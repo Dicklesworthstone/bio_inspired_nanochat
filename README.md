@@ -197,6 +197,24 @@ This script:
 
 Use this tool to discover new stable configurations when you drastically change model scale or architecture.
 
+### Synaptic Genome Map
+CMA-ES manipulates the expert-level genome `Xi` that now ships with `SynapticMoE`. Each expert expresses four genes that rewrite its local biochemistry:
+
+| Gene Index | Symbol | Range (approx) | Effect |
+| :--- | :--- | :--- | :--- |
+| 0 | `alpha_fatigue` | 0.001 – 0.021 | How quickly the expert tires. Higher = fast burnout which encourages turnover; lower = marathon expert. |
+| 1 | `alpha_energy` | 0.001 – 0.05 | ATP refill gain. Experts with high values can route more tokens without crashing. |
+| 2 | `camkii_gain` | 0.1 – 5.0 | Strength of long-term potentiation inside the postsynaptic Hebbian trace. |
+| 3 | `pp1_gain` | 0.1 – 5.0 | Strength of LTD / forgetting. Works antagonistically with CaMKII. |
+
+These genes flow into:
+
+- **SynapticExpert**: energy overrides and gene scalars are handed to both SynapticLinear layers so consolidation literally depends on genotype.
+- **Router metabolism**: fatigue/energy EMA is now `fatigue ← (1-α)·fatigue + α·util`, allowing CMA-ES to breed specialists (low fatigue, high refill) or sprinters (high fatigue, high refill).
+- **Router biasing**: tokens are projected into router-embedding space (`router_probe`) and compared against each expert’s embedding. The bias combines (1) the legacy token-norm term, (2) the newer norm-based gain, and (3) a fresh cosine alignment term so routing favours experts whose “DNA” matches the current context.
+
+If you change the genome layout, update this table and `SynapticMoE._get_phenotype` so the tuner understands what it is mutating.
+
 ---
 
 ## 🚀 Quick Start (UV Optimized)
