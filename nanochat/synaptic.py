@@ -117,6 +117,7 @@ class SynapticConfig:
 
 
 class SynapticPresyn(nn.Module):
+    cfg: SynapticConfig
     """
     Vectorized presynaptic module with explicit Syt1/7 mix, complexin clamp,
     Munc13/18 priming, clathrin/dynamin endocytosis (queue), V-ATPase/VDAC
@@ -132,7 +133,7 @@ class SynapticPresyn(nn.Module):
 
     def __init__(self, head_dim: int, cfg: SynapticConfig):
         super().__init__()
-        self.cfg = cfg
+        object.__setattr__(self, "cfg", cfg)
         self.register_buffer("running_release", torch.tensor(1.0))
 
     @staticmethod
@@ -258,7 +259,8 @@ class SynapticPresyn(nn.Module):
         )
 
         with torch.no_grad():
-            self.running_release.mul_(0.99).add_(0.01 * release_frac.mean())
+            running_release = cast(Tensor, self.running_release)
+            running_release.mul_(0.99).add_(0.01 * release_frac.mean())
 
         state.update(
             C=C_new, BUF=BUF_new, RRP=RRP_new, RES=RES_new, PR=PR_new, CL=CL, E=E_new
@@ -272,11 +274,18 @@ class SynapticPresyn(nn.Module):
 
 
 class PostsynapticHebb(nn.Module):
+    cfg: SynapticConfig
+    U: Tensor
+    V: Tensor
+    H_fast: Tensor
+    m_gate: Tensor
+    camkii: Tensor
+    pp1: Tensor
     """Low-rank eligibility + CaMKII/PP1 gate controlling consolidation."""
 
     def __init__(self, d_in: int, d_out: int, cfg: SynapticConfig):
         super().__init__()
-        self.cfg = cfg
+        object.__setattr__(self, "cfg", cfg)
         R = cfg.rank_eligibility
         self.register_buffer("U", torch.zeros(d_in, R))
         self.register_buffer("V", torch.zeros(R, d_out))
@@ -290,9 +299,12 @@ class PostsynapticHebb(nn.Module):
         c = self.cfg
         u = x_in.mean(dim=0)  # (din,)
         v = y_out.mean(dim=0)  # (dout,)
-        self.U.mul_(c.rho_elig).add_(c.eta_elig * u.unsqueeze(-1))
-        self.V.mul_(c.rho_elig).add_(c.eta_elig * v.unsqueeze(0))
-        self.H_fast.mul_(c.rho_elig).add_(c.eta_fast * (self.U @ self.V))
+        U = cast(Tensor, self.U)
+        V = cast(Tensor, self.V)
+        H_fast = cast(Tensor, self.H_fast)
+        U.mul_(c.rho_elig).add_(c.eta_elig * u.unsqueeze(-1))
+        V.mul_(c.rho_elig).add_(c.eta_elig * v.unsqueeze(0))
+        H_fast.mul_(c.rho_elig).add_(c.eta_fast * (U @ V))
 
     @torch.no_grad()
     def consolidate(self, calcium: Tensor, energy: Tensor, genes: Optional[Tensor] = None):
@@ -314,15 +326,22 @@ class PostsynapticHebb(nn.Module):
             g_camkii = c.camkii_gain
             g_pp1 = c.pp1_gain
 
-        self.camkii.add_(g_camkii * torch.clamp(calcium.mean() - 0.2, min=0.0))
-        self.pp1.add_(g_pp1 * torch.clamp(0.3 - energy.mean(), min=0.0))
-        self.camkii.clamp_(0, 1)
-        self.pp1.clamp_(0, 1)
-        gate = torch.sigmoid(3.0 * (self.camkii - 0.5) - 2.0 * self.pp1)
-        self.m_gate.copy_(gate)
+        camkii = cast(Tensor, self.camkii)
+        pp1 = cast(Tensor, self.pp1)
+        m_gate = cast(Tensor, self.m_gate)
+        camkii.add_(g_camkii * torch.clamp(calcium.mean() - 0.2, min=0.0))
+        pp1.add_(g_pp1 * torch.clamp(0.3 - energy.mean(), min=0.0))
+        camkii.clamp_(0, 1)
+        pp1.clamp_(0, 1)
+        gate = torch.sigmoid(3.0 * (camkii - 0.5) - 2.0 * pp1)
+        m_gate.copy_(gate)
 
 
 class SynapticLinear(nn.Module):
+    cfg: SynapticConfig
+    use_input_ln: bool
+    bias: Optional[nn.Parameter]
+    input_ln: Optional[nn.LayerNorm]
     """Dual-timescale linear with low-rank eligibility; bfloat16-safe."""
 
     def __init__(
@@ -334,15 +353,21 @@ class SynapticLinear(nn.Module):
         use_input_ln: bool = False,
     ):
         super().__init__()
-        self.cfg = cfg
-        self.use_input_ln = use_input_ln
+        object.__setattr__(self, "cfg", cfg)
+        object.__setattr__(self, "use_input_ln", use_input_ln)
         self.w_slow = nn.Parameter(torch.empty(in_features, out_features))
         self.w_fast = nn.Parameter(torch.empty(in_features, out_features))
-        self.bias = nn.Parameter(torch.zeros(out_features)) if bias else None
+        if bias:
+            self.bias = nn.Parameter(torch.zeros(out_features))
+        else:
+            self.register_parameter("bias", None)
         nn.init.trunc_normal_(self.w_slow, std=0.02)
         nn.init.trunc_normal_(self.w_fast, std=0.02)
         self.post = PostsynapticHebb(in_features, out_features, cfg)
-        self.input_ln = nn.LayerNorm(in_features, eps=1e-5) if use_input_ln else None
+        if use_input_ln:
+            self.input_ln = nn.LayerNorm(in_features, eps=1e-5)
+        else:
+            object.__setattr__(self, "input_ln", None)
 
     def forward(
         self, x: Tensor, calcium: Tensor, energy: Tensor, update_mem: bool = True, genes: Optional[Tensor] = None
@@ -381,6 +406,7 @@ def build_presyn_state(B: int, T: int, H: int, device, dtype, cfg: SynapticConfi
 
 
 class SynapticCausalSelfAttention(nn.Module):
+    cfg: SynapticConfig
     """
     Drop-in attention with synaptic augmentation. Uses standard Q,K,V projections,
     RoPE, multi-query key/value replication, and adds log(ε+q⋅n) to logits.
@@ -402,7 +428,7 @@ class SynapticCausalSelfAttention(nn.Module):
         self.n_head = n_head
         self.n_kv_head = n_kv_head
         self.head_dim = n_embd // n_head
-        self.cfg = cfg
+        object.__setattr__(self, "cfg", cfg)
         self.q_proj = nn.Linear(n_embd, n_head * self.head_dim, bias=False)
         self.k_proj = nn.Linear(n_embd, n_kv_head * self.head_dim, bias=False)
         self.v_proj = nn.Linear(n_embd, n_kv_head * self.head_dim, bias=False)
@@ -471,9 +497,10 @@ class SynapticCausalSelfAttention(nn.Module):
 
 
 class SynapticMLP(nn.Module):
+    cfg: SynapticConfig
     def __init__(self, n_embd: int, cfg: SynapticConfig, dropout: float = 0.0):
         super().__init__()
-        self.cfg = cfg
+        object.__setattr__(self, "cfg", cfg)
         self.fc = SynapticLinear(n_embd, 4 * n_embd, cfg, bias=True, use_input_ln=True)
         self.proj = SynapticLinear(
             4 * n_embd, n_embd, cfg, bias=True, use_input_ln=False
@@ -484,8 +511,10 @@ class SynapticMLP(nn.Module):
 
     def forward(self, x: Tensor):
         B, T, C = x.shape
-        c = self.C0.expand(B * T)
-        e = self.E0.expand(B * T)
+        c0 = cast(Tensor, self.C0)
+        e0 = cast(Tensor, self.E0)
+        c = c0.expand(B * T)
+        e = e0.expand(B * T)
         h = self.fc(x.reshape(B * T, C), c, e)
         h = F.relu(h).square()
         h = self.drop(h.reshape(B, T, -1))
@@ -548,6 +577,11 @@ class SynapticExpert(nn.Module):
 
 
 class SynapticMoE(nn.Module):
+    num_experts: int
+    top_k: int
+    cfg: SynapticConfig
+    last_aux_loss: Optional[Tensor]
+    last_ctx: Dict[str, Tensor]
     """Top-k sparse Synaptic MoE with router embeddings, expert fatigue/energy,
     contrastive router-embedding updates, and split/merge structural hooks."""
 
@@ -561,9 +595,9 @@ class SynapticMoE(nn.Module):
         dropout: float = 0.0,
     ):
         super().__init__()
-        self.num_experts = num_experts
-        self.top_k = top_k
-        self.cfg = cfg
+        object.__setattr__(self, "num_experts", num_experts)
+        object.__setattr__(self, "top_k", top_k)
+        object.__setattr__(self, "cfg", cfg)
         self.router = nn.Linear(n_embd, num_experts, bias=False)
         self.experts = nn.ModuleList(
             [
@@ -579,8 +613,8 @@ class SynapticMoE(nn.Module):
         self.router_embeddings = nn.Parameter(
             emb, requires_grad=False
         )  # updated by EMA-style rule
-        self.last_aux_loss = None
-        self.last_ctx: Dict[str, Tensor] = {}
+        object.__setattr__(self, "last_aux_loss", None)
+        object.__setattr__(self, "last_ctx", {})
         
         # Molecular Genetics: Xi (The Genome)
         # Each expert has a vector of log-space genetic biases
@@ -614,6 +648,8 @@ class SynapticMoE(nn.Module):
         B, T, C = x.shape
         E = self.num_experts
         device = x.device
+        fatigue_buf = cast(Tensor, self.fatigue)
+        energy_buf = cast(Tensor, self.energy)
         
         # 1. Express Genetics (Phenotype)
         pheno = self._get_phenotype(self.Xi) # (E, 4)
@@ -634,8 +670,8 @@ class SynapticMoE(nn.Module):
         logits = (
             logits
             + bias
-            + 0.1 * self.energy.view(1, 1, E)
-            - 0.1 * self.fatigue.view(1, 1, E)
+            + 0.1 * energy_buf.view(1, 1, E)
+            - 0.1 * fatigue_buf.view(1, 1, E)
         )
         topk = min(self.top_k, E)
         g, idx = torch.topk(logits, topk, dim=-1)  # (B,T,k)
@@ -657,7 +693,7 @@ class SynapticMoE(nn.Module):
             
             # Get genetics for this expert
             gene_e = pheno[e] # (4,)
-            energy_e = self.energy[e] # scalar
+            energy_e = energy_buf[e] # scalar
             
             y_e = self.experts[e](x_e, energy_override=energy_e, genes=gene_e)
             w = gates.masked_select(mask).unsqueeze(-1)
@@ -675,15 +711,15 @@ class SynapticMoE(nn.Module):
             # Old: self.fatigue.mul_(0.99).add_(0.01 * util)
             # New: self.fatigue = (1-alpha)*fatigue + alpha*util
             
-            self.fatigue.mul_(1.0 - alpha_fatigue).add_(alpha_fatigue * util)
-            self.energy.mul_(1.0 - alpha_energy).add_(alpha_energy * (1.0 - util))
+            fatigue_buf.mul_(1.0 - alpha_fatigue).add_(alpha_fatigue * util)
+            energy_buf.mul_(1.0 - alpha_energy).add_(alpha_energy * (1.0 - util))
 
             # Capture context for NeuroScore
-            self.last_ctx = {
+            object.__setattr__(self, "last_ctx", {
                 "x": x.detach(),
                 "indices": idx.detach(),
                 "gates": gates.detach()
-            }
+            })
 
         me = me / float(B * T)
         pe = pe / float(B * T)
@@ -717,9 +753,10 @@ class SynapticMoE(nn.Module):
 
 
 class StructuralPlasticity(nn.Module):
+    cfg: SynapticConfig
     def __init__(self, cfg: SynapticConfig):
         super().__init__()
-        self.cfg = cfg
+        object.__setattr__(self, "cfg", cfg)
         self.register_buffer("age", torch.zeros(1))
         self.register_buffer("util", torch.zeros(1))
 
