@@ -105,6 +105,8 @@ class SynapticConfig:
     router_contrastive_lr: float = 1e-4
     router_contrastive_push: float = 0.1
     router_sim_threshold: float = 0.6
+    # genetics
+    xi_dim: int = 4 # [alpha_fatigue, alpha_energy, camkii_gain, pp1_gain]
     # general numerics
     epsilon: float = 1e-6
 
@@ -293,10 +295,27 @@ class PostsynapticHebb(nn.Module):
         self.H_fast.mul_(c.rho_elig).add_(c.eta_fast * (self.U @ self.V))
 
     @torch.no_grad()
-    def consolidate(self, calcium: Tensor, energy: Tensor):
+    def consolidate(self, calcium: Tensor, energy: Tensor, genes: Optional[Tensor] = None):
+        # genes: (batch,) or (1,) if provided? 
+        # Actually genes should be (batch,) or scalar. 
+        # In expert, batch dim is flattened usually?
+        # calcium is (B*T).
+        # If genes provided, it's likely (1,) or broadcastable.
+        
         c = self.cfg
-        self.camkii.add_(c.camkii_gain * torch.clamp(calcium.mean() - 0.2, min=0.0))
-        self.pp1.add_(c.pp1_gain * torch.clamp(0.3 - energy.mean(), min=0.0))
+        
+        # Genetic overrides or defaults
+        if genes is not None:
+            # [alpha_fatigue, alpha_energy, camkii_gain, pp1_gain]
+            # Indices: 2=camkii, 3=pp1
+            g_camkii = genes[2]
+            g_pp1 = genes[3]
+        else:
+            g_camkii = c.camkii_gain
+            g_pp1 = c.pp1_gain
+
+        self.camkii.add_(g_camkii * torch.clamp(calcium.mean() - 0.2, min=0.0))
+        self.pp1.add_(g_pp1 * torch.clamp(0.3 - energy.mean(), min=0.0))
         self.camkii.clamp_(0, 1)
         self.pp1.clamp_(0, 1)
         gate = torch.sigmoid(3.0 * (self.camkii - 0.5) - 2.0 * self.pp1)
@@ -326,7 +345,7 @@ class SynapticLinear(nn.Module):
         self.input_ln = nn.LayerNorm(in_features, eps=1e-5) if use_input_ln else None
 
     def forward(
-        self, x: Tensor, calcium: Tensor, energy: Tensor, update_mem: bool = True
+        self, x: Tensor, calcium: Tensor, energy: Tensor, update_mem: bool = True, genes: Optional[Tensor] = None
     ):
         if self.input_ln is not None:
             x = self.input_ln(x)
@@ -336,7 +355,7 @@ class SynapticLinear(nn.Module):
             y = y + self.bias
         if update_mem:
             self.post.update_elig(x.detach(), y.detach())
-            self.post.consolidate(calcium.detach(), energy.detach())
+            self.post.consolidate(calcium.detach(), energy.detach(), genes=genes)
         return y
 
 
@@ -488,18 +507,41 @@ class SynapticExpert(nn.Module):
         self.fc2 = SynapticLinear(h, n_embd, cfg, bias=True, use_input_ln=False)
         self.drop = nn.Dropout(dropout)
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor, energy_override: Optional[Tensor] = None, genes: Optional[Tensor] = None) -> Tensor:
+        # x: (N, C)
+        
+        # If energy override provided (scalar or N-dim), use it. 
+        # But SynapticLinear expects flat batch tensor for calcium/energy.
+        # The MoE passes x as flattened (N,C).
+        N = x.size(0)
+        device = x.device
+        
+        if energy_override is not None:
+            # If override is scalar, expand to (N)
+            if energy_override.ndim == 0:
+                e_tens = energy_override.expand(N)
+            else:
+                # Assume it's (N) or broadcastable
+                e_tens = energy_override.view(-1).expand(N)
+        else:
+            e_tens = torch.ones(N, device=device)
+            
+        # Calcium proxy is just 1.0 for now unless we wire it from router
+        c_tens = torch.ones(N, device=device)
+
         y = self.fc1(
             x,
-            calcium=torch.ones(x.size(0), device=x.device),
-            energy=torch.ones(x.size(0), device=x.device),
+            calcium=c_tens,
+            energy=e_tens,
+            genes=genes,
         )
         y = F.relu(y).square()
         y = self.drop(y)
         y = self.fc2(
             y,
-            calcium=torch.ones(x.size(0), device=x.device),
-            energy=torch.ones(x.size(0), device=x.device),
+            calcium=c_tens,
+            energy=e_tens,
+            genes=genes,
         )
         return y
 
@@ -537,11 +579,46 @@ class SynapticMoE(nn.Module):
             emb, requires_grad=False
         )  # updated by EMA-style rule
         self.last_aux_loss = None
+        self.last_ctx: Dict[str, Tensor] = {}
+        
+        # Molecular Genetics: Xi (The Genome)
+        # Each expert has a vector of log-space genetic biases
+        # [0]: alpha_fatigue (logit)
+        # [1]: alpha_energy (logit)
+        # [2]: camkii_gain (logit)
+        # [3]: pp1_gain (logit)
+        self.Xi = nn.Parameter(torch.zeros(num_experts, cfg.xi_dim)) 
+        # Init with small noise so they aren't identical
+        nn.init.normal_(self.Xi, std=0.1)
+
+    def _get_phenotype(self, xi: Tensor) -> Tensor:
+        """Map Xi logits to biological range constants."""
+        # Use softplus to keep positive
+        # Base values come from logic/defaults, modulated here
+        # [0] fatigue rate: 0.01 base. Range 0.001 - 0.1
+        fatigue_rate = 0.01 * (torch.sigmoid(xi[..., 0]) * 2.0 + 0.1) # 0.001 to 0.021
+        
+        # [1] energy refill: 0.005 base. Range 0.001 - 0.05
+        energy_fill = 0.005 * (torch.sigmoid(xi[..., 1]) * 2.0 + 0.1)
+        
+        # [2] camkii: 1.5 base. Range 0.1 - 5.0
+        camkii_gain = F.softplus(xi[..., 2] + 1.0) # shifted so 0 -> softplus(1)~=1.3
+        
+        # [3] pp1: 1.0 base. Range 0.1 - 5.0
+        pp1_gain = F.softplus(xi[..., 3] + 0.5)
+        
+        return torch.stack([fatigue_rate, energy_fill, camkii_gain, pp1_gain], dim=-1)
 
     def forward(self, x: Tensor) -> Tuple[Tensor, Tensor]:
         B, T, C = x.shape
         E = self.num_experts
         device = x.device
+        
+        # 1. Express Genetics (Phenotype)
+        pheno = self._get_phenotype(self.Xi) # (E, 4)
+        alpha_fatigue = pheno[:, 0]
+        alpha_energy = pheno[:, 1]
+        
         logits = self.router(x)  # (B,T,E)
         # Embed-token similarity (optional small bias from router embeddings)
         # We synthesize a token embedding proxy by pooling x and projecting onto router embeddings
@@ -568,6 +645,7 @@ class SynapticMoE(nn.Module):
         flat_x = x.view(-1, C)
         me = torch.zeros(E, device=device)
         pe = torch.zeros(E, device=device)
+        
         for e in range(E):
             mask = idx == e  # (B,T,k)
             sel = mask.any(dim=-1)  # (B,T)
@@ -575,7 +653,12 @@ class SynapticMoE(nn.Module):
                 continue
             flat_idx = sel.view(-1).nonzero(as_tuple=False).squeeze(1)
             x_e = flat_x.index_select(0, flat_idx)
-            y_e = self.experts[e](x_e)
+            
+            # Get genetics for this expert
+            gene_e = pheno[e] # (4,)
+            energy_e = self.energy[e] # scalar
+            
+            y_e = self.experts[e](x_e, energy_override=energy_e, genes=gene_e)
             w = gates.masked_select(mask).unsqueeze(-1)
             flat_out.index_add_(0, flat_idx, w * y_e)
             me[e] = sel.sum()
@@ -583,8 +666,23 @@ class SynapticMoE(nn.Module):
 
         with torch.no_grad():
             util = me.clamp_min(1.0) / float(B * T)
-            self.fatigue.mul_(0.99).add_(0.01 * util)
-            self.energy.mul_(0.995).add_(0.005 * (1.0 - util))
+            # Metabolic Update using GENETICS
+            # fatigue += alpha_fatigue * util
+            # energy += alpha_energy * (1 - util)
+            # We need to handle the (0.99) decay logic as (1 - alpha).
+            
+            # Old: self.fatigue.mul_(0.99).add_(0.01 * util)
+            # New: self.fatigue = (1-alpha)*fatigue + alpha*util
+            
+            self.fatigue.mul_(1.0 - alpha_fatigue).add_(alpha_fatigue * util)
+            self.energy.mul_(1.0 - alpha_energy).add_(alpha_energy * (1.0 - util))
+
+            # Capture context for NeuroScore
+            self.last_ctx = {
+                "x": x.detach(),
+                "indices": idx.detach(),
+                "gates": gates.detach()
+            }
 
         me = me / float(B * T)
         pe = pe / float(B * T)

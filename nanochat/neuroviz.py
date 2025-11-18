@@ -63,6 +63,13 @@ try:
 except Exception:
     from synaptic import SynapticMoE, SynapticExpert
 
+try:
+    from .neuroscore import NeuroScore, NeuroScoreConfig
+except Exception:
+    # Fallback if neuroscore not present yet (or during init)
+    NeuroScore = None
+    NeuroScoreConfig = None
+
 
 # --------------------------- utilities --------------------------------
 
@@ -290,6 +297,13 @@ class NeuroVizManager:
         self._last_tb = -(10**12)
         self._last_img = -(10**12)
         self._last_html = -(10**12)
+        
+        # NeuroScore hook
+        self.score = None
+        if NeuroScore is not None:
+            # Default score config
+            sc_cfg = NeuroScoreConfig(enabled=True, update_every=100)
+            self.score = NeuroScore(sc_cfg, neuroviz=self)
 
     # --------- registration & events (used by controller) ----------
 
@@ -337,43 +351,16 @@ class NeuroVizManager:
 
     # ------------------------- per-step logging ---------------------
 
-    def step(self, model: nn.Module, step: int):
+    def step(self, model: nn.Module, step: int, loss: Optional[torch.Tensor] = None):
         # ensure we have layers registered
         if not self.layers:
             self.register_model(model)
 
+        # NeuroScore update (if active)
+        if self.score is not None and loss is not None:
+            self.score.step(model, loss, step)
+
         # TensorBoard scalars/hists
-        if self.tb is not None and step - self._last_tb >= self.cfg.tb_every:
-            for name, moe in self.layers:
-                self._log_tb_layer(name, moe, step)
-            self._last_tb = step
-
-        # Static images
-        if self.cfg.save_pngs and step - self._last_img >= self.cfg.image_every:
-            for name, moe in self.layers:
-                self._write_images(name, moe, step)
-                self.lineage.render_timeline_png(name, step)
-            self._last_img = step
-
-        # Optional interactive HTML
-        if (
-            self.cfg.write_interactive_html
-            and _HAS_PLOTLY
-            and step - self._last_html >= self.cfg.interactive_every
-        ):
-            for name, moe in self.layers:
-                self.lineage.render_interactive_html(name, step)
-            self._last_html = step
-
-    def close(self):
-        if self.tb is not None:
-            self.tb.close()
-
-    # ------------------------- metrics extraction -------------------
-
-    @torch.no_grad()
-    def _layer_metrics(self, moe: SynapticMoE) -> Dict[str, np.ndarray]:
-        emb = _to_np(moe.router_embeddings)  # (E, D)
         fatigue = _to_np(moe.fatigue)  # (E,)
         energy = _to_np(moe.energy)  # (E,)
         util = 1.0 - np.clip(fatigue, 0.0, 1.0)  # util proxy
@@ -396,6 +383,8 @@ class NeuroVizManager:
             s = float(e.fc2.w_slow.norm().item() + e.fc2.w_fast.norm().item())
             qprox.append(s)
         qprox = np.asarray(qprox, dtype=np.float32)
+
+        emb = _to_np(moe.router_embeddings)
 
         return dict(
             embedding=emb,
