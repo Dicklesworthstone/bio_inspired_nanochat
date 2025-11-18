@@ -75,9 +75,39 @@ graph TD
 
 ---
 
+## 🔬 Biological Parameter Reference
+
+Every aspect of the synapse can be tuned via `SynapticConfig`. These parameters act as the "genome" of the artificial brain.
+
+### Presynaptic (The "Sender")
+| Parameter | Default | Bio-Analog | Effect on Model |
+| :--- | :--- | :--- | :--- |
+| `tau_c` | 4.0 | **Calcium Decay** | How long a neuron stays "excited" after firing. Higher = longer bursts. |
+| `tau_rrp` | 40.0 | **Vesicle Refill** | Recovery time from fatigue. Higher = prone to "writer's block" if repetitive. |
+| `alpha_ca` | 0.25 | **Calcium Influx** | Sensitivity to attention scores. Higher = easier to trigger release. |
+| `syt_fast_kd` | 0.4 | **Synaptotagmin $K_d$** | The threshold for rapid release. Lower = more trigger-happy. |
+| `stochastic_train_frac`| 0.1 | **Thermal Noise** | Randomness in vesicle release. Prevents overfitting to specific logits. |
+
+### Postsynaptic (The "Receiver")
+| Parameter | Default | Bio-Analog | Effect on Model |
+| :--- | :--- | :--- | :--- |
+| `rank_eligibility` | 16 | **PSD Complexity** | Rank of the Hebbian update. Higher = more complex associative patterns. |
+| `rho_elig` | 0.95 | **Trace Decay** | How long the "scratchpad" memory lasts. 0.95 $\approx$ 20 tokens halflife. |
+| `camkii_gain` | 1.5 | **LTP Strength** | "Write" speed for long-term memory. Higher = learns faster from context. |
+| `pp1_gain` | 1.0 | **LTD Strength** | "Erase" speed. Higher = forgets useless context faster. |
+
+### Structural (The "City Planner")
+| Parameter | Default | Bio-Analog | Effect on Model |
+| :--- | :--- | :--- | :--- |
+| `energy_cost_rel` | 0.015 | **Metabolic Cost** | The tax paid for firing. Higher = leaner, smaller networks. |
+| `split_health_min` | 0.80 | **Mitosis Threshold** | How healthy an expert must be to clone. Lower = faster growth. |
+| `router_contrastive_push`| 0.1 | **Lateral Inhibition**| Forces experts to specialize. Higher = sharper specialization. |
+
+---
+
 ## 💉 The Neurosurgeon's Toolkit (Configuration)
 
-You can tweak the personality of the brain by adjusting its chemical balance in `nanochat/synaptic.py` (or via CLI overrides).
+You can tweak the personality of the brain by adjusting its chemical balance via CLI overrides.
 
 | If the model is... | It means... | You should tweak... | Action |
 | :--- | :--- | :--- | :--- |
@@ -91,6 +121,35 @@ You can tweak the personality of the brain by adjusting its chemical balance in 
 ```bash
 python -m scripts.base_train --syn_cfg.tau_rrp=100.0 --syn_cfg.energy_cost_rel=0.05
 ```
+
+---
+
+## 🧬 Evolution in Silicon: Automating the Neurosurgeon (CMA-ES)
+
+Manually tuning 25+ interacting biological hyperparameters (time constants, enzyme affinities, energy costs) is a daunting task for any human. To solve this, we employ **CMA-ES (Covariance Matrix Adaptation Evolution Strategy)**, a powerful derivative-free optimization algorithm that mimics biological evolution.
+
+### What is CMA-ES?
+CMA-ES is an evolutionary algorithm that treats optimization as a sampling problem. Instead of following a single gradient (like SGD), it maintains a **population** of candidate parameter sets and a multivariate normal distribution.
+1.  **Sample**: It generates a generation of "mutant" brains with slightly different chemical balances.
+2.  **Evaluate**: Each mutant is tested on a synthetic "Associative Recall" task that strictly demands working memory.
+3.  **Update**: The algorithm shifts its mean towards the successful mutants and shapes its covariance matrix (the "search shape") to align with the landscape's valleys.
+
+It is particularly robust for our use case because the biological fitness landscape is **high-dimensional**, **non-convex**, and **noisy**—environments where traditional grid search or gradient descent fail.
+
+### How We Use It
+We have provided a specialized tuner that runs this evolutionary loop for you.
+
+```bash
+uv run scripts/tune_bio_params.py
+```
+
+This script:
+*   **Spins up a population** of small `GPTSynaptic` models.
+*   **Tests them** on a "Needle-in-a-Haystack" task (copying random sequences using only synaptic plasticity).
+*   **Visualizes** the evolution in real-time using a beautiful `Rich` interface.
+*   **Saves** the fittest "genome" to `best_synaptic_config.py`.
+
+Use this tool to discover new stable configurations when you drastically change model scale or architecture.
 
 ---
 
