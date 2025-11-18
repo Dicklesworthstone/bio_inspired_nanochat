@@ -77,7 +77,7 @@ graph TD
 
 ## 🔬 Deep Dive: The Math of the Synapse
 
-For the researchers, here are the governing equations implemented in `synaptic.py`.
+For the researchers, here are the governing equations implemented in `synaptic.py` and `neuroscore.py`.
 
 ### 1. Calcium Dynamics (The Integrator)
 Calcium $C$ acts as a leaky integrator of the incoming attention signal (Logits $L$). It represents the "excitement" of the synapse.
@@ -106,6 +106,18 @@ The postsynaptic weight update follows a gated Hebbian rule. We maintain low-ran
 $$ \Delta W_{fast} = \eta \cdot (U \cdot V^T) \cdot \underbrace{\sigma(\text{CaMKII} - \text{PP1})}_{\text{Consolidation Gate}} $$
 
 The gate opens only when CaMKII (Write signal) > PP1 (Erase signal).
+
+### 5. NeuroScore Dynamics (The Credit Assignment)
+In `neuroscore.py`, we calculate the evolutionary fitness of each expert using three metrics:
+
+*   **Efficiency**: Performance per unit of metabolic cost.
+    $$ \text{Eff}_i = \frac{\text{Contribution}_i}{\text{Energy}_i + \epsilon} $$
+*   **Specialization**: How unique is the expert's input distribution compared to the global average?
+    $$ \text{Spec}_i = 1 - \cos(\mu_{expert}, \mu_{global}) $$
+*   **Resilience**: Stability of the expert's contribution over time (inverse variance).
+    $$ \text{Res}_i = \frac{1}{\text{Var}(\text{Contribution}_i) + \epsilon} $$
+
+Experts with high NeuroScores are cloned (Split); those with low scores are cannibalized (Merge).
 
 ---
 
