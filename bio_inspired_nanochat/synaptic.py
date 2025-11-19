@@ -179,19 +179,46 @@ class SynapticPresyn(nn.Module):
 
         # Ca²⁺ drive from compatibilities; strictly causal and numerically safe
         # If fused kernel is enabled and available, use it
-        if self.cfg.native_presyn and q.is_cuda:
-            try:
-                from bio_inspired_nanochat.kernels import presyn_step
-                syn_logit, state = presyn_step(q, k, logits, state, self.cfg)
-                return syn_logit, state
-            except ImportError:
-                pass  # Fallback to PyTorch
-            except Exception as e:
-                import traceback
+        if self.cfg.native_presyn:
+            if q.is_cuda:
+                try:
+                    from bio_inspired_nanochat.kernels import presyn_step
+                    syn_logit, state = presyn_step(q, k, logits, state, self.cfg)
+                    return syn_logit, state
+                except ImportError:
+                    pass  # Fallback to PyTorch
+                except Exception as e:
+                    import traceback
 
-                print(f"Triton kernel failed, falling back to PyTorch: {e}")
-                traceback.print_exc()
-                pass
+                    print(f"Triton kernel failed, falling back to PyTorch: {e}")
+                    traceback.print_exc()
+                    pass
+            elif q.device.type == "cpu":
+                try:
+                    import rustbpe
+
+                    # Convert inputs to numpy (zero-copy if contiguous)
+                    q_np = q.detach().numpy()
+                    k_np = k.detach().numpy()
+                    logits_np = logits.detach().numpy()
+                    state_np = {k: v.detach().numpy() for k, v in state.items()}
+
+                    syn_logit_np, state_new_np = rustbpe.presyn_step_cpu(
+                        q_np, k_np, logits_np, state_np, self.cfg
+                    )
+
+                    # Convert outputs back to torch
+                    syn_logit = torch.from_numpy(syn_logit_np)
+                    state = {k: torch.from_numpy(v) for k, v in state_new_np.items()}
+                    return syn_logit, state
+                except ImportError:
+                    pass
+                except Exception as e:
+                    import traceback
+
+                    print(f"Rust CPU kernel failed, falling back to PyTorch: {e}")
+                    traceback.print_exc()
+                    pass
 
         drive = _softplus(logits.clamp(-20, 20)) * causal_mask.view(1, 1, T, T)
         counts = causal_mask.float().sum(dim=0, keepdim=True).clamp_min(1.0)  # (1,T)
