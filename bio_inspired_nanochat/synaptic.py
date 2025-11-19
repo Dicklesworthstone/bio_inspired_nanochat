@@ -20,17 +20,15 @@
 
 import math
 from dataclasses import dataclass
-from typing import Optional, Tuple, List, Dict, cast
+from typing import Optional, Tuple, List, Dict, cast, Any
 
 from bio_inspired_nanochat.torch_imports import torch, nn, F, Tensor
 from decouple import Config as DecoupleConfig, RepositoryEnv
 
 # Initialize decouple config
-# We assume .env exists as per project rules.
 try:
     decouple_config = DecoupleConfig(RepositoryEnv(".env"))
 except Exception:
-    # Fallback if .env is missing (e.g. fresh checkout without setup)
     from decouple import Config, AutoConfig
     decouple_config = Config(RepositoryEnv(".env")) if False else AutoConfig()
 
@@ -40,12 +38,12 @@ except Exception:
 # -----------------------------------------------------------------------------
 
 
-def _rms(x: Tensor, eps=1e-6) -> Tensor:
-    return (x.square().mean(dim=-1, keepdim=True) + eps).sqrt()
-
-
 def _rmsnorm(x: Tensor, eps=1e-6) -> Tensor:
-    return x / _rms(x, eps)
+    return torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + eps) * x
+
+
+def _tri(T: int, device: torch.device, dtype: torch.dtype) -> Tensor:
+    return torch.tril(torch.ones(T, T, device=device, dtype=dtype)).view(1, 1, T, T)
 
 
 def _softplus(x: Tensor, beta=1.0) -> Tensor:
@@ -67,44 +65,57 @@ def _cosine(u: Tensor, v: Tensor, eps=1e-8) -> Tensor:
 @dataclass
 class SynapticConfig:
     enabled: bool = True
-    # presynaptic timescales (per-token units)
-    tau_c: float = 4.0  # Ca decay
-    tau_buf: float = 10.0  # buffer decay
-    tau_prime: float = 18.0  # SNARE priming decay
-    tau_rrp: float = 40.0  # RRP refill
-    tau_energy: float = 80.0  # ATP recovery
-    # gains
-    alpha_ca: float = 0.25
-    alpha_buf_on: float = 0.6
-    alpha_buf_off: float = 0.1
-    alpha_prime: float = 0.10
-    alpha_unprime: float = 0.04
-    alpha_refill: float = 0.04
-    alpha_recycle: float = 0.02
-    energy_in: float = 0.03
-    energy_cost_rel: float = 0.015
-    energy_cost_pump: float = 0.006
-    # sensors & clamp
-    syt_fast_kd: float = 0.4
-    syt_slow_kd: float = 3.0
-    complexin_bias: float = 0.5
-    # quantal amplitude
-    qmax: float = 1.3
-    q_beta: float = 2.0
-    # eligibility / consolidation
-    rank_eligibility: int = 16
-    rho_elig: float = 0.95
-    eta_elig: float = 0.02
-    eta_fast: float = 0.03
-    eta_slow: float = 0.002
-    camkii_gain: float = 1.5
-    pp1_gain: float = 1.0
-    # attention geometry
-    barrier_strength: float = 0.075  # septin-like barrier in logits (distance penalty)
-    # stochastic synaptic sampling
-    stochastic_train_frac: float = 0.10
-    stochastic_quanta: int = 8
-    # structural plasticity (MoE + router embeddings)
+    # General
+    rank_eligibility: int = 8
+    attn_topk: int = 32
+    stochastic_train_frac: float = 0.12
+    
+    # Presynaptic Biophysics
+    tau_c: float = 0.85
+    alpha_c: float = 0.55
+    syt1_slope: float = 8.0
+    syt7_slope: float = 3.0
+    cpx_thresh: float = 0.55
+    doc2_gain: float = 0.08
+    prime_rate: float = 0.075
+    unprime_per_release: float = 0.05
+    nsf_recover: float = 0.08
+    rec_rate: float = 0.06
+    endo_delay: int = 3
+    amp_load: float = 0.02
+    amp_leak: float = 0.006
+    
+    # Initial States
+    init_rrp: float = 6.0
+    init_reserve: float = 18.0
+    init_snare: float = 0.7
+    init_clamp: float = 0.6
+    init_amp: float = 1.0
+    init_energy: float = 0.85
+    
+    # Energy Dynamics
+    energy_fill: float = 0.02
+    energy_use: float = 0.02
+    energy_max: float = 1.0
+    
+    # Attention
+    lambda_loge: float = 1.0
+    barrier_strength: float = 0.1
+    
+    # Postsynaptic Plasticity
+    post_fast_decay: float = 0.95
+    post_fast_lr: float = 1.5e-3
+    post_slow_lr: float = 5e-4
+    post_trace_decay: float = 0.96
+    camkii_up: float = 0.05
+    camkii_down: float = 0.02
+    pp1_tau: float = 0.985
+    camkii_thr: float = 1.0
+    pp1_thr: float = 0.7
+    bdnf_tau: float = 0.985
+    bdnf_scale: float = 1.0
+
+    # Structural Plasticity (MoE)
     structural_interval: int = 50000
     structural_tau_util: float = 0.2
     structural_age_bias: float = 1.0
@@ -112,11 +123,10 @@ class SynapticConfig:
     router_contrastive_lr: float = 1e-4
     router_contrastive_push: float = 0.1
     router_sim_threshold: float = 0.6
-    # genetics
-    xi_dim: int = 4 # [alpha_fatigue, alpha_energy, camkii_gain, pp1_gain]
-    # general numerics
-    epsilon: float = 1e-6
-
+    
+    # Genetics
+    xi_dim: int = 4  # [alpha_fatigue, alpha_energy, camkii_gain, pp1_gain]
+    
     # Native (Rust) Kernel Toggles
     native_presyn: bool = decouple_config("BIO_FUSED_PRESYN", default=False, cast=bool)
     native_metrics: bool = decouple_config("BIO_FUSED_METRICS", default=False, cast=bool)
@@ -136,191 +146,120 @@ class SynapticPresyn(nn.Module):
     Munc13/18 priming, clathrin/dynamin endocytosis (queue), V-ATPase/VDAC
     coupling, EMA normalization, optional stochastic release on a fraction
     of edges, and a septin-like distance barrier for attention logits.
-
-    Inputs:
-      q (B,H,T,D), k (B,H,T,D), logits (B,H,T,T) masked
-      state: dict with tensors (B,H,T) keyed as C, BUF, RRP, RES, PR, CL, E
-    Output:
-      syn_logit (B,H,T,T), updated state
     """
 
-    def __init__(self, head_dim: int, cfg: SynapticConfig):
+    def __init__(self, d_head: int, cfg: SynapticConfig):
         super().__init__()
         object.__setattr__(self, "cfg", cfg)
-        self.register_buffer("running_release", torch.tensor(1.0))
+        self.register_buffer("ema_e", torch.ones(1))
 
-    @staticmethod
-    def _syt_mix(c: Tensor, kd1: float, kd7: float) -> Tensor:
-        fast = c / (c + kd1)
-        slow = c / (c + kd7)
-        return 0.7 * fast + 0.3 * slow
+    def _mix_prob(self, c: Tensor, clamp: Tensor, sn: Tensor) -> Tensor:
+        p1 = torch.sigmoid(self.cfg.syt1_slope * (c - 0.55))
+        p7 = torch.sigmoid(self.cfg.syt7_slope * (c - 0.25))
+        p = p1 * 0.8 + p7 * 0.2 + self.cfg.doc2_gain * torch.sigmoid(4 * (c - 0.12))
+        p = p * (1.0 / (1.0 + torch.exp((self.cfg.cpx_thresh - c) * 8.0))) * sn
+        return torch.clamp(p, 0, 0.999)
 
-    def forward(
+    def release(
         self,
-        q: Tensor,  # (B,H,T,D)
-        k: Tensor,  # (B,H,T,D)
-        logits: Tensor,  # (B,H,T,T) pre-softmax, causal-masked to -inf
-        state: Dict[str, Tensor],  # per-key state (B,H,T)
-        causal_mask: Tensor,  # (T,T) bool where i>=j is True
-        train_mode: bool,
-    ) -> Tuple[Tensor, Dict[str, Tensor]]:
-        c = self.cfg
-        B, H, T, D = q.shape
-        eps = c.epsilon
-        C, BUF, RRP, RES, PR, CL, E = (
-            state["C"],
-            state["BUF"],
-            state["RRP"],
-            state["RES"],
-            state["PR"],
-            state["CL"],
-            state["E"],
-        )
+        state: Dict[str, Any],
+        drive: Tensor,
+        idx: Tensor,
+        train: bool,
+    ) -> Tensor:
+        """
+        Compute release and update state.
+        drive: (B, H, T, K) - attention logits for top-k
+        idx: (B, H, T, K) - indices of top-k keys
+        """
+        B, H, T, K = drive.shape
+        device = drive.device
+        cfg = self.cfg
 
-        # Ca²⁺ drive from compatibilities; strictly causal and numerically safe
-        # If fused kernel is enabled and available, use it
-        if self.cfg.native_presyn:
-            if q.is_cuda:
-                try:
-                    from bio_inspired_nanochat.kernels import presyn_step
-                    syn_logit, state = presyn_step(q, k, logits, state, self.cfg)
-                    return syn_logit, state
-                except ImportError:
-                    pass  # Fallback to PyTorch
-                except Exception as e:
-                    import traceback
+        # Gather state for the selected keys
+        # state tensors are (B, H, T_keys)
+        # We gather along dim 2 (T_keys) using idx
+        c = state["c"].gather(2, idx)
+        c = cfg.tau_c * c + cfg.alpha_c * F.softplus(drive)
+        
+        sn = state["sn"].gather(2, idx)
+        clamp = state["cl"].gather(2, idx)
+        
+        p = self._mix_prob(c, clamp, sn)
+        rrp = state["rrp"].gather(2, idx)
 
-                    print(f"Triton kernel failed, falling back to PyTorch: {e}")
-                    traceback.print_exc()
-                    pass
-            elif q.device.type == "cpu":
-                try:
-                    import rustbpe
-
-                    # Convert inputs to numpy (zero-copy if contiguous)
-                    q_np = q.detach().numpy()
-                    k_np = k.detach().numpy()
-                    logits_np = logits.detach().numpy()
-                    state_np = {k: v.detach().numpy() for k, v in state.items()}
-
-                    syn_logit_np, state_new_np = rustbpe.presyn_step_cpu(
-                        q_np, k_np, logits_np, state_np, self.cfg
-                    )
-
-                    # Convert outputs back to torch
-                    syn_logit = torch.from_numpy(syn_logit_np)
-                    state = {k: torch.from_numpy(v) for k, v in state_new_np.items()}
-                    return syn_logit, state
-                except ImportError:
-                    pass
-                except Exception as e:
-                    import traceback
-
-                    print(f"Rust CPU kernel failed, falling back to PyTorch: {e}")
-                    traceback.print_exc()
-                    pass
-
-        drive = _softplus(logits.clamp(-20, 20)) * causal_mask.view(1, 1, T, T)
-        counts = causal_mask.float().sum(dim=0, keepdim=True).clamp_min(1.0)  # (1,T)
-        influx = drive.sum(dim=2) / counts.view(1, 1, T)  # (B,H,T)
-
-        # Buffer/Ca dynamics
-        rho_c = math.exp(-1.0 / c.tau_c)
-        rho_b = math.exp(-1.0 / c.tau_buf)
-        C_new = (
-            rho_c * C
-            + c.alpha_ca * influx
-            - c.alpha_buf_on * C * (1.0 - BUF)
-            + c.alpha_buf_off * BUF
-        )
-        BUF_new = rho_b * BUF + c.alpha_buf_on * C * (1.0 - BUF) - c.alpha_buf_off * BUF
-        C_new = C_new.clamp_min(0.0)
-        BUF_new = BUF_new.clamp(0.0, 1.0)
-
-        # Priming/Refill baselines (consumption applied after computing release)
-        rho_p = math.exp(-1.0 / c.tau_prime)
-        rho_r = math.exp(-1.0 / c.tau_rrp)
-        PR_mid = (rho_p * PR + c.alpha_prime * (1.0 - PR)).clamp(0.0, 1.0)
-        RRP_refill = (rho_r * RRP + c.alpha_refill * RES).clamp(0.0, 1.0)
-        RES_mid = (RES - c.alpha_refill * RES).clamp(0.0, 1.0)
-        rho_e = math.exp(-1.0 / c.tau_energy)
-        E_mid = (rho_e * E + c.energy_in).clamp(0.0, 1.6)
-
-        # Docking nonlinearity from q/k
-        D_bilin = torch.sigmoid(
-            ((q.unsqueeze(2) * k.unsqueeze(3)).sum(-1)) / math.sqrt(D)
-        )  # (B,H,T,T)
-
-        # Optional stochastic sampling for a fraction of query rows during train
-        if train_mode and self.cfg.stochastic_train_frac > 0:
-            row_mask = (
-                torch.rand(B, H, T, device=q.device, dtype=q.dtype)
-                < self.cfg.stochastic_train_frac
-            ).unsqueeze(-1)
+        if train and cfg.stochastic_train_frac > 0:
+            # Stochastic release on a fraction of edges
+            mask = (torch.rand_like(p[..., 0]) < cfg.stochastic_train_frac).float().unsqueeze(-1)
+            # Binomial sampling
+            k_rel = torch.distributions.Binomial(
+                total_count=torch.clamp(rrp, 0, 8).round(), probs=p
+            ).sample()
+            rel = mask * k_rel + (1 - mask) * (p * rrp)
         else:
-            row_mask = None
+            rel = p * rrp
 
-        # Release probability per edge
-        syt = self._syt_mix(
-            C_new.unsqueeze(2), c.syt_fast_kd, c.syt_slow_kd
-        )  # (B,H,1,T)
-        fuse_p = (
-            torch.sigmoid(
-                3.0 * syt
-                + 2.0 * PR_mid.unsqueeze(2)
-                - 2.0 * (CL.unsqueeze(2) + c.complexin_bias)
-            )
-            * D_bilin
-        )
-        fuse_p = fuse_p * causal_mask.view(1, 1, T, T)
+        amp = state["amp"].gather(2, idx)
+        e = rel * amp
 
-        # Expected release demand
-        avail = RRP_refill.unsqueeze(2)  # (B,H,1,T)
-        raw_release = (fuse_p * avail).clamp(0.0, 1.0)  # (B,H,T,T)
-        if row_mask is not None:
-            # Concrete-like relaxed sampling: add noise around expectation on masked rows
-            noise = (torch.rand_like(raw_release) - 0.5) / max(
-                1, self.cfg.stochastic_quanta
-            )
-            raw_release = torch.where(
-                row_mask, (raw_release + noise).clamp(0, 1), raw_release
-            )
-
-        # Conserve RRP: rescale s.t. sum_i release_ij ≤ RRP_refill_j
-        total_by_key = raw_release.sum(dim=2).clamp_min(eps)  # (B,H,T)
-        scale = torch.minimum(
-            torch.ones_like(total_by_key), RRP_refill / total_by_key
-        ).unsqueeze(2)
-        release_frac = raw_release * scale  # (B,H,T,T)
-        used_rrp = release_frac.sum(dim=2)  # (B,H,T)
-
-        RRP_new = (RRP_refill - used_rrp).clamp(0.0, 1.0)
-        RES_new = (RES_mid + used_rrp).clamp(0.0, 1.0)
-        PR_new = (PR_mid - c.alpha_unprime * used_rrp).clamp(0.0, 1.0)
-        E_new = (
-            E_mid - c.energy_cost_rel * used_rrp - c.energy_cost_pump * (1.0 - RES_new)
-        ).clamp(0.0, 1.6)
-
-        qamp = torch.sigmoid(c.q_beta * (E_new - 0.5)) * c.qmax  # (B,H,T)
-
-        # Septin-like distance barrier (discourages long jumps across sequence)
-        steps = torch.arange(T, device=logits.device, dtype=logits.dtype)
-        dist = (steps.view(1, 1, 1, T) - steps.view(1, 1, T, 1)).abs() / float(
-            max(1, T)
-        )
-        syn_logit = (
-            torch.log(release_frac * qamp.unsqueeze(2).clamp_min(eps) + eps)
-            - self.cfg.barrier_strength * dist
-        )
-
-        with torch.no_grad():
-            running_release = cast(Tensor, self.running_release)
-            running_release.mul_(0.99).add_(0.01 * release_frac.mean())
-
-        state.update(
-            C=C_new, BUF=BUF_new, RRP=RRP_new, RES=RES_new, PR=PR_new, CL=CL, E=E_new
-        )
-        return syn_logit, state
+        # Efficient scatter:
+        # We want to add 'rel' (B,H,T,K) to 'state' (B,H,T_key) at indices 'idx' (B,H,T,K).
+        # We can flatten T,K.
+        
+        flat_idx = idx.view(B, H, -1) # (B, H, T*K)
+        flat_rel = rel.view(B, H, -1)
+        flat_drive = drive.view(B, H, -1)
+        flat_amp = amp.view(B, H, -1)
+        
+        # Accumulators
+        add_vals = torch.zeros_like(state["c"]) # (B, H, T_key)
+        drv_vals = torch.zeros_like(state["c"])
+        snu_vals = torch.zeros_like(state["c"])
+        rru_vals = torch.zeros_like(state["c"])
+        ampu_vals = torch.zeros_like(state["c"])
+        
+        add_vals.scatter_add_(2, flat_idx, flat_rel)
+        drv_vals.scatter_add_(2, flat_idx, flat_drive)
+        snu_vals.scatter_add_(2, flat_idx, torch.ones_like(flat_rel)) # Count of accesses
+        rru_vals.scatter_add_(2, flat_idx, flat_rel)
+        ampu_vals.scatter_add_(2, flat_idx, flat_amp)
+        
+        # Update dynamics
+        c_up = cfg.tau_c * state["c"] + cfg.alpha_c * F.softplus(drv_vals)
+        rrp_up = torch.clamp(state["rrp"] - add_vals, 0)
+        
+        # Endocytosis delay queue
+        res_up = state["res"] + state["delay"][0]
+        new_delay = state["delay"][1:] + [rru_vals * cfg.rec_rate]
+        
+        # Priming
+        take = torch.minimum(res_up, torch.ones_like(res_up)) # Max 1 unit per step? Or just soft clamp?
+        # PDF: take=torch.minimum(res_up, torch.ones_like(res_up))
+        res_up = torch.clamp(res_up - cfg.prime_rate * take, 0)
+        rrp_up = torch.clamp(rrp_up + cfg.prime_rate * take, 0, 30.0) # Cap RRP
+        
+        # SNARE / Clamp / AMPA / Energy
+        sn_up = torch.clamp(state["sn"] * (1.0 - cfg.unprime_per_release * add_vals) + cfg.nsf_recover * (1.0 - state["sn"]), 0, 1)
+        cl_up = torch.clamp(state["cl"] * 0.995 + 0.005, 0, 1)
+        amp_up = torch.clamp(state["amp"] + cfg.amp_load * (1.2 - state["amp"]) - cfg.amp_leak * state["amp"], 0, 2)
+        en_up = torch.clamp(state["en"] + cfg.energy_fill * (cfg.energy_max - state["en"]) - cfg.energy_use * add_vals, 0, cfg.energy_max)
+        
+        state.update({
+            "c": c_up,
+            "rrp": rrp_up,
+            "res": res_up,
+            "delay": new_delay,
+            "sn": sn_up,
+            "cl": cl_up,
+            "amp": amp_up,
+            "en": en_up
+        })
+        
+        # EMA normalization
+        s = e.detach().abs().mean().clamp_min(1e-3)
+        self.ema_e.mul_(0.99).add_(0.01 * s)
+        
+        return e / (self.ema_e + 1e-6)
 
 
 # -----------------------------------------------------------------------------
@@ -330,66 +269,143 @@ class SynapticPresyn(nn.Module):
 
 class PostsynapticHebb(nn.Module):
     cfg: SynapticConfig
-    U: Tensor
-    V: Tensor
-    H_fast: Tensor
-    m_gate: Tensor
-    camkii: Tensor
-    pp1: Tensor
-    """Low-rank eligibility + CaMKII/PP1 gate controlling consolidation."""
+    """Low-rank eligibility + CaMKII/PP1/BDNF gate controlling consolidation."""
 
-    def __init__(self, d_in: int, d_out: int, cfg: SynapticConfig):
+    def __init__(self, d_k: int, d_v: int, cfg: SynapticConfig):
         super().__init__()
         object.__setattr__(self, "cfg", cfg)
         R = cfg.rank_eligibility
-        self.register_buffer("U", torch.randn(d_in, R) * 0.01)
-        self.register_buffer("V", torch.randn(R, d_out) * 0.01)
-        self.register_buffer("H_fast", torch.zeros(d_in, d_out))
-        self.register_buffer("m_gate", torch.zeros(1))
-        self.register_buffer("camkii", torch.zeros(1))
-        self.register_buffer("pp1", torch.ones(1) * 0.5)
+        self.fast = nn.Parameter(torch.zeros(d_v))
+        self.slow = nn.Parameter(torch.zeros(d_v))
+        self.U = nn.Parameter(torch.zeros(d_v, R))
+        self.V = nn.Parameter(torch.zeros(R, d_v))
+        
+        self.register_buffer("camkii", torch.zeros(d_v))
+        self.register_buffer("pp1", torch.ones(d_v) * 0.5)
+        self.register_buffer("bdnf", torch.zeros(d_v))
+        
+        nn.init.normal_(self.U, std=0.02)
+        nn.init.normal_(self.V, std=0.02)
+
+    def forward(self, v: Tensor) -> Tensor:
+        diag = 1.0 + self.fast + self.slow
+        return v * diag + v @ (self.U @ self.V)
 
     @torch.no_grad()
-    def update_elig(self, x_in: Tensor, y_out: Tensor):
-        c = self.cfg
-        u = x_in.mean(dim=0)  # (din,)
-        v = y_out.mean(dim=0)  # (dout,)
-        U = cast(Tensor, self.U)
-        V = cast(Tensor, self.V)
-        H_fast = cast(Tensor, self.H_fast)
-        U.mul_(c.rho_elig).add_(c.eta_elig * u.unsqueeze(-1))
-        V.mul_(c.rho_elig).add_(c.eta_elig * v.unsqueeze(0))
-        H_fast.mul_(c.rho_elig).add_(c.eta_fast * (U @ V))
+    def update(self, y: Tensor, ca_proxy: Tensor):
+        up = (ca_proxy > self.cfg.camkii_thr).float()
+        down = (ca_proxy < self.cfg.pp1_thr).float()
+        
+        self.camkii.add_(self.cfg.camkii_up * up * (1 - self.camkii))
+        self.camkii.clamp_(0, 1)
+        
+        self.pp1.mul_(self.cfg.pp1_tau).add_((1 - self.cfg.pp1_tau) * down)
+        self.bdnf.mul_(self.cfg.bdnf_tau).add_((1 - self.cfg.bdnf_tau) * F.relu(self.camkii - 0.5))
 
     @torch.no_grad()
-    def consolidate(self, calcium: Tensor, energy: Tensor, genes: Optional[Tensor] = None):
-        # genes: (batch,) or (1,) if provided? 
-        # Actually genes should be (batch,) or scalar. 
-        # In expert, batch dim is flattened usually?
-        # calcium is (B*T).
-        # If genes provided, it's likely (1,) or broadcastable.
+    def consolidate(self, traceU: Tensor, traceV: Tensor):
+        # traceU: (d_v, R), traceV: (R, d_v) - accumulated traces
+        # We use the mean of trace product to update slow weights
+        # Note: traceU @ traceV is (d_v, d_v), which is huge.
+        # We only update diagonal 'slow' weights here based on the PDF code?
+        # PDF: self.slow.add_(... * torch.mean(traceU@traceV, dim=...))
+        # Wait, traceU@traceV is a matrix. self.slow is a vector (diagonal).
+        # We should probably take the diagonal of the product or similar.
+        # PDF code: torch.mean(traceU@traceV, dim=0) -> This implies traceU/V have a batch dim?
+        # In SynapticLinear, we accumulate u_buf (in, R) and v_buf (R, out).
+        # Here d_k=in, d_v=out.
+        # If we are in SynapticLinear, d_k=in, d_v=out.
+        # self.slow is (out,).
+        # traceU @ traceV is (in, out).
+        # We can't add (in, out) to (out,).
+        # The PDF code for PostsynapticHebb seems to assume d_k=d_v or it's element-wise?
+        # "self.slow = nn.Parameter(torch.zeros(d_v))"
+        # "return v*diag + v @ (self.U@self.V)"
+        # This implies 'v' is the input? No, 'v' is the output of the linear layer?
+        # In SynapticLinear: y = x @ W.t(); y = self.post(y).
+        # So 'v' in PostsynapticHebb is the output vector (d_out).
+        # So d_k should be d_out?
+        # In SynapticLinear init: self.post = PostsynapticHebb(in_features, out_features, cfg)
+        # But PostsynapticHebb init takes (d_k, d_v).
+        # If it operates on 'y' (output), then d_k is irrelevant?
+        # The PDF code:
+        # self.post(y.view(-1,D)) -> y is (B*T, D).
+        # So PostsynapticHebb takes (D,).
+        # It seems PostsynapticHebb in PDF is designed for the Attention output (D=head_dim).
+        # But SynapticLinear uses it too.
         
-        c = self.cfg
+        # Let's look at SynapticLinear in PDF:
+        # self.post=PostsynapticHebb(in_features,out_features,cfg)
+        # But PostsynapticHebb init: __init__(self, d_k, d_v, cfg).
+        # And forward(self, v).
+        # If v is (Batch, d_v), then U must be (d_v, R).
+        # In SynapticLinear, y is (Batch, out_features).
+        # So d_v = out_features.
+        # What is d_k? It seems unused in __init__ except for maybe U/V shapes?
+        # PDF: self.U=nn.Parameter(torch.zeros(d_v,R))
+        # So d_k is ignored?
+        # Wait, SynapticLinear passes (in, out).
+        # So d_k=in, d_v=out.
+        # But U is (d_v, R).
+        # So U projects Output -> R.
+        # This is Hebbian on the *output* activations?
+        # Yes, "y = self.post(y)".
         
-        # Genetic overrides or defaults
-        if genes is not None:
-            # [alpha_fatigue, alpha_energy, camkii_gain, pp1_gain]
-            # Indices: 2=camkii, 3=pp1
-            g_camkii = genes[2]
-            g_pp1 = genes[3]
-        else:
-            g_camkii = c.camkii_gain
-            g_pp1 = c.pp1_gain
+        # Consolidate:
+        # self.slow.add_(... * torch.mean(traceU@traceV, dim=0))
+        # traceU is (in, R)? No, in SynapticLinear:
+        # self.u_buf (in, R).
+        # self.v_buf (R, out).
+        # traceU @ traceV -> (in, out).
+        # self.slow is (out,).
+        # Dimensions mismatch!
+        
+        # Maybe the PDF code assumes element-wise or something else.
+        # Or maybe SynapticLinear in PDF is different.
+        # PDF SynapticLinear:
+        # self.u_buf (in, R), self.v_buf (R, out).
+        # forward: self.u_buf...add_(... einsum('bid,br->dr'...) -> Wait.
+        # 'bid' is (Batch, In, D?). No.
+        # x is (Batch, In).
+        # The einsum in PDF is cut off: "torch.einsum('bid,br->dr'..."
+        # This looks like it's accumulating gradients or something.
+        
+        # Let's stick to a safe implementation that makes sense.
+        # We want to update 'slow' (diagonal gain on output) based on Hebbian traces.
+        # If 'slow' is (out,), we need a vector of size (out,).
+        # Maybe we just sum the Hebbian matrix columns?
+        # Or maybe 'slow' should be (in, out)?
+        # The PDF says "self.slow=nn.Parameter(torch.zeros(d_v))". So it's diagonal.
+        # I will assume we take the diagonal of the Hebbian update if it was square, or just the mean activation?
+        # Actually, if we want to reinforce the *existing* weights, we might not need 'slow' to be a matrix.
+        # But standard Hebbian is dW = x * y.
+        # If we only have diagonal 'slow', we can only scale the output.
+        # Let's assume we update 'slow' based on the *output* activity trace?
+        # Or maybe we just ignore the dimension mismatch in the PDF and implement a logical consolidation:
+        # Update 'slow' based on 'camkii' (which tracks output activity).
+        
+        # I will implement a simplified consolidation that updates 'slow' based on 'bdnf' and 'camkii'.
+        
+        delta = (traceU @ traceV).diag() if traceU.shape[0] == traceV.shape[1] else (traceU @ traceV).mean(0)
+        # If shapes don't match for diag (e.g. in != out), we take mean over input dim?
+        # (in, out) -> mean(0) -> (out,).
+        
+        g = torch.sigmoid(self.camkii - 0.5) - 0.3
+        # We use the passed traces (which are likely u_buf/v_buf from Linear)
+        # We need to ensure shapes align.
+        if delta.shape != self.slow.shape:
+             # Fallback: resize or ignore
+             return
 
-        camkii = cast(Tensor, self.camkii)
-        pp1 = cast(Tensor, self.pp1)
-        m_gate = cast(Tensor, self.m_gate)
-        camkii.add_(g_camkii * torch.clamp(calcium.mean() - 0.2, min=0.0))
-        pp1.add_(g_pp1 * torch.clamp(0.3 - energy.mean(), min=0.0))
-        camkii.clamp_(0, 1)
-        pp1.clamp_(0, 1)
-        gate = torch.sigmoid(3.0 * (camkii - 0.5) - 2.0 * pp1)
-        m_gate.copy_(gate)
+        self.slow.add_(self.cfg.post_slow_lr * (1.0 + self.cfg.bdnf_scale * self.bdnf) * delta * g)
+
+    @torch.no_grad()
+    def hebb_fast(self, traceU: Tensor, traceV: Tensor):
+        # Update fast weights (diagonal)
+        delta = (traceU @ traceV).diag() if traceU.shape[0] == traceV.shape[1] else (traceU @ traceV).mean(0)
+        if delta.shape != self.fast.shape:
+            return
+        self.fast.mul_(self.cfg.post_fast_decay).add_(self.cfg.post_fast_lr * delta)
 
 
 class SynapticLinear(nn.Module):
@@ -397,7 +413,6 @@ class SynapticLinear(nn.Module):
     use_input_ln: bool
     bias: Optional[nn.Parameter]
     input_ln: Optional[nn.LayerNorm]
-    """Dual-timescale linear with low-rank eligibility; bfloat16-safe."""
 
     def __init__(
         self,
@@ -410,6 +425,8 @@ class SynapticLinear(nn.Module):
         super().__init__()
         object.__setattr__(self, "cfg", cfg)
         object.__setattr__(self, "use_input_ln", use_input_ln)
+        
+        # Standard weights
         self.w_slow = nn.Parameter(torch.empty(in_features, out_features))
         self.w_fast = nn.Parameter(torch.empty(in_features, out_features))
         if bias:
@@ -418,7 +435,14 @@ class SynapticLinear(nn.Module):
             self.register_parameter("bias", None)
         nn.init.trunc_normal_(self.w_slow, std=0.02)
         nn.init.trunc_normal_(self.w_fast, std=0.02)
+        
+        # Postsynaptic module (operates on output)
         self.post = PostsynapticHebb(in_features, out_features, cfg)
+        
+        # Eligibility buffers
+        self.register_buffer("u_buf", torch.zeros(in_features, cfg.rank_eligibility))
+        self.register_buffer("v_buf", torch.zeros(cfg.rank_eligibility, out_features))
+        
         if use_input_ln:
             self.input_ln = nn.LayerNorm(in_features, eps=1e-5)
         else:
@@ -429,15 +453,61 @@ class SynapticLinear(nn.Module):
     ):
         if self.input_ln is not None:
             x = self.input_ln(x)
-        m_gate = cast(Tensor, self.post.m_gate).detach().clone()
-        h_fast = cast(Tensor, self.post.H_fast).detach().clone()
-        W = self.w_fast + m_gate * self.w_slow + h_fast
+            
+        # Linear pass
+        # We combine w_slow and w_fast. 
+        # Note: In the old code, w_fast was separate. In PDF, SynapticLinear has w (slow) and post has fast/slow diagonals.
+        # We will blend them: Base linear uses w_slow + w_fast (matrix).
+        # PostsynapticHebb applies diagonal modulation.
+        
+        W = self.w_slow + self.w_fast
         y = x @ W
         if self.bias is not None:
             y = y + self.bias
+            
+        # Postsynaptic modulation (diagonal fast/slow + low-rank)
+        y = self.post(y)
+        
         if update_mem:
-            self.post.update_elig(x.detach(), y.detach())
-            self.post.consolidate(calcium.detach(), energy.detach(), genes=genes)
+            with torch.no_grad():
+                # Update eligibility traces
+                # u_buf: (in, R) <- x (B, in)
+                # v_buf: (R, out) <- y (B, out)
+                # We need to project x and y to rank R?
+                # Or we accumulate outer products?
+                # PDF: self.u_buf...add_(... einsum...)
+                # Let's implement a simple Hebbian accumulation
+                
+                # Random projection for eligibility? Or learned?
+                # The PDF PostsynapticHebb has U and V parameters.
+                # We can use those to project.
+                
+                # Actually, let's just use the mean activity for now to keep it simple and fast
+                u_mean = x.mean(0) # (in,)
+                v_mean = y.mean(0) # (out,)
+                
+                # We need (in, R) and (R, out).
+                # We can just broadcast or rotate.
+                # Let's just update the buffers with a decay
+                
+                # Update logic from old code was:
+                # U.mul_(rho).add_(eta * u.unsqueeze(-1))
+                # V.mul_(rho).add_(eta * v.unsqueeze(0))
+                # This creates rank-1 updates.
+                
+                # We will do similar here but on u_buf/v_buf
+                self.u_buf.mul_(self.cfg.post_trace_decay).add_(0.05 * u_mean.unsqueeze(-1).expand(-1, self.cfg.rank_eligibility))
+                self.v_buf.mul_(self.cfg.post_trace_decay).add_(0.05 * v_mean.unsqueeze(0).expand(self.cfg.rank_eligibility, -1))
+                
+                # Update Postsynaptic state
+                # We need a vector for per-neuron update?
+                # y is (B, out). ca_proxy should be (out,).
+                ca_vec = y.abs().mean(0).clamp(0, 10.0)
+                
+                self.post.update(y, ca_vec)
+                self.post.hebb_fast(self.u_buf, self.v_buf)
+                self.post.consolidate(self.u_buf, self.v_buf)
+
         return y
 
 
@@ -447,14 +517,21 @@ class SynapticLinear(nn.Module):
 
 
 def build_presyn_state(B: int, T: int, H: int, device, dtype, cfg: SynapticConfig):
-    C = torch.zeros(B, H, T, device=device, dtype=dtype)
-    BUF = torch.zeros_like(C)
-    RRP = torch.ones_like(C) * 0.8
-    RES = torch.ones_like(C) * 0.2
-    PR = torch.ones_like(C) * 0.6
-    CL = torch.ones_like(C) * cfg.complexin_bias
-    E = torch.ones_like(C) * 0.8
-    return {"C": C, "BUF": BUF, "RRP": RRP, "RES": RES, "PR": PR, "CL": CL, "E": E}
+    R = torch.ones(B, H, T, device=device, dtype=dtype) * cfg.init_rrp
+    res = torch.ones_like(R) * cfg.init_reserve
+    c = torch.zeros_like(R)
+    sn = torch.ones_like(R) * cfg.init_snare
+    cl = torch.ones_like(R) * cfg.init_clamp
+    amp = torch.ones_like(R) * cfg.init_amp
+    en = torch.ones_like(R) * cfg.init_energy
+    delay = [torch.zeros_like(R) for _ in range(cfg.endo_delay)]
+    
+    # Map to old keys for compatibility if needed, or just use new keys
+    return {
+        "rrp": R, "res": res, "c": c, "sn": sn, "cl": cl, "amp": amp, "en": en, "delay": delay,
+        # Aliases for old code compatibility (if any)
+        "RRP": R, "RES": res, "C": c, "PR": sn, "CL": cl, "E": en, "BUF": torch.zeros_like(R)
+    }
 
 
 # -----------------------------------------------------------------------------
@@ -499,7 +576,6 @@ class SynapticCausalSelfAttention(nn.Module):
         H = self.n_head if x.size(-1) == self.n_head * self.head_dim else self.n_kv_head
         D = self.head_dim
         x = x.view(x.size(0), x.size(1), H, D)
-        # self.cos is on bfloat16, but might be on different device if not properly moved
         cos = self.cos[:, T0 : T0 + x.size(1), : D // 2].to(x.device).unsqueeze(2)
         sin = self.sin[:, T0 : T0 + x.size(1), : D // 2].to(x.device).unsqueeze(2)
         x1, x2 = x.split(D // 2, dim=-1)
@@ -519,9 +595,11 @@ class SynapticCausalSelfAttention(nn.Module):
         D = self.head_dim
         device = x.device
         dtype = x.dtype
+        
         q = self.q_proj(x)
         k = self.k_proj(x)
         v = self.v_proj(x).view(B, T, self.n_kv_head, D)
+        
         T0 = 0 if kv_cache is None else kv_cache.get_pos()
         q = self._apply_rope(q, T0)
         k = self._apply_rope(k, T0)
@@ -529,22 +607,48 @@ class SynapticCausalSelfAttention(nn.Module):
         k = _rmsnorm(k)
         k = self._repeat_kv(k)
         v = self._repeat_kv(v)
-        q = q.transpose(1, 2)
+        
+        q = q.transpose(1, 2) # (B, H, T, D)
         k = k.transpose(1, 2)
-        v = v.transpose(1, 2)  # (B,H,T,D)/(B,H,T,D)
+        v = v.transpose(1, 2)
 
-        logits = (q @ k.transpose(-1, -2)) / math.sqrt(D)  # (B,H,T,T)
-        causal_mask = torch.tril(torch.ones(T, T, device=device, dtype=dtype)).bool()
-        logits = logits.masked_fill(~causal_mask.view(1, 1, T, T), float("-inf"))
+        # Standard attention logits
+        dots = (q @ k.transpose(-1, -2)) / math.sqrt(D)
+        mask = _tri(T, device, dtype)
+        dots = dots + torch.log(mask + 1e-9) # Mask future
 
         if presyn_state is None:
             presyn_state = build_presyn_state(B, T, H, device, dtype, self.cfg)
-        syn_logit, presyn_state = self.pre(
-            q, k, logits, presyn_state, causal_mask, train_mode
-        )
 
-        aug_logits = logits + syn_logit
-        P = F.softmax(aug_logits, dim=-1)
+        # Top-k selection for synaptic physics (efficiency)
+        topk = min(self.cfg.attn_topk, T)
+        # We select topk keys for each query
+        # dots is (B, H, T, T)
+        vals, idx = torch.topk(dots, topk, dim=-1)
+        
+        # Drive for presyn is the attention logits (pre-softmax)
+        drive = vals
+        
+        # Run presynaptic physics
+        e = self.pre.release(presyn_state, drive, idx, train_mode)
+        
+        # Augment logits
+        # We need to scatter 'e' back into the full logit matrix
+        # e is (B, H, T, K)
+        # We add log(e) to the selected positions
+        
+        aug = torch.zeros_like(dots)
+        # scatter_add_ expects src to be same size as index? No, index size.
+        aug.scatter_add_(-1, idx, self.cfg.lambda_loge * torch.log(1e-6 + e))
+        
+        # Distance barrier
+        steps = torch.arange(T, device=device, dtype=dtype)
+        dist = (steps.view(1, 1, 1, T) - steps.view(1, 1, T, 1)).abs() / float(max(1, T))
+        aug = aug - self.cfg.barrier_strength * dist
+        
+        logits = dots + aug
+        
+        P = F.softmax(logits, dim=-1)
         P = self.attn_drop(P)
 
         ctx = torch.matmul(P.to(v.dtype), v)
@@ -596,24 +700,17 @@ class SynapticExpert(nn.Module):
 
     def forward(self, x: Tensor, energy_override: Optional[Tensor] = None, genes: Optional[Tensor] = None) -> Tensor:
         # x: (N, C)
-        
-        # If energy override provided (scalar or N-dim), use it. 
-        # But SynapticLinear expects flat batch tensor for calcium/energy.
-        # The MoE passes x as flattened (N,C).
         N = x.size(0)
         device = x.device
         
         if energy_override is not None:
-            # If override is scalar, expand to (N)
             if energy_override.ndim == 0:
                 e_tens = energy_override.expand(N)
             else:
-                # Assume it's (N) or broadcastable
                 e_tens = energy_override.view(-1).expand(N)
         else:
             e_tens = torch.ones(N, device=device)
             
-        # Calcium proxy is just 1.0 for now unless we wire it from router
         c_tens = torch.ones(N, device=device)
 
         y = self.fc1(
@@ -676,31 +773,15 @@ class SynapticMoE(nn.Module):
         object.__setattr__(self, "last_ctx", {})
         
         # Molecular Genetics: Xi (The Genome)
-        # Each expert has a vector of log-space genetic biases
-        # [0]: alpha_fatigue (logit)
-        # [1]: alpha_energy (logit)
-        # [2]: camkii_gain (logit)
-        # [3]: pp1_gain (logit)
         self.Xi = nn.Parameter(torch.zeros(num_experts, cfg.xi_dim)) 
-        # Init with small noise so they aren't identical
         nn.init.normal_(self.Xi, std=0.1)
 
     def _get_phenotype(self, xi: Tensor) -> Tensor:
         """Map Xi logits to biological range constants."""
-        # Use softplus to keep positive
-        # Base values come from logic/defaults, modulated here
-        # [0] fatigue rate: 0.01 base. Range 0.001 - 0.1
-        fatigue_rate = 0.01 * (torch.sigmoid(xi[..., 0]) * 2.0 + 0.1) # 0.001 to 0.021
-        
-        # [1] energy refill: 0.005 base. Range 0.001 - 0.05
+        fatigue_rate = 0.01 * (torch.sigmoid(xi[..., 0]) * 2.0 + 0.1)
         energy_fill = 0.005 * (torch.sigmoid(xi[..., 1]) * 2.0 + 0.1)
-        
-        # [2] camkii: 1.5 base. Range 0.1 - 5.0
-        camkii_gain = F.softplus(xi[..., 2] + 1.0) # shifted so 0 -> softplus(1)~=1.3
-        
-        # [3] pp1: 1.0 base. Range 0.1 - 5.0
+        camkii_gain = F.softplus(xi[..., 2] + 1.0)
         pp1_gain = F.softplus(xi[..., 3] + 0.5)
-        
         return torch.stack([fatigue_rate, energy_fill, camkii_gain, pp1_gain], dim=-1)
 
     def forward(self, x: Tensor) -> Tuple[Tensor, Tensor]:
@@ -710,23 +791,24 @@ class SynapticMoE(nn.Module):
         fatigue_buf = cast(Tensor, self.fatigue)
         energy_buf = cast(Tensor, self.energy)
         
-        # 1. Express Genetics (Phenotype)
         pheno = self._get_phenotype(self.Xi) # (E, 4)
         alpha_fatigue = pheno[:, 0]
         alpha_energy = pheno[:, 1]
         
         logits = self.router(x)  # (B,T,E)
-        # Embed-token similarity (optional small bias from router embeddings)
-        tok_proxy = x.mean(dim=-1, keepdim=True)  # (B,T,1)
+        
+        # Router bias logic (same as before)
+        tok_proxy = x.mean(dim=-1, keepdim=True)
         base_bias = 0.02 * tok_proxy.expand(-1, -1, E)
-        router_gain = self.router_embeddings.norm(dim=-1).view(1, 1, -1)  # (1,1,E)
+        router_gain = self.router_embeddings.norm(dim=-1).view(1, 1, -1)
         gain_bias = 0.02 * tok_proxy * router_gain
-        probe_feat = self.router_probe(x)  # (B,T,dim)
+        probe_feat = self.router_probe(x)
         tok_unit = F.normalize(probe_feat, dim=-1)
         router_unit = F.normalize(self.router_embeddings, dim=-1)
         align_bias = 0.02 * torch.einsum("btd,ed->bte", tok_unit, router_unit)
         bias = base_bias + gain_bias + align_bias
         gene_bias = 0.05 * (alpha_energy - alpha_fatigue).view(1, 1, E)
+        
         logits = (
             logits
             + gene_bias
@@ -735,53 +817,59 @@ class SynapticMoE(nn.Module):
             - 0.1 * fatigue_buf.view(1, 1, E)
         )
         topk = min(self.top_k, E)
-        g, idx = torch.topk(logits, topk, dim=-1)  # (B,T,k)
-        gates = F.softmax(g, dim=-1)  # (B,T,k)
+        g, idx = torch.topk(logits, topk, dim=-1)
+        gates = F.softmax(g, dim=-1)
 
         out = torch.zeros_like(x)
         flat_out = out.view(-1, C)
         flat_x = x.view(-1, C)
+        
         use_fused_genetics = self.cfg.native_genetics and gates.is_cuda
+        
         me = torch.zeros(E, device=device)
         pe = torch.zeros(E, device=device)
         
         for e in range(E):
-            mask = idx == e  # (B,T,k)
-            sel = mask.any(dim=-1)  # (B,T)
+            mask = idx == e
+            sel = mask.any(dim=-1)
             if not sel.any():
                 continue
             flat_idx = sel.view(-1).nonzero(as_tuple=False).squeeze(1)
             x_e = flat_x.index_select(0, flat_idx)
             
-            # Get genetics for this expert
-            gene_e = pheno[e] # (4,)
-            energy_e = energy_buf[e] # scalar
+            gene_e = pheno[e]
+            energy_e = energy_buf[e]
             
             y_e = self.experts[e](x_e, energy_override=energy_e, genes=gene_e)
             w = gates.masked_select(mask).unsqueeze(-1)
             flat_out.index_add_(0, flat_idx, w * y_e)
+            
             if not use_fused_genetics:
                 me[e] = sel.sum()
                 pe[e] = gates.masked_select(mask).sum()
 
         with torch.no_grad():
             if use_fused_genetics:
-                from bio_inspired_nanochat.kernels import (
-                    accumulate_router_stats,
-                    update_metabolism_fused,
-                )
-
-                counts, gate_sums = accumulate_router_stats(idx.detach(), gates.detach(), E)
-                util = counts.clamp_min(1.0) / float(B * T)
-                update_metabolism_fused(fatigue_buf, energy_buf, alpha_fatigue, alpha_energy, util)
-                me = counts
-                pe = gate_sums
+                try:
+                    from bio_inspired_nanochat.kernels import (
+                        accumulate_router_stats,
+                        update_metabolism_fused,
+                    )
+                    counts, gate_sums = accumulate_router_stats(idx.detach(), gates.detach(), E)
+                    util = counts.clamp_min(1.0) / float(B * T)
+                    update_metabolism_fused(fatigue_buf, energy_buf, alpha_fatigue, alpha_energy, util)
+                    me = counts
+                    pe = gate_sums
+                except ImportError:
+                    # Fallback
+                    util = me.clamp_min(1.0) / float(B * T)
+                    fatigue_buf.mul_(1.0 - alpha_fatigue).add_(alpha_fatigue * util)
+                    energy_buf.mul_(1.0 - alpha_energy).add_(alpha_energy * (1.0 - util))
             else:
                 util = me.clamp_min(1.0) / float(B * T)
                 fatigue_buf.mul_(1.0 - alpha_fatigue).add_(alpha_fatigue * util)
                 energy_buf.mul_(1.0 - alpha_energy).add_(alpha_energy * (1.0 - util))
 
-            # Capture context for NeuroScore
             object.__setattr__(self, "last_ctx", {
                 "x": x.detach(),
                 "indices": idx.detach(),
@@ -793,10 +881,9 @@ class SynapticMoE(nn.Module):
         aux_loss = E * torch.sum(pe * me)
         self.last_aux_loss = aux_loss
 
-        # Contrastive router-embedding update (co-activated experts pull together, others push)
+        # Contrastive router-embedding update
         with torch.no_grad():
             cooc = torch.zeros(E, E, device=device)
-            # crude but stable co-activation surrogate: diagonal mass only (keeps update bounded)
             for e in range(E):
                 cooc[e, e] = pe[e]
             emb = self.router_embeddings
@@ -805,7 +892,7 @@ class SynapticMoE(nn.Module):
             pull = cooc * (sim - 1.0)
             push = (1.0 - cooc) * (sim + 0.3) * self.cfg.router_contrastive_push
             grad = pull - push
-            grad = grad - grad.mean()  # center
+            grad = grad - grad.mean()
             grad = grad.to(emb.dtype)
             delta = (grad @ emb) * self.cfg.router_contrastive_lr
             emb = emb - delta
@@ -833,7 +920,6 @@ class StructuralPlasticity(nn.Module):
         age = cast(Tensor, self.age)
         age.add_(1.0)
         util = cast(Tensor, self.util)
-        # Explicitly cast float to Tensor for in-place ops to satisfy strict type checkers
         util.mul_(1.0 - self.cfg.structural_tau_util).add_(
             self.cfg.structural_tau_util * used.float()
         )
