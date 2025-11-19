@@ -15,7 +15,9 @@ Notice that GSM8K uses tool calls inside << >> tags.
 """
 
 import re
-from datasets import load_dataset
+from typing import Any, Dict, List, cast
+
+from datasets import Dataset, load_dataset
 from tasks.common import Task
 
 
@@ -40,7 +42,8 @@ class GSM8K(Task):
         super().__init__(**kwargs)
         assert subset in ["main", "socratic"], "GSM8K subset must be main|socratic"
         assert split in ["train", "test"], "GSM8K split must be train|test"
-        self.ds = load_dataset("openai/gsm8k", subset, split=split).shuffle(seed=42)
+        dataset = load_dataset("openai/gsm8k", subset, split=split).shuffle(seed=42)
+        self.ds: Dataset = dataset
 
     @property
     def eval_type(self):
@@ -51,12 +54,12 @@ class GSM8K(Task):
 
     def get_example(self, index):
         """ Get a single problem from the dataset. """
-        row = self.ds[index]
-        question = row['question'] # string of the question prompt
-        answer = row['answer'] # string of the full solution and the answer after #### marker
+        row = cast(Dict[str, Any], self.ds[index])
+        question = cast(str, row['question']) # string of the question prompt
+        answer = cast(str, row['answer']) # string of the full solution and the answer after #### marker
         # Create and return the Conversation object
         # This is tricky because GSM8K uses tool calls, which we need to parse here.
-        assistant_message_parts = []
+        assistant_message_parts: List[Dict[str, str]] = []
         parts = re.split(r'(<<[^>]+>>)', answer)
         for part in parts:
             if part.startswith('<<') and part.endswith('>>'):

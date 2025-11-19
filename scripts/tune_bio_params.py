@@ -99,6 +99,13 @@ PARAM_NAMES = [p[0] for p in PARAM_SPECS]
 LOWER_BOUNDS = np.array([p[2] for p in PARAM_SPECS])
 UPPER_BOUNDS = np.array([p[3] for p in PARAM_SPECS])
 
+
+def _build_synaptic_config(overrides: Dict[str, float]) -> SynapticConfig:
+    cfg = SynapticConfig()
+    for key, value in overrides.items():
+        setattr(cfg, key, float(value))
+    return cfg
+
 def encode_params(config: SynapticConfig) -> np.ndarray:
     """Extract vector from config."""
     vals = []
@@ -164,7 +171,7 @@ def evaluate_candidate(solution_vector: np.ndarray) -> float:
         
         # 2. Build Config
         # Start with default config
-        syn_cfg = SynapticConfig(**param_dict)
+        syn_cfg = _build_synaptic_config(param_dict)
         
         model_cfg = MODEL_CONFIG
         model_cfg.syn_cfg = syn_cfg
@@ -320,7 +327,8 @@ def main():
                         diffs.append(f"{k}: {def_val:.2f}->{v:.2f}")
                 
                 diff_str = ", ".join(diffs[:3]) # show top 3 changes
-                if len(diffs) > 3: diff_str += "..."
+                if len(diffs) > 3:
+                    diff_str += "..."
             else:
                 diff_str = "-"
 

@@ -12,11 +12,18 @@ import os
 import shutil
 import argparse
 
-from typing import cast
+from typing import Dict, cast
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig, Block
 from bio_inspired_nanochat.synaptic import SynapticConfig, SynapticMoE
 from bio_inspired_nanochat.neuroviz import NeuroVizConfig, NeuroVizManager
 from bio_inspired_nanochat.synaptic_splitmerge import SplitMergeConfig, SplitMergeController
+
+
+def _build_synaptic_config(overrides: Dict[str, object]) -> SynapticConfig:
+    cfg = SynapticConfig()
+    for key, value in overrides.items():
+        setattr(cfg, key, value)
+    return cfg
 
 def main():
     parser = argparse.ArgumentParser(description="Verify Bio-Inspired Nanochat Evolution")
@@ -48,7 +55,7 @@ def main():
     if args.fused_genetics is not None:
         syn_kwargs["native_genetics"] = args.fused_genetics
 
-    syn_cfg = SynapticConfig(**syn_kwargs)
+    syn_cfg = _build_synaptic_config(syn_kwargs)
     
     print(f"[*] Synaptic Config: native_presyn={syn_cfg.native_presyn}, native_metrics={syn_cfg.native_metrics}")
     
@@ -112,7 +119,10 @@ def main():
     print("[*] Starting Evolution Loop (100 steps)...")
     
     # Snapshot initial genetics
-    block0 = cast(Block, model.transformer.h[0])
+    blocks = getattr(model, "h", None)
+    if blocks is None:
+        blocks = model.transformer.h
+    block0 = cast(Block, blocks[0])
     moe_layer = cast(SynapticMoE, block0.mlp) # First layer MoE
     init_genes = moe_layer.Xi.detach().clone()
     print(f"[*] Initial Genes (Layer 0, Expert 0): {init_genes[0].float().cpu().numpy()}")

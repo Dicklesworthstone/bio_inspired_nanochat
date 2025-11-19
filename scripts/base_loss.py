@@ -8,7 +8,7 @@ torchrun --standalone --nproc_per_node=8 -m scripts.base_loss
 """
 import os
 from contextlib import nullcontext
-import torch
+from bio_inspired_nanochat.torch_imports import torch, F
 from bio_inspired_nanochat.checkpoint_manager import load_model
 from bio_inspired_nanochat.common import compute_init, print0, compute_cleanup, autodetect_device_type
 from bio_inspired_nanochat.dataloader import tokenizing_distributed_data_loader
@@ -22,7 +22,8 @@ split_tokens = 20*524288  # number of tokens to evaluate per split
 model_tag = None # optional model tag for the output directory name
 model_step = None # optional model step for the output directory name
 device_type = "" # cuda|cpu|mps (empty => autodetect)
-exec(open(os.path.join('bio_inspired_nanochat', 'configurator.py')).read()) # overrides from command line or config file
+with open(os.path.join('bio_inspired_nanochat', 'configurator.py')) as f:
+    exec(f.read()) # overrides from command line or config file
 
 # Load the base model and the tokenizer
 device_type = autodetect_device_type() if device_type == "" else device_type
@@ -40,7 +41,6 @@ bpb_results = {}
 # Handle GPTSynaptic return signature for evaluate_bpb
 is_synaptic = hasattr(model, 'config') and getattr(model.config, 'synapses', False)
 if is_synaptic:
-    import torch.nn.functional as F
     orig_forward = model.forward
     def syn_forward_wrapper(idx, targets=None, kv_cache=None, loss_reduction='mean', **kwargs):
         if targets is not None:

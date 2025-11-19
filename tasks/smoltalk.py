@@ -4,8 +4,11 @@ https://huggingface.co/datasets/HuggingFaceTB/smol-smoltalk
 We use the "smol" version, which is more appropriate for smaller models.
 """
 
-from datasets import load_dataset
+from typing import Any, Dict, List, cast
+
+from datasets import Dataset, load_dataset
 from tasks.common import Task
+
 
 class SmolTalk(Task):
     """ smol-smoltalk dataset. train is 460K rows, test is 24K rows. """
@@ -13,15 +16,16 @@ class SmolTalk(Task):
     def __init__(self, split, **kwargs):
         super().__init__(**kwargs)
         assert split in ["train", "test"], "SmolTalk split must be train|test"
-        self.ds = load_dataset("HuggingFaceTB/smol-smoltalk", split=split).shuffle(seed=42)
+        dataset = load_dataset("HuggingFaceTB/smol-smoltalk", split=split).shuffle(seed=42)
+        self.ds: Dataset = dataset
         self.length = len(self.ds)
 
     def num_examples(self):
         return self.length
 
     def get_example(self, index):
-        row = self.ds[index]
-        messages = row["messages"]
+        row = cast(Dict[str, Any], self.ds[index])
+        messages = cast(List[Dict[str, Any]], row["messages"])
         # ---------------------------------------------------------------------
         # sanity checking asserts here
         # TODO: we could remove these asserts later, for now just don't want any footguns

@@ -14,6 +14,8 @@
 
 set -Eeuo pipefail
 
+export PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1
+
 ROOT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT_DIR}"
 
@@ -35,14 +37,15 @@ have_shards() {
 
 log "Ensuring at least ${DATA_SHARDS} FineWeb shards are present..."
 if ! have_shards; then
-  log "Downloading shards via nanochat.dataset (this may take a while)..."
-  uv run python -m nanochat.dataset --num-files "${DATA_SHARDS}" --num-workers "${DATA_WORKERS}"
+  log "Downloading shards via bio_inspired_nanochat.dataset (this may take a while)..."
+  uv run python -m bio_inspired_nanochat.dataset --num-files "${DATA_SHARDS}" --num-workers "${DATA_WORKERS}"
 else
   log "Found >= ${DATA_SHARDS} shards in base_data/ (skipping download)."
 fi
 
 log "Running the fast NeuroViz/NeuroScore smoke test (scripts/verify_evolution.py)..."
-uv run scripts/verify_evolution.py | tee runs/verify_evo/latest.log
+mkdir -p runs
+PYTHONPATH=. uv run scripts/verify_evolution.py | tee runs/verify_evolution_console.log
 
 if ! pgrep -f "tensorboard --logdir" >/dev/null 2>&1; then
   log "Starting TensorBoard on port ${TB_PORT} (background)..."
@@ -55,8 +58,8 @@ fi
 
 log "Launching torchrun training job (${RUN_NAME})..."
 set -x
-torchrun --nproc_per_node=2 --master_port=29500 \
-  uv run python -m scripts.base_train \
+uv run torchrun --nproc_per_node=2 --master_port=29500 \
+  -m scripts.base_train \
     --synapses=1 \
     --run="${RUN_NAME}" \
     --model_tag="${MODEL_TAG}" \

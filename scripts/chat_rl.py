@@ -49,7 +49,8 @@ eval_every = 60 # every how many steps to evaluate the model for val pass@k
 eval_examples = 400 # number of examples used for evaluating pass@k
 # now allow CLI to override the settings via the configurator lol
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
-exec(open(os.path.join('bio_inspired_nanochat', 'configurator.py')).read()) # overrides from command line or config file
+with open(os.path.join('bio_inspired_nanochat', 'configurator.py')) as f:
+    exec(f.read()) # overrides from command line or config file
 user_config = {k: globals()[k] for k in config_keys} # will be useful for logging
 # -----------------------------------------------------------------------------
 

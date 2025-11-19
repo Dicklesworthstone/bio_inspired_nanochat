@@ -5,7 +5,9 @@ It is a coding benchmark.
 """
 
 import re
-from datasets import load_dataset
+from typing import Any, Dict, cast
+
+from datasets import Dataset, load_dataset
 from bio_inspired_nanochat.execution import execute_code
 from tasks.common import Task
 
@@ -48,7 +50,8 @@ class HumanEval(Task):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.ds = load_dataset("openai/openai_humaneval", split="test").shuffle(seed=42)
+        dataset = load_dataset("openai/openai_humaneval", split="test").shuffle(seed=42)
+        self.ds: Dataset = dataset
 
     @property
     def eval_type(self):
@@ -59,11 +62,11 @@ class HumanEval(Task):
 
     def get_example(self, index):
         """ Get a single problem from the dataset. """
-        row = self.ds[index]
-        prompt = row['prompt'] # prompts in HumanEval are the beginning of the program
-        solution = row['canonical_solution'] # the correct continuation of the program
-        entry_point = row['entry_point'] # the function to check
-        test = row['test'] # the test cases
+        row = cast(Dict[str, Any], self.ds[index])
+        prompt = cast(str, row['prompt'])
+        solution = cast(str, row['canonical_solution'])
+        entry_point = cast(str, row['entry_point'])
+        test = cast(str, row['test'])
         complete_solution = f"{prompt}\n{solution}"
         messages = [
             {"role": "user", "content": prompt},

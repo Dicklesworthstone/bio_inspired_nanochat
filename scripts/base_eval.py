@@ -20,8 +20,7 @@ import zipfile
 import tempfile
 from contextlib import nullcontext
 
-import torch
-
+from bio_inspired_nanochat.torch_imports import torch
 from bio_inspired_nanochat.common import compute_init, compute_cleanup, print0, get_base_dir, autodetect_device_type, download_file_with_lock
 from bio_inspired_nanochat.tokenizer import HuggingFaceTokenizer
 from bio_inspired_nanochat.checkpoint_manager import load_model

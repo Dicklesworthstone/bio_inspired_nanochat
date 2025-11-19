@@ -3,8 +3,11 @@ The ARC dataset from Allen AI.
 https://huggingface.co/datasets/allenai/ai2_arc
 """
 
-from datasets import load_dataset
+from typing import Any, Dict, List, cast
+
+from datasets import Dataset, load_dataset
 from tasks.common import Task, render_mc
+
 
 class ARC(Task):
 
@@ -12,7 +15,8 @@ class ARC(Task):
         super().__init__(**kwargs)
         assert subset in ["ARC-Easy", "ARC-Challenge"], "ARC subset must be ARC-Easy or ARC-Challenge"
         assert split in ["train", "validation", "test"], "ARC split must be train|validation|test"
-        self.ds = load_dataset("allenai/ai2_arc", subset, split=split).shuffle(seed=42)
+        dataset = load_dataset("allenai/ai2_arc", subset, split=split).shuffle(seed=42)
+        self.ds: Dataset = dataset
 
     @property
     def eval_type(self):
@@ -22,11 +26,12 @@ class ARC(Task):
         return len(self.ds)
 
     def get_example(self, index):
-        row = self.ds[index]
-        question = row["question"] # the question text
-        choices = row["choices"]["text"] # the text of each choice
-        answer_string = row["answerKey"] # e.g. "A", "B", "C", "D"
-        letters = row["choices"]["label"] # e.g. ["A", "B", "C", "D"]
+        row = cast(Dict[str, Any], self.ds[index])
+        question = cast(str, row["question"])  # the question text
+        choices_info = cast(Dict[str, List[str]], row["choices"])
+        choices = list(choices_info["text"])  # the text of each choice
+        answer_string = cast(str, row["answerKey"])  # e.g. "A", "B", "C", "D"
+        letters = list(choices_info["label"])  # e.g. ["A", "B", C, "D"]
         assert answer_string in letters, f"ARC answer {answer_string} must be one of {letters}" # sanity check
         # create and return the Conversation object
         user_message = render_mc(question, letters, choices)

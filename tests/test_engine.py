@@ -40,13 +40,17 @@ def test_kv_cache_resize():
         insert_token(i)
 
     # Record the original state of the cache
-    original_cache = kv_cache.kv_cache.clone()
+    cache_tensor = kv_cache.kv_cache
+    assert cache_tensor is not None, "KV cache tensor should be initialized"
+    original_cache = cache_tensor.clone()
     original_seq_len = original_cache.shape[4]
 
     # Insert the 5th token, which will trigger a resize
     insert_token(4)
     # Verify that the cache actually resized
-    new_seq_len = kv_cache.kv_cache.shape[4]
+    resized_cache = kv_cache.kv_cache
+    assert resized_cache is not None, "KV cache tensor should exist after resize"
+    new_seq_len = resized_cache.shape[4]
     assert new_seq_len > original_seq_len, f"Cache did not resize: original seq_len={original_seq_len}, new seq_len={new_seq_len}"
 
     # Verify that the original 4 tokens are still intact after resize
@@ -55,8 +59,8 @@ def test_kv_cache_resize():
             # Check that resized cache matches expected values
             expected_k = float(token_idx)
             expected_v = float(token_idx * 100)
-            actual_k = kv_cache.kv_cache[layer_idx, 0, :, :, token_idx, :]
-            actual_v = kv_cache.kv_cache[layer_idx, 1, :, :, token_idx, :]
+            actual_k = resized_cache[layer_idx, 0, :, :, token_idx, :]
+            actual_v = resized_cache[layer_idx, 1, :, :, token_idx, :]
             assert (actual_k == expected_k).all(), f"Layer {layer_idx}, token {token_idx}: key corrupted, expected {expected_k}"
             assert (actual_v == expected_v).all(), f"Layer {layer_idx}, token {token_idx}: value corrupted, expected {expected_v}"
             # And that the original cache matches resized cache

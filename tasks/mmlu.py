@@ -3,8 +3,11 @@ The MMLU dataset.
 https://huggingface.co/datasets/cais/mmlu
 """
 
-from datasets import load_dataset
+from typing import Any, Dict, List, Sequence, cast
+
+from datasets import Dataset, load_dataset
 from tasks.common import Task, render_mc
+
 
 class MMLU(Task):
 
@@ -19,7 +22,8 @@ class MMLU(Task):
             assert split == "train", "auxiliary_train must be split into train"
         self.subset = subset
         self.split = split
-        self.ds = load_dataset("cais/mmlu", subset, split=split).shuffle(seed=42)
+        dataset = load_dataset("cais/mmlu", subset, split=split).shuffle(seed=42)
+        self.ds: Dataset = dataset
         if subset == "auxiliary_train":
             # I don't understand why but the auxiliary_train rows have some weird additional 'train' wrapper
             self.ds = self.ds.map(lambda row: row['train'], remove_columns=['train'])
@@ -32,11 +36,11 @@ class MMLU(Task):
         return len(self.ds)
 
     def get_example(self, index):
-        row = self.ds[index]
-        question = row["question"] # the question text
-        choices = row["choices"] # the text of each choice
-        answer = row["answer"] # index of the answer, e.g. 0,1,2,3 (for A,B,C,D)
-        subject = row["subject"] # e.g. "college_biology", "college_chemistry", etc.
+        row = cast(Dict[str, Any], self.ds[index])
+        question = cast(str, row["question"]) # the question text
+        choices = cast(Sequence[str], row["choices"]) # the text of each choice
+        answer = cast(int, row["answer"]) # index of the answer, e.g. 0,1,2,3 (for A,B,C,D)
+        subject = cast(str, row["subject"]) # e.g. "college_biology", "college_chemistry", etc.
         assert len(choices) == 4, "MMLU should have 4 choices"
         # create and return the Conversation object
         user_message = render_mc(question, self.letters, choices)

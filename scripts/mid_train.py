@@ -51,7 +51,8 @@ eval_tokens = 20*524288
 total_batch_size = 524288
 dry_run = 0 # dry_run=1 is for experiments: we will log to wandb but we won't write checkpoints or report
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
-exec(open(os.path.join('bio_inspired_nanochat', 'configurator.py')).read()) # overrides from command line or config file
+with open(os.path.join('bio_inspired_nanochat', 'configurator.py')) as f:
+    exec(f.read()) # overrides from command line or config file
 user_config = {k: globals()[k] for k in config_keys} # possibly useful for logging
 # -----------------------------------------------------------------------------
 
