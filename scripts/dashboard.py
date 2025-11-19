@@ -154,7 +154,8 @@ with st.sidebar:
         "Overview", 
         "Synaptic Dynamics", 
         "Anatomy of a Decision",
-        "Semantic Space",
+        "Semantic Space (3D)",
+        "Functional Connectivity",
         "Interactive Petri Dish",
         "Interactive Hebbian Learning",
         "Structural Plasticity", 
@@ -192,6 +193,43 @@ if page == "Overview":
         Unlike standard Transformers, this model has a "metabolism" and "synaptic plasticity".</p>
     </div>
     """, unsafe_allow_html=True)
+    
+    # System Vitals (EKG)
+    vitals_path = os.path.join(neuroviz_dir, "vitals.csv")
+    if os.path.exists(vitals_path):
+        try:
+            df = pd.read_csv(vitals_path)
+            if not df.empty:
+                last_row = df.iloc[-1]
+                
+                col1, col2, col3, col4 = st.columns(4)
+                col1.metric("Global Energy", f"{last_row['energy']:.2f}", delta=None)
+                col2.metric("Global Fatigue", f"{last_row['fatigue']:.2f}", delta=None, delta_color="inverse")
+                col3.metric("Loss", f"{last_row['loss']:.4f}", delta=None, delta_color="inverse")
+                col4.metric("Step", int(last_row['step']))
+                
+                # Scrolling EKG Chart
+                st.markdown("### System Vitals")
+                
+                # Reshape for plotly
+                df_melt = df.melt(id_vars=['step'], value_vars=['energy', 'fatigue', 'loss'], var_name='Metric', value_name='Value')
+                
+                fig = px.line(df_melt, x='step', y='Value', color='Metric', 
+                              color_discrete_map={'energy': '#00CC96', 'fatigue': '#EF553B', 'loss': '#AB63FA'})
+                
+                fig.update_layout(
+                    template="plotly_dark",
+                    height=300,
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    xaxis_title="Step",
+                    yaxis_title="Value",
+                    margin=dict(l=0, r=0, t=0, b=0),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                )
+                st.plotly_chart(fig, use_container_width=True)
+        except Exception as e:
+            st.error(f"Error reading vitals: {e}")
     
     col1, col2 = st.columns(2)
     
@@ -402,15 +440,15 @@ elif page == "Anatomy of a Decision":
         st.warning("No decision data found yet.")
 
 # -----------------------------------------------------------------------------
-# Page: Semantic Space
+# Page: Semantic Space (3D)
 # -----------------------------------------------------------------------------
 
-elif page == "Semantic Space":
-    st.header(f"Semantic Space: {selected_layer}")
+elif page == "Semantic Space (3D)":
+    st.header(f"Semantic Space (3D): {selected_layer}")
     st.markdown("""
     **Where does the Token live?**
     
-    We project the **Token's Router Probe** and all **Expert Embeddings** into 2D space.
+    We project the **Token's Router Probe** and all **Expert Embeddings** into 3D space.
     
     *   **🔴 Red Star**: The current Token.
     *   **⚪ Grey Dots**: The Experts.
@@ -426,18 +464,22 @@ elif page == "Semantic Space":
         
         token_x = data['token_x']
         token_y = data['token_y']
+        token_z = data.get('token_z', 0.0) # Fallback for old 2D data
+        
         exp_x = data['experts_x']
         exp_y = data['experts_y']
+        exp_z = data.get('experts_z', [0.0]*len(exp_x))
+        
         gates = np.array(data['gates'])
         
         fig = go.Figure()
         
         # All experts
-        fig.add_trace(go.Scatter(
-            x=exp_x, y=exp_y,
+        fig.add_trace(go.Scatter3d(
+            x=exp_x, y=exp_y, z=exp_z,
             mode='markers',
             marker=dict(
-                size=8,
+                size=5,
                 color=gates,
                 colorscale=[[0, 'grey'], [0.01, 'grey'], [0.01, '#2196F3'], [1, '#2196F3']],
                 showscale=False,
@@ -451,39 +493,126 @@ elif page == "Semantic Space":
         # Selected experts (Halo)
         selected_mask = gates > 0
         if np.any(selected_mask):
-            fig.add_trace(go.Scatter(
+            fig.add_trace(go.Scatter3d(
                 x=np.array(exp_x)[selected_mask],
                 y=np.array(exp_y)[selected_mask],
+                z=np.array(exp_z)[selected_mask],
                 mode='markers',
                 marker=dict(
-                    size=15,
+                    size=10,
                     color='rgba(0,0,0,0)',
-                    line=dict(color='#2196F3', width=2)
+                    line=dict(color='#2196F3', width=5)
                 ),
                 hoverinfo='skip',
                 name='Selected'
             ))
         
         # Token
-        fig.add_trace(go.Scatter(
-            x=[token_x], y=[token_y],
+        fig.add_trace(go.Scatter3d(
+            x=[token_x], y=[token_y], z=[token_z],
             mode='markers',
-            marker=dict(size=18, symbol='star', color='#FF5252'),
+            marker=dict(size=12, symbol='diamond', color='#FF5252'),
             name='Current Token'
         ))
         
         fig.update_layout(
             template="plotly_dark",
-            height=600,
+            height=700,
             paper_bgcolor='rgba(0,0,0,0)',
             plot_bgcolor='rgba(0,0,0,0)',
-            xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-            yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+            scene=dict(
+                xaxis=dict(showgrid=False, zeroline=False, showticklabels=False, title=''),
+                yaxis=dict(showgrid=False, zeroline=False, showticklabels=False, title=''),
+                zaxis=dict(showgrid=False, zeroline=False, showticklabels=False, title=''),
+            ),
             showlegend=True
         )
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.warning("No semantic space data found yet.")
+
+# -----------------------------------------------------------------------------
+# Page: Functional Connectivity
+# -----------------------------------------------------------------------------
+
+elif page == "Functional Connectivity":
+    st.header(f"Functional Connectivity: {selected_layer}")
+    st.markdown("""
+    **The Connectome.**
+    
+    This graph shows which experts fire together.
+    *   **Nodes**: Experts.
+    *   **Edges**: Co-activation frequency.
+    
+    Clusters represent **Functional Modules** (e.g., a group of experts that specialize in Python code or French grammar).
+    """)
+    
+    files = get_files(f"images/{selected_layer}/{selected_layer}_connectivity_*.json")
+    if files:
+        idx = st.slider("History", 0, len(files)-1, 0, format="Step -%d", key="connect_slider")
+        data = load_json(files[idx])
+        adj = np.array(data['adjacency'])
+        
+        # Build graph for Plotly
+        # We use a circular layout for simplicity and stability
+        E = adj.shape[0]
+        
+        # Filter weak edges
+        threshold = 0.1
+        rows, cols = np.where(adj > threshold)
+        
+        edge_x = []
+        edge_y = []
+        
+        # Circular layout
+        radius = 10
+        node_x = [radius * np.cos(2*np.pi*i/E) for i in range(E)]
+        node_y = [radius * np.sin(2*np.pi*i/E) for i in range(E)]
+        
+        for r, c in zip(rows, cols):
+            if r >= c:
+                continue # Undirected
+            x0, y0 = node_x[r], node_y[r]
+            x1, y1 = node_x[c], node_y[c]
+            edge_x.extend([x0, x1, None])
+            edge_y.extend([y0, y1, None])
+            
+        edge_trace = go.Scatter(
+            x=edge_x, y=edge_y,
+            line=dict(width=0.5, color='#888'),
+            hoverinfo='none',
+            mode='lines')
+
+        node_trace = go.Scatter(
+            x=node_x, y=node_y,
+            mode='markers+text',
+            hoverinfo='text',
+            marker=dict(
+                showscale=False,
+                color='#2196F3',
+                size=10,
+                line_width=2),
+            text=[str(i) for i in range(E)],
+            textposition="top center"
+        )
+        
+        fig = go.Figure(data=[edge_trace, node_trace],
+             layout=go.Layout(
+                title='Expert Co-Activation Network',
+                titlefont_size=16,
+                showlegend=False,
+                hovermode='closest',
+                margin=dict(b=20,l=5,r=5,t=40),
+                template="plotly_dark",
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                yaxis=dict(showgrid=False, zeroline=False, showticklabels=False))
+                )
+        st.plotly_chart(fig, use_container_width=True)
+        
+    else:
+        st.warning("No connectivity data found yet.")
 
 # -----------------------------------------------------------------------------
 # Page: Interactive Petri Dish
