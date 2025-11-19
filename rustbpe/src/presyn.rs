@@ -5,11 +5,6 @@ use pyo3::types::PyDict;
 use rayon::prelude::*;
 
 #[derive(Clone, Copy)]
-struct UnsafePtr<T>(*mut T);
-unsafe impl<T> Send for UnsafePtr<T> {}
-unsafe impl<T> Sync for UnsafePtr<T> {}
-
-#[derive(Clone, Copy)]
 struct Config {
     tau_c: f32,
     tau_buf: f32,
@@ -111,6 +106,7 @@ pub fn presyn_step_cpu<'py>(
     let e_arr = e_tensor.as_array();
 
     // Initialize outputs with zeros
+    // We ensure they are standard layout (contiguous)
     let mut syn_logit = ArrayD::<f32>::zeros(logits_arr.shape());
     let mut c_new = ArrayD::<f32>::zeros(c_arr.shape());
     let mut buf_new = ArrayD::<f32>::zeros(buf_arr.shape());
@@ -127,66 +123,66 @@ pub fn presyn_step_cpu<'py>(
     let rho_e = (-1.0 / c.tau_energy).exp();
     let sqrt_d = (d_dim as f32).sqrt();
 
-    // Get raw pointers to output data
-    // We assume contiguous layout (standard for zeros())
-    let syn_logit_ptr = UnsafePtr(syn_logit.as_mut_ptr());
-    let c_new_ptr = UnsafePtr(c_new.as_mut_ptr());
-    let buf_new_ptr = UnsafePtr(buf_new.as_mut_ptr());
-    let rrp_new_ptr = UnsafePtr(rrp_new.as_mut_ptr());
-    let res_new_ptr = UnsafePtr(res_new.as_mut_ptr());
-    let pr_new_ptr = UnsafePtr(pr_new.as_mut_ptr());
-    let e_new_ptr = UnsafePtr(e_new.as_mut_ptr());
+    // Get raw pointers as usize to pass through rayon closures safely
+    // We use as_slice_mut().unwrap() to ensure contiguity and get pointer
+    let syn_logit_ptr = syn_logit.as_slice_mut().unwrap().as_mut_ptr() as usize;
+    let c_new_ptr = c_new.as_slice_mut().unwrap().as_mut_ptr() as usize;
+    let buf_new_ptr = buf_new.as_slice_mut().unwrap().as_mut_ptr() as usize;
+    let rrp_new_ptr = rrp_new.as_slice_mut().unwrap().as_mut_ptr() as usize;
+    let res_new_ptr = res_new.as_slice_mut().unwrap().as_mut_ptr() as usize;
+    let pr_new_ptr = pr_new.as_slice_mut().unwrap().as_mut_ptr() as usize;
+    let e_new_ptr = e_new.as_slice_mut().unwrap().as_mut_ptr() as usize;
 
     // Strides for flat indexing
-    // syn_logit: (B, H, T, T)
+    // syn_logit: (B, H, T, T) -> contiguous
     let stride_logits = t_dim * t_dim;
-    // state: (B, H, T)
+    // state: (B, H, T) -> contiguous
     let stride_state = t_dim;
 
     (0..b_dim).into_par_iter().for_each(move |b| {
         (0..h_dim).into_par_iter().for_each(move |h| {
             let offset_idx = b * h_dim + h;
             
-            // Get mutable slices for this (b, h) block
+            // Reconstruct mutable slices for this (b, h) block
             let syn_logit_slice = unsafe {
                 std::slice::from_raw_parts_mut(
-                    syn_logit_ptr.0.add(offset_idx * stride_logits),
+                    (syn_logit_ptr as *mut f32).add(offset_idx * stride_logits),
                     stride_logits
                 )
             };
             let c_new_slice = unsafe {
                 std::slice::from_raw_parts_mut(
-                    c_new_ptr.0.add(offset_idx * stride_state),
+                    (c_new_ptr as *mut f32).add(offset_idx * stride_state),
                     stride_state
                 )
             };
             let buf_new_slice = unsafe {
                 std::slice::from_raw_parts_mut(
-                    buf_new_ptr.0.add(offset_idx * stride_state),
+                    (buf_new_ptr as *mut f32).add(offset_idx * stride_state),
                     stride_state
                 )
             };
             let rrp_new_slice = unsafe {
                 std::slice::from_raw_parts_mut(
-                    rrp_new_ptr.0.add(offset_idx * stride_state),
+                    (rrp_new_ptr as *mut f32).add(offset_idx * stride_state),
                     stride_state
                 )
             };
             let res_new_slice = unsafe {
                 std::slice::from_raw_parts_mut(
-                    res_new_ptr.0.add(offset_idx * stride_state),
+                    (res_new_ptr as *mut f32).add(offset_idx * stride_state),
                     stride_state
                 )
             };
             let pr_new_slice = unsafe {
                 std::slice::from_raw_parts_mut(
-                    pr_new_ptr.0.add(offset_idx * stride_state),
+                    (pr_new_ptr as *mut f32).add(offset_idx * stride_state),
                     stride_state
                 )
             };
             let e_new_slice = unsafe {
                 std::slice::from_raw_parts_mut(
-                    e_new_ptr.0.add(offset_idx * stride_state),
+                    (e_new_ptr as *mut f32).add(offset_idx * stride_state),
                     stride_state
                 )
             };
