@@ -15,6 +15,7 @@
 set -Eeuo pipefail
 
 export PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1
+export WANDB_MODE=offline
 
 ROOT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT_DIR}"
@@ -54,6 +55,24 @@ if ! pgrep -f "tensorboard --logdir" >/dev/null 2>&1; then
   log "TensorBoard is streaming to http://localhost:${TB_PORT}  (logs -> /tmp/tensorboard.log)"
 else
   log "TensorBoard already running; leaving it alone."
+fi
+
+# Start Streamlit Dashboard
+DASHBOARD_PORT="${DASHBOARD_PORT:-8501}"
+mkdir -p runs/neuroviz  # Ensure directory exists so dashboard doesn't crash immediately
+if ! pgrep -f "streamlit run scripts/dashboard.py" >/dev/null 2>&1; then
+  log "Starting Bio-Nanochat Dashboard on port ${DASHBOARD_PORT} (background)..."
+  nohup env PYTHONPATH=. uv run streamlit run scripts/dashboard.py --server.port "${DASHBOARD_PORT}" --server.headless true >/tmp/dashboard.log 2>&1 &
+  log "Dashboard is streaming to http://localhost:${DASHBOARD_PORT} (logs -> /tmp/dashboard.log)"
+  
+  # Try to open browser
+  if command -v xdg-open >/dev/null; then
+      xdg-open "http://localhost:${DASHBOARD_PORT}" || true
+  elif command -v open >/dev/null; then
+      open "http://localhost:${DASHBOARD_PORT}" || true
+  fi
+else
+  log "Dashboard already running; leaving it alone."
 fi
 
 log "Launching torchrun training job (${RUN_NAME})..."
