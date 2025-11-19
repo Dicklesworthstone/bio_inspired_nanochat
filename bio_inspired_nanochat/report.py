@@ -6,20 +6,25 @@ import os
 import re
 import shutil
 import subprocess
+import shlex
 import socket
 import datetime
 import platform
+from typing import Any, Dict, List
+
 import psutil
-import torch
+from bio_inspired_nanochat.torch_imports import torch
 
 def run_command(cmd):
     """Run a shell command and return output, or None if it fails."""
     try:
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=5)
+        if isinstance(cmd, str):
+            cmd = shlex.split(cmd)
+        result = subprocess.run(cmd, shell=False, capture_output=True, text=True, timeout=5)
         if result.returncode == 0:
             return result.stdout.strip()
         return None
-    except:
+    except Exception:
         return None
 
 def get_git_info():
@@ -38,23 +43,25 @@ def get_git_info():
 
     return info
 
-def get_gpu_info():
+def get_gpu_info() -> Dict[str, Any]:
     """Get GPU information."""
     if not torch.cuda.is_available():
         return {"available": False}
 
     num_devices = torch.cuda.device_count()
+    names: List[str] = []
+    memory_gb: List[float] = []
     info = {
         "available": True,
         "count": num_devices,
-        "names": [],
-        "memory_gb": []
+        "names": names,
+        "memory_gb": memory_gb,
     }
 
     for i in range(num_devices):
         props = torch.cuda.get_device_properties(i)
-        info["names"].append(props.name)
-        info["memory_gb"].append(props.total_memory / (1024**3))
+        names.append(props.name)
+        memory_gb.append(props.total_memory / (1024**3))
 
     # Get CUDA version
     info["cuda_version"] = torch.version.cuda or "unknown"
@@ -225,7 +232,7 @@ def extract_timestamp(content, prefix):
             time_str = line.split(":", 1)[1].strip()
             try:
                 return datetime.datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S")
-            except:
+            except ValueError:
                 pass
     return None
 

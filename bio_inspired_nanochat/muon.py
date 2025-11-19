@@ -2,11 +2,14 @@
 Muon optimizer from Keller et al.
 Also a lot of borrowing of ideas from modded-nanogpt.
 """
-import torch
-from torch import Tensor
-import torch.distributed as dist
+from typing import Any, cast
 
-@torch.compile
+from bio_inspired_nanochat.torch_imports import torch, Tensor
+import torch.distributed as torch_dist
+
+dist = cast(Any, torch_dist)
+
+@torch.no_grad()
 def zeropower_via_newtonschulz5(G: Tensor, steps: int) -> Tensor:
     """
     Newton-Schulz iteration to compute the zeroth power / orthogonalization of G. We opt to use a

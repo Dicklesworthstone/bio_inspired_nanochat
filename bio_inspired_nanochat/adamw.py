@@ -2,7 +2,7 @@
 Borrowed from modded-nanogpt. By Keller, @vagrawal, et al.
 Not a general optimizer! But works for our specific use.
 """
-import torch
+from bio_inspired_nanochat.torch_imports import torch
 import torch.distributed as dist
 from torch import Tensor
 
@@ -16,7 +16,7 @@ class DistAdamW(torch.optim.Optimizer):
         defaults = dict(lr=lr, betas=betas, eps=eps, weight_decay=weight_decay)
         super().__init__(param_groups, defaults)
 
-    @torch.compile
+    # @torch.compile (not supported on Python 3.14)
     @torch.no_grad()
     def step(self):
         rank = dist.get_rank()

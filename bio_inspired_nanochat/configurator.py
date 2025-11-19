@@ -30,8 +30,9 @@ for arg in sys.argv[1:]:
         config_file = arg
         print0(f"Overriding config with {config_file}:")
         with open(config_file) as f:
-            print0(f.read())
-        exec(open(config_file).read())
+            code = f.read()
+            print0(code)
+            exec(code)
     else:
         # assume it's a --key=value argument
         assert arg.startswith('--')

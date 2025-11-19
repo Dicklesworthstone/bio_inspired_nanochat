@@ -6,7 +6,7 @@ import re
 import glob
 import json
 import logging
-import torch
+from bio_inspired_nanochat.torch_imports import torch
 
 from bio_inspired_nanochat.common import get_base_dir
 from bio_inspired_nanochat.gpt import GPT, GPTConfig

@@ -11,8 +11,7 @@ Notes:
 The whole thing is made as efficient as possible.
 """
 
-import torch
-import torch.nn.functional as F
+from bio_inspired_nanochat.torch_imports import torch, F, Tensor
 import signal
 import warnings
 from contextlib import contextmanager

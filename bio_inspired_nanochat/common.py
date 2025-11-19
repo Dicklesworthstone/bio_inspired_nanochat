@@ -6,7 +6,7 @@ import os
 import re
 import logging
 import urllib.request
-import torch
+from bio_inspired_nanochat.torch_imports import torch
 import torch.distributed as dist
 from filelock import FileLock
 

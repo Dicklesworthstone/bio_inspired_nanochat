@@ -1,6 +1,6 @@
 from collections import deque
 
-import torch
+from bio_inspired_nanochat.torch_imports import torch
 import pyarrow.parquet as pq
 
 from bio_inspired_nanochat.common import get_dist_info
