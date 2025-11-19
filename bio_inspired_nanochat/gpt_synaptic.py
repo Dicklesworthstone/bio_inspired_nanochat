@@ -267,21 +267,37 @@ class GPTSynaptic(nn.Module):
 
             model_dim = self.config.n_embd
             ddp, rank, local_rank, world_size = get_dist_info()
-            matrix_params = list(self.h.parameters())
+            
+            # Separate matrix params (2D) for Muon from other params (1D/0D) for AdamW
+            matrix_params = []
+            other_params = []
+            
+            # Collect params from transformer blocks
+            for p in self.h.parameters():
+                if p.ndim >= 2:
+                    matrix_params.append(p)
+                else:
+                    other_params.append(p)
+            
             embedding_params = list(self.wte.parameters())
             lm_head_params = list(self.lm_head.parameters())
+            
             dmodel_lr_scale = (model_dim / 768) ** -0.5
             if rank == 0:
                 print(
                     f"Scaling the LR for the AdamW parameters ∝1/√({model_dim}/768) = {dmodel_lr_scale:.6f}"
                 )
+            
+            # AdamW gets embedding, lm_head, and all 1D/0D params from blocks (biases, layernorms)
             adam_groups = [
                 dict(params=lm_head_params, lr=unembedding_lr * dmodel_lr_scale),
                 dict(params=embedding_params, lr=embedding_lr * dmodel_lr_scale),
+                dict(params=other_params, lr=embedding_lr * dmodel_lr_scale), # Use embedding LR scale for other params? Or maybe just matrix_lr? Usually AdamW params get higher LR.
             ]
             adamw_kwargs = dict(betas=(0.8, 0.95), eps=1e-10, weight_decay=weight_decay)
             AdamWFactory = DistAdamW if ddp else partial(torch.optim.AdamW, fused=True)
             adamw_optimizer = AdamWFactory(adam_groups, **adamw_kwargs)
+            
             muon_kwargs = dict(lr=matrix_lr, momentum=0.95)
             MuonFactory = DistMuon if ddp else Muon
             muon_optimizer = MuonFactory(matrix_params, **muon_kwargs)
