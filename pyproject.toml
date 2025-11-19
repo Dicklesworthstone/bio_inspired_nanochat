@@ -23,7 +23,7 @@ dependencies = [
     "tensorboard>=2.16.0",
     "tiktoken>=0.11.0",
     "tokenizers>=0.22.0",
-    "torch>=2.5.0",
+    "torch==2.5.1",
     "triton>=3.0.0",
     "transformers>=4.40.0",
     "uvicorn>=0.36.0",
@@ -80,10 +80,10 @@ explicit = true
 
 [project.optional-dependencies]  
 cpu = [  
-    "torch>=2.5.0",  
+    "torch==2.5.1",  
 ]  
 gpu = [  
-    "torch>=2.5.0",  
+    "torch==2.5.1",  
 ]
 viz = [
     "plotly>=5.18.0",
