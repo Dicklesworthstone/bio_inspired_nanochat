@@ -103,4 +103,3 @@ pub fn update_metabolism_cpu<'py>(
         
     Ok((f_new.into_pyarray(py), e_new.into_pyarray(py)))
 }
-
