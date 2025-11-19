@@ -128,24 +128,24 @@ pub fn presyn_step_cpu<'py>(
     unsafe impl<T> Sync for UnsafeArray<T> {}
     unsafe impl<T> Send for UnsafeArray<T> {}
     
-    let syn_logit_ptr = UnsafeArray(&mut syn_logit as *mut _);
-    let c_new_ptr = UnsafeArray(&mut c_new as *mut _);
-    let buf_new_ptr = UnsafeArray(&mut buf_new as *mut _);
-    let rrp_new_ptr = UnsafeArray(&mut rrp_new as *mut _);
-    let res_new_ptr = UnsafeArray(&mut res_new as *mut _);
-    let pr_new_ptr = UnsafeArray(&mut pr_new as *mut _);
-    let e_new_ptr = UnsafeArray(&mut e_new as *mut _);
+    let syn_logit_ptr: UnsafeArray<f32> = UnsafeArray(&mut syn_logit as *mut _);
+    let c_new_ptr: UnsafeArray<f32> = UnsafeArray(&mut c_new as *mut _);
+    let buf_new_ptr: UnsafeArray<f32> = UnsafeArray(&mut buf_new as *mut _);
+    let rrp_new_ptr: UnsafeArray<f32> = UnsafeArray(&mut rrp_new as *mut _);
+    let res_new_ptr: UnsafeArray<f32> = UnsafeArray(&mut res_new as *mut _);
+    let pr_new_ptr: UnsafeArray<f32> = UnsafeArray(&mut pr_new as *mut _);
+    let e_new_ptr: UnsafeArray<f32> = UnsafeArray(&mut e_new as *mut _);
 
     (0..b_dim).into_par_iter().for_each(move |b| {
         (0..h_dim).into_par_iter().for_each(move |h| {
-            // Reconstruct pointers
-            let syn_logit_p = syn_logit_ptr.0;
-            let c_new_p = c_new_ptr.0;
-            let buf_new_p = buf_new_ptr.0;
-            let rrp_new_p = rrp_new_ptr.0;
-            let res_new_p = res_new_ptr.0;
-            let pr_new_p = pr_new_ptr.0;
-            let e_new_p = e_new_ptr.0;
+            // Reconstruct pointers with explicit types
+            let syn_logit_p: *mut ArrayD<f32> = syn_logit_ptr.0;
+            let c_new_p: *mut ArrayD<f32> = c_new_ptr.0;
+            let buf_new_p: *mut ArrayD<f32> = buf_new_ptr.0;
+            let rrp_new_p: *mut ArrayD<f32> = rrp_new_ptr.0;
+            let res_new_p: *mut ArrayD<f32> = res_new_ptr.0;
+            let pr_new_p: *mut ArrayD<f32> = pr_new_ptr.0;
+            let e_new_p: *mut ArrayD<f32> = e_new_ptr.0;
 
             // Read-only slices
             let q_bh = q_arr.index_axis(Axis(0), b).index_axis(Axis(0), h);

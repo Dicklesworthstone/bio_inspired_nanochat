@@ -173,7 +173,6 @@ class SynapticPresyn(nn.Module):
         idx: (B, H, T, K) - indices of top-k keys
         """
         B, H, T, K = drive.shape
-        device = drive.device
         cfg = self.cfg
 
         # Gather state for the selected keys

@@ -204,11 +204,21 @@ class NeuroScore:
         spec = 1.0 - sim
         st["specialization"].copy_(spec.detach().cpu())
 
+    def _gini(self, x: Tensor) -> float:
+        x = x.float().sort()[0]
+        n = x.shape[0]
+        index = torch.arange(1, n + 1, device=x.device, dtype=torch.float32)
+        return ((2 * index - n - 1) * x).sum() / (n * x.sum() + 1e-6)
+
     def _log_metrics(self, layer_name, st, step):
         # Push to TensorBoard via NeuroViz
         if not self.neuroviz or not getattr(self.neuroviz, "tb", None):
             return
         tb = self.neuroviz.tb
+        
+        # Gini Coefficient (Load Balancing)
+        gini = self._gini(st["routing_freq"])
+        tb.add_scalar(f"{layer_name}/score/gini_routing", gini, step)
         
         # Scalars (Means)
         tb.add_scalar(f"{layer_name}/score/mean_efficiency", st["efficiency"].mean(), step)
