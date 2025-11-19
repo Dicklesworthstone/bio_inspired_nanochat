@@ -471,5 +471,6 @@ impl Tokenizer {
 fn rustbpe(m: &Bound<'_, PyModule>) -> PyResult<()> {
     pyo3_log::init(); // forwards Rust `log` to Python's `logging`
     m.add_class::<Tokenizer>()?;
+    
     Ok(())
 }
