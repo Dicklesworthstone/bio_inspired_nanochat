@@ -221,14 +221,14 @@ class SynapticPresyn(nn.Module):
         else:
             rel = p * rrp
 
-        amp = state["amp"].gather(2, idx)
+        amp = state["amp"].gather(2, flat_idx).view(B, H, T, K)
         e = rel * amp
 
         # Efficient scatter:
         # We want to add 'rel' (B,H,T,K) to 'state' (B,H,T_key) at indices 'idx' (B,H,T,K).
         # We can flatten T,K.
         
-        flat_idx = idx.view(B, H, -1) # (B, H, T*K)
+        # flat_idx = idx.view(B, H, -1) # (B, H, T*K)
         flat_rel = rel.view(B, H, -1)
         flat_drive = drive.view(B, H, -1)
         flat_amp = amp.view(B, H, -1)
@@ -239,6 +239,29 @@ class SynapticPresyn(nn.Module):
         snu_vals = torch.zeros_like(state["c"])
         rru_vals = torch.zeros_like(state["c"])
         ampu_vals = torch.zeros_like(state["c"])
+        
+        # scatter_add_ expects index to have same number of dimensions as self.
+        # self is (B, H, T_key). flat_idx is (B, H, T*K).
+        # We need to expand self to match index dims? No, scatter_add_ reduces.
+        # "self.scatter_add_(dim, index, src)"
+        # "index: the indices of elements to scatter, can be either empty or of the same dimensionality as src."
+        # "src: the source element(s) to scatter."
+        # "self: the destination tensor."
+        # "index" and "src" must have same size.
+        # "self" must be large enough to hold the scattered values.
+        # BUT: "index" must have same number of dimensions as "self".
+        # Here self is 3D (B, H, T_key). index is 3D (B, H, T*K).
+        # This is valid IF T_key dimension in self is large enough for indices in index.
+        # The error "Expected self.dtype to be equal to src.dtype" suggests a type mismatch.
+        # state["c"] is likely float32 or bfloat16.
+        # flat_rel is derived from p * rrp.
+        # Let's check dtypes.
+        
+        # Ensure dtypes match
+        dtype = state["c"].dtype
+        flat_rel = flat_rel.to(dtype)
+        flat_drive = flat_drive.to(dtype)
+        flat_amp = flat_amp.to(dtype)
         
         add_vals.scatter_add_(2, flat_idx, flat_rel)
         drv_vals.scatter_add_(2, flat_idx, flat_drive)
@@ -661,7 +684,10 @@ class SynapticCausalSelfAttention(nn.Module):
         
         aug = torch.zeros_like(dots)
         # scatter_add_ expects src to be same size as index? No, index size.
-        aug.scatter_add_(-1, idx, self.cfg.lambda_loge * torch.log(1e-6 + e))
+        # Ensure dtype match
+        src_val = self.cfg.lambda_loge * torch.log(1e-6 + e)
+        src_val = src_val.to(aug.dtype)
+        aug.scatter_add_(-1, idx, src_val)
         
         # Distance barrier
         steps = torch.arange(T, device=device, dtype=dtype)
