@@ -1,4 +1,6 @@
-import torch
+from typing import Any, cast
+
+from bio_inspired_nanochat.torch_imports import torch
 import triton
 import triton.language as tl
 
@@ -62,7 +64,7 @@ def accumulate_router_stats(indices, gates, num_experts):
         total_tokens,
         T,
         K,
-        BLOCK_SIZE=BLOCK_SIZE,
+        BLOCK_SIZE=cast(Any, BLOCK_SIZE),
     )
 
     return counts, gate_sums
@@ -106,6 +108,6 @@ def update_metabolism_fused(fatigue, energy, alpha_fatigue, alpha_energy, util):
         alpha_energy,
         util,
         N,
-        BLOCK_SIZE=BLOCK_SIZE,
+        BLOCK_SIZE=cast(Any, BLOCK_SIZE),
     )
 

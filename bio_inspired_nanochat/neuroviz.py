@@ -20,56 +20,49 @@
 #   viz.close()
 # ---------------------------------------------------------------------
 
+import importlib
+import importlib.util
 import os
 import json
 import time
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple, cast
+from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING, cast
 
 import numpy as np
-import torch
-import torch.nn as nn
+from bio_inspired_nanochat.torch_imports import torch, nn, Tensor
 import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-try:
-    from umap import UMAP
+def _maybe_import(module: str, attr: Optional[str] = None) -> Any:
+    spec = importlib.util.find_spec(module)
+    if spec is None:
+        return None
+    mod = importlib.import_module(module)
+    return getattr(mod, attr) if attr else mod
 
-    _HAS_UMAP = True
-except Exception:
-    _HAS_UMAP = False
 
-try:
-    from sklearn.decomposition import PCA
-
-    _HAS_SKLEARN = True
-except Exception:
-    _HAS_SKLEARN = False
-
-try:
-    import plotly.graph_objects as go
-
-    _HAS_PLOTLY = True
-except Exception:
-    _HAS_PLOTLY = False
+UMAP = _maybe_import("umap", "UMAP")
+_HAS_UMAP = UMAP is not None
+PCA = _maybe_import("sklearn.decomposition", "PCA")
+_HAS_SKLEARN = PCA is not None
+go = _maybe_import("plotly.graph_objects")
+_HAS_PLOTLY = go is not None
 
 from torch.utils.tensorboard import SummaryWriter
 
 # lazy import to avoid circulars
-try:
-    from .synaptic import SynapticMoE, SynapticExpert
-except Exception:
-    from synaptic import SynapticMoE, SynapticExpert
+from .synaptic import SynapticMoE, SynapticExpert
 
-try:
+if TYPE_CHECKING:
     from .neuroscore import NeuroScore, NeuroScoreConfig
-except Exception:
-    # Fallback if neuroscore not present yet (or during init)
-    NeuroScore = None
-    NeuroScoreConfig = None
-
+else:
+    try:
+        from .neuroscore import NeuroScore, NeuroScoreConfig
+    except Exception:
+        NeuroScore = None  # type: ignore[assignment]
+        NeuroScoreConfig = None  # type: ignore[assignment]
 
 # --------------------------- utilities --------------------------------
 

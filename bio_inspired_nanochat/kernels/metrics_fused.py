@@ -1,4 +1,6 @@
-import torch
+from typing import Any, cast
+
+from bio_inspired_nanochat.torch_imports import torch
 import triton
 import triton.language as tl
 
@@ -89,7 +91,7 @@ def update_metrics_fused(indices, gates, energy, state, cfg):
         total_tokens,
         T,
         K,
-        BLOCK_SIZE=BLOCK_SIZE,
+        BLOCK_SIZE=cast(Any, BLOCK_SIZE),
     )
 
     decay = cfg.decay

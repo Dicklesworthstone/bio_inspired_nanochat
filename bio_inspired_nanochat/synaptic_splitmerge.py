@@ -19,13 +19,12 @@
 
 from dataclasses import dataclass
 from typing import List, Tuple, Optional, Iterable, Any, cast
-import torch
-import torch.nn as nn
-import torch.distributed as dist
+from bio_inspired_nanochat.torch_imports import torch, nn, Tensor
+import torch.distributed as torch_dist
+
+dist = cast(Any, torch_dist)
 
 from .synaptic import SynapticMoE, SynapticExpert, SynapticLinear
-
-Tensor = torch.Tensor
 
 # ---------------------------------------------------------------------------
 # Config
@@ -362,8 +361,10 @@ class SplitMergeController:
                 )
             )
             # reset stats
-            layer.fatigue[dst] = 0.0
-            layer.energy[dst] = 1.0
+            fatigue = cast(Tensor, layer.fatigue)
+            energy = cast(Tensor, layer.energy)
+            fatigue[dst] = 0.0
+            energy[dst] = 1.0
             # emit lineage event: split parent src -> child dst
             if self.logger is not None and hasattr(self.logger, "on_split"):
                 try:
@@ -386,7 +387,10 @@ class SplitMergeController:
                     changed.append(layer.experts[dst].fc1.bias)
                 if layer.experts[dst].fc2.bias is not None:
                     changed.append(layer.experts[dst].fc2.bias)
-                _zero_optim_moments_for(optimizer, changed)
+                changed_params: List[nn.Parameter] = [
+                    param for param in changed if isinstance(param, nn.Parameter)
+                ]
+                _zero_optim_moments_for(optimizer, changed_params)
 
     @torch.no_grad()
     def _do_merges(
@@ -438,7 +442,10 @@ class SplitMergeController:
                     changed.append(layer.experts[loser].fc1.bias)
                 if layer.experts[loser].fc2.bias is not None:
                     changed.append(layer.experts[loser].fc2.bias)
-                _zero_optim_moments_for(optimizer, changed)
+                changed_params = [
+                    param for param in changed if isinstance(param, nn.Parameter)
+                ]
+                _zero_optim_moments_for(optimizer, changed_params)
 
     @torch.no_grad()
     def step(self, global_step: int, optimizer: Optional[torch.optim.Optimizer] = None):

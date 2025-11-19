@@ -9,9 +9,7 @@
 #   4. Resilience: Stability of contribution over time.
 # -----------------------------------------------------------------------------
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
+from bio_inspired_nanochat.torch_imports import torch, nn, F, Tensor
 from typing import Dict, Any
 from dataclasses import dataclass
 from .synaptic import SynapticMoE
@@ -67,7 +65,7 @@ class NeuroScore:
         from decouple import Config as DecoupleConfig, RepositoryEnv, AutoConfig
         try:
             decouple_config = DecoupleConfig(RepositoryEnv(".env"))
-        except:
+        except Exception:
             decouple_config = AutoConfig()
             
         fused_metrics = decouple_config("BIO_FUSED_METRICS", default=False, cast=bool)

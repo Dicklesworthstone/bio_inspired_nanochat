@@ -1,4 +1,6 @@
-import torch # kept for type hints if needed, or remove if truly unused
+from typing import Any, cast
+
+from bio_inspired_nanochat.torch_imports import torch  # noqa: F401
 import triton
 import triton.language as tl
 import math
@@ -337,7 +339,7 @@ def presyn_step(q, k, logits, state, cfg):
         k_flat.stride(0), 0, k_flat.stride(1), k_flat.stride(2),
         state_tensors["C"].stride(0), 0, state_tensors["C"].stride(1),
         # Constants
-        T=T, D=D, BLOCK_SIZE_T=BLOCK_SIZE_T,
+        T=T, D=D, BLOCK_SIZE_T=cast(Any, BLOCK_SIZE_T),
         tau_c=cfg.tau_c, tau_buf=cfg.tau_buf, tau_prime=cfg.tau_prime,
         tau_rrp=cfg.tau_rrp, tau_energy=cfg.tau_energy,
         alpha_ca=cfg.alpha_ca, alpha_buf_on=cfg.alpha_buf_on,

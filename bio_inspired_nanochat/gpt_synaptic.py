@@ -1,9 +1,9 @@
 # nanochat/gpt_synaptic.py
+# pylint: disable=too-many-instance-attributes
+from __future__ import annotations
 # GPT with Synaptic Attention/MLP and optional Synaptic MoE + structural hooks
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
+from bio_inspired_nanochat.torch_imports import torch, nn, F, Tensor
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -14,7 +14,6 @@ from .synaptic import (
     SynapticMoE,
 )
 
-Tensor = torch.Tensor
 
 # -----------------------------------------------------------------------------
 # Config
@@ -114,9 +113,9 @@ class Block(nn.Module):
             resid_drop=dropout,
         )
         self.norm2 = nn.LayerNorm(n_embd)
-        self.use_moe = use_moe
-        self.balance_loss = balance_loss
-        self.last_aux_loss = torch.tensor(0.0)
+        self.use_moe: bool = use_moe
+        self.balance_loss: float = float(balance_loss)
+        self.last_aux_loss: Tensor = torch.tensor(0.0)
         self.mlp = (
             SynapticMoE(n_embd, num_experts, top_k, hidden_mult, syn_cfg, dropout)
             if use_moe
@@ -145,29 +144,31 @@ class GPTSynaptic(nn.Module):
     def __init__(self, config: GPTSynapticConfig):
         super().__init__()
         c = config
-        self.config = c
-        self.transformer = nn.ModuleDict(
-            dict(wte=nn.Embedding(c.vocab_size, c.n_embd), h=nn.ModuleList())
-        )
+        self.config: GPTSynapticConfig = c
+        self.wte: nn.Embedding = nn.Embedding(c.vocab_size, c.n_embd)
+        self.h: nn.ModuleList[Block] = nn.ModuleList()
+        self.transformer = nn.ModuleDict(dict(wte=self.wte, h=self.h))
         self.lm_head = nn.Linear(c.n_embd, c.vocab_size, bias=False)
         self.drop = nn.Dropout(c.dropout)
         nn.init.trunc_normal_(self.lm_head.weight, std=0.02)
         T = c.sequence_len
         hd = c.n_embd // c.n_head
         base = c.rope_base
-        inv_freq = 1.0 / (
+        inv_freq: Tensor = 1.0 / (
             base ** (torch.arange(0, hd // 2, dtype=torch.float32) / (hd // 2))
         )
-        t = torch.arange(0, T * 8, dtype=torch.float32)
-        freqs = torch.outer(t, inv_freq)
+        t: Tensor = torch.arange(0, T * 8, dtype=torch.float32)
+        freqs: Tensor = torch.outer(t, inv_freq)
+        self.cos: Tensor
         self.register_buffer(
             "cos", torch.cos(freqs).unsqueeze(0).to(torch.bfloat16), persistent=False
         )
+        self.sin: Tensor
         self.register_buffer(
             "sin", torch.sin(freqs).unsqueeze(0).to(torch.bfloat16), persistent=False
         )
         for _ in range(c.n_layer):
-            self.transformer.h.append(
+            self.h.append(
                 Block(
                     c.n_embd,
                     c.n_head,
@@ -199,10 +200,10 @@ class GPTSynaptic(nn.Module):
     ):
         B, T = idx.size()
         assert T <= self.config.sequence_len
-        tok = self.transformer.wte(idx)
+        tok = self.wte(idx)
         x = self.drop(tok.to(dtype=torch.bfloat16))
         presyn_state = None
-        for li, block in enumerate(self.transformer.h):
+        for li, block in enumerate(self.h):
             x, presyn_state = block(x, kv_cache, presyn_state, train_mode)
             if self.config.structural_every and targets is not None:
                 if (li + 1) % self.config.structural_every == 0 and hasattr(
@@ -216,7 +217,7 @@ class GPTSynaptic(nn.Module):
         aux = sum(
             (
                 getattr(b, "last_aux_loss", torch.tensor(0.0, device=logits.device))
-                for b in self.transformer.h
+                for b in self.h
             )
         )
         ce = F.cross_entropy(
@@ -266,8 +267,8 @@ class GPTSynaptic(nn.Module):
 
             model_dim = self.config.n_embd
             ddp, rank, local_rank, world_size = get_dist_info()
-            matrix_params = list(self.transformer.h.parameters())
-            embedding_params = list(self.transformer.wte.parameters())
+            matrix_params = list(self.h.parameters())
+            embedding_params = list(self.wte.parameters())
             lm_head_params = list(self.lm_head.parameters())
             dmodel_lr_scale = (model_dim / 768) ** -0.5
             if rank == 0:
@@ -296,4 +297,4 @@ class GPTSynaptic(nn.Module):
         pass
 
     def get_device(self):
-        return self.transformer.wte.weight.device
+        return self.wte.weight.device

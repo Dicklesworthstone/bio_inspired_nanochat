@@ -22,9 +22,7 @@ import math
 from dataclasses import dataclass
 from typing import Optional, Tuple, List, Dict, cast
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
+from bio_inspired_nanochat.torch_imports import torch, nn, F, Tensor
 from decouple import Config as DecoupleConfig, RepositoryEnv
 
 # Initialize decouple config
@@ -36,7 +34,6 @@ except Exception:
     from decouple import Config, AutoConfig
     decouple_config = Config(RepositoryEnv(".env")) if False else AutoConfig()
 
-Tensor = torch.Tensor
 
 # -----------------------------------------------------------------------------
 # Utility functions
@@ -718,12 +715,8 @@ class SynapticMoE(nn.Module):
         flat_out = out.view(-1, C)
         flat_x = x.view(-1, C)
         use_fused_genetics = self.cfg.native_genetics and gates.is_cuda
-        if use_fused_genetics:
-            me = None
-            pe = None
-        else:
-            me = torch.zeros(E, device=device)
-            pe = torch.zeros(E, device=device)
+        me = torch.zeros(E, device=device)
+        pe = torch.zeros(E, device=device)
         
         for e in range(E):
             mask = idx == e  # (B,T,k)
