@@ -9,6 +9,9 @@ Two implementations are available:
 import os
 import copy
 from functools import lru_cache
+from typing import Any, Iterable, Sequence, cast
+
+from bio_inspired_nanochat.torch_imports import torch
 
 SPECIAL_TOKENS = [
     # every document begins with the Beginning of Sequence (BOS) token that delimits documents
@@ -64,22 +67,23 @@ class HuggingFaceTokenizer:
             unk_token=None,
             fuse_unk=False,
         ))
+        tokenizer_cfg = cast(Any, tokenizer)
         # Normalizer: None
-        tokenizer.normalizer = None
+        tokenizer_cfg.normalizer = None
         # Pre-tokenizer: GPT-4 style
         # the regex pattern used by GPT-4 to split text into groups before BPE
         # NOTE: The pattern was changed from \p{N}{1,3} to \p{N}{1,2} because I suspect it is harmful to
         # very small models and smaller vocab sizes, because it is a little bit wasteful in the token space.
         # (but I haven't validated this! TODO)
         gpt4_split_regex = Regex(SPLIT_PATTERN) # huggingface demands that you wrap it in Regex!!
-        tokenizer.pre_tokenizer = pre_tokenizers.Sequence([
+        tokenizer_cfg.pre_tokenizer = pre_tokenizers.Sequence([
             pre_tokenizers.Split(pattern=gpt4_split_regex, behavior="isolated", invert=False),
             pre_tokenizers.ByteLevel(add_prefix_space=False, use_regex=False)
         ])
         # Decoder: ByteLevel (it pairs together with the ByteLevel pre-tokenizer)
-        tokenizer.decoder = decoders.ByteLevel()
+        tokenizer_cfg.decoder = decoders.ByteLevel()
         # Post-processor: None
-        tokenizer.post_processor = None
+        tokenizer_cfg.post_processor = None
         # Trainer: BPE
         trainer = BpeTrainer(
             vocab_size=vocab_size,

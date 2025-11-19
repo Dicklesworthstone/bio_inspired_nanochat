@@ -350,8 +350,10 @@ impl Tokenizer {
                     .map(|s| {
                         let mut m: AHashMap<CompactString, i32> = AHashMap::new();
                         for mat in pattern.find_iter(s) {
-                            let piece = mat.expect("regex match failed").as_str();
-                            *m.entry(CompactString::from(piece)).or_default() += 1;
+                            if let Ok(mat) = mat {
+                                let piece = mat.as_str();
+                                *m.entry(CompactString::from(piece)).or_default() += 1;
+                            }
                         }
                         m
                     })
@@ -431,36 +433,38 @@ impl Tokenizer {
 
         // Split text using the regex pattern
         for m in self.compiled_pattern.find_iter(text) {
-            let chunk = m.expect("regex match failed").as_str();
+            if let Ok(m) = m {
+                let chunk = m.as_str();
 
-            // Convert chunk to bytes then to u32 IDs
-            let mut ids: Vec<u32> = chunk.bytes().map(|b| b as u32).collect();
+                // Convert chunk to bytes then to u32 IDs
+                let mut ids: Vec<u32> = chunk.bytes().map(|b| b as u32).collect();
 
-            // Apply merges iteratively
-            while ids.len() >= 2 {
-                // Find the best pair to merge
-                let mut best_pair: Option<(usize, Pair, u32)> = None;
+                // Apply merges iteratively
+                while ids.len() >= 2 {
+                    // Find the best pair to merge
+                    let mut best_pair: Option<(usize, Pair, u32)> = None;
 
-                for i in 0..ids.len() - 1 {
-                    let pair: Pair = (ids[i], ids[i + 1]);
-                    if let Some(&new_id) = self.merges.get(&pair) {
-                        if best_pair.is_none() || new_id < best_pair.unwrap().2 {
-                            best_pair = Some((i, pair, new_id));
+                    for i in 0..ids.len() - 1 {
+                        let pair: Pair = (ids[i], ids[i + 1]);
+                        if let Some(&new_id) = self.merges.get(&pair) {
+                            if best_pair.map_or(true, |(_, _, id)| new_id < id) {
+                                best_pair = Some((i, pair, new_id));
+                            }
                         }
+                    }
+
+                    // If we found a pair to merge, apply it
+                    if let Some((idx, _pair, new_id)) = best_pair {
+                        ids[idx] = new_id;
+                        ids.remove(idx + 1);
+                    } else {
+                        // No more merges possible
+                        break;
                     }
                 }
 
-                // If we found a pair to merge, apply it
-                if let Some((idx, _pair, new_id)) = best_pair {
-                    ids[idx] = new_id;
-                    ids.remove(idx + 1);
-                } else {
-                    // No more merges possible
-                    break;
-                }
+                all_ids.extend(ids);
             }
-
-            all_ids.extend(ids);
         }
 
         all_ids

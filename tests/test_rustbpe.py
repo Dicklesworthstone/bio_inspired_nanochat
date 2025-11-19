@@ -18,6 +18,8 @@ python -m pytest tests/test_rustbpe.py -v -s
 -v is verbose, -s is show prints
 """
 
+from typing import Any, cast
+
 import regex as re
 from collections import Counter, defaultdict
 import time
@@ -395,17 +397,18 @@ class HuggingFaceTokenizer:
             fuse_unk=False,
         ))
         # Normalizer: None
-        tokenizer.normalizer = None
+        tokenizer_cfg = cast(Any, tokenizer)
+        tokenizer_cfg.normalizer = None
         # Pre-tokenizer: GPT-4 style
         gpt4_split_regex = Regex(GPT4_SPLIT_PATTERN) # huggingface demands that you wrap it in Regex!!
-        tokenizer.pre_tokenizer = pre_tokenizers.Sequence([
+        tokenizer_cfg.pre_tokenizer = pre_tokenizers.Sequence([
             pre_tokenizers.Split(pattern=gpt4_split_regex, behavior="isolated", invert=False),
             pre_tokenizers.ByteLevel(add_prefix_space=False, use_regex=False)
         ])
         # Decoder: ByteLevel (it pairs together with the ByteLevel pre-tokenizer)
-        tokenizer.decoder = decoders.ByteLevel()
+        tokenizer_cfg.decoder = decoders.ByteLevel()
         # Post-processor: None
-        tokenizer.post_processor = None
+        tokenizer_cfg.post_processor = None
         # Trainer: BPE
         trainer = BpeTrainer(
             vocab_size=vocab_size,
