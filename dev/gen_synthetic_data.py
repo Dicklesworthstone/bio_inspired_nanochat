@@ -331,7 +331,7 @@ def generate_conversation(idx: int):
     modified_prompt = prompt.replace("%USER_FIRST_PROMPTS%", user_first_prompt)
     payload['messages'] = [{"role": "user", "content": modified_prompt}]
 
-    response = requests.post(url, headers=headers, json=payload)
+    response = requests.post(url, headers=headers, json=payload, timeout=60)
     result = response.json()
     content = result['choices'][0]['message']['content']
 

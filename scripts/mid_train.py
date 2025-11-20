@@ -52,7 +52,7 @@ total_batch_size = 524288
 dry_run = 0 # dry_run=1 is for experiments: we will log to wandb but we won't write checkpoints or report
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 with open(os.path.join('bio_inspired_nanochat', 'configurator.py')) as f:
-    exec(f.read()) # overrides from command line or config file
+    exec(f.read()) # nosec B102 # overrides from command line or config file
 user_config = {k: globals()[k] for k in config_keys} # possibly useful for logging
 # -----------------------------------------------------------------------------
 
@@ -79,7 +79,8 @@ depth = model.config.n_layer
 num_flops_per_token = model.estimate_flops()
 tokens_per_fwdbwd = device_batch_size * max_seq_len # tokens per iteration for a single rank
 world_tokens_per_fwdbwd = tokens_per_fwdbwd * ddp_world_size # total tokens per iteration for all ranks
-assert total_batch_size % world_tokens_per_fwdbwd == 0
+if total_batch_size % world_tokens_per_fwdbwd != 0:
+    raise ValueError(f"total_batch_size {total_batch_size} must be divisible by world_tokens_per_fwdbwd {world_tokens_per_fwdbwd}")
 grad_accum_steps = total_batch_size // world_tokens_per_fwdbwd
 print0(f"Tokens / micro-batch / rank: {device_batch_size} x {max_seq_len} = {tokens_per_fwdbwd:,}")
 print0(f"Tokens / micro-batch: {world_tokens_per_fwdbwd:,}")
@@ -123,10 +124,12 @@ last_step = False # we will toggle this to True when we reach the end of the dat
 approx_progress = 0.0 # will go from 0 to 1 over the course of the epoch
 def mid_data_generator(split):
     global last_step, approx_progress
-    assert split in {"train", "val"}, "split must be 'train' or 'val'"
+    if split not in {"train", "val"}:
+        raise ValueError("split must be 'train' or 'val'")
     dataset = train_dataset if split == "train" else val_dataset
     dataset_size = len(dataset)
-    assert dataset_size > 0
+    if dataset_size <= 0:
+        raise ValueError("Dataset size must be > 0")
     needed_tokens = device_batch_size * max_seq_len + 1 # to form one training batch of inputs,targets
     token_buffer = deque()
     # CUDA supports memory pinning for faster transfers between CPU and GPU:

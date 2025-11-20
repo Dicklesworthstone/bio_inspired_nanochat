@@ -179,7 +179,8 @@ for tokenizer_name in ["gpt2", "gpt4", "ours"]:
     for name, text in all_text:
         encoded = tokenizer.encode(text)
         decoded = tokenizer.decode(encoded)
-        assert decoded == text
+        if decoded != text:
+            raise ValueError(f"Decoded mismatch for {name}")
 
         encoded_bytes = text.encode('utf-8')
         ratio = len(encoded_bytes) / len(encoded)

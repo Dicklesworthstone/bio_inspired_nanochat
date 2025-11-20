@@ -421,8 +421,7 @@ elif page == "Anatomy of a Decision":
                     x = list(components.keys()) + ["Total"],
                     textposition = "outside",
                     text = [f"{v:.2f}" for v in components.values()] + [f"{total_logits[expert_id]:.2f}"],
-                    y = list(components.values()) + [0], # 0 for total is placeholder, plotly calculates it? No, for total we need 0?
-                    # Actually for waterfall, y is the value.
+                    y = list(components.values()) + [total_logits[expert_id]],
                     connector = {"line":{"color":"rgb(63, 63, 63)"}},
                 ))
                 

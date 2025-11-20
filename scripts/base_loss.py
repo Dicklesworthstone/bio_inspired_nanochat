@@ -23,7 +23,7 @@ model_tag = None # optional model tag for the output directory name
 model_step = None # optional model step for the output directory name
 device_type = "" # cuda|cpu|mps (empty => autodetect)
 with open(os.path.join('bio_inspired_nanochat', 'configurator.py')) as f:
-    exec(f.read()) # overrides from command line or config file
+    exec(f.read()) # nosec B102 # overrides from command line or config file
 
 # Load the base model and the tokenizer
 device_type = autodetect_device_type() if device_type == "" else device_type
@@ -34,7 +34,8 @@ autocast_ctx = torch.amp.autocast(device_type=device_type, dtype=torch.bfloat16)
 
 # Evaluate the loss on each split
 tokens_per_step = device_batch_size * sequence_len * ddp_world_size
-assert split_tokens % tokens_per_step == 0, "split_tokens must be divisible by tokens_per_step"
+if split_tokens % tokens_per_step != 0:
+    raise ValueError("split_tokens must be divisible by tokens_per_step")
 steps = split_tokens // tokens_per_step
 token_bytes = get_token_bytes(device=device)
 bpb_results = {}

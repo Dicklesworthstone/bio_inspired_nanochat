@@ -26,7 +26,7 @@ dataset_kwargs = {
     "split": "train",
     "name": "sample-100BT", # ~100B GPT-2 tokens at ~3 chars/token => ~300B chars total
 }
-ds = load_dataset(**dataset_kwargs)
+ds = load_dataset(**dataset_kwargs) # nosec B615
 
 # Shuffle to scramble the order
 ds = ds.shuffle(seed=42)

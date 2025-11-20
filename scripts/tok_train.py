@@ -66,7 +66,8 @@ Special chars: @#$%^&*()
 Unicode: 你好世界 🌍"""
 encoded = tokenizer.encode(test_text)
 decoded = tokenizer.decode(encoded)
-assert decoded == test_text
+if decoded != test_text:
+    raise ValueError(f"Sanity check failed: decoded '{decoded}' != original '{test_text}'")
 
 # -----------------------------------------------------------------------------
 # One more thing: we wish to cache a mapping from token id to number of bytes of that token

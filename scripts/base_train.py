@@ -76,6 +76,7 @@ depth = (
 )
 max_seq_len = 2048  # max context length
 synapses = 0  # use synaptic model (GPTSynaptic) if 1, otherwise use standard GPT
+use_flex_attention = 0 # use FlexAttention (requires torch>=2.5) if 1
 # Split/merge controller (for MoE)
 splitmerge_every = 0  # apply split/merge every N steps (0=off)
 merge_cosine = 0.85  # merge cosine similarity threshold
@@ -209,7 +210,7 @@ use_syn = bool(synapses)
 if use_syn:
     if GPTSynaptic is None:
         raise ValueError("synapses=1 but gpt_synaptic module not available")
-    syn_cfg = SynapticConfig()
+    syn_cfg = SynapticConfig(use_flex_attention=bool(use_flex_attention))
     model_config = GPTSynapticConfig(
         sequence_len=max_seq_len,
         vocab_size=vocab_size,

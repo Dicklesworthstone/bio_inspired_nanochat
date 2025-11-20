@@ -133,7 +133,8 @@ def run_categorical_eval(task_object, tokenizer, model, batch_size, max_problems
             for letter in letters:
                 if letter not in letter_to_id_cache:
                     encoded_letter = tokenizer.encode(letter)
-                    assert len(encoded_letter) == 1, "Each letter must be a single token"
+                    if len(encoded_letter) != 1:
+                        raise ValueError(f"Each letter must be a single token, got {len(encoded_letter)} for '{letter}'")
                     letter_to_id_cache[letter] = encoded_letter[0]
                 letter_ids.append(letter_to_id_cache[letter])
             # focus logits just down to the answer position and the available letters of the answer

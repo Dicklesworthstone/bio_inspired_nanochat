@@ -442,7 +442,7 @@ def enwik8_path():
     if not os.path.exists(enwik8_local_path):
         print(f"Downloading enwik8 to {enwik8_local_path_zip}")
         import requests
-        response = requests.get(enwik8_url)
+        response = requests.get(enwik8_url, timeout=60)
         with open(enwik8_local_path_zip, "wb") as f:
             f.write(response.content)
         with zipfile.ZipFile(enwik8_local_path_zip, "r") as zip_ref:
