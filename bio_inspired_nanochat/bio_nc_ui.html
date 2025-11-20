@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>NanoChat Bio-Dashboard</title>
+    <link rel="icon" type="image/svg+xml" href="/logo.svg">
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <!-- Libraries -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script> <!-- P5.js for Particles -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Outfit"', 'sans-serif'],
+                        mono: ['"Space Mono"', 'monospace'],
+                    },
+                    colors: {
+                        gray: {
+                            850: '#1f2937',
+                            900: '#111827',
+                            925: '#0b0f19', 
+                            950: '#030712',
+                        },
+                        brand: {
+                            500: '#8b5cf6', // Violet
+                            600: '#7c3aed',
+                            glow: 'rgba(139, 92, 246, 0.3)'
+                        },
+                        bio: {
+                            calcium: '#fbbf24', // Amber
+                            rrp: '#34d399',     // Emerald
+                            energy: '#60a5fa',  // Blue
+                            fatigue: '#f87171',  // Red
+                            memory: '#c084fc',  // Purple
+                        }
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'float': 'float 6s ease-in-out infinite',
+                    },
+                    keyframes: {
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-10px)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #030712;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(139, 92, 246, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(59, 130, 246, 0.15) 0px, transparent 50%);
+            background-attachment: fixed;
+        }
+        
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+
+        /* Markdown */
+        .prose p { margin-bottom: 0.8em; line-height: 1.7; }
+        .prose pre { background: #0f1117 !important; border: 1px solid #1f2937; border-radius: 0.75rem; }
+        .prose code { font-family: 'Space Mono', monospace; color: #e5e7eb; background: rgba(255,255,255,0.1); padding: 0.2em 0.4em; border-radius: 0.25em; font-size: 0.85em; }
+        
+        /* Range Slider */
+        input[type=range] { -webkit-appearance: none; background: transparent; }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%;
+            background: #8b5cf6; margin-top: -6px;
+            box-shadow: 0 0 10px rgba(139, 92, 246, 0.5); border: 2px solid #1f2937; cursor: pointer;
+        }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cursor: pointer; background: #374151; border-radius: 2px; }
+
+        /* P5 Canvas Container */
+        #synapse-canvas-container canvas {
+            border-radius: 0.75rem;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
+            border: 1px solid #1f2937;
+        }
+    </style>
+</head>
+<body class="h-screen flex overflow-hidden text-gray-300 antialiased font-sans">
+    <div id="app" class="w-full h-full flex">
+        
+        <!-- LEFT SIDEBAR -->
+        <div class="w-72 flex-shrink-0 border-r border-gray-800/50 bg-gray-950/50 backdrop-blur-xl flex flex-col transition-all duration-300" :class="{'w-0 opacity-0 overflow-hidden': !sidebarOpen}">
+            <!-- Header -->
+            <div class="p-6 flex items-center gap-3">
+                <div class="relative w-10 h-10 flex items-center justify-center bg-gradient-to-br from-brand-500 to-blue-600 rounded-xl shadow-lg shadow-brand-500/20">
+                    <img src="/logo.svg" class="w-6 h-6 brightness-200 contrast-200">
+                </div>
+                <div>
+                    <h1 class="font-bold text-white text-lg tracking-tight">NanoChat</h1>
+                    <span class="text-[10px] font-bold text-brand-500 uppercase tracking-widest">Bio-Synaptic</span>
+                </div>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto px-6 py-2 space-y-8">
+                <!-- Synaptic Vitals -->
+                <div class="space-y-3">
+                    <div class="text-[11px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                        <i data-lucide="zap" class="w-3 h-3"></i>
+                        Synaptic Vitals
+                    </div>
+                    <div class="bg-gray-900/60 rounded-xl p-4 border border-gray-800/50 space-y-4">
+                        <!-- Memory (CaMKII) -->
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-bio-memory font-medium">LTP (Memory)</span>
+                                <span class="font-mono text-gray-400">{{ (avgCamkii * 100).toFixed(0) }}%</span>
+                            </div>
+                            <div class="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                                <div class="h-full bg-bio-memory transition-all duration-500" :style="{width: `${avgCamkii * 100}%`}"></div>
+                            </div>
+                        </div>
+                        <!-- Energy -->
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-bio-energy font-medium">ATP (Energy)</span>
+                                <span class="font-mono text-gray-400">{{ (avgEnergy * 100).toFixed(0) }}%</span>
+                            </div>
+                            <div class="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                                <div class="h-full bg-bio-energy transition-all duration-500" :style="{width: `${avgEnergy * 100}%`}"></div>
+                            </div>
+                        </div>
+                        <!-- Fatigue -->
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-bio-fatigue font-medium">Fatigue</span>
+                                <span class="font-mono text-gray-400">{{ (avgFatigue * 100).toFixed(0) }}%</span>
+                            </div>
+                            <div class="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                                <div class="h-full bg-bio-fatigue transition-all duration-500" :style="{width: `${avgFatigue * 100}%`}"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Controls -->
+                <div class="space-y-6">
+                    <div class="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Hyperparameters</div>
+                    <div class="space-y-4">
+                        <div>
+                            <div class="flex justify-between text-xs mb-2">
+                                <span class="text-gray-300">Creativity</span>
+                                <span class="font-mono text-brand-400">{{ params.temperature }}</span>
+                            </div>
+                            <input type="range" v-model.number="params.temperature" min="0" max="2" step="0.1">
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-xs mb-2">
+                                <span class="text-gray-300">Focus (Top K)</span>
+                                <span class="font-mono text-brand-400">{{ params.top_k }}</span>
+                            </div>
+                            <input type="range" v-model.number="params.top_k" min="1" max="100" step="1">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="p-6 border-t border-gray-800/50">
+                <button @click="newChat" class="w-full py-3 px-4 bg-brand-600 hover:bg-brand-500 text-white rounded-xl transition-all shadow-lg shadow-brand-500/20 font-medium text-sm flex items-center justify-center gap-2 group">
+                    <i data-lucide="plus" class="w-4 h-4 group-hover:rotate-90 transition-transform"></i> 
+                    <span>New Session</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- MAIN CHAT -->
+        <div class="flex-1 flex flex-col relative min-w-0">
+            <!-- Toggle Buttons -->
+            <div class="absolute top-4 left-4 z-20 xl:hidden">
+                <button @click="sidebarOpen = !sidebarOpen" class="p-2 bg-gray-900/80 backdrop-blur rounded-lg border border-gray-800 text-gray-400 hover:text-white"><i data-lucide="menu" class="w-5 h-5"></i></button>
+            </div>
+            <div class="absolute top-4 right-4 z-20 xl:hidden">
+                <button @click="vizOpen = !vizOpen" class="p-2 bg-gray-900/80 backdrop-blur rounded-lg border border-gray-800 text-gray-400 hover:text-white"><i data-lucide="activity" class="w-5 h-5"></i></button>
+            </div>
+
+            <!-- Chat Container -->
+            <div class="flex-1 overflow-y-auto scroll-smooth pt-16 pb-32 px-4 sm:px-8" id="chatContainer">
+                <div class="max-w-3xl mx-auto space-y-8">
+                    
+                    <!-- Empty State -->
+                    <div v-if="messages.length === 0" class="flex flex-col items-center justify-center py-20 text-center animate-fade-in">
+                        <div class="relative w-24 h-24 mb-8">
+                            <div class="absolute inset-0 bg-brand-500 blur-2xl opacity-20 rounded-full animate-pulse-slow"></div>
+                            <img src="/logo.svg" class="w-full h-full relative z-10 animate-float">
+                        </div>
+                        <h2 class="text-3xl font-bold text-white mb-3">NanoChat Bio</h2>
+                        <p class="text-gray-500 max-w-md">A living neural network with real-time synaptic fatigue, metabolic limits, and Hebbian plasticity.</p>
+                    </div>
+
+                    <!-- Messages -->
+                    <div v-for="(msg, idx) in messages" :key="idx" class="flex gap-5 group animate-slide-up" :class="msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'">
+                        <!-- Avatar -->
+                        <div class="flex-shrink-0 mt-1">
+                            <div v-if="msg.role === 'assistant'" class="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-500 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-brand-500/20">
+                                <img src="/logo.svg" class="w-6 h-6 brightness-200 contrast-200">
+                            </div>
+                            <div v-else class="w-10 h-10 rounded-xl bg-gray-800 border border-gray-700 flex items-center justify-center text-gray-400">
+                                <span class="font-bold text-sm">You</span>
+                            </div>
+                        </div>
+
+                        <!-- Bubble -->
+                        <div class="flex flex-col max-w-[85%]" :class="msg.role === 'user' ? 'items-end' : 'items-start'">
+                            <div class="prose prose-invert prose-sm sm:prose-base px-6 py-4 rounded-2xl shadow-xl backdrop-blur-sm border"
+                                 :class="msg.role === 'user' 
+                                    ? 'bg-[#1e1b4b]/50 border-brand-500/30 text-gray-100 rounded-tr-sm' 
+                                    : 'bg-gray-900/50 border-gray-800 text-gray-300 rounded-tl-sm'">
+                                <div v-if="msg.role === 'assistant'" v-html="renderMarkdown(msg.content)"></div>
+                                <div v-else>{{ msg.content }}</div>
+                            </div>
+                            
+                            <!-- Stats Badge -->
+                            <div v-if="msg.role === 'assistant' && msg.metrics && msg.metrics.tok_sec > 0" class="mt-1 text-[10px] font-mono text-gray-600 px-1 opacity-0 group-hover:opacity-100 transition-opacity flex gap-3">
+                                <span><span class="text-brand-400">{{ msg.metrics.tok_sec }}</span> t/s</span>
+                                <span v-if="msg.metrics.avg_rrp">RRP: <span class="text-bio-rrp">{{ msg.metrics.avg_rrp.toFixed(1) }}</span></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Input -->
+            <div class="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-[#030712] via-[#030712] to-transparent z-10">
+                <div class="max-w-3xl mx-auto relative group">
+                    <div class="absolute -inset-0.5 bg-gradient-to-r from-brand-500 to-blue-600 rounded-2xl opacity-20 group-hover:opacity-40 transition duration-500 blur"></div>
+                    <div class="relative flex items-end gap-2 bg-gray-900/90 rounded-xl border border-gray-800 p-2 shadow-2xl">
+                        <textarea 
+                            v-model="input"
+                            @keydown.enter.prevent="sendMessage"
+                            placeholder="Message NanoChat..." 
+                            class="w-full bg-transparent text-gray-100 pl-4 py-3.5 focus:outline-none resize-none max-h-48 text-base"
+                            rows="1"
+                            ref="inputRef"
+                            :disabled="isGenerating"
+                        ></textarea>
+                        <button 
+                            @click="sendMessage"
+                            :disabled="!input.trim() || isGenerating"
+                            class="p-3 bg-brand-600 hover:bg-brand-500 disabled:bg-gray-800 disabled:text-gray-600 text-white rounded-lg transition-all active:scale-95 mb-0.5"
+                        >
+                            <i data-lucide="send" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT SIDEBAR: NeuroViz -->
+        <div class="w-96 flex-shrink-0 border-l border-gray-800/50 bg-gray-950/80 backdrop-blur-xl flex flex-col transition-all duration-300 absolute xl:static right-0 h-full z-30 shadow-2xl xl:shadow-none" 
+             :class="{'translate-x-full xl:translate-x-0': !vizOpen}">
+            
+            <!-- Header -->
+            <div class="p-4 border-b border-gray-800/50 flex justify-between items-center">
+                <div class="flex items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-widest">
+                    <i data-lucide="microscope" class="w-4 h-4 text-brand-500"></i>
+                    NeuroScope
+                </div>
+                <button @click="vizOpen = false" class="xl:hidden text-gray-500"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-5 space-y-8 scroll-smooth">
+                
+                <!-- 1. The Synapse (P5.js) -->
+                <div class="space-y-3">
+                    <div class="flex justify-between items-end">
+                        <h3 class="text-xs font-semibold text-gray-300">Live Synaptic Terminal</h3>
+                        <span class="text-[10px] text-gray-500 font-mono">Vesicle Pool Sim</span>
+                    </div>
+                    <div id="synapse-canvas-container" class="w-full aspect-video bg-gray-900 rounded-xl overflow-hidden relative">
+                        <!-- P5 Sketch inserts here -->
+                        <div class="absolute top-2 left-2 text-[10px] text-gray-500 pointer-events-none font-mono">
+                            <span class="text-bio-rrp">●</span> Vesicles<br>
+                            <span class="text-bio-calcium">●</span> Calcium
+                        </div>
+                    </div>
+                    <div class="text-[10px] text-gray-500 leading-relaxed">
+                        Visualizes the "Readily Releasable Pool" (green dots). High generation speed depletes the pool ("Fatigue"), forcing the model to pause or simplify.
+                    </div>
+                </div>
+
+                <!-- 2. Expert Topography (3D Plotly) -->
+                <div class="space-y-3">
+                    <div class="flex justify-between items-end">
+                        <h3 class="text-xs font-semibold text-gray-300">Expert Topology</h3>
+                        <span class="text-[10px] text-gray-500 font-mono">3D Activation Surface</span>
+                    </div>
+                    <div class="bg-gray-900 rounded-xl border border-gray-800 p-1 h-64 shadow-inner relative">
+                        <div id="expert3d" class="w-full h-full"></div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const { createApp, ref, reactive, onMounted, watch, nextTick } = Vue;
+
+        // Global state for P5 to access
+        window.bioState = {
+            rrp: 6.0,
+            calcium: 0.0,
+            isFiring: false
+        };
+
+        // P5.js Sketch for Synapse
+        const synapseSketch = (p) => {
+            let particles = [];
+            const maxParticles = 100; // Visual scaling
+            
+            p.setup = () => {
+                const container = document.getElementById('synapse-canvas-container');
+                const canvas = p.createCanvas(container.offsetWidth, container.offsetHeight);
+                canvas.parent('synapse-canvas-container');
+                p.frameRate(30);
+            };
+
+            p.draw = () => {
+                p.background(17, 24, 39); // gray-900
+                
+                // Draw "Terminal Bulb" outline
+                p.noFill();
+                p.stroke(55, 65, 81); // gray-700
+                p.strokeWeight(2);
+                p.beginShape();
+                p.vertex(0, 0);
+                p.bezierVertex(p.width*0.2, p.height*0.1, p.width*0.8, p.height*0.1, p.width, 0);
+                p.vertex(p.width, p.height);
+                p.vertex(0, p.height);
+                p.endShape(p.CLOSE);
+
+                // Update Particle Count based on RRP
+                // RRP range ~0 to 6-8. Scale to particle count.
+                const targetCount = Math.floor(window.bioState.rrp * 12);
+                
+                // Add particles
+                if (particles.length < targetCount) {
+                    particles.push(new Particle(p));
+                } 
+                // Remove particles (Firing!)
+                else if (particles.length > targetCount) {
+                    // Remove from bottom (simulating release)
+                    particles.sort((a, b) => b.pos.y - a.pos.y);
+                    particles.splice(0, particles.length - targetCount);
+                }
+
+                // Draw Calcium Glow
+                if (window.bioState.calcium > 0.1) {
+                    let alpha = p.map(window.bioState.calcium, 0, 2, 0, 100);
+                    p.noStroke();
+                    p.fill(251, 191, 36, alpha); // Amber
+                    p.rect(0, 0, p.width, p.height);
+                }
+
+                // Update and Draw Particles
+                for (let part of particles) {
+                    part.update();
+                    part.show();
+                }
+            };
+            
+            p.windowResized = () => {
+                const container = document.getElementById('synapse-canvas-container');
+                if(container) p.resizeCanvas(container.offsetWidth, container.offsetHeight);
+            }
+
+            class Particle {
+                constructor(p) {
+                    this.p = p;
+                    this.pos = p.createVector(p.random(p.width), p.random(0, p.height/2)); // Spawn top
+                    this.vel = p.createVector(p.random(-0.5, 0.5), p.random(0.5, 2)); // Fall down
+                    this.acc = p.createVector(0, 0);
+                }
+                update() {
+                    this.vel.add(this.acc);
+                    this.pos.add(this.vel);
+                    // Brownian jitter
+                    this.pos.x += this.p.random(-1, 1);
+                    
+                    // Boundaries (keep inside "bulb")
+                    if (this.pos.y > this.p.height - 5) {
+                        this.pos.y = this.p.height - 5;
+                        this.vel.y *= -0.5; // Bounce
+                    }
+                    if (this.pos.x < 5 || this.pos.x > this.p.width - 5) {
+                        this.vel.x *= -1;
+                    }
+                }
+                show() {
+                    this.p.noStroke();
+                    this.p.fill(52, 211, 153); // Emerald-400 (Vesicle color)
+                    this.p.ellipse(this.pos.x, this.pos.y, 6);
+                }
+            }
+        };
+
+        const App = {
+            setup() {
+                const sidebarOpen = ref(true);
+                const vizOpen = ref(true);
+                const messages = ref([]);
+                const input = ref('');
+                const isGenerating = ref(false);
+                const connected = ref(false);
+                const gpuName = ref('');
+                const inputRef = ref(null);
+                const tokensPerSec = ref(0);
+                const params = reactive({ temperature: 0.8, top_k: 50, max_tokens: 512 });
+                
+                // Bio Stats
+                const avgFatigue = ref(0);
+                const avgEnergy = ref(1.0);
+                const avgCamkii = ref(0);
+
+                // 3D Plot Data
+                let expertZ = []; 
+
+                onMounted(async () => {
+                    lucide.createIcons();
+                    await checkHealth();
+                    new p5(synapseSketch); // Init P5
+                    init3DPlot();
+                    
+                    // Responsive
+                    if (window.innerWidth < 1280) vizOpen.value = false;
+                    if (window.innerWidth < 768) sidebarOpen.value = false;
+                });
+
+                const init3DPlot = () => {
+                    const layout = {
+                        paper_bgcolor: 'rgba(0,0,0,0)',
+                        plot_bgcolor: 'rgba(0,0,0,0)',
+                        margin: { t: 0, r: 0, b: 0, l: 0 },
+                        scene: {
+                            xaxis: { title: '', showgrid: false, zeroline: false, showticklabels: false },
+                            yaxis: { title: '', showgrid: false, zeroline: false, showticklabels: false },
+                            zaxis: { title: '', showgrid: true, zeroline: false, showticklabels: false },
+                            camera: { eye: { x: 1.5, y: 1.5, z: 1.2 } }
+                        },
+                        height: 256
+                    };
+                    
+                    // Dummy initial surface
+                    const z = Array(20).fill(0).map(() => Array(8).fill(0));
+                    
+                    Plotly.newPlot('expert3d', [{
+                        z: z,
+                        type: 'surface',
+                        colorscale: 'Viridis',
+                        showscale: false,
+                        opacity: 0.9
+                    }], layout, { displayModeBar: false });
+                };
+
+                const update3DPlot = (moeData) => {
+                    // moeData is list of objects {gates: [...]}.
+                    // We need a 2D array [Layer][Expert].
+                    // moeData might be sparse or full. 
+                    // Assuming we get an array of layers from backend.
+                    if (!moeData || moeData.length === 0) return; 
+                    
+                    // Extract gates into Z matrix
+                    const z = moeData.map(l => l.gates[0][0]); // Expecting [B][1][E] structure
+                    
+                    Plotly.react('expert3d', [{
+                        z: z,
+                        type: 'surface',
+                        colorscale: 'Viridis',
+                        showscale: false
+                    }], document.getElementById('expert3d').layout);
+                };
+
+                const checkHealth = async () => {
+                    try {
+                        const res = await fetch('/health');
+                        const data = await res.json();
+                        connected.value = data.status === 'ok';
+                    } catch (e) { connected.value = false; }
+                };
+
+                const renderMarkdown = (text) => marked.parse(text);
+
+                const newChat = () => {
+                    messages.value = [];
+                    inputRef.value?.focus();
+                };
+
+                const sendMessage = async () => {
+                    if (!input.value.trim() || isGenerating.value) return;
+                    
+                    const userMsg = input.value.trim();
+                    messages.value.push({ role: 'user', content: userMsg });
+                    input.value = '';
+                    isGenerating.value = true;
+                    const msgIndex = messages.value.length;
+                    messages.value.push({ role: 'assistant', content: '', metrics: { tok_sec: 0, avg_rrp: 0 } });
+                    
+                    const startTime = performance.now();
+                    let tokenCount = 0;
+
+                    try {
+                        const response = await fetch('/chat/completions', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                messages: messages.value.slice(0, -1).map(m => ({ role: m.role, content: m.content })),
+                                ...params
+                            })
+                        });
+
+                        const reader = response.body.getReader();
+                        const decoder = new TextDecoder();
+
+                        while (true) {
+                            const { done, value } = await reader.read();
+                            if (done) break;
+                            const chunk = decoder.decode(value);
+                            const lines = chunk.split('\n');
+                            
+                            for (const line of lines) {
+                                if (line.startsWith('data: ')) {
+                                    try {
+                                        const data = JSON.parse(line.slice(6));
+                                        if (data.token) {
+                                            messages.value[msgIndex].content += data.token;
+                                            tokenCount++;
+                                            const elapsed = (performance.now() - startTime) / 1000;
+                                            messages.value[msgIndex].metrics.tok_sec = Math.round(tokenCount / elapsed);
+                                            
+                                            // Auto-scroll
+                                            const container = document.getElementById('chatContainer');
+                                            if (container) container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+                                        }
+                                        if (data.metrics) processMetrics(data.metrics, msgIndex);
+                                    } catch (e) { } // Ignore malformed JSON chunks
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        messages.value[msgIndex].content += `\n\n*[Error: ${e.message}]*`;
+                    } finally {
+                        isGenerating.value = false;
+                        nextTick(() => inputRef.value?.focus());
+                    }
+                };
+
+                const processMetrics = (m, msgIndex) => {
+                    // 1. Update Global P5 State (Synapse)
+                    if (m.presyn) {
+                        if (m.presyn.rrp && m.presyn.rrp.length > 0) {
+                            // Average RRP of layer 0 (first input layer usually most interesting for presyn)
+                            // Or avg of all layers? Engine returns [Layer][Head]. 
+                            // Wait, presyn is per-head. Engine returns dict of tensors.
+                            // In previous engine mod: metrics['presyn'][k] = last_val.tolist() (B, H)
+                            // So it's just [B][H]. We take avg of H.
+                            const rrpAvg = m.presyn.rrp[0].reduce((a,b) => a+b, 0) / m.presyn.rrp[0].length;
+                            const cAvg = m.presyn.c[0].reduce((a,b) => a+b, 0) / m.presyn.c[0].length;
+                            
+                            // Smooth update P5 state
+                            window.bioState.rrp = window.bioState.rrp * 0.8 + rrpAvg * 0.2;
+                            window.bioState.calcium = cAvg;
+                            
+                            // Update chat message metric
+                            if (messages.value[msgIndex]) {
+                                messages.value[msgIndex].metrics.avg_rrp = rrpAvg;
+                            }
+                        }
+                        
+                        if (m.presyn.en) {
+                             const enAvg = m.presyn.en[0].reduce((a,b) => a+b, 0) / m.presyn.en[0].length;
+                             avgEnergy.value = enAvg;
+                             avgFatigue.value = 1.0 - enAvg;
+                        }
+                    }
+
+                    // 2. Update 3D Plot (Experts)
+                    if (m.moe && m.moe.length > 0) {
+                        update3DPlot(m.moe);
+                    }
+
+                    // 3. Update Memory (CaMKII)
+                    if (m.memory) {
+                        // m.memory is list of layer averages
+                        const memAvg = m.memory.reduce((a,b) => a+b, 0) / m.memory.length;
+                        avgCamkii.value = memAvg;
+                    }
+                };
+
+                return {
+                    sidebarOpen, vizOpen,
+                    messages, input, isGenerating, connected, gpuName, params,
+                    newChat, sendMessage, renderMarkdown, inputRef,
+                    tokensPerSec, avgFatigue, avgEnergy, avgCamkii
+                };
+            }
+        };
+
+        createApp(App).mount('#app');
+    </script>
+</body>
+</html>
