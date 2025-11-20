@@ -50,7 +50,7 @@ class HumanEval(Task):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        dataset = load_dataset("openai/openai_humaneval", split="test").shuffle(seed=42)
+        dataset = load_dataset("openai/openai_humaneval", split="test", revision="7dce605").shuffle(seed=42)
         self.ds: Dataset = dataset
 
     @property

@@ -16,13 +16,16 @@ class MMLU(Task):
 
     def __init__(self, subset, split, **kwargs):
         super().__init__(**kwargs)
-        assert subset in ["all", "auxiliary_train"], f"subset {subset} must be all|auxiliary_train"
-        assert split in ["train", "validation", "dev", "test"], f"split {split} must be train|validation|dev|test"
+        if subset not in ["all", "auxiliary_train"]:
+            raise ValueError(f"subset {subset} must be all|auxiliary_train")
+        if split not in ["train", "validation", "dev", "test"]:
+            raise ValueError(f"split {split} must be train|validation|dev|test")
         if subset == "auxiliary_train":
-            assert split == "train", "auxiliary_train must be split into train"
+            if split != "train":
+                raise ValueError("auxiliary_train must be split into train")
         self.subset = subset
         self.split = split
-        dataset = load_dataset("cais/mmlu", subset, split=split).shuffle(seed=42)
+        dataset = load_dataset("cais/mmlu", subset, split=split, revision="c30699e").shuffle(seed=42)
         self.ds: Dataset = dataset
         if subset == "auxiliary_train":
             # I don't understand why but the auxiliary_train rows have some weird additional 'train' wrapper
@@ -41,7 +44,8 @@ class MMLU(Task):
         choices = cast(Sequence[str], row["choices"]) # the text of each choice
         answer = cast(int, row["answer"]) # index of the answer, e.g. 0,1,2,3 (for A,B,C,D)
         subject = cast(str, row["subject"]) # e.g. "college_biology", "college_chemistry", etc.
-        assert len(choices) == 4, "MMLU should have 4 choices"
+        if len(choices) != 4:
+            raise ValueError("MMLU should have 4 choices")
         # create and return the Conversation object
         user_message = render_mc(question, self.letters, choices)
         assistant_message = self.letters[answer]
@@ -59,6 +63,7 @@ class MMLU(Task):
     def evaluate(self, conversation, assistant_response):
         # the assert here is not strictly speaking needed, but currently the way we eval, we expect this to be true
         # I'm going to leave the assert here to prevent footguns, but possibly in the future can remove it.
-        assert assistant_response in self.letters, f"MMLU answer {assistant_response} is expected to be one of {self.letters}"
+        if assistant_response not in self.letters:
+            raise ValueError(f"MMLU answer {assistant_response} is expected to be one of {self.letters}")
         assistant_message = conversation['messages'][-1]['content'] # e.g. "A"
         return assistant_response == assistant_message

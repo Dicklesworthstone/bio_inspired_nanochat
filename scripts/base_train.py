@@ -128,7 +128,7 @@ config_keys = [
     if not k.startswith("_") and isinstance(v, (int, float, bool, str))
 ]
 with open(os.path.join("bio_inspired_nanochat", "configurator.py")) as f:
-    exec(f.read())  # overrides from command line or config file
+    exec(f.read())  # nosec B102 # overrides from command line or config file
 user_config = {k: globals()[k] for k in config_keys}  # will be useful for logging
 # -----------------------------------------------------------------------------
 
@@ -182,7 +182,8 @@ tokens_per_fwdbwd = (
 world_tokens_per_fwdbwd = (
     tokens_per_fwdbwd * ddp_world_size
 )  # total tokens per iteration for all ranks
-assert total_batch_size % world_tokens_per_fwdbwd == 0
+if total_batch_size % world_tokens_per_fwdbwd != 0:
+    raise ValueError(f"total_batch_size {total_batch_size} must be divisible by world_tokens_per_fwdbwd {world_tokens_per_fwdbwd}")
 grad_accum_steps = total_batch_size // world_tokens_per_fwdbwd
 print0(
     f"Tokens / micro-batch / rank: {device_batch_size} x {max_seq_len} = {tokens_per_fwdbwd:,}"
@@ -206,7 +207,8 @@ model_config_kwargs = dict(
 )
 use_syn = bool(synapses)
 if use_syn:
-    assert GPTSynaptic is not None, "synapses=1 but gpt_synaptic module not available"
+    if GPTSynaptic is None:
+        raise ValueError("synapses=1 but gpt_synaptic module not available")
     syn_cfg = SynapticConfig()
     model_config = GPTSynapticConfig(
         sequence_len=max_seq_len,
@@ -250,7 +252,8 @@ num_flops_per_token = model.estimate_flops()
 print0(f"Estimated FLOPs per token: {num_flops_per_token:e}")
 
 # Calculate number of iterations. Either it is given, or from target flops, or from target data:param ratio (in that order)
-assert num_iterations > 0 or target_param_data_ratio > 0 or target_flops > 0
+if not (num_iterations > 0 or target_param_data_ratio > 0 or target_flops > 0):
+    raise ValueError("No training horizon specified (num_iterations, target_param_data_ratio, or target_flops)")
 if num_iterations > 0:
     print0(f"Using user-provided number of iterations: {num_iterations:,}")
 elif target_flops > 0:

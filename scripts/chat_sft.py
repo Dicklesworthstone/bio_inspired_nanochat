@@ -59,7 +59,7 @@ eval_metrics_max_problems = 1024
 # now allow CLI to override the settings via the configurator lol
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 with open(os.path.join('bio_inspired_nanochat', 'configurator.py')) as f:
-    exec(f.read()) # overrides from command line or config file
+    exec(f.read()) # nosec B102 # overrides from command line or config file
 user_config = {k: globals()[k] for k in config_keys} # possibly useful for logging
 # -----------------------------------------------------------------------------
 
@@ -133,13 +133,15 @@ examples_per_step = device_batch_size * ddp_world_size
 print0(f"Target examples per step: {target_examples_per_step}")
 print0(f"Device batch size: {device_batch_size}")
 print0(f"Examples per step is device_batch_size * ddp_world_size: {examples_per_step}")
-assert target_examples_per_step % examples_per_step == 0, "Target examples per step must be divisible by examples per step"
+if target_examples_per_step % examples_per_step != 0:
+    raise ValueError("Target examples per step must be divisible by examples per step")
 grad_accum_steps = target_examples_per_step // examples_per_step
 print0(f"=> Setting grad accum steps: {grad_accum_steps}")
 
 if num_iterations == -1:
     # derive num_iterations from num_epochs and the size of the dataset
-    assert num_epochs > 0, "num_epochs must be positive if num_iterations is -1"
+    if num_epochs <= 0:
+        raise ValueError("num_epochs must be positive if num_iterations is -1")
     num_iterations = (len(train_ds) // target_examples_per_step) * num_epochs
 train_loader = sft_data_generator(train_ds, batch_size=device_batch_size)
 def build_val_loader():

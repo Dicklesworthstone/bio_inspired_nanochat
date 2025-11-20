@@ -39,15 +39,21 @@ class CustomJSON(Task):
                         continue
                     messages = json.loads(line)
                     # Validate the conversation structure
-                    assert isinstance(messages, list), f"Expected list of messages, got {type(messages)}"
-                    assert len(messages) >= 2, f"Conversation must have at least 2 messages, got {len(messages)}"
+                    if not isinstance(messages, list):
+                        raise ValueError(f"Expected list of messages, got {type(messages)}")
+                    if len(messages) < 2:
+                        raise ValueError(f"Conversation must have at least 2 messages, got {len(messages)}")
                     # Validate message structure and alternating roles
                     for i, message in enumerate(messages):
-                        assert "role" in message, f"Message {i} missing 'role' field"
-                        assert "content" in message, f"Message {i} missing 'content' field"
+                        if "role" not in message:
+                            raise ValueError(f"Message {i} missing 'role' field")
+                        if "content" not in message:
+                            raise ValueError(f"Message {i} missing 'content' field")
                         expected_role = "user" if i % 2 == 0 else "assistant"
-                        assert message["role"] == expected_role, f"Message {i} has role {message['role']} but should be {expected_role}"
-                        assert isinstance(message["content"], str), f"Message {i} content must be a string"
+                        if message["role"] != expected_role:
+                            raise ValueError(f"Message {i} has role {message['role']} but should be {expected_role}")
+                        if not isinstance(message["content"], str):
+                            raise ValueError(f"Message {i} content must be a string")
 
                     self.conversations.append(messages)
 

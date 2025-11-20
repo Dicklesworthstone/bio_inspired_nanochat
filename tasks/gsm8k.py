@@ -40,9 +40,11 @@ class GSM8K(Task):
 
     def __init__(self, subset, split, **kwargs):
         super().__init__(**kwargs)
-        assert subset in ["main", "socratic"], "GSM8K subset must be main|socratic"
-        assert split in ["train", "test"], "GSM8K split must be train|test"
-        dataset = load_dataset("openai/gsm8k", subset, split=split).shuffle(seed=42)
+        if subset not in ["main", "socratic"]:
+            raise ValueError("GSM8K subset must be main|socratic")
+        if split not in ["train", "test"]:
+            raise ValueError("GSM8K split must be train|test")
+        dataset = load_dataset("openai/gsm8k", subset, split=split, revision="f18c7ed").shuffle(seed=42)
         self.ds: Dataset = dataset
 
     @property
@@ -97,11 +99,14 @@ class GSM8K(Task):
         TODO: Technically, assistant_response should be a Message (either a string or a list of parts)
               We can handle this later possibly. For now just assume string.
         """
-        assert isinstance(assistant_response, str), "Assuming simple string response for now"
+        if not isinstance(assistant_response, str):
+            raise ValueError("Assuming simple string response for now")
         # First extract the ground truth answer
         assistant_message = conversation['messages'][-1]
-        assert assistant_message['role'] == "assistant", "Last message must be from the Assistant"
-        assert isinstance(assistant_message['content'], list), "This is expected to be a list of parts"
+        if assistant_message['role'] != "assistant":
+            raise ValueError("Last message must be from the Assistant")
+        if not isinstance(assistant_message['content'], list):
+            raise ValueError("This is expected to be a list of parts")
         last_text_part = assistant_message['content'][-1]['text'] # this contains the final answer in GSM8K
         # Extract both the ground truth answer and the predicted answer
         ref_num = extract_answer(last_text_part)

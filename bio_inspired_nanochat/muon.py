@@ -20,7 +20,10 @@ def zeropower_via_newtonschulz5(G: Tensor, steps: int) -> Tensor:
     where S' is diagonal with S_{ii}' ~ Uniform(0.5, 1.5), which turns out not to hurt model
     performance at all relative to UV^T, where USV^T = G is the SVD.
     """
-    assert G.ndim >= 2 # batched Muon implementation by @scottjmaddox, and put into practice in the record by @YouJiacheng
+    which has the advantage that it can be stably run in bfloat16 on the GPU.
+    """
+    if G.ndim < 2:
+        raise ValueError("Muon expects 2D parameters only") # batched Muon implementation by @scottjmaddox, and put into practice in the record by @YouJiacheng
     a, b, c = (3.4445, -4.7750,  2.0315)
     X = G.bfloat16()
     if G.size(-2) > G.size(-1):
@@ -111,7 +114,8 @@ class DistMuon(torch.optim.Optimizer):
                  nesterov: bool = True, ns_steps: int = 5):
         defaults = dict(lr=lr, momentum=momentum, nesterov=nesterov, ns_steps=ns_steps)
         params = list(params)
-        assert all(p.ndim == 2 for p in params), "Muon expects 2D parameters only"
+        if not all(p.ndim == 2 for p in params):
+            raise ValueError("Muon expects 2D parameters only")
         rank = dist.get_rank()
         # Group all parameters by their shape
         shapes = sorted({p.shape for p in params}) # sort to ensure consistent / deterministic ordering
@@ -119,8 +123,10 @@ class DistMuon(torch.optim.Optimizer):
         for shape in shapes:
             group_params = [p for p in params if p.shape == shape]
             device, dtype = group_params[0].device, group_params[0].dtype
-            assert all(p.device == device for p in group_params)
-            assert all(p.dtype == dtype for p in group_params)
+            if not all(p.device == device for p in group_params):
+                raise ValueError(f"All params of shape {shape} must be on the same device")
+            if not all(p.dtype == dtype for p in group_params):
+                raise ValueError(f"All params of shape {shape} must have the same dtype")
             if rank == 0:
                 print(f"Muon: Grouping {len(group_params)} params of shape {shape}, device {device}, dtype {dtype}")
             param_groups.append(dict(params=group_params, zero_buffer=torch.zeros_like(group_params[0])))
@@ -132,7 +138,8 @@ class DistMuon(torch.optim.Optimizer):
         world_size = dist.get_world_size()
 
         # Ensure all grads exist
-        assert all(p.grad is not None for group in self.param_groups for p in group["params"]), "All params must have grads"
+        if not all(p.grad is not None for group in self.param_groups for p in group["params"]):
+            raise ValueError("All params must have grads")
 
         # Kick off all the reduce scatter operations to average up the gradients across all ranks
         all_reduce_futures = []

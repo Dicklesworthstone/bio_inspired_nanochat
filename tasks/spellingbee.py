@@ -110,11 +110,10 @@ USER_MSG_TEMPLATES = [
     "{word}に{letter}が何回出てくる",
 ]
 
-class SpellingBee(Task):
-
     def __init__(self, size=1000, split="train", **kwargs):
         super().__init__(**kwargs)
-        assert split in ["train", "test"], "SpellingBee split must be train|test"
+        if split not in ["train", "test"]:
+            raise ValueError("SpellingBee split must be train|test")
         self.size = size
         self.split = split
         filename = WORD_LIST_URL.split("/")[-1]
@@ -132,7 +131,7 @@ class SpellingBee(Task):
 
     def get_example(self, index):
         seed = index if self.split == "train" else -(index + 1) # avoid collision at 0
-        rng = random.Random(seed)
+        rng = random.Random(seed) # nosec B311
 
         # pick a random word
         word = rng.choice(self.words)
@@ -207,11 +206,14 @@ Then count the occurrences of '{letter}':
         Given (conversation, completion), return evaluation outcome (0 = wrong, 1 = correct)
         Identical to gsm8k's evaluation.
         """
-        assert isinstance(assistant_response, str), "Assuming simple string response for now"
+        if not isinstance(assistant_response, str):
+            raise ValueError("Assuming simple string response for now")
         # First extract the ground truth answer from the conversation
         assistant_message = conversation['messages'][-1]
-        assert assistant_message['role'] == "assistant", "Last message must be from the Assistant"
-        assert isinstance(assistant_message['content'], list), "This is expected to be a list of parts"
+        if assistant_message['role'] != "assistant":
+            raise ValueError("Last message must be from the Assistant")
+        if not isinstance(assistant_message['content'], list):
+            raise ValueError("This is expected to be a list of parts")
         # The last text part contains the final answer with ####
         last_text_part = assistant_message['content'][-1]['text']
         # Extract both the ground truth answer and the predicted answer
@@ -233,14 +235,15 @@ class SimpleSpelling(Task):
 
     def __init__(self, size=1000, split="train", **kwargs):
         super().__init__(**kwargs)
-        assert split in ["train", "test"], "SpellingBee split must be train|test"
+        if split not in ["train", "test"]:
+            raise ValueError("SpellingBee split must be train|test")
         self.size = size
         self.split = split
         filename = WORD_LIST_URL.split("/")[-1]
         word_list_path = download_file_with_lock(WORD_LIST_URL, filename)
         with open(word_list_path, 'r', encoding='utf-8') as f:
             words = [line.strip() for line in f]
-        rng = random.Random(42)
+        rng = random.Random(42) # nosec B311
         rng.shuffle(words) # use a different word order than the SpellingBee task
         self.words = words
 
@@ -253,7 +256,7 @@ class SimpleSpelling(Task):
 
     def get_example(self, index):
         seed = index if self.split == "train" else -(index + 1) # avoid collision at 0
-        rng = random.Random(seed)
+        rng = random.Random(seed) # nosec B311
         # pick a random word
         word = rng.choice(self.words)
         word_letters = ",".join(list(word))
