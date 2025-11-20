@@ -89,13 +89,13 @@ pub fn presyn_step_cpu<'py>(
     let d_dim = shape[3];
 
     // Extract state tensors
-    let c_tensor = state.get_item("C")?.unwrap().extract::<PyReadonlyArrayDyn<f32>>()?;
-    let buf_tensor = state.get_item("BUF")?.unwrap().extract::<PyReadonlyArrayDyn<f32>>()?;
-    let rrp_tensor = state.get_item("RRP")?.unwrap().extract::<PyReadonlyArrayDyn<f32>>()?;
-    let res_tensor = state.get_item("RES")?.unwrap().extract::<PyReadonlyArrayDyn<f32>>()?;
-    let pr_tensor = state.get_item("PR")?.unwrap().extract::<PyReadonlyArrayDyn<f32>>()?;
-    let cl_tensor = state.get_item("CL")?.unwrap().extract::<PyReadonlyArrayDyn<f32>>()?;
-    let e_tensor = state.get_item("E")?.unwrap().extract::<PyReadonlyArrayDyn<f32>>()?;
+    let c_tensor = state.get_item("C")?.ok_or_else(|| pyo3::exceptions::PyValueError::new_err("Missing state key 'C'"))?.extract::<PyReadonlyArrayDyn<f32>>()?;
+    let buf_tensor = state.get_item("BUF")?.ok_or_else(|| pyo3::exceptions::PyValueError::new_err("Missing state key 'BUF'"))?.extract::<PyReadonlyArrayDyn<f32>>()?;
+    let rrp_tensor = state.get_item("RRP")?.ok_or_else(|| pyo3::exceptions::PyValueError::new_err("Missing state key 'RRP'"))?.extract::<PyReadonlyArrayDyn<f32>>()?;
+    let res_tensor = state.get_item("RES")?.ok_or_else(|| pyo3::exceptions::PyValueError::new_err("Missing state key 'RES'"))?.extract::<PyReadonlyArrayDyn<f32>>()?;
+    let pr_tensor = state.get_item("PR")?.ok_or_else(|| pyo3::exceptions::PyValueError::new_err("Missing state key 'PR'"))?.extract::<PyReadonlyArrayDyn<f32>>()?;
+    let cl_tensor = state.get_item("CL")?.ok_or_else(|| pyo3::exceptions::PyValueError::new_err("Missing state key 'CL'"))?.extract::<PyReadonlyArrayDyn<f32>>()?;
+    let e_tensor = state.get_item("E")?.ok_or_else(|| pyo3::exceptions::PyValueError::new_err("Missing state key 'E'"))?.extract::<PyReadonlyArrayDyn<f32>>()?;
 
     let c_arr = c_tensor.as_array();
     let buf_arr = buf_tensor.as_array();
