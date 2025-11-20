@@ -45,7 +45,7 @@ build-backend = "maturin"
 module-name = "rustbpe"
 bindings = "pyo3"
 python-source = "."
-manifest-path = "rustbpe/Cargo.toml"
+manifest-path = "rust_src/Cargo.toml"
 
 [dependency-groups]
 dev = [

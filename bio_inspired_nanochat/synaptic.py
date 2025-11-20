@@ -109,6 +109,26 @@ class SynapticConfig:
     barrier_strength: float = 0.1
     epsilon: float = 1e-6
     
+    # Rust Kernel Compat
+    tau_buf: float = 4.0
+    tau_prime: float = 5.0
+    tau_rrp: float = 40.0
+    tau_energy: float = 50.0
+    alpha_ca: float = 0.55
+    alpha_buf_on: float = 0.1
+    alpha_buf_off: float = 0.1
+    alpha_prime: float = 0.1
+    alpha_unprime: float = 0.1
+    alpha_refill: float = 0.1
+    energy_in: float = 0.01
+    energy_cost_rel: float = 0.015
+    energy_cost_pump: float = 0.01
+    syt_fast_kd: float = 0.4
+    syt_slow_kd: float = 1.0
+    complexin_bias: float = 0.0
+    qmax: float = 2.0
+    q_beta: float = 1.0
+    
     # Postsynaptic Plasticity
     post_fast_decay: float = 0.95
     post_fast_lr: float = 1.5e-3
