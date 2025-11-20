@@ -6,7 +6,7 @@ from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
 from bio_inspired_nanochat.synaptic import SynapticConfig
 from bio_inspired_nanochat.common import compute_init
 
-def benchmark(use_flex: bool, batch_size=4, seq_len=2048, n_layer=12, n_head=12, n_embd=768):
+def benchmark(use_flex: bool, batch_size=4, seq_len=4096, n_layer=12, n_head=12, n_embd=768):
     print(f"\n--- Benchmarking with use_flex_attention={use_flex} ---")
     
     # Reset memory
