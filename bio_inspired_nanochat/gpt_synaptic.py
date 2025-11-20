@@ -7,6 +7,12 @@ from bio_inspired_nanochat.torch_imports import torch, nn, F, Tensor
 from dataclasses import dataclass, field
 from typing import Optional
 
+try:
+    from .flex_synaptic import SynapticFlexAttention
+    _HAS_FLEX = True
+except ImportError:
+    _HAS_FLEX = False
+
 from .synaptic import (
     SynapticCausalSelfAttention,
     SynapticMLP,
@@ -32,6 +38,7 @@ class GPTSynapticConfig:
     synapses: bool = True
     syn_cfg: SynapticConfig = field(default_factory=SynapticConfig)
     dropout: float = 0.0
+    use_flex_attention: bool = False # Toggle for PyTorch 2.5+ FlexAttention
     # MoE & structural options
     use_moe: bool = False
     num_experts: int = 8
@@ -66,6 +73,7 @@ class CausalSelfAttention(nn.Module):
         syn_cfg: SynapticConfig,
         attn_drop=0.0,
         resid_drop=0.0,
+        use_flex: bool = False,
     ):
         super().__init__()
         self.attn = SynapticCausalSelfAttention(
@@ -77,6 +85,7 @@ class CausalSelfAttention(nn.Module):
             syn_cfg,
             attn_drop,
             resid_drop,
+            use_flex=use_flex,
         )
 
     def forward(self, x, kv_cache=None, presyn_state=None, train_mode=True):
@@ -99,6 +108,7 @@ class Block(nn.Module):
         top_k: int = 2,
         hidden_mult: int = 4,
         balance_loss: float = 0.01,
+        use_flex: bool = False,
     ):
         super().__init__()
         self.norm1 = nn.LayerNorm(n_embd)
@@ -111,6 +121,7 @@ class Block(nn.Module):
             syn_cfg,
             attn_drop=dropout,
             resid_drop=dropout,
+            use_flex=use_flex,
         )
         self.norm2 = nn.LayerNorm(n_embd)
         self.use_moe: bool = use_moe
@@ -182,6 +193,7 @@ class GPTSynaptic(nn.Module):
                     top_k=c.moe_top_k,
                     hidden_mult=c.moe_hidden_mult,
                     balance_loss=c.moe_balance_loss,
+                    use_flex=c.use_flex_attention,
                 )
             )
 
@@ -202,7 +214,12 @@ class GPTSynaptic(nn.Module):
         assert T <= self.config.sequence_len
         tok = self.wte(idx)
         x = self.drop(tok.to(dtype=torch.bfloat16))
+        
+        # Initialize presyn_state from kv_cache if available
         presyn_state = None
+        if kv_cache is not None and hasattr(kv_cache, 'presyn_state'):
+            presyn_state = kv_cache.presyn_state
+
         for li, block in enumerate(self.h):
             x, presyn_state = block(x, kv_cache, presyn_state, train_mode)
             if self.config.structural_every and targets is not None:
@@ -211,6 +228,12 @@ class GPTSynaptic(nn.Module):
                 ):
                     # Hook point for split/merge (kept as a callable point on purpose)
                     pass
+        
+        # Save presyn_state back to kv_cache
+        if kv_cache is not None:
+            # We attach it dynamically if it doesn't exist in __init__ yet (though we should add it there too)
+            kv_cache.presyn_state = presyn_state
+
         logits = self.lm_head(x.to(dtype=self.lm_head.weight.dtype))
         if targets is None:
             return logits, None

@@ -146,10 +146,15 @@ def _copy_synaptic_linear_(dst: SynapticLinear, src: SynapticLinear):
     # postsyn state
     cast(Tensor, dst.post.U).copy_(cast(Tensor, src.post.U))
     cast(Tensor, dst.post.V).copy_(cast(Tensor, src.post.V))
-    cast(Tensor, dst.post.H_fast).copy_(cast(Tensor, src.post.H_fast))
-    cast(Tensor, dst.post.m_gate).copy_(cast(Tensor, src.post.m_gate))
+    cast(Tensor, dst.post.fast).copy_(cast(Tensor, src.post.fast))
+    cast(Tensor, dst.post.slow).copy_(cast(Tensor, src.post.slow))
+    # buffers
     cast(Tensor, dst.post.camkii).copy_(cast(Tensor, src.post.camkii))
     cast(Tensor, dst.post.pp1).copy_(cast(Tensor, src.post.pp1))
+    cast(Tensor, dst.post.bdnf).copy_(cast(Tensor, src.post.bdnf))
+    # Linear buffers
+    cast(Tensor, dst.u_buf).copy_(cast(Tensor, src.u_buf))
+    cast(Tensor, dst.v_buf).copy_(cast(Tensor, src.v_buf))
 
 
 @torch.no_grad()
@@ -184,18 +189,26 @@ def _merge_linear_into_(winner: SynapticLinear, loser: SynapticLinear, alpha: fl
             # Manual state update (same as before)
             cast(Tensor, winner.post.U).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, loser.post.U))
             cast(Tensor, winner.post.V).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, loser.post.V))
-            cast(Tensor, winner.post.H_fast).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, loser.post.H_fast))
-            cast(Tensor, winner.post.m_gate).mul_(0.9).add_(0.1 * cast(Tensor, loser.post.m_gate))
+            cast(Tensor, winner.post.fast).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, loser.post.fast))
+            cast(Tensor, winner.post.slow).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, loser.post.slow))
+            
             cast(Tensor, winner.post.camkii).mul_(0.9).add_(0.1 * cast(Tensor, loser.post.camkii))
             cast(Tensor, winner.post.pp1).mul_(0.9).add_(0.1 * cast(Tensor, loser.post.pp1))
+            cast(Tensor, winner.post.bdnf).mul_(0.9).add_(0.1 * cast(Tensor, loser.post.bdnf))
             
             # Clone state to loser (with reset logic)
             cast(Tensor, loser.post.U).copy_(cast(Tensor, winner.post.U)).mul_(0.5)
             cast(Tensor, loser.post.V).copy_(cast(Tensor, winner.post.V)).mul_(0.5)
-            cast(Tensor, loser.post.H_fast).zero_()
-            cast(Tensor, loser.post.m_gate).copy_(cast(Tensor, winner.post.m_gate))
+            cast(Tensor, loser.post.fast).zero_() # Reset fast weights
+            cast(Tensor, loser.post.slow).copy_(cast(Tensor, winner.post.slow)) # Keep slow weights? Or reset? Usually keep base knowledge.
+            
             cast(Tensor, loser.post.camkii).copy_(cast(Tensor, winner.post.camkii))
             cast(Tensor, loser.post.pp1).copy_(cast(Tensor, winner.post.pp1))
+            cast(Tensor, loser.post.bdnf).copy_(cast(Tensor, winner.post.bdnf))
+            
+            # Reset eligibility buffers in Linear
+            cast(Tensor, loser.u_buf).zero_()
+            cast(Tensor, loser.v_buf).zero_()
             
             return
         except ImportError:
@@ -209,11 +222,13 @@ def _merge_linear_into_(winner: SynapticLinear, loser: SynapticLinear, alpha: fl
         cast(Tensor, winner.bias).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, loser.bias))
     cast(Tensor, winner.post.U).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, loser.post.U))
     cast(Tensor, winner.post.V).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, loser.post.V))
-    cast(Tensor, winner.post.H_fast).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, loser.post.H_fast))
+    cast(Tensor, winner.post.fast).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, loser.post.fast))
+    cast(Tensor, winner.post.slow).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, loser.post.slow))
+    
     # gate and enzymes: bias toward winner (more stable)
-    cast(Tensor, winner.post.m_gate).mul_(0.9).add_(0.1 * cast(Tensor, loser.post.m_gate))
     cast(Tensor, winner.post.camkii).mul_(0.9).add_(0.1 * cast(Tensor, loser.post.camkii))
     cast(Tensor, winner.post.pp1).mul_(0.9).add_(0.1 * cast(Tensor, loser.post.pp1))
+    cast(Tensor, winner.post.bdnf).mul_(0.9).add_(0.1 * cast(Tensor, loser.post.bdnf))
     
     # Clone back into loser (to keep count constant)
     _clone_linear_from_(loser, winner, cfg.clone_noise_linear)
@@ -227,9 +242,13 @@ def _clone_linear_from_(dst: SynapticLinear, src: SynapticLinear, noise_scale: f
     if dst.bias is not None:
         _add_noise_(cast(Tensor, dst.bias), noise_scale)
     # reset fast Hebbian traces for cloned expert
-    cast(Tensor, dst.post.H_fast).zero_()
+    cast(Tensor, dst.post.fast).zero_()
     cast(Tensor, dst.post.U).mul_(0.5)
     cast(Tensor, dst.post.V).mul_(0.5)  # keep some eligibility but dampen
+    
+    # Reset buffers
+    cast(Tensor, dst.u_buf).zero_()
+    cast(Tensor, dst.v_buf).zero_()
 
 
 @torch.no_grad()

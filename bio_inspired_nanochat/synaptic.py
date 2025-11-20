@@ -25,6 +25,12 @@ from typing import Optional, Tuple, List, Dict, cast, Any
 from bio_inspired_nanochat.torch_imports import torch, nn, F, Tensor
 from decouple import Config as DecoupleConfig, RepositoryEnv
 
+try:
+    from .flex_synaptic import SynapticFlexAttention
+    _HAS_FLEX = True
+except ImportError:
+    _HAS_FLEX = False
+
 # Initialize decouple config
 try:
     decouple_config = DecoupleConfig(RepositoryEnv(".env"))
@@ -101,6 +107,7 @@ class SynapticConfig:
     # Attention
     lambda_loge: float = 1.0
     barrier_strength: float = 0.1
+    epsilon: float = 1e-6
     
     # Postsynaptic Plasticity
     post_fast_decay: float = 0.95
@@ -126,6 +133,12 @@ class SynapticConfig:
     
     # Genetics
     xi_dim: int = 4  # [alpha_fatigue, alpha_energy, camkii_gain, pp1_gain]
+    
+    # Feature Toggles (Modular Control)
+    enable_presyn: bool = True
+    enable_hebbian: bool = True
+    enable_metabolism: bool = True
+    use_flex_attention: bool = False
     
     # Native (Rust) Kernel Toggles
     native_presyn: bool = decouple_config("BIO_FUSED_PRESYN", default=False, cast=bool)
@@ -172,6 +185,10 @@ class SynapticPresyn(nn.Module):
         drive: (B, H, T, K) - attention logits for top-k
         idx: (B, H, T, K) - indices of top-k keys
         """
+        if not self.cfg.enable_presyn:
+            # Return 1.0 so log(e) approx 0
+            return torch.ones_like(drive)
+
         B, H, T, K = drive.shape
         cfg = self.cfg
 
@@ -473,20 +490,28 @@ class SynapticLinear(nn.Module):
         
         # Standard weights
         self.w_slow = nn.Parameter(torch.empty(in_features, out_features))
-        self.w_fast = nn.Parameter(torch.empty(in_features, out_features))
+        # Only allocate fast weights/Hebbian params if enabled
+        if cfg.enable_hebbian:
+            self.w_fast = nn.Parameter(torch.empty(in_features, out_features))
+            nn.init.trunc_normal_(self.w_fast, std=0.02)
+            
+            # Postsynaptic module (operates on output)
+            self.post = PostsynapticHebb(in_features, out_features, cfg)
+            
+            # Eligibility buffers
+            self.register_buffer("u_buf", torch.zeros(in_features, cfg.rank_eligibility))
+            self.register_buffer("v_buf", torch.zeros(cfg.rank_eligibility, out_features))
+        else:
+            self.register_parameter("w_fast", None)
+            self.post = None
+            self.register_buffer("u_buf", None)
+            self.register_buffer("v_buf", None)
+
         if bias:
             self.bias = nn.Parameter(torch.zeros(out_features))
         else:
             self.register_parameter("bias", None)
         nn.init.trunc_normal_(self.w_slow, std=0.02)
-        nn.init.trunc_normal_(self.w_fast, std=0.02)
-        
-        # Postsynaptic module (operates on output)
-        self.post = PostsynapticHebb(in_features, out_features, cfg)
-        
-        # Eligibility buffers
-        self.register_buffer("u_buf", torch.zeros(in_features, cfg.rank_eligibility))
-        self.register_buffer("v_buf", torch.zeros(cfg.rank_eligibility, out_features))
         
         if use_input_ln:
             self.input_ln = nn.LayerNorm(in_features, eps=1e-5)
@@ -500,58 +525,60 @@ class SynapticLinear(nn.Module):
             x = self.input_ln(x)
             
         # Linear pass
-        # We combine w_slow and w_fast. 
-        # Note: In the old code, w_fast was separate. In PDF, SynapticLinear has w (slow) and post has fast/slow diagonals.
-        # We will blend them: Base linear uses w_slow + w_fast (matrix).
-        # PostsynapticHebb applies diagonal modulation.
-        
-        W = self.w_slow + self.w_fast
+        if self.cfg.enable_hebbian and self.w_fast is not None:
+            W = self.w_slow + self.w_fast
+        else:
+            W = self.w_slow
+
         y = x @ W
         if self.bias is not None:
             y = y + self.bias
             
         # Postsynaptic modulation (diagonal fast/slow + low-rank)
-        y = self.post(y)
+        if self.cfg.enable_hebbian and self.post is not None:
+            y = self.post(y)
         
-        if update_mem:
-            with torch.no_grad():
-                # Update eligibility traces
-                # u_buf: (in, R) <- x (B, in)
-                # v_buf: (R, out) <- y (B, out)
-                # We need to project x and y to rank R?
-                # Or we accumulate outer products?
-                # PDF: self.u_buf...add_(... einsum...)
-                # Let's implement a simple Hebbian accumulation
-                
-                # Random projection for eligibility? Or learned?
-                # The PDF PostsynapticHebb has U and V parameters.
-                # We can use those to project.
-                
-                # Actually, let's just use the mean activity for now to keep it simple and fast
-                u_mean = x.mean(0) # (in,)
-                v_mean = y.mean(0) # (out,)
-                
-                # We need (in, R) and (R, out).
-                # We can just broadcast or rotate.
-                # Let's just update the buffers with a decay
-                
-                # Update logic from old code was:
-                # U.mul_(rho).add_(eta * u.unsqueeze(-1))
-                # V.mul_(rho).add_(eta * v.unsqueeze(0))
-                # This creates rank-1 updates.
-                
-                # We will do similar here but on u_buf/v_buf
-                self.u_buf.mul_(self.cfg.post_trace_decay).add_(0.05 * u_mean.unsqueeze(-1).expand(-1, self.cfg.rank_eligibility))
-                self.v_buf.mul_(self.cfg.post_trace_decay).add_(0.05 * v_mean.unsqueeze(0).expand(self.cfg.rank_eligibility, -1))
-                
-                # Update Postsynaptic state
-                # We need a vector for per-neuron update?
-                # y is (B, out). ca_proxy should be (out,).
-                ca_vec = y.abs().mean(0).clamp(0, 10.0)
-                
-                self.post.update(y, ca_vec)
-                self.post.hebb_fast(self.u_buf, self.v_buf)
-                self.post.consolidate(self.u_buf, self.v_buf)
+            if update_mem:
+                with torch.no_grad():
+                    # Update eligibility traces
+                    # u_buf: (in, R) <- x (B, in)
+                    # v_buf: (R, out) <- y (B, out)
+                    # We need to project x and y to rank R?
+                    # Or we accumulate outer products?
+                    # PDF: self.u_buf...add_(... einsum...)
+                    # Let's implement a simple Hebbian accumulation
+                    
+                    # Random projection for eligibility? Or learned?
+                    # The PDF PostsynapticHebb has U and V parameters.
+                    # We can use those to project.
+                    
+                    # Actually, let's just use the mean activity for now to keep it simple and fast
+                    u_mean = x.mean(0) # (in,)
+                    v_mean = y.mean(0) # (out,)
+                    
+                    # We need (in, R) and (R, out).
+                    # We can just broadcast or rotate.
+                    # Let's just update the buffers with a decay
+                    
+                    # Update logic from old code was:
+                    # U.mul_(rho).add_(eta * u.unsqueeze(-1))
+                    # V.mul_(rho).add_(eta * v.unsqueeze(0))
+                    # This creates rank-1 updates.
+                    
+                    # We will do similar here but on u_buf/v_buf
+                    if self.u_buf is not None and self.v_buf is not None:
+                        self.u_buf.mul_(self.cfg.post_trace_decay).add_(0.05 * u_mean.unsqueeze(-1).expand(-1, self.cfg.rank_eligibility))
+                        self.v_buf.mul_(self.cfg.post_trace_decay).add_(0.05 * v_mean.unsqueeze(0).expand(self.cfg.rank_eligibility, -1))
+                    
+                    # Update Postsynaptic state
+                    # We need a vector for per-neuron update?
+                    # y is (B, out). ca_proxy should be (out,).
+                    ca_vec = y.abs().mean(0).clamp(0, 10.0)
+                    
+                    self.post.update(y, ca_vec)
+                    if self.u_buf is not None and self.v_buf is not None:
+                        self.post.hebb_fast(self.u_buf, self.v_buf)
+                        self.post.consolidate(self.u_buf, self.v_buf)
 
         return y
 
@@ -601,13 +628,21 @@ class SynapticCausalSelfAttention(nn.Module):
         cfg: SynapticConfig,
         attn_drop=0.0,
         resid_drop=0.0,
+        use_flex: bool = False,
     ):
         super().__init__()
-        assert n_embd % n_head == 0
+        if n_embd % n_head != 0:
+            raise ValueError(f"n_embd {n_embd} must be divisible by n_head {n_head}")
         self.n_head = n_head
         self.n_kv_head = n_kv_head
         self.head_dim = n_embd // n_head
         object.__setattr__(self, "cfg", cfg)
+        
+        if use_flex and _HAS_FLEX:
+            self.flex = SynapticFlexAttention(cfg)
+        else:
+            self.flex = None
+
         self.q_proj = nn.Linear(n_embd, n_head * self.head_dim, bias=False)
         self.k_proj = nn.Linear(n_embd, n_kv_head * self.head_dim, bias=False)
         self.v_proj = nn.Linear(n_embd, n_kv_head * self.head_dim, bias=False)
@@ -657,18 +692,70 @@ class SynapticCausalSelfAttention(nn.Module):
         k = k.transpose(1, 2)
         v = v.transpose(1, 2)
 
+        # Synaptic State Init
+        if presyn_state is None:
+            presyn_state = build_presyn_state(B, T, H, device, dtype, self.cfg)
+
+        # --- FlexAttention Path ---
+        if self.flex is not None:
+            # TODO: Ideally we update presyn_state using a fused kernel that DOES NOT materialize (B,H,T,T).
+            # For now, we reuse the existing logic to update state, but then discard the logits
+            # and let Flex re-compute the attention map with the biological bias efficiently.
+            # This is 'Correctness First, Optimization Second'.
+            
+            # We need to update state for Flex to see the new Calcium/RRP
+            # We can use a simplified update here or the full one.
+            # Let's use the full one but maybe we can avoid full O(T^2) later.
+            
+            # Standard logits for state update
+            dots = (q @ k.transpose(-1, -2)) / math.sqrt(D)
+            mask = _tri(T, device, dtype)
+            dots = dots + torch.log(mask + 1e-9)
+            
+            topk = min(self.cfg.attn_topk, T)
+            vals, idx = torch.topk(dots, topk, dim=-1)
+            
+            # Update state (in-place)
+            _ = self.pre.release(presyn_state, vals, idx, train_mode)
+            
+            # Now run Flex Attention
+            # Flex expects (B, H, T, D) - we have that (q, k, v)
+            # It handles the causal mask internally via block_mask (or we pass it)
+            # We pass the UPDATED presyn_state
+            
+            # Convert causal mask to BlockMask? Flex handles 'causal' string usually?
+            # flex_attention(q, k, v, score_mod=..., block_mask=...)
+            # We'll use the default causal mask logic in flex (handled by score_mod barrier usually or we pass block_mask)
+            
+            # Note: SynapticFlexAttention.forward needs to handle masking.
+            # For now, let's assume we pass None and handle it in score_mod or flex handles it.
+            # Actually flex_attention allows creating causal mask.
+            
+            # Create block mask
+            from torch.nn.attention.flex_attention import create_block_mask
+            def causal_mask(b, h, q_idx, kv_idx):
+                return q_idx >= kv_idx
+            
+            block_mask = create_block_mask(causal_mask, B, H, T, T, device=device)
+            
+            # Ensure dtypes match (v usually dictates the autocast dtype)
+            if q.dtype != v.dtype: q = q.to(v.dtype)
+            if k.dtype != v.dtype: k = k.to(v.dtype)
+
+            y = self.flex(q, k, v, presyn_state, block_mask=block_mask)
+            
+            # Output projection
+            y = y.transpose(1, 2).contiguous().view(B, T, H * D)
+            y = self.resid_drop(self.o_proj(y))
+            return y, presyn_state
+
+        # --- Standard Path ---
         # Standard attention logits
         dots = (q @ k.transpose(-1, -2)) / math.sqrt(D)
         mask = _tri(T, device, dtype)
         dots = dots + torch.log(mask + 1e-9) # Mask future
 
-        if presyn_state is None:
-            presyn_state = build_presyn_state(B, T, H, device, dtype, self.cfg)
-
-        # Top-k selection for synaptic physics (efficiency)
         topk = min(self.cfg.attn_topk, T)
-        # We select topk keys for each query
-        # dots is (B, H, T, T)
         vals, idx = torch.topk(dots, topk, dim=-1)
         
         # Drive for presyn is the attention logits (pre-softmax)
@@ -857,13 +944,11 @@ class SynapticMoE(nn.Module):
         bias = base_bias + gain_bias + align_bias
         gene_bias = 0.05 * (alpha_energy - alpha_fatigue).view(1, 1, E)
         
-        logits = (
-            logits
-            + gene_bias
-            + bias
-            + 0.1 * energy_buf.view(1, 1, E)
-            - 0.1 * fatigue_buf.view(1, 1, E)
-        )
+        logits = logits + gene_bias + bias
+        
+        if self.cfg.enable_metabolism:
+            logits = logits + 0.1 * energy_buf.view(1, 1, E) - 0.1 * fatigue_buf.view(1, 1, E)
+
         topk = min(self.top_k, E)
         g, idx = torch.topk(logits, topk, dim=-1)
         gates = F.softmax(g, dim=-1)
