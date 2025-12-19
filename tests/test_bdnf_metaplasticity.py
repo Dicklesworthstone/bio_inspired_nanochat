@@ -249,8 +249,14 @@ class TestToggleOff:
         assert hebb.bdnf.mean() > 0
 
     def test_disabled_hebbian_accumulate_baseline(self, legacy_cfg: SynapticConfig):
-        """With legacy mode, bdnf_hebb_accum should stay zero."""
+        """With legacy mode, bdnf_hebb_accum should NOT be updated."""
         hebb = PostsynapticHebb(d_k=16, d_v=16, cfg=legacy_cfg)
+
+        # Verify initial state
+        assert torch.allclose(hebb.bdnf_hebb_accum, torch.zeros(16))
+
+        # Set CaMKII above 0.5 so BDNF can accumulate (legacy uses F.relu(camkii - 0.5))
+        hebb.camkii.fill_(0.8)
 
         traceU = torch.randn(16, 4) * 0.1
         traceV = torch.randn(4, 16) * 0.1
@@ -261,15 +267,62 @@ class TestToggleOff:
             hebb.update(y, ca_proxy)
             hebb.consolidate(traceU, traceV)
 
-        # bdnf_hebb_accum should NOT be updated in legacy mode
-        # (consolidate only updates it when bdnf_hebb_accumulate=True)
-        # Actually, consolidate always updates it, but update() uses
-        # different source for BDNF. Let's check the BDNF comes from CaMKII.
+        # In legacy mode (bdnf_hebb_accumulate=False), consolidate() should
+        # NOT update bdnf_hebb_accum, so it stays at zero
+        assert torch.allclose(hebb.bdnf_hebb_accum, torch.zeros(16)), \
+            "bdnf_hebb_accum should remain zero in legacy mode"
 
-        # The test should verify BDNF doesn't come from hebb_accum path
-        # In legacy mode, BDNF = tau * BDNF + (1-tau) * relu(camkii - 0.5)
-        # So BDNF should correlate with CaMKII, not hebb_accum
-        pass  # This is validated by test_legacy_mode_uses_camkii
+        # Meanwhile, BDNF itself should be positive (from CaMKII via F.relu(camkii - 0.5))
+        assert hebb.bdnf.mean() > 0, "BDNF should be positive from CaMKII activity"
+
+
+class TestBDNFClamping:
+    """Test that BDNF values are clamped to prevent unbounded growth."""
+
+    def test_bdnf_clamped_to_max(self):
+        """BDNF should be clamped to bdnf_max to prevent unbounded growth."""
+        cfg = SynapticConfig(
+            enabled=True,
+            rank_eligibility=4,
+            bdnf_tau=0.5,  # Fast accumulation for test
+            bdnf_hebb_accumulate=True,
+            bdnf_max=5.0,  # Low max for easier testing
+        )
+        hebb = PostsynapticHebb(d_k=16, d_v=16, cfg=cfg)
+
+        # Use very large traces to drive rapid accumulation
+        large_traceU = torch.ones(16, 4) * 10.0
+        large_traceV = torch.ones(4, 16) * 10.0
+        ca_proxy = torch.ones(16) * 2.0
+        y = torch.randn(1, 16)
+
+        # Run many iterations to try to exceed bdnf_max
+        for _ in range(100):
+            hebb.consolidate(large_traceU, large_traceV)
+            hebb.update(y, ca_proxy)
+
+        # BDNF and accumulator should be clamped
+        assert hebb.bdnf.max() <= cfg.bdnf_max, \
+            f"BDNF should be <= {cfg.bdnf_max}, got {hebb.bdnf.max()}"
+        assert hebb.bdnf_hebb_accum.max() <= cfg.bdnf_max, \
+            f"bdnf_hebb_accum should be <= {cfg.bdnf_max}, got {hebb.bdnf_hebb_accum.max()}"
+
+    def test_bdnf_non_negative(self, default_cfg: SynapticConfig):
+        """BDNF should always be non-negative."""
+        hebb = PostsynapticHebb(d_k=16, d_v=16, cfg=default_cfg)
+
+        # Use negative traces (shouldn't matter since we take abs)
+        traceU = torch.randn(16, 4) * -0.5
+        traceV = torch.randn(4, 16) * -0.5
+        ca_proxy = torch.zeros(16)  # Low activity
+        y = torch.randn(1, 16)
+
+        for _ in range(20):
+            hebb.consolidate(traceU, traceV)
+            hebb.update(y, ca_proxy)
+
+        assert (hebb.bdnf >= 0).all(), "BDNF should always be non-negative"
+        assert (hebb.bdnf_hebb_accum >= 0).all(), "bdnf_hebb_accum should always be non-negative"
 
 
 class TestBDNFScaleVsGamma:

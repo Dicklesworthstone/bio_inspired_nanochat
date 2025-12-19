@@ -211,8 +211,9 @@ class SynapticConfig:
     pp1_thr: float = 0.7
     bdnf_tau: float = 0.985
     bdnf_scale: float = 1.0
-    bdnf_gamma: float = 0.0  # When > 0, BDNF accumulates |ΔW_hebb| instead of CaMKII activity
+    bdnf_gamma: float = 0.0  # Gamma gain factor; when > 0, takes precedence over bdnf_scale
     bdnf_hebb_accumulate: bool = True  # Use Hebbian delta magnitude for BDNF (vs CaMKII)
+    bdnf_max: float = 10.0  # Upper clamp on BDNF to prevent unbounded growth
 
     # Structural Plasticity (MoE)
     structural_interval: int = 50000
@@ -406,8 +407,12 @@ class SynapticPresyn(nn.Module):
         rrp_up = torch.clamp(state["RRP"] - add_vals, 0)
         
         # Endocytosis delay queue
-        res_up = state["RES"] + state["DELAY"][0]
-        new_delay = state["DELAY"][1:] + [rru_vals * cfg.rec_rate]
+        if cfg.endo_delay > 0:
+            res_up = state["RES"] + state["DELAY"][0]
+            new_delay = state["DELAY"][1:] + [rru_vals * cfg.rec_rate]
+        else:
+            res_up = state["RES"]
+            new_delay = []
         
         # Priming
         take = torch.minimum(res_up, torch.ones_like(res_up)) # Max 1 unit per step? Or just soft clamp?
@@ -663,14 +668,17 @@ class PostsynapticHebb(nn.Module):
             self.bdnf.mul_(self.cfg.bdnf_tau).add_(
                 (1 - self.cfg.bdnf_tau) * self.bdnf_hebb_accum
             )
-            # NaN guard
+            # NaN guard and upper clamp to prevent unbounded growth
             if torch.isnan(self.bdnf).any():
                 self.bdnf.zero_()
+            self.bdnf.clamp_(0, self.cfg.bdnf_max)
         else:
             # Legacy mode: BDNF tracks CaMKII activity
             self.bdnf.mul_(self.cfg.bdnf_tau).add_(
                 (1 - self.cfg.bdnf_tau) * F.relu(self.camkii - 0.5)
             )
+            # Clamp legacy mode too for consistency
+            self.bdnf.clamp_(0, self.cfg.bdnf_max)
 
     @torch.no_grad()
     def consolidate(self, traceU: Tensor, traceV: Tensor):
@@ -703,9 +711,10 @@ class PostsynapticHebb(nn.Module):
             )
             # Store for logging
             self._last_hebb_delta_mag.fill_(delta_mag.mean().item())
-            # NaN guard for accumulator
+            # NaN guard and upper clamp for accumulator
             if torch.isnan(self.bdnf_hebb_accum).any():
                 self.bdnf_hebb_accum.zero_()
+            self.bdnf_hebb_accum.clamp_(0, self.cfg.bdnf_max)
 
         # CaMKII gate: consolidation only when CaMKII > 0.5
         g = torch.sigmoid(self.camkii - 0.5) - 0.3
