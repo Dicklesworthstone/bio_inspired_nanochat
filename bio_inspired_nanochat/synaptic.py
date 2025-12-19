@@ -20,23 +20,16 @@
 
 import math
 from dataclasses import dataclass
-from typing import Optional, Tuple, List, Dict, cast, Any
+from typing import Optional, Tuple, List, Dict, Literal, cast, Any
 
 from bio_inspired_nanochat.torch_imports import torch, nn, F, Tensor
-from decouple import Config as DecoupleConfig, RepositoryEnv
+from bio_inspired_nanochat.common import decouple_config
 
 try:
     from .flex_synaptic import SynapticFlexAttention
     _HAS_FLEX = True
 except ImportError:
     _HAS_FLEX = False
-
-# Initialize decouple config
-try:
-    decouple_config = DecoupleConfig(RepositoryEnv(".env"))
-except Exception:
-    from decouple import Config, AutoConfig
-    decouple_config = Config(RepositoryEnv(".env")) if False else AutoConfig()
 
 
 # -----------------------------------------------------------------------------
@@ -62,6 +55,78 @@ def _cosine(u: Tensor, v: Tensor, eps=1e-8) -> Tensor:
     v = v / (v.norm(dim=-1, keepdim=True) + eps)
     return (u * v).sum(dim=-1)
 
+def _sample_binomial_counts(
+    probs: Tensor,
+    total_count: Tensor,
+    *,
+    max_count: int,
+    tau: float,
+    mode: Literal["gumbel_sigmoid_ste", "straight_through", "normal_reparam"],
+    eps: float = 1e-6,
+) -> Tensor:
+    """Sample Binomial(total_count, probs) counts with a cheap, GPU-friendly estimator.
+
+    Notes:
+    - We cap `total_count` to `max_count` and round to the nearest int to keep sampling fast.
+    - `mode="gumbel_sigmoid_ste"` uses a straight-through Gumbel-Sigmoid relaxation so gradients
+      flow (approximately) through `probs` during training.
+    - `mode="straight_through"` uses a simpler STE (hard Bernoulli forward, `probs` backward).
+    - `mode="normal_reparam"` uses a Gaussian approximation with reparameterization (fastest).
+    """
+    if max_count <= 0:
+        return torch.zeros_like(probs)
+
+    probs_32 = probs.to(torch.float32)
+
+    if mode == "normal_reparam":
+        count_f32 = torch.clamp(total_count.round(), 0.0, float(max_count)).to(torch.float32)
+        p = probs_32.clamp(eps, 1.0 - eps)
+        mean = count_f32 * p
+        var = count_f32 * p * (1.0 - p)
+        std = torch.sqrt(var + eps)
+        samp = mean + std * torch.randn_like(mean)
+        samp = samp.clamp(min=0.0)
+        # Clamp high-end based on per-entry count.
+        samp = torch.minimum(samp, count_f32)
+        return samp.to(probs.dtype)
+
+    if mode == "gumbel_sigmoid_ste" and tau <= 0:
+        raise ValueError(f"tau must be > 0 for gumbel_sigmoid_ste, got {tau}")
+
+    count_i64 = torch.clamp(total_count.round(), 0, float(max_count)).to(torch.int64)
+
+    # Trial mask for variable total_count.
+    trial_idx = torch.arange(max_count, device=probs.device).view(
+        (1,) * probs.ndim + (max_count,)
+    )
+    trial_mask = trial_idx < count_i64.unsqueeze(-1)
+
+    # One uniform per Bernoulli trial.
+    u = torch.rand((*probs_32.shape, max_count), device=probs.device, dtype=torch.float32)
+    u = u.clamp(min=eps, max=1.0 - eps)
+
+    if mode == "gumbel_sigmoid_ste":
+        # Logistic noise (equivalent to Gumbel(0,1)-Gumbel(0,1)).
+        noise = torch.log(u) - torch.log1p(-u)
+        logits = torch.logit(probs_32.clamp(eps, 1.0 - eps), eps=eps)
+        y_soft = torch.sigmoid((logits.unsqueeze(-1) + noise) / float(tau))
+        y_hard = (y_soft > 0.5).to(torch.float32)
+        y_soft = y_soft * trial_mask.to(torch.float32)
+        y_hard = y_hard * trial_mask.to(torch.float32)
+        y = (y_hard - y_soft).detach() + y_soft
+        return y.sum(dim=-1).to(probs.dtype)
+
+    if mode == "straight_through":
+        p = probs_32.clamp(eps, 1.0 - eps).unsqueeze(-1)
+        y_hard = (u < p).to(torch.float32)
+        y_soft = p.expand_as(y_hard)
+        y_hard = y_hard * trial_mask.to(torch.float32)
+        y_soft = y_soft * trial_mask.to(torch.float32)
+        y = (y_hard - y_soft).detach() + y_soft
+        return y.sum(dim=-1).to(probs.dtype)
+
+    raise ValueError(f"Unknown mode: {mode!r}")
+
 
 # -----------------------------------------------------------------------------
 # Config
@@ -75,6 +140,11 @@ class SynapticConfig:
     rank_eligibility: int = 8
     attn_topk: int = 32
     stochastic_train_frac: float = 0.12
+    stochastic_mode: Literal["gumbel_sigmoid_ste", "straight_through", "normal_reparam"] = (
+        "normal_reparam"
+    )
+    stochastic_tau: float = 1.0
+    stochastic_count_cap: int = 8
     
     # Presynaptic Biophysics
     tau_c: float = 0.85
@@ -141,6 +211,8 @@ class SynapticConfig:
     pp1_thr: float = 0.7
     bdnf_tau: float = 0.985
     bdnf_scale: float = 1.0
+    bdnf_gamma: float = 0.0  # When > 0, BDNF accumulates |ΔW_hebb| instead of CaMKII activity
+    bdnf_hebb_accumulate: bool = True  # Use Hebbian delta magnitude for BDNF (vs CaMKII)
 
     # Structural Plasticity (MoE)
     structural_interval: int = 50000
@@ -150,10 +222,13 @@ class SynapticConfig:
     router_contrastive_lr: float = 1e-4
     router_contrastive_push: float = 0.1
     router_sim_threshold: float = 0.6
-    
+
     # Genetics
+    # Per-expert genome embedding (Xi). A decoder maps Xi -> phenotype scalars that
+    # control expert-specific kinetics without storing a full per-expert copy of
+    # every kinetic parameter.
     xi_dim: int = 4  # [alpha_fatigue, alpha_energy, camkii_gain, pp1_gain]
-    
+
     # Feature Toggles (Modular Control)
     enable_presyn: bool = True
     enable_hebbian: bool = True
@@ -190,7 +265,12 @@ class SynapticPresyn(nn.Module):
         p1 = torch.sigmoid(self.cfg.syt1_slope * (c - 0.55))
         p7 = torch.sigmoid(self.cfg.syt7_slope * (c - 0.25))
         p = p1 * 0.8 + p7 * 0.2 + self.cfg.doc2_gain * torch.sigmoid(4 * (c - 0.12))
-        p = p * (1.0 / (1.0 + torch.exp((self.cfg.cpx_thresh - c) * 8.0))) * sn
+        # Complexin clamp: incorporate the learned/ema clamp state (and bias) as an inhibitory term.
+        # This matches the intent of the fused kernel path where clamp reduces release.
+        cpx_gate = torch.sigmoid(
+            8.0 * (c - self.cfg.cpx_thresh) - 2.0 * (clamp + self.cfg.complexin_bias)
+        )
+        p = p * cpx_gate * sn
         return torch.clamp(p, 0, 0.999)
 
     def release(
@@ -199,11 +279,18 @@ class SynapticPresyn(nn.Module):
         drive: Tensor,
         idx: Tensor,
         train: bool,
+        valid: Optional[Tensor] = None,
     ) -> Tensor:
         """
         Compute release and update state.
         drive: (B, H, T, K) - attention logits for top-k
         idx: (B, H, T, K) - indices of top-k keys
+
+        Stochastic mode (training only):
+        - Enabled when `train=True` and `cfg.stochastic_train_frac > 0`.
+        - Samples Binomial(n, p) counts with a straight-through relaxation so gradients can
+          still flow through `p(drive, state)` during backprop.
+        - For performance, `n` is rounded and capped by `cfg.stochastic_count_cap`.
         """
         if not self.cfg.enable_presyn:
             # Return 1.0 so log(e) approx 0
@@ -211,54 +298,50 @@ class SynapticPresyn(nn.Module):
 
         B, H, T, K = drive.shape
         cfg = self.cfg
+        if valid is not None and valid.shape != drive.shape:
+            raise ValueError(
+                f"valid mask must match drive shape {drive.shape}, got {valid.shape}"
+            )
 
-        # Gather state for the selected keys
-        # state tensors are (B, H, T_keys)
-        # We gather along dim 2 (T_keys) using idx
-        # idx is (B, H, T, K)
-        # We need to expand state to (B, H, T_keys, 1) or similar?
-        # gather expects index to have same number of dimensions as input.
-        # state["c"] is (B, H, T_keys). idx is (B, H, T, K).
-        # We need to expand state to (B, H, T_keys, 1) and then gather?
-        # No, gather on dim 2 means we select from T_keys using indices in idx.
-        # But idx has 4 dims. state has 3.
-        # We need to view state as (B, H, T_keys, 1) and expand to (B, H, T_keys, K)? No.
-        # We want output (B, H, T, K).
-        # If we use gather on dim 2, input must have at least 3 dims.
-        # And index must have same number of dims.
-        # So we need to unsqueeze state to (B, H, T_keys, 1) and expand idx? No.
-        
-        # Correct way:
-        # We want to gather from T_keys dimension.
-        # Input: (B, H, T_keys)
-        # Index: (B, H, T, K)
-        # We can flatten T and K in index -> (B, H, T*K)
-        # Then gather -> (B, H, T*K)
-        # Then reshape -> (B, H, T, K)
-        
+        # Gather per-edge state for the selected keys
         flat_idx = idx.view(B, H, -1)
-        
-        c = state["c"].gather(2, flat_idx).view(B, H, T, K)
+
+        c = state["C"].gather(2, flat_idx).view(B, H, T, K)
         c = cfg.tau_c * c + cfg.alpha_c * F.softplus(drive)
-        
-        sn = state["sn"].gather(2, flat_idx).view(B, H, T, K)
-        clamp = state["cl"].gather(2, flat_idx).view(B, H, T, K)
-        
+
+        sn = state["PR"].gather(2, flat_idx).view(B, H, T, K)
+        clamp = state["CL"].gather(2, flat_idx).view(B, H, T, K)
+
         p = self._mix_prob(c, clamp, sn)
-        rrp = state["rrp"].gather(2, flat_idx).view(B, H, T, K)
+        rrp = state["RRP"].gather(2, flat_idx).view(B, H, T, K)
 
         if train and cfg.stochastic_train_frac > 0:
-            # Stochastic release on a fraction of edges
-            mask = (torch.rand_like(p[..., 0]) < cfg.stochastic_train_frac).float().unsqueeze(-1)
-            # Binomial sampling
-            k_rel = torch.distributions.Binomial(
-                total_count=torch.clamp(rrp, 0, 8).round(), probs=p
-            ).sample()
-            rel = mask * k_rel + (1 - mask) * (p * rrp)
+            # Stochastic release on a fraction of *query positions* (broadcast across top-k edges).
+            do_stoch = torch.rand_like(p[..., 0].to(torch.float32)) < float(
+                cfg.stochastic_train_frac
+            )
+            rel_det = p * rrp
+            if do_stoch.any():
+                stoch_mask = do_stoch.unsqueeze(-1).expand_as(p)
+                k_rel = _sample_binomial_counts(
+                    probs=p[stoch_mask],
+                    total_count=torch.clamp(
+                        rrp[stoch_mask], 0.0, float(cfg.stochastic_count_cap)
+                    ),
+                    max_count=int(cfg.stochastic_count_cap),
+                    tau=float(cfg.stochastic_tau),
+                    mode=cfg.stochastic_mode,
+                )
+                rel = rel_det.clone()
+                rel[stoch_mask] = k_rel
+            else:
+                rel = rel_det
         else:
             rel = p * rrp
 
-        amp = state["amp"].gather(2, flat_idx).view(B, H, T, K)
+        amp = state["AMP"].gather(2, flat_idx).view(B, H, T, K)
+        if valid is not None:
+            rel = rel * valid.to(rel.dtype)
         e = rel * amp
 
         # Efficient scatter:
@@ -271,11 +354,11 @@ class SynapticPresyn(nn.Module):
         flat_amp = amp.view(B, H, -1)
         
         # Accumulators
-        add_vals = torch.zeros_like(state["c"]) # (B, H, T_key)
-        drv_vals = torch.zeros_like(state["c"])
-        snu_vals = torch.zeros_like(state["c"])
-        rru_vals = torch.zeros_like(state["c"])
-        ampu_vals = torch.zeros_like(state["c"])
+        add_vals = torch.zeros_like(state["C"])  # (B, H, T_key)
+        drv_vals = torch.zeros_like(state["C"])
+        snu_vals = torch.zeros_like(state["C"])
+        rru_vals = torch.zeros_like(state["C"])
+        ampu_vals = torch.zeros_like(state["C"])
         
         # scatter_add_ expects index to have same number of dimensions as self.
         # self is (B, H, T_key). flat_idx is (B, H, T*K).
@@ -295,24 +378,36 @@ class SynapticPresyn(nn.Module):
         # Let's check dtypes.
         
         # Ensure dtypes match
-        dtype = state["c"].dtype
+        dtype = state["C"].dtype
         flat_rel = flat_rel.to(dtype)
         flat_drive = flat_drive.to(dtype)
         flat_amp = flat_amp.to(dtype)
+        if valid is not None:
+            flat_valid_bool = valid.view(B, H, -1)
+            flat_valid = flat_valid_bool.to(dtype)
+            # Avoid NaNs from (-inf * 0) when invalid edges are masked to -inf upstream.
+            flat_drive = torch.where(flat_valid_bool, flat_drive, torch.zeros_like(flat_drive))
+            flat_amp = flat_amp * flat_valid
+        else:
+            flat_valid = torch.ones_like(flat_rel)
         
         add_vals.scatter_add_(2, flat_idx, flat_rel)
         drv_vals.scatter_add_(2, flat_idx, flat_drive)
-        snu_vals.scatter_add_(2, flat_idx, torch.ones_like(flat_rel)) # Count of accesses
+        snu_vals.scatter_add_(2, flat_idx, flat_valid) # Count of accesses
         rru_vals.scatter_add_(2, flat_idx, flat_rel)
         ampu_vals.scatter_add_(2, flat_idx, flat_amp)
         
         # Update dynamics
-        c_up = cfg.tau_c * state["c"] + cfg.alpha_c * F.softplus(drv_vals)
-        rrp_up = torch.clamp(state["rrp"] - add_vals, 0)
+        accessed = snu_vals > 0
+        c_up = (
+            cfg.tau_c * state["C"]
+            + cfg.alpha_c * F.softplus(drv_vals) * accessed.to(dtype)
+        )
+        rrp_up = torch.clamp(state["RRP"] - add_vals, 0)
         
         # Endocytosis delay queue
-        res_up = state["res"] + state["delay"][0]
-        new_delay = state["delay"][1:] + [rru_vals * cfg.rec_rate]
+        res_up = state["RES"] + state["DELAY"][0]
+        new_delay = state["DELAY"][1:] + [rru_vals * cfg.rec_rate]
         
         # Priming
         take = torch.minimum(res_up, torch.ones_like(res_up)) # Max 1 unit per step? Or just soft clamp?
@@ -321,20 +416,40 @@ class SynapticPresyn(nn.Module):
         rrp_up = torch.clamp(rrp_up + cfg.prime_rate * take, 0, 30.0) # Cap RRP
         
         # SNARE / Clamp / AMPA / Energy
-        sn_up = torch.clamp(state["sn"] * (1.0 - cfg.unprime_per_release * add_vals) + cfg.nsf_recover * (1.0 - state["sn"]), 0, 1)
-        cl_up = torch.clamp(state["cl"] * 0.995 + 0.005, 0, 1)
-        amp_up = torch.clamp(state["amp"] + cfg.amp_load * (1.2 - state["amp"]) - cfg.amp_leak * state["amp"], 0, 2)
-        en_up = torch.clamp(state["en"] + cfg.energy_fill * (cfg.energy_max - state["en"]) - cfg.energy_use * add_vals, 0, cfg.energy_max)
+        sn_up = torch.clamp(
+            state["PR"] * (1.0 - cfg.unprime_per_release * add_vals)
+            + cfg.nsf_recover * (1.0 - state["PR"]),
+            0,
+            1,
+        )
+        cl_up = torch.clamp(
+            state["CL"] * 0.995 + 0.005 - cfg.unprime_per_release * add_vals,
+            0,
+            1,
+        )
+        amp_up = torch.clamp(
+            state["AMP"] + cfg.amp_load * (1.2 - state["AMP"]) - cfg.amp_leak * state["AMP"],
+            0,
+            2,
+        )
+        en_up = torch.clamp(
+            state["E"]
+            + cfg.energy_fill * (cfg.energy_max - state["E"])
+            - cfg.energy_use * add_vals,
+            0,
+            cfg.energy_max,
+        )
         
         state.update({
-            "c": c_up,
-            "rrp": rrp_up,
-            "res": res_up,
-            "delay": new_delay,
-            "sn": sn_up,
-            "cl": cl_up,
-            "amp": amp_up,
-            "en": en_up
+            "C": c_up,
+            "RRP": rrp_up,
+            "RES": res_up,
+            "DELAY": new_delay,
+            "PR": sn_up,
+            "CL": cl_up,
+            "AMP": amp_up,
+            "E": en_up,
+            "BUF": state["BUF"],
         })
         
         # EMA normalization
@@ -342,6 +457,139 @@ class SynapticPresyn(nn.Module):
         self.ema_e.mul_(0.99).add_(0.01 * s)
         
         return e / (self.ema_e + 1e-6)
+
+    @torch.no_grad()
+    def forward(
+        self,
+        q: Tensor,
+        k: Tensor,
+        logits: Tensor,
+        state: Dict[str, Tensor],
+        mask: Optional[Tensor] = None,
+        train_mode: bool = False,
+    ) -> Tuple[Tensor, Dict[str, Tensor]]:
+        """
+        Full (B, H, T, T) presynaptic dynamics reference (sequential, causal).
+
+        This is used for kernel correctness tests and visualization utilities.
+        It implements the same governing equations as the Rust/Triton reference paths
+        (i.e., it uses the "Rust Kernel Compat" parameters in SynapticConfig).
+        """
+        B, H, T, D = q.shape
+        cfg = self.cfg
+
+        # State (clone so we can write in-place without mutating the caller).
+        c = state["C"].clone()
+        buf = state.get("BUF", torch.zeros_like(c)).clone()
+        rrp = state["RRP"].clone()
+        res = state["RES"].clone()
+        pr = state["PR"].clone()
+        cl = state["CL"].clone()
+        e_st = state["E"].clone()
+
+        rho_c = math.exp(-1.0 / cfg.tau_c)
+        rho_b = math.exp(-1.0 / cfg.tau_buf)
+        rho_p = math.exp(-1.0 / cfg.tau_prime)
+        rho_r = math.exp(-1.0 / cfg.tau_rrp)
+        rho_e = math.exp(-1.0 / cfg.tau_energy)
+        sqrt_d = math.sqrt(D)
+
+        syn_logit = torch.zeros_like(logits)
+
+        for t in range(T):
+            # 1) Calcium influx from incoming drive (mean softplus over causal keys)
+            log_t = logits[:, :, t, : t + 1]
+            if mask is not None:
+                log_t = log_t.masked_fill(
+                    ~mask[t, : t + 1].view(1, 1, -1), -20.0
+                )
+            drive = F.softplus(log_t.clamp(-20.0, 20.0))
+            influx = drive.sum(dim=-1) / float(t + 1)
+
+            # 2) Calcium + buffer update
+            c_prev = c[:, :, t]
+            buf_prev = buf[:, :, t]
+
+            c_next = (
+                rho_c * c_prev
+                + cfg.alpha_ca * influx
+                - cfg.alpha_buf_on * c_prev * (1.0 - buf_prev)
+                + cfg.alpha_buf_off * buf_prev
+            ).clamp(min=0.0)
+            buf_next = (
+                rho_b * buf_prev
+                + cfg.alpha_buf_on * c_prev * (1.0 - buf_prev)
+                - cfg.alpha_buf_off * buf_prev
+            ).clamp(0.0, 1.0)
+
+            # 3) Mid-state (priming, refill, energy)
+            pr_val = pr[:, :, t]
+            rrp_val = rrp[:, :, t]
+            res_val = res[:, :, t]
+            e_val = e_st[:, :, t]
+
+            pr_mid = (rho_p * pr_val + cfg.alpha_prime * (1.0 - pr_val)).clamp(0.0, 1.0)
+            rrp_refill = (rho_r * rrp_val + cfg.alpha_refill * res_val).clamp(0.0, 1.0)
+            res_mid = (res_val - cfg.alpha_refill * res_val).clamp(0.0, 1.0)
+            e_mid = (rho_e * e_val + cfg.energy_in).clamp(0.0, 1.6)
+
+            # 4) Release computation
+            fast = c_next / (c_next + cfg.syt_fast_kd)
+            slow = c_next / (c_next + cfg.syt_slow_kd)
+            syt = 0.7 * fast + 0.3 * slow
+
+            cl_val = cl[:, :, t]
+            fuse_base = torch.sigmoid(
+                3.0 * syt + 2.0 * pr_mid - 2.0 * (cl_val + cfg.complexin_bias)
+            )  # (B, H)
+
+            q_t = q[:, :, t, :]  # (B, H, D)
+            k_j = k[:, :, : t + 1, :]  # (B, H, t+1, D)
+            dot = torch.einsum("bhd,bhjd->bhj", q_t, k_j) / sqrt_d
+            d_bilin = torch.sigmoid(dot)
+
+            rr = (fuse_base.unsqueeze(-1) * d_bilin * rrp_refill.unsqueeze(-1)).clamp(
+                0.0, 1.0
+            )
+            row_sum = rr.sum(dim=-1)  # (B, H)
+            scale = torch.ones_like(row_sum)
+            m = row_sum > cfg.epsilon
+            scale[m] = (rrp_refill[m] / row_sum[m]).clamp(max=1.0)
+
+            rel = rr * scale.unsqueeze(-1)  # (B, H, t+1)
+            used = rel.sum(dim=-1)  # (B, H)
+
+            # 5) Final state
+            rrp_n = (rrp_refill - used).clamp(0.0, 1.0)
+            res_n = (res_mid + used).clamp(0.0, 1.0)
+            pr_n = (pr_mid - cfg.alpha_unprime * used).clamp(0.0, 1.0)
+            e_n = (
+                e_mid
+                - cfg.energy_cost_rel * used
+                - cfg.energy_cost_pump * (1.0 - res_n)
+            ).clamp(0.0, 1.6)
+
+            qamp = torch.sigmoid(cfg.q_beta * (e_n - 0.5)) * cfg.qmax  # (B, H)
+
+            # 6) Logit adjustment (write row t)
+            j = torch.arange(t + 1, device=q.device, dtype=torch.float32)
+            dist = (float(t) - j).abs() / float(max(1, T))
+            val = (rel * qamp.unsqueeze(-1)).clamp(min=cfg.epsilon).log() - (
+                cfg.barrier_strength * dist.view(1, 1, -1).to(rel.dtype)
+            )
+            syn_logit[:, :, t, : t + 1] = val
+            syn_logit[:, :, t, t + 1 :] = math.log(cfg.epsilon)
+
+            # Store updated state at index t
+            c[:, :, t] = c_next
+            buf[:, :, t] = buf_next
+            rrp[:, :, t] = rrp_n
+            res[:, :, t] = res_n
+            pr[:, :, t] = pr_n
+            e_st[:, :, t] = e_n
+
+        new_state = {"C": c, "BUF": buf, "RRP": rrp, "RES": res, "PR": pr, "CL": cl, "E": e_st}
+        return syn_logit, new_state
 
 
 # -----------------------------------------------------------------------------
@@ -351,7 +599,13 @@ class SynapticPresyn(nn.Module):
 
 class PostsynapticHebb(nn.Module):
     cfg: SynapticConfig
-    """Low-rank eligibility + CaMKII/PP1/BDNF gate controlling consolidation."""
+    """Low-rank eligibility + CaMKII/PP1/BDNF gate controlling consolidation.
+
+    BDNF Metaplasticity (bio_inspired_nanochat-711):
+    - B(t) accumulator tracks |ΔW_hebb| (Hebbian delta magnitude) with decay
+    - When bdnf_gamma > 0, slow LR is modulated by (1 + gamma * B)
+    - This implements activity-dependent learning rate scaling
+    """
 
     def __init__(self, d_k: int, d_v: int, cfg: SynapticConfig):
         super().__init__()
@@ -361,11 +615,15 @@ class PostsynapticHebb(nn.Module):
         self.slow = nn.Parameter(torch.zeros(d_v))
         self.U = nn.Parameter(torch.zeros(d_v, R))
         self.V = nn.Parameter(torch.zeros(R, d_v))
-        
+
         self.register_buffer("camkii", torch.zeros(d_v))
         self.register_buffer("pp1", torch.ones(d_v) * 0.5)
         self.register_buffer("bdnf", torch.zeros(d_v))
-        
+        # B(t) accumulator for |ΔW_hebb| - used when bdnf_hebb_accumulate=True
+        self.register_buffer("bdnf_hebb_accum", torch.zeros(d_v))
+        # Track last delta for logging/debugging
+        self.register_buffer("_last_hebb_delta_mag", torch.zeros(1))
+
         nn.init.normal_(self.U, std=0.02)
         nn.init.normal_(self.V, std=0.02)
 
@@ -374,112 +632,103 @@ class PostsynapticHebb(nn.Module):
         return v * diag + v @ (self.U @ self.V)
 
     @torch.no_grad()
-    def update(self, y: Tensor, ca_proxy: Tensor):
+    def update(self, y: Tensor, ca_proxy: Tensor, *, genes: Optional[Tensor] = None) -> None:
+        """Update CaMKII, PP1, and BDNF state based on activity.
+
+        When bdnf_hebb_accumulate=False (legacy mode):
+            BDNF accumulates based on CaMKII activity: F.relu(camkii - 0.5)
+
+        When bdnf_hebb_accumulate=True (new mode, bio_inspired_nanochat-711):
+            BDNF accumulates |ΔW_hebb| via bdnf_hebb_accum buffer (updated in consolidate())
+            The main bdnf buffer then tracks this with decay.
+        """
         up = (ca_proxy > self.cfg.camkii_thr).float()
         down = (ca_proxy < self.cfg.pp1_thr).float()
-        
-        self.camkii.add_(self.cfg.camkii_up * up * (1 - self.camkii))
+
+        camkii_up = self.cfg.camkii_up
+        pp1_rate = 1.0 - self.cfg.pp1_tau
+        if genes is not None and genes.numel() >= 4:
+            camkii_up = (genes[..., 2] * camkii_up).clamp(max=1.0)
+            pp1_rate = (genes[..., 3] * pp1_rate).clamp(0.0, 1.0)
+
+        self.camkii.add_(camkii_up * up * (1 - self.camkii))
         self.camkii.clamp_(0, 1)
-        
-        self.pp1.mul_(self.cfg.pp1_tau).add_((1 - self.cfg.pp1_tau) * down)
-        self.bdnf.mul_(self.cfg.bdnf_tau).add_((1 - self.cfg.bdnf_tau) * F.relu(self.camkii - 0.5))
+
+        self.pp1.mul_(1.0 - pp1_rate).add_(pp1_rate * down)
+
+        # BDNF update: either from CaMKII (legacy) or from Hebbian accumulator (new)
+        if self.cfg.bdnf_hebb_accumulate:
+            # New mode: BDNF tracks the accumulated |ΔW_hebb| with decay
+            # bdnf_hebb_accum is updated in consolidate() with each Hebbian delta
+            self.bdnf.mul_(self.cfg.bdnf_tau).add_(
+                (1 - self.cfg.bdnf_tau) * self.bdnf_hebb_accum
+            )
+            # NaN guard
+            if torch.isnan(self.bdnf).any():
+                self.bdnf.zero_()
+        else:
+            # Legacy mode: BDNF tracks CaMKII activity
+            self.bdnf.mul_(self.cfg.bdnf_tau).add_(
+                (1 - self.cfg.bdnf_tau) * F.relu(self.camkii - 0.5)
+            )
 
     @torch.no_grad()
     def consolidate(self, traceU: Tensor, traceV: Tensor):
-        # traceU: (d_v, R), traceV: (R, d_v) - accumulated traces
-        # We use the mean of trace product to update slow weights
-        # Note: traceU @ traceV is (d_v, d_v), which is huge.
-        # We only update diagonal 'slow' weights here based on the PDF code?
-        # PDF: self.slow.add_(... * torch.mean(traceU@traceV, dim=...))
-        # Wait, traceU@traceV is a matrix. self.slow is a vector (diagonal).
-        # We should probably take the diagonal of the product or similar.
-        # PDF code: torch.mean(traceU@traceV, dim=0) -> This implies traceU/V have a batch dim?
-        # In SynapticLinear, we accumulate u_buf (in, R) and v_buf (R, out).
-        # Here d_k=in, d_v=out.
-        # If we are in SynapticLinear, d_k=in, d_v=out.
-        # self.slow is (out,).
-        # traceU @ traceV is (in, out).
-        # We can't add (in, out) to (out,).
-        # The PDF code for PostsynapticHebb seems to assume d_k=d_v or it's element-wise?
-        # "self.slow = nn.Parameter(torch.zeros(d_v))"
-        # "return v*diag + v @ (self.U@self.V)"
-        # This implies 'v' is the input? No, 'v' is the output of the linear layer?
-        # In SynapticLinear: y = x @ W.t(); y = self.post(y).
-        # So 'v' in PostsynapticHebb is the output vector (d_out).
-        # So d_k should be d_out?
-        # In SynapticLinear init: self.post = PostsynapticHebb(in_features, out_features, cfg)
-        # But PostsynapticHebb init takes (d_k, d_v).
-        # If it operates on 'y' (output), then d_k is irrelevant?
-        # The PDF code:
-        # self.post(y.view(-1,D)) -> y is (B*T, D).
-        # So PostsynapticHebb takes (D,).
-        # It seems PostsynapticHebb in PDF is designed for the Attention output (D=head_dim).
-        # But SynapticLinear uses it too.
-        
-        # Let's look at SynapticLinear in PDF:
-        # self.post=PostsynapticHebb(in_features,out_features,cfg)
-        # But PostsynapticHebb init: __init__(self, d_k, d_v, cfg).
-        # And forward(self, v).
-        # If v is (Batch, d_v), then U must be (d_v, R).
-        # In SynapticLinear, y is (Batch, out_features).
-        # So d_v = out_features.
-        # What is d_k? It seems unused in __init__ except for maybe U/V shapes?
-        # PDF: self.U=nn.Parameter(torch.zeros(d_v,R))
-        # So d_k is ignored?
-        # Wait, SynapticLinear passes (in, out).
-        # So d_k=in, d_v=out.
-        # But U is (d_v, R).
-        # So U projects Output -> R.
-        # This is Hebbian on the *output* activations?
-        # Yes, "y = self.post(y)".
-        
-        # Consolidate:
-        # self.slow.add_(... * torch.mean(traceU@traceV, dim=0))
-        # traceU is (in, R)? No, in SynapticLinear:
-        # self.u_buf (in, R).
-        # self.v_buf (R, out).
-        # traceU @ traceV -> (in, out).
-        # self.slow is (out,).
-        # Dimensions mismatch!
-        
-        # Maybe the PDF code assumes element-wise or something else.
-        # Or maybe SynapticLinear in PDF is different.
-        # PDF SynapticLinear:
-        # self.u_buf (in, R), self.v_buf (R, out).
-        # forward: self.u_buf...add_(... einsum('bid,br->dr'...) -> Wait.
-        # 'bid' is (Batch, In, D?). No.
-        # x is (Batch, In).
-        # The einsum in PDF is cut off: "torch.einsum('bid,br->dr'..."
-        # This looks like it's accumulating gradients or something.
-        
-        # Let's stick to a safe implementation that makes sense.
-        # We want to update 'slow' (diagonal gain on output) based on Hebbian traces.
-        # If 'slow' is (out,), we need a vector of size (out,).
-        # Maybe we just sum the Hebbian matrix columns?
-        # Or maybe 'slow' should be (in, out)?
-        # The PDF says "self.slow=nn.Parameter(torch.zeros(d_v))". So it's diagonal.
-        # I will assume we take the diagonal of the Hebbian update if it was square, or just the mean activation?
-        # Actually, if we want to reinforce the *existing* weights, we might not need 'slow' to be a matrix.
-        # But standard Hebbian is dW = x * y.
-        # If we only have diagonal 'slow', we can only scale the output.
-        # Let's assume we update 'slow' based on the *output* activity trace?
-        # Or maybe we just ignore the dimension mismatch in the PDF and implement a logical consolidation:
-        # Update 'slow' based on 'camkii' (which tracks output activity).
-        
-        # I will implement a simplified consolidation that updates 'slow' based on 'bdnf' and 'camkii'.
-        
-        delta = (traceU @ traceV).diag() if traceU.shape[0] == traceV.shape[1] else (traceU @ traceV).mean(0)
-        # If shapes don't match for diag (e.g. in != out), we take mean over input dim?
-        # (in, out) -> mean(0) -> (out,).
-        
-        g = torch.sigmoid(self.camkii - 0.5) - 0.3
-        # We use the passed traces (which are likely u_buf/v_buf from Linear)
-        # We need to ensure shapes align.
-        if delta.shape != self.slow.shape:
-             # Fallback: resize or ignore
-             return
+        """Consolidate Hebbian traces into slow weights with BDNF-modulated learning rate.
 
-        self.slow.add_(self.cfg.post_slow_lr * (1.0 + self.cfg.bdnf_scale * self.bdnf) * delta * g)
+        BDNF Metaplasticity (bio_inspired_nanochat-711):
+        - Computes delta from eligibility traces
+        - Accumulates |delta| into bdnf_hebb_accum buffer
+        - Modulates slow LR by (1 + gamma * bdnf) where gamma = bdnf_gamma or bdnf_scale
+        - Guards against NaN/Inf values
+        """
+        # Compute Hebbian delta from traces
+        # traceU: (in, R), traceV: (R, out) -> product is (in, out)
+        # self.slow is (out,) so we need to reduce to that shape
+        trace_product = traceU @ traceV  # (in, out)
+
+        if trace_product.shape[0] == trace_product.shape[1]:
+            # Square matrix: take diagonal
+            delta = trace_product.diag()
+        else:
+            # Non-square: take mean over input dimension -> (out,)
+            delta = trace_product.mean(0)
+
+        # Accumulate |ΔW_hebb| for BDNF metaplasticity
+        if self.cfg.bdnf_hebb_accumulate:
+            delta_mag = delta.abs()
+            # Exponential moving average of delta magnitude
+            self.bdnf_hebb_accum.mul_(self.cfg.bdnf_tau).add_(
+                (1 - self.cfg.bdnf_tau) * delta_mag
+            )
+            # Store for logging
+            self._last_hebb_delta_mag.fill_(delta_mag.mean().item())
+            # NaN guard for accumulator
+            if torch.isnan(self.bdnf_hebb_accum).any():
+                self.bdnf_hebb_accum.zero_()
+
+        # CaMKII gate: consolidation only when CaMKII > 0.5
+        g = torch.sigmoid(self.camkii - 0.5) - 0.3
+
+        # Shape check before update
+        if delta.shape != self.slow.shape:
+            return
+
+        # Compute BDNF-modulated learning rate
+        # Use bdnf_gamma if set, otherwise fall back to bdnf_scale
+        gamma = self.cfg.bdnf_gamma if self.cfg.bdnf_gamma > 0 else self.cfg.bdnf_scale
+        bdnf_gain = 1.0 + gamma * self.bdnf
+
+        # NaN guard for BDNF gain
+        if torch.isnan(bdnf_gain).any() or torch.isinf(bdnf_gain).any():
+            bdnf_gain = torch.ones_like(bdnf_gain)
+
+        # Apply consolidated update with BDNF-modulated LR
+        update = self.cfg.post_slow_lr * bdnf_gain * delta * g
+
+        # Final NaN guard before applying update
+        if not torch.isnan(update).any() and not torch.isinf(update).any():
+            self.slow.add_(update)
 
     @torch.no_grad()
     def hebb_fast(self, traceU: Tensor, traceV: Tensor):
@@ -488,6 +737,24 @@ class PostsynapticHebb(nn.Module):
         if delta.shape != self.fast.shape:
             return
         self.fast.mul_(self.cfg.post_fast_decay).add_(self.cfg.post_fast_lr * delta)
+
+    def get_bdnf_metrics(self) -> Dict[str, float]:
+        """Get BDNF-related metrics for logging/monitoring.
+
+        Returns dict with:
+        - bdnf_mean: Mean BDNF level across all neurons
+        - bdnf_max: Max BDNF level
+        - bdnf_hebb_accum_mean: Mean accumulated |ΔW_hebb|
+        - last_hebb_delta_mag: Most recent Hebbian delta magnitude
+        - camkii_mean: Mean CaMKII level (for reference)
+        """
+        return {
+            "bdnf_mean": float(self.bdnf.mean().item()),
+            "bdnf_max": float(self.bdnf.max().item()),
+            "bdnf_hebb_accum_mean": float(self.bdnf_hebb_accum.mean().item()),
+            "last_hebb_delta_mag": float(self._last_hebb_delta_mag.item()),
+            "camkii_mean": float(self.camkii.mean().item()),
+        }
 
 
 class SynapticLinear(nn.Module):
@@ -595,7 +862,7 @@ class SynapticLinear(nn.Module):
                     # y is (B, out). ca_proxy should be (out,).
                     ca_vec = y.abs().mean(0).clamp(0, 10.0)
                     
-                    self.post.update(y, ca_vec)
+                    self.post.update(y, ca_vec, genes=genes)
                     if self.u_buf is not None and self.v_buf is not None:
                         self.post.hebb_fast(self.u_buf, self.v_buf)
                         self.post.consolidate(self.u_buf, self.v_buf)
@@ -609,20 +876,21 @@ class SynapticLinear(nn.Module):
 
 
 def build_presyn_state(B: int, T: int, H: int, device, dtype, cfg: SynapticConfig):
-    R = torch.ones(B, H, T, device=device, dtype=dtype) * cfg.init_rrp
-    res = torch.ones_like(R) * cfg.init_reserve
-    c = torch.zeros_like(R)
-    sn = torch.ones_like(R) * cfg.init_snare
-    cl = torch.ones_like(R) * cfg.init_clamp
-    amp = torch.ones_like(R) * cfg.init_amp
-    en = torch.ones_like(R) * cfg.init_energy
-    delay = [torch.zeros_like(R) for _ in range(cfg.endo_delay)]
-    
-    # Map to old keys for compatibility if needed, or just use new keys
+    state_shape = (B, H, T)
+    ones = torch.ones(state_shape, device=device, dtype=dtype)
+    zeros = torch.zeros(state_shape, device=device, dtype=dtype)
     return {
-        "rrp": R, "res": res, "c": c, "sn": sn, "cl": cl, "amp": amp, "en": en, "delay": delay,
-        # Aliases for old code compatibility (if any)
-        "RRP": R, "RES": res, "C": c, "PR": sn, "CL": cl, "E": en, "BUF": torch.zeros_like(R)
+        # Triton/Rust-compatible names
+        "C": zeros.clone(),
+        "BUF": zeros.clone(),
+        "RRP": ones * cfg.init_rrp,
+        "RES": ones * cfg.init_reserve,
+        "PR": ones * cfg.init_snare,
+        "CL": ones * cfg.init_clamp,
+        "E": ones * cfg.init_energy,
+        # Extra state used by the Python reference implementation / attention augmentation
+        "AMP": ones * cfg.init_amp,
+        "DELAY": [zeros.clone() for _ in range(cfg.endo_delay)],
     }
 
 
@@ -646,19 +914,29 @@ class SynapticCausalSelfAttention(nn.Module):
         rope_cos,
         rope_sin,
         cfg: SynapticConfig,
+        layer_idx: int,
         attn_drop=0.0,
         resid_drop=0.0,
-        use_flex: bool = False,
     ):
         super().__init__()
         if n_embd % n_head != 0:
             raise ValueError(f"n_embd {n_embd} must be divisible by n_head {n_head}")
+        if n_kv_head > n_head or (n_head % n_kv_head) != 0:
+            raise ValueError(
+                f"n_kv_head {n_kv_head} must be <= n_head {n_head} and divide it exactly"
+            )
         self.n_head = n_head
         self.n_kv_head = n_kv_head
         self.head_dim = n_embd // n_head
+        self.layer_idx = int(layer_idx)
         object.__setattr__(self, "cfg", cfg)
         
-        if use_flex and _HAS_FLEX:
+        if cfg.use_flex_attention:
+            if not _HAS_FLEX:
+                raise ImportError(
+                    "SynapticConfig.use_flex_attention=True but FlexAttention is unavailable "
+                    "(requires torch>=2.5 and torch.nn.attention.flex_attention)."
+                )
             self.flex = SynapticFlexAttention(cfg)
         else:
             self.flex = None
@@ -690,124 +968,148 @@ class SynapticCausalSelfAttention(nn.Module):
         return x.unsqueeze(2).expand(b, t, nh, nrep, d).reshape(b, t, self.n_head, d)
 
     def forward(self, x: Tensor, kv_cache=None, presyn_state=None, train_mode=True):
-        B, T, C = x.shape
+        B, Tq, _C = x.shape
         H = self.n_head
         D = self.head_dim
         device = x.device
         dtype = x.dtype
-        
+
+        # Projections (MQA/GQA: K/V may have fewer heads than Q)
         q = self.q_proj(x)
         k = self.k_proj(x)
-        v = self.v_proj(x).view(B, T, self.n_kv_head, D)
-        
+        v = self.v_proj(x).view(B, Tq, self.n_kv_head, D)
+
+        # RoPE offset is based on the current KV cache position (prefix length)
         T0 = 0 if kv_cache is None else kv_cache.get_pos()
-        q = self._apply_rope(q, T0)
-        k = self._apply_rope(k, T0)
-        q = _rmsnorm(q)
-        k = _rmsnorm(k)
-        k = self._repeat_kv(k)
-        v = self._repeat_kv(v)
-        
-        q = q.transpose(1, 2) # (B, H, T, D)
-        k = k.transpose(1, 2)
-        v = v.transpose(1, 2)
+        q = _rmsnorm(self._apply_rope(q, T0)).transpose(1, 2)  # (B, H, Tq, D)
+        k = _rmsnorm(self._apply_rope(k, T0)).transpose(1, 2)  # (B, Hkv, Tq, D)
+        v = v.transpose(1, 2)  # (B, Hkv, Tq, D)
 
-        # Synaptic State Init
+        # KV cache: store and fetch the full prefix+current K/V for this layer.
+        if kv_cache is not None:
+            k, v = kv_cache.insert_kv(self.layer_idx, k, v)  # (B, Hkv, Tk, D)
+        Tk = int(k.size(2))
+
+        # Expand presynaptic state to cover all key positions (prefix + current).
         if presyn_state is None:
-            presyn_state = build_presyn_state(B, T, H, device, dtype, self.cfg)
+            presyn_state = build_presyn_state(B, Tk, H, device, dtype, self.cfg)
+        else:
+            # Fill in missing keys from older caches/checkpoints and extend along time as needed.
+            if "C" not in presyn_state:
+                raise KeyError("presyn_state missing required key 'C'")
+            T_state = int(presyn_state["C"].size(2))
+            if "BUF" not in presyn_state:
+                presyn_state["BUF"] = torch.zeros_like(presyn_state["C"])
+            if "RRP" not in presyn_state:
+                presyn_state["RRP"] = torch.full_like(presyn_state["C"], self.cfg.init_rrp)
+            if "RES" not in presyn_state:
+                presyn_state["RES"] = torch.full_like(presyn_state["C"], self.cfg.init_reserve)
+            if "PR" not in presyn_state:
+                presyn_state["PR"] = torch.full_like(presyn_state["C"], self.cfg.init_snare)
+            if "CL" not in presyn_state:
+                presyn_state["CL"] = torch.full_like(presyn_state["C"], self.cfg.init_clamp)
+            if "E" not in presyn_state:
+                presyn_state["E"] = torch.full_like(presyn_state["C"], self.cfg.init_energy)
+            if "AMP" not in presyn_state:
+                presyn_state["AMP"] = torch.full_like(presyn_state["C"], self.cfg.init_amp)
+            if "DELAY" not in presyn_state:
+                presyn_state["DELAY"] = [
+                    torch.zeros_like(presyn_state["C"]) for _ in range(self.cfg.endo_delay)
+                ]
 
-        # --- FlexAttention Path ---
+            if T_state < Tk:
+                T_add = Tk - T_state
+                state_dtype = presyn_state["C"].dtype
+                pad_zeros = torch.zeros((B, H, T_add), device=device, dtype=state_dtype)
+
+                def pad_full(t: Tensor, fill: float) -> Tensor:
+                    pad = torch.full((B, H, T_add), fill, device=device, dtype=t.dtype)
+                    return torch.cat([t, pad], dim=2)
+
+                presyn_state["C"] = torch.cat([presyn_state["C"], pad_zeros], dim=2)
+                presyn_state["BUF"] = torch.cat([presyn_state["BUF"], pad_zeros], dim=2)
+                presyn_state["RRP"] = pad_full(presyn_state["RRP"], self.cfg.init_rrp)
+                presyn_state["RES"] = pad_full(presyn_state["RES"], self.cfg.init_reserve)
+                presyn_state["PR"] = pad_full(presyn_state["PR"], self.cfg.init_snare)
+                presyn_state["CL"] = pad_full(presyn_state["CL"], self.cfg.init_clamp)
+                presyn_state["E"] = pad_full(presyn_state["E"], self.cfg.init_energy)
+                presyn_state["AMP"] = pad_full(presyn_state["AMP"], self.cfg.init_amp)
+                presyn_state["DELAY"] = [
+                    torch.cat([d, pad_zeros], dim=2) for d in presyn_state["DELAY"]
+                ]
+
+        # Repeat cached K/V heads to match query heads (GQA)
+        k_full = self._repeat_kv(k.transpose(1, 2)).transpose(1, 2)  # (B, H, Tk, D)
+        v_full = self._repeat_kv(v.transpose(1, 2)).transpose(1, 2)  # (B, H, Tk, D)
+
+        # Build attention logits (masked in-place)
+        dots = (q @ k_full.transpose(-1, -2)) / math.sqrt(D)  # (B, H, Tq, Tk)
+        prefix_len = Tk - Tq
+        if prefix_len <= 0:
+            attn_mask = torch.tril(torch.ones((Tq, Tk), device=device, dtype=torch.bool))
+        else:
+            attn_mask = torch.zeros((Tq, Tk), device=device, dtype=torch.bool)
+            attn_mask[:, :prefix_len] = True
+            attn_mask[:, prefix_len:] = torch.tril(
+                torch.ones((Tq, Tq), device=device, dtype=torch.bool)
+            )
+        dots = dots.masked_fill(~attn_mask.view(1, 1, Tq, Tk), -torch.inf)
+
+        # --- FlexAttention Path (training/prefill only for now) ---
         if self.flex is not None:
-            # TODO: Ideally we update presyn_state using a fused kernel that DOES NOT materialize (B,H,T,T).
-            # For now, we reuse the existing logic to update state, but then discard the logits
-            # and let Flex re-compute the attention map with the biological bias efficiently.
-            # This is 'Correctness First, Optimization Second'.
-            
-            # We need to update state for Flex to see the new Calcium/RRP
-            # We can use a simplified update here or the full one.
-            # Let's use the full one but maybe we can avoid full O(T^2) later.
-            
-            # Standard logits for state update
-            dots = (q @ k.transpose(-1, -2)) / math.sqrt(D)
-            mask = _tri(T, device, dtype)
-            dots = dots + torch.log(mask + 1e-9)
-            
-            topk = min(self.cfg.attn_topk, T)
+            if prefix_len > 0:
+                raise NotImplementedError(
+                    "SynapticFlexAttention currently requires full-sequence attention (no prefix KV cache). "
+                    "Set SynapticConfig.use_flex_attention=False for decoding with KV cache."
+                )
+            topk = min(self.cfg.attn_topk, Tk)
             vals, idx = torch.topk(dots, topk, dim=-1)
-            
-            # Update state (in-place)
-            _ = self.pre.release(presyn_state, vals, idx, train_mode)
-            
-            # Now run Flex Attention
-            # Flex expects (B, H, T, D) - we have that (q, k, v)
-            # It handles the causal mask internally via block_mask (or we pass it)
-            # We pass the UPDATED presyn_state
-            
-            # Convert causal mask to BlockMask? Flex handles 'causal' string usually?
-            # flex_attention(q, k, v, score_mod=..., block_mask=...)
-            # We'll use the default causal mask logic in flex (handled by score_mod barrier usually or we pass block_mask)
-            
-            # Note: SynapticFlexAttention.forward needs to handle masking.
-            # For now, let's assume we pass None and handle it in score_mod or flex handles it.
-            # Actually flex_attention allows creating causal mask.
-            
-            # Create block mask
-            from torch.nn.attention.flex_attention import create_block_mask
-            def causal_mask(b, h, q_idx, kv_idx):
-                return q_idx >= kv_idx
-            
-            block_mask = create_block_mask(causal_mask, B, H, T, T, device=device)
-            
-            # Ensure dtypes match (v usually dictates the autocast dtype)
-            if q.dtype != v.dtype: q = q.to(v.dtype)
-            if k.dtype != v.dtype: k = k.to(v.dtype)
+            valid = torch.isfinite(vals)
+            _ = self.pre.release(presyn_state, vals, idx, train_mode, valid=valid)
 
-            y = self.flex(q, k, v, presyn_state, block_mask=block_mask)
-            
-            # Output projection
-            y = y.transpose(1, 2).contiguous().view(B, T, H * D)
+            from torch.nn.attention.flex_attention import create_block_mask
+
+            def causal_mask(_b, _h, q_idx, kv_idx):
+                return q_idx >= kv_idx
+
+            block_mask = create_block_mask(causal_mask, B, H, Tq, Tk, device=device)
+
+            if q.dtype != v_full.dtype:
+                q = q.to(v_full.dtype)
+            if k_full.dtype != v_full.dtype:
+                k_full = k_full.to(v_full.dtype)
+
+            y = self.flex(q, k_full, v_full, presyn_state, block_mask=block_mask)
+            y = y.transpose(1, 2).contiguous().view(B, Tq, H * D)
             y = self.resid_drop(self.o_proj(y))
             return y, presyn_state
 
         # --- Standard Path ---
-        # Standard attention logits
-        dots = (q @ k.transpose(-1, -2)) / math.sqrt(D)
-        mask = _tri(T, device, dtype)
-        dots = dots + torch.log(mask + 1e-9) # Mask future
-
-        topk = min(self.cfg.attn_topk, T)
+        topk = min(self.cfg.attn_topk, Tk)
         vals, idx = torch.topk(dots, topk, dim=-1)
-        
-        # Drive for presyn is the attention logits (pre-softmax)
-        drive = vals
-        
-        # Run presynaptic physics
-        e = self.pre.release(presyn_state, drive, idx, train_mode)
-        
-        # Augment logits
-        # We need to scatter 'e' back into the full logit matrix
-        # e is (B, H, T, K)
-        # We add log(e) to the selected positions
-        
+        valid = torch.isfinite(vals)
+
+        # Run presynaptic physics on only the valid edges.
+        e = self.pre.release(presyn_state, vals, idx, train_mode, valid=valid)
+
+        # Scatter biological log-bias back into the logits, preserving masking.
         aug = torch.zeros_like(dots)
-        # scatter_add_ expects src to be same size as index? No, index size.
-        # Ensure dtype match
-        src_val = self.cfg.lambda_loge * torch.log(1e-6 + e)
-        src_val = src_val.to(aug.dtype)
+        src_val = self.cfg.lambda_loge * torch.log(self.cfg.epsilon + e).to(aug.dtype)
+        src_val = src_val * valid.to(src_val.dtype)
         aug.scatter_add_(-1, idx, src_val)
-        
-        # Distance barrier
-        steps = torch.arange(T, device=device, dtype=dtype)
-        dist = (steps.view(1, 1, 1, T) - steps.view(1, 1, T, 1)).abs() / float(max(1, T))
-        aug = aug - self.cfg.barrier_strength * dist
-        
-        logits = dots + aug
-        
+
+        # Septin-like distance barrier in global positions.
+        q_pos = torch.arange(prefix_len, prefix_len + Tq, device=device, dtype=torch.float32)
+        k_pos = torch.arange(0, Tk, device=device, dtype=torch.float32)
+        dist = (q_pos[:, None] - k_pos[None, :]).abs() / float(max(1, Tk))
+        logits = dots + aug - (self.cfg.barrier_strength * dist.to(dots.dtype)).view(
+            1, 1, Tq, Tk
+        )
+
         P = F.softmax(logits, dim=-1)
         P = self.attn_drop(P)
-
-        ctx = torch.matmul(P.to(v.dtype), v)
-        y = ctx.transpose(1, 2).contiguous().view(B, T, H * D)
+        ctx = torch.matmul(P.to(v_full.dtype), v_full)
+        y = ctx.transpose(1, 2).contiguous().view(B, Tq, H * D)
         y = self.resid_drop(self.o_proj(y))
         return y, presyn_state
 
@@ -827,8 +1129,8 @@ class SynapticMLP(nn.Module):
 
     def forward(self, x: Tensor):
         B, T, C = x.shape
-        c0 = cast(Tensor, self.C0)
-        e0 = cast(Tensor, self.E0)
+        c0 = self.C0
+        e0 = self.E0
         c = c0.expand(B * T)
         e = e0.expand(B * T)
         h = self.fc(x.reshape(B * T, C), c, e)
@@ -943,8 +1245,8 @@ class SynapticMoE(nn.Module):
         B, T, C = x.shape
         E = self.num_experts
         device = x.device
-        fatigue_buf = cast(Tensor, self.fatigue)
-        energy_buf = cast(Tensor, self.energy)
+        fatigue_buf = self.fatigue
+        energy_buf = self.energy
         
         pheno = self._get_phenotype(self.Xi) # (E, 4)
         alpha_fatigue = pheno[:, 0]
@@ -1070,17 +1372,17 @@ class StructuralPlasticity(nn.Module):
 
     @torch.no_grad()
     def step(self, used: Tensor):
-        age = cast(Tensor, self.age)
+        age = self.age
         age.add_(1.0)
-        util = cast(Tensor, self.util)
+        util = self.util
         util.mul_(1.0 - self.cfg.structural_tau_util).add_(
             self.cfg.structural_tau_util * used.float()
         )
 
     @torch.no_grad()
     def decision(self):
-        util = cast(Tensor, self.util)
-        age = cast(Tensor, self.age)
+        util = self.util
+        age = self.age
         s = torch.sigmoid(
             10.0 * (util - 0.2)
             - self.cfg.structural_age_bias
