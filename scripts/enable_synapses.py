@@ -12,14 +12,15 @@ def build_synaptic(
     depth: int = 20,
     vocab: int = 65536,
     seq: int = 2048,
-    n_head: int = None,
-    n_kv_head: int = None,
+    n_head: int | None = None,
+    n_kv_head: int | None = None,
     dropout: float = 0.0,
     use_moe: bool = False,
     num_experts: int = 8,
     top_k: int = 2,
     hidden_mult: int = 4,
     lb_lambda: float = 0.01,
+    structural_every: int = 0,
 ):
     if n_head is None:
         n_head = max(1, (depth * 64 + 127) // 128)
@@ -41,6 +42,7 @@ def build_synaptic(
         moe_top_k=top_k,
         moe_hidden_mult=hidden_mult,
         moe_balance_loss=lb_lambda,
+        structural_every=structural_every,
     )
     return GPTSynaptic(cfg)
 
@@ -70,26 +72,30 @@ def main():
         top_k=args.topk,
         hidden_mult=args.hidden_mult,
         lb_lambda=args.lb_lambda,
+        structural_every=args.structural_every,
     ).to(device)
     print("FLOPs estimate:", model.estimate_flops())
     save_checkpoint(
-        model,
-        None,
-        args.ckpt_out,
+        checkpoint_dir=args.ckpt_out,
         step=0,
-        meta={
+        model_data=model.state_dict(),
+        optimizer_data=None,
+        meta_data={
             "synapses": True,
-            "config": {
+            "model_config": {
                 "sequence_len": args.seq,
                 "vocab_size": args.vocab,
                 "n_layer": args.depth,
                 "n_head": model.config.n_head,
                 "n_kv_head": model.config.n_kv_head,
                 "n_embd": model.config.n_embd,
+                "dropout": model.config.dropout,
                 "use_moe": model.config.use_moe,
                 "num_experts": model.config.num_experts,
                 "moe_top_k": model.config.moe_top_k,
                 "moe_hidden_mult": model.config.moe_hidden_mult,
+                "moe_balance_loss": model.config.moe_balance_loss,
+                "structural_every": model.config.structural_every,
             },
         },
     )

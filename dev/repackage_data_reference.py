@@ -80,9 +80,13 @@ for doc in ds:
 
 # Demonstration of how the data was later uploaded to HuggingFace
 def upload():
-    import os
     from huggingface_hub import HfApi
-    token = os.getenv("HF_TOKEN")
+    from decouple import Config as DecoupleConfig, RepositoryEnv
+
+    decouple_config = DecoupleConfig(RepositoryEnv(".env"))
+    token = decouple_config("HF_TOKEN", default="")
+    if not token:
+        raise ValueError("Missing HF_TOKEN in .env (required to upload to Hugging Face)")
     api = HfApi(token=token)
     api.upload_large_folder(
         folder_path=output_dir,
