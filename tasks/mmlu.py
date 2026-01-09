@@ -3,7 +3,7 @@ The MMLU dataset.
 https://huggingface.co/datasets/cais/mmlu
 """
 
-from typing import Any, Dict, List, Sequence, cast
+from typing import Any, Dict, Sequence, cast
 
 from datasets import Dataset, load_dataset
 from tasks.common import Task, render_mc
@@ -60,7 +60,9 @@ class MMLU(Task):
         }
         return conversation
 
-    def evaluate(self, conversation, assistant_response):
+    def evaluate(self, problem: Any, completion: Any) -> bool:
+        conversation = problem
+        assistant_response = completion
         # the assert here is not strictly speaking needed, but currently the way we eval, we expect this to be true
         # I'm going to leave the assert here to prevent footguns, but possibly in the future can remove it.
         if assistant_response not in self.letters:

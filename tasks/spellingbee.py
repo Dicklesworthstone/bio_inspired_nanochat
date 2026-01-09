@@ -28,6 +28,7 @@ python -m tasks.spellingbee
 
 import re
 import random
+from typing import Any
 from tasks.common import Task
 from bio_inspired_nanochat.common import download_file_with_lock
 
@@ -109,6 +110,9 @@ USER_MSG_TEMPLATES = [
     "{word}の中に{letter}がいくつ",
     "{word}に{letter}が何回出てくる",
 ]
+
+class SpellingBee(Task):
+    """Count occurrences of a letter in a word (with optional Python tool verification)."""
 
     def __init__(self, size=1000, split="train", **kwargs):
         super().__init__(**kwargs)
@@ -201,11 +205,13 @@ Then count the occurrences of '{letter}':
         }
         return conversation
 
-    def evaluate(self, conversation, assistant_response):
+    def evaluate(self, problem: Any, completion: Any) -> bool:
         """
         Given (conversation, completion), return evaluation outcome (0 = wrong, 1 = correct)
         Identical to gsm8k's evaluation.
         """
+        conversation = problem
+        assistant_response = completion
         if not isinstance(assistant_response, str):
             raise ValueError("Assuming simple string response for now")
         # First extract the ground truth answer from the conversation
@@ -219,9 +225,8 @@ Then count the occurrences of '{letter}':
         # Extract both the ground truth answer and the predicted answer
         ref_num = extract_answer(last_text_part)
         pred_num = extract_answer(assistant_response)
-        # Compare and return the success as int
-        is_correct = int(pred_num == ref_num)
-        return is_correct
+        # Compare and return the success
+        return pred_num == ref_num
 
     def reward(self, conversation, assistant_response):
         """ Use simple 0-1 reward just like gsm8k."""

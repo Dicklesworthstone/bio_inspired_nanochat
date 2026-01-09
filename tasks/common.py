@@ -6,6 +6,7 @@ Example tasks: MMLU, ARC-Easy, ARC-Challenge, GSM8K, HumanEval, SmolTalk.
 """
 
 import random
+from typing import Any
 
 class Task:
     """
@@ -52,7 +53,7 @@ class Task:
         conversation = self.get_example(physical_index)
         return conversation
 
-    def evaluate(self, problem, completion):
+    def evaluate(self, problem: Any, completion: Any) -> bool:
         raise NotImplementedError
 
 

@@ -79,8 +79,9 @@ class HumanEval(Task):
         }
         return conversation
 
-    def evaluate(self, conversation, completion):
+    def evaluate(self, problem: Any, completion: Any) -> bool:
         """ Given (conversation, completion), return boolean success of the completion. """
+        conversation = problem
         # the prompt will contain the imports and the function signature
         imports = extract_imports(conversation['messages'][0]['content'])
         # the completion will usually contain the whole function

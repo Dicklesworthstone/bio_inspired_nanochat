@@ -89,7 +89,7 @@ class GSM8K(Task):
         }
         return conversation
 
-    def evaluate(self, conversation, assistant_response):
+    def evaluate(self, problem: Any, completion: Any) -> bool:
         """
         Given (conversation, completion), return evaluation outcome (0 = wrong, 1 = correct)
         Note that:
@@ -99,6 +99,8 @@ class GSM8K(Task):
         TODO: Technically, assistant_response should be a Message (either a string or a list of parts)
               We can handle this later possibly. For now just assume string.
         """
+        conversation = problem
+        assistant_response = completion
         if not isinstance(assistant_response, str):
             raise ValueError("Assuming simple string response for now")
         # First extract the ground truth answer
@@ -111,9 +113,8 @@ class GSM8K(Task):
         # Extract both the ground truth answer and the predicted answer
         ref_num = extract_answer(last_text_part)
         pred_num = extract_answer(assistant_response)
-        # Compare and return the success as int
-        is_correct = int(pred_num == ref_num)
-        return is_correct
+        # Compare and return the success
+        return pred_num == ref_num
 
     def reward(self, conversation, assistant_response):
         """
