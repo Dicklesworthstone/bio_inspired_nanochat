@@ -19,49 +19,32 @@ from contextlib import nullcontext
 
 from typing import Any, cast
 
-import wandb
-from bio_inspired_nanochat.torch_imports import torch, F
 import torch.distributed as torch_dist
+import wandb
 
-dist = cast(Any, torch_dist)
-
-from bio_inspired_nanochat.gpt import GPT, GPTConfig
-
-try:
-    from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
-    from bio_inspired_nanochat.synaptic import SynapticConfig
-    from bio_inspired_nanochat.synaptic_splitmerge import (
-        SplitMergeController,
-        SplitMergeConfig,
-    )
-    from bio_inspired_nanochat.neuroviz import NeuroVizManager, NeuroVizConfig
-except Exception:
-    GPTSynaptic = None
-    GPTSynapticConfig = None
-    SynapticConfig = None
-    SplitMergeController = None
-    SplitMergeConfig = None
-    NeuroVizManager = None
-    NeuroVizConfig = None
+from bio_inspired_nanochat.checkpoint_manager import load_checkpoint, save_checkpoint
 from bio_inspired_nanochat.dataloader import (
     tokenizing_distributed_data_loader,
     tokenizing_distributed_data_loader_with_state,
 )
 from bio_inspired_nanochat.common import (
-    compute_init,
-    compute_cleanup,
-    print0,
     DummyWandb,
-    print_banner,
-    get_base_dir,
     autodetect_device_type,
+    compute_cleanup,
+    compute_init,
+    get_base_dir,
+    print0,
+    print_banner,
 )
-from bio_inspired_nanochat.tokenizer import get_tokenizer, get_token_bytes
-from bio_inspired_nanochat.checkpoint_manager import save_checkpoint, load_checkpoint
-from bio_inspired_nanochat.loss_eval import evaluate_bpb
 from bio_inspired_nanochat.engine import Engine
-from scripts.base_eval import evaluate_model
+from bio_inspired_nanochat.gpt import GPT, GPTConfig
+from bio_inspired_nanochat.loss_eval import evaluate_bpb
 from bio_inspired_nanochat.report import get_report
+from bio_inspired_nanochat.tokenizer import get_token_bytes, get_tokenizer
+from bio_inspired_nanochat.torch_imports import F, torch
+from scripts.base_eval import evaluate_model
+
+dist = cast(Any, torch_dist)
 
 print_banner()
 
@@ -77,6 +60,9 @@ depth = (
 max_seq_len = 2048  # max context length
 synapses = 0  # use synaptic model (GPTSynaptic) if 1, otherwise use standard GPT
 use_flex_attention = 0 # use FlexAttention (requires torch>=2.5) if 1
+# Weight initialization
+init_type = "baseline"  # baseline | ca_rule30 | ca_rule116
+init_seed = 42
 # Split/merge controller (for MoE)
 splitmerge_every = 0  # apply split/merge every N steps (0=off)
 merge_cosine = 0.85  # merge cosine similarity threshold
@@ -208,8 +194,14 @@ model_config_kwargs = dict(
 )
 use_syn = bool(synapses)
 if use_syn:
-    if GPTSynaptic is None:
-        raise ValueError("synapses=1 but gpt_synaptic module not available")
+    try:
+        from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
+        from bio_inspired_nanochat.synaptic import SynapticConfig
+    except Exception as e:
+        raise RuntimeError(
+            "synapses=1 but synaptic model modules failed to import."
+        ) from e
+
     syn_cfg = SynapticConfig(use_flex_attention=bool(use_flex_attention))
     model_config = GPTSynapticConfig(
         sequence_len=max_seq_len,
@@ -220,12 +212,23 @@ if use_syn:
         n_embd=model_dim,
         synapses=True,
         syn_cfg=syn_cfg,
+        init_type=str(init_type),
+        init_seed=int(init_seed),
     )
     with torch.device("meta"):
         model = GPTSynaptic(model_config)
 else:
     with torch.device("meta"):
-        model_config = GPTConfig(**model_config_kwargs)
+        model_config = GPTConfig(
+            sequence_len=max_seq_len,
+            vocab_size=vocab_size,
+            n_layer=num_layers,
+            n_head=num_heads,
+            n_kv_head=num_kv_heads,
+            n_embd=model_dim,
+            init_type=str(init_type),
+            init_seed=int(init_seed),
+        )
         model = GPT(model_config)
 model.to_empty(device=device)
 model.init_weights()
@@ -294,25 +297,34 @@ else:
 
 # Initialize NeuroVizManager
 viz = None
-if use_syn and master_process and NeuroVizManager is not None:
-    viz_cfg = NeuroVizConfig(
-        log_dir=neuroviz_dir,
-        image_every=neuroviz_image_every,
-        tb_every=neuroviz_tb_every,
-        interactive_every=neuroviz_interactive_every,
-    )
-    viz = NeuroVizManager(viz_cfg)
-    # We need to register the original model (before compile) or compiled?
-    # NeuroViz iterates modules looking for SynapticMoE.
-    # torch.compile wraps the model.
-    # Let's try registering the compiled model, if it fails we might need orig_model.
-    # But SynapticMoE modules should still be accessible.
-    # Actually, let's use orig_model to be safe as it's definitely a nn.Module structure we know.
-    viz.register_model(orig_model)
+if use_syn and master_process:
+    try:
+        from bio_inspired_nanochat.neuroviz import NeuroVizConfig, NeuroVizManager
+    except Exception as e:
+        print0(f"NeuroViz disabled (import failed): {e}")
+    else:
+        viz_cfg = NeuroVizConfig(
+            log_dir=neuroviz_dir,
+            image_every=neuroviz_image_every,
+            tb_every=neuroviz_tb_every,
+            interactive_every=neuroviz_interactive_every,
+        )
+        viz = NeuroVizManager(viz_cfg)
+        # Use the original model (before compile) to avoid compile wrappers.
+        viz.register_model(orig_model)
 
 # Initialize split/merge controller if enabled
 sm_ctrl = None
-if splitmerge_every > 0 and SplitMergeController is not None:
+if splitmerge_every > 0:
+    try:
+        from bio_inspired_nanochat.synaptic_splitmerge import (
+            SplitMergeConfig,
+            SplitMergeController,
+        )
+    except Exception as e:
+        raise RuntimeError(
+            "splitmerge_every > 0 but synaptic split/merge modules failed to import."
+        ) from e
     sm_cfg = SplitMergeConfig(
         enabled=True,
         merge_cosine_threshold=merge_cosine,
@@ -324,7 +336,7 @@ if splitmerge_every > 0 and SplitMergeController is not None:
         verbose=bool(sm_verbose),
         ddp_broadcast=True,
     )
-    sm_ctrl = SplitMergeController(model, sm_cfg, logger=viz)
+    sm_ctrl = SplitMergeController(orig_model, sm_cfg, logger=viz)
 
 if resuming:
     for opt, dat in zip(optimizers, optimizer_data):
@@ -394,6 +406,9 @@ else:
     min_val_bpb = loop_state["min_val_bpb"]
     smooth_train_loss = loop_state["smooth_train_loss"]
     total_training_time = loop_state["total_training_time"]
+
+# Only used for end-of-run reporting; will be overwritten inside the loop.
+mfu: float = 0.0
 
 # -----------------------------------------------------------------------------
 # Training loop
@@ -542,7 +557,7 @@ while True:
     t0 = time.time()
     for micro_step in range(grad_accum_steps):
         with autocast_ctx:
-            result = model(x, y, train_mode=True)
+            result = model(x, y, train_mode=True) if use_syn else model(x, y)
             if isinstance(result, tuple):
                 logits, loss = result
             else:

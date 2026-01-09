@@ -18,10 +18,19 @@ import shutil
 import random
 import zipfile
 import tempfile
+import urllib.error
 from contextlib import nullcontext
 
 from bio_inspired_nanochat.torch_imports import torch
-from bio_inspired_nanochat.common import compute_init, compute_cleanup, print0, get_base_dir, autodetect_device_type, download_file_with_lock
+from bio_inspired_nanochat.common import (
+    compute_init,
+    compute_cleanup,
+    decouple_config,
+    print0,
+    get_base_dir,
+    autodetect_device_type,
+    download_file_with_lock,
+)
 from bio_inspired_nanochat.tokenizer import HuggingFaceTokenizer
 from bio_inspired_nanochat.checkpoint_manager import load_model
 from bio_inspired_nanochat.core_eval import evaluate_task
@@ -30,34 +39,82 @@ from bio_inspired_nanochat.core_eval import evaluate_task
 # nanochat specific function dealing with I/O etc.
 
 # ~162MB of data needed to evaluate the CORE metric
-EVAL_BUNDLE_URL = "https://karpathy-public.s3.us-west-2.amazonaws.com/eval_bundle.zip"
+DEFAULT_EVAL_BUNDLE_URL = "https://karpathy-public.s3.us-west-2.amazonaws.com/eval_bundle.zip"
+EVAL_BUNDLE_URL = decouple_config("CORE_EVAL_BUNDLE_URL", default=DEFAULT_EVAL_BUNDLE_URL)
+EVAL_BUNDLE_ZIP_NAME = "eval_bundle.zip"
 
-def place_eval_bundle(file_path):
+def _validate_eval_bundle_dir(eval_bundle_dir: str) -> None:
+    missing = []
+    for rel in ["core.yaml", "eval_meta_data.csv", "eval_data"]:
+        p = os.path.join(eval_bundle_dir, rel)
+        if not os.path.exists(p):
+            missing.append(rel)
+    if missing:
+        raise FileNotFoundError(
+            f"Invalid CORE eval bundle directory {eval_bundle_dir!r}; missing: {', '.join(missing)}"
+        )
+
+
+def place_eval_bundle(file_path: str, *, eval_bundle_dir: str) -> None:
     # here file_path is the path to the eval_bundle.zip file
-    # we need to unzip it and place it in the base directory
-    base_dir = get_base_dir()
-    eval_bundle_dir = os.path.join(base_dir, "eval_bundle")
+    # we need to unzip it and place it in the configured eval_bundle_dir
+    if os.path.exists(eval_bundle_dir):
+        _validate_eval_bundle_dir(eval_bundle_dir)
+        return
     with tempfile.TemporaryDirectory() as tmpdir:
         with zipfile.ZipFile(file_path, 'r') as zip_ref:
             zip_ref.extractall(tmpdir)
         extracted_bundle_dir = os.path.join(tmpdir, "eval_bundle")
+        os.makedirs(os.path.dirname(eval_bundle_dir), exist_ok=True)
         shutil.move(extracted_bundle_dir, eval_bundle_dir)
     print0(f"Placed eval_bundle directory at {eval_bundle_dir}")
 
-def evaluate_model(model, tokenizer, device, max_per_task=-1):
+def evaluate_model(
+    model,
+    tokenizer,
+    device,
+    max_per_task: int = -1,
+    *,
+    eval_bundle_dir: str | None = None,
+    eval_bundle_zip: str | None = None,
+    eval_bundle_url: str | None = None,
+):
     """
     Evaluate a base model on the CORE benchmark.
     - max_per_task: crop the data to this many examples per task for testing (-1 = disable)
     """
     # Load config and task metadata
     base_dir = get_base_dir()
-    eval_bundle_dir = os.path.join(base_dir, "eval_bundle")
-    # Download the eval bundle to disk (and unzip if needed)
-    if not os.path.exists(eval_bundle_dir):
-        download_file_with_lock(EVAL_BUNDLE_URL, "eval_bundle.zip", postprocess_fn=place_eval_bundle)
-    config_path = os.path.join(eval_bundle_dir, "core.yaml")
-    data_base_path = os.path.join(eval_bundle_dir, "eval_data")
-    eval_meta_data = os.path.join(eval_bundle_dir, "eval_meta_data.csv")
+    resolved_bundle_dir = eval_bundle_dir or os.path.join(base_dir, "eval_bundle")
+
+    # Download/unzip the eval bundle to disk (if needed)
+    if not os.path.exists(resolved_bundle_dir):
+        if eval_bundle_zip is not None:
+            if not os.path.exists(eval_bundle_zip):
+                raise FileNotFoundError(f"--eval-bundle-zip not found: {eval_bundle_zip!r}")
+            place_eval_bundle(eval_bundle_zip, eval_bundle_dir=resolved_bundle_dir)
+        else:
+            url = eval_bundle_url or EVAL_BUNDLE_URL
+            try:
+                download_file_with_lock(
+                    url, EVAL_BUNDLE_ZIP_NAME, postprocess_fn=lambda p: place_eval_bundle(p, eval_bundle_dir=resolved_bundle_dir)
+                )
+            except urllib.error.HTTPError as e:
+                hint = (
+                    "CORE eval bundle download failed.\n\n"
+                    f"- URL: {url}\n"
+                    f"- HTTP status: {e.code}\n\n"
+                    "Fix options:\n"
+                    "- Set CORE_EVAL_BUNDLE_URL in .env to a working mirror URL, or pass --eval-bundle-url.\n"
+                    "- Or download eval_bundle.zip manually and pass --eval-bundle-zip=/path/to/eval_bundle.zip.\n"
+                    f"- Or extract eval_bundle/ and pass --eval-bundle-dir, or place it at {resolved_bundle_dir}.\n"
+                )
+                raise RuntimeError(hint) from e
+
+    _validate_eval_bundle_dir(resolved_bundle_dir)
+    config_path = os.path.join(resolved_bundle_dir, "core.yaml")
+    data_base_path = os.path.join(resolved_bundle_dir, "eval_data")
+    eval_meta_data = os.path.join(resolved_bundle_dir, "eval_meta_data.csv")
     with open(config_path, 'r', encoding='utf-8') as f:
         config = yaml.safe_load(f)
     tasks = config['icl_tasks']
@@ -156,6 +213,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--hf-path', type=str, default=None, help='HuggingFace model path to evaluate')
     parser.add_argument('--max-per-task', type=int, default=-1, help='Max examples per task to evaluate (-1 = disable)')
+    parser.add_argument('--eval-bundle-dir', type=str, default=None, help='Path to extracted eval_bundle directory (optional)')
+    parser.add_argument('--eval-bundle-zip', type=str, default=None, help='Path to eval_bundle.zip file (optional)')
+    parser.add_argument('--eval-bundle-url', type=str, default=None, help='Override CORE_EVAL_BUNDLE_URL (optional)')
     args = parser.parse_args()
 
     # distributed / precision setup
@@ -179,7 +239,15 @@ def main():
 
     # Evaluate the model
     with autocast_ctx:
-        out = evaluate_model(model, tokenizer, device, max_per_task=args.max_per_task)
+        out = evaluate_model(
+            model,
+            tokenizer,
+            device,
+            max_per_task=args.max_per_task,
+            eval_bundle_dir=args.eval_bundle_dir,
+            eval_bundle_zip=args.eval_bundle_zip,
+            eval_bundle_url=args.eval_bundle_url,
+        )
 
     # Write out the results to a csv file
     core_metric = None

@@ -15,6 +15,7 @@ from bio_inspired_nanochat.dataloader import tokenizing_distributed_data_loader
 from bio_inspired_nanochat.tokenizer import get_token_bytes
 from bio_inspired_nanochat.loss_eval import evaluate_bpb
 from bio_inspired_nanochat.engine import Engine
+from bio_inspired_nanochat.report import get_report
 
 # Configuration
 device_batch_size = 32
@@ -90,7 +91,6 @@ if ddp_rank == 0:
         samples.append(sample_str)
 
 # Log to report
-from bio_inspired_nanochat.report import get_report
 get_report().log(section="Base model loss", data=[
     {
         "train bpb": bpb_results["train"],

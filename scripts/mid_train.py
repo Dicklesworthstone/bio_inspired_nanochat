@@ -76,6 +76,7 @@ if pretrain_batch_size is not None and device_batch_size > pretrain_batch_size:
 orig_model = model
 model = torch.compile(model, dynamic=False)
 depth = model.config.n_layer
+use_syn = bool(getattr(model.config, "synapses", False))
 num_flops_per_token = model.estimate_flops()
 tokens_per_fwdbwd = device_batch_size * max_seq_len # tokens per iteration for a single rank
 world_tokens_per_fwdbwd = tokens_per_fwdbwd * ddp_world_size # total tokens per iteration for all ranks
@@ -269,7 +270,7 @@ while True:
     t0 = time.time()
     for micro_step in range(grad_accum_steps):
         with autocast_ctx:
-            result = model(x, y, train_mode=True)
+            result = model(x, y, train_mode=True) if use_syn else model(x, y)
             if isinstance(result, tuple):
                 logits, loss = result
             else:
