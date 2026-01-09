@@ -22,9 +22,9 @@ from typing import List, Tuple, Optional, Iterable, Any, cast
 from bio_inspired_nanochat.torch_imports import torch, nn, Tensor
 import torch.distributed as torch_dist
 
-dist = cast(Any, torch_dist)
-
 from .synaptic import SynapticMoE, SynapticExpert, SynapticLinear
+
+dist = cast(Any, torch_dist)
 
 # ---------------------------------------------------------------------------
 # Config
@@ -45,6 +45,9 @@ class SplitMergeConfig:
         0.80  # expert must be above this health to be split candidate
     )
     splits_per_call: int = 1
+    # RESET (dead experts) criteria
+    reset_health_max: float = 0.02  # health threshold to reset as "dead"
+    resets_per_call: int = 1
     # Noise scales for cloned experts
     clone_noise_linear: float = 0.02  # noise scale for linear weights
     clone_noise_router: float = 0.01  # noise scale for router columns
@@ -140,21 +143,29 @@ def _broadcast_module_params(module: nn.Module):
 def _copy_synaptic_linear_(dst: SynapticLinear, src: SynapticLinear):
     # weights & bias
     dst.w_slow.copy_(src.w_slow)
-    dst.w_fast.copy_(src.w_fast)
+    if (dst.w_fast is not None) and (src.w_fast is not None):
+        dst.w_fast.copy_(src.w_fast)
     if (dst.bias is not None) and (src.bias is not None):
         cast(Tensor, dst.bias).copy_(cast(Tensor, src.bias))
     # postsyn state
-    cast(Tensor, dst.post.U).copy_(cast(Tensor, src.post.U))
-    cast(Tensor, dst.post.V).copy_(cast(Tensor, src.post.V))
-    cast(Tensor, dst.post.fast).copy_(cast(Tensor, src.post.fast))
-    cast(Tensor, dst.post.slow).copy_(cast(Tensor, src.post.slow))
-    # buffers
-    cast(Tensor, dst.post.camkii).copy_(cast(Tensor, src.post.camkii))
-    cast(Tensor, dst.post.pp1).copy_(cast(Tensor, src.post.pp1))
-    cast(Tensor, dst.post.bdnf).copy_(cast(Tensor, src.post.bdnf))
+    if (dst.post is not None) and (src.post is not None):
+        cast(Tensor, dst.post.U).copy_(cast(Tensor, src.post.U))
+        cast(Tensor, dst.post.V).copy_(cast(Tensor, src.post.V))
+        cast(Tensor, dst.post.fast).copy_(cast(Tensor, src.post.fast))
+        cast(Tensor, dst.post.slow).copy_(cast(Tensor, src.post.slow))
+        # buffers
+        cast(Tensor, dst.post.camkii).copy_(cast(Tensor, src.post.camkii))
+        cast(Tensor, dst.post.pp1).copy_(cast(Tensor, src.post.pp1))
+        cast(Tensor, dst.post.bdnf).copy_(cast(Tensor, src.post.bdnf))
+        if hasattr(dst.post, "bdnf_hebb_accum") and hasattr(src.post, "bdnf_hebb_accum"):
+            cast(Tensor, dst.post.bdnf_hebb_accum).copy_(cast(Tensor, src.post.bdnf_hebb_accum))
+        if hasattr(dst.post, "_last_hebb_delta_mag") and hasattr(src.post, "_last_hebb_delta_mag"):
+            cast(Tensor, dst.post._last_hebb_delta_mag).copy_(cast(Tensor, src.post._last_hebb_delta_mag))
     # Linear buffers
-    cast(Tensor, dst.u_buf).copy_(cast(Tensor, src.u_buf))
-    cast(Tensor, dst.v_buf).copy_(cast(Tensor, src.v_buf))
+    if (dst.u_buf is not None) and (src.u_buf is not None):
+        cast(Tensor, dst.u_buf).copy_(cast(Tensor, src.u_buf))
+    if (dst.v_buf is not None) and (src.v_buf is not None):
+        cast(Tensor, dst.v_buf).copy_(cast(Tensor, src.v_buf))
 
 
 @torch.no_grad()
@@ -165,7 +176,8 @@ def _merge_linear_into_(winner: SynapticLinear, loser: SynapticLinear, alpha: fl
             from bio_inspired_nanochat.kernels import mix_and_shift_tensors
             # Weights
             mix_and_shift_tensors(winner.w_slow, loser.w_slow, alpha, cfg.clone_noise_linear)
-            mix_and_shift_tensors(winner.w_fast, loser.w_fast, alpha, cfg.clone_noise_linear)
+            if (winner.w_fast is not None) and (loser.w_fast is not None):
+                mix_and_shift_tensors(winner.w_fast, loser.w_fast, alpha, cfg.clone_noise_linear)
             if (winner.bias is not None) and (loser.bias is not None):
                 mix_and_shift_tensors(cast(Tensor, winner.bias), cast(Tensor, loser.bias), alpha, cfg.clone_noise_linear)
             
@@ -186,29 +198,48 @@ def _merge_linear_into_(winner: SynapticLinear, loser: SynapticLinear, alpha: fl
             # So we only use fused kernel for weights/biases which are the big tensors.
             # State tensors are small (rank R).
             
-            # Manual state update (same as before)
-            cast(Tensor, winner.post.U).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, loser.post.U))
-            cast(Tensor, winner.post.V).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, loser.post.V))
-            cast(Tensor, winner.post.fast).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, loser.post.fast))
-            cast(Tensor, winner.post.slow).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, loser.post.slow))
-            
-            cast(Tensor, winner.post.camkii).mul_(0.9).add_(0.1 * cast(Tensor, loser.post.camkii))
-            cast(Tensor, winner.post.pp1).mul_(0.9).add_(0.1 * cast(Tensor, loser.post.pp1))
-            cast(Tensor, winner.post.bdnf).mul_(0.9).add_(0.1 * cast(Tensor, loser.post.bdnf))
-            
-            # Clone state to loser (with reset logic)
-            cast(Tensor, loser.post.U).copy_(cast(Tensor, winner.post.U)).mul_(0.5)
-            cast(Tensor, loser.post.V).copy_(cast(Tensor, winner.post.V)).mul_(0.5)
-            cast(Tensor, loser.post.fast).zero_() # Reset fast weights
-            cast(Tensor, loser.post.slow).copy_(cast(Tensor, winner.post.slow)) # Keep slow weights? Or reset? Usually keep base knowledge.
-            
-            cast(Tensor, loser.post.camkii).copy_(cast(Tensor, winner.post.camkii))
-            cast(Tensor, loser.post.pp1).copy_(cast(Tensor, winner.post.pp1))
-            cast(Tensor, loser.post.bdnf).copy_(cast(Tensor, winner.post.bdnf))
+            if (winner.post is not None) and (loser.post is not None):
+                # Manual state update (same as before)
+                cast(Tensor, winner.post.U).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, loser.post.U))
+                cast(Tensor, winner.post.V).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, loser.post.V))
+                cast(Tensor, winner.post.fast).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, loser.post.fast))
+                cast(Tensor, winner.post.slow).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, loser.post.slow))
+                
+                cast(Tensor, winner.post.camkii).mul_(0.9).add_(0.1 * cast(Tensor, loser.post.camkii))
+                cast(Tensor, winner.post.pp1).mul_(0.9).add_(0.1 * cast(Tensor, loser.post.pp1))
+                cast(Tensor, winner.post.bdnf).mul_(0.9).add_(0.1 * cast(Tensor, loser.post.bdnf))
+                if hasattr(winner.post, "bdnf_hebb_accum") and hasattr(loser.post, "bdnf_hebb_accum"):
+                    cast(Tensor, winner.post.bdnf_hebb_accum).mul_(0.9).add_(
+                        0.1 * cast(Tensor, loser.post.bdnf_hebb_accum)
+                    )
+                if hasattr(winner.post, "_last_hebb_delta_mag") and hasattr(loser.post, "_last_hebb_delta_mag"):
+                    cast(Tensor, winner.post._last_hebb_delta_mag).copy_(
+                        cast(Tensor, loser.post._last_hebb_delta_mag)
+                    )
+                
+                # Clone state to loser (with reset logic)
+                cast(Tensor, loser.post.U).copy_(cast(Tensor, winner.post.U)).mul_(0.5)
+                cast(Tensor, loser.post.V).copy_(cast(Tensor, winner.post.V)).mul_(0.5)
+                cast(Tensor, loser.post.fast).zero_() # Reset fast weights
+                cast(Tensor, loser.post.slow).copy_(cast(Tensor, winner.post.slow)) # Keep slow weights? Or reset? Usually keep base knowledge.
+                
+                cast(Tensor, loser.post.camkii).copy_(cast(Tensor, winner.post.camkii))
+                cast(Tensor, loser.post.pp1).copy_(cast(Tensor, winner.post.pp1))
+                cast(Tensor, loser.post.bdnf).copy_(cast(Tensor, winner.post.bdnf))
+                if hasattr(loser.post, "bdnf_hebb_accum") and hasattr(winner.post, "bdnf_hebb_accum"):
+                    cast(Tensor, loser.post.bdnf_hebb_accum).copy_(
+                        cast(Tensor, winner.post.bdnf_hebb_accum)
+                    )
+                if hasattr(loser.post, "_last_hebb_delta_mag") and hasattr(winner.post, "_last_hebb_delta_mag"):
+                    cast(Tensor, loser.post._last_hebb_delta_mag).copy_(
+                        cast(Tensor, winner.post._last_hebb_delta_mag)
+                    )
             
             # Reset eligibility buffers in Linear
-            cast(Tensor, loser.u_buf).zero_()
-            cast(Tensor, loser.v_buf).zero_()
+            if loser.u_buf is not None:
+                cast(Tensor, loser.u_buf).zero_()
+            if loser.v_buf is not None:
+                cast(Tensor, loser.v_buf).zero_()
             
             return
         except ImportError:
@@ -217,18 +248,20 @@ def _merge_linear_into_(winner: SynapticLinear, loser: SynapticLinear, alpha: fl
     # Fallback / CPU logic
     # winner = alpha * winner + (1-alpha) * loser
     winner.w_slow.mul_(alpha).add_((1.0 - alpha) * loser.w_slow)
-    winner.w_fast.mul_(alpha).add_((1.0 - alpha) * loser.w_fast)
+    if (winner.w_fast is not None) and (loser.w_fast is not None):
+        winner.w_fast.mul_(alpha).add_((1.0 - alpha) * loser.w_fast)
     if (winner.bias is not None) and (loser.bias is not None):
         cast(Tensor, winner.bias).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, loser.bias))
-    cast(Tensor, winner.post.U).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, loser.post.U))
-    cast(Tensor, winner.post.V).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, loser.post.V))
-    cast(Tensor, winner.post.fast).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, loser.post.fast))
-    cast(Tensor, winner.post.slow).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, loser.post.slow))
-    
-    # gate and enzymes: bias toward winner (more stable)
-    cast(Tensor, winner.post.camkii).mul_(0.9).add_(0.1 * cast(Tensor, loser.post.camkii))
-    cast(Tensor, winner.post.pp1).mul_(0.9).add_(0.1 * cast(Tensor, loser.post.pp1))
-    cast(Tensor, winner.post.bdnf).mul_(0.9).add_(0.1 * cast(Tensor, loser.post.bdnf))
+    if (winner.post is not None) and (loser.post is not None):
+        cast(Tensor, winner.post.U).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, loser.post.U))
+        cast(Tensor, winner.post.V).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, loser.post.V))
+        cast(Tensor, winner.post.fast).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, loser.post.fast))
+        cast(Tensor, winner.post.slow).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, loser.post.slow))
+        
+        # gate and enzymes: bias toward winner (more stable)
+        cast(Tensor, winner.post.camkii).mul_(0.9).add_(0.1 * cast(Tensor, loser.post.camkii))
+        cast(Tensor, winner.post.pp1).mul_(0.9).add_(0.1 * cast(Tensor, loser.post.pp1))
+        cast(Tensor, winner.post.bdnf).mul_(0.9).add_(0.1 * cast(Tensor, loser.post.bdnf))
     
     # Clone back into loser (to keep count constant)
     _clone_linear_from_(loser, winner, cfg.clone_noise_linear)
@@ -238,17 +271,21 @@ def _merge_linear_into_(winner: SynapticLinear, loser: SynapticLinear, alpha: fl
 def _clone_linear_from_(dst: SynapticLinear, src: SynapticLinear, noise_scale: float):
     _copy_synaptic_linear_(dst, src)
     _add_noise_(dst.w_slow, noise_scale)
-    _add_noise_(dst.w_fast, noise_scale)
+    if dst.w_fast is not None:
+        _add_noise_(dst.w_fast, noise_scale)
     if dst.bias is not None:
         _add_noise_(cast(Tensor, dst.bias), noise_scale)
     # reset fast Hebbian traces for cloned expert
-    cast(Tensor, dst.post.fast).zero_()
-    cast(Tensor, dst.post.U).mul_(0.5)
-    cast(Tensor, dst.post.V).mul_(0.5)  # keep some eligibility but dampen
+    if dst.post is not None:
+        cast(Tensor, dst.post.fast).zero_()
+        cast(Tensor, dst.post.U).mul_(0.5)
+        cast(Tensor, dst.post.V).mul_(0.5)  # keep some eligibility but dampen
     
     # Reset buffers
-    cast(Tensor, dst.u_buf).zero_()
-    cast(Tensor, dst.v_buf).zero_()
+    if dst.u_buf is not None:
+        cast(Tensor, dst.u_buf).zero_()
+    if dst.v_buf is not None:
+        cast(Tensor, dst.v_buf).zero_()
 
 
 @torch.no_grad()
@@ -328,22 +365,39 @@ class SplitMergeController:
 
     @torch.no_grad()
     def _health(self, layer: SynapticMoE) -> Tensor:
-        # Higher is better: combine (1 - fatigue) with energy in [0,1]
-        fat = cast(Tensor, layer.fatigue).clamp(0, 1)  # EMA utilization proxy
+        # Higher is better: H = utilization * energy
+        util = cast(Tensor, layer.fatigue).clamp(0, 1)  # fatigue tracks EMA of utilization
         eng = cast(Tensor, layer.energy).clamp(0, 1)
-        health = (1.0 - fat) * (0.5 + 0.5 * eng)  # [0,1]
+        health = util * eng  # [0,1]
         return health
 
     @torch.no_grad()
     def _util_weight(self, layer: SynapticMoE, i: int, j: int) -> float:
         if not self.cfg.use_util_weighting:
             return 0.6  # mild bias toward first arg
-        # invert fatigue → utilization proxy
+        # fatigue is utilization proxy
         fat = cast(Tensor, layer.fatigue)
-        u_i = (1.0 - fat[i]).clamp(0, 1)
-        u_j = (1.0 - fat[j]).clamp(0, 1)
-        s = (u_i + u_j).clamp_min(1e-6)
+        u_i = fat[i].clamp(0, 1)
+        u_j = fat[j].clamp(0, 1)
+        s = u_i + u_j
+        if float(s.item()) <= 1e-6:
+            return 0.5
         return float((u_i / s).item())
+
+    @torch.no_grad()
+    def _pick_dead_slots(self, layer: SynapticMoE) -> List[int]:
+        if self.cfg.resets_per_call < 1:
+            return []
+        health = self._health(layer)
+        dead = (health <= self.cfg.reset_health_max).nonzero(as_tuple=False).flatten().tolist()
+        dead_sorted = sorted(dead, key=lambda e: float(health[e].item()))
+        return dead_sorted[: self.cfg.resets_per_call]
+
+    @torch.no_grad()
+    def _pick_reset_sources(self, layer: SynapticMoE, k: int) -> List[int]:
+        health = self._health(layer)
+        order = torch.argsort(health, descending=True).tolist()
+        return order[:k]
 
     @torch.no_grad()
     def _pick_merge_pairs(self, layer: SynapticMoE) -> List[Tuple[int, int]]:
@@ -559,6 +613,22 @@ class SplitMergeController:
                 if self.cfg.verbose:
                     print(f"[SplitMerge] Splitting {list(zip(sources, slots))}")
                 self._split_into_slots(layer, sources, slots, optimizer, global_step)
+            # 3) resets for dead experts (clone from healthiest)
+            dead_slots = self._pick_dead_slots(layer)
+            if dead_slots:
+                sources = self._pick_reset_sources(layer, max(len(dead_slots), 1))
+                reset_sources: List[int] = []
+                reset_slots: List[int] = []
+                for slot in dead_slots:
+                    src = next((s for s in sources if s != slot), None)
+                    if src is None:
+                        continue
+                    reset_sources.append(src)
+                    reset_slots.append(slot)
+                if reset_sources:
+                    if self.cfg.verbose:
+                        print(f"[SplitMerge] Resetting {list(zip(reset_sources, reset_slots))}")
+                    self._split_into_slots(layer, reset_sources, reset_slots, optimizer, global_step)
 
         # Broadcast updated params to all ranks (DDP)
         if self.cfg.ddp_broadcast and dist.is_available() and dist.is_initialized():

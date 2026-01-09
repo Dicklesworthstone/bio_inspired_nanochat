@@ -819,14 +819,38 @@ class SynapticLinear(nn.Module):
     ):
         if self.input_ln is not None:
             x = self.input_ln(x)
-            
-        # Linear pass
-        if self.cfg.enable_hebbian and self.w_fast is not None:
-            W = self.w_slow + self.w_fast
-        else:
-            W = self.w_slow
 
-        y = x @ W
+        # Linear pass (separate slow/fast for calcium/energy gating)
+        fast_gate: Optional[Tensor] = None
+        if self.cfg.enable_hebbian and self.w_fast is not None:
+            y_slow = x @ self.w_slow
+            y_fast = x @ self.w_fast
+
+            # Build a per-sample gate from calcium/energy signals.
+            # Shapes supported: scalar, (N,), or (N, out); others are reduced to (N, 1).
+            def _gate_from_signal(signal: Tensor, out_dim: int, n_rows: int) -> Tensor:
+                sig = signal
+                if sig.ndim == 0:
+                    sig = sig.view(1, 1).expand(n_rows, 1)
+                elif sig.ndim == 1:
+                    if sig.shape[0] == n_rows:
+                        sig = sig.view(n_rows, 1)
+                    else:
+                        sig = sig.mean().view(1, 1).expand(n_rows, 1)
+                elif sig.ndim == 2 and sig.shape[0] == n_rows and sig.shape[1] == out_dim:
+                    return sig
+                else:
+                    sig = sig.reshape(n_rows, -1).mean(dim=1, keepdim=True)
+                return sig
+
+            n_rows, out_dim = y_fast.shape
+            fast_gate = _gate_from_signal(calcium, out_dim, n_rows)
+            energy_gate = _gate_from_signal(energy, out_dim, n_rows)
+            fast_gate = (fast_gate * energy_gate).clamp(0.0, 1.0).to(y_fast.dtype)
+
+            y = y_slow + (y_fast * fast_gate)
+        else:
+            y = x @ self.w_slow
         if self.bias is not None:
             y = y + self.bias
             
@@ -834,7 +858,7 @@ class SynapticLinear(nn.Module):
         if self.cfg.enable_hebbian and self.post is not None:
             y = self.post(y)
         
-            if update_mem:
+            if update_mem and not torch.is_grad_enabled():
                 with torch.no_grad():
                     # Update eligibility traces
                     # u_buf: (in, R) <- x (B, in)
@@ -863,8 +887,12 @@ class SynapticLinear(nn.Module):
                     
                     # We will do similar here but on u_buf/v_buf
                     if self.u_buf is not None and self.v_buf is not None:
-                        self.u_buf.mul_(self.cfg.post_trace_decay).add_(0.05 * u_mean.unsqueeze(-1).expand(-1, self.cfg.rank_eligibility))
-                        self.v_buf.mul_(self.cfg.post_trace_decay).add_(0.05 * v_mean.unsqueeze(0).expand(self.cfg.rank_eligibility, -1))
+                        self.u_buf.mul_(self.cfg.post_trace_decay).add_(
+                            0.05 * u_mean.unsqueeze(-1).expand(-1, self.cfg.rank_eligibility)
+                        )
+                        self.v_buf.mul_(self.cfg.post_trace_decay).add_(
+                            0.05 * v_mean.unsqueeze(0).expand(self.cfg.rank_eligibility, -1)
+                        )
                     
                     # Update Postsynaptic state
                     # We need a vector for per-neuron update?
@@ -873,6 +901,16 @@ class SynapticLinear(nn.Module):
                     
                     self.post.update(y, ca_vec, genes=genes)
                     if self.u_buf is not None and self.v_buf is not None:
+                        # Update fast/slow weight matrices from low-rank traces (Hebbian).
+                        if self.w_fast is not None:
+                            gate_scale = fast_gate.mean() if fast_gate is not None else torch.tensor(
+                                1.0, device=y.device, dtype=y.dtype
+                            )
+                            delta = self.u_buf @ self.v_buf
+                            delta = delta * gate_scale.to(delta.dtype)
+                            self.w_fast.mul_(self.cfg.post_fast_decay).add_(self.cfg.post_fast_lr * delta)
+                            self.w_slow.add_(self.cfg.post_slow_lr * delta)
+
                         self.post.hebb_fast(self.u_buf, self.v_buf)
                         self.post.consolidate(self.u_buf, self.v_buf)
 
