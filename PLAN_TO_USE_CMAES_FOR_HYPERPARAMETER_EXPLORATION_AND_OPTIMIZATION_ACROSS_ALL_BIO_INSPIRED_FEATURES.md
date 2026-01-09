@@ -30,6 +30,103 @@
 
 ---
 
+## 2025-12-18 Status Update: Phase 1 (10D) Run + Sensitivity
+
+This section records the first completed Phase 1 run and a one-at-a-time (OAT) sensitivity sweep of the Phase 1 optimum. All numbers are **seeded and reproducible** (see commands below).
+
+### Setup (Synthetic Copy Objective)
+
+- Script: `scripts/tune_bio_params.py`
+- Objective: next-token copy-half
+  - Generate `x = [data, data]` (random `data` of length `T/2`)
+  - Train with next-token targets, but only score positions that generate the second half from the first:
+    - `y[t] = x[t+1]` for `t in [T/2 - 1, T - 2]`, else `y[t] = -1` (ignored)
+- Model (fast proxy): `sequence_len=256`, `vocab_size=1024`, `n_layer=2`, `n_head=4`, `n_embd=128`
+- Eval hyperparams: `steps=100`, `batch=16`, `lr=1e-3`, `weight_decay=1e-2`, `device=cpu`
+
+### Phase 1 Result (seed=1337)
+
+- Baseline loss: `6.950109`
+- Best loss: `6.949963` (Δ=`+0.000146`, found at gen=54)
+- Artifacts: `runs/cmaes_phase1_10d_2025-12-18_nexttok/` (`progress.jsonl`, `best_params.json`, `tb/`)
+- Command:
+  - `uv run python -m scripts.tune_bio_params optimize --seed 1337 --device cpu --generations 100 --popsize 10 --steps 100 --batch-size 16 --run-dir runs/cmaes_phase1_10d_2025-12-18_nexttok --stagnation-action sigma_reset`
+
+Best parameters (decoded):
+
+```python
+best_config = SynapticConfig(
+    tau_c=0.822500,
+    alpha_c=1.427284,
+    prime_rate=0.007507,
+    unprime_per_release=0.066523,
+    nsf_recover=0.180312,
+    syt1_slope=0.585658,
+    syt7_slope=1.793989,
+    cpx_thresh=1.030521,
+    complexin_bias=0.284844,
+    lambda_loge=0.145837,
+)
+```
+
+### Phase 1 Sensitivity (OAT revert each tuned parameter; seed=1337)
+
+Method: hold 9 params at Phase 1 optimum and revert 1 param back to baseline; measure loss delta.
+
+| Param | Baseline | Best | Revert Loss | Δ Loss vs Best |
+| --- | ---: | ---: | ---: | ---: |
+| `alpha_c` | 0.550000 | 1.427284 | 6.950066 | +0.000103 |
+| `lambda_loge` | 1.000000 | 0.145837 | 6.950064 | +0.000101 |
+| `complexin_bias` | 0.000000 | 0.284844 | 6.949993 | +0.000030 |
+| `prime_rate` | 0.075000 | 0.007507 | 6.949988 | +0.000025 |
+| `cpx_thresh` | 0.550000 | 1.030521 | 6.949982 | +0.000019 |
+| `nsf_recover` | 0.080000 | 0.180312 | 6.949980 | +0.000017 |
+| `syt1_slope` | 8.000000 | 0.585658 | 6.949978 | +0.000015 |
+| `syt7_slope` | 3.000000 | 1.793989 | 6.949976 | +0.000013 |
+| `unprime_per_release` | 0.050000 | 0.066523 | 6.949975 | +0.000012 |
+| `tau_c` | 0.850000 | 0.822500 | 6.949961 | -0.000002 |
+
+Quick bar plot (Δ Loss vs Best; larger = more sensitive):
+
+```
+alpha_c            ███████████  1.03e-4
+lambda_loge        ██████████   1.01e-4
+complexin_bias     ███          3.01e-5
+prime_rate         ██           2.46e-5
+cpx_thresh         █            1.91e-5
+nsf_recover        █            1.69e-5
+syt1_slope         █            1.54e-5
+syt7_slope         █            1.27e-5
+unprime_per_release█            1.16e-5
+tau_c              (baseline slightly better) -2.00e-6
+```
+
+Interpretation (tentative): the 100-step synthetic objective appears very flat at this model scale; deltas are O(1e-4). Before scaling up to Phase 2 / 48D, consider strengthening the proxy signal (more steps, easier copy variant, or a fixed evaluation set) so CMA-ES is not dominated by noise.
+
+### Phase 1 Go/No-Go (for Phase 2 / 48D)
+
+**Decision**: **No-go (as-is)** for scaling to 48D on this proxy.
+
+**Rationale**:
+
+- The observed improvement on the proxy is **~1.46e-4 absolute** on seed=1337 (≈0.002% relative), while seed-to-seed spread on best loss is **~2.10e-3 std** (10–15× larger than the observed gain).
+- OAT sensitivity deltas are also O(1e-4), suggesting the proxy is currently **near-flat** with this `steps=100` training budget and small model proxy.
+- Stagnation triggers fired essentially continuously after the warm-up window (sigma resets), consistent with a search landscape dominated by noise/plateaus at this budget.
+
+**Thresholds (proposed for Phase 2 readiness)**:
+
+- Proxy should show **≥0.5% relative improvement** vs baseline on at least one seed (or **≥3σ** above measured evaluation noise), **and**
+- OAT sensitivity should show at least a couple parameters with **Δloss ≥ 1e-3** (so the search space has measurable signal at this budget), **and**
+- Short-run seed variance should be low enough that `k=1` seed per candidate is not dominated by noise (or we explicitly budget for multi-seed evaluation).
+
+**Next actions before Phase 2**:
+
+- Strengthen the proxy objective signal:
+  - Increase `steps` (or implement learning-curve extrapolation / proxy LCE), and/or
+  - Use a fixed evaluation set (reduce per-eval noise), and/or
+  - Adjust synthetic task difficulty (e.g., shorter `seq_len`, smaller `vocab_size`, explicit delimiter/copy marker).
+- Consider multi-seed evaluation or a two-stage scheme (cheap screen → expensive confirm) to mitigate noise.
+
 ## PART 1: The Hyperparameter Landscape
 
 ### 1.1 Current State Analysis
@@ -1580,6 +1677,39 @@ fitnesses = ray.get(futures)
 4. Repeat until converged or budget exhausted
 
 **Advantage**: Can make Go/No-Go decisions mid-flight.
+
+---
+
+## Go/No-Go Checkpoint Update Template
+
+Use this template when pausing at a budget checkpoint (e.g., every 20-50 generations).
+It is referenced by `scripts/tune_bio_params.py` and aligned with the cost log fields.
+
+```
+Checkpoint: <run_id or run_dir>
+Date: <YYYY-MM-DD>
+Generations: <start>-<end>
+Best Loss (start→end): <v0> → <v1>  (Δ=<v1-v0>, <percent>%)
+Stagnation Window: <gens>  Threshold: <min_improve_frac>
+
+Compute Budget:
+  GPU Count: <N>
+  GPU Hours (this window): <hours>
+  GPU Hours (total): <hours_total>
+  Cost per GPU-hr: <$>
+  Cost (this window): <$>
+  Cost (total): <$>
+
+Proxy/Eval Settings:
+  Eval Steps: <steps>  Proxy: <on/off>  Proxy Mode: <mean_last|lce>
+
+Decision:
+  ☐ GO (continue)   ☐ NO-GO (stop)   ☐ ADJUST (tweak sigma/popsize/steps)
+
+Notes / Rationale:
+  - <Key observations>
+  - <Risks / uncertainties>
+```
 
 ---
 
