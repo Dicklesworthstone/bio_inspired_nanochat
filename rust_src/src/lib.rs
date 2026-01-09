@@ -310,7 +310,7 @@ impl Tokenizer {
         // Helper: refill `buf` with up to `buffer_size` strings from the Python iterator.
         // Returns Ok(true) if the iterator is exhausted, Ok(false) otherwise.
         let refill = |buf: &mut Vec<String>| -> PyResult<bool> {
-            pyo3::Python::with_gil(|py| {
+            pyo3::Python::attach(|py| {
                 buf.clear();
                 let it = py_iter.bind(py);
                 loop {
