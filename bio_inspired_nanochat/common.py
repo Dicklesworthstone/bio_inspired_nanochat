@@ -5,10 +5,23 @@ Common utilities for bio_inspired_nanochat.
 import os
 import re
 import logging
+import hashlib
+import math
+import shutil
+import time
 import urllib.request
+import urllib.error
 from bio_inspired_nanochat.torch_imports import torch
 import torch.distributed as dist
 from filelock import FileLock
+from decouple import Config as DecoupleConfig, RepositoryEnv
+
+# Initialize decouple config (project-local .env; must not be overwritten)
+decouple_config = DecoupleConfig(RepositoryEnv(".env"))
+
+DEFAULT_DOWNLOAD_TIMEOUT_SEC = float(decouple_config("NANOCHAT_DOWNLOAD_TIMEOUT_SEC", default="30.0"))
+DEFAULT_DOWNLOAD_CHUNK_SIZE = int(decouple_config("NANOCHAT_DOWNLOAD_CHUNK_SIZE_BYTES", default=str(1024 * 1024)))
+DEFAULT_DOWNLOAD_MAX_ATTEMPTS = int(decouple_config("NANOCHAT_DOWNLOAD_MAX_ATTEMPTS", default="3"))
 
 class ColoredFormatter(logging.Formatter):
     """Custom formatter that adds colors to log messages."""
@@ -49,12 +62,8 @@ logger = logging.getLogger(__name__)
 
 def get_base_dir():
     # co-locate nanochat intermediates with other cached data in ~/.cache (by default)
-    if os.environ.get("NANOCHAT_BASE_DIR"):
-        nanochat_dir = os.environ.get("NANOCHAT_BASE_DIR")
-    else:
-        home_dir = os.path.expanduser("~")
-        cache_dir = os.path.join(home_dir, ".cache")
-        nanochat_dir = os.path.join(cache_dir, 'bio_inspired_nanochat')
+    default_dir = os.path.join(os.path.expanduser("~"), ".cache", "bio_inspired_nanochat")
+    nanochat_dir = decouple_config("NANOCHAT_BASE_DIR", default=default_dir)
     os.makedirs(nanochat_dir, exist_ok=True)
     return nanochat_dir
 
@@ -65,6 +74,7 @@ def download_file_with_lock(url, filename, postprocess_fn=None):
     """
     base_dir = get_base_dir()
     file_path = os.path.join(base_dir, filename)
+    temp_path = file_path + ".tmp"
     lock_path = file_path + ".lock"
 
     if os.path.exists(file_path):
@@ -78,15 +88,33 @@ def download_file_with_lock(url, filename, postprocess_fn=None):
         if os.path.exists(file_path):
             return file_path
 
-        # Download the content as bytes
         print(f"Downloading {url}...")
-        with urllib.request.urlopen(url) as response:
-            content = response.read() # bytes
+        timeout_sec = DEFAULT_DOWNLOAD_TIMEOUT_SEC
+        chunk_size = DEFAULT_DOWNLOAD_CHUNK_SIZE
 
-        # Write to local file
-        with open(file_path, 'wb') as f:
-            f.write(content)
-        print(f"Downloaded to {file_path}")
+        for attempt in range(1, DEFAULT_DOWNLOAD_MAX_ATTEMPTS + 1):
+            try:
+                with urllib.request.urlopen(url, timeout=timeout_sec) as response:
+                    with open(temp_path, "wb") as f:
+                        shutil.copyfileobj(response, f, length=chunk_size)
+                os.replace(temp_path, file_path)
+                print(f"Downloaded to {file_path}")
+                break
+            except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as e:
+                # HTTP errors like 403/404 are almost never transient; don't retry.
+                if isinstance(e, urllib.error.HTTPError) and (400 <= e.code < 500):
+                    raise
+                if attempt >= DEFAULT_DOWNLOAD_MAX_ATTEMPTS:
+                    raise
+                print(f"Download attempt {attempt}/{DEFAULT_DOWNLOAD_MAX_ATTEMPTS} failed: {e}")
+                time.sleep(2**attempt)
+            finally:
+                # Best-effort cleanup of partial temp file
+                try:
+                    if os.path.exists(temp_path):
+                        os.remove(temp_path)
+                except OSError:
+                    pass
 
         # Run the postprocess function if provided
         if postprocess_fn is not None:
@@ -177,7 +205,7 @@ def compute_init(device_type="cuda"): # cuda|cpu|mps
 
 def compute_cleanup():
     """Companion function to compute_init, to clean things up before script exit"""
-    if is_ddp():
+    if is_ddp() and dist.is_available() and dist.is_initialized():
         dist.destroy_process_group()
 
 class DummyWandb:
@@ -188,3 +216,117 @@ class DummyWandb:
         pass
     def finish(self):
         pass
+
+
+def _stable_seed_u64(seed: int, *, salt: str) -> int:
+    """Return a deterministic 64-bit seed derived from (seed, salt).
+
+    Note: Python's built-in hash() is intentionally randomized across processes, so we use a
+    stable hash (blake2b) to ensure reproducibility across runs and machines.
+    """
+    seed_u64 = int(seed) & 0xFFFFFFFFFFFFFFFF
+    digest = hashlib.blake2b(salt.encode("utf-8"), digest_size=8).digest()
+    salt_u64 = int.from_bytes(digest, byteorder="little", signed=False)
+    return (seed_u64 ^ salt_u64) & 0xFFFFFFFFFFFFFFFF
+
+
+def _eca_rule_table(rule: int) -> "torch.Tensor":
+    """Return uint8 lookup table of shape (8,) for an elementary CA rule."""
+    if rule < 0 or rule > 255:
+        raise ValueError(f"ECA rule must be in [0, 255], got {rule}")
+    return torch.tensor([(rule >> i) & 1 for i in range(8)], dtype=torch.uint8, device="cpu")
+
+
+def _eca_bits_grid(
+    *,
+    steps: int,
+    width: int,
+    rule: int,
+    seed: int,
+    salt: str,
+) -> "torch.Tensor":
+    """Generate a (steps, width) uint8 grid from a 1D elementary cellular automaton.
+
+    The initial state is seeded deterministically from (seed, salt) and uses periodic
+    (wrap-around) boundary conditions.
+    """
+    if steps <= 0:
+        raise ValueError(f"steps must be > 0, got {steps}")
+    if width <= 0:
+        raise ValueError(f"width must be > 0, got {width}")
+
+    rule_table = _eca_rule_table(rule)
+    g = torch.Generator(device="cpu")
+    g.manual_seed(_stable_seed_u64(seed, salt=salt) % (2**63))
+
+    state = (torch.rand(width, generator=g, device="cpu") > 0.5).to(torch.uint8)
+    if int(state.sum().item()) == 0:
+        state[width // 2] = 1
+
+    grid = torch.empty((steps, width), dtype=torch.uint8, device="cpu")
+    for t in range(steps):
+        grid[t].copy_(state)
+        left = torch.roll(state, shifts=1, dims=0)
+        right = torch.roll(state, shifts=-1, dims=0)
+        pattern = (left << 2) | (state << 1) | right
+        state = rule_table[pattern.to(torch.int64)]
+    return grid
+
+
+@torch.no_grad()
+def ca_init_weight_(
+    weight: "torch.Tensor",
+    *,
+    rule: int,
+    seed: int,
+    salt: str,
+    layout: str = "out_in",
+    eps: float = 1e-6,
+) -> None:
+    """Initialize `weight` using a variance-corrected CA pattern.
+
+    - Supports elementary CA rules 0..255 (we use 30 and 116 by convention).
+    - Mean-centers and scales to fan_avg variance: Var = 1 / ((fan_in + fan_out)/2).
+    - Generates the CA on CPU for determinism and to avoid per-step GPU kernel launch overhead.
+
+    Args:
+        weight: Tensor to initialize (ndim >= 2).
+        rule: Wolfram ECA rule (e.g., 30 or 116).
+        seed: Global init seed.
+        salt: Stable per-tensor salt (e.g., parameter-qualified name).
+        layout:
+            - "out_in": interpret weight as (fan_out, fan_in) after flattening dims 1..N.
+            - "in_out": interpret 2D weight as (fan_in, fan_out) (used by SynapticLinear).
+        eps: Numerical epsilon for variance scaling.
+    """
+    if weight.ndim < 2:
+        raise ValueError(f"CA init requires weight.ndim >= 2, got {weight.ndim}")
+    if layout not in ("out_in", "in_out"):
+        raise ValueError(f"layout must be 'out_in' or 'in_out', got {layout!r}")
+    if layout == "in_out" and weight.ndim != 2:
+        raise ValueError(f"layout='in_out' requires a 2D tensor, got weight.ndim={weight.ndim}")
+
+    if layout == "out_in":
+        fan_out = int(weight.shape[0])
+        fan_in = int(weight.numel() // fan_out)
+        transpose = False
+    else:
+        fan_in = int(weight.shape[0])
+        fan_out = int(weight.shape[1])
+        transpose = True
+
+    bits = _eca_bits_grid(steps=fan_out, width=fan_in, rule=rule, seed=seed, salt=salt)
+    vals = bits.to(torch.float32).mul_(2.0).sub_(1.0)  # {0,1} -> {-1,+1}
+    vals.sub_(vals.mean())
+    var = vals.var(unbiased=False)
+    if not torch.isfinite(var) or float(var.item()) <= 0.0:
+        raise ValueError(f"CA init produced degenerate variance for {salt!r}: var={var}")
+
+    fan_avg = 0.5 * (fan_in + fan_out)
+    target_var = 1.0 / float(fan_avg)
+    vals.mul_(math.sqrt(target_var) / (torch.sqrt(var + float(eps)) + float(eps)))
+
+    if transpose:
+        vals = vals.transpose(0, 1).contiguous()
+    vals = vals.reshape(weight.shape).to(device=weight.device, dtype=weight.dtype)
+    weight.copy_(vals)

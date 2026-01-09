@@ -8,10 +8,23 @@ Two implementations are available:
 
 import os
 import copy
+import pickle # nosec B403
 from functools import lru_cache
-from typing import Any, Iterable, Sequence, cast
+from typing import Any, cast
 
-from bio_inspired_nanochat.torch_imports import torch
+import tiktoken
+from tokenizers import Tokenizer as HFTokenizer
+from tokenizers import pre_tokenizers, decoders, Regex
+from tokenizers.models import BPE
+from tokenizers.trainers import BpeTrainer
+
+try:
+    import rustbpe as _rustbpe
+except ImportError:
+    rustbpe: Any | None = None
+else:
+    rustbpe = cast(Any, _rustbpe)
+
 
 SPECIAL_TOKENS = [
     # every document begins with the Beginning of Sequence (BOS) token that delimits documents
@@ -34,10 +47,6 @@ SPLIT_PATTERN = r"""'(?i:[sdmt]|ll|ve|re)|[^\r\n\p{L}\p{N}]?+\p{L}+|\p{N}{1,2}| 
 
 # -----------------------------------------------------------------------------
 # Generic GPT-4-style tokenizer based on HuggingFace Tokenizer
-from tokenizers import Tokenizer as HFTokenizer
-from tokenizers import pre_tokenizers, decoders, Regex
-from tokenizers.models import BPE
-from tokenizers.trainers import BpeTrainer
 
 class HuggingFaceTokenizer:
     """Light wrapper around HuggingFace Tokenizer for some utilities"""
@@ -153,9 +162,6 @@ class HuggingFaceTokenizer:
 
 # -----------------------------------------------------------------------------
 # Tokenizer based on rustbpe + tiktoken combo
-import pickle # nosec B403
-import rustbpe
-import tiktoken
 
 class RustBPETokenizer:
     """Light wrapper around tiktoken (for efficient inference) but train with rustbpe"""
@@ -166,6 +172,10 @@ class RustBPETokenizer:
 
     @classmethod
     def train_from_iterator(cls, text_iterator, vocab_size):
+        if rustbpe is None:
+            raise ImportError(
+                "rustbpe is not installed. Build the extension via `uv run maturin develop`."
+            )
         # 1) train using rustbpe
         tokenizer = rustbpe.Tokenizer()
         # the special tokens are inserted later in __init__, we don't train them here
