@@ -42,7 +42,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, HTMLResponse, FileResponse
 from pydantic import BaseModel
-from typing import List, Optional, AsyncGenerator
+from typing import Any, AsyncGenerator, ContextManager, List, Optional, Protocol, Sequence, cast
 from dataclasses import dataclass
 from contextlib import nullcontext
 from bio_inspired_nanochat.common import compute_init, autodetect_device_type
@@ -87,14 +87,20 @@ device_type = autodetect_device_type() if args.device_type == "" else args.devic
 ddp, ddp_rank, ddp_local_rank, ddp_world_size, device = compute_init(device_type)
 ptdtype = torch.float32 if args.dtype == 'float32' else torch.bfloat16
 
+class TokenizerLike(Protocol):
+    def encode_special(self, text: str) -> int: ...
+    def get_bos_token_id(self) -> int: ...
+    def encode(self, text: str, *args: Any, **kwargs: Any) -> list[int]: ...
+    def decode(self, ids: Sequence[int]) -> str: ...
+
 @dataclass
 class Worker:
     """A worker with a model loaded on a specific GPU."""
     gpu_id: int
     device: torch.device
     engine: Engine
-    tokenizer: object
-    autocast_ctx: torch.amp.autocast
+    tokenizer: TokenizerLike
+    autocast_ctx: ContextManager[None]
 
 class WorkerPool:
     """Pool of workers, each with a model replica on a different GPU."""
@@ -192,7 +198,7 @@ def validate_chat_request(request: ChatRequest):
 
     # Validate role values
     for i, message in enumerate(request.messages):
-        if message.role not in ["user", "assistant"]:
+        if message.role not in ["user", "assistant", "system"]:
             raise HTTPException(
                 status_code=400,
                 detail=f"Message {i} has invalid role. Must be 'user', 'assistant', or 'system'"
@@ -234,7 +240,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
-    CORSMiddleware,
+    cast(Any, CORSMiddleware),
     allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
@@ -337,8 +343,31 @@ async def chat_completions(request: ChatRequest):
         assistant_start = worker.tokenizer.encode_special("<|assistant_start|>")
         assistant_end = worker.tokenizer.encode_special("<|assistant_end|>")
 
+        # The tokenizer format only supports user/assistant turns. Preserve system messages by
+        # merging them into the next user message (or injecting a synthetic user message if needed).
+        merged_messages: List[ChatMessage] = []
+        system_buf: List[str] = []
+        for msg in request.messages:
+            if msg.role == "system":
+                system_buf.append(msg.content)
+                continue
+            if system_buf and msg.role == "user":
+                merged_messages.append(
+                    ChatMessage(role="user", content="\n\n".join(system_buf + [msg.content]))
+                )
+                system_buf = []
+                continue
+            if system_buf:
+                merged_messages.append(
+                    ChatMessage(role="user", content="\n\n".join(system_buf))
+                )
+                system_buf = []
+            merged_messages.append(msg)
+        if system_buf:
+            merged_messages.append(ChatMessage(role="user", content="\n\n".join(system_buf)))
+
         conversation_tokens = [bos]
-        for message in request.messages:
+        for message in merged_messages:
             if message.role == "user":
                 conversation_tokens.append(user_start)
                 conversation_tokens.extend(worker.tokenizer.encode(message.content))

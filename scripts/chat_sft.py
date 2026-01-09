@@ -16,11 +16,13 @@ import wandb
 import torch
 import torch.distributed as dist
 from contextlib import nullcontext
+import inspect
 
 from bio_inspired_nanochat.common import compute_init, compute_cleanup, get_base_dir, print0, DummyWandb, autodetect_device_type
 from bio_inspired_nanochat.checkpoint_manager import load_model
 from bio_inspired_nanochat.checkpoint_manager import save_checkpoint
 from bio_inspired_nanochat.engine import Engine
+from bio_inspired_nanochat.report import get_report
 from scripts.chat_eval import run_chat_eval
 
 from tasks.common import TaskMixture
@@ -79,6 +81,7 @@ model, tokenizer, meta = load_model(source, device, phase="train", model_tag=mod
 orig_model = model # original, uncompiled model
 # model = torch.compile(model, dynamic=True) # doesn't work super well because of variable lengths of inputs
 engine = Engine(model, tokenizer) # will be used for inline model evaluation only
+supports_train_mode = "train_mode" in inspect.signature(model.forward).parameters
 
 # -----------------------------------------------------------------------------
 # Task data mixture we'll train on
@@ -184,7 +187,11 @@ for step in range(num_iterations):
         for _ in range(eval_steps):
             val_inputs, val_targets = next(val_iter)
             with torch.no_grad(), autocast_ctx:
-                result = model(val_inputs, val_targets, train_mode=False)
+                result = (
+                    model(val_inputs, val_targets, train_mode=False)
+                    if supports_train_mode
+                    else model(val_inputs, val_targets)
+                )
                 if isinstance(result, tuple):
                     logits, loss = result
                 else:
@@ -225,7 +232,11 @@ for step in range(num_iterations):
     for micro_step in range(grad_accum_steps):
         train_inputs, train_targets = next(train_iter)
         with autocast_ctx:
-            result = model(train_inputs, train_targets, train_mode=True)
+            result = (
+                model(train_inputs, train_targets, train_mode=True)
+                if supports_train_mode
+                else model(train_inputs, train_targets)
+            )
             if isinstance(result, tuple):
                 logits, loss = result
             else:
@@ -283,7 +294,6 @@ if master_process:
     print(f"✅ Saved model checkpoint to {checkpoint_dir}")
 
 # Log to report
-from bio_inspired_nanochat.report import get_report
 get_report().log(section="Chat SFT", data=[
     user_config, # CLI args
     {

@@ -26,6 +26,7 @@ import torch.distributed as dist
 from bio_inspired_nanochat.common import compute_init, compute_cleanup, print0, get_base_dir, DummyWandb
 from bio_inspired_nanochat.checkpoint_manager import save_checkpoint, load_model
 from bio_inspired_nanochat.engine import Engine
+from bio_inspired_nanochat.report import get_report
 from tasks.gsm8k import GSM8K
 
 # RL hyperparameters
@@ -349,7 +350,6 @@ for step in range(num_steps):
         print(f"✅ Saved model checkpoint to {checkpoint_dir}")
 
 # Log to report
-from bio_inspired_nanochat.report import get_report
 get_report().log(section="Chat RL", data=[
     user_config, # CLI args
 ])

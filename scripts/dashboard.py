@@ -1,20 +1,26 @@
-import streamlit as st
-import os
 import glob
-import time
+import importlib
+import importlib.util
 import json
+import os
+import time
+from typing import Any, cast
+
 import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
-import plotly.express as px
-from plotly.subplots import make_subplots
 
-# Check if streamlit is installed
-try:
-    import streamlit
-except ImportError:
-    print("Streamlit is not installed. Please install it with: uv add streamlit")
-    exit(1)
+def _require(module: str) -> Any:
+    if importlib.util.find_spec(module) is None:
+        raise SystemExit(
+            f"Missing optional dependency `{module}`. Install the viz extra: `uv sync --extra viz`."
+        )
+    return importlib.import_module(module)
+
+
+st = cast(Any, _require("streamlit"))
+go = cast(Any, _require("plotly.graph_objects"))
+px = cast(Any, _require("plotly.express"))
+make_subplots = cast(Any, _require("plotly.subplots")).make_subplots
 
 st.set_page_config(
     page_title="Bio-Nanochat Dashboard",
@@ -697,7 +703,7 @@ elif page == "Interactive Hebbian Learning":
     
     The model uses a "Fast Weight" matrix $H_{fast}$ to store associations from the recent context.
     
-    *   **Rule**: $H_{fast} \leftarrow \\rho H_{fast} + \eta (U \cdot V^T)$
+    *   **Rule**: $H_{fast} \\leftarrow \\rho H_{fast} + \\eta (U \\cdot V^T)$
     *   **Intuition**: "Neurons that fire together, wire together."
     """)
     
