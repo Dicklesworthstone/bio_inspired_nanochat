@@ -2,8 +2,8 @@
 
 > **"What if a Transformer had a metabolism?"**
 
-[![Python 3.13+](https://img.shields.io/badge/python-3.13%2B-blue.svg)](https://www.python.org/downloads/)
-[![PyTorch 2.5+](https://img.shields.io/badge/PyTorch-2.5%2B-red.svg)](https://pytorch.org/)
+[![Python 3.14](https://img.shields.io/badge/python-3.14-blue.svg)](https://www.python.org/downloads/)
+[![PyTorch 2.9+](https://img.shields.io/badge/PyTorch-2.9%2B-red.svg)](https://pytorch.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 This is a research fork of [Nanochat](https://github.com/karpathy/nanochat) that replaces standard static weights with **computational analogs of synaptic proteins**, implementing biologically-grounded mechanisms for working memory, attention modulation, and neural architecture search.
@@ -57,7 +57,7 @@ We map specific cellular mechanisms from the [Synaptic Cleft](https://en.wikiped
 **The Effect**: A physically-grounded **frequency penalty**. The model literally *cannot* attend to the same token endlessly. It gets "bored" (depleted) and naturally shifts focus to novel information.
 
 **Implementation**: Three backends for production use:
-- **Triton GPU Kernel** (`bio_inspired_nanochat/triton_kernels/presyn_fused.py`): 375-line fused kernel, 3 passes over attention
+- **Triton GPU Kernel** (`bio_inspired_nanochat/kernels/presyn_fused.py`): 375-line fused kernel, 3 passes over attention
 - **Rust CPU Kernel** (`rust_src/src/presyn.rs`): PyO3-native implementation for CPU inference
 - **Python Reference** (`tests/test_rust_kernels.py`): 130-line pure Python for validation
 
@@ -129,6 +129,8 @@ Beyond the core mechanisms, we're systematically implementing 11 additional biol
 6. **Synaptic Genome Embedding** - Low-dim Xi per expert decoded to kinetic parameters
 7. **CaMKII/PP1 Bistable Latch** - Hill-term ODE with hysteresis for consolidation
 8. **Cellular Automata Initialization** - Rule 30/116 variance-corrected weight init
+
+**Synaptic Genome Embedding (Xi):** Each MoE expert owns a compact genome vector `Xi` (size `SynapticConfig.xi_dim`). A decoder maps `Xi → phenotype` scalars that control expert-specific kinetics (e.g., metabolism EMA rates and CaMKII/PP1 plasticity gains). This keeps per-expert learnable parameters at `O(num_experts · xi_dim)` rather than `O(num_experts · num_kinetics)` if every expert had its own full kinetic parameter set.
 
 ### Experimental
 9. **Cross-Pollination with Gauge-Reversible Networks** - Integration of measure-preserving ideas
@@ -244,18 +246,26 @@ See [PLAN_TO_USE_CMAES_FOR_HYPERPARAMETER_EXPLORATION_AND_OPTIMIZATION_ACROSS_AL
 ### Quick Start with CMA-ES
 
 ```bash
-# Phase 1: Optimize top-10 critical parameters
-uv run scripts/tune_bio_params.py --phase=1 --population=20 --generations=50
+# (Recommended) Sanity gate before expensive runs
+uv run python -m scripts.tune_bio_params sanity --seed 1 --device cpu
 
-# Phase 2: Optimize calcium subgroup with Phase 1 winners
-uv run scripts/tune_bio_params.py --phase=2 --subgroup=calcium
+# Phase 1: Optimize top-10 parameters (10D)
+uv run python -m scripts.tune_bio_params optimize \
+  --seed 1337 --device cuda --generations 50 --popsize 10 \
+  --run-dir runs/cmaes/top10
+
+# Resume from the latest checkpoint
+uv run python -m scripts.tune_bio_params optimize --run-dir runs/cmaes/top10 --resume
+
+# Stagnation / early-stop policy (defaults: 20 gens, <1% improvement, action=stop)
+uv run python -m scripts.tune_bio_params optimize \
+  --run-dir runs/cmaes/top10 --stagnation-action sigma_reset
 ```
 
 This will:
-- ✅ Run distributed evaluation across available GPUs
-- ✅ Log covariance evolution and convergence to TensorBoard
-- ✅ Save per-generation checkpoints for resume safety
-- ✅ Emit best parameters to `best_synaptic_config.json`
+- ✅ Support `torchrun --distributed` for multi-GPU population eval (rank0 controller)
+- ✅ Save `progress.jsonl`, `best_params.json`, and `es_latest.pkl` (+ per-gen checkpoints) under `--run-dir`
+- ✅ Log scalars/histograms/covariance heatmap to TensorBoard under `--run-dir/tb/`
 
 ---
 
@@ -266,7 +276,7 @@ Bio-Inspired Nanochat is optimized for **dual RTX 4090** training/inference with
 ### Kernel Backends
 
 1. **Triton GPU Kernels** (Production)
-   - Location: `bio_inspired_nanochat/triton_kernels/presyn_fused.py`
+   - Location: `bio_inspired_nanochat/kernels/presyn_fused.py`
    - 375-line fused presynaptic dynamics kernel
    - 3 passes over attention (optimization opportunity identified)
    - FlexAttention compatibility for O(N) memory vs O(N²)
@@ -300,6 +310,9 @@ Target: **90%+ GPU utilization** on dual 4090s for both training and inference.
 
 We're implementing systematic bio vs vanilla evaluation with statistical rigor:
 
+- **Benchmark matrix design**: `docs/eval_benchmark_matrix.md`
+- **Standardized run harness**: `python -m scripts.eval_matrix --help`
+
 ### Benchmark Matrix
 
 **Quality Metrics:**
@@ -330,8 +343,15 @@ All benchmarks are:
 
 Example:
 ```bash
-# Run full benchmark matrix with 3 seeds
-uv run scripts/benchmark_matrix.py --seeds=3 --output=results.csv
+# Run CORE benchmark evaluation
+uv run scripts/base_eval.py
+```
+
+If the eval bundle download fails (e.g. HTTP 403), point the script at a local bundle or a mirror:
+```bash
+uv run python -m scripts.base_eval --eval-bundle-zip /path/to/eval_bundle.zip
+# or
+uv run python -m scripts.base_eval --eval-bundle-dir /path/to/eval_bundle/
 ```
 
 See our evaluation roadmap in `.beads/` (Epic: `bio_inspired_nanochat-gzm`).
@@ -349,7 +369,10 @@ Every aspect of the synapse can be tuned via `SynapticConfig`. These parameters 
 | `tau_rrp` | 40.0 | **Vesicle Refill** | Recovery time from fatigue. Higher = prone to "writer's block" if repetitive. |
 | `alpha_ca` | 0.25 | **Calcium Influx** | Sensitivity to attention scores. Higher = easier to trigger release. |
 | `syt_fast_kd` | 0.4 | **Synaptotagmin $K_d$** | The threshold for rapid release. Lower = more trigger-happy. |
-| `stochastic_train_frac`| 0.1 | **Thermal Noise** | Randomness in vesicle release. Prevents overfitting to specific logits. |
+| `stochastic_train_frac`| 0.12 | **Thermal Noise** | Fraction of query positions that use stochastic vesicle release during training. |
+| `stochastic_mode`| `normal_reparam` | **Sampler** | Fast stochastic sampling mode (`normal_reparam`, `gumbel_sigmoid_ste`, or `straight_through`). |
+| `stochastic_tau`| 1.0 | **Temperature** | Relaxation temperature for `gumbel_sigmoid_ste` (lower = harder). |
+| `stochastic_count_cap`| 8 | **Count Cap** | Max vesicles per edge for stochastic sampling (higher = more compute). |
 | `tau_buf` | 4.0 | **Calcium Buffer** | Buffering timescale. Higher = slower calcium dynamics. |
 | `tau_prime` | 5.0 | **SNARE Priming** | Vesicle priming timescale. Affects release readiness. |
 
@@ -400,7 +423,7 @@ python -m scripts.base_train --syn_cfg.tau_rrp=100.0 --syn_cfg.energy_cost_rel=0
 
 ### Prerequisites
 
-- **Python**: 3.13-3.14 (3.13 recommended)
+- **Python**: 3.14
 - **UV**: Latest version for fast dependency resolution
 - **GPU**: NVIDIA with CUDA 12.4+ (dual RTX 4090 recommended)
 - **RAM**: 32GB+ for large models
@@ -413,7 +436,7 @@ git clone https://github.com/Dicklesworthstone/bio_inspired_nanochat.git
 cd bio_inspired_nanochat
 
 # Create environment with UV
-uv venv .venv --python 3.13
+uv venv .venv --python 3.14.2
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Install dependencies (GPU)
@@ -425,6 +448,28 @@ uv sync --extra cpu
 # Build Rust kernels (optional, for CPU acceleration)
 uv run maturin develop
 ```
+
+### 1.5. Quality Gate (recommended)
+
+Before pushing changes, run the fast quality gate on the files you touched:
+
+```bash
+# Staged changes (pre-commit style)
+uv run python -m scripts.quality_gate --mode staged
+
+# Branch diff vs main (pre-push style)
+uv run python -m scripts.quality_gate --mode branch --base origin/main
+```
+
+What it enforces:
+
+- `uv run ruff check --fix --unsafe-fixes` (and fails if it had to modify files)
+- `uvx ty check` (type errors fail; warnings are allowed)
+- UBS resource-lifecycle scan (runs via `ubs --category=resource-lifecycle --staged` / `--diff` where possible; branch/CI may scan the whole repo)
+
+Exemptions: if a tool reports a false positive, prefer a narrow, documented suppression
+(`# noqa: ...`, `# type: ignore[...]`, or a scoped `ty.toml` exclusion) and create a Beads issue
+explaining why the exemption is correct.
 
 ### 2. Grow a Brain
 
@@ -442,7 +487,10 @@ python -m scripts.base_train \
 
 **Key Training Flags:**
 - `--synapses=1` - Enable all bio mechanisms (0 = vanilla transformer)
-- `--syn_cfg.stochastic_train_frac=0.1` - Enable stochastic vesicle release
+- `--syn_cfg.stochastic_train_frac=0.12` - Enable stochastic vesicle release
+- `--syn_cfg.stochastic_mode=normal_reparam` - Fast stochastic release (Gaussian approximation)
+- `--syn_cfg.stochastic_mode=gumbel_sigmoid_ste` - Discrete Binomial sampling via Gumbel-Sigmoid straight-through
+- `--syn_cfg.stochastic_tau=1.0` - Stochastic relaxation temperature (lower = harder)
 - `--syn_cfg.bdnf_gamma=0.1` - Enable BDNF metaplasticity
 - `--splitmerge_every=N` - Expert lifecycle interval (0 = disable)
 
@@ -463,17 +511,14 @@ tensorboard --logdir runs/
 
 ```bash
 # Launch web chat interface
-python -m scripts.chat_web --checkpoint runs/latest/model.pt
+python -m scripts.chat_web --source sft --port 8000
 ```
 
 ### 5. Benchmark Bio vs Vanilla
 
 ```bash
-# Run ablation study
-uv run scripts/benchmark_matrix.py \
-    --configs vanilla,bio-all,stochastic,bdnf \
-    --seeds 3 \
-    --output results/ablation.csv
+# Run CORE benchmark evaluation
+uv run scripts/base_eval.py
 ```
 
 ---
@@ -487,18 +532,18 @@ uv run scripts/benchmark_matrix.py \
 *   **`bio_inspired_nanochat/neuroscore.py`** 🏆 **The Credit Score**: Expert fitness metrics (Efficiency, Specialization, Resilience)
 
 ### High-Performance Kernels
-*   **`bio_inspired_nanochat/triton_kernels/presyn_fused.py`** 🔥 **GPU Kernel**: 375-line Triton implementation
+*   **`bio_inspired_nanochat/kernels/presyn_fused.py`** 🔥 **GPU Kernel**: 375-line Triton implementation
 *   **`rust_src/src/presyn.rs`** 🦀 **CPU Kernel**: PyO3-native Rust implementation
 *   **`rust_src/src/moe.rs`** 🦀 **MoE Kernel**: Expert routing and metabolism
 *   **`tests/test_rust_kernels.py`** ✅ **Reference**: Python validation implementation
 
 ### Visualization & Analysis
 *   **`bio_inspired_nanochat/neuroviz.py`** 📸 **The MRI**: Visualizations of brain internal state
-*   **`scripts/visualize_synaptic_state.py`** 📊 **State Inspector**: Interactive exploration
+*   **`scripts/dashboard.py`** 📊 **State Inspector**: Interactive exploration
 
 ### Optimization & Tuning
 *   **`scripts/tune_bio_params.py`** 🧬 **The Evolver**: CMA-ES optimizer
-*   **`scripts/benchmark_matrix.py`** 📊 **Evaluation**: Rigorous bio vs vanilla testing
+*   **`scripts/base_eval.py`** 📊 **Evaluation**: CORE benchmark evaluation
 
 ### Utilities
 *   **`scripts/enable_synapses.py`** 💉 **The Injector**: Checkpoint conversion utility
@@ -563,58 +608,6 @@ uv run scripts/benchmark_matrix.py \
 - 🎯 Cellular automata initialization experiments
 
 Use `.beads/` (Beads tracker) to explore the full dependency graph and task details.
-
----
-
-## 🤝 Contributing
-
-We welcome contributions! This is an active research project with well-defined tasks.
-
-### Getting Started
-
-1. **Explore the Roadmap**: Check `.beads/` for available tasks
-2. **Pick a Task**: Comment on the issue to claim it
-3. **Follow Conventions**: Use Ruff for Python, Clippy for Rust
-4. **Write Tests**: All new features need unit tests
-5. **Document**: Update README/docs if adding user-facing features
-
-### Development Setup
-
-```bash
-# Install dev dependencies
-uv sync --extra dev
-
-# Run linting
-ruff check bio_inspired_nanochat/ tests/
-ruff format bio_inspired_nanochat/ tests/
-
-# Run type checking
-uvx ty check
-
-# Run tests
-pytest tests/ -v
-
-# Run Rust tests
-cd rust_src && cargo test
-```
-
-### Code Style
-
-- **Python**: Ruff (Black-compatible), PEP 8
-- **Rust**: rustfmt, clippy
-- **Commits**: Conventional Commits (feat, fix, docs, chore, etc.)
-- **Documentation**: Inline docstrings + README updates for public APIs
-
-### Research Contributions
-
-Have an idea for a new bio-inspired mechanism? We'd love to hear it!
-
-1. **Biological Grounding**: Cite neuroscience literature
-2. **Mathematical Formulation**: Write equations clearly
-3. **Implementation Plan**: Sketch algorithm + complexity analysis
-4. **Ablation Plan**: How will you measure impact vs vanilla?
-
-Open an issue with the `research` label to start the discussion.
 
 ---
 

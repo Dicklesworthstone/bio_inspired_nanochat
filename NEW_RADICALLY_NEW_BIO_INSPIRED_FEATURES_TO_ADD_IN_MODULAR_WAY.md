@@ -236,3 +236,75 @@ $\Xi$ is small. We can broadcast it during the kernel execution. This drasticall
 ### **Theoretical Performance Gain**
 *   **Parameter Efficiency:** We can have billions of synapses but only millions of "genes."
 *   **Transfer Learning:** We can "transplant" an expert to a new task by keeping its weights but evolving its genome $\Xi$ to adapt its dynamics (e.g., making it faster or more robust).
+
+---
+
+## 11. Cellular Automata (CA) Weight Initialization (Rule 30 / Rule 116)
+
+### **Biological Inspiration**
+Brains do not start from IID random synapses. Developmental programs (gene regulatory networks, gradients, morphogens) produce *structured* connectivity early, then learning sculpts it. A 1D elementary cellular automaton (ECA) is the simplest “developmental rule” we can test: a local update rule that produces global structure and a controllable spectrum between “chaotic” and “regular”.
+
+### **The Plan**
+We will run a controlled A/B comparison of a **variance-corrected CA initializer** vs the current baseline initializer.
+
+#### Rules to test
+- **Rule 30**: chaotic / high-entropy (good as a “structured noise” baseline).
+- **Rule 116**: more regular / patterned (tests whether “low-complexity” structure helps early optimization).
+
+#### Mapping CA → tensors (shape strategy)
+We use a 1D ECA state with periodic boundaries (wrap-around) and write one CA time step per output row:
+- For a Linear-like weight matrix with fan-in `fan_in` and fan-out `fan_out`, generate a CA bit-grid shaped `(fan_out, fan_in)`.
+  - CA width = `fan_in`
+  - CA steps = `fan_out`
+  - Row `t` in the grid is the CA state at time step `t`.
+- For Conv kernels, treat the weight as a flattened matrix:
+  - `fan_in = in_channels * kernel_height * kernel_width`
+  - `fan_out = out_channels`
+  - Generate `(fan_out, fan_in)` CA bits and then reshape back.
+- For other shapes (e.g., `(fan_in, fan_out)` like `SynapticLinear.w_slow`), generate the CA grid in `(fan_out, fan_in)` and transpose as needed.
+
+#### Mean-centering + variance scaling (fan_avg)
+Raw CA bits are mapped to signed values and then normalized per-tensor:
+- Map bits `b ∈ {0,1}` to `x = 2b - 1 ∈ {-1, +1}`.
+- Mean-center: `x ← x - mean(x)`.
+- Scale to **fan_avg variance**:
+  - `fan_avg = (fan_in + fan_out) / 2`
+  - target variance `Var(x) = 1 / fan_avg` (i.e. `2 / (fan_in + fan_out)`)
+  - `x ← x * sqrt(target_var / (Var(x) + eps))`
+
+If a tensor is degenerate (e.g., too small and `Var(x)=0`), we fall back to the baseline init for that tensor.
+
+#### Determinism / seeding
+The CA initializer must be deterministic given:
+- a global `init_seed`
+- a selected rule (30 or 116)
+- the tensor’s shape and a stable per-tensor salt (e.g., module-qualified parameter name)
+
+This lets us reproduce A/B runs exactly and vary randomness across seeds without changing code.
+
+#### Where to apply first (to minimize confounders)
+Initial experiment targets **only Linear matrices** in the Transformer blocks:
+- Attention projections (Q/K/V/O)
+- MLP matrices
+- (Synaptic model) `SynapticLinear.w_slow` (+ optionally `w_fast`)
+
+We keep embeddings, LayerNorm parameters, and biases on their baseline initialization for the first pass, then expand the surface area only if results are promising.
+
+#### Metrics to log
+At init-time (step 0):
+- Per-tensor mean/std, and a sanity histogram for CA-generated weights.
+- Optional: a small singular-value-spectrum sample for a few representative matrices.
+
+During early training:
+- Loss curve over the first `~200–2000` steps (and compare slope, not just endpoints).
+- Gradient-norm stability; NaN/Inf checks.
+- Cosine similarity of key matrices to their initialization (how quickly the optimizer “forgets” the init).
+
+#### Compute cap + stop criteria
+Budget (micro-benchmark scale):
+- 2 seeds × (baseline init vs CA init) × `~2k–10k` steps on a fixed small config and fixed data shard.
+
+Stop early if any of the following occur:
+- Any NaN/Inf in activations/weights/gradients.
+- Loss diverges (e.g., clearly worse than baseline for a sustained window).
+- Weight similarity to init drops below ~5% within ~200 steps *and* there is no measurable gain in loss curve slope (suggesting “init doesn’t matter” for this setting).
