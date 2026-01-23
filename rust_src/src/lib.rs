@@ -9,8 +9,8 @@ use ahash::{AHashMap, AHashSet};
 use compact_str::CompactString;
 use rayon::prelude::*;
 
-mod presyn;
 mod moe;
+mod presyn;
 
 // Default GPT-4 style regex pattern for splitting text
 const GPT4_PATTERN: &str = r"'(?i:[sdmt]|ll|ve|re)|[^\r\n\p{L}\p{N}]?+\p{L}+|\p{N}{1,3}| ?[^\s\p{L}\p{N}]++[\r\n]*|\s*[\r\n]|\s+(?!\S)|\s+";
@@ -65,7 +65,11 @@ impl Word {
         while i < n {
             if i + 1 < n && self.ids[i] == a && self.ids[i + 1] == b {
                 let left = out.last().copied();
-                let right = if i + 2 < n { Some(self.ids[i + 2]) } else { None };
+                let right = if i + 2 < n {
+                    Some(self.ids[i + 2])
+                } else {
+                    None
+                };
 
                 // remove old pairs
                 if let Some(x) = left {
@@ -160,7 +164,6 @@ fn count_pairs_parallel(
 // ------------------------ END helpers ------------------------
 
 impl Tokenizer {
-
     /// Core incremental BPE training given unique words and their counts.
     /// `words`: one entry per unique chunk (Vec<u32> of token-ids/bytes).
     /// `counts`: same length as `words`, count per chunk.
@@ -171,7 +174,10 @@ impl Tokenizer {
         self.merges.clear();
 
         // ---- Initial pair_counts and where_to_update (parallel) ----
-        log::info!("Computing initial pair counts from {} unique sequences", words.len());
+        log::info!(
+            "Computing initial pair counts from {} unique sequences",
+            words.len()
+        );
         let (mut pair_counts, mut where_to_update) = count_pairs_parallel(&words, &counts);
 
         // ---- Build heap ----
@@ -194,7 +200,9 @@ impl Tokenizer {
         let mut last_log_percent = 0u32;
 
         while merges_done < num_merges {
-            let Some(mut top) = heap.pop() else { break; };
+            let Some(mut top) = heap.pop() else {
+                break;
+            };
 
             // Lazy refresh
             let current = *pair_counts.get(&top.pair).unwrap_or(&0);
@@ -249,7 +257,12 @@ impl Tokenizer {
             if current_percent > last_log_percent {
                 log::info!(
                     "Progress: {}% ({}/{} merges) - Last merge: {:?} -> {} (frequency: {})",
-                    current_percent, merges_done, num_merges, top.pair, new_id, top.count
+                    current_percent,
+                    merges_done,
+                    num_merges,
+                    top.pair,
+                    new_id,
+                    top.count
                 );
                 last_log_percent = current_percent;
             }
@@ -290,8 +303,9 @@ impl Tokenizer {
 
         // Update the stored pattern and compile it
         self.pattern = pattern_str.clone();
-        self.compiled_pattern = Regex::new(&pattern_str)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("Invalid regex pattern: {}", e)))?;
+        self.compiled_pattern = Regex::new(&pattern_str).map_err(|e| {
+            pyo3::exceptions::PyValueError::new_err(format!("Invalid regex pattern: {}", e))
+        })?;
 
         // Prepare a true Python iterator object
         let py_iter: pyo3::Py<pyo3::PyAny> = unsafe {
@@ -304,7 +318,10 @@ impl Tokenizer {
         // Temporary buffer we refill under the GIL
         let mut buf: Vec<String> = Vec::with_capacity(buffer_size);
 
-        log::info!("Processing sequences from iterator (buffer_size: {})", buffer_size);
+        log::info!(
+            "Processing sequences from iterator (buffer_size: {})",
+            buffer_size
+        );
         let mut total_sequences = 0u64;
 
         // Helper: refill `buf` with up to `buffer_size` strings from the Python iterator.
@@ -380,13 +397,19 @@ impl Tokenizer {
                 break;
             }
         }
-        log::info!("Processed {} sequences total, {} unique", total_sequences, counts.len());
+        log::info!(
+            "Processed {} sequences total, {} unique",
+            total_sequences,
+            counts.len()
+        );
 
         // Materialize words & counts
         let mut words = Vec::with_capacity(counts.len());
         let mut cvec = Vec::with_capacity(counts.len());
         for (chunk, c) in counts.into_iter() {
-            words.push(Word::new(chunk.as_bytes().iter().map(|&b| b as u32).collect()));
+            words.push(Word::new(
+                chunk.as_bytes().iter().map(|&b| b as u32).collect(),
+            ));
             cvec.push(c);
         }
 
@@ -487,7 +510,7 @@ fn rustbpe(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(moe::accumulate_router_stats_cpu, m)?)?;
     m.add_function(wrap_pyfunction!(moe::update_metabolism_cpu, m)?)?;
     m.add_function(wrap_pyfunction!(dummy_function, m)?)?;
-    
+
     let __all__ = vec![
         "Tokenizer".to_string(),
         "presyn_step_cpu".to_string(),
@@ -496,6 +519,6 @@ fn rustbpe(m: &Bound<'_, PyModule>) -> PyResult<()> {
         "dummy_function".to_string(),
     ];
     m.add("__all__", __all__)?;
-    
+
     Ok(())
 }
