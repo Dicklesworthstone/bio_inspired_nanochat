@@ -14,10 +14,15 @@ import urllib.error
 from bio_inspired_nanochat.torch_imports import torch
 import torch.distributed as dist
 from filelock import FileLock
-from decouple import Config as DecoupleConfig, RepositoryEnv
+from decouple import Config as DecoupleConfig, RepositoryEnv, RepositoryEmpty
 
-# Initialize decouple config (project-local .env; must not be overwritten)
-decouple_config = DecoupleConfig(RepositoryEnv(".env"))
+# Initialize decouple config (project-local .env if exists; fallback to empty config)
+_env_path = ".env"
+if os.path.exists(_env_path):
+    decouple_config = DecoupleConfig(RepositoryEnv(_env_path))
+else:
+    # Fallback to empty repository when .env doesn't exist (e.g., in CI)
+    decouple_config = DecoupleConfig(RepositoryEmpty())
 
 DEFAULT_DOWNLOAD_TIMEOUT_SEC = float(decouple_config("NANOCHAT_DOWNLOAD_TIMEOUT_SEC", default="30.0"))
 DEFAULT_DOWNLOAD_CHUNK_SIZE = int(decouple_config("NANOCHAT_DOWNLOAD_CHUNK_SIZE_BYTES", default=str(1024 * 1024)))
