@@ -219,6 +219,13 @@ class SynapticConfig:
     bdnf_gamma: float = 0.0  # Gamma gain factor; when > 0, takes precedence over bdnf_scale
     bdnf_hebb_accumulate: bool = True  # Use Hebbian delta magnitude for BDNF (vs CaMKII)
     bdnf_max: float = 10.0  # Upper clamp on BDNF to prevent unbounded growth
+    # vg9.2: run online Hebbian plasticity during TRAINING (grad enabled), not only under
+    # inference/no_grad. The headline "online Hebbian learning" was previously gated behind
+    # `not torch.is_grad_enabled()` and so NEVER ran at train time. When True (default), the
+    # detached fast-adaptation update executes during training; the in-place Parameter writes
+    # are deferred to the top of the next forward so they cannot corrupt the live autograd
+    # graph. Set False to restore the legacy inference-only behavior.
+    plasticity_during_training: bool = True
 
     # Structural Plasticity (MoE)
     structural_interval: int = 50000
@@ -819,11 +826,73 @@ class SynapticLinear(nn.Module):
         else:
             object.__setattr__(self, "input_ln", None)
 
+        # vg9.2: deferred-plasticity bookkeeping. During a grad-enabled (training) forward we
+        # cannot mutate w_fast/w_slow/post.fast/post.slow in place after they have been used in
+        # the forward matmuls — autograd saved them for backward and an in-place write raises
+        # "a variable needed for gradient computation has been modified by an inplace operation".
+        # So we compute the detached Hebbian deltas at the END of the step (from buffers only,
+        # which is autograd-safe) and APPLY the Parameter writes at the TOP of the NEXT forward,
+        # before those Parameters are used. _plasticity_pending flags a deferred write; the
+        # eligibility traces (u_buf/v_buf) init to zero so the first application is a no-op.
+        self._plasticity_pending: bool = False
+        self._last_gate_scale: Optional[Tensor] = None
+
+    def _update_hebb_traces(self, x: Tensor, y: Tensor, genes: Optional[Tensor]) -> None:
+        """Update eligibility traces (u_buf/v_buf) + CaMKII/PP1/BDNF state from activations.
+
+        Touches ONLY buffers (never a Parameter used in the live forward graph), so it is
+        autograd-safe even inside a grad-enabled forward. Call inside ``torch.no_grad()``.
+        """
+        u_mean = x.mean(0)  # (in,)
+        v_mean = y.mean(0)  # (out,)
+        if self.u_buf is not None and self.v_buf is not None:
+            self.u_buf.mul_(self.cfg.post_trace_decay).add_(
+                0.05 * u_mean.unsqueeze(-1).expand(-1, self.cfg.rank_eligibility)
+            )
+            self.v_buf.mul_(self.cfg.post_trace_decay).add_(
+                0.05 * v_mean.unsqueeze(0).expand(self.cfg.rank_eligibility, -1)
+            )
+        # Per-neuron calcium proxy for the CaMKII/PP1 gate.
+        ca_vec = y.abs().mean(0).clamp(0, 10.0)
+        self.post.update(y, ca_vec, genes=genes)
+
+    def _apply_hebb_weight_writes(self, gate_scale: Optional[Tensor]) -> None:
+        """Apply the Hebbian Parameter writes (w_fast/w_slow + post.fast/post.slow) from the
+        current eligibility traces.
+
+        MUST be called inside ``torch.no_grad()`` and at a point where these Parameters have
+        NOT yet been used in the live forward graph this step (the top of forward, or an
+        inference forward with no pending backward). Mutating them after a matmul that saved
+        them would corrupt the pending backward. Traces init to zero, so a call before any
+        trace update is a no-op.
+        """
+        if self.u_buf is None or self.v_buf is None:
+            return
+        if self.w_fast is not None:
+            if gate_scale is None:
+                gs = torch.ones((), device=self.w_fast.device, dtype=self.w_fast.dtype)
+            else:
+                gs = gate_scale.to(device=self.w_fast.device, dtype=self.w_fast.dtype)
+            delta = self.u_buf @ self.v_buf
+            delta = delta * gs.to(delta.dtype)
+            self.w_fast.mul_(self.cfg.post_fast_decay).add_(self.cfg.post_fast_lr * delta)
+            self.w_slow.add_(self.cfg.post_slow_lr * delta)
+        self.post.hebb_fast(self.u_buf, self.v_buf)
+        self.post.consolidate(self.u_buf, self.v_buf)
+
     def forward(
         self, x: Tensor, calcium: Tensor, energy: Tensor, update_mem: bool = True, genes: Optional[Tensor] = None
     ):
         if self.input_ln is not None:
             x = self.input_ln(x)
+
+        # vg9.2: flush any plasticity Parameter writes deferred from the previous (training)
+        # forward, BEFORE this step's matmuls use those Parameters — autograd-safe because they
+        # have not yet been saved for this step's backward. First call is a no-op (zero traces).
+        if self._plasticity_pending and self.cfg.enable_hebbian and self.post is not None:
+            with torch.no_grad():
+                self._apply_hebb_weight_writes(self._last_gate_scale)
+            self._plasticity_pending = False
 
         # Linear pass (separate slow/fast for calcium/energy gating)
         fast_gate: Optional[Tensor] = None
@@ -863,61 +932,33 @@ class SynapticLinear(nn.Module):
         if self.cfg.enable_hebbian and self.post is not None:
             y = self.post(y)
         
-            if update_mem and not torch.is_grad_enabled():
+            # vg9.2: online Hebbian plasticity. Previously gated behind
+            # `not torch.is_grad_enabled()`, so the headline "online learning" NEVER ran during
+            # training. It now runs as a DETACHED fast-adaptation update during inference
+            # (no_grad) AND during training (when plasticity_during_training is set).
+            grad_on = torch.is_grad_enabled()
+            run_plasticity = update_mem and (
+                not grad_on or (self.training and self.cfg.plasticity_during_training)
+            )
+            if run_plasticity:
                 with torch.no_grad():
-                    # Update eligibility traces
-                    # u_buf: (in, R) <- x (B, in)
-                    # v_buf: (R, out) <- y (B, out)
-                    # We need to project x and y to rank R?
-                    # Or we accumulate outer products?
-                    # PDF: self.u_buf...add_(... einsum...)
-                    # Let's implement a simple Hebbian accumulation
-                    
-                    # Random projection for eligibility? Or learned?
-                    # The PDF PostsynapticHebb has U and V parameters.
-                    # We can use those to project.
-                    
-                    # Actually, let's just use the mean activity for now to keep it simple and fast
-                    u_mean = x.mean(0) # (in,)
-                    v_mean = y.mean(0) # (out,)
-                    
-                    # We need (in, R) and (R, out).
-                    # We can just broadcast or rotate.
-                    # Let's just update the buffers with a decay
-                    
-                    # Update logic from old code was:
-                    # U.mul_(rho).add_(eta * u.unsqueeze(-1))
-                    # V.mul_(rho).add_(eta * v.unsqueeze(0))
-                    # This creates rank-1 updates.
-                    
-                    # We will do similar here but on u_buf/v_buf
-                    if self.u_buf is not None and self.v_buf is not None:
-                        self.u_buf.mul_(self.cfg.post_trace_decay).add_(
-                            0.05 * u_mean.unsqueeze(-1).expand(-1, self.cfg.rank_eligibility)
+                    # Traces + CaMKII/PP1/BDNF updates touch only buffers -> always safe.
+                    self._update_hebb_traces(x, y, genes)
+                    if grad_on:
+                        # Training: a backward is pending and the matmuls above saved
+                        # w_fast/w_slow/post.fast/post.slow. Defer their in-place writes to the
+                        # top of the NEXT forward (applied before those Parameters are reused),
+                        # stashing the gate scale that weights the delta. base_train runs
+                        # backward immediately after each forward, so the deferred write always
+                        # lands after the prior backward — no graph is corrupted.
+                        self._last_gate_scale = (
+                            fast_gate.mean().detach() if fast_gate is not None else None
                         )
-                        self.v_buf.mul_(self.cfg.post_trace_decay).add_(
-                            0.05 * v_mean.unsqueeze(0).expand(self.cfg.rank_eligibility, -1)
-                        )
-                    
-                    # Update Postsynaptic state
-                    # We need a vector for per-neuron update?
-                    # y is (B, out). ca_proxy should be (out,).
-                    ca_vec = y.abs().mean(0).clamp(0, 10.0)
-                    
-                    self.post.update(y, ca_vec, genes=genes)
-                    if self.u_buf is not None and self.v_buf is not None:
-                        # Update fast/slow weight matrices from low-rank traces (Hebbian).
-                        if self.w_fast is not None:
-                            gate_scale = fast_gate.mean() if fast_gate is not None else torch.tensor(
-                                1.0, device=y.device, dtype=y.dtype
-                            )
-                            delta = self.u_buf @ self.v_buf
-                            delta = delta * gate_scale.to(delta.dtype)
-                            self.w_fast.mul_(self.cfg.post_fast_decay).add_(self.cfg.post_fast_lr * delta)
-                            self.w_slow.add_(self.cfg.post_slow_lr * delta)
-
-                        self.post.hebb_fast(self.u_buf, self.v_buf)
-                        self.post.consolidate(self.u_buf, self.v_buf)
+                        self._plasticity_pending = True
+                    else:
+                        # Inference: no backward pending -> apply the writes now (legacy path).
+                        gate_scale = fast_gate.mean() if fast_gate is not None else None
+                        self._apply_hebb_weight_writes(gate_scale)
 
         return y
 
