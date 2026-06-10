@@ -1024,11 +1024,21 @@ class SynapticLinear(nn.Module):
             # Eligibility buffers
             self.register_buffer("u_buf", torch.zeros(in_features, cfg.rank_eligibility))
             self.register_buffer("v_buf", torch.zeros(cfg.rank_eligibility, out_features))
+            # vg9.9: FIXED random projections give the eligibility trace genuine rank R — each
+            # rank channel accumulates the correlation of the pre/post activity with a DISTINCT
+            # random projection of the other side, instead of the old mean-broadcast (all R
+            # columns identical -> effectively rank 1, so rank_eligibility was a no-op knob).
+            # Buffers: fixed per model and persisted in the checkpoint.
+            _R = cfg.rank_eligibility
+            self.register_buffer("proj_in", torch.randn(in_features, _R) / math.sqrt(in_features))
+            self.register_buffer("proj_out", torch.randn(out_features, _R) / math.sqrt(out_features))
         else:
             self.register_parameter("w_fast", None)
             self.post = None
             self.register_buffer("u_buf", None)
             self.register_buffer("v_buf", None)
+            self.register_buffer("proj_in", None)
+            self.register_buffer("proj_out", None)
 
         if bias:
             self.bias = nn.Parameter(torch.zeros(out_features))
@@ -1058,14 +1068,20 @@ class SynapticLinear(nn.Module):
         Touches ONLY buffers (never a Parameter used in the live forward graph), so it is
         autograd-safe even inside a grad-enabled forward. Call inside ``torch.no_grad()``.
         """
-        u_mean = x.mean(0)  # (in,)
-        v_mean = y.mean(0)  # (out,)
         if self.u_buf is not None and self.v_buf is not None:
+            # vg9.9: genuine rank-R eligibility. Project the post-activity y onto R random modes
+            # and accumulate its correlation with the pre-activity x into u_buf (in, R); project
+            # x onto R modes and accumulate its correlation with y into v_buf (R, out). The R
+            # columns/rows are now distinct, so delta = u_buf @ v_buf is a real rank-R Hebbian
+            # trace. Batch-normalized so the magnitude matches the old mean-based trace.
+            batch = max(1, x.shape[0])
+            y_proj = y @ self.proj_out.to(y.dtype)   # (B, R) post-activity in R modes
+            x_proj = x @ self.proj_in.to(x.dtype)    # (B, R) pre-activity in R modes
             self.u_buf.mul_(self.cfg.post_trace_decay).add_(
-                0.05 * u_mean.unsqueeze(-1).expand(-1, self.cfg.rank_eligibility)
+                0.05 * (x.transpose(0, 1) @ y_proj) / batch   # (in, R)
             )
             self.v_buf.mul_(self.cfg.post_trace_decay).add_(
-                0.05 * v_mean.unsqueeze(0).expand(self.cfg.rank_eligibility, -1)
+                0.05 * (x_proj.transpose(0, 1) @ y) / batch   # (R, out)
             )
         # Per-neuron calcium proxy for the CaMKII/PP1 gate.
         ca_vec = y.abs().mean(0).clamp(0, 10.0)
