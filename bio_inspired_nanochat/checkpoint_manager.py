@@ -2,12 +2,19 @@
 Utilities for saving and loading model/optim/state checkpoints.
 """
 import glob
+import hashlib
 import json
 import logging
 import os
 import re
+import subprocess
+from dataclasses import asdict, fields
+from typing import TYPE_CHECKING, Optional
 
 from bio_inspired_nanochat.torch_imports import torch
+
+if TYPE_CHECKING:
+    from bio_inspired_nanochat.synaptic import SynapticConfig
 
 from bio_inspired_nanochat.common import get_base_dir
 from bio_inspired_nanochat.gpt import GPT, GPTConfig
@@ -22,6 +29,65 @@ logger = logging.getLogger(__name__)
 def log0(message):
     if int(os.environ.get('RANK', 0)) == 0:
         logger.info(message)
+
+
+# --------------------------------------------------------------------------- #
+# SynapticConfig checkpoint round-trip (vg9.6)
+#
+# build_model used to rebuild synaptic models with SynapticConfig() DEFAULTS, so a model
+# trained/tuned with custom bio kinetics silently reloaded as a DIFFERENT model (only the
+# learned buffers survived). These helpers persist the full SynapticConfig into meta_data and
+# rebuild from it, with provenance (git SHA + a stable config hash) for reproducibility.
+# --------------------------------------------------------------------------- #
+def synaptic_config_to_meta(syn_cfg) -> dict:
+    """Serialize a SynapticConfig to a JSON-able dict for checkpoint meta_data."""
+    return asdict(syn_cfg)
+
+
+def synaptic_config_from_meta(meta_data) -> "SynapticConfig":
+    """Rebuild a SynapticConfig from checkpoint meta_data.
+
+    Unknown saved fields are ignored and new schema fields take their defaults (forward/back
+    compat). Falls back to SynapticConfig() defaults for pre-vg9.6 checkpoints that did not
+    persist the config (logged loudly so the reproducibility risk is visible).
+    """
+    from bio_inspired_nanochat.synaptic import SynapticConfig
+
+    saved = (meta_data or {}).get("synaptic_config")
+    if not saved:
+        log0(
+            "[checkpoint] no 'synaptic_config' in meta_data; rebuilding with SynapticConfig() "
+            "DEFAULTS (pre-vg9.6 checkpoint — bio kinetics may NOT match the trained model)."
+        )
+        return SynapticConfig()
+    known = {f.name for f in fields(SynapticConfig)}
+    unknown = sorted(set(saved) - known)
+    if unknown:
+        log0(f"[checkpoint] ignoring {len(unknown)} unknown synaptic_config field(s): {unknown}")
+    return SynapticConfig(**{k: v for k, v in saved.items() if k in known})
+
+
+def config_hash(cfg_dict: dict) -> str:
+    """Stable short hash of a config dict (order-independent)."""
+    blob = json.dumps(cfg_dict, sort_keys=True, default=str).encode()
+    return hashlib.sha256(blob).hexdigest()[:16]
+
+
+def _git_sha() -> Optional[str]:
+    try:
+        out = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+            stderr=subprocess.DEVNULL,
+        )
+        return out.decode().strip()
+    except Exception:
+        return None
+
+
+def config_provenance(syn_cfg) -> dict:
+    """Provenance stamp for a synaptic checkpoint: git SHA + a stable bio-config hash."""
+    return {"git_sha": _git_sha(), "synaptic_config_hash": config_hash(asdict(syn_cfg))}
 
 def save_checkpoint(checkpoint_dir, step, model_data, optimizer_data, meta_data, rank=0):
     if rank == 0:
@@ -94,12 +160,12 @@ def build_model(checkpoint_dir, step, device, phase):
                 GPTSynaptic,
                 GPTSynapticConfig,
             )
-            from bio_inspired_nanochat.synaptic import SynapticConfig
         except Exception as e:
             raise ImportError(
                 "Synaptic checkpoint requires synaptic modules, but they failed to import."
             ) from e
-        syn_cfg = SynapticConfig()  # Use defaults; could load from meta_data if saved
+        # vg9.6: rebuild the bio kinetics from the checkpoint instead of silently using defaults.
+        syn_cfg = synaptic_config_from_meta(meta_data)
         model_config = GPTSynapticConfig(
             sequence_len=model_config_kwargs["sequence_len"],
             vocab_size=model_config_kwargs["vocab_size"],

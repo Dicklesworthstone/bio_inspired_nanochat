@@ -22,7 +22,12 @@ from typing import Any, cast
 import torch.distributed as torch_dist
 import wandb
 
-from bio_inspired_nanochat.checkpoint_manager import load_checkpoint, save_checkpoint
+from bio_inspired_nanochat.checkpoint_manager import (
+    config_provenance,
+    load_checkpoint,
+    save_checkpoint,
+    synaptic_config_to_meta,
+)
 from bio_inspired_nanochat.dataloader import (
     tokenizing_distributed_data_loader,
     tokenizing_distributed_data_loader_with_state,
@@ -541,6 +546,10 @@ while True:
                 "val_bpb": val_bpb,  # loss at last step
                 "model_config": model_config_kwargs,
                 "synapses": use_syn,  # mark if this is a synaptic model
+                # vg9.6: persist the full bio kinetics + provenance so the model round-trips
+                # exactly (build_model used to silently rebuild with SynapticConfig() defaults).
+                "synaptic_config": synaptic_config_to_meta(syn_cfg) if use_syn else None,
+                "provenance": config_provenance(syn_cfg) if use_syn else None,
                 "user_config": user_config,  # inputs to the training script
                 "device_batch_size": device_batch_size,
                 "max_seq_len": max_seq_len,
