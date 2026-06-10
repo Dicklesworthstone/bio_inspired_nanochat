@@ -18,6 +18,12 @@ wandb
 # bv (beads viewer) local config and caches
 .bv/
 
+# beads (br) transient runtime artifacts — locks and touch markers, not data
+.beads/*.lock
+.beads/.sync.lock
+.beads/.write.lock
+.beads/last-touched
+
 # Coverage artifacts (eqyk.1)
 .coverage
 .coverage.*
