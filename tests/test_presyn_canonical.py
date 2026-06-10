@@ -171,6 +171,25 @@ def test_septin_barrier_penalizes_distant_edges():
 
 
 @pytest.mark.unit
+def test_default_applies_no_barrier_so_live_path_is_not_double_penalized():
+    # The LIVE attention path calls release_canonical WITHOUT apply_barrier (it applies its own
+    # exact logit-level barrier). Guard against regressing the default to True: with the barrier
+    # off, two edges at different distances but identical state/drive get IDENTICAL release, so
+    # the attention's barrier is never double-counted.
+    cfg = SynapticConfig(enable_presyn=True, barrier_strength=0.5, stochastic_train_frac=0.0)
+    pre = SynapticPresyn(16, cfg)
+    B, H, T = 1, 1, 8
+    state = build_presyn_state(B, T, H, DEV, DT, cfg)
+    drive = torch.full((B, H, T, 2), 2.0)
+    idx = torch.zeros(B, H, T, 2, dtype=torch.long)
+    idx[..., 0] = T - 1  # near key
+    idx[..., 1] = 0      # far key
+    e = pre.release_canonical(state, drive, idx, train=False)  # apply_barrier defaults to False
+    near, far = e[0, 0, T - 1, 0], e[0, 0, T - 1, 1]
+    assert torch.allclose(near, far), "default (barrier off) must NOT penalize distance — the attention does"
+
+
+@pytest.mark.unit
 def test_septin_barrier_respects_query_offset():
     # q_pos lets the live path supply absolute query positions (KV-cache prefix decoding).
     # Shifting queries 10 positions away from key 0 must strengthen the barrier -> less release.
