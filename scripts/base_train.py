@@ -594,9 +594,9 @@ while True:
 
     # Split/merge controller step
     if sm_ctrl is not None:
-        sm_ctrl.step(
-            step, optimizer=adamw_optimizer if muon_optimizer is None else optimizers[0]
-        )
+        # Pass ALL optimizers so split/merge resets stale momentum wherever the changed
+        # expert/router weights live: AdamW (1D/embeddings) AND Muon (2D matrices). vg9.3.
+        sm_ctrl.step(step, optimizer=optimizers)
     synchronize()
     t1 = time.time()
     dt = t1 - t0

@@ -26,6 +26,11 @@ from .synaptic import SynapticMoE, SynapticExpert, SynapticLinear
 
 dist = cast(Any, torch_dist)
 
+# An optimizer, or a collection of them. Synaptic models split parameters across AdamW
+# (1D/embeddings) AND Muon (2D matrices), so lifecycle moment-resets must reach all of
+# them — see _zero_optim_moments_for (vg9.3).
+OptimizersArg = Optional["torch.optim.Optimizer | Iterable[torch.optim.Optimizer]"]
+
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
@@ -116,18 +121,34 @@ def _add_noise_(t: Tensor, scale: float):
 
 @torch.no_grad()
 def _zero_optim_moments_for(
-    optimizer: Optional[torch.optim.Optimizer], params: Iterable[nn.Parameter]
+    optimizers: "Optional[torch.optim.Optimizer | Iterable[torch.optim.Optimizer]]",
+    params: Iterable[nn.Parameter],
 ):
-    if optimizer is None:
+    """Zero optimizer moment buffers (momentum, exp_avg, exp_avg_sq, ...) for ``params``,
+    across ONE optimizer OR an iterable of optimizers.
+
+    vg9.3: synaptic models split parameters across AdamW (1D/embeddings) AND Muon (2D
+    matrices — including the expert/router weights that split/merge overwrites). Passing
+    only one optimizer left the OTHER optimizer's stale momentum applied to freshly
+    cloned weights after a lifecycle event (a real instability vector). We therefore
+    accept all optimizers and reset each changed param's moments wherever they live.
+    """
+    if optimizers is None:
         return
+    if isinstance(optimizers, torch.optim.Optimizer):
+        optimizers = (optimizers,)
     pset = set(params)
-    for group in optimizer.param_groups:
-        for p in group["params"]:
-            if p in pset:
-                state = optimizer.state.get(p, None)
-                if state:
-                    for k in list(state.keys()):  # momentum, exp_avg, etc.
-                        state[k].zero_() if torch.is_tensor(state[k]) else None
+    for optimizer in optimizers:
+        if optimizer is None:
+            continue
+        for group in optimizer.param_groups:
+            for p in group["params"]:
+                if p in pset:
+                    state = optimizer.state.get(p, None)
+                    if state:
+                        for k in list(state.keys()):  # momentum, exp_avg, exp_avg_sq, ...
+                            if torch.is_tensor(state[k]):
+                                state[k].zero_()
 
 
 @torch.no_grad()
@@ -471,7 +492,7 @@ class SplitMergeController:
         layer: SynapticMoE,
         sources: List[int],
         slots: List[int],
-        optimizer: Optional[torch.optim.Optimizer],
+        optimizer: OptimizersArg,
         step: int,
     ):
         for src, dst in zip(sources, slots):
@@ -533,7 +554,7 @@ class SplitMergeController:
 
     @torch.no_grad()
     def _do_merges(
-        self, layer: SynapticMoE, optimizer: Optional[torch.optim.Optimizer], step: int
+        self, layer: SynapticMoE, optimizer: OptimizersArg, step: int
     ):
         pairs = self._pick_merge_pairs(layer)
         if self.cfg.verbose and len(pairs) > 0:
@@ -587,7 +608,7 @@ class SplitMergeController:
                 _zero_optim_moments_for(optimizer, changed_params)
 
     @torch.no_grad()
-    def step(self, global_step: int, optimizer: Optional[torch.optim.Optimizer] = None):
+    def step(self, global_step: int, optimizer: OptimizersArg = None):
         if not self.cfg.enabled:
             return
         if global_step < self.cfg.warmup_steps:
