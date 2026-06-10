@@ -58,7 +58,10 @@ class SyntheticBatch:
         return self.inputs.shape[1]
 
     def to(self, device) -> "SyntheticBatch":
-        return SyntheticBatch(self.inputs.to(device), self.targets.to(device), dict(self.meta))
+        # Move tensor-valued meta (e.g. gold ``answers``) too, so GPU eval doesn't hit a
+        # CPU/GPU device mismatch when comparing predictions to the gold answers.
+        meta = {k: (v.to(device) if torch.is_tensor(v) else v) for k, v in self.meta.items()}
+        return SyntheticBatch(self.inputs.to(device), self.targets.to(device), meta)
 
 
 def _generator(seed: int | torch.Generator | None) -> torch.Generator:
@@ -198,11 +201,13 @@ def needle_in_haystack(
     """
     ct = control_tokens(vocab_size)
     gen = _generator(seed)
-    half = ct.content_vocab // 2
-    key = _randint(gen, half, (batch, 1))                     # key in [0, half)
-    val = _randint(gen, half, (batch, 1)) + half              # value in [half, content)
-    # filler tokens avoid the key id so the needle key is unambiguous.
-    filler = _randint(gen, ct.content_vocab, (batch, haystack_len))
+    # Three DISJOINT token bands so the needle key/value can never appear in the filler —
+    # otherwise the retrieval would be ambiguous and a perfect model couldn't score 100%.
+    band = max(1, ct.content_vocab // 4)
+    key = _randint(gen, band, (batch, 1))                     # key   in [0, band)
+    val = _randint(gen, band, (batch, 1)) + band              # value in [band, 2*band)
+    filler_lo = 2 * band
+    filler = _randint(gen, ct.content_vocab - filler_lo, (batch, haystack_len)) + filler_lo  # [2*band, content)
     depth = max(0, min(haystack_len - 2, int(round(depth_frac * (haystack_len - 2)))))
     filler[:, depth:depth + 1] = key                         # place the needle key
     filler[:, depth + 1:depth + 2] = val                     # ...followed by its value

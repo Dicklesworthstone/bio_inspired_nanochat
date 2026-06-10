@@ -123,6 +123,18 @@ def test_niah_needle_placed_and_answerable():
 
 
 @pytest.mark.unit
+def test_niah_key_is_unique_so_retrieval_is_unambiguous():
+    # The needle key must appear ONLY at the needle position and the query — never in the
+    # filler — so a perfect model can score 100%. Guards the disjoint-band design.
+    b = needle_in_haystack(batch=16, haystack_len=40, vocab_size=VOCAB, seed=11)
+    depth = b.meta["needle_depth"]
+    for i in range(b.batch_size):
+        key = b.inputs[i, -1].item()
+        assert (b.inputs[i] == key).sum().item() == 2, "key appears exactly twice (needle + query)"
+        assert b.inputs[i, depth].item() == key
+
+
+@pytest.mark.unit
 def test_niah_depth_tracks_depth_frac():
     shallow = needle_in_haystack(batch=2, haystack_len=40, depth_frac=0.1, vocab_size=VOCAB, seed=0)
     deep = needle_in_haystack(batch=2, haystack_len=40, depth_frac=0.9, vocab_size=VOCAB, seed=0)
