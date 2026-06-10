@@ -277,12 +277,13 @@ class GPTSynaptic(nn.Module):
             kv_cache.presyn_state = presyn_states
 
         logits = self.lm_head(x.to(dtype=self.lm_head.weight.dtype))
-        # Logit softcap (parity with vanilla GPT) — applied on BOTH the inference
-        # return and the loss path so logits are bounded everywhere. See vg9.1.
+        # Logit softcap (parity with vanilla GPT) — bound logits on BOTH the inference
+        # return and the loss path. See vg9.1. We match GPT exactly: the inference
+        # path returns softcapped logits in the lm_head dtype (no float cast), and the
+        # loss path casts to fp32 before cross-entropy.
         sc = self.config.logit_softcap
         if sc and sc > 0.0:
             logits = sc * torch.tanh(logits / sc)
-        logits = logits.float()  # fp32 logits (parity with GPT)
         if targets is None:
             return logits, None
         aux = sum(
@@ -291,6 +292,7 @@ class GPTSynaptic(nn.Module):
                 for b in self.h
             )
         )
+        logits = logits.float()  # fp32 logits for the loss (parity with GPT)
         logits_flat = logits.reshape(-1, logits.size(-1))
         targets_flat = targets.reshape(-1)
         ce = F.cross_entropy(

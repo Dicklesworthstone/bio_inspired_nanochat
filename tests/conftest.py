@@ -21,7 +21,8 @@ from pathlib import Path
 import pytest
 import torch
 
-from _bio_testkit import (  # noqa: E402  (tests/ is on sys.path via pythonpath=["."])
+# tests/ is on sys.path (pytest prepends the conftest dir), so this resolves.
+from _bio_testkit import (
     make_tiny_synaptic,
     make_tiny_vanilla,
     set_seed,

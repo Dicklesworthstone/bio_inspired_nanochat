@@ -72,8 +72,6 @@ def set_seed(seed: int = 0, *, deterministic: bool = True) -> torch.Generator:
     if deterministic:
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
-        # Make hash-based ordering reproducible for any dict-order-sensitive code.
-        os.environ.setdefault("PYTHONHASHSEED", str(seed))
     gen = torch.Generator()
     gen.manual_seed(seed)
     return gen
