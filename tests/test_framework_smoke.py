@@ -107,6 +107,18 @@ def test_tiny_synaptic_model_forward_is_finite(tiny_synaptic_model):
 
 
 @pytest.mark.unit
+def test_tiny_synaptic_model_actually_uses_synaptic_attention(tiny_synaptic_model):
+    # Guard: the factory must build a GENUINELY synaptic model (a
+    # SynapticCausalSelfAttention exists somewhere in the module tree), not silently
+    # fall back to vanilla attention — otherwise every "synaptic" test would pass while
+    # exercising the wrong code path. (.modules() is robust to the wrapper nesting:
+    # Block.attn is a CausalSelfAttention wrapper whose .attn is the synaptic one.)
+    from bio_inspired_nanochat.synaptic import SynapticCausalSelfAttention
+
+    assert any(isinstance(m, SynapticCausalSelfAttention) for m in tiny_synaptic_model.modules())
+
+
+@pytest.mark.unit
 def test_tiny_vanilla_model_forward_is_finite(tiny_vanilla_model):
     x = tk.random_tokens(2, 16, vocab=97)
     logits = _logits(tiny_vanilla_model(x))
