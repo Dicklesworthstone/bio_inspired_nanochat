@@ -379,6 +379,16 @@ def _reset_fast_state(model: Any) -> None:
         model.reset_sequence_state(reset_fast_weights=True)
 
 
+def _model_context(model: Any) -> Any:
+    """The model's max context length (``config.sequence_len``), or None if unknown."""
+    return getattr(getattr(model, "config", None), "sequence_len", None)
+
+
+def _fits(batch: SyntheticBatch, context: Any) -> bool:
+    """Whether ``batch`` fits the model context. Unknown context => assume it fits (proceed)."""
+    return context is None or int(batch.inputs.shape[1]) <= int(context)
+
+
 @torch.no_grad()
 def recall_accuracy_by_pairs(
     model: Any,
@@ -393,11 +403,15 @@ def recall_accuracy_by_pairs(
 
     More pairs ⇒ more to hold in working memory before the query, so the accuracy-by-load curve
     is a direct probe of recall capacity. Fast-weight state is reset per batch so retrievals are
-    independent. Returns ``{"by_pairs": {n: acc}, "overall": mean_acc}``.
+    independent. Points whose generated sequence exceeds the model context are skipped (omitted
+    from the curve) rather than crashing. Returns ``{"by_pairs": {n: acc}, "overall": mean_acc}``.
     """
+    context = _model_context(model)
     by_pairs: dict[int, float] = {}
     for n in num_pairs:
         b = associative_recall(batch=batch, num_pairs=n, vocab_size=vocab_size, seed=seed + n)
+        if not _fits(b, context):
+            continue
         if device is not None:
             b = b.to(device)
         _reset_fast_state(model)
@@ -423,13 +437,17 @@ def binding_accuracy_by_distractors(
     A binding ("zibzab has purple fur") must survive an increasing number of irrelevant tokens
     before the query. The accuracy-vs-distractors curve measures how far back the model can bind;
     a model with genuine working memory degrades gracefully, a context-window model falls off a
-    cliff. Returns ``{"by_distractors": {n: acc}, "overall": mean_acc}``.
+    cliff. Points whose generated sequence exceeds the model context are skipped (omitted from the
+    curve) rather than crashing. Returns ``{"by_distractors": {n: acc}, "overall": mean_acc}``.
     """
+    context = _model_context(model)
     by_distractors: dict[int, float] = {}
     for n in num_distractors:
         b = variable_binding(
             batch=batch, num_vars=num_vars, num_distractors=n, vocab_size=vocab_size, seed=seed + n
         )
+        if not _fits(b, context):
+            continue
         if device is not None:
             b = b.to(device)
         _reset_fast_state(model)
@@ -459,9 +477,9 @@ def working_memory_suite(
     it drives bio-vs-vanilla and fast-weight-baseline comparisons. Returns the three curves plus a
     flat ``summary`` of overall accuracies (the headline numbers).
 
-    The model's context length must accommodate the longest eval sequence (the binding sequence
-    grows with ``binding_distractors`` and the NIAH sequence with ``niah_lengths``); size the eval
-    params to the model, as with ``niah_accuracy_by_length``.
+    Eval points whose generated sequence would exceed the model context are skipped (omitted from
+    their curve) rather than crashing, so the suite runs on any model size — only the points that
+    fit are measured (the by-difficulty dict keys show exactly which).
     """
     was_training = getattr(model, "training", False)
     if hasattr(model, "eval"):
@@ -474,8 +492,12 @@ def working_memory_suite(
         model, vocab_size=vocab_size, num_distractors=binding_distractors,
         batch=batch, seed=seed, device=device,
     )
+    # NIAH generates a needle+query around the haystack (sequence length = L + 2), so keep only the
+    # lengths that fit the model context.
+    context = _model_context(model)
+    niah_fit = tuple(L for L in niah_lengths if context is None or L + 2 <= int(context))
     niah = niah_accuracy_by_length(
-        model, vocab_size=vocab_size, lengths=niah_lengths, batch=batch, seed=seed, device=device
+        model, vocab_size=vocab_size, lengths=niah_fit, batch=batch, seed=seed, device=device
     )
 
     if was_training and hasattr(model, "train"):

@@ -95,6 +95,22 @@ def test_recall_and_binding_sweeps_have_requested_axes():
 # 4. Per-batch reset ⇒ reproducible, independent retrievals
 # --------------------------------------------------------------------------- #
 @pytest.mark.unit
+def test_suite_skips_oversized_points_instead_of_crashing():
+    # The DEFAULT difficulty params generate sequences (recall up to 34, binding up to 72, NIAH up
+    # to 130 tokens) that exceed a small model's context — the suite must SKIP those points, not
+    # crash the model's `T <= sequence_len` assertion. Use the default tiny model (context 32).
+    model = make_tiny_synaptic(seed=0)  # sequence_len = 32
+    ctx = model.config.sequence_len
+    res = working_memory_suite(model, vocab_size=VOCAB, batch=8, seed=1)  # all-default params
+    # every measured point fits the context; at least one fits (so the curves aren't all empty)
+    assert all(2 * n + 2 <= ctx for n in res["recall"]["by_pairs"]), "recall kept an oversized point"
+    assert all(n + 8 <= ctx for n in res["binding"]["by_distractors"]), "binding kept an oversized point"
+    assert all(L + 2 <= ctx for L in res["niah"]["by_length"]), "niah kept an oversized point"
+    assert res["recall"]["by_pairs"] and res["niah"]["by_length"], "some points must still fit"
+    assert all(0.0 <= v <= 1.0 for v in _all_accuracies(res))
+
+
+@pytest.mark.unit
 def test_suite_is_reproducible():
     kw = dict(
         vocab_size=VOCAB, recall_pairs=RECALL_PAIRS, binding_distractors=BINDING_DISTRACTORS,

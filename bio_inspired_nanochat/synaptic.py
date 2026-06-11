@@ -580,7 +580,10 @@ class LearnableKinetics(nn.Module):
 
         The calcium/buffer subsystem is contractive (cannot blow up) iff this is < 1. It is
         differentiable in the kinetics, so it can be read as a telemetry/stability margin or used
-        as a soft penalty. See docs/stable_recurrence_theory.md for the derivation.
+        as a soft penalty. (As a penalty, note the gradient is non-smooth where it matters: ``√``
+        of the eigenvalue discriminant has an infinite slope at the real↔complex boundary, and
+        ``.max`` over the β-grid is a subgradient — fine for monitoring, but prefer a smooth
+        surrogate if optimizing it directly.) See docs/stable_recurrence_theory.md for the derivation.
         """
         betas = torch.linspace(
             0.0, 1.0, n_beta, dtype=self.theta_rho_c.dtype, device=self.theta_rho_c.device
