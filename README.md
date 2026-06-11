@@ -26,7 +26,7 @@ Status legend: ✅ shipping (on the live model path, tested) · 🚧 partial/lan
 - ✅ **Stochastic release · BDNF metaplasticity · dual fast/slow weights** — implemented and toggleable.
 - 🚧 **Triton GPU & Rust CPU kernels** — both exist as landing targets that must match the golden reference (`tests/test_presyn_golden.py`), but the live path is pure PyTorch (`release_canonical`); kernel dispatch is not yet wired (`jyb.*`).
 - 🚧 **Systematic Optimization** — CMA-ES Phase 1 (the 10 most influential params) is wired; the broader ~48-param two-phase search is planned.
-- 🔮 **Rigorous Evaluation** — bio-vs-vanilla benchmark matrix with statistical testing (roadmap).
+- 🚧 **Rigorous Evaluation** — the statistical layer (paired t / Wilcoxon, bootstrap + Student-t 95% CIs, multi-seed aggregation) ships in `bio_inspired_nanochat/eval_stats.py`; the full benchmark-matrix *run* is still pending.
 
 ---
 
@@ -333,7 +333,7 @@ We're implementing systematic bio vs vanilla evaluation with statistical rigor:
 
 - **Configs**: Vanilla GPT, bio-all, per-feature toggles (11 ablations)
 - **Seeds**: 2-3 seeds per config for statistical significance
-- **Tests**: Paired t-tests, 95% confidence intervals
+- **Tests**: paired t-test + Wilcoxon signed-rank, bootstrap & Student-t 95% CIs, direction-aware multi-seed aggregation — implemented in `bio_inspired_nanochat/eval_stats.py` (run `python -m bio_inspired_nanochat.eval_stats <summary.csv>` on an `eval_matrix` output)
 - **Budget**: Fixed token budget per run (~10B tokens for small-scale)
 
 ### Reproducibility
