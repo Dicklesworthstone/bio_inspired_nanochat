@@ -33,6 +33,7 @@ from bio_inspired_nanochat.loss_eval import evaluate_bpb
 from bio_inspired_nanochat.torch_imports import F, Tensor, torch
 from bio_inspired_nanochat.tokenizer import get_token_bytes, get_tokenizer
 
+from bio_inspired_nanochat.ablation_registry import apply_preset
 from bio_inspired_nanochat.gpt import GPT, GPTConfig
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
 from bio_inspired_nanochat.synaptic import SynapticConfig
@@ -256,30 +257,8 @@ def _val_loss_ppl_ece(
 
 
 def _apply_syn_preset(preset: str, syn_cfg: SynapticConfig) -> None:
-    if preset == "bio_all":
-        return
-    if preset == "bio_no_presyn":
-        syn_cfg.enable_presyn = False
-        return
-    if preset == "bio_no_hebbian":
-        syn_cfg.enable_hebbian = False
-        return
-    if preset == "bio_no_metabolism":
-        syn_cfg.enable_metabolism = False
-        return
-    if preset == "bio_no_stochastic_release":
-        syn_cfg.stochastic_train_frac = 0.0
-        return
-    if preset == "bio_no_doc2":
-        syn_cfg.doc2_gain = 0.0
-        return
-    if preset == "bio_no_bdnf":
-        syn_cfg.bdnf_scale = 0.0
-        return
-    if preset == "bio_no_septin_barrier":
-        syn_cfg.barrier_strength = 0.0
-        return
-    raise ValueError(f"Unknown synaptic preset: {preset!r}")
+    # Single source of truth lives in the ablation registry (hm4.7).
+    apply_preset(preset, syn_cfg)
 
 
 def _build_model(

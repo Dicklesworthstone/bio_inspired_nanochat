@@ -142,7 +142,7 @@ Beyond the core mechanisms, we're systematically implementing 11 additional biol
 Each feature is:
 - 📝 **Documented** with biological rationale, implementation plan, and success criteria
 - 🧪 **Testable** via ablation studies and statistical validation
-- ⚙️ **Toggleable** via `SynapticConfig` flags for clean experiments
+- ⚙️ **Toggleable** via `SynapticConfig` flags, with a registry + validator (`bio_inspired_nanochat/ablation_registry.py`) that defines every mechanism's ablation knob and rejects silently-broken configs (e.g. an opt-in mechanism enabled without its prerequisite)
 - 📊 **Benchmarked** against vanilla transformers with rigorous metrics
 
 See [NEW_RADICALLY_NEW_BIO_INSPIRED_FEATURES_TO_ADD_IN_MODULAR_WAY.md](NEW_RADICALLY_NEW_BIO_INSPIRED_FEATURES_TO_ADD_IN_MODULAR_WAY.md) for detailed specifications.

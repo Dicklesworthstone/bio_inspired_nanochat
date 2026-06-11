@@ -211,6 +211,11 @@ if use_syn:
         ) from e
 
     syn_cfg = SynapticConfig(use_flex_attention=bool(use_flex_attention))
+    # Reject silently-broken configs and surface risky combinations early (hm4.7).
+    from bio_inspired_nanochat.ablation_registry import assert_valid_config
+
+    for _w in assert_valid_config(syn_cfg):
+        print0(f"[config] WARNING: {_w}")
     model_config = GPTSynapticConfig(
         sequence_len=max_seq_len,
         vocab_size=vocab_size,
