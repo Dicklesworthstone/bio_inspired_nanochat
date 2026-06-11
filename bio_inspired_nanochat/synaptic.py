@@ -1518,23 +1518,24 @@ class SynapticMoE(nn.Module):
         aux_loss = E * torch.sum(pe * me)
         self.last_aux_loss = aux_loss
 
-        # Contrastive router-embedding update
+        # Lateral-inhibition update on router embeddings (fkkc): each forward, push
+        # similar experts' identity vectors apart so experts specialize. The previous
+        # formulation built a DIAGONAL-only "co-occurrence" matrix, which made its pull
+        # term identically zero (sim[e,e]-1==0) and the net update ineffective — it did
+        # not actually reduce pairwise similarity. This is a pure similarity-weighted
+        # repulsion that provably spreads the embeddings; gated by router_contrastive_push
+        # and router_contrastive_lr (either == 0 disables it).
         with torch.no_grad():
-            cooc = torch.zeros(E, E, device=device)
-            for e in range(E):
-                cooc[e, e] = pe[e]
-            emb = self.router_embeddings
-            emb = emb / (emb.norm(dim=-1, keepdim=True) + 1e-8)
-            sim = emb @ emb.T
-            pull = cooc * (sim - 1.0)
-            push = (1.0 - cooc) * (sim + 0.3) * self.cfg.router_contrastive_push
-            grad = pull - push
-            grad = grad - grad.mean()
-            grad = grad.to(emb.dtype)
-            delta = (grad @ emb) * self.cfg.router_contrastive_lr
-            emb = emb - delta
-            emb = emb / (emb.norm(dim=-1, keepdim=True) + 1e-8)
-            self.router_embeddings.copy_(emb)
+            push, lr = self.cfg.router_contrastive_push, self.cfg.router_contrastive_lr
+            if E > 1 and push > 0.0 and lr > 0.0:
+                emb = self.router_embeddings
+                emb = emb / (emb.norm(dim=-1, keepdim=True) + 1e-8)
+                # Repel each expert from the others it is most aligned with (sim>0).
+                sim = emb @ emb.T - torch.eye(E, device=device, dtype=emb.dtype)
+                repel = sim.clamp(min=0.0)
+                emb = emb - (lr * push) * (repel @ emb)
+                emb = emb / (emb.norm(dim=-1, keepdim=True) + 1e-8)
+                self.router_embeddings.copy_(emb)
 
         return out, aux_loss
 

@@ -42,8 +42,8 @@ Maps every public/marketing claim (README, planning docs) to a verified implemen
 | MoE split/merge/reset lifecycle | **SOLID** | `synaptic_splitmerge.py` `SplitMergeController`; optimizer-moment reset across all optimizers (closed `vg9.3`) | — |
 | Health = utilization × energy drives lifecycle | **SOLID** | `synaptic_splitmerge.py:393` `_health` = util·energy; gates split/merge/reset | — |
 | Per-expert genome `Xi` (4-D) → phenotype decoder | **SOLID** | `synaptic.py:248` `xi_dim=4`; phenotype decoder maps Xi → kinetic biases | — |
-| **NeuroScore evolutionary credit assignment drives split/merge** | **PARTIAL** | `neuroscore.py:31` `NeuroScore` computes Efficiency/Specialization/Resilience, but it is **not referenced anywhere in `synaptic_splitmerge.py`** — the lifecycle uses health only | `de5l` |
-| Router embeddings + contrastive update | **PARTIAL** | `router_contrastive_lr`/`_push` params exist; no contrastive update code found wired into the lifecycle | `fkkc` |
+| **NeuroScore evolutionary credit assignment drives split/merge** | **SOLID** (opt-in) | `de5l`: `NeuroScore.step` publishes a per-expert composite fitness onto each MoE (`last_neuroscore`); `SplitMergeController._health` blends it into every split/merge/reset decision behind `use_neuroscore` (default-off) | — (closed `de5l`) |
+| Router embeddings + lateral-inhibition update | **SOLID** | `fkkc`: `SynapticMoE.forward` runs a per-forward similarity-weighted repulsion that pushes similar router embeddings apart to drive specialization (gated by `router_contrastive_lr`/`_push`). The earlier block was wired but **ineffective** — a diagonal-only co-occurrence matrix zeroed its pull term; it did not reduce pairwise similarity | — (closed `fkkc`) |
 | "Bank-account economy": taxation / income / **bankruptcy / IPO** | **ASPIRATIONAL** | **zero** code references to bankruptcy/IPO/bank-account/tax; only generic energy *metabolism* (`energy_cost_*`) exists | `8j9.3` (reframe to "energy metabolism") |
 
 ## Kernels & performance
@@ -61,19 +61,21 @@ Maps every public/marketing claim (README, planning docs) to a verified implemen
 | Claim | Status | Evidence | Closing bead |
 |---|---|---|---|
 | CMA-ES hyperparameter optimization of bio params | **SOLID** | `scripts/tune_bio_params.py` exists (59 KB, CMA-ES + `TOP10_PARAM_SPECS`); tau_c spec corrected for the canonical regime (`x6z4`) | — |
-| "48-parameter genome" | **ASPIRATIONAL** (claim drift) | `SynapticConfig` has **82 fields** (not 48); several are dead (e.g. legacy Set-A release params now unused by the canonical) | `8j9.6` (census), `8j9.5` (prune) |
+| "48-parameter genome" | **ASPIRATIONAL** (claim drift) | `SynapticConfig` now has **70 fields** — `8j9.5` pruned the 6 dead ones, so all 70 are live. The learned "genome" is 4-D (`xi_dim`); only **10** are CMA-ES-tuned. Machine-verified in `docs/parameter_census.md` | — (closed `8j9.6`/`8j9.5`) |
 | Feature toggles for clean ablation | **SOLID** | `enable_presyn`/`enable_hebbian`/`enable_metabolism`/`use_flex_attention`; presyn early-returns when disabled | — |
 
 ---
 
 ## Most significant remaining gaps (priority order)
 
-1. **NeuroScore is computed but never consumed** by the split/merge lifecycle (`synaptic_splitmerge.py` has no `neuroscore` reference). The README presents it as the credit-assignment engine for evolution. → `de5l`.
-2. **Bistable CaMKII/PP1 latch** is claimed as implemented but is a static sigmoid threshold; PP1 isn't even in the gate. → `sax.2` / `0642.2.x`.
-3. **"Bank-account economy / bankruptcy / IPO"** has no code. → reframe to "energy metabolism + health-based lifecycle" in `8j9.3`.
-4. **Three kernel backends / 90% util** — kernels exist as files but aren't on the live path. → `jyb.*`, perf beads.
-5. **"48-parameter genome"** — actually 82 config fields with dead ones. → `8j9.6` / `8j9.5`.
-6. **Router contrastive update** — params without a wired mechanism. → `fkkc`.
+1. **Bistable CaMKII/PP1 latch** is claimed as implemented but is a static sigmoid threshold; PP1 isn't even in the gate. → `sax.2` / `0642.2.x`.
+2. **"Bank-account economy / bankruptcy / IPO"** has no code. → reframe to "energy metabolism + health-based lifecycle" in `8j9.3`.
+3. **Three kernel backends / 90% util** — kernels exist as files but aren't on the live path. → `jyb.*`, perf beads.
+
+### Resolved since the original audit
+- ✅ **NeuroScore now drives the lifecycle** (`de5l`): published onto each MoE and blended into split/merge/reset health behind `use_neuroscore`.
+- ✅ **Router lateral-inhibition fixed** (`fkkc`): the wired-but-ineffective update was replaced with an effective similarity-weighted repulsion that demonstrably spreads router embeddings.
+- ✅ **"48-parameter genome" reconciled** (`8j9.6` census + `8j9.5` prune): 70 live config fields, 0 dead; machine-verified census committed.
 
 ## Recently CLOSED gaps (this audit records the wins)
 
