@@ -24,7 +24,9 @@ import wandb
 
 from bio_inspired_nanochat.checkpoint_manager import (
     config_provenance,
+    capture_rng_state,
     load_checkpoint,
+    restore_rng_state,
     save_checkpoint,
     synaptic_config_to_meta,
 )
@@ -274,11 +276,16 @@ telemetry = TrainingTelemetry(
 resuming = resume_from_step != -1
 if resuming:
     print0(f"Resuming optimization from step {resume_from_step}")
-    model_data, optimizer_data, meta_data = load_checkpoint(
-        checkpoint_dir, resume_from_step, device, load_optimizer=True, rank=ddp_rank
+    model_data, optimizer_data, meta_data, train_state = load_checkpoint(
+        checkpoint_dir, resume_from_step, device, load_optimizer=True, rank=ddp_rank,
+        load_train_state=True,
     )
     model.load_state_dict(model_data, strict=True, assign=True)
     del model_data  # free up this memory after the copy
+    # hwxb.2.6: restore per-rank RNG so the resumed trajectory matches the uninterrupted run.
+    if train_state is not None:
+        restore_rng_state(train_state.get("rng"))
+        print0(f"[checkpoint] restored RNG state for bit-comparable resume from step {resume_from_step}")
 
 orig_model = model  # original, uncompiled model, for saving raw model state_dict and for inference/evaluation (because the shapes may change shape)
 model = torch.compile(
@@ -601,6 +608,9 @@ while True:
                 },
             },
             rank=ddp_rank,
+            # hwxb.2.6: per-rank RNG so a resumed run is bit-comparable (the synaptic
+            # forward is stochastic during training; without this a resume diverges).
+            train_state={"rng": capture_rng_state(), "step": step},
         )
 
     # termination conditions (TODO: possibly also add loss explosions etc.)

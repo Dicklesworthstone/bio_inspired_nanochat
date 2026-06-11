@@ -6,10 +6,11 @@ import hashlib
 import json
 import logging
 import os
+import random
 import re
 import subprocess
 from dataclasses import asdict, fields
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 from bio_inspired_nanochat.torch_imports import torch
 
@@ -89,12 +90,101 @@ def config_provenance(syn_cfg) -> dict:
     """Provenance stamp for a synaptic checkpoint: git SHA + a stable bio-config hash."""
     return {"git_sha": _git_sha(), "synaptic_config_hash": config_hash(asdict(syn_cfg))}
 
-def save_checkpoint(checkpoint_dir, step, model_data, optimizer_data, meta_data, rank=0):
+# --------------------------------------------------------------------------- #
+# Atomic write + RNG capture (hwxb.2.6 — crash-safe, resumable long runs)
+# --------------------------------------------------------------------------- #
+# A multi-hour 2×4090 run that crashes mid-checkpoint must never leave a corrupt
+# half-written file that a resume then loads. We always write to ``<path>.tmp`` and
+# ``os.replace`` it into place (atomic on POSIX), so any reader sees either the old
+# complete file or the new complete file — never a partial one. Stray ``*.tmp`` files
+# from a crash are ignored by the loaders (which open the exact final names).
+_CKPT_RE = re.compile(r"^(model|meta|optim|train)_(\d{6})(?:_rank\d+)?\.(pt|json)$")
+
+
+def _atomic_torch_save(obj, path: str) -> None:
+    tmp = path + ".tmp"
+    torch.save(obj, tmp)
+    os.replace(tmp, path)
+
+
+def _atomic_write_json(obj, path: str) -> None:
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(obj, f, indent=2)
+    os.replace(tmp, path)
+
+
+def capture_rng_state() -> dict:
+    """Snapshot every RNG that affects training so a resume is bit-comparable.
+
+    The synaptic forward is *stochastic* during training (stochastic vesicle release
+    draws from the global torch RNG), so without restoring RNG a resumed run diverges
+    from the uninterrupted one — verified in tests/test_scaleup_checkpoint.py. RNG state
+    is per-rank (each rank draws independently), so it is saved in the per-rank blob.
+    """
+    state: dict = {"torch": torch.get_rng_state(), "python": random.getstate()}
+    try:
+        import numpy as np
+
+        # legacy=True returns the MT19937 tuple; cast because numpy's overload also
+        # types a dict form that ty otherwise infers.
+        nstate = cast("tuple[Any, ...]", np.random.get_state(legacy=True))  # (type, uint32[624], pos, has_gauss, cached)
+        # Tensor-encode the key array so the on-disk blob loads under the safe
+        # weights_only=True default (a raw numpy array would require arbitrary unpickling).
+        state["numpy"] = {
+            "type": str(nstate[0]),
+            "keys": torch.from_numpy(nstate[1].astype("int64")),
+            "pos": int(nstate[2]),
+            "has_gauss": int(nstate[3]),
+            "cached": float(nstate[4]),
+        }
+    except Exception:
+        pass
+    if torch.cuda.is_available():
+        state["cuda"] = torch.cuda.get_rng_state_all()
+    return state
+
+
+def restore_rng_state(state: Optional[dict]) -> None:
+    """Restore RNGs saved by :func:`capture_rng_state` (no-op on None / missing keys)."""
+    if not state:
+        return
+    if state.get("torch") is not None:
+        torch.set_rng_state(state["torch"])
+    if state.get("python") is not None:
+        # torch.save/load round-trips the python state tuple as nested lists; setstate
+        # requires tuples (version, internal-state-tuple, gauss).
+        py = state["python"]
+        random.setstate((int(py[0]), tuple(int(x) for x in py[1]), py[2]))
+    if state.get("numpy") is not None:
+        try:
+            import numpy as np
+
+            n = state["numpy"]
+            np.random.set_state(
+                (n["type"], n["keys"].numpy().astype("uint32"), int(n["pos"]),
+                 int(n["has_gauss"]), float(n["cached"]))
+            )
+        except Exception:
+            pass
+    if state.get("cuda") is not None and torch.cuda.is_available():
+        torch.cuda.set_rng_state_all(state["cuda"])
+
+
+def save_checkpoint(checkpoint_dir, step, model_data, optimizer_data, meta_data, rank=0, train_state=None):
+    """Atomically persist a checkpoint.
+
+    ``train_state`` (per-rank, optional) carries everything needed for a *bit-comparable*
+    training resume beyond model+optimizer: RNG state (``capture_rng_state()``), the loop
+    step, and any stateful-controller snapshots (split/merge ``_last_step`` + router-logit
+    bias, neuromod EMAs, divergence-guard last-good). See docs/scale_up_checkpointing.md
+    for the full persistence contract (and what is safely *rebuilt* rather than saved).
+    """
     if rank == 0:
         os.makedirs(checkpoint_dir, exist_ok=True)
-        # Save the model state parameters
+        # Save the model state parameters (atomic).
         model_path = os.path.join(checkpoint_dir, f"model_{step:06d}.pt")
-        torch.save(model_data, model_path)
+        _atomic_torch_save(model_data, model_path)
         logger.info(f"Saved model parameters to: {model_path}")
         # Ensure meta_data exists and mark synaptic models
         meta_data = meta_data or {}
@@ -105,31 +195,84 @@ def save_checkpoint(checkpoint_dir, step, model_data, optimizer_data, meta_data,
             synaptic_keys = [k for k in model_data.keys() if any(x in k for x in ["pre.", "post.", "H_fast", "U_buf", "V_buf", "gate_m"])]
             if synaptic_keys:
                 meta_data["synapses"] = True
-        # Save the metadata dict as json
+        # Save the metadata dict as json (atomic).
         meta_path = os.path.join(checkpoint_dir, f"meta_{step:06d}.json")
-        with open(meta_path, "w", encoding="utf-8") as f:
-            json.dump(meta_data, f, indent=2)
+        _atomic_write_json(meta_data, meta_path)
         logger.info(f"Saved metadata to: {meta_path}")
     # Note that optimizer state is sharded across ranks, so each rank must save its own.
     if optimizer_data is not None:
         optimizer_path = os.path.join(checkpoint_dir, f"optim_{step:06d}_rank{rank:d}.pt")
-        torch.save(optimizer_data, optimizer_path)
+        _atomic_torch_save(optimizer_data, optimizer_path)
         logger.info(f"Saved optimizer state to: {optimizer_path}")
+    # Per-rank training state (RNG + controller snapshots) for bit-comparable resume.
+    if train_state is not None:
+        train_path = os.path.join(checkpoint_dir, f"train_{step:06d}_rank{rank:d}.pt")
+        _atomic_torch_save(train_state, train_path)
+        logger.info(f"Saved train state to: {train_path}")
 
-def load_checkpoint(checkpoint_dir, step, device, load_optimizer=False, rank=0):
-    # Load the model state
+def load_checkpoint(checkpoint_dir, step, device, load_optimizer=False, rank=0, load_train_state=False):
+    # Load the model state. weights_only=True (the safe default) is sufficient: our
+    # checkpoints are tensor-only state dicts (and RNG is tensor-encoded), so no
+    # arbitrary-pickle deserialization is ever required to resume.
     model_path = os.path.join(checkpoint_dir, f"model_{step:06d}.pt")
-    model_data = torch.load(model_path, map_location=device)
+    model_data = torch.load(model_path, map_location=device, weights_only=True)
     # Load the optimizer state if requested
     optimizer_data = None
     if load_optimizer:
         optimizer_path = os.path.join(checkpoint_dir, f"optim_{step:06d}_rank{rank:d}.pt")
-        optimizer_data = torch.load(optimizer_path, map_location=device)
+        optimizer_data = torch.load(optimizer_path, map_location=device, weights_only=True)
     # Load the metadata
     meta_path = os.path.join(checkpoint_dir, f"meta_{step:06d}.json")
     with open(meta_path, "r", encoding="utf-8") as f:
         meta_data = json.load(f)
+    if load_train_state:
+        train_path = os.path.join(checkpoint_dir, f"train_{step:06d}_rank{rank:d}.pt")
+        # RNG state is tensor-encoded by capture_rng_state(), so the safe default loads it.
+        train_state = (
+            torch.load(train_path, map_location=device, weights_only=True)
+            if os.path.exists(train_path) else None
+        )
+        return model_data, optimizer_data, meta_data, train_state
     return model_data, optimizer_data, meta_data
+
+
+def list_checkpoint_steps(checkpoint_dir: str) -> list[int]:
+    """Sorted ascending list of steps that have a saved ``model_*.pt``."""
+    steps = []
+    for f in glob.glob(os.path.join(checkpoint_dir, "model_*.pt")):
+        m = re.match(r"model_(\d{6})\.pt$", os.path.basename(f))
+        if m:
+            steps.append(int(m.group(1)))
+    return sorted(steps)
+
+
+def prune_checkpoints(checkpoint_dir: str, keep_last: int, *, best_step: Optional[int] = None, rank: int = 0) -> list[int]:
+    """Rotate checkpoints: keep the ``keep_last`` most recent steps + ``best_step``.
+
+    Disk on a long run is finite; without rotation a multi-day run fills the volume and
+    crashes. This deletes the model/meta/optim/train artifacts of *superseded* steps only,
+    and only files matching the strict checkpoint name pattern in ``checkpoint_dir`` — it
+    never touches anything else. Opt-in: the caller passes an explicit ``keep_last``.
+    Returns the list of pruned steps. Every deletion is logged.
+    """
+    if keep_last < 1:
+        raise ValueError(f"keep_last must be >= 1, got {keep_last}")
+    steps = list_checkpoint_steps(checkpoint_dir)
+    keep = set(steps[-keep_last:])
+    if best_step is not None:
+        keep.add(int(best_step))
+    pruned = [s for s in steps if s not in keep]
+    for s in pruned:
+        for name in (f"model_{s:06d}.pt", f"meta_{s:06d}.json",
+                     f"optim_{s:06d}_rank{rank:d}.pt", f"train_{s:06d}_rank{rank:d}.pt"):
+            path = os.path.join(checkpoint_dir, name)
+            # Defensive: only ever remove files matching the checkpoint pattern.
+            if os.path.exists(path) and _CKPT_RE.match(os.path.basename(path)):
+                os.remove(path)
+                logger.info(f"[checkpoint] pruned superseded checkpoint file: {path}")
+    if pruned:
+        logger.info(f"[checkpoint] rotation kept steps {sorted(keep)}, pruned {pruned}")
+    return pruned
 
 
 def build_model(checkpoint_dir, step, device, phase):
