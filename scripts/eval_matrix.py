@@ -678,6 +678,28 @@ def _run_one(
             out = evaluate_model(model, tokenizer, device, max_per_task=core_max_per_task)
             core_metric = float(out["core_metric"])
 
+    # Needle-in-a-haystack long-context retrieval accuracy (74f.2): the key probe of
+    # the fast-weight / long-context claim. Swept over length × needle depth.
+    niah_acc: Optional[float] = None
+    try:
+        from bio_inspired_nanochat.synthetic_tasks import niah_accuracy_by_length
+
+        max_len = min(int(sequence_len) - 2, 256)
+        niah_lengths = tuple(length for length in (16, 64, max_len) if 8 <= length <= max_len)
+        if niah_lengths:
+            niah_acc = float(
+                niah_accuracy_by_length(
+                    model,
+                    vocab_size=min(64, int(vocab_size)),
+                    lengths=niah_lengths,
+                    batch=32,
+                    seed=int(seed),
+                    device=device,
+                )["overall"]
+            )
+    except Exception as e:  # eval is best-effort; never fail a run on the probe
+        print(f"[niah] eval skipped: {e}")
+
     summary = HarnessRunSummary(
         run_id=run_id,
         preset=preset,
@@ -692,7 +714,7 @@ def _run_one(
         val_bpb=val_bpb,
         core_metric=core_metric,
         ece=ece,
-        niah_acc=None,
+        niah_acc=niah_acc,
     )
 
     # Persist summary

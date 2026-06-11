@@ -320,7 +320,7 @@ We're implementing systematic bio vs vanilla evaluation with statistical rigor:
 
 **Quality Metrics:**
 - **Perplexity** - Validation loss on FineWeb-Edu
-- **Long-Context** - Needle-in-a-Haystack (NIAH) accuracy at 4k/8k tokens
+- **Long-Context** - Needle-in-a-Haystack (NIAH) retrieval accuracy, swept over length × needle depth (implemented: `synthetic_tasks.niah_accuracy_by_length`, wired into `eval_matrix` as `niah_acc`; sweep to 4k/8k for large models)
 - **Calibration** - Expected Calibration Error (ECE)
 - **MoE Health** - Expert specialization (Gini), dead expert fraction
 - **Memory** - Associative recall on synthetic tasks

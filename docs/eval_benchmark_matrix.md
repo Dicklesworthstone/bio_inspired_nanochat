@@ -16,7 +16,7 @@ It is the single source of truth for what the standardized harness (bead `bio_in
 - **Val bpb** (bits/byte): computed in `bio_inspired_nanochat/loss_eval.py::evaluate_bpb`.
   - Report bpb directly (primary) and optionally convert to a token-level proxy if needed.
 - **CORE metric** (Karpathy eval bundle): `scripts/base_eval.py::evaluate_model`.
-- **NIAH long-context accuracy** (planned): Needle-in-a-Haystack at 4k/8k context.
+- **NIAH long-context accuracy**: Needle-in-a-Haystack retrieval swept over length × needle depth — `synthetic_tasks.niah_accuracy_by_length`, wired into `eval_matrix` as `niah_acc` (74f.2). Sweep to 4k/8k for large models.
 - **Calibration (ECE)** (planned): Expected Calibration Error on a held-out slice.
 
 ### Bio / MoE health (for `GPTSynaptic`)
@@ -59,7 +59,7 @@ Three budgets (to keep iteration fast, then do real comparisons):
 ### Sequence lengths
 
 - **Train**: `2048` (default), optionally `1024` for smoke.
-- **Long-context (NIAH)**: `4096` and `8192` (planned).
+- **Long-context (NIAH)**: length × depth sweep (default `16/64/up-to-seq_len`; `4096`/`8192` for large models).
 
 ---
 

@@ -302,3 +302,67 @@ def make_task(name: str, **kwargs: Any):
     if name not in TASKS:
         raise KeyError(f"unknown synthetic task '{name}'; choices: {sorted(TASKS)}")
     return TASKS[name](**kwargs)
+
+
+# --------------------------------------------------------------------------- #
+# Retrieval evaluation (bead 74f.2) — run a model on a task and score the answer
+# --------------------------------------------------------------------------- #
+@torch.no_grad()
+def retrieval_accuracy(model: Any, batch: SyntheticBatch) -> float:
+    """Fraction of rows where the model's argmax at ``answer_pos`` equals the gold answer.
+
+    Works for any task whose ``meta`` carries ``answer_pos`` + ``answers`` (niah,
+    associative_recall, variable_binding). The models are no-shift — ``logits[:, t]``
+    predicts ``targets[:, t]`` — so the prediction is read directly at ``answer_pos``.
+    """
+    out = model(batch.inputs)
+    logits = out[0] if isinstance(out, (tuple, list)) else out
+    ap = int(batch.meta["answer_pos"])
+    pred = logits[:, ap, :].argmax(dim=-1)
+    gold = batch.meta["answers"].to(pred.device)
+    return float((pred == gold).float().mean().item())
+
+
+@torch.no_grad()
+def niah_accuracy_by_length(
+    model: Any,
+    *,
+    vocab_size: int,
+    lengths: tuple[int, ...] = (16, 64, 128),
+    depth_fracs: tuple[float, ...] = (0.1, 0.5, 0.9),
+    batch: int = 32,
+    seed: int = 0,
+    device: Any = None,
+) -> dict[str, Any]:
+    """Needle-in-a-haystack accuracy swept over haystack length × needle depth.
+
+    For each haystack length the needle is placed at every ``depth_frac`` (begin/middle/
+    end) and accuracies are averaged, giving the canonical accuracy-by-length curve.
+    Fast-weight state is reset per batch so each retrieval is independent. Returns
+    ``{"by_length": {L: acc}, "overall": mean_acc}``.
+    """
+    was_training = getattr(model, "training", False)
+    if hasattr(model, "eval"):
+        model.eval()
+    by_length: dict[int, float] = {}
+    for length in lengths:
+        accs = []
+        for i, df in enumerate(depth_fracs):
+            b = needle_in_haystack(
+                batch=batch,
+                haystack_len=length,
+                vocab_size=vocab_size,
+                depth_frac=df,
+                seed=seed + 1000 * length + i,
+            )
+            if device is not None:
+                b = b.to(device)
+            # Fresh fast-weights per batch so the needle can't leak across evals.
+            if hasattr(model, "reset_sequence_state"):
+                model.reset_sequence_state(reset_fast_weights=True)
+            accs.append(retrieval_accuracy(model, b))
+        by_length[length] = sum(accs) / len(accs)
+    if was_training and hasattr(model, "train"):
+        model.train()
+    overall = sum(by_length.values()) / len(by_length) if by_length else float("nan")
+    return {"by_length": by_length, "overall": overall}
