@@ -31,8 +31,8 @@ Maps every public/marketing claim (README, planning docs) to a verified implemen
 |---|---|---|---|
 | **Online Hebbian learning during training** | **SOLID** | `synaptic.py:233` `plasticity_during_training=True`; `:1155` `run_plasticity` runs with grad enabled; deferred autograd-safe writes `:1074` | — (closed `vg9.2`) |
 | Low-rank eligibility traces (rank-R U/V) | **PARTIAL** | `u_buf`/`v_buf` buffers + outer-product consolidation exist, but the rank-R structure is degenerate (mean-broadcast, not genuine rank-R) | `vg9.9` |
-| CaMKII/PP1 consolidation gate | **PARTIAL** | gate `synaptic.py:947` `g = sigmoid(camkii−0.5)−0.3` — **PP1 is tracked (`:889`) but NOT in the gate**; threshold, not a latch | `sax.2`, `0642.2.2.x` |
-| **Bistable CaMKII/PP1 latch** (hysteresis / self-excitation) | **ASPIRATIONAL** | no bistability, no self-excitation, no ODE; the gate is a static sigmoid threshold (`:947`) | `sax.2`, `0642.2.1.3`/`0642.2.2.1` (cusp latch) |
+| CaMKII/PP1 consolidation gate | **SOLID** (opt-in) | default gate is `g = sigmoid(camkii−0.5)−0.3` (PP1 not in it); `bistable_latch` (`sax.2`) switches it to `sigmoid(β·(CaMKII−PP1))` — PP1 IN the gate | — (closed `sax.2`) |
+| **Bistable CaMKII/PP1 latch** (hysteresis / self-excitation) | **SOLID** (opt-in) | `sax.2`: Lisman switch — CaMKII Hill autophosphorylation + mutual PP1 cross-inhibition over a basal floor; demonstrated bistability/hysteresis/erasure in `tests/test_bistable_latch.py`. Behind `bistable_latch` (default-off) | — (closed `sax.2`); cusp variant `0642.2.x` |
 | BDNF metaplasticity (activity-dependent LR) | **SOLID** | `synaptic.py:891`+ BDNF accumulator; `consolidate` modulates `post_slow_lr` by `(1+γ·BDNF)` | — |
 
 ## Structural plasticity / MoE
@@ -68,14 +68,14 @@ Maps every public/marketing claim (README, planning docs) to a verified implemen
 
 ## Most significant remaining gaps (priority order)
 
-1. **Bistable CaMKII/PP1 latch** is claimed as implemented but is a static sigmoid threshold; PP1 isn't even in the gate. → `sax.2` / `0642.2.x`.
-2. **"Bank-account economy / bankruptcy / IPO"** has no code. → reframe to "energy metabolism + health-based lifecycle" in `8j9.3`.
-3. **Three kernel backends / 90% util** — kernels exist as files but aren't on the live path. → `jyb.*`, perf beads.
+1. **"Bank-account economy / bankruptcy / IPO"** has no code. → reframe to "energy metabolism + health-based lifecycle" in `8j9.3`.
+2. **Three kernel backends / 90% util** — kernels exist as files but aren't on the live path. → `jyb.*`, perf beads.
 
 ### Resolved since the original audit
 - ✅ **NeuroScore now drives the lifecycle** (`de5l`): published onto each MoE and blended into split/merge/reset health behind `use_neuroscore`.
 - ✅ **Router lateral-inhibition fixed** (`fkkc`): the wired-but-ineffective update was replaced with an effective similarity-weighted repulsion that demonstrably spreads router embeddings.
-- ✅ **"48-parameter genome" reconciled** (`8j9.6` census + `8j9.5` prune): 70 live config fields, 0 dead; machine-verified census committed.
+- ✅ **"48-parameter genome" reconciled** (`8j9.6` census + `8j9.5` prune, then `sax.2` added the latch knobs): 82 live config fields, 0 dead; machine-verified census committed.
+- ✅ **Bistable CaMKII/PP1 latch implemented** (`sax.2`): real Lisman switch with hysteresis + PP1 in the gate, behind `bistable_latch` (default-off), demonstrated in tests.
 
 ## Recently CLOSED gaps (this audit records the wins)
 

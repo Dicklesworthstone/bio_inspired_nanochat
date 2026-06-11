@@ -221,6 +221,28 @@ class SynapticConfig:
     bdnf_gamma: float = 0.0  # Gamma gain factor; when > 0, takes precedence over bdnf_scale
     bdnf_hebb_accumulate: bool = True  # Use Hebbian delta magnitude for BDNF (vs CaMKII)
     bdnf_max: float = 10.0  # Upper clamp on BDNF to prevent unbounded growth
+
+    # Bistable CaMKII/PP1 consolidation latch (sax.2). DEFAULT-OFF. When enabled, the
+    # CaMKII/PP1 update becomes a Lisman-style bistable switch — CaMKII self-excitation
+    # (Hill autophosphorylation) + mutual cross-inhibition with PP1, over a basal
+    # phosphatase floor — and the consolidation gate becomes sigmoid(gate_beta*(CaMKII-PP1)),
+    # putting PP1 INTO the gate. This yields hysteresis: a supra-threshold pulse latches the
+    # synapse ON and it STAYS after input drops (noise-robust retention), while a sustained
+    # LTD/low-calcium signal flips it OFF. Calcium maps to LTP/LTD drives by a BCM curve:
+    # drive = sigmoid(gain*(ca - camkii_thr)); erase = sigmoid(gain*(latch_ltd_thr - ca)).
+    # The disabled path keeps the legacy linear CaMKII update + sigmoid(CaMKII-0.5) gate.
+    bistable_latch: bool = False
+    latch_ltd_thr: float = 0.5       # calcium below this activates PP1/LTD (camkii_thr is the LTP threshold)
+    latch_input_gain: float = 12.0   # sharpness of the BCM drive/erase sigmoids
+    latch_alpha_ca: float = 0.6      # calcium -> CaMKII potentiation rate
+    latch_beta_pp1: float = 1.0      # PP1 -> CaMKII de-potentiation (cross-inhibition)
+    latch_gamma_auto: float = 0.45   # CaMKII autophosphorylation (self-excitation) gain
+    latch_hill_n: float = 6.0        # Hill coefficient of the self-excitation
+    latch_hill_k: float = 0.6        # Hill half-max of the self-excitation
+    latch_alpha_pp1: float = 0.5     # low-calcium -> PP1 activation rate
+    latch_beta_camkii: float = 0.3   # CaMKII -> PP1 cross-inhibition (maintains the latch)
+    latch_pp1_basal: float = 0.3     # basal phosphatase floor (keeps the OFF state stable)
+    latch_gate_beta: float = 6.0     # consolidation-gate steepness, sigmoid(beta*(CaMKII-PP1))
     # vg9.2: run online Hebbian plasticity during TRAINING (grad enabled), not only under
     # inference/no_grad. The headline "online Hebbian learning" was previously gated behind
     # `not torch.is_grad_enabled()` and so NEVER ran at train time. When True (default), the
@@ -668,19 +690,44 @@ class PostsynapticHebb(nn.Module):
             BDNF accumulates |ΔW_hebb| via bdnf_hebb_accum buffer (updated in consolidate())
             The main bdnf buffer then tracks this with decay.
         """
-        up = (ca_proxy > self.cfg.camkii_thr).float()
-        down = (ca_proxy < self.cfg.pp1_thr).float()
+        cfg = self.cfg
+        if cfg.bistable_latch:
+            # Lisman-style bistable switch (sax.2): CaMKII self-excitation + mutual
+            # cross-inhibition with PP1 over a basal phosphatase floor. Calcium maps to
+            # LTP/LTD drives via a BCM curve (LTP above camkii_thr, LTD below latch_ltd_thr).
+            gain = cfg.latch_input_gain
+            drive = torch.sigmoid(gain * (ca_proxy - cfg.camkii_thr))
+            erase = torch.sigmoid(gain * (cfg.latch_ltd_thr - ca_proxy))
+            gamma = cfg.latch_gamma_auto      # CaMKII autophosphorylation gain
+            beta_pp1 = cfg.latch_beta_pp1     # PP1 de-potentiation strength
+            if genes is not None and genes.numel() >= 4:
+                gamma = (genes[..., 2] * gamma).clamp(min=0.0)
+                beta_pp1 = (genes[..., 3] * beta_pp1).clamp(min=0.0)
+            m, p = self.camkii, self.pp1
+            n, k = cfg.latch_hill_n, cfg.latch_hill_k
+            hill = m.pow(n) / (k**n + m.pow(n) + 1e-12)
+            m_new = (
+                m + cfg.latch_alpha_ca * drive * (1 - m) - beta_pp1 * p * m + gamma * hill
+            ).clamp(0.0, 1.0)
+            p_new = (
+                p + cfg.latch_alpha_pp1 * erase * (1 - p) - cfg.latch_beta_camkii * m * p
+            ).clamp(cfg.latch_pp1_basal, 1.0)
+            self.camkii.copy_(m_new)
+            self.pp1.copy_(p_new)
+        else:
+            up = (ca_proxy > cfg.camkii_thr).float()
+            down = (ca_proxy < cfg.pp1_thr).float()
 
-        camkii_up = self.cfg.camkii_up
-        pp1_rate = 1.0 - self.cfg.pp1_tau
-        if genes is not None and genes.numel() >= 4:
-            camkii_up = (genes[..., 2] * camkii_up).clamp(max=1.0)
-            pp1_rate = (genes[..., 3] * pp1_rate).clamp(0.0, 1.0)
+            camkii_up = cfg.camkii_up
+            pp1_rate = 1.0 - cfg.pp1_tau
+            if genes is not None and genes.numel() >= 4:
+                camkii_up = (genes[..., 2] * camkii_up).clamp(max=1.0)
+                pp1_rate = (genes[..., 3] * pp1_rate).clamp(0.0, 1.0)
 
-        self.camkii.add_(camkii_up * up * (1 - self.camkii))
-        self.camkii.clamp_(0, 1)
+            self.camkii.add_(camkii_up * up * (1 - self.camkii))
+            self.camkii.clamp_(0, 1)
 
-        self.pp1.mul_(1.0 - pp1_rate).add_(pp1_rate * down)
+            self.pp1.mul_(1.0 - pp1_rate).add_(pp1_rate * down)
 
         # BDNF update: either from CaMKII (legacy) or from Hebbian accumulator (new)
         if self.cfg.bdnf_hebb_accumulate:
@@ -737,8 +784,13 @@ class PostsynapticHebb(nn.Module):
                 self.bdnf_hebb_accum.zero_()
             self.bdnf_hebb_accum.clamp_(0, self.cfg.bdnf_max)
 
-        # CaMKII gate: consolidation only when CaMKII > 0.5
-        g = torch.sigmoid(self.camkii - 0.5) - 0.3
+        # Consolidation gate. With the bistable latch (sax.2), PP1 is IN the gate —
+        # g = sigmoid(beta*(CaMKII - PP1)) — so consolidation tracks the latch state and
+        # its hysteresis. Otherwise the legacy CaMKII-only threshold gate.
+        if self.cfg.bistable_latch:
+            g = torch.sigmoid(self.cfg.latch_gate_beta * (self.camkii - self.pp1))
+        else:
+            g = torch.sigmoid(self.camkii - 0.5) - 0.3
 
         # Shape check before update
         if delta.shape != self.slow.shape:
