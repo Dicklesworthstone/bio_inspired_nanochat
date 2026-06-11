@@ -139,8 +139,11 @@ class DistMuon(torch.optim.Optimizer):
         if not all(p.grad is not None for group in self.param_groups for p in group["params"]):
             raise ValueError("All params must have grads")
 
-        # Kick off all the reduce scatter operations to average up the gradients across all ranks
-        all_reduce_futures = []
+        # Kick off all the reduce scatter operations to average up the gradients across all ranks.
+        # We keep the async ``Work`` handles and ``.wait()`` on them directly rather than
+        # ``.get_future()``: gloo (CPU, used by tests/test_scaleup_ddp.py) does not implement
+        # ``Work::getFuture`` while NCCL does; ``.wait()`` is portable and equally async.
+        reduce_handles = []
         for group in self.param_groups:
             params = group["params"]
             zero_buffer = group["zero_buffer"]
@@ -155,12 +158,12 @@ class DistMuon(torch.optim.Optimizer):
                 # the output buffer gets strided across the group based on the rank
                 rs_output = params[owner_idx].grad if owner_idx < len(params) else torch.empty_like(zero_buffer)
                 # reduce scatter the gradients within this group of world_size params
-                work = dist.reduce_scatter(rs_output, rs_input, op=dist.ReduceOp.AVG, async_op=True).get_future()
-                all_reduce_futures.append(work)
+                handle = dist.reduce_scatter(rs_output, rs_input, op=dist.ReduceOp.AVG, async_op=True)
+                reduce_handles.append(handle)
 
         # Now each rank computes the update and gathers
         future_idx = 0
-        all_gather_futures = []
+        all_gather_handles = []
         for group in self.param_groups:
             params = group["params"]
             zero_buffer = group["zero_buffer"]
@@ -169,7 +172,7 @@ class DistMuon(torch.optim.Optimizer):
                 # The compute owner of each param is rank i % world_size
                 owner_idx = base_i + rank # calculate the index of the param that this rank owns
                 # Wait for the reduce scatter to complete
-                all_reduce_futures[future_idx].wait() # possibly later we could use wait_any polling instead
+                reduce_handles[future_idx].wait() # possibly later we could use wait_any polling instead
                 future_idx += 1
                 # Owner computes the Muon update, result is in its param
                 if owner_idx < len(params):
@@ -188,8 +191,9 @@ class DistMuon(torch.optim.Optimizer):
                 ag_input = params[owner_idx] if owner_idx < len(params) else zero_buffer
                 ag_output = params[base_i:base_i + world_size]
                 ag_output.extend([torch.empty_like(zero_buffer) for _ in range(world_size - len(ag_output))]) # pad
-                work = dist.all_gather(ag_output, ag_input, async_op=True).get_future()
-                all_gather_futures.append(work)
+                handle = dist.all_gather(ag_output, ag_input, async_op=True)
+                all_gather_handles.append(handle)
 
         # Wait for all work to finish
-        torch.futures.collect_all(all_gather_futures).wait()
+        for handle in all_gather_handles:
+            handle.wait()
