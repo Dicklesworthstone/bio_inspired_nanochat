@@ -366,3 +366,128 @@ def niah_accuracy_by_length(
         model.train()
     overall = sum(by_length.values()) / len(by_length) if by_length else float("nan")
     return {"by_length": by_length, "overall": overall}
+
+
+# --------------------------------------------------------------------------- #
+# Working-memory evaluation suite (sax.4)
+# --------------------------------------------------------------------------- #
+
+
+def _reset_fast_state(model: Any) -> None:
+    """Wipe per-sequence fast-weight/eligibility state so each eval batch is independent."""
+    if hasattr(model, "reset_sequence_state"):
+        model.reset_sequence_state(reset_fast_weights=True)
+
+
+@torch.no_grad()
+def recall_accuracy_by_pairs(
+    model: Any,
+    *,
+    vocab_size: int,
+    num_pairs: tuple[int, ...] = (2, 4, 8, 16),
+    batch: int = 32,
+    seed: int = 0,
+    device: Any = None,
+) -> dict[str, Any]:
+    """Associative-recall accuracy swept over the number of key→value pairs (memory load).
+
+    More pairs ⇒ more to hold in working memory before the query, so the accuracy-by-load curve
+    is a direct probe of recall capacity. Fast-weight state is reset per batch so retrievals are
+    independent. Returns ``{"by_pairs": {n: acc}, "overall": mean_acc}``.
+    """
+    by_pairs: dict[int, float] = {}
+    for n in num_pairs:
+        b = associative_recall(batch=batch, num_pairs=n, vocab_size=vocab_size, seed=seed + n)
+        if device is not None:
+            b = b.to(device)
+        _reset_fast_state(model)
+        by_pairs[n] = retrieval_accuracy(model, b)
+    overall = sum(by_pairs.values()) / len(by_pairs) if by_pairs else float("nan")
+    return {"by_pairs": by_pairs, "overall": overall}
+
+
+@torch.no_grad()
+def binding_accuracy_by_distractors(
+    model: Any,
+    *,
+    vocab_size: int,
+    num_distractors: tuple[int, ...] = (0, 4, 16, 64),
+    num_vars: int = 3,
+    batch: int = 32,
+    seed: int = 0,
+    device: Any = None,
+) -> dict[str, Any]:
+    """Variable-binding accuracy swept over the number of DISTRACTOR tokens between the binding
+    and the query — the "infinite local context" stress test.
+
+    A binding ("zibzab has purple fur") must survive an increasing number of irrelevant tokens
+    before the query. The accuracy-vs-distractors curve measures how far back the model can bind;
+    a model with genuine working memory degrades gracefully, a context-window model falls off a
+    cliff. Returns ``{"by_distractors": {n: acc}, "overall": mean_acc}``.
+    """
+    by_distractors: dict[int, float] = {}
+    for n in num_distractors:
+        b = variable_binding(
+            batch=batch, num_vars=num_vars, num_distractors=n, vocab_size=vocab_size, seed=seed + n
+        )
+        if device is not None:
+            b = b.to(device)
+        _reset_fast_state(model)
+        by_distractors[n] = retrieval_accuracy(model, b)
+    overall = sum(by_distractors.values()) / len(by_distractors) if by_distractors else float("nan")
+    return {"by_distractors": by_distractors, "overall": overall}
+
+
+@torch.no_grad()
+def working_memory_suite(
+    model: Any,
+    *,
+    vocab_size: int,
+    recall_pairs: tuple[int, ...] = (2, 4, 8, 16),
+    binding_distractors: tuple[int, ...] = (0, 4, 16, 64),
+    niah_lengths: tuple[int, ...] = (16, 64, 128),
+    batch: int = 32,
+    seed: int = 0,
+    device: Any = None,
+) -> dict[str, Any]:
+    """The working-memory evaluation suite (sax.4): a single entry point that tests the
+    "infinite local context" claim with clean, by-difficulty curves.
+
+    Runs three complementary probes — associative recall by memory load, variable binding by
+    distractor count, and needle-in-a-haystack by length — each with per-batch fast-weight resets
+    so retrievals are independent. Model-agnostic: works on bio (synaptic) and vanilla models, so
+    it drives bio-vs-vanilla and fast-weight-baseline comparisons. Returns the three curves plus a
+    flat ``summary`` of overall accuracies (the headline numbers).
+
+    The model's context length must accommodate the longest eval sequence (the binding sequence
+    grows with ``binding_distractors`` and the NIAH sequence with ``niah_lengths``); size the eval
+    params to the model, as with ``niah_accuracy_by_length``.
+    """
+    was_training = getattr(model, "training", False)
+    if hasattr(model, "eval"):
+        model.eval()
+
+    recall = recall_accuracy_by_pairs(
+        model, vocab_size=vocab_size, num_pairs=recall_pairs, batch=batch, seed=seed, device=device
+    )
+    binding = binding_accuracy_by_distractors(
+        model, vocab_size=vocab_size, num_distractors=binding_distractors,
+        batch=batch, seed=seed, device=device,
+    )
+    niah = niah_accuracy_by_length(
+        model, vocab_size=vocab_size, lengths=niah_lengths, batch=batch, seed=seed, device=device
+    )
+
+    if was_training and hasattr(model, "train"):
+        model.train()
+
+    return {
+        "recall": recall,
+        "binding": binding,
+        "niah": niah,
+        "summary": {
+            "recall_overall": recall["overall"],
+            "binding_overall": binding["overall"],
+            "niah_overall": niah["overall"],
+        },
+    }
