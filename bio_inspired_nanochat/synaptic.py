@@ -294,6 +294,64 @@ class SynapticConfig:
 
 
 # -----------------------------------------------------------------------------
+# Differentiable affine recurrence (yw9.2.1)
+# -----------------------------------------------------------------------------
+
+
+def affine_scan_sequential(a: Tensor, b: Tensor, x0: Optional[Tensor] = None) -> Tensor:
+    """Reference (sequential) affine scan: x_t = a_t * x_{t-1} + b_t, t = 0..T-1.
+
+    The scan runs along dim 0. ``a``, ``b`` are ``(T, *batch)`` and broadcast against each other;
+    ``x0`` is the pre-sequence state ``x_{-1}`` (``*batch``, default zeros). Returns ``(T, *batch)``.
+    This is the obviously-correct `O(T)`-depth reference that the parallel `affine_scan` is
+    validated against (yw9.2.1 acceptance) and is itself differentiable.
+    """
+    T = a.shape[0]
+    prev = x0 if x0 is not None else torch.zeros_like(b[0])
+    outs = []
+    for t in range(T):
+        prev = a[t] * prev + b[t]
+        outs.append(prev)
+    return torch.stack(outs, dim=0)
+
+
+def affine_scan(a: Tensor, b: Tensor, x0: Optional[Tensor] = None) -> Tensor:
+    """Differentiable PARALLEL associative scan of x_t = a_t * x_{t-1} + b_t (yw9.2.1).
+
+    Hillis-Steele inclusive scan over the affine monoid — each affine map f_i(x) = a_i x + b_i
+    composes associatively as  (a_l, b_l) ⊕ (a_r, b_r) = (a_r·a_l, a_r·b_l + b_r)  (left applied
+    first). `O(log T)` sequential depth (vs `O(T)` for the loop) and fully differentiable w.r.t.
+    ``a``, ``b``, ``x0`` (only `mul`/`add`/`cat`). Matches `affine_scan_sequential` to fp tolerance.
+
+    Scan runs along dim 0. ``a``, ``b``: ``(T, *batch)``; ``x0``: ``*batch`` (default zeros).
+    Stability: for the synaptic leaky integrators every ``a_t`` is a decay in ``(0,1)`` so the
+    prefix products ``∏ a`` stay bounded — no blow-up in the forward or the gradient.
+    """
+    T = a.shape[0]
+    # A, B hold the cumulative affine map F_t (so far) at each position; init = the per-step maps.
+    # After the scan, F_t = (A_t, B_t) satisfies x_t = A_t * x0 + B_t.
+    A = a.broadcast_to(b.shape) if a.shape != b.shape else a
+    B = b.broadcast_to(A.shape) if b.shape != A.shape else b
+    A = A.clone()
+    B = B.clone()
+    d = 1
+    while d < T:
+        # out[t-d] is the earlier/left operand, identity-padded with (a=1, b=0) for the first d.
+        ones = torch.ones_like(A[:d])
+        zeros = torch.zeros_like(B[:d])
+        A_left = torch.cat([ones, A[:-d]], dim=0)
+        B_left = torch.cat([zeros, B[:-d]], dim=0)
+        # combine(left=out[t-d], right=out[t]) = (a_r·a_l, a_r·b_l + b_r); a_r,b_r are the OLD A,B.
+        A_new = A * A_left
+        B_new = A * B_left + B
+        A, B = A_new, B_new
+        d *= 2
+    if x0 is None:
+        return B
+    return A * x0 + B
+
+
+# -----------------------------------------------------------------------------
 # Presynaptic biophysics
 # -----------------------------------------------------------------------------
 
