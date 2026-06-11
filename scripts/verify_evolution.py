@@ -27,10 +27,6 @@ def _build_synaptic_config(overrides: Dict[str, object]) -> SynapticConfig:
 
 def main():
     parser = argparse.ArgumentParser(description="Verify Bio-Inspired Nanochat Evolution")
-    parser.add_argument("--fused-presyn", action="store_true", default=None, help="Enable fused (Triton) presyn kernel")
-    parser.add_argument("--no-fused-presyn", action="store_false", dest="fused_presyn", help="Disable fused presyn kernel")
-    parser.add_argument("--fused-metrics", action="store_true", default=None, help="Enable fused metrics")
-    parser.add_argument("--no-fused-metrics", action="store_false", dest="fused_metrics", help="Disable fused metrics")
     parser.add_argument("--fused-genetics", action="store_true", default=None, help="Enable fused genetics")
     parser.add_argument("--no-fused-genetics", action="store_false", dest="fused_genetics", help="Disable fused genetics")
     
@@ -42,22 +38,17 @@ def main():
     torch.autograd.set_detect_anomaly(True)
 
     syn_kwargs = {
-        "enabled": True,
         "tau_rrp": 20.0,
         "xi_dim": 4,
     }
-    
+
     # Override defaults if flags are provided
-    if args.fused_presyn is not None:
-        syn_kwargs["native_presyn"] = args.fused_presyn
-    if args.fused_metrics is not None:
-        syn_kwargs["native_metrics"] = args.fused_metrics
     if args.fused_genetics is not None:
         syn_kwargs["native_genetics"] = args.fused_genetics
 
     syn_cfg = _build_synaptic_config(syn_kwargs)
-    
-    print(f"[*] Synaptic Config: native_presyn={syn_cfg.native_presyn}, native_metrics={syn_cfg.native_metrics}")
+
+    print(f"[*] Synaptic Config: native_genetics={syn_cfg.native_genetics}")
     
     # Tiny model for speed
     model_cfg = GPTSynapticConfig(

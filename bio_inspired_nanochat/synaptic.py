@@ -135,7 +135,6 @@ def _sample_binomial_counts(
 
 @dataclass
 class SynapticConfig:
-    enabled: bool = True
     # General
     rank_eligibility: int = 8
     attn_topk: int = 32
@@ -214,7 +213,6 @@ class SynapticConfig:
     post_slow_lr: float = 5e-4
     post_trace_decay: float = 0.96
     camkii_up: float = 0.05
-    camkii_down: float = 0.02
     pp1_tau: float = 0.985
     camkii_thr: float = 1.0
     pp1_thr: float = 0.7
@@ -238,7 +236,6 @@ class SynapticConfig:
     router_embed_dim: int = 24
     router_contrastive_lr: float = 1e-4
     router_contrastive_push: float = 0.1
-    router_sim_threshold: float = 0.6
 
     # Genetics
     # Per-expert genome embedding (Xi). A decoder maps Xi -> phenotype scalars that
@@ -253,10 +250,13 @@ class SynapticConfig:
     use_flex_attention: bool = False
 
     # Native (Rust) Kernel Toggles
-    native_presyn: bool = decouple_config("BIO_FUSED_PRESYN", default=False, cast=bool)
-    native_metrics: bool = decouple_config("BIO_FUSED_METRICS", default=False, cast=bool)
+    # native_genetics gates the fused metabolism/genetics kernel (synaptic.py, MoE
+    # forward). The sibling toggles native_presyn / native_metrics / native_plasticity
+    # were removed in 8j9.5 as dead no-op knobs: the presyn fused kernel is not on the
+    # live path (jyb.2 will wire it and reintroduce a toggle then), the fused-metrics
+    # path is gated independently by the FUSED_METRICS module constant in neuroscore.py,
+    # and no fused-plasticity kernel exists.
     native_genetics: bool = decouple_config("BIO_FUSED_GENETICS", default=False, cast=bool)
-    native_plasticity: bool = decouple_config("BIO_FUSED_PLASTICITY", default=False, cast=bool)
 
 
 # -----------------------------------------------------------------------------

@@ -69,7 +69,6 @@ OTHER_CONFIG_FILES = [
 # Subsystem for every SynapticConfig field. The completeness guard below makes
 # this map impossible to silently drift from the dataclass.
 SUBSYSTEM: dict[str, str] = {
-    "enabled": "meta",
     "rank_eligibility": "general",
     "attn_topk": "general",
     "stochastic_train_frac": "general",
@@ -119,7 +118,6 @@ SUBSYSTEM: dict[str, str] = {
     "post_slow_lr": "postsynaptic",
     "post_trace_decay": "postsynaptic",
     "camkii_up": "postsynaptic",
-    "camkii_down": "postsynaptic",
     "pp1_tau": "postsynaptic",
     "camkii_thr": "postsynaptic",
     "pp1_thr": "postsynaptic",
@@ -135,34 +133,20 @@ SUBSYSTEM: dict[str, str] = {
     "router_embed_dim": "structural",
     "router_contrastive_lr": "structural",
     "router_contrastive_push": "structural",
-    "router_sim_threshold": "structural",
     "xi_dim": "genetics",
     "enable_presyn": "toggle",
     "enable_hebbian": "toggle",
     "enable_metabolism": "toggle",
     "use_flex_attention": "toggle",
-    "native_presyn": "native_toggle",
-    "native_metrics": "native_toggle",
     "native_genetics": "native_toggle",
-    "native_plasticity": "native_toggle",
 }
 
 # Curated, human-verified nuance notes for fields whose LIVE/DEAD status needs
 # more than a binary. Keyed by field name; merged into the per-field record.
 NOTES: dict[str, str] = {
-    "enabled": "DEAD: read by nothing. Other config dataclasses have their own "
-    "'enabled'; SynapticConfig.enabled is never consumed. Prune (8j9.5).",
-    "camkii_down": "DEAD: declared but never read; CaMKII decay uses pp1_tau / "
-    "camkii_up. Prune (8j9.5).",
-    "router_sim_threshold": "DEAD: no reader; the contrastive update uses "
-    "router_contrastive_push/_lr instead. Prune (8j9.5).",
-    "native_presyn": "DEAD dispatch: only appears in a diagnostic print "
-    "(scripts/verify_evolution.py); no live kernel dispatch checks it. "
-    "Wire or prune (8j9.5).",
-    "native_metrics": "DEAD dispatch: only in a diagnostic print; no dispatch "
-    "reads it (the fused-metrics path is gated elsewhere). Wire or prune (8j9.5).",
-    "native_plasticity": "DEAD: read by nothing. Wire or prune (8j9.5).",
-    "native_genetics": "LIVE: gates the fused genetics kernel at synaptic.py:1460.",
+    "native_genetics": "LIVE: gates the fused metabolism/genetics kernel at "
+    "synaptic.py (MoE forward). Its dead sibling toggles (native_presyn / "
+    "native_metrics / native_plasticity) were pruned in 8j9.5.",
     "init_amp": "LIVE-but-inert: the AMP state is initialized from this and "
     "carried, but its dynamics are frozen (or4t removed amp_load/amp_leak); the "
     "canonical path uses energy->qamp instead.",
@@ -374,22 +358,37 @@ def render_markdown(census: dict[str, Any]) -> str:
         + ". The 48-/82-parameter figures are the *aspirational* two-phase plan, not "
         "shipping code.\n"
     )
-    out.append(
-        f"- **The config surface is {census['field_count']} hyperparameters**, of "
-        f"which {census['dead_count']} are dead (see prune task `8j9.5`).\n"
-    )
-
-    out.append("\n## Dead fields (read by nothing) — prune or wire (`8j9.5`)\n")
-    out.append("| Field | Subsystem | Default | Note |")
-    out.append("|---|---|---|---|")
-    for r in sorted(
+    dead_rows = sorted(
         (r for r in census["fields"] if r["status"] == "DEAD"),
         key=lambda r: r["name"],
-    ):
+    )
+    if dead_rows:
         out.append(
-            f"| `{r['name']}` | {r['subsystem']} | `{r['default']}` | "
-            f"{r['note'] or '—'} |"
+            f"- **The config surface is {census['field_count']} hyperparameters**, "
+            f"of which {census['dead_count']} are dead (see prune task `8j9.5`).\n"
         )
+    else:
+        out.append(
+            f"- **The config surface is {census['field_count']} hyperparameters**, "
+            "every one of which is read by runtime code — `8j9.5` pruned the last "
+            "dead fields (`enabled`, `camkii_down`, `router_sim_threshold`, "
+            "`native_presyn`, `native_metrics`, `native_plasticity`).\n"
+        )
+
+    out.append("\n## Dead fields (read by nothing)\n")
+    if not dead_rows:
+        out.append(
+            "None — every `SynapticConfig` field is read on some runtime path "
+            "(invariant enforced by `tests/test_param_census.py`).\n"
+        )
+    else:
+        out.append("| Field | Subsystem | Default | Note |")
+        out.append("|---|---|---|---|")
+        for r in dead_rows:
+            out.append(
+                f"| `{r['name']}` | {r['subsystem']} | `{r['default']}` | "
+                f"{r['note'] or '—'} |"
+            )
 
     out.append("\n## Full census by subsystem\n")
     order = [

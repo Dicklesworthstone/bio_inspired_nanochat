@@ -165,10 +165,7 @@ def _bench_ca_init() -> list[_RunResult]:
                 enable_hebbian=True,
                 enable_metabolism=False,
                 use_flex_attention=False,
-                native_presyn=False,
-                native_metrics=False,
                 native_genetics=False,
-                native_plasticity=False,
             )
             cfg = GPTSynapticConfig(
                 sequence_len=int(micro_seq_len),

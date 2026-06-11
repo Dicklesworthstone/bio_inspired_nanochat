@@ -2,7 +2,7 @@
 
 > **Generated** by `scripts/param_census.py` (bead `bio_inspired_nanochat-8j9.6`). Do not hand-edit; re-run `uv run python -m scripts.param_census`. Machine-readable companion: [`parameter_census.json`](./parameter_census.json).
 
-`SynapticConfig` has **76 fields** — **70 LIVE** (read by runtime code) and **6 DEAD** (declared, read by nothing). This is the ground truth behind the README's *“48-parameter genome”* framing, which conflated three different counts.
+`SynapticConfig` has **70 fields** — **70 LIVE** (read by runtime code) and **0 DEAD** (declared, read by nothing). This is the ground truth behind the README's *“48-parameter genome”* framing, which conflated three different counts.
 
 ## What the counts actually are
 
@@ -10,28 +10,16 @@
 
 - **The wired search space is 10 params**, not 48. CMA-ES Phase 1 (`TOP10_PARAM_SPECS` in `scripts/tune_bio_params.py`) tunes: `alpha_ca`, `complexin_bias`, `doc2_gain`, `lambda_loge`, `nsf_recover`, `prime_rate`, `syt_fast_kd`, `syt_slow_kd`, `tau_c`, `unprime_per_release`. The 48-/82-parameter figures are the *aspirational* two-phase plan, not shipping code.
 
-- **The config surface is 76 hyperparameters**, of which 6 are dead (see prune task `8j9.5`).
+- **The config surface is 70 hyperparameters**, every one of which is read by runtime code — `8j9.5` pruned the last dead fields (`enabled`, `camkii_down`, `router_sim_threshold`, `native_presyn`, `native_metrics`, `native_plasticity`).
 
 
-## Dead fields (read by nothing) — prune or wire (`8j9.5`)
+## Dead fields (read by nothing)
 
-| Field | Subsystem | Default | Note |
-|---|---|---|---|
-| `camkii_down` | postsynaptic | `0.02` | DEAD: declared but never read; CaMKII decay uses pp1_tau / camkii_up. Prune (8j9.5). |
-| `enabled` | meta | `True` | DEAD: read by nothing. Other config dataclasses have their own 'enabled'; SynapticConfig.enabled is never consumed. Prune (8j9.5). |
-| `native_metrics` | native_toggle | `False` | DEAD dispatch: only in a diagnostic print; no dispatch reads it (the fused-metrics path is gated elsewhere). Wire or prune (8j9.5). |
-| `native_plasticity` | native_toggle | `False` | DEAD: read by nothing. Wire or prune (8j9.5). |
-| `native_presyn` | native_toggle | `False` | DEAD dispatch: only appears in a diagnostic print (scripts/verify_evolution.py); no live kernel dispatch checks it. Wire or prune (8j9.5). |
-| `router_sim_threshold` | structural | `0.6` | DEAD: no reader; the contrastive update uses router_contrastive_push/_lr instead. Prune (8j9.5). |
+None — every `SynapticConfig` field is read on some runtime path (invariant enforced by `tests/test_param_census.py`).
+
 
 ## Full census by subsystem
 
-
-### `meta` (0/1 live)
-
-| Field | Default | Status | Tuned | Read at |
-|---|---|---|---|---|
-| `enabled` | `True` | DEAD |  | — |
 
 ### `general` (6/6 live)
 
@@ -107,7 +95,7 @@
 | `qmax` | `2.0` | LIVE |  | bio_inspired_nanochat/flex_synaptic.py:57 |
 | `q_beta` | `1.0` | LIVE |  | bio_inspired_nanochat/flex_synaptic.py:57 |
 
-### `postsynaptic` (14/15 live)
+### `postsynaptic` (14/14 live)
 
 | Field | Default | Status | Tuned | Read at |
 |---|---|---|---|---|
@@ -116,7 +104,6 @@
 | `post_slow_lr` | `0.0005` | LIVE |  | bio_inspired_nanochat/synaptic.py:757 |
 | `post_trace_decay` | `0.96` | LIVE |  | bio_inspired_nanochat/synaptic.py:889 |
 | `camkii_up` | `0.05` | LIVE |  | bio_inspired_nanochat/synaptic.py:674 |
-| `camkii_down` | `0.02` | DEAD |  | — |
 | `pp1_tau` | `0.985` | LIVE |  | bio_inspired_nanochat/synaptic.py:675 |
 | `camkii_thr` | `1.0` | LIVE |  | bio_inspired_nanochat/synaptic.py:671 |
 | `pp1_thr` | `0.7` | LIVE |  | bio_inspired_nanochat/synaptic.py:672 |
@@ -127,7 +114,7 @@
 | `bdnf_max` | `10.0` | LIVE |  | bio_inspired_nanochat/synaptic.py:695 |
 | `plasticity_during_training` | `True` | LIVE |  | bio_inspired_nanochat/synaptic.py:1015 |
 
-### `structural` (6/7 live)
+### `structural` (6/6 live)
 
 | Field | Default | Status | Tuned | Read at |
 |---|---|---|---|---|
@@ -137,7 +124,6 @@
 | `router_embed_dim` | `24` | LIVE |  | bio_inspired_nanochat/gpt_synaptic.py:480 |
 | `router_contrastive_lr` | `0.0001` | LIVE |  | bio_inspired_nanochat/synaptic.py:1530 |
 | `router_contrastive_push` | `0.1` | LIVE |  | bio_inspired_nanochat/synaptic.py:1526 |
-| `router_sim_threshold` | `0.6` | DEAD |  | — |
 
 ### `genetics` (1/1 live)
 
@@ -154,14 +140,11 @@
 | `enable_metabolism` | `True` | LIVE |  | bio_inspired_nanochat/synaptic.py:1449 |
 | `use_flex_attention` | `False` | LIVE |  | bio_inspired_nanochat/synaptic.py:1101 |
 
-### `native_toggle` (1/4 live)
+### `native_toggle` (1/1 live)
 
 | Field | Default | Status | Tuned | Read at |
 |---|---|---|---|---|
-| `native_presyn` | `False` | DEAD |  | scripts only |
-| `native_metrics` | `False` | DEAD |  | scripts only |
 | `native_genetics` | `False` | LIVE |  | bio_inspired_nanochat/synaptic.py:1460 |
-| `native_plasticity` | `False` | DEAD |  | — |
 
 ---
 *Status = LIVE when read by a runtime module (`bio_inspired_nanochat/**` or the Rust kernel), DEAD otherwise. “Read at” shows the first runtime/Rust read site; full evidence is in the JSON.*

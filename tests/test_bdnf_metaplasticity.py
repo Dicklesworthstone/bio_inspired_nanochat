@@ -22,7 +22,6 @@ from bio_inspired_nanochat.synaptic import SynapticConfig, PostsynapticHebb
 def default_cfg() -> SynapticConfig:
     """Default config with BDNF enabled."""
     return SynapticConfig(
-        enabled=True,
         rank_eligibility=4,
         bdnf_tau=0.9,
         bdnf_scale=1.0,
@@ -33,7 +32,6 @@ def default_cfg() -> SynapticConfig:
         post_fast_decay=0.95,
         post_trace_decay=0.96,
         camkii_up=0.1,
-        camkii_down=0.05,
         camkii_thr=0.5,
         pp1_tau=0.95,
         pp1_thr=0.3,
@@ -44,7 +42,6 @@ def default_cfg() -> SynapticConfig:
 def legacy_cfg() -> SynapticConfig:
     """Config with legacy BDNF mode (CaMKII-based)."""
     cfg = SynapticConfig(
-        enabled=True,
         rank_eligibility=4,
         bdnf_tau=0.9,
         bdnf_scale=1.0,
@@ -282,7 +279,6 @@ class TestBDNFClamping:
     def test_bdnf_clamped_to_max(self):
         """BDNF should be clamped to bdnf_max to prevent unbounded growth."""
         cfg = SynapticConfig(
-            enabled=True,
             rank_eligibility=4,
             bdnf_tau=0.5,  # Fast accumulation for test
             bdnf_hebb_accumulate=True,
@@ -331,7 +327,6 @@ class TestBDNFScaleVsGamma:
     def test_gamma_takes_precedence_when_positive(self):
         """bdnf_gamma > 0 should override bdnf_scale."""
         cfg = SynapticConfig(
-            enabled=True,
             rank_eligibility=4,
             bdnf_scale=2.0,
             bdnf_gamma=0.5,  # Should use this
@@ -359,7 +354,6 @@ class TestBDNFScaleVsGamma:
     def test_bdnf_scale_used_when_gamma_zero(self):
         """bdnf_scale should be used when bdnf_gamma=0."""
         cfg = SynapticConfig(
-            enabled=True,
             rank_eligibility=4,
             bdnf_scale=2.0,
             bdnf_gamma=0.0,  # Zero, so bdnf_scale should be used

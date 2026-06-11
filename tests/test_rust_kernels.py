@@ -141,7 +141,7 @@ def test_presyn_step_cpu_parity():
     assert rustbpe is not None
     B, H, T, D = 2, 4, 32, 16
     # Use config compatible with Rust implementation
-    cfg = SynapticConfig(native_presyn=True)
+    cfg = SynapticConfig()
     
     q = torch.randn(B, H, T, D)
     k = torch.randn(B, H, T, D)

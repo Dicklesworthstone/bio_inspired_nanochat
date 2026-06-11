@@ -18,17 +18,10 @@ from scripts.param_census import build_census, cmaes_phase1_params
 
 pytestmark = pytest.mark.unit
 
-# Verified by hand against the source (see CLAIMS_AUDIT.md / 8j9.5).
-KNOWN_DEAD = {
-    "enabled",
-    "camkii_down",
-    "router_sim_threshold",
-    "native_presyn",
-    "native_metrics",
-    "native_plasticity",
-}
 # Fields whose status is non-obvious (shared names / indirect handles) and must
 # resolve LIVE — these are exactly the cases the disambiguation rule exists for.
+# (8j9.5 pruned the six formerly-dead fields: enabled, camkii_down,
+# router_sim_threshold, native_presyn, native_metrics, native_plasticity.)
 KNOWN_LIVE = {
     "router_contrastive_lr",
     "router_contrastive_push",
@@ -58,10 +51,11 @@ def test_counts_are_consistent(census: dict) -> None:
     assert (live, dead) == (census["live_count"], census["dead_count"])
 
 
-def test_known_dead_fields_are_dead(census: dict) -> None:
-    status = {r["name"]: r["status"] for r in census["fields"]}
-    for name in KNOWN_DEAD:
-        assert status[name] == "DEAD", f"{name} should be DEAD"
+def test_no_dead_fields(census: dict) -> None:
+    # 8j9.5 acceptance criterion: every SynapticConfig field is read somewhere.
+    dead = [r["name"] for r in census["fields"] if r["status"] == "DEAD"]
+    assert dead == [], f"dead config fields reappeared (prune or wire them): {dead}"
+    assert census["dead_count"] == 0
 
 
 def test_known_live_fields_are_live(census: dict) -> None:
@@ -70,13 +64,11 @@ def test_known_live_fields_are_live(census: dict) -> None:
         assert status[name] == "LIVE", f"{name} should be LIVE"
 
 
-def test_enabled_collision_is_disambiguated(census: dict) -> None:
-    # `enabled` is the one field name shared with other config dataclasses; it
-    # must be flagged as a collision yet still resolve DEAD (no syn_cfg reader).
-    assert "enabled" in census["collision_fields"]
-    rec = next(r for r in census["fields"] if r["name"] == "enabled")
-    assert rec["status"] == "DEAD"
-    assert rec["runtime_read_sites"] == []
+def test_no_collision_fields_remain(census: dict) -> None:
+    # `enabled` was the only SynapticConfig name shared with another config
+    # dataclass, and 8j9.5 removed it. The disambiguation machinery stays in
+    # place for future collisions, but none should exist today.
+    assert census["collision_fields"] == []
 
 
 def test_tuned_set_matches_cmaes_specs(census: dict) -> None:

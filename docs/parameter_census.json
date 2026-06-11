@@ -1,9 +1,9 @@
 {
   "generated_by": "scripts/param_census.py (bead bio_inspired_nanochat-8j9.6)",
   "config_class": "bio_inspired_nanochat.synaptic.SynapticConfig",
-  "field_count": 76,
+  "field_count": 70,
   "live_count": 70,
-  "dead_count": 6,
+  "dead_count": 0,
   "tuned_phase1_count": 10,
   "tuned_phase1_params": [
     "alpha_ca",
@@ -18,24 +18,9 @@
     "unprime_per_release"
   ],
   "disambiguation_rule": "synaptic-native files (synaptic.py, flex_synaptic.py, kernels/presyn_fused.py) credit cfg./self.cfg./syn_cfg.; other files credit syn_cfg. always and <obj>.cfg.<f> only when <f> is not shared with another config dataclass; Rust credits getattr(\"<f>\").",
-  "collision_fields": [
-    "enabled"
-  ],
+  "collision_fields": [],
   "learned_genome_note": "The biological 'genome' is the learned per-expert Xi vector (xi_dim=4: [alpha_fatigue, alpha_energy, camkii_gain, pp1_gain]), a torch parameter decoded to phenotype kinetics -- NOT the SynapticConfig hyperparameters. Every field here is a fixed hyperparameter, not a learned weight.",
   "fields": [
-    {
-      "name": "enabled",
-      "subsystem": "meta",
-      "type": "bool",
-      "default": true,
-      "status": "DEAD",
-      "tuned_phase1": false,
-      "runtime_read_sites": [],
-      "rust_read_sites": [],
-      "script_sites": [],
-      "test_sites": [],
-      "note": "DEAD: read by nothing. Other config dataclasses have their own 'enabled'; SynapticConfig.enabled is never consumed. Prune (8j9.5)."
-    },
     {
       "name": "rank_eligibility",
       "subsystem": "general",
@@ -959,19 +944,6 @@
       "note": ""
     },
     {
-      "name": "camkii_down",
-      "subsystem": "postsynaptic",
-      "type": "float",
-      "default": 0.02,
-      "status": "DEAD",
-      "tuned_phase1": false,
-      "runtime_read_sites": [],
-      "rust_read_sites": [],
-      "script_sites": [],
-      "test_sites": [],
-      "note": "DEAD: declared but never read; CaMKII decay uses pp1_tau / camkii_up. Prune (8j9.5)."
-    },
-    {
       "name": "pp1_tau",
       "subsystem": "postsynaptic",
       "type": "float",
@@ -1099,10 +1071,10 @@
       "rust_read_sites": [],
       "script_sites": [],
       "test_sites": [
+        "tests/test_bdnf_metaplasticity.py:304",
         "tests/test_bdnf_metaplasticity.py:305",
         "tests/test_bdnf_metaplasticity.py:306",
-        "tests/test_bdnf_metaplasticity.py:307",
-        "tests/test_bdnf_metaplasticity.py:308"
+        "tests/test_bdnf_metaplasticity.py:307"
       ],
       "note": ""
     },
@@ -1216,19 +1188,6 @@
       "note": ""
     },
     {
-      "name": "router_sim_threshold",
-      "subsystem": "structural",
-      "type": "float",
-      "default": 0.6,
-      "status": "DEAD",
-      "tuned_phase1": false,
-      "runtime_read_sites": [],
-      "rust_read_sites": [],
-      "script_sites": [],
-      "test_sites": [],
-      "note": "DEAD: no reader; the contrastive update uses router_contrastive_push/_lr instead. Prune (8j9.5)."
-    },
-    {
       "name": "xi_dim",
       "subsystem": "genetics",
       "type": "int",
@@ -1313,36 +1272,6 @@
       "note": ""
     },
     {
-      "name": "native_presyn",
-      "subsystem": "native_toggle",
-      "type": "bool",
-      "default": false,
-      "status": "DEAD",
-      "tuned_phase1": false,
-      "runtime_read_sites": [],
-      "rust_read_sites": [],
-      "script_sites": [
-        "scripts/verify_evolution.py:60"
-      ],
-      "test_sites": [],
-      "note": "DEAD dispatch: only appears in a diagnostic print (scripts/verify_evolution.py); no live kernel dispatch checks it. Wire or prune (8j9.5)."
-    },
-    {
-      "name": "native_metrics",
-      "subsystem": "native_toggle",
-      "type": "bool",
-      "default": false,
-      "status": "DEAD",
-      "tuned_phase1": false,
-      "runtime_read_sites": [],
-      "rust_read_sites": [],
-      "script_sites": [
-        "scripts/verify_evolution.py:60"
-      ],
-      "test_sites": [],
-      "note": "DEAD dispatch: only in a diagnostic print; no dispatch reads it (the fused-metrics path is gated elsewhere). Wire or prune (8j9.5)."
-    },
-    {
       "name": "native_genetics",
       "subsystem": "native_toggle",
       "type": "bool",
@@ -1353,22 +1282,11 @@
         "bio_inspired_nanochat/synaptic.py:1460"
       ],
       "rust_read_sites": [],
-      "script_sites": [],
+      "script_sites": [
+        "scripts/verify_evolution.py:51"
+      ],
       "test_sites": [],
-      "note": "LIVE: gates the fused genetics kernel at synaptic.py:1460."
-    },
-    {
-      "name": "native_plasticity",
-      "subsystem": "native_toggle",
-      "type": "bool",
-      "default": false,
-      "status": "DEAD",
-      "tuned_phase1": false,
-      "runtime_read_sites": [],
-      "rust_read_sites": [],
-      "script_sites": [],
-      "test_sites": [],
-      "note": "DEAD: read by nothing. Wire or prune (8j9.5)."
+      "note": "LIVE: gates the fused metabolism/genetics kernel at synaptic.py (MoE forward). Its dead sibling toggles (native_presyn / native_metrics / native_plasticity) were pruned in 8j9.5."
     }
   ]
 }
