@@ -705,7 +705,8 @@ class PostsynapticHebb(nn.Module):
                 beta_pp1 = (genes[..., 3] * beta_pp1).clamp(min=0.0)
             m, p = self.camkii, self.pp1
             n, k = cfg.latch_hill_n, cfg.latch_hill_k
-            hill = m.pow(n) / (k**n + m.pow(n) + 1e-12)
+            mn = m.pow(n)
+            hill = mn / (k**n + mn + 1e-12)
             m_new = (
                 m + cfg.latch_alpha_ca * drive * (1 - m) - beta_pp1 * p * m + gamma * hill
             ).clamp(0.0, 1.0)
