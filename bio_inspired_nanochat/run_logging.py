@@ -492,7 +492,12 @@ def read_run_events(run_dir: str | os.PathLike[str], *, event: str | None = None
             line = line.strip()
             if not line:
                 continue
-            rec = json.loads(line)
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                # A run that crashed mid-write can leave a truncated final line;
+                # skip it rather than failing the whole post-hoc analysis.
+                continue
             if event is None or rec.get("event") == event:
                 out.append(rec)
     return out

@@ -26,6 +26,7 @@ Design notes
 from __future__ import annotations
 
 import logging
+import math
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -203,7 +204,12 @@ def _max_abs_param(model: torch.nn.Module) -> float:
     m = 0.0
     for p in model.parameters():
         if p.numel():
-            m = max(m, float(p.detach().abs().max().item()))
+            v = float(p.detach().abs().max().item())
+            # Propagate non-finite immediately: ``max(m, nan)`` returns m in Python
+            # (nan > m is False), which would hide a NaN/Inf runaway from mechanism_stable.
+            if not math.isfinite(v):
+                return v
+            m = max(m, v)
     return m
 
 
@@ -273,7 +279,9 @@ def run_e2e(
         # A degenerate/diverged model (e.g. the NaN self-test) must yield FAILED
         # invariants, never crash the harness — catching is part of the job.
         try:
-            ckpt_ok, ckpt_detail = _checkpoint_roundtrip(model, opt, cfg, pool, step + 1)
+            # len(losses) == number of completed steps (== cfg.steps), and is defined
+            # even if cfg.steps == 0 (unlike the loop variable).
+            ckpt_ok, ckpt_detail = _checkpoint_roundtrip(model, opt, cfg, pool, len(losses))
         except Exception as e:
             ckpt_ok, ckpt_detail = False, f"checkpoint probe raised: {type(e).__name__}: {e}"
         try:
@@ -364,8 +372,6 @@ def _invariant_battery(
     max_abs: float,
     nonfinite: bool,
 ) -> list[InvariantResult]:
-    import math
-
     out: list[InvariantResult] = []
 
     finite_losses = all(math.isfinite(x) for x in losses)
@@ -433,9 +439,13 @@ def _log_report(report: E2EReport) -> None:
     for r in report.invariants:
         _logger.info(r.line())
     s = report.summary
+
+    def _fmt(v, spec):
+        return format(v, spec) if isinstance(v, (int, float)) else "n/a"
+
     _logger.info(
-        f"[e2e] loss {s['initial_loss']:.4f} -> {s['final_loss']:.4f} | "
-        f"max|grad|={s['max_grad_norm']:.3f} | fast-weight Δ={s['fast_weight_delta']:.3e}"
+        f"[e2e] loss {_fmt(s['initial_loss'], '.4f')} -> {_fmt(s['final_loss'], '.4f')} | "
+        f"max|grad|={_fmt(s['max_grad_norm'], '.3f')} | fast-weight Δ={_fmt(s['fast_weight_delta'], '.3e')}"
     )
 
 

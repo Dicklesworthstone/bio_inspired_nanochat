@@ -108,16 +108,21 @@ class DistAdamW(torch.optim.Optimizer):
         # ``Work::getFuture``, while NCCL does; ``.wait()`` is portable to both and has the
         # same launch-async-then-block semantics.
         work: list[tuple] = []  # (group, p, kind, handle, payload)
+        keepalive: list[Tensor] = []  # hold async-collective input buffers alive until wait()
         for group in self.param_groups:
             for p in group["params"]:
                 grad = p.grad
                 if grad is None:
                     continue  # frozen / unused param this step
                 if _is_shardable(grad, world_size):
+                    # reduce_scatter_tensor needs a contiguous input; keep it referenced
+                    # so a (rare) non-contiguous-grad copy can't be freed mid-flight.
+                    grad_in = grad.contiguous()
+                    keepalive.append(grad_in)
                     rank_size = grad.shape[0] // world_size
-                    grad_slice = torch.empty_like(grad[:rank_size])
+                    grad_slice = torch.empty_like(grad_in[:rank_size])
                     handle = dist.reduce_scatter_tensor(
-                        grad_slice, grad.contiguous(), op=dist.ReduceOp.AVG, async_op=True
+                        grad_slice, grad_in, op=dist.ReduceOp.AVG, async_op=True
                     )
                     work.append((group, p, "shard", handle, grad_slice))
                 else:

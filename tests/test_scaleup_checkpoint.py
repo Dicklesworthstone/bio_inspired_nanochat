@@ -134,12 +134,28 @@ def test_resume_is_bit_comparable(tmp_path):
 
 @pytest.mark.e2e
 def test_train_state_roundtrips_through_disk(tmp_path):
-    """save_checkpoint(train_state=...) -> load_checkpoint(load_train_state=True) restores RNG."""
+    """save_checkpoint(train_state=...) -> load_checkpoint(...) restores torch+python+numpy RNG.
+
+    The train-state blob is tensor-encoded (numpy key array as a tensor) so it loads under
+    the safe weights_only=True default; this exercises all three RNG streams through disk.
+    """
+    import random
+
+    import numpy as np
+
     d = str(tmp_path)
-    torch.manual_seed(7)
+    random.seed(7)
+    np.random.seed(8)
+    torch.manual_seed(9)
+    # advance each stream so the captured state is non-initial
+    [random.random() for _ in range(3)]
+    np.random.rand(3)
     _ = torch.randn(3)
     rng = capture_rng_state()
-    expected = torch.randn(4)
+    expected_py = [random.random() for _ in range(4)]
+    expected_np = np.random.rand(4).tolist()
+    expected_tc = torch.randn(4)
+
     save_checkpoint(d, 3, {"w": torch.zeros(1)}, {"o": torch.zeros(1)},
                     {"model_config": {}}, rank=0, train_state={"rng": rng, "step": 3})
     _, _, _, train_state = load_checkpoint(
@@ -147,4 +163,6 @@ def test_train_state_roundtrips_through_disk(tmp_path):
     )
     assert train_state is not None and train_state["step"] == 3
     restore_rng_state(train_state["rng"])
-    assert torch.equal(torch.randn(4), expected), "RNG restored from disk must reproduce draws"
+    assert [random.random() for _ in range(4)] == expected_py, "python RNG must round-trip"
+    assert np.random.rand(4).tolist() == expected_np, "numpy RNG must round-trip"
+    assert torch.equal(torch.randn(4), expected_tc), "torch RNG must round-trip"
