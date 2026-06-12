@@ -151,3 +151,26 @@ def test_calcium_decay_moves_under_sgd_only_when_wired():
 def test_kinetics_stay_contractive_throughout_training():
     _, _, max_rho = _train_reduced(differentiable_recurrence=True, steps=40)
     assert max_rho < 1.0, f"calcium↔buffer spectral radius must stay < 1, peaked at {max_rho:.4f}"
+
+
+# --------------------------------------------------------------------------- #
+# 3. Per-mechanism engagement: online Hebbian fast-weights (ON vs OFF)
+# --------------------------------------------------------------------------- #
+def test_online_fast_weights_adapt_and_stay_bounded_only_when_hebbian_on():
+    from bio_inspired_nanochat.e2e_harness import E2EConfig, run_e2e
+
+    on = run_e2e(E2EConfig(synapses=True, steps=40), verbose=False)
+    off = run_e2e(E2EConfig(synapses=True, steps=40, syn_overrides={"enable_hebbian": False}),
+                  verbose=False)
+
+    # ON: the fast weights adapt online (nonzero Hebbian-state delta), the run is healthy, and the
+    # weights stay bounded (no runaway).
+    assert on.passed, on.failures()
+    assert abs(on.summary["hebbian_delta"]) > 0.0, "fast-weights must adapt online when hebbian on"
+    (stable,) = [r for r in on.invariants if r.name == "mechanism_stable"]
+    assert stable.passed, "online fast-weights must stay bounded"
+
+    # OFF: no online adaptation, and the ONLY thing the harness flags is "mechanism not engaged" —
+    # every other health invariant still passes (the mechanism is cleanly off, not broken).
+    assert off.summary["hebbian_delta"] == 0.0, "no online adaptation when hebbian is off"
+    assert {r.name for r in off.failures()} == {"mechanism_engaged"}, off.failures()
