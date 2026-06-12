@@ -159,6 +159,26 @@ class SynapticConfig:
     # softplus gains, bounded buffer coupling) so learning can't destabilize. DEFAULT-OFF: the
     # cfg constants below are used unchanged unless this is set.
     learnable_kinetics: bool = False
+    # hwxb.4.6: WIRE the differentiable recurrence (yw9.2) into the live attention forward so the
+    # learnable kinetics above actually receive gradient in a real run. DEFAULT-OFF: the live path
+    # stays the detached single-call snapshot (byte-identical to today). When ON, the attention
+    # presyn bias is computed by advancing the presyn state CAUSALLY over query CHUNKS with
+    # autograd, so the decay kinetics — which see gradient only once state accumulates across steps
+    # (a single fresh-state call only trains alpha_ca) — become learnable. This also makes the
+    # training forward consistent with the inherently-causal KV-cache decode path (a query attends
+    # to a key whose vesicles were already drained by earlier queries). Requires learnable_kinetics
+    # to be useful (the validator flags it otherwise). Applies to the standard (non-flex) full-
+    # sequence training/prefill path; decode (prefix KV cache) is already per-step causal.
+    differentiable_recurrence: bool = False
+    # Query positions per recurrence STEP for the chunked causal recurrence above. Smaller = more
+    # faithful causal evolution (more state snapshots) but more sequential steps; >= seq_len
+    # collapses to the single non-causal call (no multi-step => decays get no gradient). 64 balances
+    # faithfulness and the per-step overhead on a 4090.
+    recurrence_block_size: int = 64
+    # Truncated-BPTT detach interval, in recurrence STEPS (blocks), for the differentiable
+    # recurrence. Bounds activation memory to ~chunk_len blocks regardless of sequence length.
+    # 0 => full BPTT across the whole sequence (no truncation).
+    recurrence_chunk_len: int = 0
     # (or4t: alpha_c / syt1_slope / syt7_slope / cpx_thresh were the LEGACY sigmoid release-prob
     #  params; removed as dead after the canonical migration. The canonical uses alpha_ca for the
     #  calcium influx and Hill syt_fast_kd/syt_slow_kd + complexin_bias for the release prob.)
@@ -459,6 +479,8 @@ def chunked_recurrence(
     *,
     chunk_len: int,
     train: bool = False,
+    valids: Optional[List[Optional[Tensor]]] = None,
+    differentiable: bool = True,
 ) -> List[Tensor]:
     """Run the DIFFERENTIABLE presynaptic recurrence over a sequence of steps with truncated
     BPTT (yw9.2.3).
@@ -469,12 +491,23 @@ def chunked_recurrence(
     bounded by ``chunk_len`` steps instead of the full sequence length. ``chunk_len <= 0`` disables
     truncation (full BPTT). Detaching changes only the gradient graph, never the forward values, so
     the returned per-step release biases are identical to a full-BPTT (or detached) run.
+
+    ``valids`` (optional) is a matching list of per-step ``(B,H,T,K)`` boolean masks for the live
+    attention path (causal top-k masking); ``None`` (or a ``None`` entry) means all edges valid.
+    ``differentiable`` toggles the autograd state recurrence: ``True`` (default) carries gradient
+    through the state for BPTT; ``False`` runs the same causal schedule under no_grad (the live eval
+    path — identical forward values, no graph). hwxb.4.6 wires this into the model attention forward.
     """
     outs: List[Tensor] = []
     for t, (drive, idx) in enumerate(zip(drives, idxs)):
         if chunk_len > 0 and t > 0 and (t % chunk_len == 0):
             _detach_presyn_state(state)
-        outs.append(presyn.release_canonical(state, drive, idx, train=train, differentiable=True))
+        valid = None if valids is None else valids[t]
+        outs.append(
+            presyn.release_canonical(
+                state, drive, idx, train=train, valid=valid, differentiable=differentiable
+            )
+        )
     return outs
 
 
@@ -1550,6 +1583,43 @@ class SynapticCausalSelfAttention(nn.Module):
         self.cos, self.sin = rope_cos, rope_sin
         self.pre = SynapticPresyn(self.head_dim, cfg)
 
+    def _chunked_release_bias(
+        self,
+        presyn_state: Dict[str, Any],
+        vals: Tensor,
+        idx: Tensor,
+        valid: Tensor,
+        train_mode: bool,
+    ) -> Tensor:
+        """Causal, chunked-TBPTT presynaptic release bias (hwxb.4.6).
+
+        Replaces the single non-causal ``release_canonical`` snapshot with a recurrence over query
+        CHUNKS: the presyn state is advanced ``recurrence_block_size`` query positions at a time so
+        query chunk ``b`` sees the state left by chunks ``0..b-1`` (faithful vesicle fatigue), and
+        ``release_canonical(differentiable=…)`` carries gradient through that state so the learnable
+        kinetics get a real training signal (a single fresh-state call only trains ``alpha_ca``;
+        the decays need accumulation across steps). Backprop is truncated every
+        ``recurrence_chunk_len`` chunks to bound activation memory. The per-chunk biases are
+        concatenated back along the query dimension; the attention matmul/mask/softmax/barrier path
+        is unchanged and still spans the full sequence. The state-recurrence autograd is requested
+        only when grad is enabled, so eval runs the identical causal schedule with no graph.
+        """
+        block = max(1, int(self.cfg.recurrence_block_size))
+        drives = list(vals.split(block, dim=2))
+        idxs = list(idx.split(block, dim=2))
+        valids = list(valid.split(block, dim=2))
+        outs = chunked_recurrence(
+            self.pre,
+            presyn_state,
+            drives,
+            idxs,
+            chunk_len=int(self.cfg.recurrence_chunk_len),
+            train=train_mode,
+            valids=valids,
+            differentiable=torch.is_grad_enabled(),
+        )
+        return torch.cat(outs, dim=2)
+
     def _apply_rope(self, x: Tensor, T0: int):
         H = self.n_head if x.size(-1) == self.n_head * self.head_dim else self.n_kv_head
         D = self.head_dim
@@ -1696,7 +1766,14 @@ class SynapticCausalSelfAttention(nn.Module):
 
         # Run presynaptic physics on only the valid edges (8j9.2/ukxt: canonical faithful
         # release; the septin barrier is applied at the logit level below, not folded into e).
-        e = self.pre.release_canonical(presyn_state, vals, idx, train_mode, valid=valid)
+        # hwxb.4.6: when differentiable_recurrence is on, advance the presyn state CAUSALLY over
+        # query chunks (autograd) so the learnable kinetics get gradient; the single non-causal
+        # snapshot is the default. Gated to the full-sequence training/prefill path (prefix_len<=0);
+        # decode is already per-step causal and uses the single call.
+        if self.cfg.differentiable_recurrence and prefix_len <= 0:
+            e = self._chunked_release_bias(presyn_state, vals, idx, valid, train_mode)
+        else:
+            e = self.pre.release_canonical(presyn_state, vals, idx, train_mode, valid=valid)
 
         # Scatter biological log-bias back into the logits, preserving masking.
         aug = torch.zeros_like(dots)

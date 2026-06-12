@@ -80,6 +80,16 @@ MECHANISMS: tuple[MechanismFlag, ...] = (
         "native_genetics", "native_genetics", False, False, False, ("enable_metabolism",),
         "Fused Rust metabolism/genetics kernel (CUDA).",
     ),
+    MechanismFlag(
+        "learnable_kinetics", "learnable_kinetics", False, False, False, ("enable_presyn",),
+        "SGD-learnable, stability-preserving presynaptic calcium/buffer kinetics (yw9.3).",
+    ),
+    MechanismFlag(
+        "differentiable_recurrence", "differentiable_recurrence", False, False, False,
+        ("learnable_kinetics",),
+        "Causal chunked-TBPTT presyn recurrence that gives the learnable kinetics gradient in a "
+        "real training forward (yw9.2 wired by hwxb.4.6).",
+    ),
 )
 
 _BY_FIELD: dict[str, MechanismFlag] = {m.field: m for m in MECHANISMS}
@@ -162,8 +172,23 @@ def validate_config(cfg: SynapticConfig) -> tuple[list[str], list[str]]:
                 f"latch_ltd_thr ({cfg.latch_ltd_thr}) must be < camkii_thr "
                 f"({cfg.camkii_thr}) so the BCM curve has a neutral zone where the latch holds"
             )
+    if cfg.differentiable_recurrence:
+        if cfg.recurrence_block_size < 1:
+            errors.append(
+                f"recurrence_block_size must be >= 1, got {cfg.recurrence_block_size}"
+            )
+        if cfg.recurrence_chunk_len < 0:
+            errors.append(
+                f"recurrence_chunk_len must be >= 0 (0 = full BPTT), got {cfg.recurrence_chunk_len}"
+            )
 
     # 3. Risky-but-legal combinations -> warnings.
+    if cfg.differentiable_recurrence and cfg.use_flex_attention:
+        warnings.append(
+            "differentiable_recurrence has no effect on the FlexAttention path (the chunked "
+            "causal recurrence is wired into the standard path only); the kinetics will not "
+            "receive gradient under use_flex_attention=True."
+        )
     if cfg.use_flex_attention:
         warnings.append(
             "use_flex_attention=True is PREFILL-ONLY; it cannot serve KV-cache decoding. "
