@@ -293,3 +293,63 @@ def run_monitored(
         monitor.append(rec)
         traj.append(z.copy())
     return np.array(traj), monitor
+
+
+# --------------------------------------------------------------------------- #
+# Free-energy DELIBERATION + energy-based decoding (reference API, bead r00r.1.1).
+# The convergence + halting guarantees are exactly the discrete free-energy Lyapunov property of
+# the structure-preserving step (0642.1.1 / 0642.1.2.1). The live per-token decode wiring (toggle +
+# fallback) is r00r.1.2; this is the executable spec the design note is written against.
+# --------------------------------------------------------------------------- #
+@dataclass
+class DeliberationResult:
+    z: np.ndarray            # the relaxed synaptic state
+    iters: int               # deliberation steps actually taken (the effort signal)
+    F_final: float           # final free energy (the confidence signal — lower = more self-consistent)
+    F_drop: float            # F(z0) − F_final, the total free energy released
+    halted_converged: bool   # True if stopped on dF < eps, False if the budget was hit
+
+
+def deliberate(
+    z: np.ndarray, dt: float, *, eps: float = 1e-4, max_iters: int = 64, T: float = TEMP,
+    thresholds: GuardThresholds | None = None, **kw,
+) -> DeliberationResult:
+    """Run extra free-energy-minimization steps on the synaptic state until it self-consistently
+    relaxes (``|ΔF| < eps``) or the compute budget ``max_iters`` is hit ("think longer on hard tokens").
+
+    Convergence is guaranteed by Thrust A: the structure-preserving step makes ``F`` monotonically
+    non-increasing and bounded below on the compact energy shell (0642.1.1 §5), so ``F`` converges and
+    ``|ΔF| → 0`` — the halt always fires within a bounded number of steps. ``eps`` and ``max_iters``
+    are the compute-vs-quality knob: smaller ``eps`` / larger budget ⟹ more deliberation.
+    """
+    thr = thresholds or GuardThresholds()
+    z = np.asarray(z, dtype=np.float64).copy()
+    f_start = free_energy(z, T)
+    f_prev = f_start
+    used, converged = 0, False
+    for k in range(max_iters):
+        z, rec = guarded_step(z, dt, k, thr, T=T, **kw)
+        used = k + 1
+        if abs(f_prev - rec.F) < eps:
+            converged = True
+            f_prev = rec.F
+            break
+        f_prev = rec.F
+    return DeliberationResult(z=z, iters=used, F_final=f_prev, F_drop=f_start - f_prev,
+                              halted_converged=converged)
+
+
+def boltzmann_weights(free_energies, kT: float = 1.0) -> np.ndarray:
+    """Energy-based (Boltzmann) decoding weights ``p ∝ exp(−F/kT)`` over candidate free energies.
+
+    Lower free energy ⟹ a more self-consistent candidate ⟹ higher probability. ``kT`` is the decoding
+    temperature (``kT → 0`` ⟹ argmin-F greedy; large ``kT`` ⟹ uniform). Constraints enter as extra
+    additive energy terms in ``F`` (energy-based constrained generation). Numerically stabilized.
+    """
+    f = np.asarray(free_energies, dtype=np.float64)
+    if kT <= 0.0:
+        raise ValueError(f"kT must be positive, got {kT}")
+    logits = -f / kT
+    logits -= logits.max()
+    w = np.exp(logits)
+    return w / w.sum()
