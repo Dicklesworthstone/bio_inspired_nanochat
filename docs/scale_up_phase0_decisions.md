@@ -101,9 +101,12 @@ and KV cache. This is the headroom the bead asked for.
 
 ### 2.4 Code prerequisites this decision creates (filed for Phase 1)
 
-1. **Weight tying** must be available and on for scale-up runs (currently **untied** in `gpt.py`).
-   → tracked as **`hwxb.2.9`** (NOT yet implemented; until it lands, `D1` is ~133M params untied,
-   not the ~91M tied target quoted below — note the setup_optimizers double-counting subtlety).
+1. **Weight tying** — **implemented** in `hwxb.2.9` as the opt-in `tie_embeddings` flag
+   (`GPTConfig`/`GPTSynapticConfig`; `--tie_embeddings=1` in `base_train`). Default **off** (keeps
+   the legacy untied behaviour + separate embedding/unembedding LRs); scale-up runs turn it on, which
+   makes `D1` ~91M params (vs ~133M untied). The shared weight is optimized exactly once at the
+   `unembedding_lr`, and `tie_weights()` re-establishes the tie after `load_state_dict(assign=True)`
+   on resume. Tested in `tests/test_scaleup_tying.py`.
 2. `base_train.py` does **not** expose most `SynapticConfig` fields via CLI; the eval/ablation harness owns
    preset→config wiring (already true for `eval_matrix.py`). Scale-up runs go through the harness, not raw
    `base_train` flags, for any non-default mechanism.

@@ -44,11 +44,10 @@ and asserts divisibility. For `D1`: `262144 / (16 × 1024 × 2) = 8`. We use **0
 trains better with a smaller batch at fixed token budget. The effective batch doubles for free with the
 2nd GPU (DDP averages gradients; see `docs/scale_up_ddp.md`).
 
-> **Param count caveat:** the Phase-0 decision is to **tie** `wte`/`lm_head`, which makes `D1` ≈ **91M**
-> params (see `scale_up_phase0_decisions.md` §2.1). Tying is a *pending prerequisite* (`hwxb.2.9`); the
-> code currently ships **untied** embeddings (`gpt.py`), so at `--depth=10`, vocab 65536, dim 640 the
-> *actual* model is ≈ **133M** params (≈49M transformer + ≈84M untied embeddings). Until tying lands,
-> size/throughput estimates should use ~133M, not 91M.
+> **Param count:** with `--tie_embeddings=1` (the Phase-0 decision, implemented in `hwxb.2.9`),
+> `D1` ≈ **91M** params (≈49M transformer + ≈42M shared embedding). The flag defaults **off**, so
+> without it `D1` is ≈ **133M** (untied: ≈84M of separate `wte`+`lm_head`). Scale-up runs set the
+> flag; size/throughput estimates below assume tied (~91M).
 
 ## Horizon — the equal-compute basis (FIXED HERE)
 
@@ -86,13 +85,19 @@ risk for a small model is under-training, not just divergence.
 ```bash
 export NCCL_P2P_LEVEL=PXB OMP_NUM_THREADS=8
 .venv/bin/torchrun --standalone --nproc_per_node=2 -m scripts.base_train \
-  --depth=10 --max_seq_len=1024 \
+  --depth=10 --max_seq_len=1024 --tie_embeddings=1 \
   --device_batch_size=16 --total_batch_size=262144 \
   --warmup_ratio=0.1 --warmdown_ratio=0.2 --final_lr_frac=0.0 \
   --grad_clip=1.0 \
   --embedding_lr=0.2 --unembedding_lr=0.004 --matrix_lr=0.02 --weight_decay=0.0 \
   --target_param_data_ratio=-1 --num_iterations=1900   # 1900*0.25M ≈ 500M tokens
 ```
+
+`--tie_embeddings=1` shares `wte`/`lm_head` (the Phase-0 decision; `hwxb.2.9`) so `D1` is ~91M
+params, not ~133M. The shared weight is optimized once, at the **`unembedding_lr`** (0.004×scale)
+— the smaller of the two LRs, chosen because the tied weight also drives the dense output
+projection where the embedding LR (0.2) would risk logit instability. Vanilla and bio arms must
+use the **same** `--tie_embeddings` setting for a fair comparison.
 
 Vanilla baseline (`hwxb.3.1`) and every bio arm (`hwxb.5.x`) use the **same** flags, toggling only
 `--synapses` and the mechanism's `SynapticConfig` field via the eval/ablation harness. The recipe

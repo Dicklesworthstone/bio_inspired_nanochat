@@ -43,6 +43,11 @@ class GPTConfig:
     # Weight initialization
     init_type: str = "baseline"  # "baseline" | "ca_rule30" | "ca_rule116"
     init_seed: int = 42
+    # Tie the token embedding and the output (lm_head) weights into ONE shared matrix
+    # (hwxb.2.9). For a small model the untied embeddings (2·vocab·d) dominate the param
+    # budget; tying halves that so the budget goes into depth/width. Default off preserves
+    # the legacy untied behaviour + the separate embedding/unembedding LRs.
+    tie_embeddings: bool = False
 
 
 def norm(x):
@@ -350,6 +355,20 @@ class GPT(nn.Module):
         # Cast the embeddings from fp32 to bf16: optim can tolerate it and it saves memory: both in the model and the activations
         if self.wte.weight.device.type == "cuda":
             self.wte.to(dtype=torch.bfloat16)
+        # Tie LAST (after the zeroing + bf16 cast above) so lm_head shares the FINAL wte
+        # tensor — otherwise the `zeros_(lm_head.weight)` above would zero the embedding,
+        # or lm_head would keep a stale fp32 copy after the cast. See tie_weights().
+        self.tie_weights()
+
+    def tie_weights(self) -> None:
+        """Share lm_head.weight with the token embedding when tie_embeddings is set.
+
+        Idempotent. Must be called after init AND after any load_state_dict(assign=True)
+        (which replaces the param objects and thus breaks an earlier tie) — callers in
+        scripts/base_train.py and checkpoint_manager.build_model re-tie on resume.
+        """
+        if getattr(self.config, "tie_embeddings", False):
+            self.lm_head.weight = self.wte.weight
 
     def _init_weights_ca(self) -> None:
         init_type = str(getattr(self.config, "init_type", "ca_rule30"))
@@ -431,6 +450,14 @@ class GPT(nn.Module):
         matrix_params = list(self.blocks.parameters())
         embedding_params = list(self.wte.parameters())
         lm_head_params = list(self.lm_head.parameters())
+        # When tie_embeddings is on, lm_head.weight IS wte.weight (one shared tensor). It must
+        # be optimized EXACTLY ONCE, else AdamW double-updates it. We keep it in the lm_head
+        # (unembedding) group — the smaller, more conservative LR — because the shared weight
+        # also serves the dense output-projection role where the large embedding LR (0.2) would
+        # risk logit instability. So drop it from the embedding group (which becomes empty).
+        if getattr(self.config, "tie_embeddings", False):
+            embedding_params = [p for p in embedding_params if p is not self.lm_head.weight]
+        # parameters() already dedupes shared tensors, so the assert holds in both cases.
         assert len(list(self.parameters())) == len(matrix_params) + len(embedding_params) + len(lm_head_params)
         # Create the AdamW optimizer for the embedding and lm_head
         # Scale the LR for the AdamW parameters by ∝1/√dmodel (having tuned the LRs for 768 dim model)
@@ -439,8 +466,9 @@ class GPT(nn.Module):
             print(f"Scaling the LR for the AdamW parameters ∝1/√({model_dim}/768) = {dmodel_lr_scale:.6f}")
         adam_groups = [
             dict(params=lm_head_params, lr=unembedding_lr * dmodel_lr_scale),
-            dict(params=embedding_params, lr=embedding_lr * dmodel_lr_scale),
         ]
+        if embedding_params:  # empty when tied (the shared weight sits in the lm_head group)
+            adam_groups.append(dict(params=embedding_params, lr=embedding_lr * dmodel_lr_scale))
         adamw_kwargs = dict(betas=(0.8, 0.95), eps=1e-10, weight_decay=weight_decay)
         use_fused = (not ddp) and any(p.is_cuda for p in (embedding_params + lm_head_params))
         AdamWFactory = DistAdamW if ddp else partial(torch.optim.AdamW, fused=use_fused)

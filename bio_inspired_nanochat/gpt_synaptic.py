@@ -55,6 +55,8 @@ class GPTSynapticConfig:
     # Weight initialization
     init_type: str = "baseline"  # "baseline" | "ca_rule30" | "ca_rule116"
     init_seed: int = 42
+    # Tie wte/lm_head into one shared matrix (hwxb.2.9); default off keeps untied behaviour.
+    tie_embeddings: bool = False
 
 
 # -----------------------------------------------------------------------------
@@ -383,19 +385,25 @@ class GPTSynaptic(nn.Module):
             
             embedding_params = list(self.wte.parameters())
             lm_head_params = list(self.lm_head.parameters())
-            
+            # tie_embeddings: lm_head.weight IS wte.weight (one shared tensor) — optimize it
+            # ONCE (kept in the lm_head/unembedding group at its smaller LR; see gpt.py for
+            # the rationale). Drop it from the embedding group, which then becomes empty.
+            if getattr(self.config, "tie_embeddings", False):
+                embedding_params = [p for p in embedding_params if p is not self.lm_head.weight]
+
             dmodel_lr_scale = (model_dim / 768) ** -0.5
             if rank == 0:
                 print(
                     f"Scaling the LR for the AdamW parameters ∝1/√({model_dim}/768) = {dmodel_lr_scale:.6f}"
                 )
-            
+
             # AdamW gets embedding, lm_head, and all 1D/0D params from blocks (biases, layernorms)
             adam_groups = [
                 dict(params=lm_head_params, lr=unembedding_lr * dmodel_lr_scale),
-                dict(params=embedding_params, lr=embedding_lr * dmodel_lr_scale),
                 dict(params=other_params, lr=embedding_lr * dmodel_lr_scale), # Use embedding LR scale for other params? Or maybe just matrix_lr? Usually AdamW params get higher LR.
             ]
+            if embedding_params:  # empty when tied (shared weight sits in the lm_head group)
+                adam_groups.append(dict(params=embedding_params, lr=embedding_lr * dmodel_lr_scale))
             adamw_kwargs = dict(betas=(0.8, 0.95), eps=1e-10, weight_decay=weight_decay)
             adam_params = embedding_params + lm_head_params + other_params
             use_fused = (not ddp) and any(p.is_cuda for p in adam_params)
@@ -561,6 +569,20 @@ class GPTSynaptic(nn.Module):
             if isinstance(module, SynapticCausalSelfAttention):
                 module.cos = self.cos
                 module.sin = self.sin
+
+        # Tie LAST so lm_head shares the final wte tensor (the lm_head trunc_normal init
+        # above is discarded when tied). See tie_weights().
+        self.tie_weights()
+
+    def tie_weights(self) -> None:
+        """Share lm_head.weight with the token embedding when tie_embeddings is set.
+
+        Idempotent; must be re-called after any load_state_dict(assign=True) (which replaces
+        the param objects and breaks an earlier tie). base_train + checkpoint_manager re-tie
+        on resume.
+        """
+        if getattr(self.config, "tie_embeddings", False):
+            self.lm_head.weight = self.wte.weight
 
     def get_device(self):
         return self.wte.weight.device

@@ -343,6 +343,7 @@ def build_model(checkpoint_dir, step, device, phase):
             structural_every=model_config_kwargs.get("structural_every", 0),
             init_type=model_config_kwargs.get("init_type", "baseline"),
             init_seed=int(model_config_kwargs.get("init_seed", 42)),
+            tie_embeddings=bool(model_config_kwargs.get("tie_embeddings", False)),  # hwxb.2.9
         )
         with torch.device("meta"):
             model = GPTSynaptic(model_config)
@@ -355,6 +356,8 @@ def build_model(checkpoint_dir, step, device, phase):
     model.to_empty(device=device)
     model.init_weights() # note: this is dumb, but we need to init the rotary embeddings. TODO: fix model re-init
     model.load_state_dict(model_data, strict=True, assign=True)
+    # hwxb.2.9: re-establish the wte/lm_head tie that assign=True breaks (no-op when untied).
+    model.tie_weights()
     # Put the model in the right training phase / mode
     if phase == "eval":
         model.eval()

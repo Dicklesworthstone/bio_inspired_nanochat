@@ -72,6 +72,7 @@ use_flex_attention = 0 # use FlexAttention (requires torch>=2.5) if 1
 # Weight initialization
 init_type = "baseline"  # baseline | ca_rule30 | ca_rule116
 init_seed = 42
+tie_embeddings = 0  # hwxb.2.9: tie wte/lm_head into one shared matrix (1=on; recommended for small scale-up models)
 # Split/merge controller (for MoE)
 splitmerge_every = 0  # apply split/merge every N steps (0=off)
 merge_cosine = 0.85  # merge cosine similarity threshold
@@ -207,6 +208,7 @@ model_config_kwargs = dict(
     n_head=num_heads,
     n_kv_head=num_kv_heads,
     n_embd=model_dim,
+    tie_embeddings=bool(tie_embeddings),  # hwxb.2.9: persisted so build_model rebuilds tied (round-trip)
 )
 use_syn = bool(synapses)
 if use_syn:
@@ -235,6 +237,7 @@ if use_syn:
         syn_cfg=syn_cfg,
         init_type=str(init_type),
         init_seed=int(init_seed),
+        tie_embeddings=bool(tie_embeddings),
     )
     with torch.device("meta"):
         model = GPTSynaptic(model_config)
@@ -249,6 +252,7 @@ else:
             n_embd=model_dim,
             init_type=str(init_type),
             init_seed=int(init_seed),
+            tie_embeddings=bool(tie_embeddings),
         )
         model = GPT(model_config)
 model.to_empty(device=device)
@@ -282,6 +286,9 @@ if resuming:
     )
     model.load_state_dict(model_data, strict=True, assign=True)
     del model_data  # free up this memory after the copy
+    # hwxb.2.9: load_state_dict(assign=True) replaces the param objects, breaking any
+    # wte/lm_head tie — re-establish it so the shared weight trains as one on resume.
+    model.tie_weights()
     # hwxb.2.6: restore per-rank RNG so the resumed trajectory matches the uninterrupted run.
     if train_state is not None:
         restore_rng_state(train_state.get("rng"))
