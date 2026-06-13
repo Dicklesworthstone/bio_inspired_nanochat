@@ -85,7 +85,11 @@ def composition_eligibility(cfg: SynapticConfig, *, eps_max: float = 0.5) -> dic
     out: dict[str, ThrustEligibility] = {}
     for key, t in THRUSTS.items():
         row = rows.get(t.requires)
-        if row is None:  # the calcium fast-end (no incoming boundary) is always eligible
+        if row is None:
+            # Defensive: a thrust gated on the fast-end stratum `calcium` has no incoming boundary, so
+            # it is unconditionally eligible. No current thrust does this — every `requires` is a *slow*
+            # stratum {release, fast_weights, slow_weights, structure} with a row — so this is a guard
+            # for a future fast-end thrust, not the path taken by A (which is gated on calcium→release).
             out[key] = ThrustEligibility(key, t.name, "fast-end", 0.0, eps_max, True, "compose")
             continue
         out[key] = ThrustEligibility(

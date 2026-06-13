@@ -163,9 +163,11 @@ def tur_bound(mean_sigma: float) -> float:
 def tur_certificate(rates: ReleaseRates, steps: float) -> TURCertificate:
     """Analytic TUR certificate for the release current over `steps` (note §2).
 
-    `ε² = Var(J)/⟨J⟩² = (a+b)/((a−b)²·t)` is lower-bounded by `2/⟨Σ⟩ = 2/((a−b)·t·ln(a/b))`; the TUR
-    `(a+b)·ln(a/b) ≥ 2(a−b)` is a theorem for all `a,b>0`, so `satisfied` is always True and `slack`
-    is the precision the head can actually buy beyond the thermodynamic floor.
+    `ε² = Var(J)/⟨J⟩² = (a+b)/((a−b)²·t)` is lower-bounded by `2/⟨Σ⟩ = 2/((a−b)·t·ln(a/b))`. The TUR
+    is `ε² ≥ 2/⟨Σ⟩` itself (always non-negative since `⟨Σ⟩ = (a−b)·ln(a/b) ≥ 0`); cleared of the
+    denominators it reads `(a+b)·|ln(a/b)| ≥ 2·|a−b|`, a theorem for all `a,b>0` (the sign of
+    `(a−b)` and `ln(a/b)` always agree). So `satisfied` is always True and `slack` is the precision the
+    head can actually buy beyond the thermodynamic floor.
     """
     mean_j = mean_current(rates, steps)
     if mean_j == 0.0:

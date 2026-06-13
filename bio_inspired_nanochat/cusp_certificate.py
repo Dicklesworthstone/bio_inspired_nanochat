@@ -480,7 +480,12 @@ class CuspMonitor:
         drive that produced `ca_proxy`) is given, the slow-manifold reconstruction error is measured;
         otherwise it is recorded as NaN (not monitored that step).
         """
-        b = self.lat.bias_at_calcium(torch.as_tensor(ca_proxy, dtype=torch.float32))
+        # Mirror CuspLatch.step exactly: the bias that drives the latch uses the SLAVED PP1, not the
+        # certificate's basal floor — so the monitored retention margin reflects the live operating point.
+        ca_t = torch.as_tensor(ca_proxy, dtype=torch.float32)
+        m_t = torch.as_tensor(m, dtype=torch.float32)
+        p_slaved = self.lat.slaved_pp1(m_t, ca_t)
+        b = self.lat.bias_at_calcium(ca_t, pp1=p_slaved)
         b_mean = float(torch.as_tensor(b, dtype=torch.float32).mean())
         proj_err = math.nan
         if influx is not None:

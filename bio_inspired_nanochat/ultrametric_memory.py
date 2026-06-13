@@ -169,7 +169,15 @@ def shares_prefix(x: int, y: int, p: int, n_levels: int, level: int) -> bool:
 
 
 def corrupt_instance(x: int, p: int, n_levels: int, n_fine: int, rng: np.random.Generator) -> int:
-    """Corrupt the `n_fine` finest (low-order) digits of `x`, leaving its coarse category intact."""
+    """Corrupt the `n_fine` finest (low-order) digits of `x`, leaving its coarse category intact.
+
+    `n_fine` must be in `[0, n_levels)`: corrupting `n_levels` (or more) digits would overwrite digit 0
+    — the coarsest category — defeating the very premise. Callers checking recall at category `level`
+    must additionally keep `n_fine ≤ n_levels − level` so the queried category prefix survives.
+    """
+    if not 0 <= n_fine < n_levels:
+        raise ValueError(f"n_fine must be in [0, n_levels={n_levels}); got {n_fine} "
+                         f"(corrupting all digits would destroy the category)")
     digits = padic_digits(x, p, n_levels)
     for i in range(n_levels - n_fine, n_levels):
         digits[i] = int(rng.integers(0, p))
@@ -228,6 +236,11 @@ def leapfrog_recall(p: int, n_levels: int, *, n_per_category: int = 3, n_fine: i
     arm weights the coarse prefix exponentially, so it recovers the category even when the instance is
     destroyed; the flat arm is pulled to wrong-category prototypes that coincide on the corrupted digits.
     """
+    if not 1 <= level <= n_levels:
+        raise ValueError(f"level must be in [1, n_levels={n_levels}], got {level}")
+    if n_fine > n_levels - level:
+        raise ValueError(f"n_fine ({n_fine}) must be ≤ n_levels − level ({n_levels - level}) so the "
+                         f"category prefix at depth {level} survives corruption")
     rng = np.random.default_rng(seed)
     bank = sparse_prototype_bank(p, n_levels, n_per_category, rng)
     cats = [padic_digits(b, p, n_levels)[0] for b in bank]

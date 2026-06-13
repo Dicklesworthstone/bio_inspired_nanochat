@@ -109,6 +109,19 @@ def test_boltzmann_token_weights_equal_temperature_softmax():
 
 
 @pytest.mark.unit
+def test_boltzmann_token_weights_normalize_per_row_for_batches():
+    # Each distribution (last axis) must normalize independently — not globally across the batch.
+    c = DeliberationController(DeliberationConfig(enabled=True))
+    logits = torch.tensor([[1.0, 2.0, 3.0, 0.5], [0.0, 0.0, 5.0, 1.0]])
+    w = c.boltzmann_token_weights(logits, kT=0.7)
+    row_sums = w.sum(dim=-1)
+    assert torch.allclose(row_sums, torch.ones_like(row_sums), atol=1e-9), "each row must sum to 1"
+    assert torch.allclose(w, torch.softmax(logits.double() / 0.7, dim=-1), atol=1e-9)
+    with pytest.raises(ValueError):
+        c.boltzmann_token_weights(logits, kT=0.0)
+
+
+@pytest.mark.unit
 def test_f_trajectory_and_summary_are_well_formed():
     c = DeliberationController(DeliberationConfig(enabled=True))
     ps = [{"C": torch.tensor([1.0]), "BUF": torch.tensor([0.4])}]

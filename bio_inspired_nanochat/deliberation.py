@@ -28,7 +28,6 @@ import numpy as np
 from bio_inspired_nanochat.metriplectic_integrator import (
     TEMP,
     DeliberationResult,
-    boltzmann_weights,
     deliberate,
     free_energy,
 )
@@ -158,17 +157,21 @@ class DeliberationController:
     # -- energy-based decoding (Boltzmann) ------------------------------------ #
     @staticmethod
     def boltzmann_token_weights(logits, kT: float = 1.0):
-        """Energy-based decode weights `p ∝ exp(−F/kT)` with the model logits as negative energy.
+        """Energy-based decode weights `p ∝ exp(−F/kT)` over the last (vocab) axis, with the model
+        logits as negative energy (`F = −logit`).
 
-        This is exactly temperature-`kT` softmax over the logits (`F_token = −logit`), the energy-based
-        reading of the model's own scores; it composes with `effective_temperature` (which supplies a
-        deliberation-derived `kT`). Returned as a torch tensor matching `logits`. For candidate-level
-        energy decoding (score each relaxed continuation by its `F`), pass those free energies to
+        This is exactly the temperature-`kT` softmax of the logits, normalized **per distribution**
+        (the last axis), so it is correct for a single `(vocab,)` logit vector *and* a batch
+        `(..., vocab)` of them (each row sums to 1). For a single vector it equals
+        `metriplectic_integrator.boltzmann_weights(−logits, kT)`. It composes with
+        `effective_temperature`, which supplies a deliberation-derived `kT`. For candidate-level energy
+        decoding (score each relaxed continuation by its own `F`), pass those free energies to
         `metriplectic_integrator.boltzmann_weights` directly (the `re4e.3` energy-guided search path).
         """
+        if kT <= 0.0:
+            raise ValueError(f"kT must be positive, got {kT}")
         t = torch.as_tensor(logits, dtype=torch.float64)
-        w = boltzmann_weights((-t).cpu().numpy().ravel(), kT=kT)
-        return torch.as_tensor(w, dtype=torch.float64).reshape(t.shape)
+        return torch.softmax(t / kT, dim=-1)
 
     # -- traces --------------------------------------------------------------- #
     def _next_index(self, token_index: int | None) -> int:

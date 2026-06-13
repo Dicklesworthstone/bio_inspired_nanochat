@@ -125,3 +125,15 @@ def test_corruption_helpers_preserve_category():
     q = um.corrupt_instance(clean, p, levels, n_fine=3, rng=rng)
     assert um.padic_digits(q, p, levels)[0] == 2, "corrupting fine digits must keep the coarse category"
     assert um.shares_prefix(q, clean, p, levels, level=1)
+
+
+def test_corruption_guards_reject_destroying_the_category():
+    # Corrupting all (or more than n_levels−level) digits would overwrite the category — must raise,
+    # not silently produce a meaningless (negative) leapfrog.
+    rng = np.random.default_rng(0)
+    with pytest.raises(ValueError):
+        um.corrupt_instance(0, 3, 3, n_fine=3, rng=rng)        # n_fine == n_levels
+    with pytest.raises(ValueError):
+        um.leapfrog_recall(p=3, n_levels=3, n_fine=3, level=1)  # n_fine > n_levels − level (= 2)
+    with pytest.raises(ValueError):
+        um.leapfrog_recall(p=4, n_levels=4, n_fine=4, level=1)  # would destroy the category

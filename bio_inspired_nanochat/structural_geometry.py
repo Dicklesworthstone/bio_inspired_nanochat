@@ -194,19 +194,24 @@ def wasserstein_barycenter_1d(a: np.ndarray, b: np.ndarray, *, t: float = 0.5, n
 class MergeCertificate:
     """The OT-merge certificate: the barycenter is the minimum-transport-cost (function-preserving) merge."""
 
-    transport_cost: float       # the barycenter's weighted W2 cost Σ W2(bary, expert)²
+    transport_cost: float       # the barycenter's weighted W2 cost Σ W2(bary, expert)²  (always ≤ naive_cost)
     naive_cost: float           # the same cost for the naive value-average merge
-    barycenter_std: float       # spread of the OT-merged distribution
-    naive_std: float            # spread of the naive average (collapses when the experts differ)
-    ot_preserves_spread: bool   # barycenter_std ≥ naive_std (OT keeps the marginal shape)
+    barycenter_std: float       # spread of the OT-merged distribution: (1−t)σ_a + tσ_b
+    naive_std: float            # spread of the naive average (≈ ½√(σ_a²+σ_b²); collapses when experts differ)
+    ot_preserves_spread: bool   # barycenter_std ≥ naive_std — holds in the population limit (see note)
 
 
 def ot_merge_certificate(a: np.ndarray, b: np.ndarray) -> MergeCertificate:
     """Certify the OT (Wasserstein-barycenter) merge of two experts against the naive value average.
 
-    The W2 barycenter minimizes `½·W2(·,a)² + ½·W2(·,b)²` (the OT-optimal merge), and — being the
-    geodesic midpoint — preserves the distributional spread, whereas the naive elementwise average
-    `(a+b)/2` cancels the parts where the experts disagree and so *shrinks* the variance.
+    The W2 barycenter minimizes `½·W2(·,a)² + ½·W2(·,b)²` (the OT-optimal merge — `transport_cost ≤
+    naive_cost` holds always), and — being the geodesic midpoint — its spread is `(1−t)σ_a + tσ_b`,
+    whereas the naive elementwise average `(a+b)/2` of two same-size samples has spread
+    `≈ ½√(σ_a²+σ_b²) ≤ ½(σ_a+σ_b)`, so it *shrinks* the variance. Hence `ot_preserves_spread` holds in
+    the population limit; on small finite samples it can occasionally flip (sampling noise in the
+    elementwise pairing), so read it as the typical, not a guaranteed, behavior. The naive baseline is
+    elementwise (order-dependent); when the two experts have different sizes it is undefined here and
+    falls back to the barycenter itself (so `naive_cost == transport_cost`, a no-contrast degenerate case).
     """
     a = np.asarray(a, dtype=np.float64).ravel()
     b = np.asarray(b, dtype=np.float64).ravel()
