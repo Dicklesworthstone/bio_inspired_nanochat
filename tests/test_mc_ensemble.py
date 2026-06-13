@@ -132,3 +132,19 @@ def test_summary_keys():
     model = make_tiny_synaptic(seed=1234)
     s = mc.mc_predict(model, _ids(), n_samples=8).summary()
     assert {"n_samples", "mean_predictive_entropy", "mean_aleatoric", "mean_epistemic", "mean_logit_std"} <= set(s)
+
+
+def test_mc_predict_restores_train_mode_even_if_a_forward_raises():
+    # mc_predict sets eval() on entry; a forward that raises mid-loop must still leave the model in its
+    # original (train) mode, and must not leave _mc_sampling set on any presyn.
+    model = make_tiny_synaptic(seed=1234)
+    model.train()
+    orig_forward = model.forward
+    model.forward = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("forward boom"))
+    try:
+        with pytest.raises(RuntimeError, match="boom"):
+            mc.mc_predict(model, _ids(), n_samples=4)
+        assert model.training, "train mode must be restored after an exception"
+        assert all(not getattr(m, "_mc_sampling", False) for m in _presyn(model)), "MC flags must be cleared"
+    finally:
+        model.forward = orig_forward
