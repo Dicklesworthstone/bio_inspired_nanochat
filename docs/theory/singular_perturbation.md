@@ -198,8 +198,9 @@ Dividing by `|C₃| > 0` and rescaling `m̃ = u` yields the **cusp normal form**
   ```
 
   Below `γ_c` (e.g. `γ = 0`, self-excitation off) the synapse is **monostable — no memory**.
-- `b` is the **normal (bias) parameter**: the LTP-drive `d` vs LTD/decay balance. Writing pushes
-  `b > 0`; erasing/quiescence pushes `b < 0`.
+- `b` is the **normal (bias) parameter**: the LTP-drive `d` vs LTD/decay balance. Because
+  `b = −C₀/|C₃|` and the LTP drive enters `C₀` with a `+` sign (`+α_ca·d·(1−m_*)`), **writing (high
+  drive) pushes `b < 0`** (toward the ON branch `m̃ > 0`); erasing/quiescence pushes `b > 0`.
 
 The cusp point is `a = b = 0` (`C₁ = C₀ = 0`): the codimension-2 organizing center where the two
 folds and the bistable wedge are born.
@@ -236,10 +237,10 @@ Hence the **closed-form hysteresis half-width**
 
 **Write / erase / retention, stated as a certificate.**
 
-- **Write**: to latch ON from OFF, the drive must push `b` past `+δ*` (upper fold — the OFF state
-  disappears). The *minimal write* is the pulse that reaches `b = +δ*` (the minimum-energy pulse is
-  the subject of `0642.2.1.5`).
-- **Erase**: to drop ON→OFF, the input must push `b` below `−δ*`.
+- **Write**: to latch ON from OFF, the drive must push `b` past `−δ*` (the lower fold — the OFF state
+  disappears, leaving only ON `m̃ > 0`). The *minimal write* is the pulse that reaches `b = −δ*` (the
+  minimum-energy pulse is the subject of `0642.2.1.5`).
+- **Erase**: to drop ON→OFF, the input must push `b` above `+δ*` (the upper fold).
 - **Retention certificate**: once latched, the ON state **persists against any bias perturbation of
   magnitude `< δ*`**. In particular, at quiescence the resting bias `b_rest` (set by basal drive and
   the floor `p₀`) must satisfy `|b_rest| < δ*`; the **retention margin** is `δ* − |b_rest| > 0`. This
