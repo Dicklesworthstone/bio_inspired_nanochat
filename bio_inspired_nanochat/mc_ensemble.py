@@ -127,18 +127,22 @@ def mc_predict(model, input_ids, *, n_samples: int = 16, temperature: float = 1.
     entropy_sum = None
     logit_sum = None
     logit_sq_sum = None
-    with mc_sampling(model):
-        for _ in range(n_samples):
-            _reset_sequence_state(model)  # i.i.d. draw from a clean per-sequence baseline
-            logits = _forward_logits(model, input_ids).float()
-            probs = torch.softmax(logits / temperature, dim=-1)
-            ent = _entropy(probs)
-            probs_sum = probs if probs_sum is None else probs_sum + probs
-            entropy_sum = ent if entropy_sum is None else entropy_sum + ent
-            logit_sum = logits if logit_sum is None else logit_sum + logits
-            logit_sq_sum = logits * logits if logit_sq_sum is None else logit_sq_sum + logits * logits
-    if was_training:
-        model.train()
+    try:
+        with mc_sampling(model):
+            for _ in range(n_samples):
+                _reset_sequence_state(model)  # i.i.d. draw from a clean per-sequence baseline
+                logits = _forward_logits(model, input_ids).float()
+                probs = torch.softmax(logits / temperature, dim=-1)
+                ent = _entropy(probs)
+                probs_sum = probs if probs_sum is None else probs_sum + probs
+                entropy_sum = ent if entropy_sum is None else entropy_sum + ent
+                logit_sum = logits if logit_sum is None else logit_sum + logits
+                logit_sq_sum = logits * logits if logit_sq_sum is None else logit_sq_sum + logits * logits
+    finally:
+        # Restore train/eval mode even if a forward pass raises (the mc_sampling context manager
+        # already restores the per-module _mc_sampling/_mc_frac flags in its own finally).
+        if was_training:
+            model.train()
 
     assert (probs_sum is not None and entropy_sum is not None
             and logit_sum is not None and logit_sq_sum is not None)  # n_samples >= 1 ⟹ the loop ran

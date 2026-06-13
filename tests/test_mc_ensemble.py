@@ -68,11 +68,17 @@ def test_mc_predict_produces_a_valid_predictive_distribution():
 def test_uncertainty_decomposition_is_consistent():
     model = make_tiny_synaptic(seed=1234)
     pred = mc.mc_predict(model, _ids(), n_samples=24)
-    # BALD: total ≥ aleatoric, and epistemic = total − aleatoric ≥ 0.
+    # Independent recompute (NOT via the stored field): predictive_entropy must be the Shannon entropy
+    # of the mean predictive distribution. Catches a predictive-entropy computed from the wrong tensor.
+    indep_predictive = -(pred.mean_probs * (pred.mean_probs + 1e-12).log()).sum(dim=-1)
+    assert torch.allclose(pred.predictive_entropy, indep_predictive, atol=1e-6)
+    # Jensen / BALD — the substantive property: total (predictive) ≥ aleatoric (expected). This breaks
+    # if predictive/expected are swapped or mis-aggregated (concavity of entropy forbids the reverse).
     assert (pred.predictive_entropy >= pred.expected_entropy - 1e-5).all()
-    assert (pred.mutual_information >= -1e-6).all()
+    # ... and the epistemic gap is the (clamped) difference; entropies are in nats and finite.
     assert torch.allclose(pred.mutual_information,
                           (pred.predictive_entropy - pred.expected_entropy).clamp(min=0.0), atol=1e-6)
+    assert torch.isfinite(pred.predictive_entropy).all() and (pred.expected_entropy >= 0).all()
 
 
 def test_bio_model_has_nonzero_variance_vanilla_is_deterministic():
