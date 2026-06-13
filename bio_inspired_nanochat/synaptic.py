@@ -780,7 +780,13 @@ class SynapticPresyn(nn.Module):
         # release fraction. Default-neutral (gain 1.0) unless a NeuromodulatoryBus broadcasts a
         # gain; higher ACh => more stochastic vesicle release => more exploration. Clamped [0,1].
         ach_frac = min(1.0, max(0.0, cfg.stochastic_train_frac * getattr(self, "_nm_ach_gain", 1.0)))
-        if train and ach_frac > 0:
+        # u2t.1: MC ensembling samples the stochastic release at INFERENCE too. When `_mc_sampling`
+        # is set (by mc_ensemble), every query position releases stochastically (fraction `_mc_frac`,
+        # default 1.0), so each forward pass is an independent draw from the predictive distribution.
+        mc_sampling = bool(getattr(self, "_mc_sampling", False))
+        if mc_sampling:
+            ach_frac = min(1.0, max(0.0, float(getattr(self, "_mc_frac", 1.0))))
+        if (train or mc_sampling) and ach_frac > 0:
             do_stoch = torch.rand_like(p[..., 0].to(torch.float32)) < float(ach_frac)
             rel_det = p * rrp_edge
             if do_stoch.any():
