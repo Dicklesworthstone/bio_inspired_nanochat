@@ -106,16 +106,18 @@ def test_leapfrog_ultrametric_beats_flat_under_corruption():
 
 def test_ultrametric_recall_is_robust_across_corruption_depth():
     # The coarse prefix is never corrupted (corruption hits only fine digits) and the bank covers every
-    # category, so the ultrametric arm recovers the category at recall 1.0 for ANY corruption depth,
-    # while the flat arm degrades — and ultrametric never underperforms flat.
-    prev_flat = 1.1
+    # category, so the ultrametric arm recovers the category at recall ≈1.0 for ANY corruption depth and
+    # clearly beats the flat baseline at EVERY depth (the leapfrog). Note: flat does NOT need to
+    # "degrade with depth" — it is already confused at n_fine=0 because the query is an unstored random
+    # leaf — so we assert the per-depth leapfrog, not a depth trend.
+    flats = []
     for n_fine in (0, 1, 2, 3):
         res = um.leapfrog_recall(p=4, n_levels=4, n_per_category=3, n_fine=n_fine, level=1,
                                  trials=300, seed=1)
         assert res.ultrametric_recall >= 0.99, f"ultrametric category recall must stay ~1 (n_fine={n_fine})"
-        assert res.delta >= -1e-9, "ultrametric must never underperform flat"
-        prev_flat = res.flat_recall
-    assert prev_flat < 0.99, "by full fine corruption the flat baseline must have clearly degraded"
+        assert res.delta > 0.2, f"ultrametric must clearly beat flat at n_fine={n_fine} (Δ={res.delta:.3f})"
+        flats.append(res.flat_recall)
+    assert max(flats) < 0.9, f"the flat baseline must be clearly worse at every depth, got {flats}"
 
 
 def test_corruption_helpers_preserve_category():

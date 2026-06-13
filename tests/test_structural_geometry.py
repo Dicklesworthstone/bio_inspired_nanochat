@@ -57,8 +57,14 @@ def test_spectral_certificate_bounds_child_kappa_weyl():
 def test_split_is_output_preserving_on_average():
     rng = np.random.default_rng(2)
     w = _well_conditioned(12, 1.0, 3.0, rng=rng)
-    c1, c2 = sg.function_preserving_split(w, 0.3, rng)
+    noise_norm = 0.3
+    c1, c2 = sg.function_preserving_split(w, noise_norm, rng)
     assert np.allclose(0.5 * (c1 + c2), w), "the antisymmetric split must average back to the parent"
+    assert not np.allclose(c1, c2), "the split must actually perturb (antisymmetric, non-degenerate)"
+    # The achieved noise spectral norm must equal the request — the contract the Weyl certificate (and
+    # max_noise_for_kappa) rely on; a wrong rescaling would silently break the κ bound.
+    delta_n = 0.5 * (c1 - c2)
+    assert float(np.linalg.svd(delta_n, compute_uv=False)[0]) == pytest.approx(noise_norm, rel=1e-6)
 
 
 def test_max_noise_for_kappa_achieves_the_target():
