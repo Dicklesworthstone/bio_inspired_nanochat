@@ -120,9 +120,11 @@ def integral_ft_closed_form(rates: ReleaseRates, steps: float) -> float:
     `⟨e^{−Σ}⟩ = ⟨(b/a)^J⟩ = exp(a t (b/a − 1)) · exp(b t (a/b − 1)) = exp(t(b−a) + t(a−b)) = 1`.
     This is the analytic counterpart of `integral_fluctuation_theorem` (which only converges by MC
     near equilibrium); together they show the identity holds and that the simulator reproduces it.
+    The two exponents are summed *before* exponentiating: each alone can overflow for an extreme drive
+    `a/b`, but their sum is identically 0 — so the combined form returns 1.0 for any `a, b, t`.
     """
     a, b, t = rates.a, rates.b, steps
-    return math.exp(a * t * (b / a - 1.0)) * math.exp(b * t * (a / b - 1.0))
+    return math.exp(a * t * (b / a - 1.0) + b * t * (a / b - 1.0))
 
 
 def detailed_fluctuation_ratio(currents: np.ndarray, rates: ReleaseRates, k: int) -> tuple[float, float]:
@@ -185,9 +187,13 @@ def empirical_tur(currents: np.ndarray, mean_sigma: float) -> TURCertificate:
     """The TUR certificate from *sampled* currents (the runtime-measurable form, `0642.3.2.1`).
 
     Uses the empirical mean/variance of `J` against the analytic ⟨Σ⟩; this is what a per-head monitor
-    evaluates online to certify that a head's release precision is thermodynamically honest.
+    evaluates online to certify that a head's release precision is thermodynamically honest. Requires
+    at least 2 samples: with `n < 2` the empirical variance is undefined / unreliable and the TUR is
+    not testable (a 1-sample `Var=0` would otherwise read as a spurious "violation" of a theorem).
     """
     c = np.asarray(currents, dtype=np.float64)
+    if c.size < 2:
+        raise ValueError(f"empirical TUR needs >= 2 current samples, got {c.size}")
     mean_j = float(np.mean(c))
     if mean_j == 0.0:
         raise ValueError("empirical TUR needs a non-zero mean current")
@@ -248,7 +254,9 @@ def crooks_calibration(sigma: np.ndarray, *, n_bins: int = 21, tol: float = 0.25
     for i in range(n_bins):
         c = centers[i]
         j = n_bins - 1 - i                          # the mirror bin (center −c)
-        if c > 0 and counts[i] >= min_count and counts[j] >= min_count:
+        # require both bins populated (and the mirror non-empty regardless of min_count) to avoid a
+        # log(count/0) = inf when the caller passes min_count == 0.
+        if c > 0 and counts[i] >= max(1, min_count) and counts[j] >= max(1, min_count):
             measured.append(math.log(counts[i] / counts[j]))
             predicted.append(c)
             kept.append(c)
@@ -382,17 +390,22 @@ class StochasticThermoMonitor:
     def record(self, currents: np.ndarray, rates: ReleaseRates, *, step: int | None = None) -> ThermoStepRecord:
         """Ingest one batch of release currents `J` at jump propensities `rates`; certify the TUR."""
         c = np.asarray(currents, dtype=np.float64)
+        if c.size == 0:
+            raise ValueError("record needs a non-empty batch of currents")
         a = affinity(rates)
         sig = entropy_production_samples(c, rates)
         self._sigma.append(sig)
         mean_j = float(c.mean())
         mean_sig = float(sig.mean())
-        if mean_j != 0.0 and mean_sig > 0.0:
+        # The empirical TUR is only meaningful with >= 2 samples AND non-zero spread: a degenerate
+        # batch (n<2 or Var=0) gives an unreliable variance that would read as a spurious "violation"
+        # of a theorem, so treat it as non-informative (satisfied, bound=∞) rather than a violation.
+        if c.size >= 2 and float(np.var(c)) > 0.0 and mean_j != 0.0 and mean_sig > 0.0:
             cert = empirical_tur(c, mean_sig)
             rel_var, bound, satisfied, slack = (
                 cert.relative_variance, cert.entropy_bound, cert.satisfied, cert.slack,
             )
-        else:  # undriven / degenerate batch: the TUR is not informative here
+        else:  # undriven / degenerate batch: the TUR is not testable here
             rel_var = float(np.var(c)) / (mean_j * mean_j) if mean_j != 0.0 else float("inf")
             bound, satisfied, slack = float("inf"), True, float("inf")
         rec = ThermoStepRecord(

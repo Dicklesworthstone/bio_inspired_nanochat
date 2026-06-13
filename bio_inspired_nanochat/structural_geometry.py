@@ -150,14 +150,18 @@ def coverage_signal(points: np.ndarray, *, ratio_threshold: float = 3.0) -> Cove
     (robust to noise) — a principled, noise-stable trigger to grow capacity there.
     """
     e = mst_edge_lengths(points)
+    n = int(np.asarray(points).shape[0])
     if e.size == 0:
-        return CoverageSignal(0.0, 0.0, 0.0, int(np.asarray(points).shape[0]), False)
+        return CoverageSignal(0.0, 0.0, 0.0, n, False)
     max_gap = float(e[-1])
-    typical = float(np.median(e)) or 1e-12
-    ratio = max_gap / typical
+    typical = float(np.median(e))
+    # A genuinely zero median (e.g. a tight cluster of (near-)duplicate points plus one far outlier)
+    # makes the ratio undefined; report it as ∞ honestly — there IS an isolated hole — rather than a
+    # meaningless ~1e14 from dividing by an epsilon floor.
+    ratio = (max_gap / typical) if typical > 0.0 else (float("inf") if max_gap > 0.0 else 0.0)
     return CoverageSignal(
         max_gap=max_gap, typical_gap=typical, persistence_ratio=ratio,
-        n_points=int(np.asarray(points).shape[0]), significant=bool(ratio >= ratio_threshold),
+        n_points=n, significant=bool(ratio >= ratio_threshold),
     )
 
 

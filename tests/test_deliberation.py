@@ -58,6 +58,19 @@ def test_synaptic_z_aggregates_calcium_and_buffer():
 
 
 @pytest.mark.unit
+def test_synaptic_z_rejects_nonfinite_calcium_and_falls_back():
+    # An empty or all-NaN calcium tensor must NOT become a NaN z (which would silently drive the
+    # explore-ceiling and log NaN); it falls back to None ⟹ single-step decode.
+    c = DeliberationController(DeliberationConfig(enabled=True))
+    assert c.synaptic_z([{"C": torch.tensor([]), "BUF": torch.tensor([0.5])}]) is None
+    assert c.synaptic_z([{"C": torch.tensor([float("nan")]), "BUF": torch.tensor([0.5])}]) is None
+    assert c.synaptic_z([{"C": torch.tensor([float("inf")]), "BUF": torch.tensor([0.5])}]) is None
+    # ... and the per-token hook therefore returns the base temperature unchanged (no NaN record).
+    assert c.effective_temperature([{"C": torch.tensor([float("nan")]), "BUF": torch.tensor([0.5])}], 0.9) == 0.9
+    assert c.records == []
+
+
+@pytest.mark.unit
 def test_ponder_converges_within_budget():
     c = DeliberationController(DeliberationConfig(enabled=True, max_iters=64))
     res = c.ponder(np.array([0.5, 0.3, 0.0]))

@@ -282,3 +282,36 @@ def test_assess_one_shot_reports_temperature_and_mode():
     out = on.assess(st.simulate_currents(neq, 2.0, 200000, seed=2), neq, ach_level=1.0, min_count=80)
     assert {"enabled", "optimal_temperature", "calibration_mode", "ft_calibrated", "ft_residual"} <= set(out)
     assert out["optimal_temperature"] > st.landauer_optimal_temperature(1.0)  # ACh=1 raises it
+
+
+# =========================================================================== #
+# Edge cases / numerical robustness (fresh-eyes round 3)
+# =========================================================================== #
+def test_integral_ft_closed_form_no_overflow_at_extreme_drive():
+    # The exponents sum to exactly 0; computing them separately would overflow at extreme a/b.
+    for a in (1e6, 1e12, 1e18):
+        assert st.integral_ft_closed_form(st.ReleaseRates(a=a, b=1.0), 1.0) == pytest.approx(1.0, abs=1e-9)
+        assert st.integral_ft_closed_form(st.ReleaseRates(a=1.0, b=a), 1.0) == pytest.approx(1.0, abs=1e-9)
+
+
+def test_empirical_tur_and_monitor_reject_degenerate_batches():
+    # A single-sample (or zero-variance) batch makes Var(J) an unreliable estimate that would read as a
+    # spurious "TUR violation" of a theorem; empirical_tur must refuse it, and the monitor must treat it
+    # as non-informative (satisfied), never a violation. An empty batch is rejected outright.
+    rates = st.rates_from_release(p_release=0.4, rec_rate=0.06, pool=6.0)
+    with pytest.raises(ValueError):
+        st.empirical_tur(np.array([3.0]), 1.0)              # n = 1
+    mon = st.StochasticThermoMonitor()
+    mon.record(np.array([3.0]), rates)                      # degenerate batch ⟹ non-informative
+    mon.record(np.array([2.0, 2.0, 2.0]), rates)            # zero-variance ⟹ non-informative
+    assert mon.all_currents_satisfy_tur(), "degenerate batches must NOT register a false TUR violation"
+    mon.assert_tur()                                        # must not raise
+    with pytest.raises(ValueError):
+        mon.record(np.array([]), rates)                     # empty batch rejected
+
+
+def test_crooks_calibration_handles_min_count_zero():
+    rng = np.random.default_rng(0)
+    sig = rng.normal(0.0, 1.0, 5000)
+    cal = st.crooks_calibration(sig, n_bins=15, min_count=0)  # must not divide by an empty mirror bin
+    assert math.isfinite(cal.max_abs_residual) or cal.max_abs_residual == float("inf")

@@ -115,6 +115,17 @@ def test_coverage_signal_is_bottleneck_stable():
     assert abs(pert - base) <= 6 * eps, "the H0 diagram must move by ~the perturbation (bottleneck stability)"
 
 
+def test_coverage_signal_zero_median_reports_inf_not_a_huge_number():
+    # A tight cluster of duplicate points plus one far outlier ⟹ median MST edge = 0; the ratio must be
+    # reported as ∞ (a genuine isolated hole), not a meaningless ~1e14 from an epsilon floor.
+    pts = np.vstack([np.zeros((10, 2)), np.array([[100.0, 0.0]])])
+    sig = sg.coverage_signal(pts)
+    assert sig.typical_gap == 0.0 and sig.persistence_ratio == float("inf") and sig.significant
+    # All-identical points (every MST edge 0, no hole) ⟹ ratio 0, not ∞.
+    flat = sg.coverage_signal(np.zeros((8, 2)))
+    assert flat.max_gap == 0.0 and flat.persistence_ratio == 0.0 and not flat.significant
+
+
 # --------------------------------------------------------------------------- #
 # §3. Optimal-transport merge
 # --------------------------------------------------------------------------- #

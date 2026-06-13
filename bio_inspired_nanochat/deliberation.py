@@ -16,6 +16,18 @@ bounded number of steps; a guard trip inside a step deterministically falls back
 whole mechanism is **default-off**: with no `DeliberationController` the engine decodes exactly as
 before (single-step). Nothing here mutates the model — deliberation only runs the existing descent
 longer and reads the result.
+
+**Scope of this wiring (`r00r.1.2`), stated honestly.** The relaxed state `z` is *read*, not fed back:
+its effort/confidence set the **decode temperature** only — the model's logits are unchanged, so this
+is a confidence-calibrated temperature controller, not (yet) a state-feedback "ponder" that re-runs the
+model on a relaxed state. Because the metriplectic core here is the low-dimensional aggregate
+`z = (mean C, mean B, 0)`, the effort and `F` are both monotone functions of the mean presynaptic
+calcium magnitude (`F_final = (1−T)·½‖(C,B)‖²`), i.e. a simple "how active is the synapse" difficulty
+proxy rather than an independent self-consistency measure. The decode temperature is one scalar per
+decoded step (shared across the batch, matching `sample_next_token`'s single-temperature API). The
+fuller programme — feeding the relaxed state back into the forward, and per-candidate energy decoding
+(`boltzmann_weights` over each relaxed continuation's `F`) — is the downstream `re4e.*` work; this
+module is the bounded, default-off substrate it builds on.
 """
 
 from __future__ import annotations
@@ -98,10 +110,17 @@ class DeliberationController:
             if not isinstance(st, dict):
                 continue
             c, b = st.get("C"), st.get("BUF")
+            # Only accept finite means: an empty or all-NaN calcium tensor must NOT become a NaN `z`
+            # (which would silently drive the latch to the explore-ceiling and log NaN). Skip it, and
+            # if no usable calcium remains, fall back to None ⟹ single-step decode (vanilla behavior).
             if c is not None:
-                cs.append(float(torch.as_tensor(c, dtype=torch.float64).mean()))
+                cm = float(torch.as_tensor(c, dtype=torch.float64).mean())
+                if np.isfinite(cm):
+                    cs.append(cm)
             if b is not None:
-                bs.append(float(torch.as_tensor(b, dtype=torch.float64).mean()))
+                bm = float(torch.as_tensor(b, dtype=torch.float64).mean())
+                if np.isfinite(bm):
+                    bs.append(bm)
         if not cs:
             return None
         c_mean = float(np.mean(cs))
