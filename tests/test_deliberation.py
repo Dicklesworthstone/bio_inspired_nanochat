@@ -232,17 +232,23 @@ def test_halting_distinguishes_convergence_from_budget():
 
 @pytest.mark.unit
 def test_energy_sampler_matches_target_distribution():
-    """Sampling p ∝ exp(−F/kT) must reproduce the Boltzmann weights empirically (a toy case)."""
+    """`boltzmann_weights` must equal the closed-form `exp(−F/kT)/Z`, and sampling reproduces it."""
     free_energies = np.array([0.0, 1.0, 2.0, 0.5])
     kT = 0.8
     w = boltzmann_weights(free_energies, kT=kT)
+    # INDEPENDENT closed form — this is what catches a wrong sign or kT-scaling (the sampling check
+    # below only verifies torch.multinomial reproduces its own input, which is not a property of w).
+    expected = np.exp(-free_energies / kT)
+    expected /= expected.sum()
+    assert np.allclose(w, expected, atol=1e-12), f"weights {w} must equal exp(−F/kT)/Z {expected}"
+    # A wrong kT (e.g. 2·kT) would change the spread; pin it.
+    assert not np.allclose(w, boltzmann_weights(free_energies, kT=2 * kT), atol=1e-3)
     probs = torch.as_tensor(w, dtype=torch.float64)
     gen = torch.Generator().manual_seed(0)
     draws = torch.multinomial(probs, num_samples=40000, replacement=True, generator=gen)
     emp = torch.bincount(draws, minlength=4).double() / 40000.0
     assert torch.allclose(emp, probs, atol=0.02), f"empirical {emp.tolist()} must match target {probs.tolist()}"
-    # argmin-F (lowest energy) must be the most probable candidate.
-    assert int(probs.argmax()) == int(np.argmin(free_energies))
+    assert int(probs.argmax()) == int(np.argmin(free_energies))  # argmin-F is most probable
 
 
 @pytest.mark.e2e
