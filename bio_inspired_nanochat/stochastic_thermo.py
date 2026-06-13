@@ -261,6 +261,70 @@ def crooks_calibration(sigma: np.ndarray, *, n_bins: int = 21, tol: float = 0.25
 
 
 # =========================================================================== #
+# §4. Energy-optimal (Landauer) release temperature (bead 0642.3.1.4)
+# =========================================================================== #
+def _rate_distortion_residual(snr: float) -> float:
+    """`2·SNR/(1+SNR) − ln(1+SNR)`: zero at the bits-per-joule-optimal SNR (positive below, negative above)."""
+    return 2.0 * snr / (1.0 + snr) - math.log1p(snr)
+
+
+def optimal_exploration_snr(tol: float = 1e-13) -> float:
+    """The signal-to-noise ratio that maximizes the release's bits-per-joule: `SNR* ≈ 3.9215`.
+
+    Maximizing `bits/energy ∝ log₂(1+SNR)/√SNR` (the Gaussian-channel information over the TUR energy
+    floor `2·SNR·kT` at the matched temperature `kT = σ/√SNR`) gives the transcendental stationarity
+    `2·SNR/(1+SNR) = ln(1+SNR)`, whose unique positive root is the universal rate-distortion operating
+    point of the release. Solved by bisection (no SciPy dependency).
+    """
+    lo, hi = 1.0, 100.0  # residual > 0 at lo, < 0 at hi (bracket the root)
+    for _ in range(200):
+        mid = 0.5 * (lo + hi)
+        if _rate_distortion_residual(mid) > 0.0:
+            lo = mid
+        else:
+            hi = mid
+        if hi - lo < tol:
+            break
+    return 0.5 * (lo + hi)
+
+
+def bits_per_joule(snr: float) -> float:
+    """The (unnormalized) bits-per-joule of a release at signal-to-noise ratio `snr`.
+
+    `½·log₂(1+SNR)` bits delivered over an energy `∝ √SNR` (the TUR floor `2·SNR·kT` evaluated at the
+    matched temperature `kT = σ/√SNR`). A single interior maximum at `optimal_exploration_snr()`.
+    """
+    if snr <= 0.0:
+        return 0.0
+    return 0.5 * math.log2(1.0 + snr) / math.sqrt(snr)
+
+
+def landauer_optimal_temperature(drive_uncertainty: float, *, snr_star: float | None = None) -> float:
+    """The energy-optimal release temperature `kT* = σ/√SNR* ≈ 0.505·σ` (`σ` = drive uncertainty).
+
+    The release resolves the signal exactly to the level of its uncertainty: any finer wastes
+    metabolic energy on spurious precision (the Landauer cost), any coarser throws away signal. The
+    matched point is the bits-per-joule maximum — a *thermodynamically optimal* attention temperature.
+    """
+    if drive_uncertainty <= 0.0:
+        raise ValueError(f"drive uncertainty must be positive, got {drive_uncertainty}")
+    s = optimal_exploration_snr() if snr_star is None else snr_star
+    return drive_uncertainty / math.sqrt(s)
+
+
+def ach_coupled_temperature(drive_uncertainty_base: float, ach_level: float, *, ach_gain: float = 1.0) -> float:
+    """ACh-coupled energy-optimal release temperature (couples `0642.3.1.4` to `hy8.5`).
+
+    Acetylcholine signals uncertainty/attention; here it scales the effective drive uncertainty
+    `σ(ACh) = σ_base·(1 + ach_gain·ACh)`, so the optimal temperature `kT*(ACh) = σ(ACh)/√SNR*` rises
+    with ACh: more uncertainty ⟹ hotter release ⟹ more exploration — Landauer-optimal *and*
+    state-dependent. Default-neutral at `ach_level = 0` (`kT* = σ_base/√SNR*`).
+    """
+    sigma = drive_uncertainty_base * (1.0 + ach_gain * max(0.0, ach_level))
+    return landauer_optimal_temperature(sigma)
+
+
+# =========================================================================== #
 # Bridge to the live release subsystem
 # =========================================================================== #
 def rates_from_release(p_release: float, rec_rate: float, pool: float) -> ReleaseRates:

@@ -135,7 +135,46 @@ state).
 
 ---
 
-## 4. Proof-obligation & assumptions ledger  → consumed by `0642.3.2`, `0642.3.3`
+## 4. Energy-optimal (Landauer) release temperature  → subtask `0642.3.1.4`
+
+The release temperature `kT` (set by ACh, `hy8.5`) is the exploration knob: hotter ⟹ more stochastic
+release. How hot is *thermodynamically* optimal? Trade the information delivered against the metabolic
+energy spent. A release that resolves a drive at signal-to-noise ratio `SNR` delivers
+`½·log₂(1+SNR)` bits; by the TUR (§2) the minimum entropy to sustain that precision is `⟨Σ⟩ = 2·SNR`,
+costing energy `E = kT·⟨Σ⟩`. At the **matched temperature** `kT = σ/√SNR` (thermal noise scaled to the
+drive uncertainty `σ`), `E = 2σ·√SNR`, so the **bits-per-joule** is
+
+```
+        η(SNR)  ∝  log₂(1 + SNR) / √SNR .
+```
+
+`η` has a single interior maximum where `d/dSNR[ln(1+SNR)/√SNR] = 0`, i.e. at the universal
+rate-distortion operating point
+
+```
+        2·SNR*/(1 + SNR*)  =  ln(1 + SNR*)        ⟹      SNR* ≈ 3.9215,
+```
+
+giving the **energy-optimal release temperature**
+
+```
+        kT*  =  σ / √SNR*  ≈  0.505 · σ.
+```
+
+*Interpretation.* The release resolves the signal **exactly to the level of its uncertainty**: any
+finer (`kT < kT*`) wastes metabolic energy on spurious precision (the Landauer cost of bits you didn't
+need), any coarser (`kT > kT*`) throws away signal. `SNR* ≈ 3.92` is a constant of the channel, not a
+tunable — the thermodynamically-optimal attention always operates there.
+
+**ACh coupling (state-dependent optimality).** Acetylcholine signals uncertainty/attention, scaling
+the effective drive uncertainty `σ(ACh) = σ_base·(1 + g·ACh)`. So the optimal temperature
+`kT*(ACh) = σ(ACh)/√SNR*` **rises with ACh**: more uncertainty ⟹ hotter ⟹ more exploration — exactly
+the `hy8.5` direction (ACh → exploration), now with a *thermodynamic* justification rather than a
+hand-set gain. (`landauer_optimal_temperature`, `ach_coupled_temperature`.)
+
+---
+
+## 5. Proof-obligation & assumptions ledger  → consumed by `0642.3.2`, `0642.3.3`
 
 | # | Assumption (discharged by) | Statement | Failure mode | Fallback |
 |---|---|---|---|---|
@@ -150,7 +189,7 @@ by the calcium/RRP dynamics, so the stationarity E2 couples to the timescale-sep
 
 ---
 
-## 5. Numerical corroboration
+## 6. Numerical corroboration
 
 `tests/test_stochastic_thermo.py` checks the results against the reference Markov-jump model:
 
@@ -163,6 +202,9 @@ by the calcium/RRP dynamics, so the stationarity E2 couples to the timescale-sep
   the empirical TUR holds on sampled currents.
 - **Crooks/Jarzynski calibration** — `jarzynski_free_energy ≈ 0`; the `Σ` histogram obeys the detailed
   FT line; and the check **rejects** a misspecified (Gaussian) `Σ`, so the guarantee is falsifiable.
+- **Landauer temperature** — `optimal_exploration_snr ≈ 3.9215` solves the stationarity; bits-per-joule
+  peaks there; `kT* = σ/√SNR* ≈ 0.505·σ` is linear in the drive uncertainty; the ACh coupling raises
+  `kT*` with the signaled uncertainty.
 
 These corroborate the exact identities (closed form) and that the simulated release reproduces them —
 which is what licenses the runtime certificate/monitor (`0642.3.2.1`) and the falsification

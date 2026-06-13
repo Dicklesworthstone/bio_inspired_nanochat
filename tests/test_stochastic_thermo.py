@@ -16,6 +16,7 @@ well sampled. Run:  pytest tests/test_stochastic_thermo.py -v
 
 from __future__ import annotations
 
+import math
 
 import numpy as np
 import pytest
@@ -138,3 +139,42 @@ def test_boltzmann_drive_temperature_relation_smoke():
     sig = st.entropy_production_samples(J, _NEAR_EQ)
     work = 2.0 * sig  # w = kT·Σ with kT = 2
     assert st.jarzynski_free_energy(work, kT=2.0) == pytest.approx(0.0, abs=0.05)
+
+
+# =========================================================================== #
+# 0642.3.1.4 — energy-optimal (Landauer) release temperature
+# =========================================================================== #
+def test_optimal_exploration_snr_solves_the_stationarity():
+    snr = st.optimal_exploration_snr()
+    assert snr == pytest.approx(3.9215, abs=1e-3), f"SNR* must be the rate-distortion root, got {snr}"
+    # Satisfies 2·SNR/(1+SNR) = ln(1+SNR).
+    assert (2 * snr / (1 + snr)) == pytest.approx(math.log1p(snr), abs=1e-9)
+
+
+def test_bits_per_joule_peaks_at_optimal_snr():
+    snr = st.optimal_exploration_snr()
+    peak = st.bits_per_joule(snr)
+    for delta in (0.5, 1.0, 2.0, 5.0):
+        assert st.bits_per_joule(snr + delta) < peak, "bits-per-joule must fall above SNR*"
+        assert st.bits_per_joule(max(0.05, snr - delta)) < peak, "bits-per-joule must fall below SNR*"
+
+
+def test_landauer_temperature_matches_the_uncertainty_scale():
+    snr = st.optimal_exploration_snr()
+    const = 1.0 / math.sqrt(snr)                      # kT*/σ ≈ 0.505
+    for sigma in (0.5, 1.0, 2.0, 4.0):
+        kt = st.landauer_optimal_temperature(sigma)
+        assert kt == pytest.approx(const * sigma)     # linear in the drive uncertainty
+    assert const == pytest.approx(0.505, abs=0.005)
+    with pytest.raises(ValueError):
+        st.landauer_optimal_temperature(0.0)
+
+
+def test_ach_coupling_raises_temperature_with_uncertainty():
+    base = st.ach_coupled_temperature(1.0, ach_level=0.0)
+    hi = st.ach_coupled_temperature(1.0, ach_level=1.0, ach_gain=1.0)
+    higher = st.ach_coupled_temperature(1.0, ach_level=3.0, ach_gain=1.0)
+    assert base < hi < higher, "more ACh (uncertainty) ⟹ hotter, more-exploratory release"
+    assert base == pytest.approx(st.landauer_optimal_temperature(1.0))  # neutral at ACh = 0
+    # ACh = 1 doubles the effective uncertainty (gain 1) ⟹ doubles kT*.
+    assert hi == pytest.approx(2.0 * base)
