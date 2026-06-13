@@ -1070,6 +1070,14 @@ class PostsynapticHebb(nn.Module):
         nn.init.normal_(self.U, std=0.02)
         nn.init.normal_(self.V, std=0.02)
 
+        # 0642.2.2.1: certified cusp-normal-form latch. Built only when opted in; falls back to the
+        # heuristic sax.2 map below when the retention certificate is void (fail-closed, §5 of
+        # docs/theory/singular_perturbation.md). Lazy import avoids a cusp_certificate↔synaptic cycle.
+        self._cusp_latch = None
+        if cfg.bistable_latch and cfg.cusp_latch:
+            from bio_inspired_nanochat.cusp_certificate import CuspLatch
+            self._cusp_latch = CuspLatch(cfg)
+
     def forward(self, v: Tensor) -> Tensor:
         diag = 1.0 + self.fast + self.slow
         return v * diag + v @ (self.U @ self.V)
@@ -1086,7 +1094,21 @@ class PostsynapticHebb(nn.Module):
             The main bdnf buffer then tracks this with decay.
         """
         cfg = self.cfg
-        if cfg.bistable_latch:
+        if cfg.bistable_latch and self._cusp_latch is not None and self._cusp_latch.certified:
+            # 0642.2.2.1: certified cusp-normal-form latch. m evolves by one gradient step of the
+            # cusp cubic m̃³+a·m̃+b(c) with the certified splitting parameter a and the live calcium
+            # bias b(c); PP1 is slaved to its reduced quasi-steady value. δ*(a) is then the *tight*
+            # retention half-width. Genes modulate the operating bias (γ, β_pp1), not the certified a.
+            gamma_scale = beta_pp1_scale = None
+            if genes is not None and genes.numel() >= 4:
+                gamma_scale = genes[..., 2].clamp(min=0.0)
+                beta_pp1_scale = genes[..., 3].clamp(min=0.0)
+            m_new, p_new = self._cusp_latch.step(
+                self.camkii, ca_proxy, gamma_scale=gamma_scale, beta_pp1_scale=beta_pp1_scale
+            )
+            self.camkii.copy_(m_new)
+            self.pp1.copy_(p_new)
+        elif cfg.bistable_latch:
             # Lisman-style bistable switch (sax.2): CaMKII self-excitation + mutual
             # cross-inhibition with PP1 over a basal phosphatase floor. Calcium maps to
             # LTP/LTD drives via a BCM curve (LTP above camkii_thr, LTD below latch_ltd_thr).

@@ -66,14 +66,17 @@ def test_self_excitation_off_is_monostable_and_uncertified():
 def test_certificate_bistability_agrees_with_the_live_latch():
     # The certificate says γ ≥ ~0.2 is bistable; confirm the live latch actually RETAINS there and
     # does NOT at γ = 0 (the certificate's a-sign is grounded in the real dynamics, not just algebra).
+    # With cusp_latch on (via _cfg), the live latch is the certified cusp gradient-flow (0642.2.2.1),
+    # whose write is gradual (monotone, stability-capped) — so it needs a sustained write pulse to
+    # climb from deep-OFF to the ON root; retention at the neutral hold is the property under test.
     def retains(gamma: float) -> bool:
         post = PostsynapticHebb(d_k=4, d_v=4, cfg=_cfg(latch_gamma_auto=gamma))
         ca_hi, ca_neutral = torch.full((4,), 2.0), torch.full((4,), 0.75)
         y = torch.zeros(1, 4)
-        for _ in range(12):
-            post.update(y, ca_hi)        # write pulse
+        for _ in range(40):
+            post.update(y, ca_hi)        # sustained write pulse (cusp write is graded, not a jump)
         for _ in range(80):
-            post.update(y, ca_neutral)   # hold at neutral
+            post.update(y, ca_neutral)   # hold at neutral (inside the retention band |b| < δ*)
         return float(post.camkii.mean()) > 0.5
 
     assert cc.certify_retention(_cfg(latch_gamma_auto=0.45)).certified and retains(0.45)
