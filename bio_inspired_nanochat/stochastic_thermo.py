@@ -23,8 +23,9 @@ flukes. This module is the theory + reference math; the runtime TUR certificate 
 
 from __future__ import annotations
 
+import json
 import math
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 
 import numpy as np
 
@@ -335,3 +336,127 @@ def rates_from_release(p_release: float, rec_rate: float, pool: float) -> Releas
     the high-calcium / metabolically-driven regime where the release dissipates and `Σ > 0`.
     """
     return ReleaseRates(a=max(p_release * pool, 1e-12), b=max(rec_rate * pool, 1e-12))
+
+
+# =========================================================================== #
+# Runtime TUR certificate + Crooks calibration monitor (bead 0642.3.2.1)
+# =========================================================================== #
+#
+# Turns the theory into observable per-head/per-step evidence (the CuspMonitor / LyapunovMonitor
+# discipline). Each `record` ingests a batch of release-current samples `J` (from the MC ensemble,
+# `mc_ensemble`, or any live stochastic-release readout) with their jump propensities, certifies the
+# TUR (the one-sided, always-computable precision/cost bound), and accumulates the entropy production
+# for the Crooks detailed-FT residual (the calibration guarantee — computable only where the `Σ`
+# histogram has support on both signs, i.e. near equilibrium; flagged otherwise). Emits rich + JSONL.
+
+
+@dataclass
+class ThermoStepRecord:
+    """Auditable per-step stochastic-thermodynamics record (the runtime UQ-certificate evidence)."""
+
+    step: int
+    n_samples: int
+    affinity: float            # A = ln(a/b)
+    mean_current: float        # ⟨J⟩
+    relative_variance: float   # ε² = Var(J)/⟨J⟩² (the precision)
+    mean_entropy: float        # ⟨Σ⟩
+    entropy_bound: float       # 2/⟨Σ⟩ (the TUR floor on ε²)
+    tur_satisfied: bool        # ε² ≥ 2/⟨Σ⟩
+    tur_slack: float           # ε² − 2/⟨Σ⟩ ≥ 0
+
+
+class StochasticThermoMonitor:
+    """Runtime TUR certificate + Crooks calibration monitor for the stochastic release (`0642.3.2.1`).
+
+    Accumulates release-current batches; per batch it emits a `ThermoStepRecord` with the (non-vacuous)
+    TUR certificate, and accumulates the entropy production for the Crooks detailed-FT residual. Audit
+    surface mirrors `CuspMonitor`: predicates, `summary()`, `to_jsonl()`, `render()`.
+    """
+
+    def __init__(self) -> None:
+        self.records: list[ThermoStepRecord] = []
+        self._sigma: list[np.ndarray] = []
+
+    def record(self, currents: np.ndarray, rates: ReleaseRates, *, step: int | None = None) -> ThermoStepRecord:
+        """Ingest one batch of release currents `J` at jump propensities `rates`; certify the TUR."""
+        c = np.asarray(currents, dtype=np.float64)
+        a = affinity(rates)
+        sig = entropy_production_samples(c, rates)
+        self._sigma.append(sig)
+        mean_j = float(c.mean())
+        mean_sig = float(sig.mean())
+        if mean_j != 0.0 and mean_sig > 0.0:
+            cert = empirical_tur(c, mean_sig)
+            rel_var, bound, satisfied, slack = (
+                cert.relative_variance, cert.entropy_bound, cert.satisfied, cert.slack,
+            )
+        else:  # undriven / degenerate batch: the TUR is not informative here
+            rel_var = float(np.var(c)) / (mean_j * mean_j) if mean_j != 0.0 else float("inf")
+            bound, satisfied, slack = float("inf"), True, float("inf")
+        rec = ThermoStepRecord(
+            step=step if step is not None else len(self.records),
+            n_samples=int(c.size), affinity=a, mean_current=mean_j,
+            relative_variance=rel_var, mean_entropy=mean_sig, entropy_bound=bound,
+            tur_satisfied=bool(satisfied), tur_slack=slack,
+        )
+        self.records.append(rec)
+        return rec
+
+    # -- audit predicates ----------------------------------------------------- #
+    def all_currents_satisfy_tur(self) -> bool:
+        """Every recorded batch honored the TUR (a theorem, so this must hold — a self-consistency check)."""
+        return all(r.tur_satisfied for r in self.records)
+
+    def crooks_calibration(self, **kw) -> CrooksCalibration:
+        """The Crooks detailed-FT calibration over ALL accumulated entropy production."""
+        if not self._sigma:
+            return CrooksCalibration(np.array([]), np.array([]), np.array([]), float("inf"), False)
+        return crooks_calibration(np.concatenate(self._sigma), **kw)
+
+    def ft_residual(self, **kw) -> float:
+        """The tracked fluctuation-theorem residual `sup|ln(P(+Σ)/P(−Σ)) − Σ|` (nan if no symmetric support)."""
+        return self.crooks_calibration(**kw).max_abs_residual
+
+    def assert_tur(self) -> None:
+        if not self.all_currents_satisfy_tur():
+            bad = next(r for r in self.records if not r.tur_satisfied)
+            raise AssertionError(
+                f"TUR violated at step {bad.step}: ε²={bad.relative_variance:.4g} < 2/⟨Σ⟩={bad.entropy_bound:.4g}"
+            )
+
+    def summary(self) -> dict:
+        if not self.records:
+            return {"steps": 0}
+        finite = [r for r in self.records if math.isfinite(r.entropy_bound)]
+        cal = self.crooks_calibration()
+        return {
+            "steps": len(self.records),
+            "tur_all_satisfied": self.all_currents_satisfy_tur(),
+            "mean_relative_variance": float(np.mean([r.relative_variance for r in finite])) if finite else float("nan"),
+            "mean_entropy_bound": float(np.mean([r.entropy_bound for r in finite])) if finite else float("nan"),
+            "min_tur_slack": min((r.tur_slack for r in finite), default=float("nan")),
+            "mean_affinity": float(np.mean([r.affinity for r in self.records])),
+            "ft_residual": cal.max_abs_residual,
+            "ft_calibrated": cal.calibrated,
+            "ft_bins": int(cal.bins.size),
+        }
+
+    def to_jsonl(self) -> list[str]:
+        """Per-step records as JSONL lines (the eqyk.2 detailed-logging artifact)."""
+        return [json.dumps(asdict(r), ensure_ascii=False) for r in self.records]
+
+    def render(self, console=None) -> None:
+        """Rich summary of the monitor (falls back to plain print without rich)."""
+        s = self.summary()
+        try:
+            from rich.console import Console
+            from rich.table import Table
+            console = console or Console()
+            t = Table(title="Stochastic-thermo monitor (TUR certificate + Crooks FT)")
+            t.add_column("metric")
+            t.add_column("value", justify="right")
+            for k, v in s.items():
+                t.add_row(k, f"{v:.5g}" if isinstance(v, float) else str(v))
+            console.print(t)
+        except Exception:  # pragma: no cover - rich is a project dep; stay usable without it
+            print("stochastic-thermo monitor summary:", s)

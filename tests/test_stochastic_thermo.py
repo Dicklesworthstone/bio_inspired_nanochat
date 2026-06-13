@@ -178,3 +178,55 @@ def test_ach_coupling_raises_temperature_with_uncertainty():
     assert base == pytest.approx(st.landauer_optimal_temperature(1.0))  # neutral at ACh = 0
     # ACh = 1 doubles the effective uncertainty (gain 1) ⟹ doubles kT*.
     assert hi == pytest.approx(2.0 * base)
+
+
+# =========================================================================== #
+# 0642.3.2.1 — runtime TUR certificate + Crooks calibration monitor
+# =========================================================================== #
+def test_monitor_certifies_tur_with_a_nonvacuous_bound():
+    mon = st.StochasticThermoMonitor()
+    driven = st.rates_from_release(p_release=0.4, rec_rate=0.06, pool=6.0)
+    for step in range(5):
+        rec = mon.record(st.simulate_currents(driven, 10.0, 20000, seed=step), driven, step=step)
+        assert rec.tur_satisfied
+        assert 0.0 < rec.entropy_bound < float("inf"), "the TUR bound must be finite and positive (non-vacuous)"
+        assert rec.tur_slack >= -1e-9
+    assert mon.all_currents_satisfy_tur()
+    mon.assert_tur()  # must not raise
+
+
+def test_monitor_tracks_ft_residual_and_calibrates_near_equilibrium():
+    mon = st.StochasticThermoMonitor()
+    neq = st.ReleaseRates(a=0.6, b=0.4)
+    for step in range(4):
+        mon.record(st.simulate_currents(neq, 2.0, 200000, seed=step), neq, step=step)
+    cal = mon.crooks_calibration(min_count=80)
+    assert cal.calibrated, f"the accumulated Σ must obey the detailed FT (residual={cal.max_abs_residual:.3f})"
+    assert math.isfinite(mon.ft_residual(min_count=80))
+
+
+def test_monitor_summary_and_jsonl_well_formed():
+    mon = st.StochasticThermoMonitor()
+    driven = st.rates_from_release(0.4, 0.06, 6.0)
+    for step in range(3):
+        mon.record(st.simulate_currents(driven, 10.0, 10000, seed=step), driven, step=step)
+    s = mon.summary()
+    for key in ("steps", "tur_all_satisfied", "mean_entropy_bound", "ft_residual"):
+        assert key in s
+    lines = mon.to_jsonl()
+    assert len(lines) == 3
+    import json
+    rec0 = json.loads(lines[0])
+    assert {"step", "affinity", "relative_variance", "entropy_bound", "tur_satisfied"} <= set(rec0)
+
+
+def test_monitor_assert_tur_fires_on_a_violation():
+    # The TUR is a theorem for real samples; to exercise the guard, inject a crafted violating record.
+    mon = st.StochasticThermoMonitor()
+    mon.records.append(st.ThermoStepRecord(
+        step=0, n_samples=10, affinity=0.5, mean_current=1.0, relative_variance=0.1,
+        mean_entropy=1.0, entropy_bound=2.0, tur_satisfied=False, tur_slack=-1.9,
+    ))
+    assert not mon.all_currents_satisfy_tur()
+    with pytest.raises(AssertionError, match="TUR violated"):
+        mon.assert_tur()
