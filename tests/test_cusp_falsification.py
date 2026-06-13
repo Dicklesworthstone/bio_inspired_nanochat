@@ -42,6 +42,8 @@ if _REPO_ROOT not in sys.path:
 
 import pytest  # noqa: E402
 
+from bio_inspired_nanochat import cusp_certificate as cc  # noqa: E402
+from bio_inspired_nanochat import eval_stats  # noqa: E402
 from bio_inspired_nanochat.cusp_certificate import CuspLatch, relax_cubic  # noqa: E402
 from bio_inspired_nanochat.synaptic import PostsynapticHebb, SynapticConfig  # noqa: E402
 from bio_inspired_nanochat.torch_imports import torch  # noqa: E402
@@ -175,6 +177,102 @@ def test_tuned_cusp_outretains_uncertified_baseline():
     )
 
 
+# =========================================================================== #
+# (D) Multi-seed statistics — the stats-backed verdict (74f.3 / eval_stats; bead 0642.2.3.2)
+# =========================================================================== #
+# Headline regime: a near-critical NOISY erase hold. Zero-mean per-channel calcium noise that the
+# certified cusp's double well recovers from (it returns to the ON root) but that permanently collapses
+# the uncertified sax.2 latch (its one-way LTD push never recovers). Continuous metric = mean retained
+# CaMKII (so the paired test has real variance), paired across seeds.
+_STATS_HOLD = 0.54
+_STATS_NOISE = 0.15
+
+
+def _noisy_erase_retention(cfg: SynapticConfig, hold: float, noise: float, seed: int,
+                           hold_steps: int = 300) -> float:
+    """Mean retained CaMKII after a written latch is held under a noisy erase ramp (one seed)."""
+    post = _written_latch(cfg)
+    y = torch.zeros(1, _D_V)
+    gen = torch.Generator().manual_seed(seed)
+    for _ in range(hold_steps):
+        jitter = noise * (2.0 * torch.rand(_D_V, generator=gen) - 1.0)
+        post.update(y, (torch.full((_D_V,), float(hold)) + jitter).clamp(min=0.0))
+    return float(post.camkii.mean())
+
+
+def _retention_paired(treatment: SynapticConfig, baseline: SynapticConfig, *, seeds, hold, noise):
+    tr = {s: _noisy_erase_retention(treatment, hold, noise, s) for s in seeds}
+    bl = {s: _noisy_erase_retention(baseline, hold, noise, s) for s in seeds}
+    return eval_stats.paired_comparison(tr, bl, lower_is_better=False), tr, bl
+
+
+def test_multiseed_stats_certified_cusp_beats_baseline():
+    """The stats-backed verdict: across seeds, the certified cusp (γ=0.8) retains significantly more
+    CaMKII than the uncertified sax.2 baseline under a noisy erase (paired t + Wilcoxon + bootstrap CI)."""
+    res, tr, bl = _retention_paired(_cusp_cfg(0.8), _sax_cfg(), seeds=range(8),
+                                    hold=_STATS_HOLD, noise=_STATS_NOISE)
+    assert res is not None, "need ≥2 shared seeds"
+    assert res.n_favorable == res.n_pairs, f"every seed must favor the cusp: {res.n_favorable}/{res.n_pairs}"
+    assert res.mean_delta > 0.5, f"the retention gain must be large, got Δ={res.mean_delta:.3f}"
+    assert res.delta_ci_low > 0.0, f"the 95% CI must exclude zero (significant): [{res.delta_ci_low:.3f}, {res.delta_ci_high:.3f}]"
+    assert res.t_p_value < 0.01 and res.wilcoxon_p_value <= 0.05, (
+        f"verdict must be significant: t_p={res.t_p_value:.4g}, wilcoxon_p={res.wilcoxon_p_value:.4g}"
+    )
+
+
+def test_default_cusp_and_baseline_tie_at_the_bit_level_on_mild_erase():
+    """Honesty guard: the cusp is NOT claimed to dominate everywhere. At a MILD erase BOTH latches
+    retain the bit (fraction-ON = 1.0) — the certified win (D) is regime-specific (hard/noisy erase).
+    Caveat made explicit: the cusp holds at its interior ON root (~0.85) while sax.2 pins at the clamp
+    (1.0) — same retained bit, different m-level — so a continuous m-level metric would *flatter* sax
+    here; retention is read at the bit level."""
+    mild = 0.58
+    sax_on = _retention_after_hold(_sax_cfg(), mild, hold_steps=400)
+    cusp_on = _retention_after_hold(_cusp_cfg(0.45), mild, hold_steps=400)
+    assert sax_on == 1.0 and cusp_on == 1.0, (
+        f"mild erase: both arms must retain the bit (sax fraction-ON={sax_on}, cusp fraction-ON={cusp_on})"
+    )
+
+
+# =========================================================================== #
+# (E) ε-gating / deterministic-fallback verification across regimes (bead 0642.2.3.2)
+# =========================================================================== #
+def _posthebb_camkii(cfg: SynapticConfig, ca_seq) -> torch.Tensor:
+    post = PostsynapticHebb(d_k=_D_V, d_v=_D_V, cfg=cfg)
+    y = torch.zeros(1, _D_V)
+    for ca in ca_seq:
+        post.update(y, torch.full((_D_V,), float(ca)))
+    return post.camkii.clone()
+
+
+def test_certificate_gating_is_correct_across_regimes():
+    """certified ⟺ bistable (γ above the cusp threshold) AND separated (ρ(M_cb) ≤ cusp_eps_max)."""
+    regimes = [
+        # (γ,    τ_c,   expect_certified, why)
+        (0.45, 6.0, True, "default: bistable + separated"),
+        (0.80, 6.0, True, "deeper wedge, still separated"),
+        (0.00, 6.0, False, "monostable (no self-excitation)"),
+        (0.45, 400.0, False, "insufficient timescale separation (ρ_fast → 1)"),
+    ]
+    for gamma, tau_c, expect, why in regimes:
+        cfg = SynapticConfig(bistable_latch=True, cusp_latch=True, latch_gamma_auto=gamma, tau_c=tau_c)
+        cert = cc.certify_retention(cfg)
+        assert cert.certified == expect, f"{why}: certified={cert.certified} ({cert.reason})"
+
+
+def test_fallback_is_byte_exact_across_all_uncertified_regimes():
+    """In every uncertified regime the latch must reduce EXACTLY to the heuristic sax.2 map — the
+    deterministic fail-closed contract, verified end to end (no silent half-application)."""
+    ca = [2.0] * 12 + [0.7] * 40
+    for gamma, tau_c in [(0.0, 6.0), (0.45, 400.0), (0.1, 400.0)]:
+        cusp = SynapticConfig(bistable_latch=True, cusp_latch=True, latch_gamma_auto=gamma, tau_c=tau_c)
+        sax = SynapticConfig(bistable_latch=True, cusp_latch=False, latch_gamma_auto=gamma, tau_c=tau_c)
+        assert not cc.certify_retention(cusp).certified, f"regime γ={gamma},τ_c={tau_c} should be uncertified"
+        assert torch.allclose(_posthebb_camkii(cusp, ca), _posthebb_camkii(sax, ca), atol=0.0), (
+            f"uncertified cusp (γ={gamma}, τ_c={tau_c}) must be byte-identical to sax.2"
+        )
+
+
 # --------------------------------------------------------------------------- #
 # Runnable experiment: print the retention curves for both arms.
 # --------------------------------------------------------------------------- #
@@ -228,6 +326,25 @@ def _print_curves() -> None:
     print("\nReading: sax.2 and default cusp flip at ~similar calcium (default δ* is shallow — the cusp's")
     print("edge there is the TIGHT CERTIFICATE); turning the certified γ dial up makes the cusp retain")
     print("far past the uncertified baseline — the certified leapfrog.")
+
+    # Arm D — multi-seed statistics under a noisy erase (the stats-backed verdict).
+    print(f"\n[D] multi-seed stats: retained CaMKII under a noisy erase (hold={_STATS_HOLD}, noise={_STATS_NOISE}):")
+    res, tr, bl = _retention_paired(_cusp_cfg(0.8), _sax_cfg(), seeds=range(10),
+                                    hold=_STATS_HOLD, noise=_STATS_NOISE)
+    import statistics
+    print(f"   sax.2     : {statistics.mean(bl.values()):.3f} ± {statistics.pstdev(bl.values()):.3f}")
+    print(f"   cusp γ=0.8 : {statistics.mean(tr.values()):.3f} ± {statistics.pstdev(tr.values()):.3f}")
+    print(f"   Δ={res.mean_delta:.3f}  95%CI[{res.delta_ci_low:.3f}, {res.delta_ci_high:.3f}]  "
+          f"paired-t p={res.t_p_value:.2g}  Wilcoxon p={res.wilcoxon_p_value:.2g}  "
+          f"favorable={res.n_favorable}/{res.n_pairs}")
+    print("   VERDICT: certified cusp retention beats the uncertified sax.2 baseline (significant).")
+
+    # Arm E — ε-gating / fallback verification across regimes.
+    print("\n[E] certificate gating across regimes (certified ⟺ bistable AND separated):")
+    for gamma, tau_c in [(0.45, 6.0), (0.80, 6.0), (0.0, 6.0), (0.45, 400.0)]:
+        cfg = SynapticConfig(bistable_latch=True, cusp_latch=True, latch_gamma_auto=gamma, tau_c=tau_c)
+        cert = cc.certify_retention(cfg)
+        print(f"   γ={gamma:<4} τ_c={tau_c:<6}: certified={cert.certified!s:<5}  {cert.reason}")
 
 
 if __name__ == "__main__":

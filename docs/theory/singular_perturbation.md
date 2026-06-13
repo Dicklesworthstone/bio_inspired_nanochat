@@ -310,6 +310,77 @@ fallback path.
 
 ---
 
+## 8. Runtime verification & falsification results (beads `0642.2.2.*`, `0642.2.3.*`)
+
+The theory above is now **shipped and falsified**. The runtime lives in
+`bio_inspired_nanochat/cusp_certificate.py` (the `CuspLatch` update, the minimum-energy pulse
+controller, the slow-manifold projector, the `CuspMonitor`) behind the default-off `cusp_latch`
+toggle, dispatched from `PostsynapticHebb.update`. What was checked, and what it showed:
+
+### 8.1 The certificate is **tight** (`0642.2.2.4`, `0642.2.3.1`)
+
+The latch update **is** the cusp cubic `m̃ ← m̃ − η(m̃³ + a·m̃ + b(c))` with the certified splitting
+parameter `a` fixed and the live calcium bias `b(c) = −C₀(c)/|C₃|` (the *same* `C₀` the certificate
+uses — a shared `_residual_taylor`, so implementation and certificate can never drift). Consequently
+`δ*(a)` is the **exact** fold half-width, not a loose bound. Sweeping a sustained bias drift in the
+control coordinate: the bit holds for drift `≤ 0.95·δ*` and flips for `≥ 1.05·δ*` — the empirical
+retention half-width equals the closed-form `δ*`. (`tests/test_cusp_latch.py::
+test_retention_boundary_is_at_delta_star_within_tolerance`, `tests/test_cusp_falsification.py::
+test_retention_half_width_equals_delta_star`.)
+
+### 8.2 The certificate is **sound / conservative** (`0642.2.3.1`)
+
+Driving the *full* latch with a physical calcium erase ramp, the empirical retention is **at least**
+the certified margin — the bound never over-promises. PP1 slaving makes the held ON state strictly
+more robust than the basal-`p₀` certificate (the live erase fold sits *below* the certified one), so
+empirical ≥ certified, never the reverse. (`test_full_latch_retention_is_at_least_the_certified_margin`.)
+
+### 8.3 ε-gating & deterministic fallback verified across regimes (`0642.2.2.2`, `0642.2.3.2`)
+
+`certified ⟺ bistable (γ > γ_c ⟹ a < 0) AND separated (ρ(M_cb) ≤ cusp_eps_max)`. Verified over a
+`(γ, τ_c)` grid: default `(0.45, 6)` and deeper `(0.80, 6)` certify; `γ=0` (monostable) and
+`τ_c=400` (ρ_fast → 1, separation lost) do **not**. In **every** uncertified regime the latch reduces
+**byte-for-byte** to the heuristic `sax.2` map — the fail-closed contract, verified end to end (no
+silent half-application). The `CuspMonitor` emits per-step rich + JSONL traces of the ε gauge, the
+retention margin `δ* − |b(c)|` (negative only while a write/erase deliberately crosses a fold), and
+the Fenichel slow-manifold reconstruction error `|C_live − h(influx)|` (≈0 on the manifold).
+(`test_certificate_gating_is_correct_across_regimes`,
+`test_fallback_is_byte_exact_across_all_uncertified_regimes`,
+`tests/test_cusp_latch.py::test_monitor_*`.)
+
+### 8.4 The certified leapfrog — multi-seed stats verdict (`0642.2.3.2`)
+
+Two honest readings, both shipped:
+
+- **At the DEFAULT γ the well is shallow** (`δ* ≈ 0.009`) and, under a *noiseless* sustained erase
+  drift, the certified cusp and the `sax.2` baseline are ~tied on raw threshold (both flip near
+  `Ca ≈ 0.51`–`0.52`). The cusp's edge at default is the **tight certificate**, not raw margin. At a
+  mild erase both arms retain the bit (fraction-ON = 1.0).
+- **The certified dial buys real robustness.** `δ*` grows monotonically with the self-excitation `γ`
+  (a tunable, *guaranteed* margin). Under a **near-critical noisy erase** (`hold=0.54`, zero-mean
+  per-channel calcium noise `±0.15`, the regime where `sax.2`'s one-way LTD push collapses and never
+  recovers while the cusp's symmetric well returns to the ON root), the certified cusp at `γ=0.8`
+  retains essentially all of its CaMKII while `sax.2` loses the bit:
+
+  | arm | retained CaMKII (mean ± sd, 10 seeds) |
+  |---|---|
+  | `sax.2` (uncertified) | `0.03 ± 0.04` |
+  | cusp `γ=0.8` (certified) | `0.90 ± 0.00` |
+
+  Paired across seeds (`eval_stats.paired_comparison`, `74f.3`): `Δ = 0.87`, 95% CI
+  `[0.84, 0.89]`, paired-t `p ≈ 1.5e-13`, Wilcoxon `p ≈ 2e-3`, **10/10 seeds favorable**. The verdict
+  is **positive and significant**: a certified, equal-capacity cusp latch out-retains the uncertified
+  sigmoid baseline under noise. (`tests/test_cusp_falsification.py::
+  test_multiseed_stats_certified_cusp_beats_baseline`; run
+  `python tests/test_cusp_falsification.py` for the full retention curves.)
+
+**Registry note.** The results-registry (`hm4.1`, `results_registry.py`) schema admits only the
+`train`/`eval`/`tune` harnesses with the canonical metric vocabulary; a latch-falsification verdict
+fits neither, so the durable record is this note plus the seeded e2e experiment (rather than forcing
+an out-of-vocabulary harness/metric into the eval registry).
+
+---
+
 ## References
 
 - Fenichel, N. (1979). *Geometric singular perturbation theory for ordinary differential equations.*
