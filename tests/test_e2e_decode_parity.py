@@ -10,7 +10,8 @@ This locks decode correctness for the **bio path** (not just vanilla):
   2. **Fork preserves state** — replicating a batch-1 prefill cache to a batch-N decode cache
      (`KVCache.prefill`, the engine's `generate` fork) broadcasts the presyn state to every row.
   3. **Determinism** — `Engine.generate` with a fixed seed yields identical tokens across runs
-     (relies on the per-sequence reset at generation start so no state leaks between runs).
+     (reproducible sampling: the only nondeterminism in this pure-forward model is the sampler,
+     which must be driven by the seeded generator, not global RNG state).
   4. **Per-step logging** — bio-state is logged per decode step (the `eqyk.2` JSONL stream).
 
 Run:  pytest tests/test_e2e_decode_parity.py -v
@@ -201,6 +202,9 @@ class _FakeTok:
 
 @pytest.mark.e2e
 def test_decode_deterministic_under_seed():
+    """Two generations with the same seed must produce identical tokens — i.e. sampling is driven by
+    the seeded generator, not global RNG state. (The model here is a pure forward, so this isolates
+    sampler reproducibility; cross-run state isolation when plasticity is on is a separate concern.)"""
     model, cfg = _model(0)
     eng = Engine(model, _FakeTok())
     prompt = [1, 2, 3, 4]
