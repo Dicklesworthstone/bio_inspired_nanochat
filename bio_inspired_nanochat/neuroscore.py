@@ -149,10 +149,18 @@ class NeuroScore:
                 energy_cpu = module.energy.detach().float().cpu()
                 st["efficiency"] = st["loss_contrib"] / (energy_cpu + 1e-6)
 
-                # 4. Resilience = 1 / (Variance of Contribution)
-                # Track simple diff from last step
+                # 4. Resilience = stability of contribution over time (1 / variation).
+                # Gate by activity: a DEAD expert also has ~constant (zero) contribution, so an
+                # ungated 1/|Δ| would score it as MAXIMALLY resilient (and min-max-normalized to 1.0
+                # in composite_fitness), protecting it from reset — the lifecycle would never reclaim
+                # it. This is the sibling of the dead-expert specialization inversion above. Only
+                # experts routed this step earn resilience; unused experts decay toward 0 (low =
+                # reclaimable). NOTE: keep parity with kernels.update_metrics_fused if that path gains
+                # a resilience term.
                 diff = (st["loss_contrib"] - st["prev_contrib"]).abs()
-                st["resilience"].mul_(self.cfg.decay).add_((1.0 / (diff + 1e-6)) * (1 - self.cfg.decay))
+                stability = 1.0 / (diff + 1e-6)
+                active = (freq_update > 0).float()
+                st["resilience"].mul_(self.cfg.decay).add_(stability * active * (1 - self.cfg.decay))
                 st["prev_contrib"].copy_(st["loss_contrib"])
 
                 st["updates"] += 1

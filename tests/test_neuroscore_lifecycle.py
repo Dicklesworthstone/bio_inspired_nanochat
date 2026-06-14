@@ -148,6 +148,31 @@ def test_unused_expert_keeps_prior_specialization_not_max():
     assert not torch.allclose(st["specialization"], torch.full((num_experts,), prior))
 
 
+def test_unused_expert_does_not_accrue_resilience():
+    """Resilience = 1/|Δcontribution|. A DEAD expert also has ~constant (zero) contribution, so an
+    ungated 1/|Δ| would blow up (Δ≈0 ⟹ 1e6) and score it as maximally resilient — protecting it from
+    reset. The activity gate must keep a never-routed expert's resilience ≈ 0 (sibling of the
+    dead-expert specialization fix)."""
+    torch.manual_seed(0)
+    num_experts, B, T, C, k = 4, 2, 8, 8, 2
+    moe = _moe(num_experts)
+    dead = num_experts - 1
+    x = torch.randn(B, T, C)
+    indices = torch.randint(0, num_experts - 1, (B, T, k))  # routing NEVER selects the dead expert
+
+    score = NeuroScore(NeuroScoreConfig(enabled=True, update_every=1000), neuroviz=None)
+    for s in range(20):
+        # re-randomize gates each step so ACTIVE experts have genuine contribution variation
+        object.__setattr__(moe, "last_ctx", {"gates": torch.rand(B, T, k), "indices": indices, "x": x})
+        score.step(moe, loss=torch.tensor(1.0), global_step=s)
+
+    res = score.stats[""]["resilience"]  # the moe itself registers under name ""
+    assert res[dead].item() == pytest.approx(0.0, abs=1e-3), (
+        "a never-routed expert must not accrue the spurious 1/Δ resilience spike"
+    )
+    assert res[dead].item() < res[:dead].max().item(), "active experts must out-score the dead one"
+
+
 # --------------------------------------------------------------------------- #
 # 4. End-to-end: NeuroScore.step publishes a usable score onto the live module
 # --------------------------------------------------------------------------- #
