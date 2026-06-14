@@ -33,6 +33,7 @@ from bio_inspired_nanochat.synaptic_splitmerge import (
     SplitMergeController,
     _function_preserving_split_,
     _function_preserving_merge_,
+    _merge_expert_into_and_clone_,
     _clone_linear_from_,
     _add_noise_,
 )
@@ -183,6 +184,51 @@ def test_function_preserving_beats_legacy_split(top_k: int):
     legacy = _rel_l2(moe(x)[0], out0)
 
     assert fp < legacy / 3.0, f"FP split (relL2={fp:.3e}) must be far gentler than legacy ({legacy:.3e})"
+
+
+@pytest.mark.unit
+def test_fp_merge_keeps_router_embeddings_unit_norm():
+    """The router embeddings are maintained unit-norm everywhere (init + the contrastive EMA in
+    SynapticMoE.forward) and the forward uses ‖embedding‖ as a routing GAIN. The function-preserving
+    merge averages the winner with the loser; averaging two non-parallel unit vectors gives a norm
+    < 1, so the merge must renormalize — otherwise it silently changes the winner's routing gain
+    (and the clone it seeds into the freed loser slot inherits the shrunken norm too)."""
+    E = 6
+    moe = _pure_moe(0, E, top_k=E)
+    winner, loser = 2, 3
+    D = moe.router_embeddings.shape[1]
+    e_w = torch.zeros(D)
+    e_w[0] = 1.0
+    e_l = torch.zeros(D)
+    e_l[1] = 1.0  # orthogonal unit vector ⟹ naive average norm = 1/√2
+    with torch.no_grad():
+        moe.router_embeddings[winner].copy_(e_w)
+        moe.router_embeddings[loser].copy_(e_l)
+    cfg = SplitMergeConfig(function_preserving=True, fp_divergence_noise=0.0)
+    with torch.no_grad():
+        _function_preserving_merge_(moe, winner_idx=winner, loser_idx=loser, alpha=0.5, cfg=cfg)
+    assert moe.router_embeddings[winner].norm().item() == pytest.approx(1.0, abs=1e-5)
+    assert moe.router_embeddings[loser].norm().item() == pytest.approx(1.0, abs=1e-5)
+
+
+@pytest.mark.unit
+def test_legacy_merge_reseeds_loser_genome_and_routing_bias():
+    """The legacy (function_preserving=False) merge reseeds the freed loser slot as a noisy clone
+    of the winner, so the reborn expert must adopt the winner's presynaptic genome Xi and routing
+    bias — not keep the dead loser's stale ones (a phenotype mismatch)."""
+    E = 6
+    moe = _pure_moe(0, E, top_k=E)
+    winner, loser = 2, 3
+    with torch.no_grad():
+        moe.Xi[winner].copy_(torch.full_like(moe.Xi[winner], 0.7))
+        moe.Xi[loser].copy_(torch.full_like(moe.Xi[loser], -0.7))   # distinct stale genome
+        moe.router_logit_bias[winner] = 1.5
+        moe.router_logit_bias[loser] = -3.0                          # stale dead-slot bias
+    cfg = SplitMergeConfig(function_preserving=False)
+    with torch.no_grad():
+        _merge_expert_into_and_clone_(moe, winner_idx=winner, loser_idx=loser, alpha=0.5, cfg=cfg)
+    assert torch.allclose(moe.Xi[loser], moe.Xi[winner]), "reborn loser must inherit the winner's genome"
+    assert moe.router_logit_bias[loser].item() == pytest.approx(moe.router_logit_bias[winner].item())
 
 
 @pytest.mark.unit

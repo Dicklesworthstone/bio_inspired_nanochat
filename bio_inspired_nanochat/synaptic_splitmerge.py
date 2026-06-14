@@ -459,6 +459,11 @@ def _function_preserving_merge_(
     Xi[winner_idx].mul_(alpha).add_((1.0 - alpha) * Xi[loser_idx])
     emb = layer.router_embeddings
     emb[winner_idx].mul_(alpha).add_((1.0 - alpha) * emb[loser_idx])
+    # Router embeddings are maintained unit-norm everywhere (init + the contrastive EMA update in
+    # SynapticMoE.forward), and the forward uses ‖emb‖ as a routing gain. Averaging two unit vectors
+    # yields norm < 1, so renormalize to keep the merge function-preserving (and so the clone below,
+    # which copies emb[winner] into emb[loser], inherits the unit-norm embedding too).
+    emb[winner_idx].div_(emb[winner_idx].norm() + 1e-8)
     rb = cast(Tensor, layer.router_logit_bias)
     rb[winner_idx] = rb[winner_idx] + cfg.gate_split_bias
     _function_preserving_split_(layer, winner_idx, loser_idx, cfg)
@@ -509,6 +514,15 @@ def _merge_expert_into_and_clone_(
     e_w = emb[winner_idx : winner_idx + 1]  # (1,D)
     e_l = _orthogonal_perturb_like(e_w.clone(), cfg.clone_noise_embed)
     emb[loser_idx : loser_idx + 1].copy_(e_l)
+
+    # 4b) Genome + routing bias: the loser slot is now a (noisy) clone of the winner, so it must
+    # adopt the winner's presynaptic genome Xi and routing-logit bias. Otherwise the reborn expert
+    # carries the dead loser's stale genome/bias — a phenotype mismatch (the function-preserving
+    # path and _copy_expert_full_ both clone these).
+    Xi = cast(Tensor, layer.Xi)
+    Xi[loser_idx].copy_(Xi[winner_idx])
+    rb = cast(Tensor, layer.router_logit_bias)
+    rb[loser_idx] = rb[winner_idx]
 
     # 5) Reset stats
     fatigue = cast(Tensor, layer.fatigue)

@@ -522,6 +522,60 @@ def test_gpt_ca_init_applies_to_block_linears():
     assert abs(w.var(unbiased=False).item() - target_var) / target_var < 2e-2
 
 
+def test_sample_next_token_top_k_zero_is_disabled_not_degenerate():
+    """top_k=0 used to hit torch.topk(logits, 0) -> empty -> multinomial crash. It must instead be
+    treated as 'no truncation' (HF convention), sampling over the full vocabulary."""
+    from bio_inspired_nanochat.engine import sample_next_token
+
+    rng = torch.Generator()
+    rng.manual_seed(0)
+    logits = torch.randn(3, 17)
+    out = sample_next_token(logits, rng, temperature=1.0, top_k=0)  # must not raise
+    assert out.shape == (3, 1)
+    assert (out >= 0).all() and (out < 17).all()
+
+
+def test_generate_resets_per_sequence_state_at_start():
+    """A new prompt is a new scratchpad: because synaptic plasticity runs during inference,
+    Engine.generate must reset the per-sequence state once at the start so one generation's fast
+    adaptation cannot leak into the next (e.g. across chat turns)."""
+    from bio_inspired_nanochat.engine import Engine
+    from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
+
+    cfg = GPTSynapticConfig(
+        sequence_len=64, vocab_size=64, n_layer=1, n_head=2, n_kv_head=2, n_embd=32
+    )
+    model = GPTSynaptic(cfg).eval()
+
+    calls = {"n": 0}
+    orig_reset = model.reset_sequence_state
+
+    def _spy(*args, **kwargs):
+        calls["n"] += 1
+        return orig_reset(*args, **kwargs)
+
+    model.reset_sequence_state = _spy  # instance attribute shadows the bound method
+
+    class _FakeTok:
+        _special = {
+            "<|python_start|>": -1, "<|python_end|>": -2,
+            "<|output_start|>": -3, "<|output_end|>": -4, "<|assistant_end|>": -5,
+        }
+        def encode_special(self, s):
+            return self._special[s]
+        def get_bos_token_id(self):
+            return -10
+        def decode(self, toks):
+            return ""
+        def encode(self, s):
+            return []
+
+    eng = Engine(model, _FakeTok())
+    # Drive the generator to completion (it is lazy; the reset fires on first iteration).
+    list(eng.generate(tokens=[1, 2, 3], num_samples=1, max_tokens=2, temperature=1.0, top_k=None, seed=0))
+    assert calls["n"] == 1, "generate() must reset per-sequence state exactly once at the start"
+
+
 def test_gpt_synaptic_init_weights_after_to_empty_is_finite():
     from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
     from bio_inspired_nanochat.synaptic import SynapticConfig

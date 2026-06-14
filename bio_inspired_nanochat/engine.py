@@ -255,7 +255,7 @@ def sample_next_token(logits, rng, temperature=1.0, top_k=None):
     assert temperature >= 0.0, "temperature must be non-negative"
     if temperature == 0.0:
         return torch.argmax(logits, dim=-1, keepdim=True)
-    if top_k is not None:
+    if top_k is not None and top_k > 0:
         k = min(top_k, logits.size(-1))
         vals, idx = torch.topk(logits, k, dim=-1)
         vals = vals / temperature
@@ -310,6 +310,14 @@ class Engine:
         device = self.model.get_device()
         rng = torch.Generator(device=device)
         rng.manual_seed(seed)
+
+        # A new prompt is a new scratchpad: synaptic plasticity runs during inference (the
+        # consolidation/eligibility update is gated on no_grad, which inference_mode satisfies), so
+        # without this reset one generation's fast adaptation leaks into the next (e.g. across chat
+        # turns). Defaults clear the per-sequence eligibility traces + CaMKII/PP1/BDNF gate while
+        # preserving the backprop-trained slow/fast weights. See GPTSynaptic.reset_sequence_state.
+        if hasattr(self.model, "reset_sequence_state"):
+            self.model.reset_sequence_state()
 
         # Build the deliberation controller (None ⟹ baseline single-step decode). Lazy import keeps
         # the metriplectic/numpy stack off engine.py's import path unless deliberation is requested.

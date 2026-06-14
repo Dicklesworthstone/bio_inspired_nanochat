@@ -242,9 +242,16 @@ class NeuroScore:
         # Cosine distance from global mean
         # (E, C) vs (C,)
         sim = F.cosine_similarity(expert_means, global_mean.unsqueeze(0), dim=1)
-        
+
         # Specialization = 1 - similarity (0 = generic, 1 = unique)
         spec = 1.0 - sim
+        # An expert that received no tokens in this sample has an all-zero centroid, so its cosine
+        # similarity is 0 and spec would be 1.0 — i.e. a dead expert would score as MAXIMALLY
+        # specialized, inverting the lifecycle signal (protecting it from reset, attracting splits).
+        # Keep the prior specialization for unused experts instead of the spurious max.
+        used = expert_counts > 0
+        prior = st["specialization"].to(spec.device)
+        spec = torch.where(used, spec, prior)
         st["specialization"].copy_(spec.detach().cpu())
 
     def _gini(self, x: Tensor) -> float:

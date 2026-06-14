@@ -122,6 +122,33 @@ def test_neuroscore_inverts_split_and_reset_selection():
 
 
 # --------------------------------------------------------------------------- #
+# 3b. Dead experts must not be scored as maximally specialized
+# --------------------------------------------------------------------------- #
+def test_unused_expert_keeps_prior_specialization_not_max():
+    """An expert that received NO tokens this batch has an all-zero centroid, so its cosine
+    similarity to the global mean is 0 and ``1 - sim`` would be 1.0 — i.e. a DEAD expert would
+    look MAXIMALLY specialized, inverting the lifecycle signal (protecting it from reset,
+    making it an attractive split source). Unused experts must instead keep their prior score."""
+    torch.manual_seed(0)
+    score = NeuroScore(NeuroScoreConfig(enabled=True), neuroviz=None)
+    num_experts, B, T, C, k = 4, 8, 32, 8, 2
+    x = torch.randn(B, T, C)
+    indices = torch.randint(0, num_experts - 1, (B, T, k))  # routing never selects the last expert
+    prior = 0.25
+    st = {"specialization": torch.full((num_experts,), prior)}
+
+    score._update_specialization(st, x, indices, num_experts)
+
+    dead = num_experts - 1
+    assert st["specialization"][dead].item() == pytest.approx(prior), (
+        "an unused expert must keep its prior specialization, not the spurious 1.0"
+    )
+    assert st["specialization"][dead].item() != pytest.approx(1.0)
+    # and the used experts WERE updated (the method actually ran, not an early return)
+    assert not torch.allclose(st["specialization"], torch.full((num_experts,), prior))
+
+
+# --------------------------------------------------------------------------- #
 # 4. End-to-end: NeuroScore.step publishes a usable score onto the live module
 # --------------------------------------------------------------------------- #
 def test_neuroscore_step_publishes_score_onto_module():
