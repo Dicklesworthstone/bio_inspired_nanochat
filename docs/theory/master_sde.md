@@ -65,8 +65,9 @@ conditions. The point of (★) is that the four thrusts are not four theories �
 **compose** rather than collide (`0642.11.2`, gated by the separation certificate `0642.10`).
 
 The free energy `F = E − T·S` is the master Lyapunov functional of the **vertical drift**; the
-diffusion makes it the stochastic potential of the **stationary Gibbs** measure; the connection
-transports it across the base; the `ε`-limit restricts it to the slow manifold. Every thrust is a way
+diffusion adds the matching fluctuations whose **stationary Gibbs** law is `e^{−E/T}` (with `F` its
+free energy); the connection transports it across the base; the `ε`-limit restricts it to the slow
+manifold. Every thrust is a way
 of reading `F`.
 
 ---
@@ -100,7 +101,8 @@ Two equivalent readings of the same noise:
 
 - **Diffusion (Langevin) reading.** With the Einstein/fluctuation–dissipation relation
   `σσᵀ = 2T·M` on the dissipative coordinates, the Fokker–Planck stationary density of (★) is the
-  **Gibbs measure** `ρ_∞ ∝ e^{−E/T}` (the metriplectic `F` is its potential), and the entropy
+  **Gibbs measure** `ρ_∞ ∝ e^{−E/T}` (the energy `E` is the Boltzmann potential; `F = E − T·S` is the
+  corresponding free energy), and the entropy
   production rate is `≥ 0` — the second law, now for the *noisy* dynamics. For the linearized
   dissipative block `dz = −Mz dt + σ dW`, the stationary covariance solves the Lyapunov balance
   `M·Cov + Cov·Mᵀ = σσᵀ`, which with `σσᵀ = 2T·M` gives `Cov = T·I` — equipartition.
