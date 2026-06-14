@@ -134,6 +134,10 @@ def fast_slow_step(
     As `ε → 0` the fast `x` is slaved to `h₀(y) = k·y` (Fenichel) and `y` follows `reduced_flow_step`.
     This is the master drift under the `1/ε` fast-drift scaling (the Thrust-F restriction), in a
     minimal linear form whose slow manifold is explicit.
+
+    NOTE: the fast variable uses an EXPLICIT step with rate `dt/ε`, which is only stable for
+    `dt < 2·ε` (and accurate for `dt ≲ ε`). Choose `dt ≤ ε` when integrating; integrating a smaller
+    `ε` therefore needs a proportionally smaller `dt`. (Demonstration integrator, not a stiff solver.)
     """
     x_next = x + (dt / eps) * (-(x - k * y))
     y_next = y + dt * (b * x - a * y)
@@ -168,8 +172,9 @@ def integrate_reduced(y0: float, dt: float, steps: int, *, k: float, a: float, b
 # Thrust D restriction — the gauge connection (horizontal transport).
 # --------------------------------------------------------------------------- #
 def gauge_matrix(theta: float) -> np.ndarray:
-    """A structure-group element `U = blkdiag(R(θ), 1)` — an O(2) rotation of the calcium `(C, B)` plane,
-    fixing the heat `h`. Orthogonal on `(C,B)` ⟹ preserves the metriplectic energy `E = ½(C²+B²) + h`.
+    """A structure-group element `U = blkdiag(R(θ), 1)` — an SO(2) rotation of the calcium `(C, B)`
+    plane, fixing the heat `h`. Orthogonal on `(C,B)` ⟹ preserves the metriplectic energy
+    `E = ½(C²+B²) + h`. (Gauge covariance holds for any orthogonal `U`; rotations suffice to exhibit it.)
     """
     c, s = np.cos(theta), np.sin(theta)
     U = np.eye(3)

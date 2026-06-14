@@ -79,6 +79,16 @@ def test_thermo_restriction_gibbs_equipartition():
     assert np.allclose(cov, T * np.eye(2), atol=1e-9)
 
 
+def test_solve_lyapunov_general_nondiagonal():
+    # guard the exported solver beyond the diagonal case the Gibbs check exercises: for a general
+    # (non-diagonal, non-symmetric) A and symmetric Q, the returned X must satisfy A·X + X·Aᵀ + Q = 0.
+    A = np.array([[-1.0, 0.5], [0.2, -2.0]])
+    Q = np.array([[1.0, 0.3], [0.3, 2.0]])
+    X = ms.solve_lyapunov(A, Q)
+    assert np.allclose(A @ X + X @ A.T + Q, 0.0, atol=1e-10)
+    assert np.allclose(X, X.T, atol=1e-12), "Lyapunov solution for symmetric Q must be symmetric"
+
+
 def test_thermo_restriction_gibbs_matches_simulation():
     # corroborate the analytic stationary covariance by simulating the OU dissipative block
     rng = np.random.default_rng(7)
