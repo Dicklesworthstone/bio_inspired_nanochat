@@ -5,8 +5,9 @@
 ## The unifying picture
 
 The synaptic transformer is best read as a **stochastic, gauge-covariant, metriplectic neural SDE on a
-fiber bundle with separated timescales**. The synapse has a hierarchy of strata, each evolving on its
-own timescale:
+fiber bundle with separated timescales** — the master object formalized in
+[master_sde.md](master_sde.md) (capstone `0642.11`), of which every thrust below is a restriction. The
+synapse has a hierarchy of strata, each evolving on its own timescale:
 
 ```
         calcium  ≪  release  ≪  fast_weights  ≪  slow_weights  ≪  structure
@@ -52,6 +53,16 @@ that the strata are decoupled enough for the thrusts to compose without interfer
 |---|---|---|
 | Free-energy deliberation + energy-based decoding (`r00r.1`) | Thrust A | [free_energy_deliberation.md](free_energy_deliberation.md) · `deliberation.py` |
 | Bayesian MC ensembling (`u2t.1`) | Thrust E | `mc_ensemble.py` |
+
+## The capstone (`0642.11`)
+
+[master_sde.md](master_sde.md) writes the single object the thrusts are restrictions of —
+`∇^𝒜 z = [L∇E + M∇S]dt + σdW` on a fiber bundle — and gives the explicit **correspondence table**:
+**A** is the deterministic drift (`σ→0`), **E** the diffusion (`σσᵀ=2T·M`), **F** the slow-manifold
+limit of the drift (`ε→0`), **D** the gauge connection (covariant transport). Reference module
+`master_sde.py` + `tests/test_master_sde.py` make each restriction falsifiable (e.g. the `σ→0` drift
+is bit-for-bit `metriplectic_integrator.field`). The composition-consistency proof (`0642.11.2`) and
+the minimal shared state/API (`0642.11.3`) build on this mapping.
 
 ## The composition keystone (`0642.10`)
 
