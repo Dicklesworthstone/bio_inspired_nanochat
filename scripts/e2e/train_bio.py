@@ -14,10 +14,11 @@ integration across synaptic / optimizer / checkpoint / logging is sound:
   * **mechanism engaged**: the *online* Hebbian state (eligibility traces) actually grows.
   * **checkpoint round-trip**: save → rebuild-from-identical-config → load reproduces the eval
     output exactly (the resume contract).
-  * **bio buffers in range AND changing** (the eqyk.4 value-add over the generic harness):
-    presynaptic calcium/RRP/energy, postsynaptic CaMKII/BDNF/PP1, and the MoE per-expert energy
-    & fatigue all stay inside their biologically/numerically expected ranges and demonstrably
-    *move* (a dead constant would pass a range check but means the mechanism is inert).
+  * **bio buffers in range AND changing** (the eqyk.4 value-add over the generic harness): the
+    presynaptic (calcium/RRP/energy + BUF), postsynaptic (CaMKII/BDNF/PP1) and — when ``--moe`` —
+    MoE (energy/fatigue) buffers all stay inside their biologically/numerically expected ranges;
+    and the five bead-named ones (calcium/RRP/energy/CaMKII/BDNF) must demonstrably *move* (a dead
+    constant would pass a range check but means the mechanism is inert).
 
 It emits a human-readable report plus a machine-readable ``events.jsonl`` trace (per-step
 bio-state via the ``eqyk.2`` :class:`RunLogger` stream) for post-hoc inspection.

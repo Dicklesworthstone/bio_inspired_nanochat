@@ -11,8 +11,8 @@ What this test locks:
      five bead-named bio buffers (calcium/RRP/energy/CaMKII/BDNF) stay in range and demonstrably move.
   2. The run emits a machine-readable JSONL trace with **per-step bio-state** (the eqyk.2 stream)
      plus the presynaptic calcium/RRP/energy curve — the artifact for human inspection.
-  3. The battery is NOT vacuous: a no-learning run (lr=0) is CAUGHT (loss does not decrease), so the
-     PASS in (1) is meaningful.
+  3. The battery is NOT vacuous: a no-learning run (a fully frozen model — lr=0 with plasticity off)
+     is CAUGHT (loss does not decrease), so the PASS in (1) is meaningful.
 
 Run:  pytest tests/test_e2e_train_bio.py -v
 """
