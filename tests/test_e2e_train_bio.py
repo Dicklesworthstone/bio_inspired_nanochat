@@ -68,14 +68,26 @@ def test_bio_e2e_run_passes_and_logs(tmp_path):
 
 
 def test_bio_e2e_battery_catches_no_learning(tmp_path):
-    """Sanity that the battery is not vacuous: with lr=0 the model can't learn, so the
-    loss-decreases invariant must FAIL and the run is reported as not-passed (so the PASS in the
-    healthy test above is a real signal). Params are frozen, so other invariants stay green."""
-    cfg = BioE2EConfig(steps=32, seed=1234, lr=0.0)
+    """Sanity that the battery is not vacuous: a no-learning run must FAIL, so the PASS above is a
+    real signal.
+
+    We freeze the model COMPLETELY and make the forward STATELESS — lr=0 (no gradient step) plus
+    every stateful mechanism off (``enable_hebbian``: no fast-weight memorization that could drive
+    loss DOWN even at lr=0; ``enable_presyn``: its ``ema_e`` normalizer drifts every forward and
+    would otherwise leave a residual cross-step signal; ``enable_metabolism``). With nothing carrying
+    across steps, the forward is a pure function of (params, batch), so the fixed pool of period
+    ``pool_size`` makes the loss EXACTLY periodic and the first- and last-quartile means are equal —
+    ``loss_decreases`` then deterministically fails. steps=32 spans whole pool cycles (pool_size=8)
+    so the quartiles cover identical batches.
+    """
+    cfg = BioE2EConfig(
+        steps=32, seed=1234, lr=0.0,
+        syn_overrides={"enable_hebbian": False, "enable_metabolism": False, "enable_presyn": False},
+    )
     report = run_bio_e2e(cfg, run_dir=tmp_path, verbose=False)
 
     assert not report.passed
     names = {r.name: r for r in report.invariants}
-    assert not names["loss_decreases"].passed, "lr=0 should not decrease the loss"
+    assert not names["loss_decreases"].passed, "a fully-frozen model must not decrease the loss"
     with pytest.raises(AssertionError):
         report.assert_passed()

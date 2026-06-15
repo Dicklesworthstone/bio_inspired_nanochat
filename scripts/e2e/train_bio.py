@@ -185,14 +185,21 @@ def collect_persistent_bio(model) -> dict[str, float]:
     return out
 
 
-@torch.no_grad()
 def presyn_position_trace(model, cfg: BioE2EConfig, batch: torch.Tensor) -> dict[str, torch.Tensor]:
-    """Presynaptic calcium/RRP/energy as a per-position curve from a clean eval-mode forward.
+    """Presynaptic calcium/RRP/energy as a per-position curve from a *non-mutating* eval forward.
 
     Calcium is a leaky integrator of the attention drive and RRP a depleting vesicle pool, so a
     *live* presyn mechanism produces a curve that varies across key positions (rather than a dead
-    constant). Run in eval mode through a fresh KV-cache (the only path that exposes presyn state).
-    Used post-training so it never perturbs the training trajectory.
+    constant). Presyn state is only exposed through a KV-cache forward.
+
+    NB: this deliberately runs in eval mode WITH grad enabled (no ``torch.no_grad``) and never calls
+    ``backward``. Under ``torch.no_grad`` the plasticity gate (``not grad_on or ...``) would RUN
+    Hebbian consolidation / metabolism on the probe batch and mutate CaMKII/BDNF (the "inference runs
+    plasticity" path); with grad on + ``training=False`` that gate stays OFF, so the probe runs NO new
+    plasticity (CaMKII/BDNF/metabolism are left as trained). Like any forward it does flush the
+    slow-weight write that vg9.2 *defers* from the previous training step — a legitimate, bounded
+    application of training's own update, harmless to the post-run probes. We never backward, so
+    KVCache's in-place writes don't trip autograd; only detached summaries escape.
     """
     was_training = model.training
     model.eval()
@@ -204,17 +211,19 @@ def presyn_position_trace(model, cfg: BioE2EConfig, batch: torch.Tensor) -> dict
         head_dim=cfg.n_embd // cfg.n_head,
         num_layers=cfg.n_layer,
     )
-    model(batch, None, kv_cache=kv, train_mode=False)
     trace: dict[str, torch.Tensor] = {}
-    states = kv.presyn_state if isinstance(kv.presyn_state, list) else []
-    if states:
-        last = states[-1]  # deepest layer's presyn state, shape (B, H, T)
-        for key in ("C", "RRP", "E", "BUF"):
-            v = last.get(key)
-            if torch.is_tensor(v) and v.dim() >= 1:
-                trace[key] = v.detach().float().reshape(-1, v.shape[-1]).mean(dim=0)  # (T,)
-    if was_training:
-        model.train()
+    try:
+        model(batch, None, kv_cache=kv, train_mode=False)  # grad on, no backward → plasticity gated OFF
+        states = kv.presyn_state if isinstance(kv.presyn_state, list) else []
+        if states:
+            last = states[-1]  # deepest layer's presyn state, shape (B, H, T)
+            for key in ("C", "RRP", "E", "BUF"):
+                v = last.get(key)
+                if torch.is_tensor(v) and v.dim() >= 1:
+                    trace[key] = v.detach().float().reshape(-1, v.shape[-1]).mean(dim=0)  # (T,)
+    finally:
+        if was_training:
+            model.train()
     return trace
 
 
@@ -321,7 +330,12 @@ def run_bio_e2e(cfg: BioE2EConfig, *, run_dir: str | Path | None = None, verbose
         fp_end = _hebbian_state_fingerprint(model)
 
         # Presynaptic calcium/RRP/energy as a per-position curve (post-training, no perturbation).
-        presyn = presyn_position_trace(model, cfg, pool[0][0])
+        # A degenerate model must FAIL the bio invariants (empty trace), not crash the run.
+        try:
+            presyn = presyn_position_trace(model, cfg, pool[0][0])
+        except Exception as e:
+            presyn = {}
+            _logger.warning(f"[bio-e2e] presyn probe raised (treated as missing): {e}")
         rl.log_bio_state(
             step=cfg.steps,
             **{f"presyn_{k}": v for k, v in presyn.items()},
