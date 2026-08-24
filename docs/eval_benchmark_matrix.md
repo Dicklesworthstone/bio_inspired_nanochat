@@ -16,15 +16,30 @@ It is the single source of truth for what the standardized harness (bead `bio_in
 - **Val bpb** (bits/byte): computed in `bio_inspired_nanochat/loss_eval.py::evaluate_bpb`.
   - Report bpb directly (primary) and optionally convert to a token-level proxy if needed.
 - **CORE metric** (Karpathy eval bundle): `scripts/base_eval.py::evaluate_model`.
-- **NIAH long-context accuracy**: Needle-in-a-Haystack retrieval swept over length × needle depth — `synthetic_tasks.niah_accuracy_by_length`, wired into `eval_matrix` as `niah_acc` (74f.2). Sweep to 4k/8k for large models.
-- **Calibration (ECE)** (planned): Expected Calibration Error on a held-out slice.
+- **NIAH long-context accuracy**: Needle-in-a-Haystack retrieval swept over length × needle depth — `synthetic_tasks.niah_accuracy_by_length`, emitted as both scalar `niah_acc` and the JSON `recall_by_length` curve. Sweep to 4k/8k for large models.
+- **Calibration / OOD detection**: token-level `id_ece` plus sequence-level `ood_auroc`. The OOD arm applies a deterministic token/position hash that destroys sequence structure without advancing model or loader RNG; mean predictive entropy is the predeclared OOD score.
+- **Continual forgetting**: `forgetting_rate` is the mean peak-to-final accuracy loss over previously acquired disjoint online-copy tasks. The full lower-triangular accuracy trace and per-task drops are retained in `capability_metrics.jsonl`.
 
 ### Bio / MoE health (for `GPTSynaptic`)
 
-- **Routing distribution**: Gini and frequency histogram (`bio_inspired_nanochat/neuroscore.py`).
+- **Routing distribution**: mean per-layer routing-count Gini (`moe_gini`) plus per-layer counts and shares.
 - **Specialization**: mean specialization + histogram (`bio_inspired_nanochat/neuroscore.py`).
 - **Efficiency**: loss contribution per unit energy (`bio_inspired_nanochat/neuroscore.py`).
-- **Dead expert fraction** (planned): fraction of experts with routing freq < ε over a window.
+- **Dead expert fraction**: `dead_expert_frac`, the fraction of experts whose observed routing share is below `--dead-expert-threshold` (default `0.01`). Vanilla/non-MoE runs emit `null` with status `not_applicable`, never a misleading zero.
+
+### Capability ownership (`74f.7`)
+
+| Owning evaluation task | Matrix evidence |
+|---|---|
+| `u2t.2` — calibration/selective prediction | `id_ece`, `ood_auroc` |
+| `cel.4` — continual learning | `forgetting_rate`, `forgetting_by_task`, full accuracy matrix |
+| `uta.7` — structural plasticity | `moe_gini`, `dead_expert_frac`, per-layer routing shares |
+| `sax.4` — working memory | `niah_acc`, `recall_by_length` |
+
+Every run writes the scalar columns to `summary.csv`/`summary.jsonl`, all applicable scalars to the
+canonical results registry, and four structured records (uncertainty, continual, routing, memory) to
+the run-local `capability_metrics.jsonl`. Missing capability evidence is explicit
+(`not_applicable`/`error` plus a reason); optional probes are never converted to zero.
 
 ### Performance
 

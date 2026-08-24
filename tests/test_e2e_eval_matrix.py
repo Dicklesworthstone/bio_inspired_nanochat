@@ -31,10 +31,25 @@ from pathlib import Path
 import pytest
 
 from bio_inspired_nanochat.eval_stats import compare_matrix, load_matrix_csv, paired_comparison
-from bio_inspired_nanochat.checkpoint_manager import checkpoint_model_config, save_checkpoint
+from bio_inspired_nanochat.checkpoint_manager import (
+    checkpoint_model_config,
+    save_checkpoint,
+    synaptic_config_to_meta,
+)
 from bio_inspired_nanochat.gpt import GPT, GPTConfig
+from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
 from bio_inspired_nanochat.results_registry import read_records
-from scripts.eval_matrix import SUMMARY_FIELDS, _get_logits, _load_base_train_checkpoint
+from bio_inspired_nanochat.synaptic import SynapticConfig
+from scripts.eval_matrix import (
+    SUMMARY_FIELDS,
+    _binary_auroc,
+    _deterministic_ood_tokens,
+    _forgetting_rate_from_accuracy_matrix,
+    _get_logits,
+    _gini_coefficient,
+    _load_base_train_checkpoint,
+    _summarize_routing_counts,
+)
 
 pytestmark = pytest.mark.e2e
 
@@ -46,7 +61,8 @@ SEEDS = (1337, 1338)
 _REQUIRED_FIELDS = (
     "run_id", "preset", "seed", "data", "device_type", "sequence_len", "vocab_size",
     "n_layer", "n_head", "n_embd", "train_tokens_requested", "train_tokens_processed",
-    "steps", "walltime_sec", "tok_per_sec", "val_loss", "val_ppl",
+    "steps", "walltime_sec", "tok_per_sec", "val_loss", "val_ppl", "id_ece",
+    "ood_auroc", "forgetting_rate", "recall_by_length",
 )
 
 
@@ -68,7 +84,8 @@ def _run_matrix(out_dir: Path) -> Path:
         "--sequence-len", "64", "--vocab-size", "256",
         "--n-layer", "2", "--n-head", "2", "--n-embd", "64",
         "--device-batch-size", "1", "--total-batch-size-tokens", "64",
-        "--ece-bins", "5", "--niah-lengths", "7",  # "7" < min NIAH length → NIAH skipped (fast)
+        "--ece-bins", "5", "--niah-lengths", "8",
+        "--dead-expert-threshold", "0.05", "--continual-exposures", "2",
         "--embedding-lr", "0.02", "--unembedding-lr", "0.004", "--matrix-lr", "0.01",
         "--out-dir", str(out_dir), "--batch-id", "test",
         "--registry-path", str(out_dir / "registry.jsonl"),
@@ -139,6 +156,10 @@ def test_eval_matrix_e2e_synthetic_pipeline(matrix_dir):
     assert {record.run_id for record in registry_records} == {row["run_id"] for row in rows}
     assert all(record.harness == "eval" for record in registry_records)
     assert all(record.git_sha and record.config_hash for record in registry_records)
+    assert all(
+        {"id_ece", "ood_auroc", "forgetting_rate"} <= set(record.metrics)
+        for record in registry_records
+    )
 
     # per-run detailed logs (the human-inspectable artifacts)
     run_dirs = [d for d in matrix_dir.iterdir() if d.is_dir()]
@@ -146,6 +167,25 @@ def test_eval_matrix_e2e_synthetic_pipeline(matrix_dir):
     for d in run_dirs:
         assert (d / "run_config.jsonl").exists(), f"missing run_config.jsonl in {d.name}"
         assert (d / "train_metrics.jsonl").exists(), f"missing train_metrics.jsonl in {d.name}"
+        capability_records = [
+            json.loads(line)
+            for line in (d / "capability_metrics.jsonl").read_text(encoding="utf-8").splitlines()
+        ]
+        assert {record["capability"] for record in capability_records} == {
+            "uncertainty",
+            "continual",
+            "routing",
+            "memory",
+        }
+
+    for row in jl:
+        assert 0.0 <= row["id_ece"] <= 1.0
+        assert 0.0 <= row["ood_auroc"] <= 1.0
+        assert 0.0 <= row["forgetting_rate"] <= 1.0
+        assert set(row["recall_by_length"]) == {"8"}
+        assert 0.0 <= row["recall_by_length"]["8"] <= 1.0
+        assert row["capability_metric_status"]["routing"] == "not_applicable"
+        assert row["moe_gini"] is None and row["dead_expert_frac"] is None
 
 
 def test_eval_matrix_evaluates_real_base_train_checkpoint(tmp_path):
@@ -255,6 +295,103 @@ def test_eval_matrix_evaluates_real_base_train_checkpoint(tmp_path):
         )
 
 
+def test_eval_matrix_emits_live_moe_routing_metrics_from_checkpoint(tmp_path):
+    checkpoint_dir = tmp_path / "base_checkpoints" / "bio_all_s19"
+    syn_cfg = SynapticConfig()
+    config = GPTSynapticConfig(
+        sequence_len=16,
+        vocab_size=32,
+        n_layer=1,
+        n_head=1,
+        n_kv_head=1,
+        n_embd=16,
+        syn_cfg=syn_cfg,
+        use_moe=True,
+        num_experts=4,
+        moe_top_k=2,
+        init_seed=19,
+    )
+    model = GPTSynaptic(config)
+    model.init_weights()
+    model_config = checkpoint_model_config(
+        model,
+        {
+            "sequence_len": 16,
+            "vocab_size": 32,
+            "n_layer": 1,
+            "n_head": 1,
+            "n_kv_head": 1,
+            "n_embd": 16,
+        },
+    )
+    save_checkpoint(
+        str(checkpoint_dir),
+        1,
+        model.state_dict(),
+        None,
+        {
+            "step": 1,
+            "model_config": model_config,
+            "synapses": True,
+            "synaptic_config": synaptic_config_to_meta(syn_cfg),
+            "user_config": {"init_seed": 19, "num_iterations": 1, "total_batch_size": 16},
+            "device_batch_size": 1,
+            "loop_state": {"total_training_time": 1.0, "smooth_train_loss": 2.5},
+        },
+    )
+
+    out_dir = tmp_path / "moe_eval"
+    from scripts.eval_matrix import main
+
+    old_argv = sys.argv
+    sys.argv = [
+        "eval_matrix",
+        "run",
+        "--preset",
+        "bio_all",
+        "--seed",
+        "19",
+        "--checkpoint-dir",
+        str(checkpoint_dir),
+        "--checkpoint-step",
+        "1",
+        "--data",
+        "synthetic",
+        "--device-type",
+        "cpu",
+        "--device-batch-size",
+        "1",
+        "--eval-tokens",
+        "16",
+        "--niah-lengths",
+        "7",
+        "--out-dir",
+        str(out_dir),
+        "--registry-path",
+        str(tmp_path / "moe_registry.jsonl"),
+    ]
+    try:
+        assert main() == 0
+    finally:
+        sys.argv = old_argv
+
+    row = json.loads((out_dir / "summary.jsonl").read_text(encoding="utf-8"))
+    assert row["use_moe"] and row["num_experts"] == 4 and row["moe_top_k"] == 2
+    assert row["capability_metric_status"]["routing"] == "ok"
+    assert 0.0 <= row["moe_gini"] <= 1.0
+    assert 0.0 <= row["dead_expert_frac"] <= 1.0
+    routing = [
+        json.loads(line)
+        for line in (Path(row["run_dir"]) / "capability_metrics.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+        if '"capability": "routing"' in line
+    ]
+    assert len(routing) == 1 and routing[0]["layers"]
+    registry = read_records(str(tmp_path / "moe_registry.jsonl"))[0]
+    assert {"moe_gini", "dead_expert_frac"} <= set(registry.metrics)
+
+
 def test_eval_matrix_requires_checkpoint_or_explicit_smoke_mode():
     from scripts.eval_matrix import main
 
@@ -268,6 +405,37 @@ def test_eval_matrix_requires_checkpoint_or_explicit_smoke_mode():
     assert exc_info.value.code == 2
 
 
+@pytest.mark.parametrize(
+    ("flag", "value", "message"),
+    [
+        ("--ece-bins", "1", "--ece-bins must be >= 2"),
+        ("--dead-expert-threshold", "1", "--dead-expert-threshold must be in"),
+        ("--continual-tasks", "1", "--continual-tasks must be >= 2"),
+        ("--continual-exposures", "0", "--continual-exposures must be >= 1"),
+    ],
+)
+def test_eval_matrix_rejects_invalid_capability_metric_policy(flag, value, message, capsys):
+    from scripts.eval_matrix import main
+
+    old_argv = sys.argv
+    sys.argv = [
+        "eval_matrix",
+        "run",
+        "--preset",
+        "vanilla",
+        "--inline-smoke-training",
+        flag,
+        value,
+    ]
+    try:
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+    finally:
+        sys.argv = old_argv
+    assert exc_info.value.code == 2
+    assert message in capsys.readouterr().err
+
+
 def test_eval_logits_forces_synaptic_inference_mode():
     import torch
 
@@ -278,6 +446,56 @@ def test_eval_logits_forces_synaptic_inference_mode():
 
     tokens = torch.zeros((1, 4), dtype=torch.long)
     assert _get_logits(Probe(), tokens).shape == (1, 4, 8)
+
+
+def test_capability_metric_primitives_are_seeded_and_fail_closed():
+    import torch
+
+    tokens = torch.tensor([[0, 1, 2], [3, 4, 5]])
+    corrupted = _deterministic_ood_tokens(tokens, vocab_size=8, seed=17)
+    assert torch.equal(corrupted, _deterministic_ood_tokens(tokens, vocab_size=8, seed=17))
+    assert corrupted.shape == tokens.shape
+    assert bool((corrupted != tokens).all())
+    assert 0 <= int(corrupted.min()) <= int(corrupted.max()) < 8
+
+    assert _binary_auroc([0.1, 0.2], [0.8, 0.9]) == 1.0
+    assert _binary_auroc([0.8, 0.9], [0.1, 0.2]) == 0.0
+    assert _binary_auroc([0.5], [0.5]) == 0.5
+    with pytest.raises(ValueError, match="finite"):
+        _binary_auroc([0.1], [float("nan")])
+
+
+def test_routing_metrics_report_specialization_and_dead_experts():
+    import torch
+
+    balanced = torch.tensor([10.0, 10.0, 10.0, 10.0])
+    assert _gini_coefficient(balanced) == pytest.approx(0.0)
+    assert _gini_coefficient(torch.tensor([0.0, 0.0, 0.0, 40.0])) == pytest.approx(0.75)
+    summary = _summarize_routing_counts(
+        {"h.0.mlp": torch.tensor([49.0, 49.0, 2.0, 0.0])},
+        dead_expert_threshold=0.03,
+    )
+    assert summary.moe_gini is not None and summary.moe_gini > 0.0
+    assert summary.dead_expert_frac == pytest.approx(0.5)
+    assert summary.layers["h.0.mlp"]["dead_experts"] == 2
+    assert _summarize_routing_counts({}, dead_expert_threshold=0.01).moe_gini is None
+
+
+def test_forgetting_rate_uses_peak_to_final_accuracy_for_prior_tasks():
+    rate, by_task = _forgetting_rate_from_accuracy_matrix(
+        [
+            [0.9, None, None],
+            [0.8, 0.7, None],
+            [0.6, 0.8, 0.5],
+        ]
+    )
+    assert rate == pytest.approx(0.15)
+    assert by_task == {
+        "0": {"peak_accuracy": 0.9, "final_accuracy": 0.6, "forgetting": pytest.approx(0.3)},
+        "1": {"peak_accuracy": 0.8, "final_accuracy": 0.8, "forgetting": 0.0},
+    }
+    with pytest.raises(ValueError, match="square"):
+        _forgetting_rate_from_accuracy_matrix([[0.5]])
 
 
 # --------------------------------------------------------------------------- #

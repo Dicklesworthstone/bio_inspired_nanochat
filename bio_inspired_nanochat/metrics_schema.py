@@ -81,6 +81,24 @@ _M("niah_accuracy", "fraction", Direction.HIGHER_BETTER, "needle-in-haystack ret
 _M("id_ece", "fraction", Direction.LOWER_BETTER, "in-distribution expected calibration error")
 _M("ood_auroc", "fraction", Direction.HIGHER_BETTER, "out-of-distribution detection AUROC")
 _M(
+    "forgetting_rate",
+    "fraction",
+    Direction.LOWER_BETTER,
+    "mean peak-to-final accuracy loss across previously learned continual tasks",
+)
+_M(
+    "moe_gini",
+    "coefficient",
+    Direction.NEUTRAL,
+    "mean per-layer Gini coefficient of observed MoE routing counts",
+)
+_M(
+    "dead_expert_frac",
+    "fraction",
+    Direction.LOWER_BETTER,
+    "fraction of MoE experts below the predeclared routing-share floor",
+)
+_M(
     "live_ft_max_crooks_residual",
     "log-probability ratio",
     Direction.LOWER_BETTER,

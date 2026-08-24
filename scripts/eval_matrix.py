@@ -22,7 +22,7 @@ from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterator, Literal, Optional, cast
+from typing import Any, Iterator, Literal, Optional, Sequence, cast
 
 from rich.console import Console
 from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
@@ -43,7 +43,7 @@ from bio_inspired_nanochat.checkpoint_manager import (
 from bio_inspired_nanochat.gpt import GPT, GPTConfig
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
 from bio_inspired_nanochat.results_registry import DEFAULT_REGISTRY, append_record, make_record
-from bio_inspired_nanochat.synaptic import SynapticConfig
+from bio_inspired_nanochat.synaptic import SynapticConfig, SynapticMoE
 
 from scripts.base_eval import evaluate_model
 
@@ -109,6 +109,9 @@ SUMMARY_FIELDS: tuple[str, ...] = (
     "core_eval",
     "core_max_per_task",
     "ece_bins",
+    "dead_expert_threshold",
+    "continual_tasks",
+    "continual_exposures",
     "walltime_sec",
     "tok_per_sec",
     "train_loss_final",
@@ -116,8 +119,15 @@ SUMMARY_FIELDS: tuple[str, ...] = (
     "val_ppl",
     "val_bpb",
     "core_metric",
-    "ece",
+    "id_ece",
+    "ood_auroc",
+    "forgetting_rate",
+    "moe_gini",
+    "dead_expert_frac",
     "niah_acc",
+    "recall_by_length",
+    "forgetting_by_task",
+    "capability_metric_status",
 )
 
 
@@ -135,8 +145,30 @@ class HarnessRunSummary:
     val_ppl: float
     val_bpb: Optional[float]
     core_metric: Optional[float]
-    ece: Optional[float]
+    id_ece: Optional[float]
+    ood_auroc: Optional[float]
+    forgetting_rate: Optional[float]
+    moe_gini: Optional[float]
+    dead_expert_frac: Optional[float]
     niah_acc: Optional[float]
+    recall_by_length: dict[str, float]
+    forgetting_by_task: dict[str, dict[str, float]]
+
+
+@dataclass(frozen=True)
+class RoutingMetricSummary:
+    moe_gini: Optional[float]
+    dead_expert_frac: Optional[float]
+    layers: dict[str, dict[str, Any]]
+
+
+@dataclass(frozen=True)
+class ContinualMetricSummary:
+    forgetting_rate: Optional[float]
+    by_task: dict[str, dict[str, float]]
+    accuracy_matrix: list[list[Optional[float]]]
+    status: str
+    reason: Optional[str]
 
 
 ComputeRuntime = tuple[bool, int, int, int, torch.device]
@@ -190,9 +222,9 @@ def _synthetic_loader(
         yield toks[:, :-1].to(torch.long), toks[:, 1:].to(torch.long)
 
 
-def _get_logits(model: Any, idx: Tensor) -> Tensor:
+def _forward_logits(model: Any, idx: Tensor, *, train_mode: bool) -> Tensor:
     out = (
-        model(idx, train_mode=False)
+        model(idx, train_mode=train_mode)
         if "train_mode" in inspect.signature(model.forward).parameters
         else model(idx)
     )
@@ -205,6 +237,138 @@ def _get_logits(model: Any, idx: Tensor) -> Tensor:
     if not isinstance(logits, torch.Tensor):
         raise TypeError(f"Expected logits Tensor, got {type(logits)}")
     return logits
+
+
+def _get_logits(model: Any, idx: Tensor) -> Tensor:
+    """Return inference logits without updating synaptic state."""
+    return _forward_logits(model, idx, train_mode=False)
+
+
+def _deterministic_ood_tokens(tokens: Tensor, *, vocab_size: int, seed: int) -> Tensor:
+    """Destroy sequence structure with a deterministic token/position hash.
+
+    The transform is deliberately private-RNG-free: computing the OOD arm cannot advance model or
+    data-loader RNG state. Every token changes while remaining inside the checkpoint vocabulary.
+    """
+    if vocab_size < 2:
+        raise ValueError("OOD corruption requires vocab_size >= 2")
+    batch = torch.arange(tokens.shape[0], device=tokens.device, dtype=torch.int64).view(-1, 1)
+    position = torch.arange(tokens.shape[1], device=tokens.device, dtype=torch.int64).view(1, -1)
+    values = tokens.to(torch.int64)
+    mixed = (
+        31 * values.square()
+        + 17 * values
+        + 13 * position.square()
+        + 7 * batch
+        + 19 * int(seed)
+        + 23
+    )
+    corrupted = torch.remainder(mixed, vocab_size)
+    return torch.where(corrupted == values, torch.remainder(corrupted + 1, vocab_size), corrupted)
+
+
+def _binary_auroc(id_scores: Sequence[float], ood_scores: Sequence[float]) -> float:
+    """Exact tie-aware AUROC, treating OOD examples as the positive class."""
+    if not id_scores or not ood_scores:
+        raise ValueError("AUROC requires at least one ID and one OOD score")
+    labelled = [(float(score), 0) for score in id_scores]
+    labelled.extend((float(score), 1) for score in ood_scores)
+    if not all(math.isfinite(score) for score, _ in labelled):
+        raise ValueError("AUROC scores must be finite")
+    labelled.sort(key=lambda item: item[0])
+    positive_rank_sum = 0.0
+    start = 0
+    while start < len(labelled):
+        end = start + 1
+        while end < len(labelled) and labelled[end][0] == labelled[start][0]:
+            end += 1
+        average_rank = ((start + 1) + end) / 2.0
+        positive_rank_sum += average_rank * sum(label for _, label in labelled[start:end])
+        start = end
+    n_positive = len(ood_scores)
+    n_negative = len(id_scores)
+    return (
+        positive_rank_sum - n_positive * (n_positive + 1) / 2.0
+    ) / (n_positive * n_negative)
+
+
+def _gini_coefficient(values: Tensor) -> float:
+    """Population Gini for non-negative routing counts (zero for an all-zero vector)."""
+    x = values.detach().to(dtype=torch.float64).reshape(-1)
+    if x.numel() == 0 or bool((x < 0).any()):
+        raise ValueError("Gini requires a non-empty non-negative vector")
+    total = float(x.sum().item())
+    if total == 0.0:
+        return 0.0
+    ordered = x.sort().values
+    n = ordered.numel()
+    ranks = torch.arange(1, n + 1, device=ordered.device, dtype=torch.float64)
+    return float((((2.0 * ranks - n - 1.0) * ordered).sum() / (n * ordered.sum())).item())
+
+
+def _routing_counts(model: Any) -> dict[str, Tensor]:
+    return {
+        name: torch.zeros(module.num_experts, dtype=torch.float64, device=module.energy.device)
+        for name, module in model.named_modules()
+        if isinstance(module, SynapticMoE)
+    }
+
+
+def _accumulate_routing_counts(model: Any, counts: dict[str, Tensor]) -> None:
+    modules = dict(model.named_modules())
+    for name, total in counts.items():
+        module = modules[name]
+        if not isinstance(module, SynapticMoE):
+            raise TypeError(f"routing module {name!r} changed type during evaluation")
+        indices = module.last_ctx.get("indices")
+        if indices is None:
+            continue
+        total.add_(torch.bincount(indices.reshape(-1), minlength=module.num_experts).to(total))
+
+
+def _summarize_routing_counts(
+    counts: dict[str, Tensor], *, dead_expert_threshold: float
+) -> RoutingMetricSummary:
+    if not 0.0 <= dead_expert_threshold < 1.0:
+        raise ValueError("dead_expert_threshold must be in [0, 1)")
+    if not counts:
+        return RoutingMetricSummary(None, None, {})
+    layers: dict[str, dict[str, Any]] = {}
+    ginis: list[float] = []
+    dead = 0
+    experts = 0
+    for name, raw_counts in counts.items():
+        total = float(raw_counts.sum().item())
+        if total <= 0.0:
+            raise ValueError(f"MoE layer {name!r} emitted no routing assignments")
+        shares = raw_counts / total
+        gini = _gini_coefficient(raw_counts)
+        layer_dead = int((shares < dead_expert_threshold).sum().item())
+        layer_experts = raw_counts.numel()
+        ginis.append(gini)
+        dead += layer_dead
+        experts += layer_experts
+        layers[name] = {
+            "assignments": [int(value) for value in raw_counts.cpu().tolist()],
+            "routing_share": [float(value) for value in shares.cpu().tolist()],
+            "gini": gini,
+            "dead_experts": layer_dead,
+            "num_experts": layer_experts,
+            "dead_expert_threshold": dead_expert_threshold,
+        }
+    return RoutingMetricSummary(
+        moe_gini=sum(ginis) / len(ginis),
+        dead_expert_frac=dead / experts,
+        layers=layers,
+    )
+
+
+def _distributed_scores(scores: list[float], *, ddp: bool) -> list[float]:
+    if not ddp or not torch.distributed.is_initialized():
+        return scores
+    gathered: list[Optional[list[float]]] = [None] * torch.distributed.get_world_size()
+    torch.distributed.all_gather_object(gathered, scores)
+    return [score for rank_scores in gathered if rank_scores is not None for score in rank_scores]
 
 
 @contextmanager
@@ -234,7 +398,11 @@ def _val_loss_ppl_ece(
     device_type: str,
     ddp: bool,
     ece_bins: int = 15,
-) -> tuple[float, float, Optional[float]]:
+    ood_seed: int = 0,
+    dead_expert_threshold: float = 0.01,
+) -> tuple[float, float, Optional[float], float, RoutingMetricSummary]:
+    if ece_bins < 2:
+        raise ValueError("ece_bins must be >= 2")
     model.train(False)
     autocast_ctx = (
         torch.amp.autocast(device_type=device_type, dtype=torch.bfloat16)
@@ -246,12 +414,16 @@ def _val_loss_ppl_ece(
     conf_sum = torch.zeros(ece_bins, dtype=torch.float64, device=accumulator_device)
     acc_sum = torch.zeros(ece_bins, dtype=torch.float64, device=accumulator_device)
     count = torch.zeros(ece_bins, dtype=torch.float64, device=accumulator_device)
+    routing_counts = _routing_counts(model)
+    id_uncertainty: list[float] = []
+    ood_uncertainty: list[float] = []
 
     losses: list[Tensor] = []
     for _ in range(steps):
         x, y = next(batches)
         with torch.no_grad(), autocast_ctx:
             logits = _get_logits(model, x).to(torch.float32)
+            _accumulate_routing_counts(model, routing_counts)
             logits_flat = logits.reshape(-1, logits.size(-1))
             targets_flat = y.reshape(-1)
             loss_flat = F.cross_entropy(
@@ -279,11 +451,32 @@ def _val_loss_ppl_ece(
                     acc_sum[b] += float(correct[mask].float().sum().item())
                     count[b] += float(mask.sum().item())
 
+            id_log_probs = torch.log_softmax(logits, dim=-1)
+            id_probs = id_log_probs.exp()
+            id_uncertainty.extend(
+                float(value)
+                for value in (-(id_probs * id_log_probs).sum(dim=-1).mean(dim=-1)).cpu().tolist()
+            )
+            ood_x = _deterministic_ood_tokens(
+                x,
+                vocab_size=logits.size(-1),
+                seed=ood_seed,
+            )
+            ood_logits = _get_logits(model, ood_x).to(torch.float32)
+            ood_log_probs = torch.log_softmax(ood_logits, dim=-1)
+            ood_probs = ood_log_probs.exp()
+            ood_uncertainty.extend(
+                float(value)
+                for value in (-(ood_probs * ood_log_probs).sum(dim=-1).mean(dim=-1)).cpu().tolist()
+            )
+
     val_loss = torch.stack(losses).mean()
     if ddp and torch.distributed.is_initialized():
         torch.distributed.all_reduce(val_loss, op=torch.distributed.ReduceOp.AVG)
         for accumulator in (conf_sum, acc_sum, count):
             torch.distributed.all_reduce(accumulator, op=torch.distributed.ReduceOp.SUM)
+        for layer_counts in routing_counts.values():
+            torch.distributed.all_reduce(layer_counts, op=torch.distributed.ReduceOp.SUM)
     val_loss_f = float(val_loss.item())
     val_ppl = float(math.exp(val_loss_f)) if math.isfinite(val_loss_f) else float("inf")
 
@@ -295,7 +488,14 @@ def _val_loss_ppl_ece(
         acc_mean = acc_sum / count.clamp_min(1.0)
         weights = count / count.sum()
         ece = float((weights * (conf_mean - acc_mean).abs()).sum().item())
-    return val_loss_f, val_ppl, ece
+    id_uncertainty = _distributed_scores(id_uncertainty, ddp=ddp)
+    ood_uncertainty = _distributed_scores(ood_uncertainty, ddp=ddp)
+    ood_auroc = _binary_auroc(id_uncertainty, ood_uncertainty)
+    routing = _summarize_routing_counts(
+        routing_counts,
+        dead_expert_threshold=dead_expert_threshold,
+    )
+    return val_loss_f, val_ppl, ece, ood_auroc, routing
 
 
 def _apply_syn_preset(preset: str, syn_cfg: SynapticConfig) -> None:
@@ -515,7 +715,10 @@ def _normalize_row_for_csv(row: dict[str, Any]) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for k in SUMMARY_FIELDS:
         v = row.get(k)
-        out[k] = "" if v is None else v
+        if isinstance(v, (dict, list, tuple)):
+            out[k] = json.dumps(v, sort_keys=True, separators=(",", ":"), allow_nan=False)
+        else:
+            out[k] = "" if v is None else v
     return out
 
 
@@ -557,6 +760,9 @@ def _error_row(
     core_eval: bool,
     core_max_per_task: int,
     ece_bins: int,
+    dead_expert_threshold: float,
+    continual_tasks: int,
+    continual_exposures: int,
     error: str,
 ) -> dict[str, Any]:
     tokens_per_micro = device_batch_size * sequence_len
@@ -608,6 +814,9 @@ def _error_row(
         "core_eval": core_eval,
         "core_max_per_task": core_max_per_task,
         "ece_bins": ece_bins,
+        "dead_expert_threshold": dead_expert_threshold,
+        "continual_tasks": continual_tasks,
+        "continual_exposures": continual_exposures,
         "walltime_sec": None,
         "tok_per_sec": None,
         "train_loss_final": None,
@@ -615,8 +824,15 @@ def _error_row(
         "val_ppl": None,
         "val_bpb": None,
         "core_metric": None,
-        "ece": None,
+        "id_ece": None,
+        "ood_auroc": None,
+        "forgetting_rate": None,
+        "moe_gini": None,
+        "dead_expert_frac": None,
         "niah_acc": None,
+        "recall_by_length": {},
+        "forgetting_by_task": {},
+        "capability_metric_status": {"run": "error"},
     }
 
 
@@ -633,6 +849,95 @@ def _resolve_niah_lengths(niah_lengths: str, max_len: int) -> tuple[int, ...]:
         requested = [16, 64, max_len]
     kept = sorted({length for length in requested if 8 <= length <= max_len})
     return tuple(kept)
+
+
+def _masked_token_accuracy(model: Any, batch: Any) -> float:
+    logits = _get_logits(model, batch.inputs)
+    valid = batch.targets >= 0
+    if not bool(valid.any()):
+        raise ValueError("continual task contains no supervised targets")
+    predictions = logits.argmax(dim=-1)
+    return float((predictions[valid] == batch.targets[valid]).float().mean().item())
+
+
+def _forgetting_rate_from_accuracy_matrix(
+    accuracy_matrix: Sequence[Sequence[Optional[float]]],
+) -> tuple[float, dict[str, dict[str, float]]]:
+    """Standard continual-learning forgetting over a lower-triangular accuracy matrix.
+
+    Row ``t`` is measured after learning task ``t``. For every task except the last (which has no
+    subsequent interference), forgetting is its best accuracy from acquisition through the final
+    phase minus its final accuracy. Including the final phase in the maximum makes the rate
+    non-negative while still crediting later positive transfer.
+    """
+    task_count = len(accuracy_matrix)
+    if task_count < 2 or any(len(row) != task_count for row in accuracy_matrix):
+        raise ValueError("forgetting requires a square accuracy matrix with at least two tasks")
+    by_task: dict[str, dict[str, float]] = {}
+    drops: list[float] = []
+    for task in range(task_count - 1):
+        observed = [accuracy_matrix[phase][task] for phase in range(task, task_count)]
+        if any(value is None for value in observed):
+            raise ValueError(f"task {task} is missing an accuracy after acquisition")
+        values = [float(cast(float, value)) for value in observed]
+        if not all(math.isfinite(value) and 0.0 <= value <= 1.0 for value in values):
+            raise ValueError(f"task {task} accuracies must be finite fractions")
+        peak = max(values)
+        final = values[-1]
+        drop = peak - final
+        drops.append(drop)
+        by_task[str(task)] = {"peak_accuracy": peak, "final_accuracy": final, "forgetting": drop}
+    return sum(drops) / len(drops), by_task
+
+
+def _continual_forgetting_metric(
+    model: Any,
+    *,
+    sequence_len: int,
+    vocab_size: int,
+    task_count: int,
+    exposures: int,
+    seed: int,
+    device: torch.device,
+) -> ContinualMetricSummary:
+    if task_count < 2:
+        raise ValueError("continual_tasks must be >= 2")
+    if exposures < 1:
+        raise ValueError("continual_exposures must be >= 1")
+    task_length = min(8, (vocab_size - 2) // task_count, (sequence_len - 1) // 2)
+    if task_length < 1:
+        return ContinualMetricSummary(None, {}, [], "not_applicable", "model context/vocabulary too small")
+
+    from bio_inspired_nanochat.synthetic_tasks import continual_task_sequence
+
+    tasks = [
+        batch.to(device)
+        for batch in continual_task_sequence(
+            num_tasks=task_count,
+            batch=8,
+            length=task_length,
+            vocab_size=vocab_size,
+            seed=seed,
+        )
+    ]
+    reset = getattr(model, "reset_sequence_state", None)
+    if callable(reset):
+        reset(reset_fast_weights=True, reset_consolidation=True)
+    matrix: list[list[Optional[float]]] = [
+        [None for _ in range(task_count)] for _ in range(task_count)
+    ]
+    try:
+        with torch.no_grad():
+            for phase, task in enumerate(tasks):
+                for _ in range(exposures):
+                    _forward_logits(model, task.inputs, train_mode=True)
+                for learned_task in range(phase + 1):
+                    matrix[phase][learned_task] = _masked_token_accuracy(model, tasks[learned_task])
+        rate, by_task = _forgetting_rate_from_accuracy_matrix(matrix)
+        return ContinualMetricSummary(rate, by_task, matrix, "ok", None)
+    finally:
+        if callable(reset):
+            reset(reset_fast_weights=True, reset_consolidation=True)
 
 
 def _run_one(
@@ -663,6 +968,9 @@ def _run_one(
     core_max_per_task: int,
     ece_bins: int,
     niah_lengths: str = "",
+    dead_expert_threshold: float = 0.01,
+    continual_tasks: int = 3,
+    continual_exposures: int = 4,
     init_type: str,
     use_moe: bool,
     num_experts: int,
@@ -718,6 +1026,10 @@ def _run_one(
             moe_top_k=moe_top_k,
         )
         model.train()
+        if preset == "vanilla":
+            use_moe = False
+            num_experts = 0
+            moe_top_k = 0
 
     stamp_payload = [_utc_stamp() if ddp_rank == 0 else ""]
     if ddp and torch.distributed.is_initialized():
@@ -833,6 +1145,9 @@ def _run_one(
         "core_max_per_task": core_max_per_task,
         "ece_bins": ece_bins,
         "niah_lengths": niah_lengths,
+        "dead_expert_threshold": dead_expert_threshold,
+        "continual_tasks": continual_tasks,
+        "continual_exposures": continual_exposures,
         "sequence_len": sequence_len,
         "vocab_size": vocab_size,
         "n_layer": n_layer,
@@ -937,8 +1252,15 @@ def _run_one(
 
     # Evaluation
     eval_steps = max(1, int(eval_tokens // world_tokens_per_micro))
-    val_loss, val_ppl, ece = _val_loss_ppl_ece(
-        model, val_iter, steps=eval_steps, device_type=device_type, ddp=ddp, ece_bins=ece_bins
+    val_loss, val_ppl, id_ece, ood_auroc, routing = _val_loss_ppl_ece(
+        model,
+        val_iter,
+        steps=eval_steps,
+        device_type=device_type,
+        ddp=ddp,
+        ece_bins=ece_bins,
+        ood_seed=seed + 74_007,
+        dead_expert_threshold=dead_expert_threshold,
     )
 
     val_bpb: Optional[float] = None
@@ -995,26 +1317,53 @@ def _run_one(
     # Needle-in-a-haystack long-context retrieval accuracy (74f.2): the key probe of
     # the fast-weight / long-context claim. Swept over length × needle depth.
     niah_acc: Optional[float] = None
+    recall_by_length: dict[str, float] = {}
+    memory_status = "not_applicable"
+    memory_reason: Optional[str] = "no supported context lengths"
     try:
         from bio_inspired_nanochat.synthetic_tasks import niah_accuracy_by_length
 
-        max_len = min(int(sequence_len) - 2, 256)
+        context_max = int(sequence_len) - 2
+        max_len = context_max if niah_lengths.strip() else min(context_max, 256)
         lengths_used = _resolve_niah_lengths(niah_lengths, max_len)
         if lengths_used and ddp_rank == 0:
             with _force_synaptic_eval_forward(model) as eval_model:
-                niah_acc = float(
-                    niah_accuracy_by_length(
-                        eval_model,
-                        vocab_size=min(64, int(vocab_size)),
-                        lengths=lengths_used,
-                        batch=32,
-                        seed=int(seed),
-                        device=device,
-                    )["overall"]
+                niah_result = niah_accuracy_by_length(
+                    eval_model,
+                    vocab_size=min(64, int(vocab_size)),
+                    lengths=lengths_used,
+                    batch=32,
+                    seed=int(seed),
+                    device=device,
                 )
+            niah_acc = float(niah_result["overall"])
+            recall_by_length = {
+                str(length): float(accuracy)
+                for length, accuracy in niah_result["by_length"].items()
+            }
+            memory_status = "ok"
+            memory_reason = None
     except Exception as e:  # eval is best-effort; never fail a run on the probe
         if ddp_rank == 0:
             console.print(f"[yellow][niah] eval skipped:[/yellow] {e}")
+            memory_status = "error"
+            memory_reason = repr(e)
+
+    continual = ContinualMetricSummary(None, {}, [], "not_run", "non-zero DDP rank")
+    if ddp_rank == 0:
+        try:
+            continual = _continual_forgetting_metric(
+                model,
+                sequence_len=sequence_len,
+                vocab_size=vocab_size,
+                task_count=continual_tasks,
+                exposures=continual_exposures,
+                seed=seed + 74_700,
+                device=device,
+            )
+        except Exception as e:
+            continual = ContinualMetricSummary(None, {}, [], "error", repr(e))
+            console.print(f"[yellow][continual] eval skipped:[/yellow] {e}")
 
     summary = HarnessRunSummary(
         run_id=run_id,
@@ -1029,9 +1378,22 @@ def _run_one(
         val_ppl=val_ppl,
         val_bpb=val_bpb,
         core_metric=core_metric,
-        ece=ece,
+        id_ece=id_ece,
+        ood_auroc=ood_auroc,
+        forgetting_rate=continual.forgetting_rate,
+        moe_gini=routing.moe_gini,
+        dead_expert_frac=routing.dead_expert_frac,
         niah_acc=niah_acc,
+        recall_by_length=recall_by_length,
+        forgetting_by_task=continual.by_task,
     )
+
+    capability_metric_status = {
+        "uncertainty": "ok",
+        "continual": continual.status,
+        "routing": "ok" if routing.layers else "not_applicable",
+        "memory": memory_status,
+    }
 
     # Persist summary
     row: dict[str, Any] = {
@@ -1072,6 +1434,9 @@ def _run_one(
         "core_eval": core_eval,
         "core_max_per_task": core_max_per_task,
         "ece_bins": ece_bins,
+        "dead_expert_threshold": dead_expert_threshold,
+        "continual_tasks": continual_tasks,
+        "continual_exposures": continual_exposures,
         "walltime_sec": summary.walltime_sec,
         "tok_per_sec": summary.tok_per_sec,
         "train_loss_final": summary.train_loss_final,
@@ -1079,10 +1444,68 @@ def _run_one(
         "val_ppl": summary.val_ppl,
         "val_bpb": summary.val_bpb,
         "core_metric": summary.core_metric,
-        "ece": summary.ece,
+        "id_ece": summary.id_ece,
+        "ood_auroc": summary.ood_auroc,
+        "forgetting_rate": summary.forgetting_rate,
+        "moe_gini": summary.moe_gini,
+        "dead_expert_frac": summary.dead_expert_frac,
         "niah_acc": summary.niah_acc,
+        "recall_by_length": summary.recall_by_length,
+        "forgetting_by_task": summary.forgetting_by_task,
+        "capability_metric_status": capability_metric_status,
     }
     if ddp_rank == 0:
+        capability_log = run_dir / "capability_metrics.jsonl"
+        _write_jsonl(
+            capability_log,
+            {
+                "run_id": run_id,
+                "capability": "uncertainty",
+                "status": "ok",
+                "id_ece": summary.id_ece,
+                "ood_auroc": summary.ood_auroc,
+                "ece_bins": ece_bins,
+                "ood_protocol": "deterministic_token_position_hash",
+                "ood_score": "mean_predictive_entropy_per_sequence",
+            },
+        )
+        _write_jsonl(
+            capability_log,
+            {
+                "run_id": run_id,
+                "capability": "routing",
+                "status": capability_metric_status["routing"],
+                "moe_gini": summary.moe_gini,
+                "dead_expert_frac": summary.dead_expert_frac,
+                "dead_expert_threshold": dead_expert_threshold,
+                "layers": routing.layers,
+            },
+        )
+        _write_jsonl(
+            capability_log,
+            {
+                "run_id": run_id,
+                "capability": "memory",
+                "status": memory_status,
+                "reason": memory_reason,
+                "niah_acc": summary.niah_acc,
+                "recall_by_length": summary.recall_by_length,
+            },
+        )
+        _write_jsonl(
+            capability_log,
+            {
+                "run_id": run_id,
+                "capability": "continual",
+                "status": continual.status,
+                "reason": continual.reason,
+                "forgetting_rate": continual.forgetting_rate,
+                "forgetting_by_task": continual.by_task,
+                "accuracy_matrix": continual.accuracy_matrix,
+                "task_count": continual_tasks,
+                "exposures_per_task": continual_exposures,
+            },
+        )
         _write_summary(out_dir, row)
         registry_metrics = {"tok_per_sec": float(summary.tok_per_sec)}
         if summary.train_loss_final is not None and math.isfinite(summary.train_loss_final):
@@ -1091,6 +1514,15 @@ def _run_one(
             registry_metrics["eval_bpb"] = float(summary.val_bpb)
         if summary.niah_acc is not None and math.isfinite(summary.niah_acc):
             registry_metrics["niah_accuracy"] = float(summary.niah_acc)
+        for metric_name, value in (
+            ("id_ece", summary.id_ece),
+            ("ood_auroc", summary.ood_auroc),
+            ("forgetting_rate", summary.forgetting_rate),
+            ("moe_gini", summary.moe_gini),
+            ("dead_expert_frac", summary.dead_expert_frac),
+        ):
+            if value is not None and math.isfinite(value):
+                registry_metrics[metric_name] = float(value)
         append_record(
             make_record(
                 "eval",
@@ -1144,6 +1576,9 @@ def _cmd_run(args: argparse.Namespace) -> int:
             core_max_per_task=args.core_max_per_task,
             ece_bins=args.ece_bins,
             niah_lengths=args.niah_lengths,
+            dead_expert_threshold=args.dead_expert_threshold,
+            continual_tasks=args.continual_tasks,
+            continual_exposures=args.continual_exposures,
             init_type=args.init_type,
             use_moe=args.use_moe,
             num_experts=args.num_experts,
@@ -1214,6 +1649,9 @@ def _run_batch(
                         core_max_per_task=args.core_max_per_task,
                         ece_bins=args.ece_bins,
                         niah_lengths=args.niah_lengths,
+                        dead_expert_threshold=args.dead_expert_threshold,
+                        continual_tasks=args.continual_tasks,
+                        continual_exposures=args.continual_exposures,
                         init_type=args.init_type,
                         use_moe=args.use_moe,
                         num_experts=args.num_experts,
@@ -1261,6 +1699,9 @@ def _run_batch(
                         core_eval=args.core_eval,
                         core_max_per_task=args.core_max_per_task,
                         ece_bins=args.ece_bins,
+                        dead_expert_threshold=args.dead_expert_threshold,
+                        continual_tasks=args.continual_tasks,
+                        continual_exposures=args.continual_exposures,
                         error=repr(e),
                     )
                     if ddp_rank == 0:
@@ -1345,9 +1786,27 @@ def main() -> int:
         p.add_argument("--core-max-per-task", type=int, default=200)
         p.add_argument("--ece-bins", type=int, default=15)
         p.add_argument(
+            "--dead-expert-threshold",
+            type=float,
+            default=0.01,
+            help="Routing-share floor below which an MoE expert is classified as dead",
+        )
+        p.add_argument(
+            "--continual-tasks",
+            type=int,
+            default=3,
+            help="Number of disjoint online-copy tasks in the forgetting probe (>=2)",
+        )
+        p.add_argument(
+            "--continual-exposures",
+            type=int,
+            default=4,
+            help="State-updating exposures per task in the forgetting probe (>=1)",
+        )
+        p.add_argument(
             "--niah-lengths", default="",
-            help="Comma-separated NIAH context lengths, e.g. '16,64,128' (default: 16,64,<model max>); "
-            "clamped to the model context. Use fixed --seed for reproducibility.",
+            help="Comma-separated NIAH context lengths, e.g. '16,64,4096' (default: 16,64,min(model max,256)); "
+            "explicit values are clamped only to the model context. Use fixed --seed for reproducibility.",
         )
         p.add_argument("--batch-id", default=None, help="Optional subdirectory name under --out-dir")
         p.add_argument("--fail-fast", action="store_true", help="Stop the batch on the first failure")
@@ -1395,6 +1854,14 @@ def main() -> int:
     args = parser.parse_args()
     if args.device_type == "":
         args.device_type = autodetect_device_type()
+    if args.ece_bins < 2:
+        parser.error("--ece-bins must be >= 2")
+    if not 0.0 <= args.dead_expert_threshold < 1.0:
+        parser.error("--dead-expert-threshold must be in [0, 1)")
+    if args.continual_tasks < 2:
+        parser.error("--continual-tasks must be >= 2")
+    if args.continual_exposures < 1:
+        parser.error("--continual-exposures must be >= 1")
     if not args.checkpoint_dir and not args.inline_smoke_training:
         parser.error(
             "scientific evaluation requires --checkpoint-dir from base_train; "

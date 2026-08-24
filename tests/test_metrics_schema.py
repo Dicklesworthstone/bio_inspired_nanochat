@@ -44,6 +44,9 @@ def test_each_harness_area_is_represented():
     assert {
         "id_ece",
         "ood_auroc",
+        "forgetting_rate",
+        "moe_gini",
+        "dead_expert_frac",
         "live_ft_max_crooks_residual",
         "live_tur_bound_ratio",
     } <= names  # stochastic-thermodynamic UQ falsification
