@@ -24,7 +24,7 @@ Status legend: ✅ shipping (on the live model path, tested) · 🚧 partial/lan
 
 - ✅ **Core Synaptic Mechanisms** — presynaptic release (faithful Hill dynamics), online Hebbian fast-weights, and the structural MoE lifecycle all run on the live path.
 - ✅ **Stochastic release · BDNF metaplasticity · dual fast/slow weights** — implemented and toggleable.
-- 🚧 **Triton GPU & Rust CPU kernels** — Triton has a default-off FP32 `Tq=1` decode dispatch at the configured top-k width, with CUDA parity/performance acceptance still pending; Rust remains a non-live landing backend (`jyb.*`).
+- 🚧 **Triton GPU & Rust CPU kernels** — Triton has a default-off FP32 `Tq=1` decode dispatch at the configured top-k width, with CUDA performance acceptance still pending; Rust has a golden-driven canonical CPU decode kernel but remains outside live dispatch (`jyb.*`).
 - 🚧 **Systematic Optimization** — CMA-ES Phase 1 (the 10 most influential params) is wired; the broader ~48-param two-phase search is planned.
 - 🚧 **Rigorous Evaluation** — the statistical layer (paired t / Wilcoxon, bootstrap + Student-t 95% CIs, multi-seed aggregation) ships in `bio_inspired_nanochat/eval_stats.py`; the full benchmark-matrix *run* is still pending.
 
@@ -40,7 +40,7 @@ Status legend: ✅ shipping (on the live model path, tested) · 🚧 partial/lan
 | **Capacity** | 🏗️ **Fixed**: Pre-allocated size (e.g., 32 layers). | 🏙️ **Elastic**: Experts multiply/die based on demand. |
 | **Learning** | 🏫 **Offline**: Only learns during Backprop. | ⚡ **Online**: "Learns" context via Hebbian consolidation. |
 | **Optimization** | 🎯 **Grid Search**: Manual hyperparameter tuning. | 🧬 **Evolution**: CMA-ES tunes the bio parameters (10 wired in Phase 1). |
-| **Kernels** | 🐍 **Python/CUDA**: Single backend. | ⚡ **Reference + experimental kernels**: canonical PyTorch plus default-off FP32 Triton decode; Rust remains a landing backend. |
+| **Kernels** | 🐍 **Python/CUDA**: Single backend. | ⚡ **Reference + experimental kernels**: canonical PyTorch plus default-off FP32 Triton decode and a parity-locked Rust CPU decode kernel. |
 
 ---
 
@@ -57,9 +57,9 @@ We map specific cellular mechanisms from the [Synaptic Cleft](https://en.wikiped
 
 **The Effect**: A physically-grounded **frequency penalty**. The model literally *cannot* attend to the same token endlessly. It gets "bored" (depleted) and naturally shifts focus to novel information.
 
-**Implementation**: the canonical model path is `SynapticPresyn.release_canonical` (pure PyTorch, differentiable, golden-locked in `tests/test_presyn_golden.py`). A default-off Triton backend implements an intended acceleration for its deterministic FP32 one-query CUDA decode slice at the configured top-k width; unsupported modes retain the canonical Python path. The Rust backend remains a landing target, not a live dispatch path:
+**Implementation**: the canonical model path is `SynapticPresyn.release_canonical` (pure PyTorch, differentiable, golden-locked in `tests/test_presyn_golden.py`). A default-off Triton backend implements an intended acceleration for its deterministic FP32 one-query CUDA decode slice at the configured top-k width; unsupported modes retain the canonical Python path. The same frozen decode trajectory is exercised by Python, Triton's CPU interpreter/CUDA path, and a Rust CPU landing kernel in `tests/test_presyn_backend_parity.py`:
 - **Triton GPU Kernel** (`bio_inspired_nanochat/kernels/presyn_fused.py`): live FP32 `Tq=1` deterministic decode fusion; RTX 4090 acceptance pending.
-- **Rust CPU Kernel** (`rust_src/src/presyn.rs`): legacy PyO3-native landing implementation.
+- **Rust CPU Kernel** (`rust_src/src/presyn.rs`): PyO3-native canonical deterministic decode implementation; not yet live-dispatched.
 
 ```mermaid
 graph LR
@@ -294,7 +294,7 @@ This will:
 
 ## ⚡ High-Performance Multi-Backend Architecture
 
-Bio-Inspired Nanochat targets **dual RTX 4090** training/inference. The canonical presynaptic path remains PyTorch, with a narrow default-off Triton decode dispatch and an explicit fallback for unsupported modes. The Rust landing implementation is not live.
+Bio-Inspired Nanochat targets **dual RTX 4090** training/inference. The canonical presynaptic path remains PyTorch, with a narrow default-off Triton decode dispatch and an explicit fallback for unsupported modes. The Rust canonical decode implementation is parity-locked but not live-dispatched.
 
 ### Kernel Backends
 
@@ -310,6 +310,7 @@ Bio-Inspired Nanochat targets **dual RTX 4090** training/inference. The canonica
 
 3. **Rust CPU Kernel** 🚧 (landing — not yet dispatched on the live path)
    - Location: `rust_src/src/presyn.rs`, `rust_src/src/moe.rs`
+   - `presyn_release_canonical_cpu` matches the frozen sparse one-query trajectory, including duplicate-index reductions and delayed recycling.
    - PyO3-based native extensions; build requires `maturin develop`.
 
 ### Performance Optimizations (In Progress)
@@ -571,7 +572,8 @@ uv run scripts/base_eval.py
 *   **`bio_inspired_nanochat/kernels/presyn_fused.py`** 🔥 **GPU Kernel**: default-off live deterministic decode fusion with canonical fallback
 *   **`rust_src/src/presyn.rs`** 🦀 **CPU Kernel**: PyO3-native Rust implementation
 *   **`rust_src/src/moe.rs`** 🦀 **MoE Kernel**: Expert routing and metabolism
-*   **`tests/test_rust_kernels.py`** ✅ **Reference**: Python validation implementation
+*   **`tests/test_presyn_backend_parity.py`** ✅ **Parity**: one frozen trajectory across Python, Triton, and Rust
+*   **`tests/test_rust_kernels.py`** ✅ **Reference**: legacy dense-kernel and MoE validation
 
 ### Visualization & Analysis
 *   **`bio_inspired_nanochat/neuroviz.py`** 📸 **The MRI**: Visualizations of brain internal state

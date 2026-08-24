@@ -106,10 +106,11 @@ def test_verdict_table_renders_all_presets(dryrun):
 
 def test_module_enumerates_the_full_matrix():
     # The reduced test runs a slice; assert the module still defines the full screening matrix.
-    # 16 = 3 anchors + 8 leave-one-out + 5 add-one-in. Controller-driven
+    # 17 = 3 anchors + 9 leave-one-out + 5 add-one-in. The ninth leave-one-out
+    # column is the default-off native presyn decode backend; controller-driven
     # topological_nas is intentionally excluded from this config-only matrix.
     expected = len(am.anchors()) + len(am.leave_one_out()) + len(am.add_one_in())
-    assert len(am.screening_columns()) == expected == 16
+    assert len(am.screening_columns()) == expected == 17
 
 
 # --------------------------------------------------------------------------- #

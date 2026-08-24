@@ -1,3 +1,6 @@
+import importlib
+from typing import Any, cast
+
 import torch
 import numpy as np
 import pytest
@@ -5,11 +8,10 @@ from bio_inspired_nanochat.engine import KVCache
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
 from bio_inspired_nanochat.synaptic import SynapticConfig, SynapticPresyn
 
-# Try to import rustbpe_native, skip if not available
+# The maturin extension is a top-level module. Skip only when it is genuinely unbuilt.
 try:
-    from rustbpe import rustbpe as rustbpe_native
-    rustbpe = rustbpe_native # For backwards compatibility with test calls
-except ImportError:
+    rustbpe: Any = importlib.import_module("rustbpe")
+except ModuleNotFoundError:
     rustbpe = None
 
 def softplus(x):
@@ -139,6 +141,7 @@ def presyn_step_python_ref(q, k, logits, state, cfg):
 @pytest.mark.skipif(rustbpe is None, reason="rustbpe not installed")
 def test_presyn_step_cpu_parity():
     assert rustbpe is not None
+    backend = cast(Any, rustbpe)
     B, H, T, D = 2, 4, 32, 16
     # Use config compatible with Rust implementation
     cfg = SynapticConfig()
@@ -166,7 +169,7 @@ def test_presyn_step_cpu_parity():
     logits_np = logits.numpy()
     state_np = {k: v.numpy() for k, v in state.items()}
     
-    syn_logit_rust, state_new_rust = rustbpe.presyn_step_cpu(q_np, k_np, logits_np, state_np, cfg)
+    syn_logit_rust, state_new_rust = backend.presyn_step_cpu(q_np, k_np, logits_np, state_np, cfg)
     
     # Run Python Reference
     syn_logit_py, state_new_py = presyn_step_python_ref(q, k, logits, state, cfg)
@@ -190,6 +193,7 @@ def test_presyn_step_cpu_parity():
 @pytest.mark.skipif(rustbpe is None, reason="rustbpe not installed")
 def test_moe_stats_cpu_parity():
     assert rustbpe is not None
+    backend = cast(Any, rustbpe)
     B, T, k = 2, 128, 2
     E = 8
     
@@ -209,7 +213,7 @@ def test_moe_stats_cpu_parity():
     idx_np = idx.numpy().astype("int64")
     gates_np = gates.numpy()
     
-    counts_rust, probs_rust = rustbpe.accumulate_router_stats_cpu(idx_np, gates_np, E)
+    counts_rust, probs_rust = backend.accumulate_router_stats_cpu(idx_np, gates_np, E)
     
     print("Comparing MoE stats...")
     print(f"Counts max diff: {np.abs(counts_rust - me.numpy()).max()}")
@@ -221,6 +225,7 @@ def test_moe_stats_cpu_parity():
 @pytest.mark.skipif(rustbpe is None, reason="rustbpe not installed")
 def test_metabolism_cpu_parity():
     assert rustbpe is not None
+    backend = cast(Any, rustbpe)
     E = 8
     fatigue = torch.rand(E)
     energy = torch.rand(E)
@@ -235,7 +240,7 @@ def test_metabolism_cpu_parity():
     e_py.mul_(1.0 - alpha_energy).add_(alpha_energy * (1.0 - util))
     
     # Rust version
-    f_rust, e_rust = rustbpe.update_metabolism_cpu(
+    f_rust, e_rust = backend.update_metabolism_cpu(
         fatigue.numpy(), energy.numpy(), alpha_fatigue.numpy(), alpha_energy.numpy(), util.numpy()
     )
     
@@ -290,24 +295,25 @@ def test_presyn_release_is_deterministic_when_stochastic_train_frac_is_zero():
     cfg = SynapticConfig()
     cfg.stochastic_train_frac = 0.0
 
-    pre_train = SynapticPresyn(d_head=16, cfg=cfg)
-    pre_eval = SynapticPresyn(d_head=16, cfg=cfg)
+    pre_a = SynapticPresyn(d_head=16, cfg=cfg)
+    pre_b = SynapticPresyn(d_head=16, cfg=cfg)
 
     B, H, Tk, Tq, K = 1, 2, 6, 3, 4
     drive = torch.randn(B, H, Tq, K)
     idx = torch.randint(0, Tk, (B, H, Tq, K))
 
-    state_train = build_presyn_state(B, Tk, H, drive.device, drive.dtype, cfg)
-    state_eval = build_presyn_state(B, Tk, H, drive.device, drive.dtype, cfg)
+    state_a = build_presyn_state(B, Tk, H, drive.device, drive.dtype, cfg)
+    state_b = build_presyn_state(B, Tk, H, drive.device, drive.dtype, cfg)
 
-    e_train = pre_train.release_canonical(state_train, drive, idx, train=True)
-    e_eval = pre_eval.release_canonical(state_eval, drive, idx, train=False)
+    e_a = pre_a.release_canonical(state_a, drive, idx, train=True)
+    e_b = pre_b.release_canonical(state_b, drive, idx, train=True)
 
-    torch.testing.assert_close(e_train, e_eval, rtol=1e-6, atol=1e-6)
+    torch.testing.assert_close(e_a, e_b, rtol=1e-6, atol=1e-6)
+    torch.testing.assert_close(pre_a.ema_e, pre_b.ema_e, rtol=0.0, atol=0.0)
     for key in ["C", "BUF", "RRP", "RES", "PR", "CL", "E", "AMP"]:
-        torch.testing.assert_close(state_train[key], state_eval[key], rtol=1e-6, atol=1e-6)
-    for d_train, d_eval in zip(state_train["DELAY"], state_eval["DELAY"], strict=True):
-        torch.testing.assert_close(d_train, d_eval, rtol=1e-6, atol=1e-6)
+        torch.testing.assert_close(state_a[key], state_b[key], rtol=1e-6, atol=1e-6)
+    for delay_a, delay_b in zip(state_a["DELAY"], state_b["DELAY"], strict=True):
+        torch.testing.assert_close(delay_a, delay_b, rtol=1e-6, atol=1e-6)
 
 
 def test_gpt_synaptic_kv_cache_matches_full_forward():
