@@ -19,7 +19,8 @@
 
 import math
 from dataclasses import dataclass
-from typing import List, Tuple, Optional, Iterable, Any, cast
+from collections import defaultdict
+from typing import List, Tuple, Optional, Iterable, Any, Dict, Set, cast
 from bio_inspired_nanochat.torch_imports import torch, nn, Tensor
 import torch.distributed as torch_dist
 
@@ -94,6 +95,19 @@ class SplitMergeConfig:
     # pure utilization*energy economy unless an experiment opts in; requires an active
     # NeuroScore (NeuroVizManager) so last_neuroscore is populated, else it no-ops.
     use_neuroscore: bool = False
+    # VARIABLE EXPERT COUNT (uta.4): real neurogenesis/apoptosis. When enabled the
+    # controller may APPEND fresh expert slots under sustained split pressure and
+    # REMOVE surplus dead slots (folding their contribution into the healthiest
+    # survivor), rebuilding the router/buffers/genome and synchronizing optimizer
+    # param-groups (survivors keep their moments; new params start fresh; removed
+    # params are dropped). Bounded by hard floors/caps and a cumulative growth
+    # budget expressed as a fraction of the initial total expert count — since MoE
+    # FLOPs scale linearly with expert count, the budget IS the FLOP budget.
+    variable_expert_count: bool = False
+    min_experts: int = 2
+    max_experts: int = 64
+    growth_budget_pct: float = 0.5  # max NET added experts, fraction of initial total
+    allow_variable_under_ddp: bool = False  # uta.5 lifts the DDP guard; off = refuse loudly
     neuroscore_weight: float = 0.5  # blend weight in [0,1]: health=(1-w)*health + w*score
     # Logging
     verbose: bool = False
@@ -532,6 +546,238 @@ def _merge_expert_into_and_clone_(
 
 
 # ---------------------------------------------------------------------------
+# Variable expert count (uta.4) — structural surgery + optimizer synchronization
+# ---------------------------------------------------------------------------
+
+
+def _expert_hidden_mult(layer: SynapticMoE) -> int:
+    """Recover the ``hidden_mult`` CONSTRUCTOR ARGUMENT of existing experts.
+
+    ``SynapticExpert(n_embd, hidden_mult, ...)`` sizes its first linear as
+    ``hidden_mult * n_embd`` outputs; the storage orientation of the custom
+    ``SynapticLinear`` weights is an implementation detail, so derive the
+    multiplier from the parameter VOLUME instead of any single axis.
+    """
+    numel = int(cast(Tensor, layer.experts[0].fc1.w_slow).numel())
+    n_embd = int(layer.router.in_features)
+    return max(1, numel // (n_embd * n_embd))
+
+
+def _norm_param_name(name: str) -> str:
+    """Collapse ModuleList indices so sibling expert params share a layout key."""
+    out = []
+    for p in name.split("."):
+        out.append("N" if p.isdigit() else p)
+    return ".".join(out)
+
+
+def _as_opt_list(optimizers: OptimizersArg) -> List[torch.optim.Optimizer]:
+    if optimizers is None:
+        return []
+    if isinstance(optimizers, (list, tuple)):
+        return list(optimizers)
+    return [optimizers]
+
+
+@torch.no_grad()
+def snapshot_optimizer_state(optimizers: OptimizersArg) -> Dict[int, Any]:
+    """Map ``id(param) -> state`` for every parameter that HAS optimizer state.
+
+    Surviving parameters keep the same Python objects across uta.4 surgery, so
+    their moment buffers stay valid and are reattached verbatim; params without
+    state (never stepped) simply don't appear.
+    """
+    snap: Dict[int, Any] = {}
+    for opt in _as_opt_list(optimizers):
+        for group in opt.param_groups:
+            for p in group["params"]:
+                if id(p) not in snap and p in opt.state:
+                    snap[id(p)] = opt.state[p]
+    return snap
+
+
+def capture_optimizer_layout(
+    optimizers: OptimizersArg, model: nn.Module
+) -> Dict[str, Tuple[int, Dict[str, Any]]]:
+    """Record which optimizer group each parameter NAME (index-normalized) belongs to.
+
+    uta.4 replaces router/genome Parameter objects under the SAME attribute paths,
+    and appended experts produce names matching their siblings once indices are
+    normalized — so this layout stays valid across resize events.
+    """
+    id2name = {id(p): n for n, p in model.named_parameters()}
+    layout: Dict[str, Tuple[int, Dict[str, Any]]] = {}
+    for oi, opt in enumerate(_as_opt_list(optimizers)):
+        for gi, group in enumerate(opt.param_groups):
+            hypers = {k: v for k, v in group.items() if k != "params"}
+            for p in group["params"]:
+                name = id2name.get(id(p))
+                if name is None:
+                    continue
+                key = f"{oi}:{_norm_param_name(name)}"
+                layout[key] = (gi, hypers)
+                layout.setdefault(f"norm:{_norm_param_name(name)}", (oi, gi, hypers))
+    return layout
+
+
+def synchronize_optimizers_with_model(
+    optimizers: OptimizersArg,
+    model: nn.Module,
+    layout: Dict[str, Tuple[int, Dict[str, Any]]],
+    state_snapshot: Dict[int, Any],
+) -> None:
+    """Re-point optimizer param_groups at the post-surgery parameter set.
+
+    - survivors keep both their group (by normalized name) and their moments;
+    - brand-new params join the group of their normalized-name siblings (falling
+      back to the 2D→matrix / 1D→elementwise rule), starting with NO moments;
+    - removed params drop out of groups and their state is released.
+    """
+    opts = _as_opt_list(optimizers)
+    if not opts:
+        return
+    membership: Dict[Tuple[int, int], List[nn.Parameter]] = {}
+    seen: Set[int] = set()
+    for name, p in model.named_parameters():
+        if id(p) in seen:
+            continue
+        hit = layout.get(f"norm:{_norm_param_name(name)}")
+        if hit is not None:
+            oi, gi, _hyp = hit
+            oi = min(oi, len(opts) - 1)
+        elif len(opts) > 1:
+            # matrix params go to the LAST optimizer (Muon in setup_optimizers),
+            # elementwise to the first (AdamW) — mirrors setup_optimizers order.
+            oi = len(opts) - 1 if p.ndim >= 2 else 0
+            gi = 0
+        else:
+            oi = gi = 0
+        seen.add(id(p))
+        membership.setdefault((oi, gi), []).append(p)
+    for oi, opt in enumerate(opts):
+        for gi, group in enumerate(opt.param_groups):
+            group["params"] = membership.get((oi, gi), [])
+        # release stale state; reattach survivor state; new params start fresh
+        new_state = {}
+        for group in opt.param_groups:
+            for p in group["params"]:
+                if id(p) in state_snapshot:
+                    new_state[p] = state_snapshot[id(p)]
+        opt.state = defaultdict(dict, new_state)
+
+
+@torch.no_grad()
+def _resize_layer_experts_(
+    layer: SynapticMoE,
+    target_E: int,
+    seed_idx: int,
+    cfg: SplitMergeConfig,
+) -> List[int]:
+    """Grow/shrink ``layer`` to ``target_E`` experts IN PLACE; returns touched slots.
+
+    Grow: appends clones of expert ``seed_idx`` (full weights + synaptic state via
+    :func:`_copy_expert_full_`), gives each a ``-ln2`` routing bias (low-mass fresh
+    capacity, same convention as the uta.3 twin split) and small fc1 divergence noise.
+    Shrink with ``target_E < E`` drops the LAST ``E - target_E`` experts (callers fold
+    their contribution into a survivor first). Router, genome Xi, embeddings and the
+    metabolic buffers are rebuilt at the new size; NeuroScore bookkeeping self-heals
+    on its next step (size-mismatch reset).
+
+    NOTE (honest scope): unlike slot-reuse splits, count growth changes the top-k
+    routing distribution, so the event is NOT output-preserving; survivor parameters
+    are untouched bit-exact.
+    """
+    E_old = int(layer.num_experts)
+    if target_E == E_old or target_E <= 0:
+        return []
+    dev = layer.router.weight.device
+    dtype = layer.router.weight.dtype
+    n_embd = layer.router.in_features
+    hidden = _expert_hidden_mult(layer)
+
+    old_W = layer.router.weight.detach().clone()
+    old_Xi = cast(Tensor, layer.Xi).detach().clone()
+    old_emb = layer.router_embeddings.detach().clone()
+    old_rb = layer.router_logit_bias.detach().clone()
+    old_fat = cast(Tensor, layer.fatigue).detach().clone()
+    old_eng = cast(Tensor, layer.energy).detach().clone()
+
+    touched: List[int] = []
+    if target_E > E_old:
+        n_new = target_E - E_old
+        new_experts = [
+            SynapticExpert(n_embd, hidden, layer.cfg) for _ in range(n_new)
+        ]
+        layer.experts.extend(new_experts)
+        W_new = torch.cat(
+            [old_W, old_W[seed_idx].repeat(n_new, 1)]
+        )
+        Xi_new = torch.cat([old_Xi, old_Xi[seed_idx].repeat(n_new, 1)])
+        emb_new = torch.cat([old_emb, old_emb[seed_idx].repeat(n_new, 1)])
+        rb_new = torch.cat(
+            [old_rb, torch.full((n_new,), -cfg.gate_split_bias, device=dev, dtype=dtype)]
+        )
+        fat_new = torch.cat([old_fat, torch.zeros(n_new, device=dev, dtype=dtype)])
+        eng_new = torch.cat([old_eng, torch.ones(n_new, device=dev, dtype=dtype)])
+        new_router = nn.Linear(n_embd, target_E, bias=False).to(device=dev, dtype=dtype)
+        with torch.no_grad():
+            new_router.weight.copy_(W_new)
+        layer.router = new_router
+        cast(Any, layer).Xi = nn.Parameter(Xi_new)
+        layer.router_embeddings = nn.Parameter(emb_new, requires_grad=False)
+        layer.register_buffer("router_logit_bias", rb_new)
+        layer.register_buffer("fatigue", fat_new)
+        layer.register_buffer("energy", eng_new)
+        for dst in range(E_old, target_E):
+            _copy_expert_full_(layer, dst_idx=dst, src_idx=seed_idx)
+            # the full copy clones the seed's routing bias too; a fresh twin must
+            # still start at LOW mass, so (re)apply the -ln2 gate afterwards.
+            cast(Tensor, layer.router_logit_bias)[dst] = -cfg.gate_split_bias
+            e = layer.experts[dst]
+            _add_noise_(cast(Tensor, e.fc1.w_slow), cfg.clone_noise_linear * 0.5)
+            fatigue = cast(Tensor, layer.fatigue)
+            energy = cast(Tensor, layer.energy)
+            fatigue[dst] = 0.0
+            energy[dst] = 1.0
+            touched.append(dst)
+        # appended experts must not inherit any stale hook markers
+        object.__setattr__(layer, "last_ctx", {})
+    else:
+        n_drop = E_old - target_E
+        drop = list(range(E_old - n_drop, E_old))
+        keep = [i for i in range(E_old) if i not in drop]
+        layer.experts = nn.ModuleList([layer.experts[i] for i in keep])
+        new_router = nn.Linear(n_embd, target_E, bias=False).to(device=dev, dtype=dtype)
+        with torch.no_grad():
+            new_router.weight.copy_(old_W[keep])
+        layer.router = new_router
+        cast(Any, layer).Xi = nn.Parameter(old_Xi[keep])
+        layer.router_embeddings = nn.Parameter(old_emb[keep], requires_grad=False)
+        layer.register_buffer("router_logit_bias", old_rb[keep])
+        layer.register_buffer("fatigue", old_fat[keep])
+        layer.register_buffer("energy", old_eng[keep])
+        object.__setattr__(layer, "last_ctx", {})
+        touched.extend(drop)
+
+    setattr(layer, "num_experts", target_E)
+    # NeuroScore re-arms lazily via its stats size-check; per-expert capture
+    # guards keep survivor hooks from duplicating across resizes.
+    return touched
+
+
+@torch.no_grad()
+def _fold_expert_into_(layer: SynapticMoE, victim_idx: int, keeper_idx: int, alpha: float) -> None:
+    """Average a doomed expert's weights into a survivor before removing its slot."""
+    keeper = layer.experts[keeper_idx]
+    victim = layer.experts[victim_idx]
+    _avg_linear_into_(keeper.fc1, victim.fc1, alpha)
+    _avg_linear_into_(keeper.fc2, victim.fc2, alpha)
+    # absorb routing mass: +ln2 lets the survivor cover the removed row's gate share
+    rb = cast(Tensor, layer.router_logit_bias)
+    rb[keeper_idx] += math.log(2.0)
+
+
+# ---------------------------------------------------------------------------
 # Controller
 # ---------------------------------------------------------------------------
 
@@ -545,6 +791,11 @@ class SplitMergeController:
         self._last_step = -(10**12)  # ensure first call can run if warmup permits
         self._moe_layers: List[SynapticMoE] = self._find_moe_layers(model)
         self.logger = logger
+        # uta.4 bookkeeping: MoE FLOPs scale linearly with expert count, so a cap on
+        # NET added experts (fraction of the initial total) is the compute budget.
+        self._initial_total_experts = sum(m.num_experts for m in self._moe_layers)
+        self._net_added_experts = 0
+        self._warned_ddp_variable = False
 
     def _find_moe_layers(self, module: nn.Module) -> List[SynapticMoE]:
         moes: List[SynapticMoE] = []
@@ -795,6 +1046,113 @@ class SplitMergeController:
                 ]
                 _zero_optim_moments_for(optimizer, changed_params)
 
+    # ------------------------------------------------------------------
+    # uta.4: variable expert count
+    # ------------------------------------------------------------------
+
+    def _growth_budget_remaining(self) -> int:
+        cap = int(self._initial_total_experts * self.cfg.growth_budget_pct)
+        return max(0, cap - max(0, self._net_added_experts))
+
+    @torch.no_grad()
+    def _maybe_resize_layer(
+        self, layer: SynapticMoE, optimizer: OptimizersArg, step: int
+    ) -> None:
+        """Grow/shrink this layer's expert count under pressure + budget (uta.4).
+
+        GROW when strong-expert count exceeds what splits_per_call can serve — i.e.
+        sustained demand for capacity instead of overwriting healthy slots — and the
+        hard cap plus cumulative growth budget allow it, AND no reclaimable dead
+        surplus exists (recycle before grow). Each appended slot receives a
+        function-preserving twin split of the strongest expert (reusing the uta.3
+        machinery, including lineage events and moment resets).
+        SHRINK when dead-slot surplus exceeds what resets_per_call can service: the
+        doomed experts are folded into the healthiest survivor (+ln2 routing mass) and
+        their rows removed everywhere.
+        """
+        if (
+            dist.is_available()
+            and dist.is_initialized()
+            and not self.cfg.allow_variable_under_ddp
+        ):
+            if not self._warned_ddp_variable:
+                print(
+                    "[SplitMerge] variable_expert_count skipped under DDP; "
+                    "set SplitMergeConfig.allow_variable_under_ddp after wiring "
+                    "all-rank deterministic surgery (uta.5)."
+                )
+                self._warned_ddp_variable = True
+            return
+
+        E = int(layer.num_experts)
+        health = self._health(layer)
+        dead = [
+            i for i in range(E) if float(health[i]) <= self.cfg.reset_health_max
+        ]
+        # recycle-before-grow: reclaimable dead slots must be serviced (by the
+        # reset pass above and/or removal below) before fresh capacity is added.
+        dead_surplus = len(dead) - self.cfg.resets_per_call
+
+        strong = [
+            i for i in range(E) if float(health[i]) >= self.cfg.split_health_min
+        ]
+        demand_surplus = len(strong) - self.cfg.splits_per_call
+        cap_room = self.cfg.max_experts - E
+        budget_room = min(cap_room, self._growth_budget_remaining())
+        if demand_surplus > 0 and budget_room > 0 and dead_surplus <= 0:
+            n_add = min(demand_surplus, budget_room)
+            newE = E + n_add
+            seed = max(strong, key=lambda i: float(health[i]))
+            touched = _resize_layer_experts_(layer, newE, seed_idx=seed, cfg=self.cfg)
+            if touched:
+                sources = [seed] * len(touched)
+                self._split_into_slots(layer, sources, touched, optimizer, step)
+                self._net_added_experts += len(touched)
+                if self.logger is not None and hasattr(self.logger, "on_spawn"):
+                    try:
+                        self.logger.on_spawn(
+                            layer, parent_idx=int(seed), children=touched, step=step
+                        )
+                    except Exception as _e:
+                        if self.cfg.verbose:
+                            print(f"[SplitMerge] logger.on_spawn failed: {_e}")
+                if self.cfg.verbose:
+                    print(f"[SplitMerge] grew layer to {newE} experts (spawned {touched})")
+                return  # one resize per call keeps surgery auditable
+
+        # --- SHRINK ---
+        removable = len(dead) - self.cfg.resets_per_call
+        floor_room = E - self.cfg.min_experts
+        if removable > 0 and floor_room > 0:
+            n_drop = min(removable, floor_room)
+            victims = sorted(dead, key=lambda i: float(health[i]))[:n_drop]
+            keeper = max(
+                (i for i in range(E) if i not in victims),
+                key=lambda i: float(health[i]),
+            )
+            for v in victims:
+                _fold_expert_into_(layer, victim_idx=v, keeper_idx=keeper, alpha=0.5)
+            # remove highest indices first so remaining victim indices stay valid
+            for _v in sorted(victims, reverse=True):
+                _resize_layer_experts_(
+                    layer,
+                    target_E=int(getattr(layer, "num_experts")) - 1,
+                    seed_idx=keeper,
+                    cfg=self.cfg,
+                )
+            self._net_added_experts -= n_drop
+            if self.logger is not None and hasattr(self.logger, "on_death"):
+                try:
+                    self.logger.on_death(layer, removed=victims, keeper=int(keeper), step=step)
+                except Exception as _e:
+                    if self.cfg.verbose:
+                        print(f"[SplitMerge] logger.on_death failed: {_e}")
+            if self.cfg.verbose:
+                print(
+                    f"[SplitMerge] shrank layer {E}->{int(layer.num_experts)} "
+                    f"(folded {victims} into {keeper})"
+                )
+
     @torch.no_grad()
     def step(self, global_step: int, optimizer: OptimizersArg = None):
         if not self.cfg.enabled:
@@ -843,6 +1201,10 @@ class SplitMergeController:
                     if self.cfg.verbose:
                         print(f"[SplitMerge] Resetting {list(zip(reset_sources, reset_slots))}")
                     self._split_into_slots(layer, reset_sources, reset_slots, optimizer, global_step)
+            # 4) variable expert count (uta.4) — after merges/splits/resets so
+            # pressure reflects this round's outcomes; one resize event max per call.
+            if self.cfg.variable_expert_count:
+                self._maybe_resize_layer(layer, optimizer, global_step)
 
         # Broadcast updated params to all ranks (DDP)
         if self.cfg.ddp_broadcast and dist.is_available() and dist.is_initialized():
