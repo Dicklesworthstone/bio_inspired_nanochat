@@ -901,9 +901,13 @@ class SynapticPresyn(nn.Module):
                 "PR": sn_up, "CL": cl_up, "AMP": state["AMP"], "E": en_up,
             })
 
-            # EMA normalization (parity with release())
+            # EMA normalization (parity with release()). 9mxi: the running normalizer is
+            # PERSISTENT module state, so only adapt it when adaptation is allowed
+            # (train=True). Eval forwards (train=False) must not mutate any persistent
+            # state, or val_bpb is neither idempotent nor contamination-free.
             s = e.detach().abs().mean().clamp_min(1e-3)
-            self.ema_e.mul_(0.99).add_(0.01 * s)
+            if train:
+                self.ema_e.mul_(0.99).add_(0.01 * s)
 
         return e / (self.ema_e + 1e-6)
 
@@ -1519,6 +1523,10 @@ class SynapticLinear(nn.Module):
             # `not torch.is_grad_enabled()`, so the headline "online learning" NEVER ran during
             # training. It now runs as a DETACHED fast-adaptation update during inference
             # (no_grad) AND during training (when plasticity_during_training is set).
+            # 9mxi: update_mem is threaded from GPTSynaptic.forward(train_mode=...) down
+            # through Block -> MLP/MoE -> Expert, so the EVALUATION path (model.eval() +
+            # no_grad + train_mode=False) never adapts: validation cannot contaminate the
+            # model and val_bpb stays idempotent. Generation keeps adapting (default True).
             grad_on = torch.is_grad_enabled()
             run_plasticity = update_mem and (
                 not grad_on or (self.training and self.cfg.plasticity_during_training)
@@ -1865,16 +1873,16 @@ class SynapticMLP(nn.Module):
         self.register_buffer("C0", torch.tensor(0.5))
         self.register_buffer("E0", torch.tensor(0.8))
 
-    def forward(self, x: Tensor):
+    def forward(self, x: Tensor, update_mem: bool = True):
         B, T, C = x.shape
         c0 = self.C0
         e0 = self.E0
         c = c0.expand(B * T)
         e = e0.expand(B * T)
-        h = self.fc(x.reshape(B * T, C), c, e)
+        h = self.fc(x.reshape(B * T, C), c, e, update_mem=update_mem)
         h = F.relu(h).square()
         h = self.drop(h.reshape(B, T, -1))
-        y = self.proj(h.reshape(B * T, -1), c, e).reshape(B, T, C)
+        y = self.proj(h.reshape(B * T, -1), c, e, update_mem=update_mem).reshape(B, T, C)
         return y
 
 
@@ -1893,7 +1901,7 @@ class SynapticExpert(nn.Module):
         self.fc2 = SynapticLinear(h, n_embd, cfg, bias=True, use_input_ln=False)
         self.drop = nn.Dropout(dropout)
 
-    def forward(self, x: Tensor, energy_override: Optional[Tensor] = None, genes: Optional[Tensor] = None) -> Tensor:
+    def forward(self, x: Tensor, energy_override: Optional[Tensor] = None, genes: Optional[Tensor] = None, update_mem: bool = True) -> Tensor:
         # x: (N, C)
         N = x.size(0)
         device = x.device
@@ -1913,6 +1921,7 @@ class SynapticExpert(nn.Module):
             calcium=c_tens,
             energy=e_tens,
             genes=genes,
+            update_mem=update_mem,
         )
         y = F.relu(y).square()
         y = self.drop(y)
@@ -1921,6 +1930,7 @@ class SynapticExpert(nn.Module):
             calcium=c_tens,
             energy=e_tens,
             genes=genes,
+            update_mem=update_mem,
         )
         return y
 
@@ -1999,7 +2009,7 @@ class SynapticMoE(nn.Module):
         pp1_gain = F.softplus(xi[..., 3] + 0.5)
         return torch.stack([fatigue_rate, energy_fill, camkii_gain, pp1_gain], dim=-1)
 
-    def forward(self, x: Tensor) -> Tuple[Tensor, Tensor]:
+    def forward(self, x: Tensor, update_mem: bool = True) -> Tuple[Tensor, Tensor]:
         B, T, C = x.shape
         E = self.num_experts
         device = x.device
@@ -2057,7 +2067,7 @@ class SynapticMoE(nn.Module):
             gene_e = pheno[e]
             energy_e = energy_buf[e]
 
-            y_e = self.experts[e](x_e, energy_override=energy_e, genes=gene_e)
+            y_e = self.experts[e](x_e, energy_override=energy_e, genes=gene_e, update_mem=update_mem)
             w = gates.masked_select(mask).unsqueeze(-1)
             flat_out.index_add_(0, flat_idx, w * y_e)
 
@@ -2073,19 +2083,24 @@ class SynapticMoE(nn.Module):
                         update_metabolism_fused,
                     )
                     counts, gate_sums = accumulate_router_stats(idx.detach(), gates.detach(), E)
-                    util = counts.clamp_min(1.0) / float(B * T)
-                    update_metabolism_fused(fatigue_buf, energy_buf, alpha_fatigue, alpha_energy, util)
                     me = counts
                     pe = gate_sums
+                    # 9mxi: the fatigue/energy EMAs are PERSISTENT adaptation state —
+                    # only write them when update_mem; eval must leave them untouched.
+                    if update_mem:
+                        util = counts.clamp_min(1.0) / float(B * T)
+                        update_metabolism_fused(fatigue_buf, energy_buf, alpha_fatigue, alpha_energy, util)
                 except ImportError:
                     # Fallback
                     util = me.clamp_min(1.0) / float(B * T)
-                    fatigue_buf.mul_(1.0 - alpha_fatigue).add_(alpha_fatigue * util)
-                    energy_buf.mul_(1.0 - alpha_energy).add_(alpha_energy * (1.0 - util))
+                    if update_mem:
+                        fatigue_buf.mul_(1.0 - alpha_fatigue).add_(alpha_fatigue * util)
+                        energy_buf.mul_(1.0 - alpha_energy).add_(alpha_energy * (1.0 - util))
             else:
                 util = me.clamp_min(1.0) / float(B * T)
-                fatigue_buf.mul_(1.0 - alpha_fatigue).add_(alpha_fatigue * util)
-                energy_buf.mul_(1.0 - alpha_energy).add_(alpha_energy * (1.0 - util))
+                if update_mem:
+                    fatigue_buf.mul_(1.0 - alpha_fatigue).add_(alpha_fatigue * util)
+                    energy_buf.mul_(1.0 - alpha_energy).add_(alpha_energy * (1.0 - util))
 
             object.__setattr__(self, "last_ctx", {
                 "x": x.detach(),
@@ -2107,7 +2122,7 @@ class SynapticMoE(nn.Module):
         # and router_contrastive_lr (either == 0 disables it).
         with torch.no_grad():
             push, lr = self.cfg.router_contrastive_push, self.cfg.router_contrastive_lr
-            if E > 1 and push > 0.0 and lr > 0.0:
+            if update_mem and E > 1 and push > 0.0 and lr > 0.0:
                 emb = self.router_embeddings
                 emb = emb / (emb.norm(dim=-1, keepdim=True) + 1e-8)
                 # Repel each expert from the others it is most aligned with (sim>0).

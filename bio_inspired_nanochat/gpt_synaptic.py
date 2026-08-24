@@ -69,8 +69,8 @@ class MLP(nn.Module):
         super().__init__()
         self.mlp = SynapticMLP(n_embd, syn_cfg, dropout)
 
-    def forward(self, x):
-        return self.mlp(x)
+    def forward(self, x, update_mem: bool = True):
+        return self.mlp(x, update_mem=update_mem)
 
 
 class CausalSelfAttention(nn.Module):
@@ -148,10 +148,10 @@ class Block(nn.Module):
         a, st = self.attn(self.norm1(x), kv_cache, presyn_state, train_mode)
         x = x + a
         if self.use_moe:
-            y, aux = self.mlp(self.norm2(x))
+            y, aux = self.mlp(self.norm2(x), update_mem=train_mode)
             self.last_aux_loss = self.balance_loss * aux
         else:
-            y = self.mlp(self.norm2(x))
+            y = self.mlp(self.norm2(x), update_mem=train_mode)
             self.last_aux_loss = torch.tensor(0.0, device=x.device)
         x = x + y
         return x, st
