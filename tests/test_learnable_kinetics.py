@@ -261,3 +261,28 @@ def test_task_loss_reaches_xi_through_live_expert_path():
     assert moe.Xi.grad is not None
     assert torch.isfinite(moe.Xi.grad).all()
     assert moe.Xi.grad.abs().sum() > 0.0, "ordinary task loss must train the expert genome"
+
+
+@pytest.mark.unit
+def test_moe_metabolism_updates_are_safe_for_multistep_autograd():
+    """Persistent energy writes must not invalidate the expert graph saved for backward."""
+    torch.manual_seed(29)
+    moe = _moe().train()
+    optimizer = torch.optim.AdamW(moe.parameters(), lr=1e-3)
+
+    for _ in range(3):
+        optimizer.zero_grad(set_to_none=True)
+        energy_before = moe.energy.clone()
+        x = torch.randn(2, 7, 4)
+        out, aux = moe(x, update_mem=True)
+
+        # Keep the reproduction honest: the persistent buffer must actually mutate between
+        # forward and backward. The expert uses a detached snapshot, so this remains grad-safe.
+        assert not torch.equal(moe.energy, energy_before)
+        loss = out.square().mean() + 0.01 * aux
+        loss.backward()
+
+        grads = [param.grad for param in moe.parameters() if param.requires_grad]
+        assert any(grad is not None for grad in grads)
+        assert all(grad is None or torch.isfinite(grad).all() for grad in grads)
+        optimizer.step()
