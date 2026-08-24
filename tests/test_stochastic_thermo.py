@@ -28,6 +28,7 @@ from bio_inspired_nanochat import stochastic_thermo as st
 from bio_inspired_nanochat.results_registry import read_records
 from scripts.e2e.stochastic_thermo_uq import (
     ExperimentConfig,
+    _calibration_evaluation,
     _make_model,
     _mc_dropout_prediction,
     _reset_sequence,
@@ -41,6 +42,7 @@ from scripts.e2e.stochastic_thermo_uq import (
     run_experiment,
     run_live_release_ft,
     run_multi_seed,
+    selective_risk_coverage,
 )
 
 pytestmark = pytest.mark.unit
@@ -567,6 +569,39 @@ def test_falsification_metrics_have_exact_known_values():
         binary_auroc(torch.tensor([0.1]), torch.tensor([float("nan")]))
 
 
+def test_selective_risk_coverage_has_exact_known_curve_and_fails_closed():
+    probabilities = torch.tensor(
+        [
+            [0.9, 0.1],
+            [0.6, 0.4],
+            [0.2, 0.8],
+            [0.7, 0.3],
+        ]
+    )
+    targets = torch.tensor([0, 1, 1, 1])
+    aurc, curve = selective_risk_coverage(
+        probabilities,
+        targets,
+        torch.tensor([0.1, 0.2, 0.3, 0.4]),
+    )
+    assert [point.coverage for point in curve] == pytest.approx([0.25, 0.5, 0.75, 1.0])
+    assert [point.risk for point in curve] == pytest.approx([0.0, 0.5, 1 / 3, 0.5])
+    assert aurc == pytest.approx(1 / 3)
+    assert curve[-1].accepted == 4 and curve[-1].errors == 2
+    with pytest.raises(ValueError, match="align"):
+        selective_risk_coverage(
+            probabilities,
+            targets,
+            torch.tensor([0.1]),
+        )
+    with pytest.raises(ValueError, match="finite"):
+        selective_risk_coverage(
+            probabilities,
+            targets,
+            torch.tensor([0.1, 0.2, 0.3, float("nan")]),
+        )
+
+
 def test_exact_binomial_crooks_curve_is_falsifiable():
     rng = np.random.default_rng(31)
     pool_size = 6
@@ -685,6 +720,16 @@ def test_thermo_uq_e2e_reports_both_baselines_without_assuming_a_win():
     for metrics in report.methods.values():
         assert math.isfinite(metrics.ece)
         assert 0.0 <= metrics.ood_auroc <= 1.0
+        assert 0.0 <= metrics.selective_aurc <= 1.0
+        assert 0.0 <= metrics.selective_risk_at_50_coverage <= 1.0
+        assert 0.0 <= metrics.selective_risk_at_80_coverage <= 1.0
+        assert len(metrics.risk_coverage_curve) == (
+            config.batch_size * config.eval_pool_size * config.seq_len
+        )
+        assert metrics.risk_coverage_curve[-1].coverage == 1.0
+        assert metrics.risk_coverage_curve[-1].risk == pytest.approx(
+            1.0 - metrics.id_accuracy
+        )
         assert sum(point.count for point in metrics.calibration_curve) == (
             config.batch_size * config.eval_pool_size * config.seq_len
         )
@@ -746,12 +791,53 @@ def test_multi_seed_report_uses_paired_stats_and_emits_honest_null(multi_seed_re
         "thermo_uq",
     }
     for metrics in report.method_aggregates.values():
-        assert set(metrics) == {"ece", "ood_auroc", "id_accuracy"}
+        assert set(metrics) == {
+            "ece",
+            "ood_auroc",
+            "id_accuracy",
+            "selective_aurc",
+            "selective_risk_at_50_coverage",
+            "selective_risk_at_80_coverage",
+        }
         assert all(stats.n == 3 for stats in metrics.values())
     for comparison in report.paired_comparisons.values():
-        assert comparison["ece"].n_pairs == 3
-        assert comparison["ood_auroc"].n_pairs == 3
+        assert set(comparison) == {
+            "ece",
+            "ood_auroc",
+            "selective_aurc",
+            "selective_risk_at_80_coverage",
+        }
+        assert all(metric.n_pairs == 3 for metric in comparison.values())
+    calibration = report.calibration_evaluation
+    assert calibration.bead == "bio_inspired_nanochat-u2t.2"
+    assert calibration.treatment_method.startswith("thermo_uq")
+    assert set(calibration.ece_relative_improvement) == {
+        "softmax_entropy",
+        "mc_dropout",
+    }
+    assert calibration.verdict in {"positive", "null"}
+    assert calibration.acceptance_met == (calibration.verdict == "positive")
     json.dumps(report.to_dict(), allow_nan=False)
+
+
+def test_u2t2_acceptance_uses_the_auroc_lower_confidence_bound(multi_seed_report):
+    aggregates = {
+        method: dict(metrics)
+        for method, metrics in multi_seed_report.method_aggregates.items()
+    }
+    aggregates["thermo_uq"]["ood_auroc"] = replace(
+        aggregates["thermo_uq"]["ood_auroc"],
+        ci_low=0.71,
+    )
+    result = _calibration_evaluation(
+        aggregates,
+        multi_seed_report.paired_comparisons,
+        alpha=0.05,
+    )
+    assert result.acceptance_met
+    assert result.ood_auroc_threshold_passed
+    assert result.verdict == "positive"
+    assert "lower bound 0.710000" in result.verdict_reason
 
 
 def test_multi_seed_registry_records_are_schema_valid_and_duplicate_safe(
@@ -771,6 +857,8 @@ def test_multi_seed_registry_records_are_schema_valid_and_duplicate_safe(
         assert {
             "id_ece",
             "ood_auroc",
+            "selective_aurc",
+            "selective_risk_at_80_coverage",
             "eval_accuracy",
             "live_ft_max_crooks_residual",
             "live_ft_integral_residual",
@@ -780,7 +868,7 @@ def test_multi_seed_registry_records_are_schema_valid_and_duplicate_safe(
             "live_tur_bound_ratio",
         } == set(record.metrics)
         if "-thermo_uq-" in record.run_id:
-            assert record.verdict == multi_seed_report.verdict
+            assert record.verdict == multi_seed_report.calibration_evaluation.verdict
         else:
             assert record.verdict is None
         assert not record.eligible_for_best

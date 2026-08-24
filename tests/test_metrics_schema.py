@@ -44,6 +44,8 @@ def test_each_harness_area_is_represented():
     assert {
         "id_ece",
         "ood_auroc",
+        "selective_aurc",
+        "selective_risk_at_80_coverage",
         "forgetting_rate",
         "moe_gini",
         "dead_expert_frac",

@@ -16,8 +16,10 @@ This is a runnable, CPU-friendly experiment with two independent checks:
 2. Train one tiny synaptic language model, then evaluate the same weights with
    deterministic softmax entropy, MC-dropout, and stochastic-release thermo-UQ.
    The report contains ID expected calibration error (ECE), OOD AUROC, full ECE
-   curves, and thermo-UQ deltas against both baselines.  No improvement is assumed:
-   negative results are first-class output.
+   and selective risk-coverage curves, and matched-seed deltas against both baselines.
+   The stochastic-release method is the synaptic MC treatment from ``u2t.1``; the
+   thermo-UQ name records its optional evidence collector, not a separate predictor.
+   No improvement is assumed: negative results are first-class output.
 
 Run with:
 
@@ -195,6 +197,15 @@ class CalibrationBin:
 
 
 @dataclass(frozen=True)
+class RiskCoveragePoint:
+    coverage: float
+    accepted: int
+    errors: int
+    risk: float
+    uncertainty_threshold: float
+
+
+@dataclass(frozen=True)
 class MethodMetrics:
     ece: float
     ood_auroc: float
@@ -202,7 +213,29 @@ class MethodMetrics:
     mean_id_confidence: float
     mean_id_uncertainty: float
     mean_ood_uncertainty: float
+    selective_aurc: float
+    selective_risk_at_50_coverage: float
+    selective_risk_at_80_coverage: float
     calibration_curve: list[CalibrationBin]
+    risk_coverage_curve: list[RiskCoveragePoint]
+
+
+@dataclass(frozen=True)
+class CalibrationEvaluation:
+    """Task-level ``u2t.2`` result, separate from the stricter thermodynamic claim."""
+
+    bead: str
+    treatment_method: str
+    baseline_methods: tuple[str, ...]
+    ece_relative_improvement: dict[str, float]
+    ece_improvement_supported: dict[str, bool]
+    ood_auroc_threshold: float
+    ood_auroc_ci_low: float
+    ood_auroc_threshold_passed: bool
+    selective_aurc_improvement_supported: dict[str, bool]
+    acceptance_met: bool
+    verdict: str
+    verdict_reason: str
 
 
 @dataclass(frozen=True)
@@ -235,6 +268,7 @@ class MultiSeedReport:
     reports: list[ExperimentReport]
     method_aggregates: dict[str, dict[str, Aggregate]]
     paired_comparisons: dict[str, dict[str, PairedResult]]
+    calibration_evaluation: CalibrationEvaluation
     predictive_distribution: MultiSeedPredictiveThermoVerdict
     ft_pass_rate: float
     ft_aggregates: dict[str, Aggregate | None]
@@ -311,6 +345,84 @@ def expected_calibration_error(
             )
         )
     return ece, curve
+
+
+def selective_risk_coverage(
+    probabilities: Tensor,
+    targets: Tensor,
+    uncertainty: Tensor,
+) -> tuple[float, list[RiskCoveragePoint]]:
+    """Return the discrete area under the selective risk-coverage curve.
+
+    Predictions are accepted from lowest to highest uncertainty. At each attainable coverage,
+    selective risk is the error fraction among accepted predictions. Stable sorting gives a
+    deterministic policy when uncertainty scores tie; the complete curve preserves that choice for
+    audit instead of interpolating a more favorable threshold after observing labels.
+    """
+    if probabilities.ndim < 2:
+        raise ValueError("probabilities must have a final class dimension")
+    flat_probs = probabilities.detach().float().reshape(-1, probabilities.shape[-1])
+    flat_targets = targets.detach().reshape(-1)
+    flat_uncertainty = uncertainty.detach().float().reshape(-1)
+    prediction_count = flat_targets.numel()
+    if prediction_count == 0 or flat_probs.shape[1] == 0:
+        raise ValueError("risk-coverage requires at least one prediction and one class")
+    if flat_probs.shape[0] != prediction_count or flat_uncertainty.numel() != prediction_count:
+        raise ValueError("probabilities, targets, and uncertainty must align per prediction")
+    if (
+        not torch.isfinite(flat_probs).all()
+        or not torch.isfinite(flat_uncertainty).all()
+        or (flat_probs < 0.0).any()
+    ):
+        raise ValueError("risk-coverage inputs must be finite and probabilities nonnegative")
+    if not torch.allclose(
+        flat_probs.sum(dim=-1),
+        torch.ones(prediction_count, device=flat_probs.device),
+        atol=1e-5,
+        rtol=1e-5,
+    ):
+        raise ValueError("probability rows must sum to one")
+    if (flat_targets < 0).any() or (flat_targets >= flat_probs.shape[1]).any():
+        raise ValueError("targets must index the probability class dimension")
+
+    errors = flat_probs.argmax(dim=-1).ne(flat_targets).to(torch.int64)
+    order = torch.argsort(flat_uncertainty, stable=True)
+    ranked_errors = errors[order]
+    ranked_uncertainty = flat_uncertainty[order]
+    cumulative_errors = ranked_errors.cumsum(dim=0)
+    accepted = torch.arange(
+        1,
+        prediction_count + 1,
+        device=cumulative_errors.device,
+        dtype=torch.int64,
+    )
+    risks = cumulative_errors.to(torch.float64) / accepted
+    curve = [
+        RiskCoveragePoint(
+            coverage=int(count) / prediction_count,
+            accepted=int(count),
+            errors=int(error_count),
+            risk=float(risk),
+            uncertainty_threshold=float(threshold),
+        )
+        for count, error_count, risk, threshold in zip(
+            accepted.cpu().tolist(),
+            cumulative_errors.cpu().tolist(),
+            risks.cpu().tolist(),
+            ranked_uncertainty.cpu().tolist(),
+            strict=True,
+        )
+    ]
+    return float(risks.mean().item()), curve
+
+
+def _risk_at_coverage(curve: Sequence[RiskCoveragePoint], target: float) -> float:
+    if not curve:
+        raise ValueError("risk-coverage curve must not be empty")
+    if not 0.0 < target <= 1.0:
+        raise ValueError("target coverage must lie in (0, 1]")
+    index = min(math.ceil(target * len(curve)) - 1, len(curve) - 1)
+    return curve[index].risk
 
 
 def binary_auroc(id_scores: Tensor, ood_scores: Tensor) -> float:
@@ -750,6 +862,11 @@ def _method_metrics(
         id_targets,
         n_bins=ece_bins,
     )
+    selective_aurc, risk_coverage_curve = selective_risk_coverage(
+        id_prediction.probabilities,
+        id_targets,
+        id_prediction.uncertainty,
+    )
     id_confidence, id_class = id_prediction.probabilities.max(dim=-1)
     return MethodMetrics(
         ece=ece,
@@ -758,7 +875,11 @@ def _method_metrics(
         mean_id_confidence=float(id_confidence.mean().item()),
         mean_id_uncertainty=float(id_prediction.uncertainty.mean().item()),
         mean_ood_uncertainty=float(ood_prediction.uncertainty.mean().item()),
+        selective_aurc=selective_aurc,
+        selective_risk_at_50_coverage=_risk_at_coverage(risk_coverage_curve, 0.5),
+        selective_risk_at_80_coverage=_risk_at_coverage(risk_coverage_curve, 0.8),
         calibration_curve=curve,
+        risk_coverage_curve=risk_coverage_curve,
     )
 
 
@@ -874,7 +995,11 @@ def run_experiment(config: ExperimentConfig = ExperimentConfig()) -> ExperimentR
 def _report_id(base_config: ExperimentConfig, seeds: Sequence[int]) -> str:
     config_payload = asdict(base_config)
     config_payload.pop("seed")
-    payload = {"config": config_payload, "seeds": list(seeds)}
+    payload = {
+        "protocol_version": "selective-risk-v1",
+        "config": config_payload,
+        "seeds": list(seeds),
+    }
     digest = hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()[:12]
@@ -896,6 +1021,85 @@ def _supports_improvement(
         ci_favorable
         and comparison.t_p_value <= alpha
         and comparison.wilcoxon_p_value <= alpha
+    )
+
+
+def _calibration_evaluation(
+    method_aggregates: dict[str, dict[str, Aggregate]],
+    paired: dict[str, dict[str, PairedResult]],
+    *,
+    alpha: float,
+    ood_auroc_threshold: float = 0.7,
+) -> CalibrationEvaluation:
+    """Apply the preregistered ``u2t.2`` capability criterion without theory scope creep."""
+    treatment_name = "thermo_uq"
+    treatment = method_aggregates[treatment_name]
+    baseline_names = ("softmax_entropy", "mc_dropout")
+    ece_relative_improvement: dict[str, float] = {}
+    ece_supported: dict[str, bool] = {}
+    aurc_supported: dict[str, bool] = {}
+    for baseline in baseline_names:
+        baseline_ece = method_aggregates[baseline]["ece"].mean
+        ece_relative_improvement[baseline] = (
+            (baseline_ece - treatment["ece"].mean) / baseline_ece
+            if baseline_ece > 0.0
+            else 0.0
+        )
+        comparison = paired[f"vs_{baseline}"]
+        ece_supported[baseline] = bool(
+            ece_relative_improvement[baseline] >= 0.10
+            and _supports_improvement(
+                comparison["ece"],
+                lower_is_better=True,
+                alpha=alpha,
+            )
+        )
+        aurc_supported[baseline] = _supports_improvement(
+            comparison["selective_aurc"],
+            lower_is_better=True,
+            alpha=alpha,
+        )
+
+    auroc_ci_low = treatment["ood_auroc"].ci_low
+    auroc_passed = auroc_ci_low > ood_auroc_threshold
+    acceptance_met = bool(any(ece_supported.values()) or auroc_passed)
+    ece_wins = [name for name, supported in ece_supported.items() if supported]
+    if acceptance_met:
+        reasons: list[str] = []
+        if ece_wins:
+            reasons.append(
+                "ECE improved by at least 10% with matched-seed support versus "
+                + ", ".join(ece_wins)
+            )
+        if auroc_passed:
+            reasons.append(
+                f"the treatment OOD-AUROC 95% lower bound {auroc_ci_low:.6f} exceeded "
+                f"the {ood_auroc_threshold:.2f} target"
+            )
+        verdict = "positive"
+        verdict_reason = "; ".join(reasons) + (
+            ". This satisfies the task threshold, while paired comparisons and selective-risk "
+            "statistics remain the authority for claims of superiority over each baseline."
+        )
+    else:
+        verdict = "null"
+        verdict_reason = (
+            "Neither a statistically supported >=10% ECE improvement nor an OOD-AUROC lower "
+            f"confidence bound above {ood_auroc_threshold:.2f} was observed."
+        )
+    return CalibrationEvaluation(
+        bead="bio_inspired_nanochat-u2t.2",
+        treatment_method="thermo_uq (synaptic stochastic-release MC)",
+        baseline_methods=baseline_names,
+        ece_relative_improvement=ece_relative_improvement,
+        ece_improvement_supported=ece_supported,
+        ood_auroc_threshold=ood_auroc_threshold,
+        ood_auroc_ci_low=auroc_ci_low,
+        ood_auroc_threshold_passed=auroc_passed,
+        selective_aurc_improvement_supported=aurc_supported,
+        acceptance_met=acceptance_met,
+        verdict=verdict,
+        verdict_reason=verdict_reason,
     )
 
 
@@ -926,13 +1130,25 @@ def summarize_multi_seed(
             metric: aggregate(
                 [float(getattr(report.methods[method], metric)) for report in reports]
             )
-            for metric in ("ece", "ood_auroc", "id_accuracy")
+            for metric in (
+                "ece",
+                "ood_auroc",
+                "id_accuracy",
+                "selective_aurc",
+                "selective_risk_at_50_coverage",
+                "selective_risk_at_80_coverage",
+            )
         }
 
     paired: dict[str, dict[str, PairedResult]] = {}
     for baseline in ("softmax_entropy", "mc_dropout"):
         per_metric: dict[str, PairedResult] = {}
-        for metric, lower_is_better in (("ece", True), ("ood_auroc", False)):
+        for metric, lower_is_better in (
+            ("ece", True),
+            ("ood_auroc", False),
+            ("selective_aurc", True),
+            ("selective_risk_at_80_coverage", True),
+        ):
             treatment = {
                 report.config.seed: float(getattr(report.methods["thermo_uq"], metric))
                 for report in reports
@@ -952,6 +1168,12 @@ def summarize_multi_seed(
                 raise AssertionError("validated matched-seed reports produced no paired comparison")
             per_metric[metric] = comparison
         paired[f"vs_{baseline}"] = per_metric
+
+    calibration_evaluation = _calibration_evaluation(
+        method_aggregates,
+        paired,
+        alpha=alpha,
+    )
 
     max_crooks = [
         report.live_release_ft.max_crooks_residual for report in reports
@@ -1030,6 +1252,7 @@ def summarize_multi_seed(
         reports=list(reports),
         method_aggregates=method_aggregates,
         paired_comparisons=paired,
+        calibration_evaluation=calibration_evaluation,
         predictive_distribution=predictive_verdict,
         ft_pass_rate=ft_pass_rate,
         ft_aggregates=ft_aggregates,
@@ -1072,6 +1295,7 @@ def registry_records(
     artifact_note = f"; artifact={artifact}" if artifact else ""
     shared_notes = (
         f"experiment=stochastic_thermo_uq; group_verdict={report.verdict}; "
+        f"u2t2_verdict={report.calibration_evaluation.verdict}; "
         f"thermo_vs_softmax_ece_delta={ece_softmax.mean_delta:.17g}; "
         f"thermo_vs_softmax_ece_ci=[{ece_softmax.delta_ci_low:.17g},"
         f"{ece_softmax.delta_ci_high:.17g}]; "
@@ -1093,6 +1317,10 @@ def registry_records(
                     {
                         "id_ece": metrics.ece,
                         "ood_auroc": metrics.ood_auroc,
+                        "selective_aurc": metrics.selective_aurc,
+                        "selective_risk_at_80_coverage": (
+                            metrics.selective_risk_at_80_coverage
+                        ),
                         "eval_accuracy": metrics.id_accuracy,
                         "live_ft_max_crooks_residual": ft.max_crooks_residual,
                         "live_ft_integral_residual": ft.integral_ft_residual,
@@ -1111,8 +1339,10 @@ def registry_records(
                     },
                     seed=seed_report.config.seed,
                     notes=f"method={method}; {shared_notes}",
-                    verdict=report.verdict if is_treatment else None,
-                    eligible_for_best=bool(is_treatment and report.verdict == "positive"),
+                    verdict=(
+                        report.calibration_evaluation.verdict if is_treatment else None
+                    ),
+                    eligible_for_best=False,
                 )
             )
     return records
@@ -1183,6 +1413,8 @@ def render_report(report: ExperimentReport, console: Console) -> None:
     table.add_column("ID ECE", justify="right")
     table.add_column("OOD AUROC", justify="right")
     table.add_column("ID accuracy", justify="right")
+    table.add_column("Selective AURC", justify="right")
+    table.add_column("Risk@80%", justify="right")
     table.add_column("ID/OOD uncertainty", justify="right")
     for name, metrics in report.methods.items():
         table.add_row(
@@ -1190,6 +1422,8 @@ def render_report(report: ExperimentReport, console: Console) -> None:
             f"{metrics.ece:.4f}",
             f"{metrics.ood_auroc:.4f}",
             f"{metrics.id_accuracy:.4f}",
+            f"{metrics.selective_aurc:.4f}",
+            f"{metrics.selective_risk_at_80_coverage:.4f}",
             f"{metrics.mean_id_uncertainty:.4f}/{metrics.mean_ood_uncertainty:.4f}",
         )
     console.print(table)
@@ -1253,6 +1487,13 @@ def render_multi_seed_report(report: MultiSeedReport, console: Console) -> None:
                 f"{comparison.n_favorable}/{comparison.n_pairs}",
             )
     console.print(paired_table)
+    calibration = report.calibration_evaluation
+    calibration_style = "green" if calibration.acceptance_met else "yellow"
+    console.print(
+        f"[bold]u2t.2 calibration/selective-prediction verdict:[/bold] "
+        f"[{calibration_style}]{calibration.verdict.upper()}[/{calibration_style}] — "
+        f"{calibration.verdict_reason}"
+    )
     console.print(
         f"[bold]Live FT pass rate:[/bold] {report.ft_pass_rate:.1%}; "
         f"[bold]classic live TUR:[/bold] non-vacuous={report.live_tur.nonvacuous}, "

@@ -81,6 +81,18 @@ _M("niah_accuracy", "fraction", Direction.HIGHER_BETTER, "needle-in-haystack ret
 _M("id_ece", "fraction", Direction.LOWER_BETTER, "in-distribution expected calibration error")
 _M("ood_auroc", "fraction", Direction.HIGHER_BETTER, "out-of-distribution detection AUROC")
 _M(
+    "selective_aurc",
+    "fraction",
+    Direction.LOWER_BETTER,
+    "discrete area under the error-risk versus accepted-coverage curve",
+)
+_M(
+    "selective_risk_at_80_coverage",
+    "fraction",
+    Direction.LOWER_BETTER,
+    "error risk among the least-uncertain 80 percent of predictions",
+)
+_M(
     "forgetting_rate",
     "fraction",
     Direction.LOWER_BETTER,
