@@ -41,7 +41,12 @@ import matplotlib.pyplot as plt
 
 
 def _maybe_import(module: str, attr: Optional[str] = None) -> Any:
-    spec = importlib.util.find_spec(module)
+    try:
+        spec = importlib.util.find_spec(module)
+    except (ModuleNotFoundError, ValueError):
+        # find_spec raises (rather than returning None) when a PARENT package is missing,
+        # e.g. "sklearn.decomposition" without sklearn installed — treat as absent.
+        return None
     if spec is None:
         return None
     mod = importlib.import_module(module)
@@ -962,3 +967,210 @@ class NeuroVizManager:
         fig.tight_layout(rect=(0, 0, 1, 0.95))
         fig.savefig(os.path.join(outdir, f"{name}_hists_{step:09d}.png"), dpi=140)
         plt.close(fig)
+
+
+# --------------------------------------------------------------------------- #
+# NeuroViz v2 — synaptic bio-panel collection + dependency-light HTML
+# dashboard (bead dow). Pure addition: consumes the live model's module
+# state (postsynaptic fast/slow weights, CaMKII/PP1/BDNF, MoE metabolism)
+# and optionally a per-position presynaptic trace from a non-mutating
+# KV-cache forward. Renders a static self-contained HTML dashboard plus a
+# JSON sidecar; no matplotlib required for the HTML path.
+# --------------------------------------------------------------------------- #
+
+
+def _panel_sparkline(values: List[float], width: int = 240, height: int = 48) -> str:
+    """One inline SVG sparkline for a 1-D series (dependency-free HTML path)."""
+    vals = [float(v) for v in values if np.isfinite(v)] or [0.0]
+    lo, hi = min(vals), max(vals)
+    span = (hi - lo) or 1.0
+    n = max(len(vals), 2)
+    pts = " ".join(
+        f"{width * i / (n - 1):.1f},{height - height * (v - lo) / span:.1f}"
+        for i, v in enumerate(vals)
+    )
+    return (
+        f'<svg width="{width}" height="{height}" xmlns="http://www.w3.org/2000/svg">'
+        f'<polyline points="{pts}" fill="none" stroke="#4472C4" stroke-width="2"/></svg>'
+    )
+
+
+def collect_bio_panels(
+    model: nn.Module,
+    *,
+    probe_batch: Optional[Tensor] = None,
+    n_head: Optional[int] = None,
+    n_layer: Optional[int] = None,
+) -> Dict[str, Dict[str, Any]]:
+    """Collect the dow v2 panels from a live synaptic model.
+
+    Panels (all values JSON-serializable floats/ints):
+      ``postsyn``  — fast/slow weight norms, CaMKII / PP1 / BDNF means, latch fraction.
+      ``moe``      — per-layer energy / fatigue / health means + utilization gini
+                     (empty dict for dense models).
+      ``presyn_trace`` — only with ``probe_batch``: per-position mean calcium (C),
+                     vesicle pool (RRP), and energy (E) from the deepest layer's
+                     KV-cache presyn state via a NON-MUTATING eval forward
+                     (grad enabled + train_mode=False so no plasticity runs — same
+                     contract as scripts/e2e/train_bio.presyn_position_trace).
+    """
+    from bio_inspired_nanochat.synaptic import PostsynapticHebb, SynapticLinear
+
+    posts = [m for m in model.modules() if isinstance(m, PostsynapticHebb)]
+    lins = [
+        m for m in model.modules()
+        if isinstance(m, SynapticLinear) and m.post is not None
+    ]
+
+    postsyn: Dict[str, float] = {}
+    if lins:
+        fast_norms = [float(m.post.fast.detach().norm()) for m in lins]
+        slow_norms = [float(m.w_slow.detach().norm()) for m in lins]
+        camkii = torch.cat([m.camkii.detach().flatten() for m in posts]) if posts else None
+        pp1 = torch.cat([m.pp1.detach().flatten() for m in posts]) if posts else None
+        bdnf_vals = (
+            torch.cat([m.bdnf.detach().flatten() for m in posts])
+            if posts and all(hasattr(m, "bdnf") for m in posts) else None
+        )
+        thr = float(posts[0].cfg.camkii_thr) if posts else 1.0
+        postsyn.update({
+            "fast_weight_norm_mean": float(np.mean(fast_norms)),
+            "fast_weight_norm_max": float(np.max(fast_norms)),
+            "slow_weight_norm_mean": float(np.mean(slow_norms)),
+            "latched_frac": float((camkii > thr).float().mean()) if camkii is not None else 0.0,
+            "camkii_mean": float(camkii.mean()) if camkii is not None else 0.0,
+            "pp1_mean": float(pp1.mean()) if pp1 is not None else 0.0,
+            "bdnf_mean": float(bdnf_vals.mean()) if bdnf_vals is not None else 0.0,
+            "n_postsyn_modules": len(lins),
+        })
+
+    moe: Dict[str, Any] = {}
+    for idx, m in enumerate(m for m in model.modules() if isinstance(m, SynapticMoE)):
+        energy = _to_np(m.energy.detach())
+        fatigue = _to_np(m.fatigue.detach())
+        health = _weight_energy_util(energy, fatigue)
+        util = getattr(m, "utilization", None)
+        if util is not None:
+            u = np.sort(_to_np(util.detach()).astype(np.float64).ravel())
+            k = max(len(u), 1)
+            gini = float((2.0 * np.sum((np.arange(1, k + 1)) * u) / (k * u.sum() + 1e-12)) - (k + 1) / k)
+        else:
+            gini = float("nan")
+        moe[f"layer_{idx}"] = {
+            "energy_mean": float(energy.mean()),
+            "fatigue_mean": float(fatigue.mean()),
+            "health_mean": float(np.nanmean(health)) if health.size else 0.0,
+            "utilization_gini": gini,
+            "num_experts": int(getattr(m, "num_experts", 0)),
+        }
+
+    panels: Dict[str, Dict[str, Any]] = {"postsyn": postsyn, "moe": moe}
+
+    if probe_batch is not None:
+        from bio_inspired_nanochat.engine import KVCache
+
+        cfg = model.config
+        heads = int(n_head if n_head is not None else getattr(cfg, "n_head", 1))
+        layers_n = int(n_layer if n_layer is not None else getattr(cfg, "n_layer", 1))
+        B, T = int(probe_batch.shape[0]), int(probe_batch.shape[1])
+        kv = KVCache(
+            batch_size=B, num_heads=heads, seq_len=T,
+            head_dim=int(cfg.n_embd) // heads, num_layers=layers_n,
+        )
+        was_training = model.training
+        model.eval()
+        try:  # grad ON + train_mode=False: plasticity stays gated OFF (see train_bio probe)
+            model(probe_batch, None, kv_cache=kv, train_mode=False)
+        finally:
+            if was_training:
+                model.train()
+        states = kv.presyn_state if isinstance(kv.presyn_state, list) else []
+        trace: Dict[str, List[float]] = {}
+        if states:
+            last = states[-1]
+            for key in ("C", "RRP", "E"):
+                v = last.get(key)
+                if torch.is_tensor(v) and v.dim() >= 1:
+                    trace[key] = [
+                        float(x) for x in
+                        v.detach().float().reshape(-1, v.shape[-1]).mean(dim=0)
+                    ]
+        panels["presyn_trace"] = cast(Dict[str, Any], trace)
+    return panels
+
+
+def render_html_dashboard(
+    panels: Dict[str, Dict[str, Any]],
+    out_path: str,
+    *,
+    title: str = "NeuroViz v2 — bio panels",
+) -> str:
+    """Render panels as one self-contained static HTML file. Returns the path written."""
+    parts = [
+        "<!DOCTYPE html><html><head><meta charset='utf-8'>",
+        f"<title>{title}</title>",
+        "<style>body{font-family:sans-serif;margin:24px;background:#fafafa}",
+        "h2{border-bottom:2px solid #4472C4;padding-bottom:4px}",
+        "table{border-collapse:collapse}td,th{border:1px solid #ccc;padding:4px 10px}",
+        ".metric{color:#333}</style></head><body>",
+        f"<h1>{title}</h1>",
+    ]
+    postsyn = panels.get("postsyn") or {}
+    if postsyn:
+        parts.append("<h2>Postsynaptic plasticity</h2><table>")
+        for k, v in postsyn.items():
+            parts.append(f"<tr><th class='metric'>{k}</th><td>{v:.5g}</td></tr>")
+        parts.append("</table>")
+    moe = panels.get("moe") or {}
+    if moe:
+        parts.append("<h2>MoE metabolism &amp; specialization</h2><table>")
+        for layer, stats in moe.items():
+            cells = " ".join(f"<td>{k}={v:.4g}</td>" for k, v in stats.items())
+            parts.append(f"<tr><th>{layer}</th>{cells}</tr>")
+        parts.append("</table>")
+    trace = panels.get("presyn_trace") or {}
+    if trace:
+        parts.append("<h2>Presynaptic per-position traces</h2>")
+        for key, series in trace.items():
+            parts.append(f"<div><b>{key}</b> {_panel_sparkline(series)}</div>")
+    parts.append("</body></html>")
+    _ensure_dir(os.path.dirname(out_path) or ".")
+    with open(out_path, "w") as f:
+        f.write("\n".join(parts))
+    return out_path
+
+
+def write_bio_dashboard(
+    manager_or_model: Any,
+    step: int,
+    *,
+    probe_batch: Optional[Tensor] = None,
+    log_dir: Optional[str] = None,
+) -> Dict[str, str]:
+    """Collect panels and write ``bio_panels_<step>.json`` + ``bio_dashboard_<step>.html``.
+
+    Accepts either a :class:`NeuroVizManager` (uses its ``log_dir``/TensorBoard writer)
+    or a bare model plus an explicit ``log_dir``. Returns the artifact paths.
+    """
+    if hasattr(manager_or_model, "cfg") and hasattr(manager_or_model, "layers"):
+        manager = manager_or_model
+        model = next(m for _, m in manager.layers) if manager.layers else None
+        if model is None:
+            raise ValueError("manager has no registered SynapticMoE; pass a model instead")
+        out_dir = log_dir or manager.cfg.log_dir
+    else:
+        manager, model = None, manager_or_model
+        out_dir = log_dir or "runs/neuroviz"
+    panels = collect_bio_panels(model, probe_batch=probe_batch)
+    _ensure_dir(out_dir)
+    json_path = os.path.join(out_dir, f"bio_panels_{step:09d}.json")
+    with open(json_path, "w") as f:
+        json.dump(panels, f, indent=2, default=float)
+    html_path = render_html_dashboard(
+        panels, os.path.join(out_dir, f"bio_dashboard_{step:09d}.html")
+    )
+    if manager is not None and manager.tb is not None:
+        postsyn = panels.get("postsyn") or {}
+        for k, v in postsyn.items():
+            manager.tb.add_scalar(f"bio_v2/{k}", float(v), step)
+    return {"json": json_path, "html": html_path}
