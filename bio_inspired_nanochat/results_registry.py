@@ -47,6 +47,8 @@ class RunRecord:
     dataset_shards: List[str] = field(default_factory=list)
     timestamp: Optional[float] = None
     notes: str = ""
+    verdict: Optional[str] = None
+    eligible_for_best: bool = True
 
     def to_json(self) -> dict:
         return asdict(self)
@@ -79,6 +81,8 @@ def make_record(
     dataset_shards: Optional[List[str]] = None,
     timestamp: Optional[float] = None,
     notes: str = "",
+    verdict: Optional[str] = None,
+    eligible_for_best: bool = True,
 ) -> RunRecord:
     """Build a provenance-stamped, schema-valid RunRecord.
 
@@ -93,6 +97,10 @@ def make_record(
         raise ValueError("run_id must be non-empty")
     if config is not None and syn_cfg is not None:
         raise ValueError("pass either config or syn_cfg, not both")
+    if verdict not in (None, "positive", "null", "invalidated"):
+        raise ValueError("verdict must be positive, null, invalidated, or None")
+    if verdict in ("null", "invalidated") and eligible_for_best:
+        raise ValueError("null and invalidated records cannot be eligible for best-result queries")
     valid = validate_metrics(metrics, strict=True)
     cfg_hash = None
     config_value = config if config is not None else syn_cfg
@@ -115,6 +123,8 @@ def make_record(
         dataset_shards=list(dataset_shards or []),
         timestamp=timestamp,
         notes=notes,
+        verdict=verdict,
+        eligible_for_best=eligible_for_best,
     )
 
 
@@ -148,7 +158,7 @@ def best_record(records: List[RunRecord], metric: str) -> Optional[RunRecord]:
     spec = get_metric(metric)
     if spec is None:
         raise KeyError(f"unknown metric {metric!r}")
-    have = [r for r in records if metric in r.metrics]
+    have = [r for r in records if r.eligible_for_best and metric in r.metrics]
     if not have:
         return None
     reverse = spec.direction == Direction.HIGHER_BETTER

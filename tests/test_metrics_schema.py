@@ -43,6 +43,11 @@ def test_each_harness_area_is_represented():
     assert {"eval_bpb", "eval_accuracy"} <= names                    # eval
     assert {"neuroscore_efficiency", "neuroscore_resilience"} <= names  # neuroscore
     assert {"tune_objective", "tune_generation"} <= names            # tuning
+    assert {
+        "tropical_exactness_rate",
+        "tropical_certified_radius",
+        "tropical_attribution_l1_error",
+    } <= names  # theory falsification
 
 
 @pytest.mark.unit
@@ -87,6 +92,7 @@ def test_validate_rejects_non_numeric_value():
 @pytest.mark.unit
 def test_helpers():
     assert is_known("val_bpb") and not is_known("nope")
-    assert get_metric("val_bpb").direction == Direction.LOWER_BETTER
+    val_bpb = get_metric("val_bpb")
+    assert val_bpb is not None and val_bpb.direction == Direction.LOWER_BETTER
     assert get_metric("nope") is None
     assert math.isfinite(validate_metrics({"step": 3})["step"])

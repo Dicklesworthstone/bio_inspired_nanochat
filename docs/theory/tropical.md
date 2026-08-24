@@ -523,6 +523,52 @@ under the recorded score scope.”
 
 ---
 
+## 12. Held-out falsification protocol (`0642.6.3.1`)
+
+The executable experiment is `scripts/e2e/tropical_falsification.py`. This section records the
+decision rules before the held-out confirmation seeds are executed. Exploratory development used
+seeds `11, 23, 37, 53, 71, 89, 107, 131`; the fixed confirmation seeds are
+`149, 167, 181, 199, 223, 241, 263, 281`. The family has six affine choices in two dimensions, a
+unique winner, and back-solved offsets. No rejection loop selects successful outcomes.
+
+The named controls are:
+
+1. ordinary `tau=1` soft readout versus the hard readout over the fixed sweep
+   `(1, .5, .2, .1, .05, .02, .01)`;
+2. a local NumPy argmax oracle, independent of the runtime argmax implementation, queried over
+   4,096 angular rays with 48 bisection steps to estimate the first L2 decision flip;
+3. 512 random perturbations strictly inside each certified radius; and
+4. a frozen-value winner-lesion target versus the active-vertex fingerprint and one-layer rollout
+   at the distinct fixed temperature `tau=.5`.
+
+The verdict is **invalidated** on any runtime/oracle argmax disagreement, soft/hard mismatch,
+exponential-bound violation, failed temperature/fallback control, non-positive certificate, flip
+inside the certificate, certificate exceeding the empirical flip, angular attack error above
+`1e-3` relative to the analytic affine boundary, or non-exact lesion-target attribution. A
+**positive** verdict additionally requires paired bootstrap intervals plus paired t and Wilcoxon
+tests at `alpha=.05` for cold-readout and attribution error. Anything else is an honest **null**.
+
+Certified-to-empirical radius ratio is descriptive formula/attack-resolution conformance, not a
+statistical success threshold: the certificate intentionally applies a five-percent safety fraction,
+so a well-resolved attack should yield a ratio near `.95`. The test can falsify soundness or attack
+resolution, but cannot establish a learned robustness gain.
+
+Each invocation writes to a fresh run-ID subdirectory under `runs/e2e/tropical_falsification/` and
+refuses a nonempty explicit directory. Registry rows carry a machine-readable verdict; null and
+invalidated rows are ineligible for best-result queries. Run the held-out protocol with:
+
+```bash
+uv run python -m scripts.e2e.tropical_falsification
+```
+
+The scope remains the standalone exact-affine, query-conditional selection skeleton. The lesion
+target makes the attribution check causal for this frozen hard-selection readout only; it does not
+establish causality for a downstream model prediction. The broader lesion and causal-tracing work in
+`odq.2` is still required. Live nonlinear attention/MoE adapters must continue to fail closed until
+they can supply an exact-affine score ledger or a separately proved approximation-error certificate.
+
+---
+
 ## References
 
 - Maclagan, D. and Sturmfels, B. *Introduction to Tropical Geometry*. The max-plus polynomial,

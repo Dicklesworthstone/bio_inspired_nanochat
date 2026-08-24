@@ -90,6 +90,54 @@ _M(
     Direction.LOWER_BETTER,
     "fraction of predeclared stress-step evaluations classified as divergent",
 )
+_M(
+    "tropical_exactness_rate",
+    "fraction",
+    Direction.HIGHER_BETTER,
+    "fraction of the preregistered temperature sweep whose soft argmax matches the active vertex",
+)
+_M(
+    "tropical_readout_l1_error",
+    "L1",
+    Direction.LOWER_BETTER,
+    "low-temperature soft-readout L1 distance from the exact tropical hard readout",
+)
+_M(
+    "soft_readout_l1_error",
+    "L1",
+    Direction.LOWER_BETTER,
+    "ordinary tau=1 soft-readout L1 distance from the exact hard readout",
+)
+_M(
+    "tropical_certified_radius",
+    "L2 input distance",
+    Direction.HIGHER_BETTER,
+    "safety-adjusted affine selection radius under the preregistered L2 threat model",
+)
+_M(
+    "empirical_adversarial_radius",
+    "L2 input distance",
+    Direction.HIGHER_BETTER,
+    "nearest decision flip found by the independent black-box angular adversarial search",
+)
+_M(
+    "tropical_radius_tightness",
+    "ratio",
+    Direction.HIGHER_BETTER,
+    "certified selection radius divided by the empirical adversarial flip radius",
+)
+_M(
+    "tropical_attribution_l1_error",
+    "L1",
+    Direction.LOWER_BETTER,
+    "active-vertex attribution L1 distance from the exact hard-selection attribution",
+)
+_M(
+    "attention_rollout_attribution_l1_error",
+    "L1",
+    Direction.LOWER_BETTER,
+    "ordinary one-layer attention-rollout L1 distance from exact hard-selection attribution",
+)
 # -- NeuroScore (neuroscore.py) --
 _M("neuroscore_efficiency", "ratio", Direction.HIGHER_BETTER, "expert efficiency (contribution/energy)")
 _M("neuroscore_specialization", "ratio", Direction.HIGHER_BETTER, "expert input-distribution specialization")

@@ -91,6 +91,10 @@ def test_make_record_rejects_ambiguous_config_and_empty_run_id():
         )
     with pytest.raises(ValueError, match="run_id must be non-empty"):
         make_record("train", {"train_loss": 1.0}, run_id="  ")
+    with pytest.raises(ValueError, match="verdict must be"):
+        make_record("eval", {"eval_bpb": 1.0}, run_id="bad", verdict="maybe")
+    with pytest.raises(ValueError, match="cannot be eligible"):
+        make_record("eval", {"eval_bpb": 1.0}, run_id="null", verdict="null")
 
 
 @pytest.mark.unit
@@ -139,6 +143,26 @@ def test_best_record_respects_optimization_direction():
     assert best_record([], "val_bpb") is None
     with pytest.raises(KeyError):
         best_record(recs, "not_a_metric")
+
+
+@pytest.mark.unit
+def test_best_record_excludes_ineligible_falsification_results():
+    invalidated = make_record(
+        "eval",
+        {"eval_accuracy": 1.0},
+        run_id="invalidated",
+        verdict="invalidated",
+        eligible_for_best=False,
+    )
+    positive = make_record(
+        "eval",
+        {"eval_accuracy": 0.8},
+        run_id="positive",
+        verdict="positive",
+    )
+
+    best = best_record([invalidated, positive], "eval_accuracy")
+    assert best is not None and best.run_id == "positive"
 
 
 @pytest.mark.unit
