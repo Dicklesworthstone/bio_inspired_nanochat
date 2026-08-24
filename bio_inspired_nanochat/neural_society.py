@@ -63,6 +63,14 @@ class SharedSynapticMemoryBus:
             self.topics[topic] = []
         self.topics[topic].append(msg)
 
+    def clear_topic(self, topic: str) -> None:
+        """Clear all messages from a topic."""
+        self.topics.pop(topic, None)
+
+    def list_topics(self) -> List[str]:
+        """List all active topic names."""
+        return list(self.topics.keys())
+
     def aggregate_topic(self, topic: str, in_dim: int, out_dim: int) -> Tensor:
         """Aggregate and blend all published associative bindings for a given topic."""
         delta = torch.zeros(in_dim, out_dim)
@@ -70,11 +78,21 @@ class SharedSynapticMemoryBus:
             return delta
 
         for msg in self.topics[topic]:
-            # Outer product delta
-            k = msg.key_vector[:in_dim]
-            v = msg.value_vector[:out_dim]
-            if k.shape[0] == in_dim and v.shape[0] == out_dim:
-                delta.add_(msg.confidence * torch.outer(k, v))
+            # Robust dimension adaptation with zero padding / truncation
+            k = msg.key_vector
+            v = msg.value_vector
+
+            k_pad = torch.zeros(in_dim)
+            k_len = min(in_dim, k.shape[0])
+            if k_len > 0:
+                k_pad[:k_len] = k[:k_len]
+
+            v_pad = torch.zeros(out_dim)
+            v_len = min(out_dim, v.shape[0])
+            if v_len > 0:
+                v_pad[:v_len] = v[:v_len]
+
+            delta.add_(msg.confidence * torch.outer(k_pad, v_pad))
 
         # Norm bounding
         curr_norm = float(delta.norm().item())
@@ -132,7 +150,15 @@ class NeuralSociety:
         a1_id = agent_names[0]
         a1_model = self.agents[a1_id]
         with torch.no_grad():
-            emb = a1_model.wte(task_prompt).mean(dim=1).squeeze(0)
+            wte_out = a1_model.wte(task_prompt)
+            # Robust 1D vector aggregation across batch and sequence dimensions
+            if wte_out.ndim == 3:
+                emb = wte_out.mean(dim=(0, 1))
+            elif wte_out.ndim == 2:
+                emb = wte_out.mean(dim=0)
+            else:
+                emb = wte_out.view(-1)
+
             self.bus.publish(
                 sender_id=a1_id,
                 topic=topic,
