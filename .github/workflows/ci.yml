@@ -251,5 +251,16 @@ jobs:
           uv sync --extra cpu --dev
           uv run maturin develop --release
 
-      - name: Run pytest
+      - name: Run fast unit & integration tests
         run: uv run pytest -v -m "not slow"
+
+      - name: Run master validation fast suite
+        run: uv run python -m scripts.validate_all --suite fast
+
+      - name: Upload validation report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-report-pr-${{ github.run_id }}
+          path: reports/**
+          retention-days: 7

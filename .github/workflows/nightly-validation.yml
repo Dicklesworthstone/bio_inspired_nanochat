@@ -1,0 +1,58 @@
+name: Nightly Master Validation & Performance Gates
+
+on:
+  schedule:
+    - cron: "30 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  nightly-master-validation:
+    name: Full Master Validation & E2E Suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      UV_PYTHON: "3.14.2"
+      PYTHONPATH: "."
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Install Python 3.14
+        run: uv python install 3.14.2
+
+      - name: Install dependencies and build extension
+        run: |
+          uv sync --extra cpu --dev
+          uv run maturin develop --release
+
+      - name: Run Full Master Validation Battery
+        run: |
+          uv run python -m scripts.validate_all --suite all
+
+      - name: Run Performance Regression Gates
+        run: |
+          uv run python -m scripts.perf_regression_gate --mode check --tolerance 0.45 --record-registry
+
+      - name: Upload Master Validation Reports & Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: master-validation-report-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            reports/**
+            results/registry.jsonl
+            results/perf_baselines.json
+          retention-days: 30

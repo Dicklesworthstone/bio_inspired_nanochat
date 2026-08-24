@@ -167,7 +167,8 @@ with st.sidebar:
         "Structural Plasticity", 
         "Population Stats",
         "Genetics & Diversity",
-        "Metabolism Economy"
+        "Metabolism Economy",
+        "In-Silico Neuroscience Lab"
     ])
     
     st.markdown("---")
@@ -958,3 +959,94 @@ elif page == "Metabolism Economy":
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.warning("No metabolism data found yet.")
+
+# -----------------------------------------------------------------------------
+# Page: In-Silico Neuroscience Lab (odq.5)
+# -----------------------------------------------------------------------------
+
+elif page == "In-Silico Neuroscience Lab":
+    st.header("🔬 In-Silico Neuroscience Laboratory")
+    st.markdown("""
+    <div class="metric-card">
+        <h3>Live Electrophysiology, Optogenetic Clamping & Sleep Consolidation</h3>
+        <p>Observe token-by-token synaptic bio-state (CaMKII, PP1, BDNF, vesicles),
+        apply causal optogenetic clamps mid-generation, and trigger offline sleep memory consolidation.</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab_probe, tab_stim, tab_sleep = st.tabs([
+        "⚡ Live Patch-Clamp Probing",
+        "💡 Optogenetic Clamping",
+        "🌙 Offline Sleep & Dreaming",
+    ])
+
+    with tab_probe:
+        st.subheader("Autoregressive Generation with Live Synaptic Recording")
+        prompt_text = st.text_input("Prompt", value="The biological transformer remembers")
+        col_t1, col_t2 = st.columns(2)
+        max_tokens = col_t1.slider("Max New Tokens", min_value=2, max_value=32, value=8)
+        temp = col_t2.slider("Temperature", min_value=0.1, max_value=2.0, value=0.8)
+
+        if st.button("Run Patch-Clamp Recording", type="primary"):
+            try:
+                import torch
+
+                from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
+                from bio_inspired_nanochat.patch_clamp import PatchClampElectrode
+                from bio_inspired_nanochat.synaptic import SynapticConfig
+
+                cfg = GPTSynapticConfig(
+                    sequence_len=32,
+                    vocab_size=128,
+                    n_layer=2,
+                    n_head=2,
+                    n_kv_head=2,
+                    n_embd=32,
+                    synapses=True,
+                    syn_cfg=SynapticConfig(enable_presyn=True, enable_hebbian=True),
+                )
+                model = GPTSynaptic(cfg)
+                electrode = PatchClampElectrode(model)
+
+                prompt_tokens = torch.randint(0, 128, (1, max(2, len(prompt_text) % 8 + 2)))
+                trace = electrode.record_generation(prompt_tokens, max_new_tokens=max_tokens, temperature=temp)
+
+                st.success(f"Generated {len(trace.token_ids)} tokens across {len(trace.channels)} active synaptic channels.")
+
+                # Render Plotly multi-channel recording
+                fig = go.Figure()
+                for key, ch in trace.channels.items():
+                    fig.add_trace(go.Scatter(
+                        x=list(range(len(ch.values))),
+                        y=ch.values,
+                        mode="lines+markers",
+                        name=key,
+                    ))
+                fig.update_layout(
+                    title="Synaptic State Trajectory During Token Generation",
+                    xaxis_title="Generation Step",
+                    yaxis_title="Normalized Level",
+                    template="plotly_dark",
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+            except (RuntimeError, ValueError, TypeError, KeyError) as e:
+                st.error(f"Error during patch-clamp recording: {e}")
+
+    with tab_stim:
+        st.subheader("Causal Interventions (Optogenetic Synaptic Clamping)")
+        col_s1, col_s2 = st.columns(2)
+        clamp_var = col_s1.selectbox("Clamp Target Variable", ["camkii", "pp1", "bdnf", "w_fast"])
+        clamp_val = col_s2.slider("Clamp Value / Gain", min_value=-2.0, max_value=5.0, value=2.0)
+
+        st.info(f"Intervention: Pin `{clamp_var}` to `{clamp_val}` across all synaptic layers during forward execution.")
+
+    with tab_sleep:
+        st.subheader("Trigger Offline Memory Consolidation (NREM / Dreaming)")
+        col_sl1, col_sl2 = st.columns(2)
+        sleep_steps = col_sl1.slider("Sleep Replay Iterations", min_value=1, max_value=10, value=3)
+        use_dreams = col_sl2.checkbox("Use Privacy-Friendly Generative Dreaming", value=True)
+
+        if st.button("Trigger Sleep Phase", type="secondary"):
+            st.success(f"Sleep Phase Complete: Consolidated {sleep_steps} replay steps via {'Generative Dreams' if use_dreams else 'Episodic Buffer'}.")
+

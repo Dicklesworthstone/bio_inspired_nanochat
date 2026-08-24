@@ -1,0 +1,30 @@
+{
+  "standard_transformer_train": {
+    "name": "standard_transformer_train",
+    "mode": "train",
+    "tok_per_sec": 3000.0,
+    "peak_memory_mb": 0.4375,
+    "tolerance": 0.50
+  },
+  "synaptic_transformer_train": {
+    "name": "synaptic_transformer_train",
+    "mode": "train",
+    "tok_per_sec": 1500.0,
+    "peak_memory_mb": 0.7368,
+    "tolerance": 0.50
+  },
+  "standard_transformer_decode": {
+    "name": "standard_transformer_decode",
+    "mode": "decode",
+    "tok_per_sec": 3000.0,
+    "peak_memory_mb": 0.4375,
+    "tolerance": 0.50
+  },
+  "synaptic_transformer_decode": {
+    "name": "synaptic_transformer_decode",
+    "mode": "decode",
+    "tok_per_sec": 1000.0,
+    "peak_memory_mb": 0.7368,
+    "tolerance": 0.50
+  }
+}

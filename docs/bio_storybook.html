@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+  <meta charset='UTF-8'>
+  <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+  <title>Bio-Inspired Transformer Storybook & Visualizer</title>
+  <style>
+    :root {
+        --bg: #0d1117;
+        --card-bg: #161b22;
+        --border: #30363d;
+        --text: #c9d1d9;
+        --heading: #58a6ff;
+        --accent: #2ea043;
+        --highlight: #f0883e;
+    }
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        background-color: var(--bg);
+        color: var(--text);
+        line-height: 1.6;
+        margin: 0;
+        padding: 40px 20px;
+    }
+    .container {
+        max-width: 1000px;
+        margin: 0 auto;
+    }
+    header {
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 20px;
+        margin-bottom: 40px;
+    }
+    h1 { color: var(--heading); font-size: 2.2em; margin-bottom: 5px; }
+    .subtitle { color: #8b949e; font-size: 1.1em; }
+    .chapter {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 25px;
+        margin-bottom: 30px;
+    }
+    h2 { color: var(--heading); margin-top: 0; }
+    .badge {
+        display: inline-block;
+        background: #1f6feb22;
+        color: #58a6ff;
+        border: 1px solid #1f6feb66;
+        padding: 3px 10px;
+        border-radius: 12px;
+        font-size: 0.85em;
+        margin-bottom: 15px;
+    }
+    .equation-box {
+        background: #090d13;
+        border-left: 4px solid var(--heading);
+        padding: 12px 18px;
+        font-family: "SFMono-Regular", Consolas, Menlo, monospace;
+        font-size: 0.9em;
+        margin: 15px 0;
+        color: #79c0ff;
+        overflow-x: auto;
+    }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 20px 0;
+        font-size: 0.9em;
+    }
+    th, td {
+        border: 1px solid var(--border);
+        padding: 8px 12px;
+        text-align: right;
+    }
+    th {
+        background: #21262d;
+        color: #f0f6fc;
+        text-align: right;
+    }
+    th:first-child, td:first-child { text-align: center; }
+    tr:hover { background: #1f242c; }
+    .narrative {
+        background: #1f293733;
+        border-left: 4px solid var(--accent);
+        padding: 12px 15px;
+        margin-top: 15px;
+        border-radius: 0 4px 4px 0;
+    }
+    footer {
+        text-align: center;
+        color: #8b949e;
+        margin-top: 50px;
+        font-size: 0.85em;
+    }
+    </style>
+</head>
+<body>
+  <div class='container'>
+    <header>
+      <h1>Bio-Inspired Transformer Storybook</h1>
+      <div class='subtitle'>A Living Guided Tour of Synaptic Plasticity, Neuromodulation & Metaplastic Dynamics</div>
+    </header>
+    <div class='chapter'>
+      <span class='badge'>Presynaptic Biophysics</span>
+      <h2>Chapter 1: The Presynaptic Vesicle Cycle</h2>
+      <p>Action potential bursts trigger calcium influx, driving vesicular neurotransmitter release followed by short-term depression (fatigue) and slow endocytosis recycling.</p>
+      <div class='equation-box'>
+        <div>C_{t} = C_{t-1} \cdot e^{-1/\tau_c} + \alpha_{ca} \cdot \text{Drive}_t</div>
+        <div>P_{\text{rel}} = \frac{C^4}{C^4 + K_{d,\text{fast}}^4} + \gamma_{\text{doc2}} \cdot \sigma(4(C - \theta_{\text{doc2}}))</div>
+        <div>\text{RRP}_{t+1} = \text{RRP}_t - \text{Rel}_t + \text{Prime}(\text{Res}_t)</div>
+      </div>
+      <table>
+        <thead><tr>
+          <th>Token Step</th>
+          <th>Drive</th>
+          <th>Calcium</th>
+          <th>Rrp Vesicles</th>
+          <th>Release Flux</th>
+        </tr></thead>
+        <tbody>
+          <tr>
+            <td>1</td>
+            <td>0.0</td>
+            <td>0.3812</td>
+            <td>3.558</td>
+            <td>2.953</td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td>0.0</td>
+            <td>0.3812</td>
+            <td>3.558</td>
+            <td>2.953</td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td>3.5</td>
+            <td>1.9414</td>
+            <td>0.5927</td>
+            <td>6.4321</td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td>3.5</td>
+            <td>1.9414</td>
+            <td>0.5927</td>
+            <td>6.4321</td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td>3.5</td>
+            <td>1.9414</td>
+            <td>0.5927</td>
+            <td>6.4321</td>
+          </tr>
+          <tr>
+            <td>6</td>
+            <td>3.5</td>
+            <td>1.9414</td>
+            <td>0.5927</td>
+            <td>6.4321</td>
+          </tr>
+          <tr>
+            <td>7</td>
+            <td>0.20000000298023224</td>
+            <td>0.439</td>
+            <td>3.2599</td>
+            <td>3.3028</td>
+          </tr>
+          <tr>
+            <td>8</td>
+            <td>0.20000000298023224</td>
+            <td>0.439</td>
+            <td>3.2599</td>
+            <td>3.3028</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class='narrative'><strong>Biological Insight:</strong> Notice how steps 3-6 experience high calcium which sharply drives release probability up initially, but progressively exhausts readily releasable vesicles (RRP), creating self-limiting adaptation.</div>
+    </div>
+    <div class='chapter'>
+      <span class='badge'>Neuromodulation (DA / ACh / NE)</span>
+      <h2>Chapter 2: Neuromodulatory Control &amp; Surprise</h2>
+      <p>Neuromodulators act as broadcast broadcast volume knobs: Dopamine signals reward prediction error, Acetylcholine signals uncertainty/entropy, and Norepinephrine triggers exploratory plasticity on surprise.</p>
+      <div class='equation-box'>
+        <div>\delta_{\text{DA}} = \text{RPE} = R_t - \hat{V}_t</div>
+        <div>\text{ACh}_t = \text{Softplus}(\beta_{\text{ach}} \cdot H(p_t))</div>
+        <div>\text{LR}_{\text{eff}} = \text{LR}_0 \cdot (1 + \kappa_{\text{da}} \cdot \text{DA}_t) \cdot (1 + \kappa_{\text{ne}} \cdot \text{NE}_t)</div>
+      </div>
+      <table>
+        <thead><tr>
+          <th>Token Step</th>
+          <th>Loss</th>
+          <th>Entropy</th>
+          <th>Dopamine Da</th>
+          <th>Acetylcholine Ach</th>
+          <th>Norepinephrine Ne</th>
+          <th>Plasticity Gain</th>
+        </tr></thead>
+        <tbody>
+          <tr>
+            <td>1</td>
+            <td>2.5</td>
+            <td>1.2</td>
+            <td>0.0</td>
+            <td>0.0834</td>
+            <td>0.0</td>
+            <td>1.0</td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td>2.4</td>
+            <td>1.2</td>
+            <td>0.0197</td>
+            <td>0.075</td>
+            <td>0.01</td>
+            <td>1.0197</td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td>2.3</td>
+            <td>1.1</td>
+            <td>0.054</td>
+            <td>0.0675</td>
+            <td>0.0277</td>
+            <td>1.054</td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td>1.2</td>
+            <td>1.3</td>
+            <td>0.1474</td>
+            <td>0.0717</td>
+            <td>0.1104</td>
+            <td>1.1474</td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td>1.1</td>
+            <td>1.4</td>
+            <td>0.2313</td>
+            <td>0.0842</td>
+            <td>0.184</td>
+            <td>1.2313</td>
+          </tr>
+          <tr>
+            <td>6</td>
+            <td>1.5</td>
+            <td>3.2</td>
+            <td>0.2975</td>
+            <td>0.172</td>
+            <td>0.2273</td>
+            <td>1.2975</td>
+          </tr>
+          <tr>
+            <td>7</td>
+            <td>1.4</td>
+            <td>2.8</td>
+            <td>0.3582</td>
+            <td>0.2429</td>
+            <td>0.2679</td>
+            <td>1.3582</td>
+          </tr>
+          <tr>
+            <td>8</td>
+            <td>1.3</td>
+            <td>1.5</td>
+            <td>0.4137</td>
+            <td>0.2187</td>
+            <td>0.306</td>
+            <td>1.4137</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class='narrative'><strong>Biological Insight:</strong> At step 4, the sudden drop in loss triggers a positive Dopamine burst (RPE), elevating synaptic plasticity learning rate. At step 6, predictive entropy spikes, releasing Acetylcholine to open explorative attention bandwidth.</div>
+    </div>
+    <footer>
+      Generated by bio_storybook on 2026-08-24 14:05:31 UTC • Bio-Inspired Nanochat
+    </footer>
+  </div>
+</body>
+</html>
