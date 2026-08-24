@@ -43,7 +43,7 @@ import os
 import pickle
 import time
 from collections import deque
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any, Dict, Sequence
 
@@ -60,6 +60,8 @@ from rich.panel import Panel
 from rich import box
 from rich.syntax import Syntax
 
+from bio_inspired_nanochat.checkpoint_manager import config_hash
+from bio_inspired_nanochat.results_registry import DEFAULT_REGISTRY, append_record, make_record
 from bio_inspired_nanochat.synaptic import SynapticConfig
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
 
@@ -355,6 +357,7 @@ def _init_distributed(base_device: str) -> DistInfo:
 
 @dataclass
 class RunArtifacts:
+    run_id: str
     run_dir: Path
     progress_jsonl: Path
     best_params_json: Path
@@ -372,12 +375,14 @@ def _prepare_run_artifacts(args: argparse.Namespace) -> RunArtifacts | None:
     run_dir = Path(args.run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
     tb_dir = run_dir / "tb"
+    run_id = f"tune-{config_hash({'run_dir': str(run_dir.resolve()), 'seed': int(args.seed)})}"
 
     tb_writer = None
     if not args.no_tensorboard:
         tb_writer = SummaryWriter(log_dir=str(tb_dir))
 
     return RunArtifacts(
+        run_id=run_id,
         run_dir=run_dir,
         progress_jsonl=run_dir / "progress.jsonl",
         best_params_json=run_dir / "best_params.json",
@@ -399,11 +404,13 @@ def _load_best_params(best_params_json: Path) -> tuple[float, dict[str, float]]:
 def _save_best_params(
     best_params_json: Path,
     *,
+    run_id: str,
     best_loss: float,
     best_params: dict[str, float],
     gen: int,
 ) -> None:
     payload = {
+        "run_id": run_id,
         "best_loss": float(best_loss),
         "best_params": {k: float(v) for k, v in best_params.items()},
         "generation": int(gen),
@@ -1208,8 +1215,23 @@ def _cmd_optimize(args: argparse.Namespace, *, console: Console, specs: Sequence
     )
 
     artifacts = _prepare_run_artifacts(args)
+    run_id = (
+        artifacts.run_id
+        if artifacts is not None
+        else f"tune-s{int(args.seed)}-{time.time_ns()}"
+    )
     if artifacts is not None:
-        console.print(f"[dim]Run dir: {artifacts.run_dir}[/dim]")
+        console.print(f"[dim]Run {run_id} dir: {artifacts.run_dir}[/dim]")
+
+    run_config = {
+        "arguments": {
+            key: value
+            for key, value in vars(args).items()
+            if key not in {"registry_path", "run_dir", "save_best"}
+        },
+        "model": asdict(MODEL_CONFIG),
+        "search_space": [asdict(spec) for spec in specs],
+    }
 
     defaults = SynapticConfig()
     x0 = encode_params(defaults, specs)
@@ -1445,6 +1467,7 @@ def _cmd_optimize(args: argparse.Namespace, *, console: Console, specs: Sequence
                     _append_progress(
                         artifacts.progress_jsonl,
                         {
+                            "run_id": run_id,
                             "generation": gen,
                             "min_loss": gen_min,
                             "mean_loss": gen_mean,
@@ -1485,6 +1508,7 @@ def _cmd_optimize(args: argparse.Namespace, *, console: Console, specs: Sequence
                     if improved:
                         _save_best_params(
                             artifacts.best_params_json,
+                            run_id=run_id,
                             best_loss=best_loss,
                             best_params=best_params,
                             gen=gen,
@@ -1576,6 +1600,28 @@ def _cmd_optimize(args: argparse.Namespace, *, console: Console, specs: Sequence
                 f.write(f"    {k}={v:.6f},\n")
             f.write(")\n")
         console.print(f"[dim]Saved best config to {path}[/dim]")
+
+    final_generation = int(getattr(es, "countiter", 0))
+    if not math.isfinite(best_loss):
+        raise RuntimeError("CMA-ES completed without a finite objective")
+    artifact_note = str(artifacts.run_dir) if artifacts is not None else "none"
+    append_record(
+        make_record(
+            "tune",
+            {
+                "tune_objective": float(best_loss),
+                "tune_generation": float(final_generation),
+            },
+            run_id=run_id,
+            config=run_config,
+            seed=int(args.seed),
+            dataset_shards=["synthetic:associative_recall"],
+            timestamp=time.time(),
+            notes=f"artifact_dir={artifact_note}; best_params={len(best_params)}",
+        ),
+        args.registry_path,
+    )
+    console.print(f"[dim]Appended {run_id} to {args.registry_path}[/dim]")
 
     return 0
 
@@ -1733,6 +1779,12 @@ def main() -> int:
         type=str,
         default=None,
         help="Optional run directory for progress/checkpoints/TensorBoard",
+    )
+    opt_p.add_argument(
+        "--registry-path",
+        type=str,
+        default=DEFAULT_REGISTRY,
+        help="Committed JSONL results registry path",
     )
     opt_p.add_argument(
         "--resume",

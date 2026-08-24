@@ -21,8 +21,10 @@ import json
 import logging
 import os
 import platform
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, is_dataclass
 from typing import Any, Dict, List, Mapping, Optional
+
+from rich.console import Console
 
 from bio_inspired_nanochat.checkpoint_manager import _git_sha, config_hash
 from bio_inspired_nanochat.metrics_schema import Direction, get_metric, validate_metrics
@@ -71,6 +73,7 @@ def make_record(
     metrics: Mapping[str, Any],
     *,
     run_id: str,
+    config: Any = None,
     syn_cfg: Any = None,
     seed: Optional[int] = None,
     dataset_shards: Optional[List[str]] = None,
@@ -80,15 +83,27 @@ def make_record(
     """Build a provenance-stamped, schema-valid RunRecord.
 
     Metrics are validated against the canonical schema (unknown/non-finite -> error). Provenance
-    (git SHA + a stable config hash) is stamped automatically; pass `timestamp` for reproducible
-    records (else it is left None for the caller/CLI to fill).
+    (git SHA + a stable config hash) is stamped automatically. ``config`` should contain the
+    complete harness configuration; ``syn_cfg`` remains available for focused mechanism records.
+    Pass `timestamp` for reproducible records (else it is left None for the caller/CLI to fill).
     """
     if harness not in _HARNESSES:
         raise ValueError(f"unknown harness {harness!r}; expected one of {_HARNESSES}")
+    if not run_id.strip():
+        raise ValueError("run_id must be non-empty")
+    if config is not None and syn_cfg is not None:
+        raise ValueError("pass either config or syn_cfg, not both")
     valid = validate_metrics(metrics, strict=True)
     cfg_hash = None
-    if syn_cfg is not None:
-        cfg_hash = config_hash(asdict(syn_cfg))
+    config_value = config if config is not None else syn_cfg
+    if config_value is not None:
+        if is_dataclass(config_value) and not isinstance(config_value, type):
+            config_payload = asdict(config_value)
+        elif isinstance(config_value, Mapping):
+            config_payload = dict(config_value)
+        else:
+            raise TypeError("config must be a dataclass instance or mapping")
+        cfg_hash = config_hash(config_payload)
     return RunRecord(
         run_id=run_id,
         harness=harness,
@@ -161,12 +176,17 @@ def _main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--metric", default="val_bpb")
     ap.add_argument("--limit", type=int, default=20)
     args = ap.parse_args(argv)
+    console = Console()
     records = read_records(args.path)
     if args.command == "list":
-        print(summarize(records, harness=args.harness, limit=args.limit))
+        console.print(summarize(records, harness=args.harness, limit=args.limit))
     else:
         b = best_record(records, args.metric)
-        print(f"best by {args.metric}: {b.run_id} = {b.metrics[args.metric]:.4g}" if b else "(none)")
+        console.print(
+            f"best by {args.metric}: {b.run_id} = {b.metrics[args.metric]:.4g}"
+            if b
+            else "(none)"
+        )
     return 0
 
 

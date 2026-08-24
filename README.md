@@ -365,6 +365,19 @@ Example:
 uv run scripts/base_eval.py
 ```
 
+`base_train`, `eval_matrix`, and `tune_bio_params optimize` append schema-validated records to
+the tracked `results/registry.jsonl` corpus. Each record carries the harness/artifact run ID,
+git SHA, full configuration hash, seed, hardware, dataset identifiers, and canonical metrics.
+Inspect accumulated runs without opening the JSONL directly:
+
+```bash
+uv run python -m bio_inspired_nanochat.results_registry list --limit 20
+uv run python -m bio_inspired_nanochat.results_registry best --metric val_bpb
+```
+
+Evaluation and tuning commands accept `--registry-path` when an isolated scratch registry is
+needed; normal research runs should retain the tracked default so results accumulate.
+
 If the eval bundle download fails (e.g. HTTP 403), point the script at a local bundle or a mirror:
 ```bash
 uv run python -m scripts.base_eval --eval-bundle-zip /path/to/eval_bundle.zip

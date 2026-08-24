@@ -11,6 +11,7 @@ If you are only on CPU/Macbook, you'll want to train a much much smaller LLM. Ex
 python -m scripts.base_train --depth=4 --max_seq_len=512 --device_batch_size=1 --eval_tokens=512 --core_metric_every=-1 --total_batch_size=512 --num_iterations=20
 """
 
+import math
 import os
 
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
@@ -975,20 +976,36 @@ if ddp_rank == 0:
     try:
         from bio_inspired_nanochat.results_registry import append_record, make_record
 
+        _metric_candidates = {
+            "val_bpb": val_bpb,
+            "smooth_train_loss": smooth_train_loss,
+            "mfu": mfu,
+            "total_training_time": total_training_time,
+            "step": step,
+        }
+        _metrics = {
+            name: float(value)
+            for name, value in _metric_candidates.items()
+            if math.isfinite(float(value))
+        }
+        _dataset_shards = [
+            f"fineweb:train:pq{dataloader_state_dict['pq_idx']}:rg{dataloader_state_dict['rg_idx']}",
+            "fineweb:val",
+        ]
         _rec = make_record(
             "train",
-            {
-                "val_bpb": float(val_bpb),
-                "smooth_train_loss": float(smooth_train_loss),
-                "mfu": float(mfu),
-                "total_training_time": float(total_training_time),
-                "step": float(step),
+            _metrics,
+            run_id=str(telemetry.run_id),
+            config={
+                "model": asdict(model_config),
+                "training": user_config,
+                "resolved_num_iterations": int(num_iterations),
+                "world_size": int(ddp_world_size),
             },
-            run_id=f"train-{int(time.time())}",
-            syn_cfg=syn_cfg if use_syn else None,
             seed=int(init_seed),
+            dataset_shards=_dataset_shards,
             timestamp=time.time(),
-            notes="base_train",
+            notes=f"base_train; telemetry=runs/telemetry/{output_dirname}/events.jsonl",
         )
         append_record(_rec)
         print0(f"[results] appended run record {_rec.run_id} to the registry")

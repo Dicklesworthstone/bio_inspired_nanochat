@@ -35,6 +35,7 @@ import pytest
 from bio_inspired_nanochat.eval_stats import compare_matrix, load_matrix_csv, paired_comparison
 from bio_inspired_nanochat.checkpoint_manager import checkpoint_model_config, save_checkpoint
 from bio_inspired_nanochat.gpt import GPT, GPTConfig
+from bio_inspired_nanochat.results_registry import read_records
 from scripts.eval_matrix import SUMMARY_FIELDS, _get_logits, _load_base_train_checkpoint
 
 pytestmark = pytest.mark.e2e
@@ -72,6 +73,7 @@ def _run_matrix(out_dir: Path) -> Path:
         "--ece-bins", "5", "--niah-lengths", "7",  # "7" < min NIAH length → NIAH skipped (fast)
         "--embedding-lr", "0.02", "--unembedding-lr", "0.004", "--matrix-lr", "0.01",
         "--out-dir", str(out_dir), "--batch-id", "test",
+        "--registry-path", str(out_dir / "registry.jsonl"),
     ]
     from scripts.eval_matrix import main
 
@@ -133,6 +135,12 @@ def test_eval_matrix_e2e_synthetic_pipeline(matrix_dir):
         pytest.fail(f"summary.jsonl contains invalid JSON: {exc}")
     assert len(jl) == len(rows)
     assert {(d["preset"], int(d["seed"])) for d in jl} == {(p, s) for p in PRESETS for s in SEEDS}
+
+    registry_records = read_records(str(matrix_dir.parent / "registry.jsonl"))
+    assert len(registry_records) == len(rows)
+    assert {record.run_id for record in registry_records} == {row["run_id"] for row in rows}
+    assert all(record.harness == "eval" for record in registry_records)
+    assert all(record.git_sha and record.config_hash for record in registry_records)
 
     # per-run detailed logs (the human-inspectable artifacts)
     run_dirs = [d for d in matrix_dir.iterdir() if d.is_dir()]
@@ -208,6 +216,8 @@ def test_eval_matrix_evaluates_real_base_train_checkpoint(tmp_path):
         "7",
         "--out-dir",
         str(out_dir),
+        "--registry-path",
+        str(tmp_path / "registry.jsonl"),
     ]
     from scripts.eval_matrix import main
 
@@ -231,6 +241,9 @@ def test_eval_matrix_evaluates_real_base_train_checkpoint(tmp_path):
     assert row["train_tokens_requested"] == 48
     assert row["train_tokens_processed"] == 48
     assert row["tok_per_sec"] == pytest.approx(32.0)
+    registry_record = read_records(str(tmp_path / "registry.jsonl"))[0]
+    assert registry_record.run_id == row["run_id"]
+    assert registry_record.config_hash
     run_dir = Path(row["run_dir"])
     assert (run_dir / "run_config.jsonl").exists()
     assert not (run_dir / "train_metrics.jsonl").exists()

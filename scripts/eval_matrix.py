@@ -42,6 +42,7 @@ from bio_inspired_nanochat.checkpoint_manager import (
 )
 from bio_inspired_nanochat.gpt import GPT, GPTConfig
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
+from bio_inspired_nanochat.results_registry import DEFAULT_REGISTRY, append_record, make_record
 from bio_inspired_nanochat.synaptic import SynapticConfig
 
 from scripts.base_eval import evaluate_model
@@ -668,6 +669,7 @@ def _run_one(
     moe_top_k: int,
     checkpoint_dir: str,
     checkpoint_step: int,
+    registry_path: str,
     runtime: ComputeRuntime,
 ) -> HarnessRunSummary:
     ddp, ddp_rank, _, ddp_world_size, device = runtime
@@ -815,36 +817,53 @@ def _run_one(
         else total_batch_size_tokens
     )
 
+    run_config = {
+        "preset": preset,
+        "seed": seed,
+        "recipe_source": recipe_source,
+        "checkpoint_dir": str(checkpoint_path) if checkpoint_path is not None else None,
+        "checkpoint_step": resolved_checkpoint_step,
+        "checkpoint_metadata": checkpoint_meta or None,
+        "data": data,
+        "world_size": ddp_world_size,
+        "train_tokens_requested": tokens_requested,
+        "eval_tokens": eval_tokens,
+        "eval_bpb": eval_bpb,
+        "core_eval": core_eval,
+        "core_max_per_task": core_max_per_task,
+        "ece_bins": ece_bins,
+        "niah_lengths": niah_lengths,
+        "sequence_len": sequence_len,
+        "vocab_size": vocab_size,
+        "n_layer": n_layer,
+        "n_head": n_head,
+        "n_embd": n_embd,
+        "device_batch_size": recorded_device_batch_size,
+        "eval_device_batch_size": device_batch_size,
+        "total_batch_size_tokens": recorded_total_batch_size,
+        "grad_accum_steps": grad_accum_steps,
+        "steps": steps,
+        "embedding_lr": embedding_lr,
+        "unembedding_lr": unembedding_lr,
+        "matrix_lr": matrix_lr,
+        "weight_decay": weight_decay,
+        "init_type": init_type,
+        "use_moe": use_moe,
+        "num_experts": num_experts,
+        "moe_top_k": moe_top_k,
+    }
+    registry_config = {
+        key: value for key, value in run_config.items() if key != "checkpoint_metadata"
+    }
+    registry_config["checkpoint_provenance"] = (
+        checkpoint_meta.get("provenance") if checkpoint_meta else None
+    )
+
     # Write config snapshot
     if ddp_rank == 0:
         _write_jsonl(
             run_dir / "run_config.jsonl",
-            {
-                "run_id": run_id,
-                "preset": preset,
-                "seed": seed,
-                "recipe_source": recipe_source,
-                "checkpoint_dir": str(checkpoint_path) if checkpoint_path is not None else None,
-                "checkpoint_step": resolved_checkpoint_step,
-                "checkpoint_metadata": checkpoint_meta or None,
-                "data": data,
-                "world_size": ddp_world_size,
-                "train_tokens_requested": tokens_requested,
-                "sequence_len": sequence_len,
-                "vocab_size": vocab_size,
-                "n_layer": n_layer,
-                "n_head": n_head,
-                "n_embd": n_embd,
-                "device_batch_size": recorded_device_batch_size,
-                "eval_device_batch_size": device_batch_size,
-                "total_batch_size_tokens": recorded_total_batch_size,
-                "grad_accum_steps": grad_accum_steps,
-                "steps": steps,
-                "init_type": init_type,
-                "use_moe": use_moe,
-                "num_experts": num_experts,
-                "moe_top_k": moe_top_k,
-            },
+            {"run_id": run_id, **run_config},
         )
 
     # The historical inline loop is retained only for explicit CI/smoke use. Scientific rows load
@@ -1065,6 +1084,26 @@ def _run_one(
     }
     if ddp_rank == 0:
         _write_summary(out_dir, row)
+        registry_metrics = {"tok_per_sec": float(summary.tok_per_sec)}
+        if summary.train_loss_final is not None and math.isfinite(summary.train_loss_final):
+            registry_metrics["train_loss"] = float(summary.train_loss_final)
+        if summary.val_bpb is not None and math.isfinite(summary.val_bpb):
+            registry_metrics["eval_bpb"] = float(summary.val_bpb)
+        if summary.niah_acc is not None and math.isfinite(summary.niah_acc):
+            registry_metrics["niah_accuracy"] = float(summary.niah_acc)
+        append_record(
+            make_record(
+                "eval",
+                registry_metrics,
+                run_id=run_id,
+                config=registry_config,
+                seed=seed,
+                dataset_shards=[f"{data}:val"],
+                timestamp=time.time(),
+                notes=f"artifact_dir={run_dir}; preset={preset}; recipe={recipe_source}",
+            ),
+            registry_path,
+        )
 
     # Pretty print
     if ddp_rank == 0:
@@ -1111,6 +1150,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
             moe_top_k=args.moe_top_k,
             checkpoint_dir=args.checkpoint_dir,
             checkpoint_step=args.checkpoint_step,
+            registry_path=args.registry_path,
             runtime=runtime,
         )
     finally:
@@ -1180,6 +1220,7 @@ def _run_batch(
                         moe_top_k=args.moe_top_k,
                         checkpoint_dir=args.checkpoint_dir,
                         checkpoint_step=args.checkpoint_step,
+                        registry_path=args.registry_path,
                         runtime=runtime,
                     )
                 except Exception as e:
@@ -1268,6 +1309,11 @@ def main() -> int:
         p.add_argument("--device-type", default="", help="cuda|cpu|mps (default: autodetect)")
         p.add_argument("--data", default="fineweb", choices=["fineweb", "synthetic"])
         p.add_argument("--out-dir", default="runs/eval_matrix")
+        p.add_argument(
+            "--registry-path",
+            default=DEFAULT_REGISTRY,
+            help="Committed JSONL results registry path",
+        )
         p.add_argument(
             "--checkpoint-dir",
             default="",

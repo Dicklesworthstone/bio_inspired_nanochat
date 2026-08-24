@@ -56,6 +56,44 @@ def test_make_record_rejects_unknown_harness():
 
 
 @pytest.mark.unit
+def test_make_record_hashes_full_mapping_config():
+    first = make_record(
+        "eval",
+        {"eval_bpb": 1.2},
+        run_id="first",
+        config={"model": {"depth": 4}, "data": "fineweb"},
+    )
+    same = make_record(
+        "eval",
+        {"eval_bpb": 1.1},
+        run_id="same",
+        config={"data": "fineweb", "model": {"depth": 4}},
+    )
+    changed = make_record(
+        "eval",
+        {"eval_bpb": 1.1},
+        run_id="changed",
+        config={"model": {"depth": 8}, "data": "fineweb"},
+    )
+    assert first.config_hash == same.config_hash
+    assert first.config_hash != changed.config_hash
+
+
+@pytest.mark.unit
+def test_make_record_rejects_ambiguous_config_and_empty_run_id():
+    with pytest.raises(ValueError, match="either config or syn_cfg"):
+        make_record(
+            "train",
+            {"train_loss": 1.0},
+            run_id="r",
+            config={"depth": 4},
+            syn_cfg=SynapticConfig(),
+        )
+    with pytest.raises(ValueError, match="run_id must be non-empty"):
+        make_record("train", {"train_loss": 1.0}, run_id="  ")
+
+
+@pytest.mark.unit
 def test_default_registry_is_a_committable_results_path():
     assert DEFAULT_REGISTRY == "results/registry.jsonl"
 
@@ -94,8 +132,10 @@ def test_best_record_respects_optimization_direction():
         make_record("eval", {"eval_accuracy": 0.7}, run_id="a", timestamp=3.0),
         make_record("eval", {"eval_accuracy": 0.9}, run_id="b", timestamp=4.0),  # higher better
     ]
-    assert best_record(recs, "val_bpb").run_id == "lo"
-    assert best_record(recs, "eval_accuracy").run_id == "b"
+    best_bpb = best_record(recs, "val_bpb")
+    best_accuracy = best_record(recs, "eval_accuracy")
+    assert best_bpb is not None and best_bpb.run_id == "lo"
+    assert best_accuracy is not None and best_accuracy.run_id == "b"
     assert best_record([], "val_bpb") is None
     with pytest.raises(KeyError):
         best_record(recs, "not_a_metric")
