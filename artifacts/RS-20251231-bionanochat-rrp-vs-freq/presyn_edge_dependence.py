@@ -7,7 +7,11 @@ import torch
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
-from bio_inspired_nanochat.synaptic import SynapticConfig, SynapticPresyn, build_presyn_state
+from bio_inspired_nanochat.synaptic import (  # noqa: E402
+    SynapticConfig,
+    SynapticPresyn,
+    build_presyn_state,
+)
 
 
 def run_once(q: torch.Tensor, k: torch.Tensor, logits: torch.Tensor) -> torch.Tensor:

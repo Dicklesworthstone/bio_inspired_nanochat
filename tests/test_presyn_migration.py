@@ -2,8 +2,8 @@
 ukxt: live attention path migrated to the canonical faithful presyn release (8j9.2).
 
 Verifies the migration end-to-end:
-1. The live attention forward calls release_canonical (faithful Hill dynamics), NOT the legacy
-   sigmoid release().
+1. The live attention fallback calls release_canonical (faithful Hill dynamics), NOT the legacy
+   sigmoid release(). Multi-query CPU forwards may use the equivalent scripted causal scan.
 2. SMOKE-TRAIN GATE (mandatory for a core-engine change): a tiny end-to-end model trains for
    several steps with finite, bounded loss and finite grads — no NaN/Inf, no explosion.
 3. The septin barrier is not double-counted: the attention still applies its own logit-level
@@ -24,7 +24,8 @@ from _bio_testkit import make_tiny_synaptic, random_tokens
 
 @pytest.mark.unit
 def test_live_attention_calls_canonical(monkeypatch):
-    # The legacy sigmoid release() was deleted (qcj7); release_canonical is the only release fn.
+    # The legacy sigmoid release() was deleted (qcj7). A single query deliberately takes the
+    # canonical fallback; multi-query CPU forwards may use the parity-tested scripted scan.
     assert not hasattr(SynapticPresyn, "release"), "the legacy release() must be gone (qcj7)"
     calls = {"canonical": 0}
     orig_canon = SynapticPresyn.release_canonical
@@ -36,7 +37,7 @@ def test_live_attention_calls_canonical(monkeypatch):
     monkeypatch.setattr(SynapticPresyn, "release_canonical", spy_canon)
 
     m = make_tiny_synaptic(seed=0, train=True).train()
-    m(random_tokens(2, 16, vocab=m.config.vocab_size))
+    m(random_tokens(2, 1, vocab=m.config.vocab_size))
 
     assert calls["canonical"] > 0, "live attention must call release_canonical"
 

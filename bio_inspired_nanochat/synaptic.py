@@ -68,6 +68,7 @@ def _sample_binomial_counts(
     mode: Literal["gumbel_sigmoid_ste", "straight_through", "normal_reparam"],
     eps: float = 1e-6,
     generator: Optional[torch.Generator] = None,
+    normal_draw_width: Optional[int] = None,
 ) -> Tensor:
     """Sample Binomial(total_count, probs) counts with a cheap, GPU-friendly estimator.
 
@@ -89,9 +90,17 @@ def _sample_binomial_counts(
         mean = count_f32 * p
         var = count_f32 * p * (1.0 - p)
         std = torch.sqrt(var + eps)
+        draw_shape = mean.shape
+        if normal_draw_width is not None:
+            if normal_draw_width < mean.size(-1):
+                raise ValueError(
+                    "normal_draw_width must cover the probability tensor's final dimension; "
+                    f"got width={normal_draw_width}, probabilities={mean.size(-1)}"
+                )
+            draw_shape = (*mean.shape[:-1], normal_draw_width)
         noise = torch.randn(
-            mean.shape, device=mean.device, dtype=mean.dtype, generator=generator
-        )
+            draw_shape, device=mean.device, dtype=mean.dtype, generator=generator
+        )[..., : mean.size(-1)]
         samp = mean + std * noise
         samp = samp.clamp(min=0.0)
         # Clamp high-end based on per-entry count.
@@ -182,10 +191,9 @@ class SynapticConfig:
     # to be useful (the validator flags it otherwise). Applies to the standard (non-flex) full-
     # sequence training/prefill path; decode (prefix KV cache) is already per-step causal.
     differentiable_recurrence: bool = False
-    # Query positions per recurrence STEP for the chunked causal recurrence above. Smaller = more
-    # faithful causal evolution (more state snapshots) but more sequential steps; >= seq_len
-    # collapses to the single non-causal call (no multi-step => decays get no gradient). 64 balances
-    # faithfulness and the per-step overhead on a 4090.
+    # Query positions per recurrence GROUP for the causal recurrence above. Every query still
+    # advances the state separately; grouping only controls graph/checkpoint orchestration. 64
+    # amortizes Python bookkeeping while preserving token-for-token decode semantics.
     recurrence_block_size: int = 64
     # Truncated-BPTT detach interval, in recurrence STEPS (blocks), for the differentiable
     # recurrence. Bounds activation memory to ~chunk_len blocks regardless of sequence length.
@@ -593,6 +601,339 @@ def _runtime_buffer_mapping(tensors: tuple[Tensor, ...]) -> Dict[str, Tensor]:
     return dict(zip(_PRESYN_RUNTIME_BUFFER_NAMES, tensors))
 
 
+@torch.jit.script
+def _scripted_detached_presyn_scan_cpu(
+    calcium: torch.Tensor,
+    buffer: torch.Tensor,
+    rrp: torch.Tensor,
+    reserve: torch.Tensor,
+    primed: torch.Tensor,
+    clamp: torch.Tensor,
+    energy: torch.Tensor,
+    amplitude: torch.Tensor,
+    delay: List[torch.Tensor],
+    drive: torch.Tensor,
+    idx: torch.Tensor,
+    valid: torch.Tensor,
+    first_active_key_count: int,
+    ema_e: torch.Tensor,
+    generator: Optional[torch.Generator],
+    train: bool,
+    stochastic_frac: float,
+    normal_draw_width: int,
+    stochastic_count_cap: int,
+    rho_c: float,
+    rho_b: float,
+    alpha_ca: float,
+    alpha_buf_on: float,
+    alpha_buf_off: float,
+    syt_fast_kd: float,
+    syt_slow_kd: float,
+    doc2_gain: float,
+    complexin_bias: float,
+    q_beta: float,
+    qmax: float,
+    rec_rate: float,
+    prime_rate: float,
+    unprime_per_release: float,
+    nsf_recover: float,
+    energy_fill: float,
+    energy_max: float,
+    energy_use: float,
+) -> Tuple[
+    torch.Tensor,
+    torch.Tensor,
+    torch.Tensor,
+    torch.Tensor,
+    torch.Tensor,
+    torch.Tensor,
+    torch.Tensor,
+    torch.Tensor,
+    torch.Tensor,
+    List[torch.Tensor],
+    torch.Tensor,
+]:
+    """TorchScript loop for the ordinary detached CPU recurrence."""
+    calcium = calcium.detach().clone()
+    buffer = buffer.detach().clone()
+    rrp = rrp.detach().clone()
+    reserve = reserve.detach().clone()
+    primed = primed.detach().clone()
+    clamp = clamp.detach().clone()
+    energy = energy.detach().clone()
+    delay = [item.detach().clone() for item in delay]
+    ema_e = ema_e.detach().clone()
+    outputs = torch.jit.annotate(List[torch.Tensor], [])
+    batch = int(drive.size(0))
+    heads = int(drive.size(1))
+    query_count = int(drive.size(2))
+
+    for offset in range(query_count):
+        active_key_count = first_active_key_count + offset
+        step_drive = drive[:, :, offset : offset + 1, :]
+        step_valid = valid[:, :, offset : offset + 1, :]
+        step_idx = idx[:, :, offset : offset + 1, :].masked_fill(~step_valid, 0)
+        flat_idx = step_idx.reshape(batch, heads, -1)
+
+        calcium_prefix = calcium[:, :, :active_key_count]
+        buffer_prefix = buffer[:, :, :active_key_count]
+        rrp_prefix = rrp[:, :, :active_key_count]
+        reserve_prefix = reserve[:, :, :active_key_count]
+        primed_prefix = primed[:, :, :active_key_count]
+        clamp_prefix = clamp[:, :, :active_key_count]
+        energy_prefix = energy[:, :, :active_key_count]
+
+        calcium_edge = calcium_prefix.gather(2, flat_idx).view_as(step_drive)
+        buffer_edge = buffer_prefix.gather(2, flat_idx).view_as(step_drive)
+        primed_edge = primed_prefix.gather(2, flat_idx).view_as(step_drive)
+        clamp_edge = clamp_prefix.gather(2, flat_idx).view_as(step_drive)
+        rrp_edge = rrp_prefix.gather(2, flat_idx).view_as(step_drive)
+        energy_edge = energy_prefix.gather(2, flat_idx).view_as(step_drive)
+
+        influx = alpha_ca * F.softplus(step_drive)
+        calcium_edge = (
+            rho_c * calcium_edge
+            + influx
+            - alpha_buf_on * calcium_edge * (1.0 - buffer_edge)
+            + alpha_buf_off * buffer_edge
+        ).clamp(min=0.0)
+        fast = calcium_edge / (calcium_edge + syt_fast_kd)
+        slow = calcium_edge / (calcium_edge + syt_slow_kd)
+        sensor = (
+            0.7 * fast
+            + 0.3 * slow
+            + doc2_gain * torch.sigmoid(4.0 * (calcium_edge - 0.12))
+        )
+        fuse_base = torch.sigmoid(
+            3.0 * sensor + 2.0 * primed_edge - 2.0 * (clamp_edge + complexin_bias)
+        )
+        probability = (fuse_base * torch.sigmoid(step_drive)).clamp(0.0, 1.0)
+        released_deterministic = probability * rrp_edge
+        if train and stochastic_frac > 0.0:
+            do_stochastic = (
+                torch.rand(
+                    probability[..., 0].shape,
+                    device=probability.device,
+                    dtype=torch.float32,
+                    generator=generator,
+                )
+                < stochastic_frac
+            )
+            stochastic_mask = do_stochastic.unsqueeze(-1).expand_as(probability)
+            stochastic_mask = stochastic_mask & step_valid
+            if not bool(stochastic_mask.any()):
+                released = released_deterministic
+            else:
+                if stochastic_count_cap <= 0:
+                    sampled = torch.zeros_like(probability)
+                else:
+                    count_float = torch.clamp(
+                        rrp_edge.round(), 0.0, float(stochastic_count_cap)
+                    ).to(torch.float32)
+                    probability_float = probability.to(torch.float32).clamp(
+                        1e-6, 1.0 - 1e-6
+                    )
+                    mean = count_float * probability_float
+                    variance = (
+                        count_float * probability_float * (1.0 - probability_float)
+                    )
+                    deviation = torch.sqrt(variance + 1e-6)
+                    noise = torch.randn(
+                        (
+                            mean.size(0),
+                            mean.size(1),
+                            mean.size(2),
+                            normal_draw_width,
+                        ),
+                        device=mean.device,
+                        dtype=mean.dtype,
+                        generator=generator,
+                    )[..., : mean.size(-1)]
+                    sampled = (mean + deviation * noise).clamp(min=0.0)
+                    sampled = torch.minimum(sampled, count_float).to(
+                        probability.dtype
+                    )
+                released = torch.where(
+                    stochastic_mask, sampled, released_deterministic
+                )
+        else:
+            released = released_deterministic
+        released = released * step_valid.to(released.dtype)
+        qamp = torch.sigmoid(q_beta * (energy_edge - 0.5)) * qmax
+        edge_release = released * qamp
+
+        flat_release = released.detach().reshape(batch, heads, -1).to(calcium.dtype)
+        flat_drive = (
+            step_drive.detach().reshape(batch, heads, -1).to(calcium.dtype)
+        )
+        flat_valid_bool = step_valid.reshape(batch, heads, -1)
+        flat_valid = flat_valid_bool.to(calcium.dtype)
+        flat_drive = torch.where(
+            flat_valid_bool, flat_drive, torch.zeros_like(flat_drive)
+        )
+        add_values = torch.zeros_like(calcium_prefix)
+        drive_values = torch.zeros_like(calcium_prefix)
+        count_values = torch.zeros_like(calcium_prefix)
+        add_values.scatter_add_(2, flat_idx, flat_release)
+        drive_values.scatter_add_(2, flat_idx, flat_drive)
+        count_values.scatter_add_(2, flat_idx, flat_valid)
+        accessed = (count_values > 0).to(calcium.dtype)
+
+        calcium_updated = (
+            rho_c * calcium_prefix
+            + alpha_ca * F.softplus(drive_values) * accessed
+            - alpha_buf_on * calcium_prefix * (1.0 - buffer_prefix)
+            + alpha_buf_off * buffer_prefix
+        ).clamp(min=0.0)
+        buffer_updated = (
+            rho_b * buffer_prefix
+            + alpha_buf_on * calcium_prefix * (1.0 - buffer_prefix)
+            - alpha_buf_off * buffer_prefix
+        ).clamp(0.0, 1.0)
+        rrp_updated = torch.clamp(rrp_prefix - add_values, 0.0)
+        if len(delay) > 0:
+            reserve_updated = reserve_prefix + delay[0][:, :, :active_key_count]
+            for delay_index in range(len(delay) - 1):
+                delay[delay_index][:, :, :active_key_count] = delay[delay_index + 1][
+                    :, :, :active_key_count
+                ]
+            delay[-1][:, :, :active_key_count] = add_values * rec_rate
+        else:
+            reserve_updated = reserve_prefix
+        take = torch.minimum(reserve_updated, torch.ones_like(reserve_updated))
+        reserve_updated = torch.clamp(
+            reserve_updated - prime_rate * take, 0.0
+        )
+        rrp_updated = torch.clamp(
+            rrp_updated + prime_rate * take, 0.0, 30.0
+        )
+        primed_updated = torch.clamp(
+            primed_prefix * (1.0 - unprime_per_release * add_values)
+            + nsf_recover * (1.0 - primed_prefix),
+            0.0,
+            1.0,
+        )
+        clamp_updated = torch.clamp(
+            clamp_prefix * 0.995 + 0.005 - unprime_per_release * add_values,
+            0.0,
+            1.0,
+        )
+        energy_updated = torch.clamp(
+            energy_prefix
+            + energy_fill * (energy_max - energy_prefix)
+            - energy_use * add_values,
+            0.0,
+            energy_max,
+        )
+
+        calcium[:, :, :active_key_count] = calcium_updated
+        buffer[:, :, :active_key_count] = buffer_updated
+        rrp[:, :, :active_key_count] = rrp_updated
+        reserve[:, :, :active_key_count] = reserve_updated
+        primed[:, :, :active_key_count] = primed_updated
+        clamp[:, :, :active_key_count] = clamp_updated
+        energy[:, :, :active_key_count] = energy_updated
+        if train:
+            valid_weight = step_valid.to(edge_release.dtype)
+            scale = (
+                (edge_release.detach().abs() * valid_weight).sum()
+                / valid_weight.sum().clamp_min(1)
+            ).clamp_min(1e-3)
+            ema_e.mul_(0.99)
+            ema_e.add_(0.01 * scale)
+        outputs.append(edge_release / (ema_e + 1e-6))
+
+    return (
+        torch.cat(outputs, dim=2),
+        calcium,
+        buffer,
+        rrp,
+        reserve,
+        primed,
+        clamp,
+        energy,
+        amplitude,
+        delay,
+        ema_e,
+    )
+
+
+def _presyn_state_prefix(state: Dict[str, Any], key_count: int) -> Dict[str, Any]:
+    """Return a view-backed state containing only the materialized key prefix."""
+    flat_state, delay_len, has_heat = _flatten_presyn_state(state)
+    return _unflatten_presyn_state(
+        tuple(tensor[:, :, :key_count] for tensor in flat_state),
+        delay_len=delay_len,
+        has_heat=has_heat,
+    )
+
+
+def _grow_presyn_state_prefix(
+    state: Dict[str, Any], source: Dict[str, Any], key_count: int
+) -> Dict[str, Any]:
+    """Append newly materialized source slots to a recurrent state prefix."""
+    flat_state, delay_len, has_heat = _flatten_presyn_state(state)
+    flat_source, source_delay_len, source_has_heat = _flatten_presyn_state(source)
+    if source_delay_len != delay_len or source_has_heat != has_heat:
+        raise RuntimeError("presyn recurrent state changed its schema while growing")
+    current_key_count = int(flat_state[0].size(2))
+    if key_count < current_key_count:
+        raise ValueError(
+            f"cannot shrink a presyn state prefix from {current_key_count} to {key_count}"
+        )
+    if key_count == current_key_count:
+        return state
+    return _unflatten_presyn_state(
+        tuple(
+            torch.cat((current, original[:, :, current_key_count:key_count]), dim=2)
+            for current, original in zip(flat_state, flat_source)
+        ),
+        delay_len=delay_len,
+        has_heat=has_heat,
+    )
+
+
+def _commit_presyn_state_prefix(
+    state: Dict[str, Any], prefix: Dict[str, Any], source: Dict[str, Any]
+) -> None:
+    """Merge an updated materialized prefix with untouched future state exactly once."""
+    flat_prefix, delay_len, has_heat = _flatten_presyn_state(prefix)
+    flat_source, source_delay_len, source_has_heat = _flatten_presyn_state(source)
+    if source_delay_len != delay_len or source_has_heat != has_heat:
+        raise RuntimeError("presyn recurrent state changed its schema while committing")
+    prefix_key_count = int(flat_prefix[0].size(2))
+    source_key_count = int(flat_source[0].size(2))
+    if prefix_key_count > source_key_count:
+        raise ValueError(
+            "presyn state prefix exceeds its source extent; "
+            f"got prefix={prefix_key_count}, source={source_key_count}"
+        )
+    if prefix_key_count == source_key_count:
+        merged = flat_prefix
+    else:
+        merged = tuple(
+            torch.cat((current, original[:, :, prefix_key_count:]), dim=2)
+            for current, original in zip(flat_prefix, flat_source)
+        )
+    state.update(
+        _unflatten_presyn_state(merged, delay_len=delay_len, has_heat=has_heat)
+    )
+
+
+@torch.no_grad()
+def _copy_presyn_state_prefix_(state: Dict[str, Any], prefix: Dict[str, Any]) -> None:
+    """Commit a detached recurrent prefix into its full-capacity backing tensors in place."""
+    flat_state, delay_len, has_heat = _flatten_presyn_state(state)
+    flat_prefix, prefix_delay_len, prefix_has_heat = _flatten_presyn_state(prefix)
+    if prefix_delay_len != delay_len or prefix_has_heat != has_heat:
+        raise RuntimeError("presyn recurrent state changed its schema while copying")
+    prefix_key_count = int(flat_prefix[0].size(2))
+    if prefix_key_count > int(flat_state[0].size(2)):
+        raise ValueError("presyn state prefix exceeds its destination extent")
+    for destination, source in zip(flat_state, flat_prefix):
+        destination[:, :, :prefix_key_count].copy_(source)
+
+
 def _release_recurrence_group(
     presyn: "SynapticPresyn",
     state: Dict[str, Any],
@@ -607,7 +948,7 @@ def _release_recurrence_group(
 ) -> Tensor:
     """Advance one graph/checkpoint group while preserving per-query causal values."""
     query_count = int(drive.size(2))
-    if active_key_count is None or query_count == 1:
+    if active_key_count is None:
         return presyn.release_canonical(
             state,
             drive,
@@ -625,6 +966,167 @@ def _release_recurrence_group(
             "active_key_count must cover every query in its recurrence group; "
             f"got end={active_key_count}, queries={query_count}"
         )
+    state_key_count = int(state["C"].size(2))
+    if active_key_count > state_key_count:
+        raise ValueError(
+            "active_key_count exceeds the recurrent state extent; "
+            f"got active={active_key_count}, state={state_key_count}"
+        )
+
+    cfg = presyn.cfg
+    train_stochastic_frac = min(
+        1.0,
+        max(
+            0.0,
+            cfg.stochastic_train_frac * getattr(presyn, "_nm_ach_gain", 1.0),
+        ),
+    )
+    flat_state, _, _ = _flatten_presyn_state(state)
+    if (
+        valid is not None
+        and query_count > 1
+        and cfg.enable_presyn
+        and drive.device.type == "cpu"
+        and drive.dtype == torch.float32
+        and (train or not torch.is_grad_enabled())
+        and not differentiable
+        and runtime_buffers is None
+        and presyn.kinetics is None
+        and not presyn.use_metriplectic_integrator()
+        and not bool(getattr(presyn, "_mc_sampling", False))
+        and cfg.stochastic_mode == "normal_reparam"
+        and "HEAT" not in state
+        and not any(tensor.requires_grad for tensor in flat_state)
+    ):
+        train_generator = (
+            presyn._train_sampling_generator(drive.device)
+            if train and train_stochastic_frac > 0.0
+            else None
+        )
+        scripted = _scripted_detached_presyn_scan_cpu(
+            state["C"],
+            state["BUF"],
+            state["RRP"],
+            state["RES"],
+            state["PR"],
+            state["CL"],
+            state["E"],
+            state["AMP"],
+            state["DELAY"],
+            drive,
+            idx,
+            valid,
+            first_active_key_count,
+            presyn.ema_e,
+            train_generator,
+            train,
+            train_stochastic_frac,
+            int(cfg.attn_topk),
+            int(cfg.stochastic_count_cap),
+            math.exp(-1.0 / cfg.tau_c),
+            math.exp(-1.0 / cfg.tau_buf),
+            cfg.alpha_ca,
+            cfg.alpha_buf_on,
+            cfg.alpha_buf_off,
+            cfg.syt_fast_kd,
+            cfg.syt_slow_kd,
+            cfg.doc2_gain,
+            cfg.complexin_bias,
+            cfg.q_beta,
+            cfg.qmax,
+            cfg.rec_rate,
+            cfg.prime_rate,
+            cfg.unprime_per_release,
+            cfg.nsf_recover,
+            cfg.energy_fill,
+            cfg.energy_max,
+            cfg.energy_use,
+        )
+        if train_generator is not None:
+            presyn._commit_train_sampling_generator(train_generator)
+        state.update(
+            {
+                "C": scripted[1],
+                "BUF": scripted[2],
+                "RRP": scripted[3],
+                "RES": scripted[4],
+                "PR": scripted[5],
+                "CL": scripted[6],
+                "E": scripted[7],
+                "AMP": scripted[8],
+                "DELAY": scripted[9],
+            }
+        )
+        if train:
+            with torch.no_grad():
+                presyn.ema_e.copy_(scripted[10])
+        return scripted[0]
+
+    # Invalid top-k entries can point into the preallocated future suffix. When an explicit valid
+    # mask is present, map those dead entries to key zero and run each exact causal step only over
+    # its materialized prefix. This removes full-sequence state arithmetic and one active-mask
+    # restore per query. The updated prefix is joined with the untouched suffix once per group.
+    # Calls without a valid mask retain the full-state path because future indices may be genuine
+    # inputs whose release values must still be returned.
+    if valid is not None and not (
+        query_count == 1 and active_key_count == state_key_count
+    ):
+        if presyn.use_metriplectic_integrator() and "HEAT" not in state:
+            state["HEAT"] = torch.zeros_like(state["C"])
+            flat_state, _, _ = _flatten_presyn_state(state)
+        if not differentiable and not any(tensor.requires_grad for tensor in flat_state):
+            drives = drive.split(1, dim=2)
+            idxs = idx.split(1, dim=2)
+            valids = valid.split(1, dim=2)
+            outputs: List[Tensor] = []
+            for offset, (step_drive, step_idx, step_valid) in enumerate(
+                zip(drives, idxs, valids)
+            ):
+                step_key_count = first_active_key_count + offset
+                local_state = _presyn_state_prefix(state, step_key_count)
+                local_idx = step_idx.masked_fill(~step_valid, 0)
+                outputs.append(
+                    presyn.release_canonical(
+                        local_state,
+                        step_drive,
+                        local_idx,
+                        train=train,
+                        valid=step_valid,
+                        differentiable=False,
+                        runtime_buffers=runtime_buffers,
+                    )
+                )
+                _copy_presyn_state_prefix_(state, local_state)
+            return torch.cat(outputs, dim=2)
+
+        source_state = dict(state)
+        local_state = _presyn_state_prefix(source_state, first_active_key_count)
+        drives = drive.split(1, dim=2)
+        idxs = idx.split(1, dim=2)
+        valids = valid.split(1, dim=2)
+        outputs: List[Tensor] = []
+        for offset, (step_drive, step_idx, step_valid) in enumerate(
+            zip(drives, idxs, valids)
+        ):
+            step_key_count = first_active_key_count + offset
+            local_state = _grow_presyn_state_prefix(
+                local_state, source_state, step_key_count
+            )
+            local_idx = step_idx.masked_fill(~step_valid, 0)
+            outputs.append(
+                presyn.release_canonical(
+                    local_state,
+                    step_drive,
+                    local_idx,
+                    train=train,
+                    valid=step_valid,
+                    differentiable=differentiable,
+                    runtime_buffers=runtime_buffers,
+                )
+            )
+        _commit_presyn_state_prefix(state, local_state, source_state)
+        return torch.cat(outputs, dim=2)
+
     drives = drive.split(1, dim=2)
     idxs = idx.split(1, dim=2)
     valids: Sequence[Optional[Tensor]] = (
@@ -1012,6 +1514,18 @@ class SynapticPresyn(nn.Module):
         super().__init__()
         object.__setattr__(self, "cfg", cfg)
         self.register_buffer("ema_e", torch.ones(1))
+        # Generator states are opaque and backend-specific (CPU and CUDA even use different
+        # state sizes). Keep one variable-length blob per supported backend plus a shared lazy
+        # seed for safe cross-device migration. Same-backend checkpoints resume exactly; when a
+        # checkpoint first moves to another backend, that backend starts from the shared seed
+        # instead of trying to ingest an incompatible state blob.
+        self.register_buffer("_presyn_train_rng_seed", torch.full((), -1, dtype=torch.int64))
+        self.register_buffer(
+            "_presyn_train_cpu_rng_state", torch.empty(0, dtype=torch.uint8)
+        )
+        self.register_buffer(
+            "_presyn_train_cuda_rng_state", torch.empty(0, dtype=torch.uint8)
+        )
         # 0642.1.2: on-device, non-persistent guard evidence for the live metriplectic recurrence.
         # These are counters/telemetry, not learned or checkpoint state. Keeping reductions as
         # tensors avoids synchronizing CUDA on every presynaptic step.
@@ -1035,6 +1549,83 @@ class SynapticPresyn(nn.Module):
         # yw9.3: SGD-learnable, stability-preserving calcium/buffer kinetics (default-off). When
         # present, release_canonical sources rho_c/rho_b/alpha_* from these Parameters.
         self.kinetics = LearnableKinetics(cfg) if cfg.learnable_kinetics else None
+
+    def _train_rng_state_buffer(self, device: torch.device) -> Tensor:
+        if device.type == "cpu":
+            return self._presyn_train_cpu_rng_state
+        if device.type == "cuda":
+            return self._presyn_train_cuda_rng_state
+        raise RuntimeError(
+            "private presynaptic train sampling supports CPU and CUDA generators; "
+            f"got device {device}"
+        )
+
+    def _train_sampling_generator(
+        self, device: torch.device
+    ) -> Optional[torch.Generator]:
+        """Return a private CPU/CUDA RNG; other backends retain their global RNG fallback."""
+        if device.type not in {"cpu", "cuda"}:
+            # PyTorch does not expose torch.Generator for every accelerator backend (notably MPS
+            # in supported releases). Passing None keeps the former device-global RNG behavior
+            # instead of making otherwise-supported stochastic training fail.
+            return None
+        generator = getattr(self, "_presyn_train_generator", None)
+        if generator is None or generator.device != device:
+            generator = torch.Generator(device=device)
+            state = self._train_rng_state_buffer(device)
+            if state.numel() > 0:
+                generator.set_state(state.detach().cpu())
+            else:
+                seed = int(self._presyn_train_rng_seed.item())
+                if seed < 0:
+                    seed = int(
+                        torch.randint(
+                            0, torch.iinfo(torch.int64).max, (), device="cpu"
+                        ).item()
+                    )
+                    with torch.no_grad():
+                        self._presyn_train_rng_seed.fill_(seed)
+                generator.manual_seed(seed)
+            self._presyn_train_generator = generator
+        return generator
+
+    @torch.no_grad()
+    def _commit_train_sampling_generator(self, generator: torch.Generator) -> None:
+        """Persist the private train RNG in the matching backend's checkpoint blob."""
+        state_buffer = self._train_rng_state_buffer(generator.device)
+        generator_state = generator.get_state().to(device=state_buffer.device)
+        state_buffer.resize_(generator_state.shape)
+        state_buffer.copy_(generator_state)
+
+    def _load_from_state_dict(
+        self,
+        state_dict,
+        prefix,
+        local_metadata,
+        strict,
+        missing_keys,
+        unexpected_keys,
+        error_msgs,
+    ) -> None:
+        # Opaque generator states have backend- and PyTorch-version-dependent lengths. Resize the
+        # registered destinations before the normal strict loader copies (or assigns) them.
+        for name in ("_presyn_train_cpu_rng_state", "_presyn_train_cuda_rng_state"):
+            incoming = state_dict.get(prefix + name)
+            current = getattr(self, name)
+            if torch.is_tensor(incoming) and incoming.shape != current.shape:
+                with torch.no_grad():
+                    current.resize_(incoming.shape)
+        super()._load_from_state_dict(
+            state_dict,
+            prefix,
+            local_metadata,
+            strict,
+            missing_keys,
+            unexpected_keys,
+            error_msgs,
+        )
+        if hasattr(self, "_presyn_train_generator"):
+            delattr(self, "_presyn_train_generator")
 
     def use_metriplectic_integrator(self) -> bool:
         """Dispatch predicate (0642.1.2.4): advance the calcium/buffer subsystem with the
@@ -1404,7 +1995,15 @@ class SynapticPresyn(nn.Module):
         sampled_mask = (
             torch.zeros_like(p, dtype=torch.bool) if evidence_sink is not None else None
         )
+        train_generator: Optional[torch.Generator] = None
         if (train or mc_sampling) and ach_frac > 0:
+            sampling_generator = (
+                mc_generator
+                if mc_sampling
+                else self._train_sampling_generator(p.device)
+            )
+            if train and not mc_sampling and sampling_generator is not None:
+                train_generator = sampling_generator
             sample_pool_sizes = torch.clamp(
                 rrp_edge.round(), 0.0, float(cfg.stochastic_count_cap)
             )
@@ -1413,7 +2012,7 @@ class SynapticPresyn(nn.Module):
                     p[..., 0].shape,
                     device=p.device,
                     dtype=torch.float32,
-                    generator=mc_generator,
+                    generator=sampling_generator,
                 )
                 < float(ach_frac)
             )
@@ -1421,7 +2020,28 @@ class SynapticPresyn(nn.Module):
             stoch_mask = do_stoch.unsqueeze(-1).expand_as(p)
             if valid is not None:
                 stoch_mask = stoch_mask & valid
-            if stoch_mask.any():
+            if cfg.stochastic_mode == "normal_reparam":
+                # The normal estimator is cheap enough to evaluate densely. Avoiding boolean
+                # gather/scatter here removes a CPU synchronization point and dozens of tiny
+                # indexing kernels from every causal query; ``where`` keeps non-sampled edges on
+                # their deterministic release value. Drawing one fixed-shape noise tensor per
+                # query also remains invariant to recurrence grouping.
+                if stoch_mask.any():
+                    if sampled_mask is not None:
+                        sampled_mask = stoch_mask
+                    k_rel = _sample_binomial_counts(
+                        probs=p,
+                        total_count=sample_pool_sizes,
+                        max_count=int(cfg.stochastic_count_cap),
+                        tau=float(cfg.stochastic_tau),
+                        mode=cfg.stochastic_mode,
+                        generator=sampling_generator,
+                        normal_draw_width=int(cfg.attn_topk),
+                    )
+                    rel = torch.where(stoch_mask, k_rel, rel_det)
+                else:
+                    rel = rel_det
+            elif stoch_mask.any():
                 if sampled_mask is not None:
                     sampled_mask = stoch_mask
                 k_rel = _sample_binomial_counts(
@@ -1430,7 +2050,7 @@ class SynapticPresyn(nn.Module):
                     max_count=int(cfg.stochastic_count_cap),
                     tau=float(cfg.stochastic_tau),
                     mode=cfg.stochastic_mode,
-                    generator=mc_generator,
+                    generator=sampling_generator,
                 )
                 rel = rel_det.clone()
                 rel[stoch_mask] = k_rel
@@ -1438,6 +2058,8 @@ class SynapticPresyn(nn.Module):
                 rel = rel_det
         else:
             rel = p * rrp_edge
+        if train_generator is not None:
+            self._commit_train_sampling_generator(train_generator)
         if valid is not None:
             rel = rel * valid.to(rel.dtype)
         if evidence_sink is not None:

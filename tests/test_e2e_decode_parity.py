@@ -19,6 +19,8 @@ Run:  pytest tests/test_e2e_decode_parity.py -v
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import torch
 import pytest
 
@@ -27,7 +29,12 @@ from bio_inspired_nanochat.gpt import GPT, GPTConfig
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
 from bio_inspired_nanochat.mc_ensemble import mc_sampling
 from bio_inspired_nanochat.run_logging import RunLogger
-from bio_inspired_nanochat.synaptic import SynapticConfig, SynapticPresyn, build_presyn_state
+from bio_inspired_nanochat.synaptic import (
+    SynapticConfig,
+    SynapticPresyn,
+    _release_recurrence_group,
+    build_presyn_state,
+)
 
 
 # --------------------------------------------------------------------------- #
@@ -305,6 +312,292 @@ def test_inactive_future_state_slots_remain_at_initial_values():
             assert torch.equal(value[..., 2:], initial_value[..., 2:]), key
 
 
+@pytest.mark.unit
+def test_scripted_cpu_scan_matches_stochastic_reference_values_state_and_gradients():
+    cfg = SynapticConfig(attn_topk=8, stochastic_train_frac=0.12)
+    scripted_presyn = SynapticPresyn(d_head=8, cfg=cfg)
+    reference_presyn = SynapticPresyn(d_head=8, cfg=cfg)
+    batch, heads, tokens, topk = 2, 3, 12, 8
+    initial = build_presyn_state(
+        batch, tokens, heads, torch.device("cpu"), torch.float32, cfg
+    )
+
+    def clone_state():
+        return {
+            key: [item.clone() for item in value]
+            if isinstance(value, list)
+            else value.clone()
+            for key, value in initial.items()
+        }
+
+    scripted_state = clone_state()
+    reference_state = clone_state()
+    generator = torch.Generator().manual_seed(101)
+    drive = torch.randn(batch, heads, tokens, topk, generator=generator)
+    idx = torch.randint(0, tokens, (batch, heads, tokens, topk), generator=generator)
+    valid = idx <= torch.arange(tokens).view(1, 1, tokens, 1)
+    scripted_drive = drive.clone().requires_grad_()
+    reference_drive = drive.clone().requires_grad_()
+
+    torch.manual_seed(103)
+    with patch.object(
+        SynapticPresyn,
+        "release_canonical",
+        side_effect=AssertionError("scripted scan fell back to the Python query loop"),
+    ):
+        scripted_output = _release_recurrence_group(
+            scripted_presyn,
+            scripted_state,
+            scripted_drive,
+            idx,
+            valid,
+            train=True,
+            differentiable=False,
+            active_key_count=tokens,
+        )
+
+    torch.manual_seed(103)
+    reference_outputs = []
+    for position in range(tokens):
+        reference_outputs.append(
+            reference_presyn.release_canonical(
+                reference_state,
+                reference_drive[:, :, position : position + 1],
+                idx[:, :, position : position + 1],
+                train=True,
+                valid=valid[:, :, position : position + 1],
+                differentiable=False,
+                active_key_count=position + 1,
+            )
+        )
+    reference_output = torch.cat(reference_outputs, dim=2)
+
+    assert torch.equal(scripted_output, reference_output)
+    assert torch.equal(scripted_presyn.ema_e, reference_presyn.ema_e)
+    for key in scripted_state:
+        scripted_values = (
+            scripted_state[key]
+            if isinstance(scripted_state[key], list)
+            else [scripted_state[key]]
+        )
+        reference_values = (
+            reference_state[key]
+            if isinstance(reference_state[key], list)
+            else [reference_state[key]]
+        )
+        assert all(
+            torch.allclose(
+                scripted_value, reference_value, atol=1e-7, rtol=1e-7
+            )
+            for scripted_value, reference_value in zip(
+                scripted_values, reference_values
+            )
+        ), key
+
+    scripted_output.sum().backward()
+    reference_output.sum().backward()
+    assert scripted_drive.grad is not None and reference_drive.grad is not None
+    assert torch.allclose(
+        scripted_drive.grad, reference_drive.grad, atol=2e-7, rtol=1e-6
+    )
+
+
+@pytest.mark.unit
+def test_scripted_cpu_scan_falls_back_for_differentiable_input_state():
+    cfg = SynapticConfig(attn_topk=4, stochastic_train_frac=0.0)
+    presyn = SynapticPresyn(d_head=8, cfg=cfg)
+    state = build_presyn_state(1, 4, 1, torch.device("cpu"), torch.float32, cfg)
+    initial_calcium = state["C"].requires_grad_()
+    drive = torch.randn(1, 1, 4, 4, requires_grad=True)
+    idx = torch.zeros(1, 1, 4, 4, dtype=torch.long)
+    valid = torch.ones_like(idx, dtype=torch.bool)
+
+    output = _release_recurrence_group(
+        presyn,
+        state,
+        drive,
+        idx,
+        valid,
+        train=True,
+        differentiable=False,
+        active_key_count=4,
+    )
+    output.sum().backward()
+
+    initial_calcium_grad = initial_calcium.grad
+    assert initial_calcium_grad is not None
+    assert torch.isfinite(initial_calcium_grad).all()
+    assert initial_calcium_grad.abs().sum() > 0
+
+
+@pytest.mark.unit
+def test_private_train_rng_round_trips_through_presyn_state_dict():
+    cfg = SynapticConfig(attn_topk=4, stochastic_train_frac=1.0)
+    uninterrupted = SynapticPresyn(d_head=8, cfg=cfg)
+    resumed = SynapticPresyn(d_head=8, cfg=cfg)
+    assert uninterrupted._train_sampling_generator(torch.device("mps")) is None
+    tokens = 8
+    recurrent_state = build_presyn_state(
+        1, tokens, 2, torch.device("cpu"), torch.float32, cfg
+    )
+    generator = torch.Generator().manual_seed(107)
+    drive = torch.randn(1, 2, tokens, 4, generator=generator)
+    idx = torch.randint(0, tokens, (1, 2, tokens, 4), generator=generator)
+    valid = idx <= torch.arange(tokens).view(1, 1, tokens, 1)
+
+    torch.manual_seed(109)
+    _release_recurrence_group(
+        uninterrupted,
+        recurrent_state,
+        drive[:, :, :4],
+        idx[:, :, :4],
+        valid[:, :, :4],
+        train=True,
+        differentiable=False,
+        active_key_count=4,
+    )
+    saved_module_state = {
+        key: value.clone() for key, value in uninterrupted.state_dict().items()
+    }
+    saved_recurrent_state = {
+        key: [item.clone() for item in value]
+        if isinstance(value, list)
+        else value.clone()
+        for key, value in recurrent_state.items()
+    }
+
+    expected = _release_recurrence_group(
+        uninterrupted,
+        recurrent_state,
+        drive[:, :, 4:],
+        idx[:, :, 4:],
+        valid[:, :, 4:],
+        train=True,
+        differentiable=False,
+        active_key_count=8,
+    )
+
+    torch.manual_seed(9_999)
+    resumed.load_state_dict(saved_module_state, strict=True)
+    actual = _release_recurrence_group(
+        resumed,
+        saved_recurrent_state,
+        drive[:, :, 4:],
+        idx[:, :, 4:],
+        valid[:, :, 4:],
+        train=True,
+        differentiable=False,
+        active_key_count=8,
+    )
+
+    assert torch.equal(actual, expected)
+    assert torch.equal(resumed.ema_e, uninterrupted.ema_e)
+    for key in recurrent_state:
+        expected_values = (
+            recurrent_state[key]
+            if isinstance(recurrent_state[key], list)
+            else [recurrent_state[key]]
+        )
+        actual_values = (
+            saved_recurrent_state[key]
+            if isinstance(saved_recurrent_state[key], list)
+            else [saved_recurrent_state[key]]
+        )
+        assert all(
+            torch.equal(actual_value, expected_value)
+            for actual_value, expected_value in zip(
+                actual_values, expected_values
+            )
+        ), key
+
+
+@pytest.mark.gpu
+@pytest.mark.e2e
+def test_private_train_rng_checkpoint_is_backend_safe_on_cuda():
+    """CPU and CUDA RNG blobs never get loaded into one another, and CUDA resumes exactly."""
+    cfg = SynapticConfig(attn_topk=4, stochastic_train_frac=1.0)
+    cpu_source = SynapticPresyn(d_head=8, cfg=cfg)
+    cpu_state = build_presyn_state(
+        1, 1, 2, torch.device("cpu"), torch.float32, cfg
+    )
+    cpu_drive = torch.ones(1, 2, 1, 4)
+    cpu_idx = torch.zeros(1, 2, 1, 4, dtype=torch.long)
+    cpu_valid = torch.ones_like(cpu_idx, dtype=torch.bool)
+    torch.manual_seed(113)
+    _release_recurrence_group(
+        cpu_source,
+        cpu_state,
+        cpu_drive,
+        cpu_idx,
+        cpu_valid,
+        train=True,
+        differentiable=False,
+        active_key_count=1,
+    )
+    assert cpu_source._presyn_train_cpu_rng_state.numel() > 0
+    assert cpu_source._presyn_train_cuda_rng_state.numel() == 0
+
+    device = torch.device("cuda")
+    uninterrupted = SynapticPresyn(d_head=8, cfg=cfg).to(device)
+    uninterrupted.load_state_dict(cpu_source.state_dict(), strict=True)
+    assert uninterrupted._presyn_train_cpu_rng_state.numel() > 0
+    assert uninterrupted._presyn_train_cuda_rng_state.numel() == 0
+
+    tokens = 8
+    recurrent_state = build_presyn_state(1, tokens, 2, device, torch.float32, cfg)
+    generator = torch.Generator().manual_seed(127)
+    drive = torch.randn(1, 2, tokens, 4, generator=generator).to(device)
+    idx = torch.randint(
+        0, tokens, (1, 2, tokens, 4), generator=generator
+    ).to(device)
+    valid = idx <= torch.arange(tokens, device=device).view(1, 1, tokens, 1)
+    _release_recurrence_group(
+        uninterrupted,
+        recurrent_state,
+        drive[:, :, :4],
+        idx[:, :, :4],
+        valid[:, :, :4],
+        train=True,
+        differentiable=False,
+        active_key_count=4,
+    )
+    assert uninterrupted._presyn_train_cuda_rng_state.numel() > 0
+    saved_module_state = {
+        key: value.clone() for key, value in uninterrupted.state_dict().items()
+    }
+    saved_recurrent_state = {
+        key: [item.clone() for item in value]
+        if isinstance(value, list)
+        else value.clone()
+        for key, value in recurrent_state.items()
+    }
+    expected = _release_recurrence_group(
+        uninterrupted,
+        recurrent_state,
+        drive[:, :, 4:],
+        idx[:, :, 4:],
+        valid[:, :, 4:],
+        train=True,
+        differentiable=False,
+        active_key_count=8,
+    )
+
+    resumed = SynapticPresyn(d_head=8, cfg=cfg).to(device)
+    resumed.load_state_dict(saved_module_state, strict=True)
+    actual = _release_recurrence_group(
+        resumed,
+        saved_recurrent_state,
+        drive[:, :, 4:],
+        idx[:, :, 4:],
+        valid[:, :, 4:],
+        train=True,
+        differentiable=False,
+        active_key_count=8,
+    )
+    torch.testing.assert_close(actual, expected, rtol=0.0, atol=0.0)
+    assert torch.equal(resumed.ema_e, uninterrupted.ema_e)
+
+
 @pytest.mark.e2e
 def test_train_mode_ema_matches_contiguous_and_incremental_schedules():
     full_model, cfg = _model(7, stochastic_train_frac=0.0)
@@ -335,6 +628,46 @@ def test_train_mode_ema_matches_contiguous_and_incremental_schedules():
             incremental_block.attn.attn.pre.ema_e,
             atol=1e-7,
             rtol=1e-7,
+        )
+
+
+@pytest.mark.e2e
+def test_stochastic_train_rng_matches_contiguous_and_incremental_schedules():
+    full_model, cfg = _model(29, attn_topk=8, stochastic_train_frac=0.12)
+    incremental_model, _ = _model(29, attn_topk=8, stochastic_train_frac=0.12)
+    torch.manual_seed(37)
+    tokens = torch.randint(0, cfg.vocab_size, (1, 11), dtype=torch.long)
+
+    torch.manual_seed(41)
+    full_cache = _kv(cfg, 1, 11)
+    full_logits, _ = full_model(tokens, kv_cache=full_cache, train_mode=True)
+
+    torch.manual_seed(41)
+    incremental_cache = _kv(cfg, 1, 11)
+    incremental_logits = []
+    for position in range(tokens.size(1)):
+        logits, _ = incremental_model(
+            tokens[:, position : position + 1],
+            kv_cache=incremental_cache,
+            train_mode=True,
+        )
+        incremental_logits.append(logits)
+
+    assert torch.allclose(
+        torch.cat(incremental_logits, dim=1), full_logits, atol=1e-6, rtol=1e-6
+    )
+    assert isinstance(full_cache.presyn_state, list)
+    assert isinstance(incremental_cache.presyn_state, list)
+    for layer, (full_state, incremental_state) in enumerate(
+        zip(full_cache.presyn_state, incremental_cache.presyn_state)
+    ):
+        _assert_presyn_state_close(
+            full_state, incremental_state, context=f"stochastic layer {layer}"
+        )
+    for full_block, incremental_block in zip(full_model.h, incremental_model.h):
+        assert torch.equal(
+            full_block.attn.attn.pre.ema_e,
+            incremental_block.attn.attn.pre.ema_e,
         )
 
 
