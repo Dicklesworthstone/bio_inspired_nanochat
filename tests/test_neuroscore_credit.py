@@ -16,10 +16,49 @@ from __future__ import annotations
 import pytest
 import torch
 
+import bio_inspired_nanochat.neuroscore as neuroscore_module
 from bio_inspired_nanochat.neuroscore import NeuroScore, NeuroScoreConfig
 from bio_inspired_nanochat.synaptic import SynapticConfig, SynapticMoE
 
 pytestmark = pytest.mark.unit
+
+
+@pytest.mark.parametrize(
+    ("credit_mode", "gates_on_cuda", "expected"),
+    [
+        ("gradient", True, False),
+        ("gradient", False, False),
+        ("proxy", True, True),
+        ("proxy", False, False),
+    ],
+)
+def test_fused_proxy_kernel_never_overrides_gradient_credit(
+    monkeypatch, credit_mode: str, gates_on_cuda: bool, expected: bool
+):
+    monkeypatch.setattr(neuroscore_module, "FUSED_METRICS", True)
+    score = NeuroScore(NeuroScoreConfig(credit_mode=credit_mode), neuroviz=None)
+    assert score._uses_fused_proxy_metrics(gates_on_cuda=gates_on_cuda) is expected
+
+
+@pytest.mark.gpu
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+def test_cuda_fused_flag_still_publishes_gradient_credit(monkeypatch):
+    monkeypatch.setattr(neuroscore_module, "FUSED_METRICS", True)
+    moe = _moe(num_experts=4).cuda()
+    score = NeuroScore(NeuroScoreConfig(credit_mode="gradient"), neuroviz=None)
+    x = torch.randn(2, 6, 8, device="cuda")
+
+    # First step installs hooks; the second backward produces fresh marginal credit.
+    y, _aux = moe(x)
+    y.pow(2).mean().backward()
+    score.step(moe, y.detach().pow(2).mean(), 0)
+    moe.zero_grad(set_to_none=True)
+
+    y, _aux = moe(x)
+    y.pow(2).mean().backward()
+    score.step(moe, y.detach().pow(2).mean(), 1)
+
+    assert score.stats[""]["credit_source"] == "gradient"
 
 
 def _moe(num_experts: int = 4, n_embd: int = 8, top_k: int | None = None, seed: int = 0) -> SynapticMoE:

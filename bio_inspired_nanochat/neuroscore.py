@@ -12,7 +12,7 @@
 # -----------------------------------------------------------------------------
 
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 from bio_inspired_nanochat.common import decouple_config
 from bio_inspired_nanochat.torch_imports import F, Tensor, nn, torch
@@ -68,6 +68,18 @@ class NeuroScore:
     def _uses_gradient_credit(self) -> bool:
         return getattr(self.cfg, "credit_mode", "gradient") == "gradient"
 
+    def _uses_fused_proxy_metrics(self, *, gates_on_cuda: bool) -> bool:
+        """Whether the proxy-only fused kernel is semantically valid this step.
+
+        ``update_metrics_fused`` accumulates routing-gate mass as contribution; it
+        cannot consume the backward-hook stash used by gradient credit. Therefore a
+        configured gradient estimator must always take the reference path, including
+        on CUDA, instead of silently publishing proxy credit from the faster kernel.
+        """
+        return bool(
+            FUSED_METRICS and gates_on_cuda and not self._uses_gradient_credit()
+        )
+
     def _install_hooks(self, module: nn.Module) -> None:
         """Attach per-expert backward captures (uta.2), idempotently.
 
@@ -86,7 +98,9 @@ class NeuroScore:
         experts = getattr(module, "experts", None)
         if experts is None:
             return
-        stash: Dict[int, Any] = getattr(module, "_ns_grad_stash", None)
+        stash = cast(
+            Optional[Dict[int, Any]], getattr(module, "_ns_grad_stash", None)
+        )
         if stash is None:
             stash = {}
             object.__setattr__(module, "_ns_grad_stash", stash)
@@ -181,7 +195,7 @@ class NeuroScore:
 
                 layer_name = name
                 if self.neuroviz is not None:
-                    mapped = self.neuroviz._name_of(module)  # type: ignore[attr-defined]
+                    mapped = self.neuroviz._name_of(module)
                     if mapped:
                         layer_name = mapped
                 if layer_name not in self.stats:
@@ -207,12 +221,15 @@ class NeuroScore:
                 x_in = ctx["x"]  # (B,T,C)
                 energy = module.energy # (E,)
 
-                # Fused Kernel Path
-                if FUSED_METRICS and gates.is_cuda:
+                # Fused kernel path. This kernel implements the explicit routing
+                # proxy only; gradient credit must consume the backward-hook stash
+                # in the reference path below even when gates live on CUDA.
+                if self._uses_fused_proxy_metrics(gates_on_cuda=gates.is_cuda):
                     try:
                         from bio_inspired_nanochat.kernels import update_metrics_fused
 
                         if update_metrics_fused(indices, gates, energy, st, self.cfg):
+                            st["credit_source"] = "proxy"
                             st["updates"] += 1
 
                             if global_step % self.cfg.update_every == 0:
