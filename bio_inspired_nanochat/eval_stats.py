@@ -19,12 +19,14 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import math
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import numpy as np
+from rich.console import Console
 
 from bio_inspired_nanochat.metrics_schema import Direction, get_metric
 
@@ -286,6 +288,32 @@ def _direction_lower_better(metric: str, lower_is_better: Optional[bool]) -> boo
     return spec.direction == Direction.LOWER_BETTER
 
 
+def holm_adjust(p_values: dict[str, float]) -> dict[str, float]:
+    """Holm-adjust a named family of p-values while preserving its keys.
+
+    Non-finite values are retained as ``nan`` and excluded from the correction family. The
+    step-down running maximum is required for monotonic adjusted p-values.
+    """
+    invalid = {
+        name: value
+        for name, value in p_values.items()
+        if math.isfinite(value) and not 0.0 <= value <= 1.0
+    }
+    if invalid:
+        raise ValueError(f"p-values must be in [0, 1], got {invalid}")
+    adjusted = {name: float("nan") for name in p_values}
+    finite = sorted(
+        ((name, value) for name, value in p_values.items() if math.isfinite(value)),
+        key=lambda item: item[1],
+    )
+    family_size = len(finite)
+    running_max = 0.0
+    for rank, (name, value) in enumerate(finite):
+        running_max = max(running_max, (family_size - rank) * value)
+        adjusted[name] = min(1.0, running_max)
+    return adjusted
+
+
 def compare_matrix(
     data: dict[str, dict[int, float]],
     *,
@@ -293,14 +321,21 @@ def compare_matrix(
     metric: str = "val_bpb",
     lower_is_better: Optional[bool] = None,
     alpha: float = 0.05,
+    min_pairs: int = 3,
     seed: int = 0,
 ) -> dict:
     """Aggregate every preset and test each against ``baseline`` on matched seeds.
 
     ``data`` maps preset -> {seed: metric_value}. Returns a structured report with a
-    per-preset aggregate and (for non-baseline presets) a paired comparison whose
-    ``better``/``significant`` flags are direction-aware.
+    per-preset aggregate and (for non-baseline presets) a paired comparison whose verdict is
+    direction-aware, Holm-corrected across presets, and gated by both paired tests plus the
+    paired-bootstrap interval. Fewer than ``min_pairs`` matched seeds always yields
+    ``insufficient_evidence``.
     """
+    if not 0.0 < alpha < 1.0:
+        raise ValueError(f"alpha must be in (0, 1), got {alpha}")
+    if min_pairs < 2:
+        raise ValueError(f"min_pairs must be at least 2, got {min_pairs}")
     if baseline not in data:
         raise ValueError(f"baseline preset {baseline!r} not in data ({sorted(data)})")
     lower = _direction_lower_better(metric, lower_is_better)
@@ -309,8 +344,23 @@ def compare_matrix(
         "lower_is_better": lower,
         "baseline": baseline,
         "alpha": alpha,
+        "min_pairs": min_pairs,
+        "decision_rule": {
+            "multiple_comparison_correction": "holm",
+            "supported_gain": (
+                "at least min_pairs matched seeds; mean delta and paired-bootstrap 95% CI "
+                "favorable; Holm-adjusted paired-t and Wilcoxon p-values both <= alpha"
+            ),
+            "supported_regression": (
+                "at least min_pairs matched seeds; mean delta and paired-bootstrap 95% CI "
+                "adverse; Holm-adjusted paired-t and Wilcoxon p-values both <= alpha"
+            ),
+            "null": "sufficient matched seeds, but neither directional support rule passed",
+            "insufficient_evidence": "fewer than min_pairs matched seeds",
+        },
         "presets": {},
     }
+    paired_by_preset: dict[str, PairedResult] = {}
     for preset, by_seed in data.items():
         agg = aggregate(list(by_seed.values()))
         entry: dict = {"aggregate": asdict(agg)}
@@ -319,13 +369,74 @@ def compare_matrix(
                 by_seed, data[baseline], lower_is_better=lower, seed=seed
             )
             if paired is not None:
-                improvement = -paired.mean_delta if lower else paired.mean_delta
                 entry["paired_vs_baseline"] = asdict(paired)
-                entry["better"] = improvement > 0
-                entry["significant"] = (
-                    min(paired.t_p_value, paired.wilcoxon_p_value) < alpha
+                paired_by_preset[preset] = paired
+            else:
+                matched = len(set(by_seed) & set(data[baseline]))
+                entry.update(
+                    {
+                        "matched_pairs": matched,
+                        "better": None,
+                        "evidence_sufficient": False,
+                        "ci_favorable": False,
+                        "ci_adverse": False,
+                        "paired_t_p_adjusted": None,
+                        "wilcoxon_p_adjusted": None,
+                        "tests_pass": False,
+                        "significant": False,
+                        "supported_gain": False,
+                        "supported_regression": False,
+                        "verdict": "insufficient_evidence",
+                    }
                 )
         report["presets"][preset] = entry
+
+    adjusted_t = holm_adjust(
+        {preset: paired.t_p_value for preset, paired in paired_by_preset.items()}
+    )
+    adjusted_wilcoxon = holm_adjust(
+        {preset: paired.wilcoxon_p_value for preset, paired in paired_by_preset.items()}
+    )
+    for preset, paired in paired_by_preset.items():
+        entry = report["presets"][preset]
+        improvement = -paired.mean_delta if lower else paired.mean_delta
+        ci_favorable = (
+            paired.delta_ci_high < 0.0 if lower else paired.delta_ci_low > 0.0
+        )
+        ci_adverse = (
+            paired.delta_ci_low > 0.0 if lower else paired.delta_ci_high < 0.0
+        )
+        enough_pairs = paired.n_pairs >= min_pairs
+        tests_pass = (
+            adjusted_t[preset] <= alpha and adjusted_wilcoxon[preset] <= alpha
+        )
+        supported_gain = enough_pairs and improvement > 0.0 and ci_favorable and tests_pass
+        supported_regression = (
+            enough_pairs and improvement < 0.0 and ci_adverse and tests_pass
+        )
+        if not enough_pairs:
+            verdict = "insufficient_evidence"
+        elif supported_gain:
+            verdict = "supported_gain"
+        elif supported_regression:
+            verdict = "supported_regression"
+        else:
+            verdict = "null"
+        entry.update(
+            {
+                "better": improvement > 0.0,
+                "evidence_sufficient": enough_pairs,
+                "ci_favorable": ci_favorable,
+                "ci_adverse": ci_adverse,
+                "paired_t_p_adjusted": adjusted_t[preset],
+                "wilcoxon_p_adjusted": adjusted_wilcoxon[preset],
+                "tests_pass": tests_pass,
+                "significant": supported_gain or supported_regression,
+                "supported_gain": supported_gain,
+                "supported_regression": supported_regression,
+                "verdict": verdict,
+            }
+        )
     return report
 
 
@@ -363,41 +474,147 @@ def load_matrix_csv(path: Path, metric: str) -> dict[str, dict[int, float]]:
     return data
 
 
+def _load_matrix_provenance(path: Path, metric: str) -> dict[str, Any]:
+    """Summarize recipe/dataset provenance for the same usable rows as ``load_matrix_csv``."""
+    recipe_sources: set[str] = set()
+    data_sources: set[str] = set()
+    with open(path, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        if reader.fieldnames is None or metric not in reader.fieldnames:
+            raise ValueError(f"metric {metric!r} not a column in {path}")
+        for row in reader:
+            if row.get("status", "ok") not in ("ok", "", None):
+                continue
+            try:
+                value = float(row.get(metric, ""))
+            except (TypeError, ValueError):
+                continue
+            if not math.isfinite(value):
+                continue
+            recipe_sources.add(row.get("recipe_source") or "unknown")
+            data_sources.add(row.get("data") or "unknown")
+    canonical = recipe_sources == {"base_train_checkpoint"} and data_sources == {"fineweb"}
+    warning = None
+    if not canonical:
+        warning = (
+            "NONCANONICAL OR UNKNOWN EVIDENCE: inferential calculations are shown for pipeline "
+            "inspection only; do not promote them to a recipe-faithful FineWeb bio-vs-vanilla claim"
+        )
+    return {
+        "recipe_sources": sorted(recipe_sources),
+        "data_sources": sorted(data_sources),
+        "canonical_recipe_evidence": canonical,
+        "scope_warning": warning,
+    }
+
+
 def _format_report(report: dict) -> str:
     lines = [
         f"metric={report['metric']} "
         f"({'lower' if report['lower_is_better'] else 'higher'} is better)  "
-        f"baseline={report['baseline']}  alpha={report['alpha']}",
+        f"baseline={report['baseline']}  alpha={report['alpha']}  "
+        f"min_pairs={report['min_pairs']}  correction=Holm",
         "",
-        f"{'preset':<28}{'n':>3}  {'mean':>10}  {'95% CI':>22}  "
-        f"{'Δ vs base':>11}  {'t p':>8}  {'W p':>8}  verdict",
+        f"{'preset':<28}{'n':>3}  {'mean':>10}  {'sample SD':>10}  {'95% CI':>22}  "
+        f"{'Δ vs base':>11}  {'t p(adj)':>10}  {'W p(adj)':>10}  verdict",
     ]
+    if report.get("scope_warning"):
+        lines[1:1] = [str(report["scope_warning"]), ""]
     for preset, e in report["presets"].items():
         a = e["aggregate"]
         ci = f"[{a['ci_low']:.4g}, {a['ci_high']:.4g}]"
-        row = f"{preset:<28}{a['n']:>3}  {a['mean']:>10.5g}  {ci:>22}  "
+        row = (
+            f"{preset:<28}{a['n']:>3}  {a['mean']:>10.5g}  {a['std']:>10.5g}  "
+            f"{ci:>22}  "
+        )
         if "paired_vs_baseline" in e:
             p = e["paired_vs_baseline"]
-            verdict = (
-                ("BETTER" if e["better"] else "WORSE")
-                + (" *" if e["significant"] else "")
-            )
             row += (
-                f"{p['mean_delta']:>+11.4g}  {p['t_p_value']:>8.3g}  "
-                f"{p['wilcoxon_p_value']:>8.3g}  {verdict}"
+                f"{p['mean_delta']:>+11.4g}  {e['paired_t_p_adjusted']:>10.3g}  "
+                f"{e['wilcoxon_p_adjusted']:>10.3g}  {e['verdict']}"
             )
+        elif preset == report["baseline"]:
+            row += f"{'—':>11}  {'—':>10}  {'—':>10}  baseline"
         else:
-            row += f"{'—':>11}  {'—':>8}  {'—':>8}  baseline"
+            row += f"{'—':>11}  {'—':>10}  {'—':>10}  {e['verdict']}"
         lines.append(row)
     return "\n".join(lines)
 
 
+def _strict_json_value(value: Any) -> Any:
+    """Return a recursively strict-JSON-safe value (non-finite floats become null)."""
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, dict):
+        return {key: _strict_json_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_strict_json_value(item) for item in value]
+    return value
+
+
+def _format_markdown_report(report: dict) -> str:
+    direction = "lower" if report["lower_is_better"] else "higher"
+    lines = [
+        f"# Statistical comparison: `{report['metric']}`",
+        "",
+        f"- Baseline: `{report['baseline']}`",
+        f"- Direction: {direction} is better",
+        f"- Familywise alpha: `{report['alpha']}` with Holm correction",
+        f"- Minimum matched seeds for an inferential verdict: `{report['min_pairs']}`",
+        "- Support requires a favorable paired-bootstrap 95% CI and both adjusted paired tests.",
+        "",
+        "| Preset | n | Mean ± sample SD (Student-t 95% CI) | Delta vs baseline | "
+        "Adjusted paired-t p | Adjusted Wilcoxon p | Verdict |",
+        "|---|---:|---:|---:|---:|---:|---|",
+    ]
+    if report.get("scope_warning"):
+        lines[1:1] = ["", f"> **WARNING:** {report['scope_warning']}"]
+    for preset, entry in report["presets"].items():
+        aggregate_result = entry["aggregate"]
+        aggregate_text = (
+            f"{aggregate_result['mean']:.6g} ± {aggregate_result['std']:.6g} "
+            f"[{aggregate_result['ci_low']:.6g}, {aggregate_result['ci_high']:.6g}]"
+        )
+        if preset == report["baseline"]:
+            lines.append(
+                f"| `{preset}` | {aggregate_result['n']} | {aggregate_text} | — | — | — | baseline |"
+            )
+            continue
+        if "paired_vs_baseline" not in entry:
+            lines.append(
+                f"| `{preset}` | {aggregate_result['n']} | {aggregate_text} | — | — | — | "
+                f"`{entry['verdict']}` |"
+            )
+            continue
+        paired = entry["paired_vs_baseline"]
+        lines.append(
+            f"| `{preset}` | {aggregate_result['n']} | {aggregate_text} | "
+            f"{paired['mean_delta']:+.6g} "
+            f"[{paired['delta_ci_low']:+.6g}, {paired['delta_ci_high']:+.6g}] | "
+            f"{entry['paired_t_p_adjusted']:.4g} | "
+            f"{entry['wilcoxon_p_adjusted']:.4g} | `{entry['verdict']}` |"
+        )
+    lines.extend(
+        [
+            "",
+            "`null` means the preregistered support rule did not pass; it is not evidence of equivalence. "
+            "`insufficient_evidence` means too few matched seeds were available for the declared minimum.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def main() -> int:
+    console = Console()
     ap = argparse.ArgumentParser(description="Bio-vs-vanilla statistical comparison.")
     ap.add_argument("csv", type=Path, help="eval_matrix summary.csv")
     ap.add_argument("--metric", default="val_bpb")
     ap.add_argument("--baseline", default="vanilla")
     ap.add_argument("--alpha", type=float, default=0.05)
+    ap.add_argument("--min-pairs", type=int, default=3)
+    ap.add_argument("--json-out", type=Path)
+    ap.add_argument("--markdown-out", type=Path)
     ap.add_argument(
         "--higher-better", action="store_true", help="force higher-is-better direction"
     )
@@ -405,20 +622,38 @@ def main() -> int:
 
     data = load_matrix_csv(args.csv, args.metric)
     if args.baseline not in data:
-        # Fall back to bio_all so the tool still works on baseline-less matrices.
-        alt = "bio_all" if "bio_all" in data else next(iter(data), None)
-        if alt is None:
-            print("No usable rows.")
-            return 1
-        args.baseline = alt
-    report = compare_matrix(
-        data,
-        baseline=args.baseline,
-        metric=args.metric,
-        lower_is_better=(False if args.higher_better else None),
-        alpha=args.alpha,
-    )
-    print(_format_report(report))
+        console.print(
+            f"[red]Baseline {args.baseline!r} has no usable rows in {args.csv}.[/red]"
+        )
+        return 2
+    try:
+        report = compare_matrix(
+            data,
+            baseline=args.baseline,
+            metric=args.metric,
+            lower_is_better=(False if args.higher_better else None),
+            alpha=args.alpha,
+            min_pairs=args.min_pairs,
+        )
+        report.update(_load_matrix_provenance(args.csv, args.metric))
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        return 2
+    console.print(_format_report(report), markup=False)
+    if args.json_out is not None:
+        args.json_out.parent.mkdir(parents=True, exist_ok=True)
+        args.json_out.write_text(
+            json.dumps(
+                _strict_json_value(report), sort_keys=True, indent=2, allow_nan=False
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        console.print(f"[green]Wrote strict JSON report:[/green] {args.json_out}")
+    if args.markdown_out is not None:
+        args.markdown_out.parent.mkdir(parents=True, exist_ok=True)
+        args.markdown_out.write_text(_format_markdown_report(report), encoding="utf-8")
+        console.print(f"[green]Wrote Markdown report:[/green] {args.markdown_out}")
     return 0
 
 

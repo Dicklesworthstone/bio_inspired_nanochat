@@ -7,16 +7,22 @@ correct, then the aggregation/comparison logic is checked on synthetic matrices.
 
 from __future__ import annotations
 
+import json
 import math
+import sys
 
 import numpy as np
 import pytest
 
 from bio_inspired_nanochat.eval_stats import (
+    _format_markdown_report,
+    _strict_json_value,
     aggregate,
     bootstrap_ci,
     compare_matrix,
+    holm_adjust,
     load_matrix_csv,
+    main,
     paired_comparison,
     paired_t_test,
     t_cdf,
@@ -132,17 +138,26 @@ def test_paired_comparison_needs_two_shared_seeds():
 
 
 def test_compare_matrix_detects_consistent_improvement():
-    # bio_all has lower val_bpb than vanilla on every matched seed -> better + favorable.
+    # Six non-zero pairs are the mathematical minimum for an exact two-sided Wilcoxon p < .05.
+    baseline = {seed: 1.0 + seed * 0.01 for seed in range(1, 7)}
+    deltas = (-0.08, -0.09, -0.07, -0.10, -0.06, -0.11)
     data = {
-        "vanilla": {1: 1.00, 2: 1.10, 3: 0.95, 4: 1.05},
-        "bio_all": {1: 0.80, 2: 0.88, 3: 0.78, 4: 0.84},
+        "vanilla": baseline,
+        "bio_all": {
+            seed: baseline[seed] + delta
+            for seed, delta in zip(baseline, deltas, strict=True)
+        },
     }
     rep = compare_matrix(data, baseline="vanilla", metric="val_bpb")
     assert rep["lower_is_better"] is True
     bio = rep["presets"]["bio_all"]
     assert bio["better"] is True
     assert bio["significant"] is True
-    assert bio["paired_vs_baseline"]["n_favorable"] == 4
+    assert bio["supported_gain"] is True
+    assert bio["verdict"] == "supported_gain"
+    assert bio["ci_favorable"] is True
+    assert bio["tests_pass"] is True
+    assert bio["paired_vs_baseline"]["n_favorable"] == 6
     assert bio["paired_vs_baseline"]["mean_delta"] < 0  # lower bpb
     # baseline row carries no paired comparison.
     assert "paired_vs_baseline" not in rep["presets"]["vanilla"]
@@ -156,6 +171,79 @@ def test_compare_matrix_no_difference_is_not_significant():
     rep = compare_matrix(data, baseline="vanilla", metric="val_bpb")
     assert rep["presets"]["bio_all"]["significant"] is False
     assert rep["presets"]["bio_all"]["better"] is False
+    assert rep["presets"]["bio_all"]["verdict"] == "null"
+
+
+def test_compare_matrix_does_not_cherry_pick_the_paired_t_test():
+    # A constant three-seed improvement has paired-t p=0, but exact two-sided Wilcoxon p=.25.
+    # The old ``min(p_t, p_w)`` rule incorrectly called this significant.
+    data = {
+        "vanilla": {1: 1.0, 2: 1.1, 3: 0.9},
+        "bio_all": {1: 0.8, 2: 0.9, 3: 0.7},
+    }
+    entry = compare_matrix(data, baseline="vanilla")["presets"]["bio_all"]
+    assert entry["paired_vs_baseline"]["t_p_value"] < 0.05
+    assert entry["paired_vs_baseline"]["wilcoxon_p_value"] == pytest.approx(0.25)
+    assert entry["ci_favorable"] is True
+    assert entry["tests_pass"] is False
+    assert entry["significant"] is False
+    assert entry["verdict"] == "null"
+
+
+def test_compare_matrix_reports_supported_regression():
+    baseline = {seed: 1.0 + seed * 0.01 for seed in range(1, 7)}
+    deltas = (0.08, 0.09, 0.07, 0.10, 0.06, 0.11)
+    data = {
+        "vanilla": baseline,
+        "bio_all": {
+            seed: baseline[seed] + delta
+            for seed, delta in zip(baseline, deltas, strict=True)
+        },
+    }
+    entry = compare_matrix(data, baseline="vanilla")["presets"]["bio_all"]
+    assert entry["better"] is False
+    assert entry["ci_adverse"] is True
+    assert entry["supported_regression"] is True
+    assert entry["verdict"] == "supported_regression"
+
+
+@pytest.mark.parametrize("pairs", [1, 2])
+def test_compare_matrix_fails_closed_on_too_few_pairs(pairs):
+    data = {
+        "vanilla": {seed: 1.0 for seed in range(pairs)},
+        "bio_all": {seed: 0.8 for seed in range(pairs)},
+    }
+    entry = compare_matrix(data, baseline="vanilla")["presets"]["bio_all"]
+    assert entry["evidence_sufficient"] is False
+    assert entry["significant"] is False
+    assert entry["verdict"] == "insufficient_evidence"
+
+
+def test_holm_adjust_known_family_and_rejects_invalid_values():
+    assert holm_adjust({"a": 0.01, "b": 0.03, "c": 0.04}) == pytest.approx(
+        {"a": 0.03, "b": 0.06, "c": 0.06}
+    )
+    with pytest.raises(ValueError, match="p-values"):
+        holm_adjust({"impossible": 1.1})
+
+
+def test_compare_matrix_holm_corrects_across_all_treatments():
+    # At n=6 an all-favorable exact Wilcoxon has raw p=.03125. With two treatments in the
+    # family, Holm adjusts both to .0625, so neither can be promoted on its raw p-value alone.
+    baseline = {seed: 1.0 + seed * 0.01 for seed in range(6)}
+    data = {
+        "vanilla": baseline,
+        "bio_a": {seed: value - 0.10 - seed * 0.001 for seed, value in baseline.items()},
+        "bio_b": {seed: value - 0.08 - seed * 0.001 for seed, value in baseline.items()},
+    }
+    report = compare_matrix(data, baseline="vanilla")
+    for preset in ("bio_a", "bio_b"):
+        entry = report["presets"][preset]
+        assert entry["paired_vs_baseline"]["wilcoxon_p_value"] == pytest.approx(0.03125)
+        assert entry["wilcoxon_p_adjusted"] == pytest.approx(0.0625)
+        assert entry["ci_favorable"] is True
+        assert entry["tests_pass"] is False
+        assert entry["verdict"] == "null"
 
 
 def test_compare_matrix_higher_better_metric_direction():
@@ -168,11 +256,35 @@ def test_compare_matrix_higher_better_metric_direction():
     assert rep["lower_is_better"] is False
     assert rep["presets"]["bio_all"]["better"] is True
     assert rep["presets"]["bio_all"]["paired_vs_baseline"]["mean_delta"] > 0
+    assert rep["presets"]["bio_all"]["verdict"] == "null"
 
 
 def test_compare_matrix_unknown_baseline_raises():
     with pytest.raises(ValueError, match="baseline"):
         compare_matrix({"a": {1: 1.0}}, baseline="nope", metric="val_bpb")
+
+
+@pytest.mark.parametrize(
+    "kwargs,match",
+    [({"alpha": 0.0}, "alpha"), ({"alpha": 1.0}, "alpha"), ({"min_pairs": 1}, "min_pairs")],
+)
+def test_compare_matrix_rejects_invalid_decision_parameters(kwargs, match):
+    with pytest.raises(ValueError, match=match):
+        compare_matrix({"vanilla": {1: 1.0}}, baseline="vanilla", **kwargs)
+
+
+def test_report_serialization_is_strict_json_and_markdown():
+    data = {
+        "vanilla": {seed: 1.0 for seed in range(6)},
+        "bio_all": {seed: 0.8 for seed in range(6)},
+    }
+    report = compare_matrix(data, baseline="vanilla")
+    encoded = json.dumps(_strict_json_value(report), allow_nan=False)
+    decoded = json.loads(encoded)
+    assert decoded["presets"]["bio_all"]["paired_vs_baseline"]["t_stat"] is None
+    markdown = _format_markdown_report(report)
+    assert "`supported_gain`" in markdown
+    assert "Holm correction" in markdown
 
 
 # --------------------------------------------------------------------------- #
@@ -200,3 +312,47 @@ def test_load_matrix_csv_missing_metric_raises(tmp_path):
     p.write_text("preset,seed,val_bpb\nbio_all,1,0.8\n", encoding="utf-8")
     with pytest.raises(ValueError, match="not a column"):
         load_matrix_csv(p, "eval_accuracy")
+
+
+def test_cli_writes_strict_json_and_markdown_reports(tmp_path, monkeypatch):
+    csv_path = tmp_path / "summary.csv"
+    rows = ["status,preset,seed,recipe_source,data,val_bpb"]
+    for seed in range(6):
+        rows.extend(
+            [
+                f"ok,vanilla,{seed},inline_smoke_noncanonical,synthetic,1.0",
+                f"ok,bio_all,{seed},inline_smoke_noncanonical,synthetic,0.8",
+            ]
+        )
+    csv_path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+    json_path = tmp_path / "reports" / "stats.json"
+    markdown_path = tmp_path / "reports" / "stats.md"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "eval_stats",
+            str(csv_path),
+            "--json-out",
+            str(json_path),
+            "--markdown-out",
+            str(markdown_path),
+        ],
+    )
+
+    assert main() == 0
+    payload = json.loads(json_path.read_text(encoding="utf-8"))
+    assert payload["presets"]["bio_all"]["verdict"] == "supported_gain"
+    assert payload["presets"]["bio_all"]["paired_vs_baseline"]["t_stat"] is None
+    assert payload["canonical_recipe_evidence"] is False
+    markdown = markdown_path.read_text(encoding="utf-8")
+    assert "`supported_gain`" in markdown
+    assert "NONCANONICAL OR UNKNOWN EVIDENCE" in markdown
+    assert "sample SD" in markdown
+
+
+def test_cli_fails_closed_when_requested_baseline_is_missing(tmp_path, monkeypatch):
+    csv_path = tmp_path / "summary.csv"
+    csv_path.write_text("preset,seed,val_bpb\nbio_all,1,0.8\n", encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["eval_stats", str(csv_path), "--baseline", "vanilla"])
+    assert main() == 2

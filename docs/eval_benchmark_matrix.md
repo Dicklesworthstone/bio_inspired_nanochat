@@ -89,7 +89,40 @@ For each preset below, the harness should log:
 ### Seeds
 
 - **CI / smoke**: 2 seeds → `{1337, 1338}`
-- **Research**: 3 seeds → `{1337, 1338, 1339}`
+- **Research estimation floor**: 3 seeds → `{1337, 1338, 1339}`
+- **Supported directional claim floor**: at least 6 matched, non-zero pairs. An exact two-sided
+  Wilcoxon test cannot attain `p < 0.05` with 5 or fewer all-favorable pairs (its best possible
+  value at `n=5` is `0.0625`). Two-seed smoke results are descriptive, and three-seed confidence
+  intervals are preliminary; neither count should be advertised as statistically supported merely
+  because the paired t-test passes.
+
+### Statistical decision rule (`rwg` / `74f.3`)
+
+For each metric, `bio_inspired_nanochat.eval_stats.compare_matrix` aggregates every preset with a
+Student-t 95% CI and compares treatments with the baseline only on matched seeds. Across all
+treatments in that metric family, paired-t and exact/approximated Wilcoxon p-values are corrected
+separately with Holm's step-down procedure. A result is:
+
+- `supported_gain` only when the mean delta is favorable, its paired-bootstrap 95% CI excludes
+  zero favorably, and **both** Holm-adjusted paired tests are at or below alpha;
+- `supported_regression` under the symmetric adverse rule;
+- `null` when enough matched seeds exist but neither directional rule passes; or
+- `insufficient_evidence` when fewer than `--min-pairs` matched seeds exist.
+
+`null` is not an equivalence claim. Missing baselines fail closed; the CLI no longer silently
+substitutes another preset. Emit durable, strict-JSON and Markdown summaries alongside a completed
+matrix with:
+
+```bash
+uv run python -m bio_inspired_nanochat.eval_stats runs/eval_matrix/<batch>/summary.csv \
+  --metric val_bpb --baseline vanilla --min-pairs 3 \
+  --json-out runs/eval_matrix/<batch>/val_bpb.stats.json \
+  --markdown-out runs/eval_matrix/<batch>/val_bpb.stats.md
+```
+
+The committed controlled structural and uncertainty studies already use matched multi-seed paired
+statistics. The full 10M FineWeb Matrix A run remains pending (`4fw`), so this methodology must not
+be presented as a completed language-model-scale bio-vs-vanilla result.
 
 ### Token budgets
 
