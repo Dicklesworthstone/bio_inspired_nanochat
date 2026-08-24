@@ -256,7 +256,194 @@ quantities can also change `e_j`, so an observational decrease alone does not id
 
 ---
 
-## 6. Proof obligations and assumptions ledger
+## 6. Exact max-plus slopes and a certified active-cell radius
+
+Fix an input norm `||.||` and its dual norm `||.||_*`. For the affine skeleton,
+
+```text
+    F(x) = max_j (a_j^T x + b_j).
+```
+
+The exact full-space Lipschitz constant is
+
+```text
+    L_F = sup_x sup_(g in partial F(x)) ||g||_*
+        = max_(j whose region R_j is nonempty) ||a_j||_*.
+```
+
+At a tie, `partial F(x)` is the convex hull of the active slopes; a norm achieves its maximum on a
+vertex of that hull, which gives the last equality. Keeping dominated terms yields the conservative,
+easier bound `max_j ||a_j||_*`. Thus the max-plus slope is computable exactly after empty regions are
+removed, and conservatively without solving region feasibility.
+
+`L_F` bounds changes in the maximum score, but it does **not** by itself certify that the maximizing
+ID stays fixed. Selection stability uses each pairwise score difference. If `j*` is the unique winner,
+
+```text
+    g_j*k(x) = z_j*(x) - z_k(x) > 0,
+    L_j*k    = ||a_j* - a_k||_*,
+    g_j*k(x + delta) >= g_j*k(x) - L_j*k ||delta||.
+```
+
+For every competitor with a different slope, define its facet distance
+
+```text
+    r_j*k(x) = g_j*k(x) / L_j*k.
+```
+
+Equal slopes require explicit handling: if `a_j* = a_k` and `b_j* > b_k`, choice `k` can never catch
+the winner and its distance is `+infinity`; equal slope and equal offset is a duplicate exact tie, so
+a unique-winner certificate is invalid. The certified top-1 radius is
+
+```text
+    r_top1(x) = min_(k != j*, a_k != a_j*) r_j*k(x).
+```
+
+The minimum of an empty set is `+infinity`, matching the case where no eligible competitor has a
+different slope.
+For every perturbation `||delta|| < r_top1`, all pairwise differences stay positive and `j*`
+remains the unique active ID. At the closed boundary `||delta|| = r_top1`, a tie may occur. On the
+unconstrained input space this is the exact distance to the nearest score-equality hyperplane; a
+production certificate can emit `(1 - safety_fraction) r_top1`, with
+`0 < safety_fraction < 1`, to keep a strict numerical margin.
+
+For an unordered top-k set `S`, the corresponding radius is
+
+```text
+    r_topk(x) = min_(i in S, k not in S, a_i != a_k)
+                (z_i(x) - z_k(x)) / ||a_i - a_k||_*.
+```
+
+Apply the same equal-slope rules. This preserves membership of `S`; preserving the order inside `S`
+also requires the pairwise constraints among selected choices. The attention or expert **selection**
+is constant inside the certified ball. The numerical output is only constant when the selected value
+is fixed; if values depend on the perturbed input, their own Lipschitz bound must be composed with the
+selection certificate.
+
+Under this note's query-conditional attention threat model—keys, values, history, and mask fixed—the
+hard layer output is exactly the same `v_j*` throughout the top-1 ball. Under a full-sequence threat
+model the values also move. Likewise, a MoE certificate keeps the selected expert IDs fixed but the
+experts still transform the perturbed token; those outputs require the selected value/expert operator
+norm before “output stable” can mean more than stable selection.
+
+The standard attention path has two coupled cells: the base-dot-product top-k support determines
+where biological offsets are scattered, and the augmented score determines the final winner. If the
+support is not frozen independently of `q`, compute `r_support` from the base scores using the top-k
+formula above and emit
+
+```text
+    r_standard = min(r_support, r_augmented_selection).
+```
+
+Omitting `r_support` would allow a perturbation to change which edges receive biological offsets
+before reaching the reported augmented-score facet, invalidating the affine expression itself.
+
+These are conditional, per-decision/per-layer guarantees. An end-to-end model radius additionally
+needs the input-to-layer operator norms and a final output/class margin; multiplying layer constants
+without that margin does not create a predictive robustness certificate. Nonlinear live biological
+scores remain `local_only` unless their approximation error and derivative remainder are bounded.
+
+---
+
+## 7. Temperature, score-gap, and entropy validity gate
+
+For a unique winner, define the dimensionless regime gap
+
+```text
+    kappa = Delta / tau,
+    u     = (m - 1) exp(-kappa),
+    p_j*  >= 1 / (1 + u),
+    q := 1 - p_j* <= q_hat := u / (1 + u).
+```
+
+The entropy is largest when the losing mass `q` is uniform over the other `m-1` choices. With
+`h_2(q) = -q log q - (1-q) log(1-q)`, this gives
+
+```text
+    H(p) <= h_2(q_hat) + q_hat log(m - 1),
+    H_normalized = H(p) / log(m).
+```
+
+The bound ranges from `log(m)` at a zero gap to zero as `kappa -> infinity`. For a requested minimum
+hard mass `1/m < p_min < 1`, the sufficient gap threshold is
+
+```text
+    kappa >= kappa_min := log((m - 1) p_min / (1 - p_min)).
+```
+
+These expressions assume `m >= 2`. For a singleton eligible set, use `p_1 = 1` and
+`H = H_normalized = 0`; selection is trivially hard, `r = +infinity`, and the gap/`kappa`/entropy
+thresholds are bypassed. That certificate is labeled `singleton`, not evidence that annealing reached
+a low-temperature regime.
+
+A soft-to-hard **readout** certificate with `m >= 2` is valid only when **all** of these gates pass on
+the masked, pre-dropout score distribution:
+
+1. the score scope is `exact_affine`, finite, and replayable;
+2. `tau > 0`, `Delta > tie_tol`, and `kappa >= kappa_min`;
+3. measured winner mass is at least `p_min` and measured normalized entropy is at most `H_max`;
+4. the norm and threat model are declared and `r_top1` or `r_topk` exceeds the configured
+   non-vacuity floor;
+5. any composition/timescale and provenance gates required by the caller pass.
+
+The gap bound and measured entropy are intentionally both recorded: the analytic bound proves a
+sufficient low-temperature regime, while the measured value detects implementation or masking drift.
+At high temperature, a region/radius may still describe the hypothetical hard skeleton, but it does
+not certify the live soft readout. Report it as `soft_approximation` with `certified=false` and keep
+the existing softmax/top-k path.
+
+The protected choice set changes the contract:
+
+- **Attention hard readout:** `m` is every eligible causal edge. Geometry and all temperature/mass/
+  entropy gates above apply.
+- **MoE top-k membership:** membership is selected before the within-set softmax, so `r_topk`, exact
+  scope, non-vacuity, and provenance gates apply; temperature metrics are diagnostic and cannot
+  invalidate this membership certificate.
+- **MoE hard top-1 readout:** `m` is the current selected set for the softmax gap/mass/entropy gate;
+  geometry must additionally keep the selected set and its top-1 ID stable. As `tau -> 0`, this is the
+  new claim that the selected mixture collapses to the highest routed expert.
+
+Every emitted certificate states one of these scopes. Reusing the attention temperature gate for
+MoE top-k membership would be a category error.
+
+---
+
+## 8. Default-off temperature/septin anneal
+
+Let `s in [0,1]` be persisted schedule progress. A positive geometric cooling schedule avoids zero
+temperature:
+
+```text
+    tau(s) = tau_start (tau_min / tau_start)^s,
+    0 < tau_min <= tau_start.
+```
+
+For standard attention, the septin barrier may be ramped independently,
+
+```text
+    gamma(s) = gamma_start + s (gamma_end - gamma_start),
+```
+
+and substituted for `barrier_strength`. Increasing `gamma` favors nearby keys but is not guaranteed
+to increase the winner gap: it can move decision boundaries or change the winner. Therefore schedule
+progress never grants validity. Scores, gap, entropy, radius, support, clamp state, and scope are
+recomputed after each scheduled update, and only the measured gate in section 7 can issue a
+certificate.
+
+The toggle remains default-off. Off means the live `tau = 1` behavior and configured septin barrier
+are byte-for-byte unchanged. When enabled, a hard path may enter only after the stricter entry gate
+passes for a configured number of consecutive observation windows. It must fall back immediately on
+any non-finite value, exact-scope/provenance failure, or violation of the declared exit thresholds.
+Entry thresholds may be stricter than exit thresholds to prevent chattering, but the exit thresholds
+are the actual certificate assumptions and may never be bypassed by hysteresis.
+
+Every transition records schedule parameters and progress, measured `Delta`, `kappa`, entropy,
+winner mass, radius, norm, scope, and the exact gate that passed or failed. The deterministic fallback
+is the unchanged softmax/top-k baseline; it may retain diagnostics but must drop the certified label.
+
+---
+
+## 9. Proof obligations and assumptions ledger
 
 | ID | Assumptions | Formal statement | Verification artifact | Failure condition | Conservative fallback |
 |---|---|---|---|---|---|
@@ -265,15 +452,20 @@ quantities can also change `e_j`, so an observational decrease alone does not id
 | H3 | Exact active face uses exact score equality; a numerically unique-winner claim additionally requires `Delta > tie_tol`; deterministic ordering is recorded. | An exactly unique active generator is an exposed vertex of `N_lift(h)`; exact ties expose a face. If `0 < Delta <= tie_tol`, face dimension is withheld as numerically ambiguous. | Exact active IDs, ambiguity candidates, score gap, tie tolerance, lifted-face dimension when licensed, tie rule. | Near-tie, duplicate terms, or non-reproducible ordering. | For exact equality return the tied face; for a near-tie return candidates and refuse vertex/face certification. |
 | H4 | Release/support frozen during one decision; `lambda_loge >= 0`; clamp state recorded. A causal depletion claim additionally controls drive, all other biological state, RNG, support, and EMA denominator. | A measured decrease `e_new <= e_old` cannot increase the unclamped offset `beta_j`; under the controlled comparison, lowering RRP induces that use-tax shift. | Old/new release and RRP values, controlled-state digest, offset delta, support, clamp-saturation bit. | Uncontrolled state/RNG/normalizer change, negative gain, or untracked saturation. | Use the measured final scores only; make no depletion-causal claim. |
 | H5 | Fingerprint scope is selection, not downstream causality. | Replaying the score vector, mask, and tie rule reproduces the selected active set exactly. | Deterministic replay fixture plus a digest of score-producing state. | Stochastic release is replayed without its RNG state or score inputs are omitted. | Label fingerprint non-replayable; fall back to existing attention-rollout/lesion tools. |
+| H6 | Affine score family; declared input norm/dual norm; nonempty active regions identified or conservatively retained. | `F=max_j z_j` has exact full-space constant `max_(R_j nonempty) ||a_j||_*`; retaining all terms is a valid upper bound. | Active-slope ledger and norm-specific constants, checked against adversarial score perturbations. | Unknown norm, nonlinear score, or omitted active slope. | Emit only a conservative local diagnostic; no global Lipschitz claim. |
+| H7 | Fixed eligible mask, unique winner/top-k boundary, finite positive score margins, exact affine scope, explicit equal-slope handling, and every score-defining support-cell radius included. | The minimum normalized pairwise margin in section 6 is an exact unconstrained distance to the nearest relevant equality hyperplane and a strict-ball selection radius; an empty finite-boundary set yields `+infinity`. Standard attention takes the minimum of base-support and augmented-selection radii. | Per-competitor margins/slopes/radii, support radius, chosen norm, safety fraction, adversarial boundary back-test. | Tie/near-tie, omitted support boundary, zero/negative/NaN radius, nonlinear term, changing mask, or unsupported threat model. | Keep soft routing; refuse robustness certification. |
+| H8 | For soft-to-hard readout with `m>=2`: masked finite pre-dropout scores, `tau>0`, `1/m < p_min < 1`, `0 <= H_max <= 1`, `tie_tol >= 0`, and positive non-vacuity floor. Singleton uses the explicit bypass above; MoE membership uses H7 rather than temperature. | The gap gives the winner-mass and entropy bounds in section 7; attention or MoE top-1 readout is live only while analytic and measured gates pass. MoE top-k membership is temperature-independent. | Certificate scope plus `m`, `tau`, `Delta`, `kappa`, entropy bound/measurement, winner mass, radius, and gate/bypass verdict. | High entropy, insufficient gap/mass/radius, wrong scope, invalid thresholds, dropout, or stale evidence. | Label readout results `soft_approximation`, keep softmax/top-k, and set `certified=false`; retain a separately valid membership certificate if H7 passes. |
+| H9 | Default-off schedule, persisted progress/parameters, deterministic score replay, and immediate exit on assumption failure. | Annealing changes temperature/barrier but never self-certifies; only the measured H8 gate enables the optional hard path. | Transition JSONL with before/after parameters, observations, gate, and fallback reason. | Missing schedule provenance, hysteresis bypasses exit gate, or restart changes progress. | Restore the baseline parameters/path and invalidate the certificate. |
 
 Assumption classes are structural (affine score family and mask), computational (finite arithmetic and
 deterministic tie handling), and operational (complete state/RNG logging). Every certificate field is
-measurable at runtime. None of H1-H5 licenses a robustness radius; the Lipschitz-to-radius theorem,
-temperature/entropy gate, and anneal schedule are the separate `0642.6.1.2` obligation.
+measurable at runtime. H6-H9 license only the declared per-layer selection and soft-to-hard claims;
+they do not imply end-to-end predictive robustness without the additional composition described in
+section 6.
 
 ---
 
-## 7. Falsifiable verification plan
+## 10. Falsifiable verification plan
 
 The runtime and tests that consume this note must check all of the following:
 
@@ -288,6 +480,16 @@ The runtime and tests that consume this note must check all of the following:
   are explicitly flagged.
 - Enabling the live drive-dependent release or normalized alignment term changes the scope to
   `local_only` unless a later artifact proves the required affine approximation error bound.
+- For `L1`, `L2`, and `L-infinity` threat norms, perturbations strictly inside the reported
+  dual-norm radius preserve top-1/top-k selection. For finite different-slope competitors, a
+  constructed nearest-facet perturbation reaches the predicted tie. Equal-slope/lower-offset terms
+  yield `+infinity` and no finite boundary; equal-slope/equal-offset duplicates invalidate uniqueness
+  immediately.
+- Random softmax distributions obey the analytic winner-mass and entropy bounds; values exactly on
+  either configured threshold exercise the documented inclusive/exclusive gate semantics.
+- Cooling and septin schedules replay from persisted progress. Schedule completion with a failed
+  measured gate never enables hard mode, and any exit-gate violation triggers the baseline in the
+  same decision.
 
 A counterexample to any exact claim invalidates the certificate and routes inference through the
 unchanged softmax/top-k baseline. Default behavior remains unchanged: this thrust begins as a
@@ -295,7 +497,7 @@ read-only analysis layer, and the optional hard-routing toggle belongs to `0642.
 
 ---
 
-## 8. Transparency card contract
+## 11. Transparency card contract
 
 For one decision, a human-facing card should show:
 
@@ -303,8 +505,10 @@ For one decision, a human-facing card should show:
     equation:     z_j = a_j^T x + b_j(h),  j* = argmax_j z_j
     substituted:  top scores, winner, runner-up, and Delta
     geometry:     exact_affine | local_only | invalid; active vertex/face IDs
-    intuition:    which token/expert won, its score gap, and (when a norm is declared) boundary distance
-    assumptions:  mask, frozen-state status, tie tolerance, clamp saturation
+    robustness:   input norm, pairwise slope, certified radius, and safety fraction
+    regime:       tau, kappa, winner mass, entropy bound/measurement, gate verdict
+    intuition:    which token/expert won and the nearest certified decision boundary
+    assumptions:  mask, frozen-state status, tie/clamp state, threat model, provenance
     decision flip: the nearest score equality or failed validity gate
 ```
 
