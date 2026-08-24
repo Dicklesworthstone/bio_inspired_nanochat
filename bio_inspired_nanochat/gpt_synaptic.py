@@ -221,8 +221,25 @@ class GPTSynaptic(nn.Module):
         targets: Optional[Tensor] = None,
         kv_cache=None,
         train_mode=True,
+        max_layers: int | None = None,
     ):
         B, T = idx.size()
+        active_layers = self.config.n_layer if max_layers is None else max_layers
+        if (
+            isinstance(active_layers, bool)
+            or not isinstance(active_layers, int)
+            or not 1 <= active_layers <= self.config.n_layer
+        ):
+            raise ValueError(
+                f"max_layers must be an integer in [1, {self.config.n_layer}], got {max_layers!r}"
+            )
+        if kv_cache is not None:
+            cache_layers = getattr(kv_cache, "kv_shape", (None,))[0]
+            if cache_layers != active_layers:
+                raise ValueError(
+                    "KV cache layer count must equal max_layers so the final active layer advances "
+                    f"the cache position; got cache_layers={cache_layers}, max_layers={active_layers}"
+                )
         assert T <= self.config.sequence_len
         tok = self.wte(idx)
         x = self.drop(tok)
@@ -252,17 +269,19 @@ class GPTSynaptic(nn.Module):
             return cloned
 
         if isinstance(presyn_states, list):
-            if len(presyn_states) < len(self.h):
-                presyn_states = presyn_states + [None] * (len(self.h) - len(presyn_states))
-            elif len(presyn_states) > len(self.h):
-                presyn_states = presyn_states[: len(self.h)]
+            if len(presyn_states) < active_layers:
+                presyn_states = presyn_states + [None] * (active_layers - len(presyn_states))
+            elif len(presyn_states) > active_layers:
+                presyn_states = presyn_states[:active_layers]
         elif isinstance(presyn_states, dict):
             # Backward-compat: expand a single dict into per-layer copies
-            presyn_states = [_clone_presyn_state(presyn_states) for _ in range(len(self.h))]
+            presyn_states = [_clone_presyn_state(presyn_states) for _ in range(active_layers)]
         else:
-            presyn_states = [None] * len(self.h)
+            presyn_states = [None] * active_layers
 
         for li, block in enumerate(self.h):
+            if li >= active_layers:
+                break
             layer_state = presyn_states[li]
             x, layer_state = block(x, kv_cache, layer_state, train_mode)
             presyn_states[li] = layer_state
@@ -291,7 +310,7 @@ class GPTSynaptic(nn.Module):
         aux = sum(
             (
                 getattr(b, "last_aux_loss", torch.tensor(0.0, device=logits.device))
-                for b in self.h
+                for b in self.h[:active_layers]
             )
         )
         logits = logits.float()  # fp32 logits for the loss (parity with GPT)

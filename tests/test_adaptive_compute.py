@@ -227,21 +227,74 @@ def test_runtime_expert_k_changes_real_moe_routing_and_restores_configuration():
 
 
 @pytest.mark.unit
-def test_adaptive_mc_prediction_executes_selected_draw_count():
-    model = make_tiny_synaptic(n_layer=1, use_moe=False)
+def test_adaptive_depth_and_mc_execute_on_synaptic_model():
+    model = make_tiny_synaptic(n_layer=3, use_moe=False)
     inputs = random_tokens(batch=1, seq=3)
-    plan = _controller().plan_for_model(
+    controller = AdaptiveComputeController(
+        AdaptiveComputeConfig(
+            enabled=True,
+            min_depth_layers=1,
+            min_experts=1,
+            min_mc_samples=1,
+            max_mc_samples=4,
+            layer_cost_atp=10,
+        )
+    )
+    plan = controller.plan_for_model(
         torch.zeros(model.config.vocab_size),
-        ATPBudget(10),
+        ATPBudget(13),
         model=model,
         token_index=0,
     )
-    prediction = adaptive_mc_predict(model, inputs, plan)
-    assert prediction.n_samples == plan.mc_samples == plan.max_mc_samples
+    calls = [0, 0, 0]
+    handles = []
+    for layer_index, block in enumerate(model.h):
+        def count_call(_module, _args, _output, index=layer_index):
+            calls[index] += 1
+
+        handles.append(block.register_forward_hook(count_call))
+    try:
+        prediction = adaptive_mc_predict(model, inputs, plan)
+    finally:
+        for handle in handles:
+            handle.remove()
+
+    assert plan.mc_samples == 3 > 1
+    assert calls == [plan.mc_samples, 0, 0]
+    assert prediction.n_samples == plan.mc_samples
+    assert plan.depth_layers == 1 < plan.max_depth_layers
     assert plan.expert_top_k == plan.max_experts == 0
     assert all(record.action != "expert" for record in plan.debit_records)
     assert prediction.mean_probs.shape == (*inputs.shape, model.config.vocab_size)
     assert bool(torch.isfinite(prediction.mean_probs).all())
+
+    direct_logits, _ = model(inputs, train_mode=False)
+    full_logits, _ = model(inputs, train_mode=False, max_layers=model.config.n_layer)
+    torch.testing.assert_close(full_logits, direct_logits, rtol=0.0, atol=0.0)
+
+    partial_cache = KVCache(
+        batch_size=1,
+        num_heads=model.config.n_kv_head,
+        seq_len=8,
+        head_dim=model.config.n_embd // model.config.n_head,
+        num_layers=1,
+    )
+    cached_logits, _ = model(inputs, kv_cache=partial_cache, train_mode=False, max_layers=1)
+    shallow_logits, _ = model(inputs, train_mode=False, max_layers=1)
+    assert partial_cache.get_pos() == inputs.shape[1]
+    assert isinstance(partial_cache.presyn_state, list)
+    assert len(partial_cache.presyn_state) == 1
+    torch.testing.assert_close(cached_logits, shallow_logits, rtol=0.0, atol=0.0)
+
+    mismatched_cache = KVCache(
+        batch_size=1,
+        num_heads=model.config.n_kv_head,
+        seq_len=8,
+        head_dim=model.config.n_embd // model.config.n_head,
+        num_layers=model.config.n_layer,
+    )
+    with pytest.raises(ValueError, match="KV cache layer count must equal max_layers"):
+        model(inputs, kv_cache=mismatched_cache, train_mode=False, max_layers=1)
 
 
 @pytest.mark.unit
