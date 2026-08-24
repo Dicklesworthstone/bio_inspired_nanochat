@@ -580,9 +580,29 @@ uv run scripts/base_eval.py
 *   **`scripts/base_eval.py`** 📊 **Evaluation**: CORE benchmark evaluation
 
 ### Utilities
-*   **`scripts/enable_synapses.py`** 💉 **The Injector**: Checkpoint conversion utility
+*   **`scripts/enable_synapses.py`** 💉 **The Injector**: Copies a compatible pretrained Nanochat GPT checkpoint into synaptic slow weights, with optional identical MoE expert clones
 *   **`scripts/base_train.py`** 🎓 **Training Loop**: Main training script
 *   **`scripts/chat_web.py`** 💬 **Chat UI**: Web-based inference interface
+
+### Retrofit an existing checkpoint
+
+Convert the latest vanilla Nanochat GPT checkpoint without overwriting the source. The converter
+copies attention and dense MLP weights into the synaptic model (`W_slow` receives the pretrained
+MLP matrices), zeros fast/adaptive state, preserves source provenance, and writes a new loadable
+checkpoint. The optional smoke finetune proves the biological state activates while logits remain
+finite:
+
+```bash
+uv run python -m scripts.enable_synapses \
+  --source-ckpt /path/to/base_checkpoints/vanilla \
+  --source-step -1 \
+  --ckpt-out /path/to/base_checkpoints/vanilla_synaptic \
+  --finetune-steps 4
+```
+
+Add `--use-moe --experts 8 --topk 2` to clone the pretrained dense MLP into every initially
+identical expert. This converter intentionally targets architecture-compatible Nanochat GPT
+checkpoints; arbitrary Hugging Face families require an explicit architecture adapter.
 
 ### Documentation
 *   **`prompts/`** 📜 **The DNA**: Theoretical blueprints and research proposals
