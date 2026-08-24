@@ -5,8 +5,8 @@ _Thrust E — fluctuation-theorem-calibrated UQ. Author: BeigeSquirrel · 2026-0
 ## Purpose & scope
 
 This note gives the mathematical foundation for treating **stochastic vesicle release as a
-nonequilibrium thermodynamic process** and harvesting its fluctuation theorems as *calibration and
-precision guarantees*. It establishes three results and the assumptions they rest on, so the
+nonequilibrium thermodynamic process** and testing its fluctuation-theorem consistency and precision
+bounds. It establishes three results and the assumptions they rest on, so the
 downstream implementation (`0642.3.2.1`, the TUR certificate + Crooks monitor) and falsification
 (`0642.3.3.1`, the FT test + ECE/OOD-AUROC vs the softmax/MC baseline) build against a fixed contract:
 
@@ -14,17 +14,18 @@ downstream implementation (`0642.3.2.1`, the TUR certificate + Crooks monitor) a
    and its fluctuation theorems hold (`⟨e^{−Σ}⟩ = 1`, `P(Σ)/P(−Σ) = e^Σ`) (§1, subtask `0642.3.1.1`).
 2. **The Thermodynamic Uncertainty Relation** `Var(J)/⟨J⟩² ≥ 2/⟨Σ⟩` — *precision costs entropy* — a
    provable lower bound on the relative uncertainty of any release current `J` (§2, `0642.3.1.2`).
-3. **Crooks / Jarzynski ⟹ a calibration guarantee**: the empirical entropy-production histogram must
-   obey an analytic detailed-balance relation, an *a-priori* calibration constraint rather than only a
-   post-hoc ECE (§3, `0642.3.1.3`).
+3. **Crooks / Jarzynski ⟹ a release-trajectory consistency check**: the empirical
+   entropy-production histogram must obey an analytic detailed-balance relation. This constrains the
+   stochastic release process; it is not, by itself, a guarantee that token probabilities are
+   calibrated (§3, `0642.3.1.3`).
 
 Everything is grounded in the *live* code: the physical engine is the already-tested stochastic
 release `K ~ Binomial(N = RRP, p = release_prob)` (`synaptic._sample_binomial_counts`, gated by
 `stochastic_train_frac`/ACh) with recovery rate `rec_rate`. The reference math is
 `bio_inspired_nanochat/stochastic_thermo.py`; the qualitative and quantitative claims are corroborated
-numerically in `tests/test_stochastic_thermo.py` (§5). The **baseline** this improves on is the
-softmax-entropy + MC-dropout calibration of `u2t` — which has hysteresis-free UQ but no
-fluctuation-theorem guarantee.
+numerically in `tests/test_stochastic_thermo.py` (§5). Softmax entropy and MC-dropout from `u2t` are
+the empirical predictive-calibration baselines for the falsification experiment; no improvement is
+assumed.
 
 ---
 
@@ -113,11 +114,11 @@ bits-per-joule.
 
 ---
 
-## 3. Crooks / Jarzynski → the calibration guarantee  → subtask `0642.3.1.3`
+## 3. Crooks / Jarzynski → release-trajectory consistency  → subtask `0642.3.1.3`
 
 Identifying the dissipated work `w = kT·Σ` (with `ΔF = 0` for a steady-state current), the detailed FT
 **is** the Crooks relation `P_F(w)/P_R(−w) = e^{(w−ΔF)/kT}` and the integral FT is Jarzynski
-`⟨e^{−w/kT}⟩ = e^{−ΔF/kT}`. This turns into a **calibration guarantee** with teeth: the empirical
+`⟨e^{−w/kT}⟩ = e^{−ΔF/kT}`. This gives a **trajectory-consistency check** with teeth: the empirical
 entropy-production histogram produced by MC release sampling (`u2t`) must satisfy
 
 ```
@@ -125,10 +126,12 @@ entropy-production histogram produced by MC release sampling (`u2t`) must satisf
 ```
 
 `crooks_calibration` checks exactly this (symmetric bins about 0; equal widths make the count ratio
-the density ratio). Unlike a post-hoc ECE number, this is an **analytic relation the predictive
-distribution must obey a priori** — and it is *falsifiable*: a distribution with no
+the density ratio). This is an **analytic relation the release-trajectory distribution must obey** —
+and it is *falsifiable*: a distribution with no
 fluctuation-theorem symmetry (e.g. a Gaussian) fails the check, which is the proof-ledger trigger to
-drop the analytic-guarantee claim and report empirical ECE only (§4, R-fail). Hard constraints enter
+drop the release-process claim and report empirical predictive calibration only (§4, R-fail). Passing
+does **not** prove low ECE or calibrated token probabilities; those require the held-out baseline
+comparison in §7. Hard constraints enter
 as additive energy terms `Σ + Σ_c λ_c g_c` (energy-based constrained generation, `re4e.8`), and
 `jarzynski_free_energy` recovers `ΔF` from the same nonequilibrium fluctuations (`≈ 0` for steady
 state).
@@ -181,9 +184,9 @@ hand-set gain. (`landauer_optimal_temperature`, `ach_coupled_temperature`.)
 | E1 | **Markov / Poisson limit**: release & recovery are independent Poisson jumps with rates `a ∝ p·N`, `b ∝ rec_rate·N` (the Skellam model; `simulate_currents`). | `Σ = J·ln(a/b)`; the integral & detailed FTs hold exactly. | Binomial saturation (`p` not small, `N` small) breaks the Poisson limit; correlated releases break independence. | Use the empirical FT test (`0642.3.3.1`) as the gate; if it fails, drop the analytic guarantee, report empirical ECE only, flag. |
 | E2 | **Stationary drive**: `a, b` (hence `A`) ≈ constant over the measurement window. | `⟨Σ⟩ = ⟨J⟩·A`; the TUR `Var(J)/⟨J⟩² ≥ 2/⟨Σ⟩`. | A fast-ramping release-probability protocol makes `A` time-dependent; the steady-state TUR no longer applies verbatim. | Use the finite-time/transient TUR (generalized bound) or restrict to windows where `p` is quasi-stationary. |
 | E3 | **Local detailed balance**: the reverse rate of a release is the recovery rate (`b`), i.e. no hidden third state. | The medium entropy `ln(a/b)` is the correct trajectory affinity; Crooks/Jarzynski close. | A hidden facilitation/priming state (`Doc2`/`SNARE`) adds cycles ⟹ the 1-cycle affinity is incomplete. | Extend to the multi-state network affinity (Schnakenberg); until then, treat the 2-state `Σ` as a lower bound on the true entropy production. |
-| R | **Calibration claim**: the empirical `Σ` histogram obeys `ln(P(+Σ)/P(−Σ)) = Σ` within tolerance. | The predictive distribution is fluctuation-theorem-calibrated (an analytic guarantee). | The histogram fails the relation (E1/E3 broken). | Drop the analytic-guarantee claim; fall back to the post-hoc ECE of the `u2t` baseline; flag. |
+| R | **Trajectory-consistency claim**: the empirical `Σ` histogram obeys `ln(P(+Σ)/P(−Σ)) = Σ` within tolerance. | The sampled release process is fluctuation-theorem-consistent for the tested counter-protocol; predictive calibration remains empirical. | The histogram fails the relation (E1/E3 broken). | Drop the release-process claim; report predictive ECE/AUROC empirically; flag. |
 
-**Composition note** (`0642.10`/`0642.11.1`): the FT calibration composes with the other thrusts only
+**Composition note** (`0642.10`/`0642.11.1`): the FT consistency check composes with the other thrusts only
 while E1–E3 hold jointly with the presyn recurrence active (the release `p` and pool `N` are produced
 by the calcium/RRP dynamics, so the stationarity E2 couples to the timescale-separation gauge).
 
@@ -200,8 +203,9 @@ by the calcium/RRP dynamics, so the stationarity E2 couples to the timescale-sep
   `P(+k)/P(−k) ≈ (a/b)^k` to ~5%.
 - **TUR** — satisfied for every drive; relative slack `→ 0` as `a → b` (saturated near equilibrium);
   the empirical TUR holds on sampled currents.
-- **Crooks/Jarzynski calibration** — `jarzynski_free_energy ≈ 0`; the `Σ` histogram obeys the detailed
-  FT line; and the check **rejects** a misspecified (Gaussian) `Σ`, so the guarantee is falsifiable.
+- **Crooks/Jarzynski trajectory consistency** — `jarzynski_free_energy ≈ 0`; the `Σ` histogram obeys
+  the detailed FT line; and the check **rejects** a misspecified (Gaussian) `Σ`, so the release-process
+  claim is falsifiable.
 - **Landauer temperature** — `optimal_exploration_snr ≈ 3.9215` solves the stationarity; bits-per-joule
   peaks there; `kT* = σ/√SNR* ≈ 0.505·σ` is linear in the drive uncertainty; the ACh coupling raises
   `kT*` with the signaled uncertainty.
@@ -209,6 +213,74 @@ by the calcium/RRP dynamics, so the stationarity E2 couples to the timescale-sep
 These corroborate the exact identities (closed form) and that the simulated release reproduces them —
 which is what licenses the runtime certificate/monitor (`0642.3.2.1`) and the falsification
 (`0642.3.3.1`).
+
+---
+
+## 7. Matched-seed falsification verdict  → subtask `0642.3.3.2`
+
+The runnable harness now has a matched-seed statistics path backed by the shared `74f.3` layer:
+Student-t 95% intervals for each method, paired t and exact Wilcoxon tests, and a 10,000-resample
+paired-bootstrap interval for every thermo-minus-baseline delta. The committed run used seeds
+`11,23,37,53,71,89,107,131,149,167`, identical trained weights within each seed, and the default
+CPU experiment configuration:
+
+```bash
+uv run python -m scripts.e2e.stochastic_thermo_uq \
+  --seeds 11,23,37,53,71,89,107,131,149,167 \
+  --bootstrap-samples 10000 \
+  --output results/stochastic_thermo_uq_548ebe9f791d.json \
+  --registry results/registry.jsonl
+```
+
+### 7.1 Calibration result: **null**, not a win
+
+| method | ID ECE mean (Student-t 95% CI) | OOD AUROC mean (Student-t 95% CI) |
+|---|---:|---:|
+| softmax entropy | 0.071934 [0.061107, 0.082761] | 0.994748 [0.989499, 0.999998] |
+| MC-dropout | 0.110240 [0.098622, 0.121858] | 0.997287 [0.993953, 1.000621] |
+| thermo-UQ | 0.071938 [0.061379, 0.082498] | 0.994911 [0.989545, 1.000277] |
+
+| paired thermo delta | mean | bootstrap 95% CI | paired-t p | Wilcoxon p | verdict |
+|---|---:|---:|---:|---:|---|
+| ECE vs softmax (lower is better) | +0.000004 | [-0.000316, +0.000224] | 0.9780 | 0.2324 | indistinguishable |
+| AUROC vs softmax (higher is better) | +0.000163 | [-0.000217, +0.000553] | 0.4512 | 0.6250 | indistinguishable |
+| ECE vs MC-dropout | -0.038302 | [-0.042648, -0.033841] | 5.81e-8 | 0.00195 | thermo better |
+| AUROC vs MC-dropout | -0.002376 | [-0.004981, +0.000054] | 0.1178 | 0.1562 | no supported improvement |
+
+The decision rule requires favorable bootstrap intervals **and** both paired tests for ECE and OOD
+AUROC against **both** baselines. Thermo-UQ ties the stronger softmax baseline, and its ECE advantage
+over MC-dropout does not extend to AUROC. The registry verdict is therefore **null**. This tiny cyclic
+language-model benchmark also has near-saturated OOD AUROC, so it cannot establish a general
+calibration advantage; a harder predictive-distribution benchmark would be fresh follow-up work, not
+a reinterpretation of this result.
+
+### 7.2 FT and TUR scope: one pass, one important limitation
+
+The live one-step paired-binomial counter-protocol passed its detailed/integral fluctuation-theorem
+thresholds on all 10 seeds. Mean maximum Crooks residual was `0.047982` (95% CI
+`[0.026676, 0.069288]`), and mean integral-FT residual was `0.001773` (95% CI
+`[0.000942, 0.002604]`). This remains an isolated local-detailed-balance check; the report explicitly
+sets `predictive_distribution_claim=false` and does not turn it into a certificate for recurrent
+hidden state or model predictions.
+
+The classic continuous-time TUR bound is **non-vacuous** on the exact live protocol, but it does not
+quite transfer to the finite one-step binomial process:
+
+```text
+exact relative variance       = 10.416664
+classic entropy bound         = 10.445187
+slack (variance - bound)      = -0.028523
+bound ratio                   = 0.997269
+```
+
+Thus E1's Poisson/Skellam limit matters quantitatively: applying the classic bound directly to the
+finite live binomial would assert a small false violation. The runtime continuous-time TUR remains
+valid for its stated reference process, but a live-path certificate needs either a justified
+rare-event limit or an appropriate finite/discrete-time bound. The harness records this as a theory
+limitation instead of rounding it into a pass.
+
+Evidence: `results/stochastic_thermo_uq_548ebe9f791d.json`; 30 schema-validated per-seed/method rows
+in `results/registry.jsonl`, all provenance-stamped to implementation commit `55df5f5`.
 
 ---
 
