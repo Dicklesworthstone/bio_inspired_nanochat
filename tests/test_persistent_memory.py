@@ -94,3 +94,35 @@ def test_right_to_be_forgotten(tmp_path):
     erased = manager.forget_user("alice", model=model)
     assert erased
     assert len(list(tmp_path.glob("mem_*.pt"))) == 0
+
+
+def test_unmount_restores_base_model_weights(tmp_path):
+    """Verify that unmounting a user completely restores the model's base slow weights."""
+    manager = PersistentLifelongMemoryManager(storage_dir=tmp_path)
+    model = _make_model()
+    syn_lin = next(mod for mod in model.modules() if isinstance(mod, SynapticLinear))
+
+    w_slow_pristine = syn_lin.w_slow.data.clone()
+
+    # Mount user Alice who has consolidated memory
+    manager.mount_user(model, "alice")
+    assert syn_lin.w_fast is not None
+    syn_lin.w_fast.data.fill_(0.8)
+    manager.unmount_user(model, "alice", consolidate=True, consolidation_lr=0.5)
+
+    # Base model after unmount must match pristine slow weights
+    assert torch.allclose(syn_lin.w_slow.data, w_slow_pristine, atol=1e-6)
+
+    # Re-mount Alice on same model instance -> deltas apply
+    manager.mount_user(model, "alice")
+    assert not torch.allclose(syn_lin.w_slow.data, w_slow_pristine, atol=1e-6)
+
+    # Unmount Alice again -> returns to pristine
+    manager.unmount_user(model, "alice", consolidate=False)
+    assert torch.allclose(syn_lin.w_slow.data, w_slow_pristine, atol=1e-6)
+
+    # Partition inspection
+    part = manager.load_partition("alice")
+    assert part is not None
+    assert part.user_id == "alice"
+
