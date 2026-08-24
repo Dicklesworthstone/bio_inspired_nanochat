@@ -164,6 +164,71 @@
       "mathlib_revision": "a3a10db0e9d66acbebf76c5e6a135066525ac900",
       "build_command": "LEAN_PATH=<pinned-package-build-paths> rch exec -- <lean-4.27.0>/bin/lean BioInspiredNanochat.lean",
       "build_result": "passed-locally-rch-had-no-workers-lake-wrapper-unavailable"
+    },
+    {
+      "cycle_id": "lfl-0642.1.2-live-runtime-2026-08-24",
+      "frog_id": "bio_inspired_nanochat-0642.1.2",
+      "theorem_ids": [
+        "BioInspiredNanochat.Metriplectic.poisson_entropy_degeneracy",
+        "BioInspiredNanochat.Metriplectic.friction_energy_degeneracy",
+        "BioInspiredNanochat.Metriplectic.energyRate_zero",
+        "BioInspiredNanochat.Metriplectic.entropyRate_nonnegative",
+        "BioInspiredNanochat.Metriplectic.freeEnergyRate_nonpositive",
+        "BioInspiredNanochat.Metriplectic.freeEnergy_nonincreasing",
+        "BioInspiredNanochat.Metriplectic.trajectory_energy_constant",
+        "BioInspiredNanochat.Metriplectic.trajectory_entropy_from_start",
+        "BioInspiredNanochat.Metriplectic.trajectory_freeEnergy_nonincreasing",
+        "BioInspiredNanochat.Metriplectic.trajectory_component_bounds"
+      ],
+      "route": "runtime-first-proof-preserving",
+      "proof_friction_class": "floating-point-refinement",
+      "runtime_defect_found": false,
+      "artifact_hash": "sha256:831498bc2853d86701250ea89024ab5f5f6190d2e3a5a9ae66f93a7d5d42d963",
+      "hash_scope": "formal/lean/BioInspiredNanochat.lean",
+      "sorry_or_admit_present": false,
+      "axioms": [
+        "propext",
+        "Classical.choice",
+        "Quot.sound"
+      ],
+      "assurance": {
+        "exact_real_algebra": "E",
+        "live_torch_regressions": "B",
+        "floating_point_refinement": "dtype-aware-guarded-runtime-gap"
+      },
+      "conformance": {
+        "statement_parity": "pass-reduced-core",
+        "state_parity": "pass-live-C-B-HEAT-core",
+        "transition_parity": "pass-closed-form-implicit-midpoint-vs-numpy-reference",
+        "concurrency_parity": "not-applicable-pure-tensor-transform",
+        "cancel_drain_parity": "not-applicable",
+        "runtime_evidence": "pass",
+        "drift_gate": "pass"
+      },
+      "runtime_mapping": [
+        {
+          "path": "bio_inspired_nanochat/metriplectic_integrator.py",
+          "sha256": "a1ee201944210dc8621199fc8eee379ef1b69efda84e2eec0e0c3b59324e0db5"
+        },
+        {
+          "path": "bio_inspired_nanochat/synaptic.py",
+          "sha256": "beae721545d01d7516419193587e4f1d638dc2f8b2c8a7ed62689279a70754ec"
+        },
+        {
+          "path": "tests/test_metriplectic_runtime.py",
+          "sha256": "89bd48e337b6d31060619a87388dc3ab2b564907051cb8719f1861e338c4c07a"
+        },
+        {
+          "path": "docs/theory/metriplectic.md",
+          "sha256": "a06e69fef4430fef6f5b4e0ab55e336ad6b9b82d9bbde89690bf19e262c32bf7"
+        }
+      ],
+      "regression_command": "uv run --no-sync python -m pytest tests/test_metriplectic_theory.py tests/test_metriplectic_integrator.py tests/test_metriplectic_runtime.py -v --tb=short",
+      "regression_result": "36 passed",
+      "lean_toolchain": "leanprover/lean4:v4.27.0",
+      "mathlib_revision": "a3a10db0e9d66acbebf76c5e6a135066525ac900",
+      "build_command": "rch exec -- lake build",
+      "build_result": "not-rerun-runtime-only-rch-lake-unavailable-permission-denied"
     }
   ]
 }

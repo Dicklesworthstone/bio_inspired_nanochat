@@ -34,14 +34,14 @@ derive the conservation/production/Lyapunov chain and the **bounded-trajectory**
 comparator** is the shipped `vg9` clamped-Euler step (`vg9.5`/`vg9.7`): dissipative-stable (the
 `yw9.7` contraction `cb_spectral_radius < 1`) but *not* structure-preserving — it does not exactly
 conserve `E` or the vesicle Casimir at finite step. This note specifies the structure the
-discrete-gradient integrator will preserve exactly.
+discrete-gradient integrator preserves exactly.
 
 ---
 
 ## 0. Where reversibility, dissipation, and conservation live in the synapse
 
-The presynaptic state is `(C, BUF, RRP, RES, DELAY, PR, CL, E_met)` (`build_presyn_state`,
-`release_canonical`). Three physically distinct behaviors are already present in the code:
+The presynaptic state is `(C, BUF, RRP, RES, DELAY, PR, CL, E_met)` plus opt-in `HEAT`
+(`build_presyn_state`, `release_canonical`). Three physically distinct behaviors are present:
 
 - **Reversible exchange** — the **calcium ↔ buffer** shuttle: `αon` moves free calcium `C` into the
   bound store `BUF`, `αoff` releases it back (`docs/stable_recurrence_theory.md` §2). In the
@@ -193,7 +193,7 @@ attains its minimum `F(z*) = E₀ − T·E₀ = (1−T)E₀` there.
 The **vesicle pool** `N = RRP + RES + Σ DELAY` is a **Casimir**: it commutes with the reversible
 bracket (`L ∂N = 0` — `N` does not appear in the `(C,B,h)` core) and is conserved by the dissipative
 pool dynamics structurally (`yw9.2.2`: every depletion is a *paired transfer*, never a sink). A
-structure-preserving integrator (`0642.1.2.1`) must keep `N` constant to machine precision, exactly
+structure-preserving runtime (`0642.1.2`) keeps `N` constant to machine precision, exactly
 as `_vesicle_step` already does at `rec_rate = 1`. Casimirs foliate the phase space into invariant
 leaves `{N = const}`; the metriplectic flow above lives on a single leaf, so the full guarantee is
 "bounded on the energy shell **within** the conserved-vesicle leaf."
@@ -235,11 +235,43 @@ same fail-closed discipline as `0642.2.1` (the cusp note).
 
 These confirm the *exact* algebraic facts (degeneracy, PSD, skew) and the *qualitative* dynamical
 facts (conservation in the continuous limit, monotone `S`, Lyapunov `F`, boundedness) that the
-structure-preserving integrator will then realize at finite step.
+structure-preserving integrator realizes at finite step.
 
 ---
 
-## 9. Relationship to the `vg9` baseline & the reversible-flow backprop  → subtask `0642.1.1.6`
+## 9. Live runtime compilation and fallback  → bead `0642.1.2`
+
+`metriplectic_integrator.torch_guarded_step` is the vectorized torch compilation used by
+`SynapticPresyn.release_canonical`. Because `E` is quadratic and `S` is linear, the Gonzalez step is
+an implicit-midpoint update with a closed-form 2×2 solve for `(C, BUF)`; there is no Python
+fixed-point loop on the live path. `heat` is then closed from the exact energy-shell identity. The
+operation remains differentiable, so the existing chunked-BPTT path can carry gradients through it.
+
+The attention drive is an **external forcing**, not part of the closed GENERIC core. The runtime
+therefore injects `alpha_ca·softplus(drive)` into calcium first and conserves the resulting energy
+shell during the internal relaxation. The certificate is deliberately per relaxation step: it does
+not claim that a driven/open synapse conserves energy across input injection.
+
+The feature is behind `SynapticConfig.metriplectic_integrator` and remains default-off. When enabled:
+
+- the live state gains a `HEAT` tensor; old caches acquire a deterministic zero reservoir;
+- ordinary/default-off states allocate no `HEAT` tensor and retain the original operation path;
+- non-finite proposals, energy drift, negative entropy production, or departure from the live
+  physical domain (`C ≥ 0`, `0 ≤ BUF ≤ 1`, `heat ≥ 0`) select the pre-existing clamped-Euler update
+  elementwise;
+- `SynapticPresyn.get_metriplectic_metrics()` exposes step/fallback counts plus the last energy,
+  entropy, and free-energy guard reductions for structured telemetry;
+- the vesicle Casimir remains enforced independently by the existing paired-transfer RRP/RES/DELAY
+  update, so changing the calcium integrator cannot bypass vesicle conservation.
+
+All guard calculations certify the values after conversion to the live state dtype. The tolerance
+floor scales with that dtype's machine epsilon, so fp32/bf16 runs are judged against attainable
+precision rather than the fp64 reference tolerance. A fallback receives the already-computed live
+clamped-Euler tensors and selects them directly; it does not reimplement or approximate the baseline.
+
+---
+
+## 10. Relationship to the `vg9` baseline & the reversible-flow backprop  → subtask `0642.1.1.6`
 
 The shipped dynamics are the **`vg9` clamped-Euler** step: stable (the `yw9.7` contraction) and
 conservation-bounded for the pools (`yw9.2.2`), but it enforces stability by **clamping** and does

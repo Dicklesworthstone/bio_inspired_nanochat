@@ -22,17 +22,17 @@ conservation exact — the integrator is the implicit midpoint rule in this case
 Euler at first order. See `docs/theory/metriplectic.md` §4–§5; tested in
 `tests/test_metriplectic_integrator.py`.
 
-Scope (0642.1.2.1): the integrator object itself, operating on the metriplectic core that
-`docs/theory/metriplectic.md` reduces the synaptic calcium↔buffer subsystem to. Wiring it into the
-live synaptic step behind a toggle + fallback is the compile bead `0642.1.2`; the free-energy
-deliberation loop that consumes it is `r00r.1.2`.
+Scope: the NumPy reference implements `0642.1.2.1`; :func:`torch_guarded_step` compiles that core
+into the live synaptic recurrence for `0642.1.2`. The free-energy deliberation loop that consumes
+the same structure is `r00r.1.2`.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-
 import numpy as np
+
+from bio_inspired_nanochat.torch_imports import Tensor, torch
 
 # Default core parameters (see metriplectic.md §0): ω = reversible calcium↔buffer exchange rate;
 # γ_C, γ_B = the dissipative leak rates (1−ρc, 1−ρb).
@@ -181,6 +181,183 @@ class GuardThresholds:
     eps_E: float = 1e-8    # max |E(z') − E(z)| (energy drift)
     eps_S: float = 1e-10   # entropy production must be ≥ −eps_S
     eps_D: float = 1e-8    # degeneracy residuals ‖L∇S‖, ‖M∇E‖ must be ≤ eps_D
+
+
+@dataclass(frozen=True)
+class TorchStepRecord:
+    """Vectorized guard evidence emitted by :func:`torch_guarded_step`.
+
+    The tensors retain the leading shape of the live presynaptic state. ``breach_code`` is zero for
+    a certified proposal, 1 for a non-finite proposal, 2 for energy drift, 3 for negative entropy
+    production, and 4 for leaving the live physical domain. Keeping the evidence on-device avoids
+    a synchronizing ``.item()`` in the model's hot path; callers reduce it only when logging.
+    """
+
+    energy_drift: Tensor
+    entropy_production: Tensor
+    free_energy_delta: Tensor
+    res_L_gradS: Tensor
+    res_M_gradE: Tensor
+    fallback_mask: Tensor
+    breach_code: Tensor
+
+    def detached(self) -> "TorchStepRecord":
+        """Return graph-free evidence suitable for retaining as runtime telemetry."""
+        return TorchStepRecord(
+            energy_drift=self.energy_drift.detach(),
+            entropy_production=self.entropy_production.detach(),
+            free_energy_delta=self.free_energy_delta.detach(),
+            res_L_gradS=self.res_L_gradS.detach(),
+            res_M_gradE=self.res_M_gradE.detach(),
+            fallback_mask=self.fallback_mask.detach(),
+            breach_code=self.breach_code.detach(),
+        )
+
+
+def _torch_scalar(value: float | Tensor, like: Tensor) -> Tensor:
+    return torch.as_tensor(value, dtype=like.dtype, device=like.device)
+
+
+def torch_guarded_step(
+    calcium: Tensor,
+    buffer: Tensor,
+    heat: Tensor,
+    *,
+    dt: float = 1.0,
+    omega: float | Tensor = OMEGA,
+    gC: float | Tensor = GAMMA_C,
+    gB: float | Tensor = GAMMA_B,
+    temperature: float = TEMP,
+    thresholds: GuardThresholds | None = None,
+    fallback: tuple[Tensor, Tensor, Tensor] | None = None,
+) -> tuple[Tensor, Tensor, Tensor, TorchStepRecord]:
+    """Advance a batched live ``(C, B, heat)`` state with guarded implicit midpoint.
+
+    This is the torch-native compilation of :func:`guarded_step` used by the actual presynaptic
+    recurrence. For the quadratic energy and linear entropy in the theory note, the Gonzalez
+    discrete-gradient update has a closed-form 2×2 solve for ``(C, B)``. The heat coordinate is
+    then obtained from the energy-shell identity, avoiding the Python fixed-point loop and keeping
+    the operation differentiable and GPU-friendly.
+
+    Guard tolerances are interpreted at the working dtype's machine precision. A breached element
+    selects its supplied live clamped-Euler ``fallback`` byte-for-byte. If no fallback is supplied,
+    the function constructs the reference clamped forward-Euler step.
+    """
+    if calcium.shape != buffer.shape or calcium.shape != heat.shape:
+        raise ValueError(
+            "calcium, buffer, and heat must have identical shapes; "
+            f"got {calcium.shape}, {buffer.shape}, and {heat.shape}"
+        )
+    if not calcium.is_floating_point():
+        raise TypeError(f"metriplectic state must be floating point, got {calcium.dtype}")
+    if dt <= 0.0:
+        raise ValueError(f"dt must be positive, got {dt}")
+    if temperature <= 0.0:
+        raise ValueError(f"temperature must be positive, got {temperature}")
+
+    thr = thresholds or GuardThresholds()
+    work_dtype = torch.float64 if calcium.dtype == torch.float64 else torch.float32
+    c0 = calcium.to(work_dtype)
+    b0 = buffer.to(work_dtype)
+    h0 = heat.to(work_dtype)
+    dt_t = _torch_scalar(dt, c0)
+    omega_t = _torch_scalar(omega, c0)
+    gc_t = _torch_scalar(gC, c0)
+    gb_t = _torch_scalar(gB, c0)
+    half_dt = 0.5 * dt_t
+
+    # Implicit-midpoint 2×2 system:
+    #   (1+a*gC) C' - a*w B' = (1-a*gC) C + a*w B
+    #    a*w C' + (1+a*gB) B' = -a*w C + (1-a*gB) B
+    a11 = 1.0 + half_dt * gc_t
+    a12 = -half_dt * omega_t
+    a21 = half_dt * omega_t
+    a22 = 1.0 + half_dt * gb_t
+    rhs_c = (1.0 - half_dt * gc_t) * c0 + half_dt * omega_t * b0
+    rhs_b = -half_dt * omega_t * c0 + (1.0 - half_dt * gb_t) * b0
+    determinant = a11 * a22 - a12 * a21
+    singular = determinant.abs() <= torch.finfo(work_dtype).eps
+    safe_determinant = torch.where(singular, torch.ones_like(determinant), determinant)
+    inverse_determinant = torch.reciprocal(safe_determinant)
+    c_prop = (rhs_c * a22 - a12 * rhs_b) * inverse_determinant
+    b_prop = (a11 * rhs_b - rhs_c * a21) * inverse_determinant
+
+    # Quantize C/B to the live state dtype before closing the energy shell. This makes the guard
+    # certify the values that are actually persisted (including bf16), not an fp32 proposal that
+    # would subsequently round differently.
+    c_candidate = c_prop.to(calcium.dtype).to(work_dtype)
+    b_candidate = b_prop.to(buffer.dtype).to(work_dtype)
+
+    # The exact shell identity is both cheaper and more accurate than accumulating h with the
+    # midpoint dissipation formula. It is algebraically identical for this quadratic core.
+    mechanical0 = 0.5 * (c0.square() + b0.square())
+    mechanical1 = 0.5 * (c_candidate.square() + b_candidate.square())
+    h_candidate = (h0 + mechanical0 - mechanical1).to(heat.dtype).to(work_dtype)
+    energy0 = mechanical0 + h0
+    energy1 = mechanical1 + h_candidate
+    energy_drift = energy1 - energy0
+    entropy_production = h_candidate - h0
+    free_energy_delta = energy_drift - temperature * entropy_production
+
+    # L·∇S and M·∇E cancel structurally for this parameterization. Record explicit zero tensors so
+    # the live telemetry schema is identical to the reference monitor's evidence table.
+    res_l_grads = torch.zeros_like(energy_drift)
+    res_m_grade = torch.zeros_like(energy_drift)
+    finite = (
+        torch.isfinite(c_candidate)
+        & torch.isfinite(b_candidate)
+        & torch.isfinite(h_candidate)
+        & torch.isfinite(determinant)
+        & ~singular
+    )
+    scale = torch.maximum(torch.maximum(energy0.abs(), energy1.abs()), torch.ones_like(energy0))
+    dtype_tol = 16.0 * torch.finfo(calcium.dtype).eps * scale
+    energy_tol = torch.maximum(_torch_scalar(thr.eps_E, energy0), dtype_tol)
+    entropy_tol = torch.maximum(_torch_scalar(thr.eps_S, energy0), dtype_tol)
+    energy_breach = energy_drift.abs() > energy_tol
+    entropy_breach = entropy_production < -entropy_tol
+    domain_breach = (
+        (c_candidate < 0.0)
+        | (b_candidate < 0.0)
+        | (b_candidate > 1.0)
+        | (h_candidate < -entropy_tol)
+    )
+    nonfinite_breach = ~finite
+    fallback_mask = nonfinite_breach | energy_breach | entropy_breach | domain_breach
+    breach_code = torch.zeros_like(energy_drift, dtype=torch.int8)
+    breach_code = torch.where(domain_breach, torch.full_like(breach_code, 4), breach_code)
+    breach_code = torch.where(entropy_breach, torch.full_like(breach_code, 3), breach_code)
+    breach_code = torch.where(energy_breach, torch.full_like(breach_code, 2), breach_code)
+    breach_code = torch.where(nonfinite_breach, torch.ones_like(breach_code), breach_code)
+
+    if fallback is None:
+        c_fallback = (c0 + dt_t * (omega_t * b0 - gc_t * c0)).clamp_min(0.0)
+        b_fallback = (b0 + dt_t * (-omega_t * c0 - gb_t * b0)).clamp(0.0, 1.0)
+        h_fallback = h0
+    else:
+        c_fallback, b_fallback, h_fallback = (
+            value.to(work_dtype) for value in fallback
+        )
+        if (
+            c_fallback.shape != calcium.shape
+            or b_fallback.shape != calcium.shape
+            or h_fallback.shape != calcium.shape
+        ):
+            raise ValueError("every fallback tensor must match the live state shape")
+
+    c_next = torch.where(fallback_mask, c_fallback, c_candidate).to(calcium.dtype)
+    b_next = torch.where(fallback_mask, b_fallback, b_candidate).to(buffer.dtype)
+    h_next = torch.where(fallback_mask, h_fallback, h_candidate).to(heat.dtype)
+    record = TorchStepRecord(
+        energy_drift=energy_drift,
+        entropy_production=entropy_production,
+        free_energy_delta=free_energy_delta,
+        res_L_gradS=res_l_grads,
+        res_M_gradE=res_m_grade,
+        fallback_mask=fallback_mask,
+        breach_code=breach_code,
+    )
+    return c_next, b_next, h_next, record
 
 
 @dataclass

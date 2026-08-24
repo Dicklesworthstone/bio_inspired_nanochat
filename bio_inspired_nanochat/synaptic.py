@@ -25,6 +25,7 @@ from typing import Optional, Tuple, List, Dict, Literal, cast, Any
 
 from bio_inspired_nanochat.torch_imports import torch, nn, F, Tensor
 from bio_inspired_nanochat.common import decouple_config
+from bio_inspired_nanochat.metriplectic_integrator import TorchStepRecord, torch_guarded_step
 
 try:
     from .flex_synaptic import SynapticFlexAttention
@@ -664,6 +665,26 @@ class SynapticPresyn(nn.Module):
         super().__init__()
         object.__setattr__(self, "cfg", cfg)
         self.register_buffer("ema_e", torch.ones(1))
+        # 0642.1.2: on-device, non-persistent guard evidence for the live metriplectic recurrence.
+        # These are counters/telemetry, not learned or checkpoint state. Keeping reductions as
+        # tensors avoids synchronizing CUDA on every presynaptic step.
+        self.register_buffer("metriplectic_steps", torch.zeros((), dtype=torch.int64), persistent=False)
+        self.register_buffer(
+            "metriplectic_fallbacks", torch.zeros((), dtype=torch.int64), persistent=False
+        )
+        self.register_buffer(
+            "metriplectic_last_energy_drift", torch.zeros((), dtype=torch.float32), persistent=False
+        )
+        self.register_buffer(
+            "metriplectic_last_entropy_production",
+            torch.zeros((), dtype=torch.float32),
+            persistent=False,
+        )
+        self.register_buffer(
+            "metriplectic_last_free_energy_delta",
+            torch.zeros((), dtype=torch.float32),
+            persistent=False,
+        )
         # yw9.3: SGD-learnable, stability-preserving calcium/buffer kinetics (default-off). When
         # present, release_canonical sources rho_c/rho_b/alpha_* from these Parameters.
         self.kinetics = LearnableKinetics(cfg) if cfg.learnable_kinetics else None
@@ -675,6 +696,84 @@ class SynapticPresyn(nn.Module):
         energy is conserved and the free energy is Lyapunov at the discrete level. DEFAULT-OFF; the
         integration call site is wired in 0642.1.2 — this is the toggle read."""
         return bool(self.cfg.metriplectic_integrator)
+
+    @torch.no_grad()
+    def _record_metriplectic_step(self, record: TorchStepRecord) -> None:
+        """Retain compact live guard/ledger evidence without holding the autograd graph."""
+        self.metriplectic_steps.add_(record.fallback_mask.numel())
+        self.metriplectic_fallbacks.add_(record.fallback_mask.sum().to(torch.int64))
+        self.metriplectic_last_energy_drift.copy_(
+            record.energy_drift.detach().abs().max().to(torch.float32)
+        )
+        self.metriplectic_last_entropy_production.copy_(
+            record.entropy_production.detach().min().to(torch.float32)
+        )
+        self.metriplectic_last_free_energy_delta.copy_(
+            record.free_energy_delta.detach().max().to(torch.float32)
+        )
+
+    def get_metriplectic_metrics(self) -> Dict[str, float | int]:
+        """Return the live conservation/entropy ledger for structured telemetry."""
+        return {
+            "steps": int(self.metriplectic_steps.item()),
+            "fallbacks": int(self.metriplectic_fallbacks.item()),
+            "last_max_energy_drift": float(self.metriplectic_last_energy_drift.item()),
+            "last_min_entropy_production": float(
+                self.metriplectic_last_entropy_production.item()
+            ),
+            "last_max_free_energy_delta": float(
+                self.metriplectic_last_free_energy_delta.item()
+            ),
+        }
+
+    def _advance_calcium_buffer(
+        self,
+        calcium: Tensor,
+        buffer: Tensor,
+        heat: Tensor,
+        influx: Tensor,
+        *,
+        rho_c: float | Tensor,
+        rho_b: float | Tensor,
+        alpha_buf_on: float | Tensor,
+        alpha_buf_off: float | Tensor,
+        record_metrics: bool = False,
+    ) -> tuple[Tensor, Tensor, Tensor]:
+        """Advance the live calcium/buffer subsystem or its exact guarded fallback.
+
+        The external attention-driven influx is injected into calcium before the closed-system
+        metriplectic relaxation. If any structural/numerical/domain guard trips, the pre-existing
+        clamped-Euler calcium/buffer update is selected elementwise, byte-for-byte.
+        """
+        baseline_c = (
+            rho_c * calcium
+            + influx
+            - alpha_buf_on * calcium * (1.0 - buffer)
+            + alpha_buf_off * buffer
+        ).clamp(min=0.0)
+        baseline_b = (
+            rho_b * buffer
+            + alpha_buf_on * calcium * (1.0 - buffer)
+            - alpha_buf_off * buffer
+        ).clamp(0.0, 1.0)
+        if not self.use_metriplectic_integrator():
+            return baseline_c, baseline_b, heat
+
+        # The Poisson orientation is chosen so positive free calcium flows into the positive live
+        # buffer coordinate. Dissipative rates are the discrete leaks identified in the theory note.
+        omega = -0.5 * (alpha_buf_on + alpha_buf_off)
+        c_next, b_next, h_next, record = torch_guarded_step(
+            calcium + influx,
+            buffer,
+            heat,
+            omega=omega,
+            gC=1.0 - rho_c,
+            gB=1.0 - rho_b,
+            fallback=(baseline_c, baseline_b, heat),
+        )
+        if record_metrics:
+            self._record_metriplectic_step(record)
+        return c_next, b_next, h_next
 
     # The legacy sigmoid release() + _mix_prob were removed here (qcj7). The faithful canonical
     # release lives in release_canonical (below) and is used by ALL paths now (standard + flex);
@@ -747,6 +846,12 @@ class SynapticPresyn(nn.Module):
                 f"valid mask must match drive shape {drive.shape}, got {valid.shape}"
             )
         dtype = state["C"].dtype
+        heat_state = state.get("HEAT")
+        if self.use_metriplectic_integrator() and heat_state is None:
+            # Compatibility for caches created before 0642.1.2. Heat is a default-off state and
+            # therefore absent from ordinary checkpoints; an enabled old cache starts on h=0.
+            heat_state = torch.zeros_like(state["C"])
+            state["HEAT"] = heat_state
         flat_idx = idx.reshape(B, H, -1)
 
         # yw9.3: source the calcium/buffer kinetics from learnable Parameters when enabled, else
@@ -766,6 +871,8 @@ class SynapticPresyn(nn.Module):
         # --- gather per-edge state for the selected keys (prior state is detached) ---
         c_prev = state["C"].gather(2, flat_idx).view(B, H, T, K)
         buf_prev = state["BUF"].gather(2, flat_idx).view(B, H, T, K)
+        if heat_state is not None:
+            heat_prev = heat_state.gather(2, flat_idx).view(B, H, T, K)
         pr_edge = state["PR"].gather(2, flat_idx).view(B, H, T, K)
         cl_edge = state["CL"].gather(2, flat_idx).view(B, H, T, K)
         rrp_edge = state["RRP"].gather(2, flat_idx).view(B, H, T, K)
@@ -773,11 +880,25 @@ class SynapticPresyn(nn.Module):
 
         # --- calcium + buffer ODE (BUF now ACTIVE; influx carries the grad w.r.t. drive) ---
         influx = alpha_ca * F.softplus(drive)
-        c_edge = (
-            rho_c * c_prev + influx
-            - alpha_buf_on * c_prev * (1.0 - buf_prev)
-            + alpha_buf_off * buf_prev
-        ).clamp(min=0.0)
+        if heat_state is None:
+            # Preserve the default path's exact operation sequence and allocation profile.
+            c_edge = (
+                rho_c * c_prev
+                + influx
+                - alpha_buf_on * c_prev * (1.0 - buf_prev)
+                + alpha_buf_off * buf_prev
+            ).clamp(min=0.0)
+        else:
+            c_edge, _, _ = self._advance_calcium_buffer(
+                c_prev,
+                buf_prev,
+                heat_prev,
+                influx,
+                rho_c=rho_c,
+                rho_b=rho_b,
+                alpha_buf_on=alpha_buf_on,
+                alpha_buf_off=alpha_buf_off,
+            )
 
         # --- faithful Hill release probability, then release = p * available RRP (<= RRP) ---
         p = self._faithful_release_prob(c_edge, pr_edge, cl_edge, drive)
@@ -861,17 +982,22 @@ class SynapticPresyn(nn.Module):
             cnt_vals.scatter_add_(2, flat_idx, flat_valid)  # access count per key
             accessed = (cnt_vals > 0).to(dtype)
 
-            # calcium + buffer at key positions (faithful BUF ODE)
+            # Calcium + buffer at key positions. The default remains the faithful clamped-Euler
+            # ODE; the opt-in path advances the same driven state with the guarded discrete-gradient
+            # core and persists its heat/entropy ledger.
             c_k, buf_k = state["C"], state["BUF"]
-            c_up = (
-                rho_c * c_k + alpha_ca * F.softplus(drv_vals) * accessed
-                - alpha_buf_on * c_k * (1.0 - buf_k)
-                + alpha_buf_off * buf_k
-            ).clamp(min=0.0)
-            buf_up = (
-                rho_b * buf_k + alpha_buf_on * c_k * (1.0 - buf_k)
-                - alpha_buf_off * buf_k
-            ).clamp(0.0, 1.0)
+            heat_k = state["HEAT"] if self.use_metriplectic_integrator() else c_k
+            c_up, buf_up, heat_up = self._advance_calcium_buffer(
+                c_k,
+                buf_k,
+                heat_k,
+                alpha_ca * F.softplus(drv_vals) * accessed,
+                rho_c=rho_c,
+                rho_b=rho_b,
+                alpha_buf_on=alpha_buf_on,
+                alpha_buf_off=alpha_buf_off,
+                record_metrics=True,
+            )
 
             # RRP depletion + endocytosis delay queue + priming refill
             rrp_up = torch.clamp(state["RRP"] - add_vals, 0)
@@ -901,10 +1027,13 @@ class SynapticPresyn(nn.Module):
                 0, cfg.energy_max,
             )
 
-            state.update({
+            next_state = {
                 "C": c_up, "BUF": buf_up, "RRP": rrp_up, "RES": res_up, "DELAY": new_delay,
                 "PR": sn_up, "CL": cl_up, "AMP": state["AMP"], "E": en_up,
-            })
+            }
+            if self.use_metriplectic_integrator():
+                next_state["HEAT"] = heat_up
+            state.update(next_state)
 
             # EMA normalization (parity with release()). 9mxi: the running normalizer is
             # PERSISTENT module state, so only adapt it when adaptation is allowed
@@ -1575,7 +1704,7 @@ def build_presyn_state(B: int, T: int, H: int, device, dtype, cfg: SynapticConfi
     state_shape = (B, H, T)
     ones = torch.ones(state_shape, device=device, dtype=dtype)
     zeros = torch.zeros(state_shape, device=device, dtype=dtype)
-    return {
+    state = {
         # Triton/Rust-compatible names
         "C": zeros.clone(),
         "BUF": zeros.clone(),
@@ -1588,6 +1717,11 @@ def build_presyn_state(B: int, T: int, H: int, device, dtype, cfg: SynapticConfi
         "AMP": ones * cfg.init_amp,
         "DELAY": [zeros.clone() for _ in range(cfg.endo_delay)],
     }
+    if cfg.metriplectic_integrator:
+        # Heat/entropy reservoir for the proof core z=(C, BUF, h). It costs no memory in the
+        # default-off configuration and is initialized on the zero-entropy shell when enabled.
+        state["HEAT"] = zeros.clone()
+    return state
 
 
 # -----------------------------------------------------------------------------
@@ -1733,6 +1867,8 @@ class SynapticCausalSelfAttention(nn.Module):
             T_state = int(presyn_state["C"].size(2))
             if "BUF" not in presyn_state:
                 presyn_state["BUF"] = torch.zeros_like(presyn_state["C"])
+            if self.cfg.metriplectic_integrator and "HEAT" not in presyn_state:
+                presyn_state["HEAT"] = torch.zeros_like(presyn_state["C"])
             if "RRP" not in presyn_state:
                 presyn_state["RRP"] = torch.full_like(presyn_state["C"], self.cfg.init_rrp)
             if "RES" not in presyn_state:
@@ -1761,6 +1897,10 @@ class SynapticCausalSelfAttention(nn.Module):
 
                 presyn_state["C"] = torch.cat([presyn_state["C"], pad_zeros], dim=2)
                 presyn_state["BUF"] = torch.cat([presyn_state["BUF"], pad_zeros], dim=2)
+                if self.cfg.metriplectic_integrator:
+                    presyn_state["HEAT"] = torch.cat(
+                        [presyn_state["HEAT"], pad_zeros], dim=2
+                    )
                 presyn_state["RRP"] = pad_full(presyn_state["RRP"], self.cfg.init_rrp)
                 presyn_state["RES"] = pad_full(presyn_state["RES"], self.cfg.init_reserve)
                 presyn_state["PR"] = pad_full(presyn_state["PR"], self.cfg.init_snare)

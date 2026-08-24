@@ -505,6 +505,11 @@ class GPTSynaptic(nn.Module):
 
             if isinstance(module, SynapticPresyn):
                 module.ema_e.fill_(1.0)
+                module.metriplectic_steps.zero_()
+                module.metriplectic_fallbacks.zero_()
+                module.metriplectic_last_energy_drift.zero_()
+                module.metriplectic_last_entropy_production.zero_()
+                module.metriplectic_last_free_energy_delta.zero_()
                 continue
 
             if isinstance(module, SynapticMLP):
