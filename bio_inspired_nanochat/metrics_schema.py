@@ -111,6 +111,24 @@ _M(
     "fraction of MoE experts below the predeclared routing-share floor",
 )
 _M(
+    "structural_final_loss",
+    "mean_squared_error",
+    Direction.LOWER_BETTER,
+    "final prediction MSE after a controlled structural-lifecycle event",
+)
+_M(
+    "structural_event_loss_spike",
+    "mean_squared_error",
+    Direction.LOWER_BETTER,
+    "positive part of the immediate prediction-MSE change at a structural event",
+)
+_M(
+    "structural_event_loss_discontinuity",
+    "mean_squared_error",
+    Direction.LOWER_BETTER,
+    "absolute immediate prediction-MSE change at a structural-lifecycle event",
+)
+_M(
     "live_ft_max_crooks_residual",
     "log-probability ratio",
     Direction.LOWER_BETTER,

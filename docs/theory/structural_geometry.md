@@ -107,6 +107,43 @@ falsification vs the heuristic lifecycle (`0642.5.3`).
 
 ---
 
+## 6. Equal-work falsification against UTA (`0642.5.3.1`)
+
+The committed protocol `9d8a787bec9e` compares the certificate-driven controller with the UTA
+utilization-times-energy threshold controller on eight matched seeds. Every pair begins from the
+same four-expert state, keeps four experts and `top_k=2`, and spends exactly 480 expert dispatches
+per method. The fixture contains one redundant unhealthy pair, two healthy specialists, and a
+sampled routing coverage gap. It is a tiny controlled synthetic test of the lifecycle contract,
+**not evidence about language-model scale or wall-clock efficiency**.
+
+All exact obligations held on all eight seeds: the topological controller executed the intended OT
+merge plus certified split; both children remained below the recorded Weyl condition-number bound;
+the measured H0 maximum-gap change stayed below the `2ε` perturbation bound; the empirical
+Wasserstein barycenter cost was no greater than the naive comparator; and removing the live routing
+points made the topological controller fall back to a bit-identical UTA state and output.
+
+The loss outcomes favored the topological path on every matched seed:
+
+| Predeclared outcome (topological − UTA) | Mean delta | Paired bootstrap 95% CI | Paired t / Wilcoxon |
+|---|---:|---:|---:|
+| Final MSE | −0.04776 | [−0.07945, −0.01770] | `p=0.0236` / `p=0.0078` |
+| Positive event-loss spike | −0.04783 | [−0.07899, −0.02026] | `p=0.0232` / `p=0.0078` |
+| Dead-expert fraction | 0 | [0, 0] | `p=1` / `p=1` |
+
+The predeclared verdict is therefore **null**, not positive: no exact claim failed and the two loss
+metrics improved, but the dead-expert endpoint tied at zero for both methods instead of strictly
+favoring the topological controller. This is the intended falsification discipline; the result does
+not promote an incomplete three-metric win. The full strict-JSON evidence, seed outcomes,
+certificates, fallback checks, and statistics are in
+`results/structural_falsification_9d8a787bec9e.json`; per-method observations are also recorded in
+`results/registry.jsonl` with `eligible_for_best=false` because this fixture is synthetic.
+
+The remaining scale question is separate: a larger routed workload must test whether the
+certificate overhead and any dead-expert advantage survive realistic optimization and compute
+budgets (`uta.7`).
+
+---
+
 ## References
 
 - Voiculescu, D. (1991). *Free probability theory* / free convolution of spectra.
