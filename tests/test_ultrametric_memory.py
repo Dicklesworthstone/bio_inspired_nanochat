@@ -10,6 +10,7 @@ implementation (`bio_inspired_nanochat/ultrametric_memory.py`):
   - the batched Torch kernel resolves exact p-adic prefixes and degenerates exactly to flat retrieval
     at depth one;
   - normalized RRP depletion drives a monotone, resettable coarse-to-fine descent (§4);
+  - low or invalid live tree-ness evidence selects the exact flat fallback and emits detailed JSONL;
   - the leapfrog: under instance corruption a sparse ultrametric memory recovers the **category**
     robustly, beating the flat modern-Hopfield baseline (§4).
 
@@ -25,6 +26,7 @@ import numpy as np
 import pytest
 
 from bio_inspired_nanochat import ultrametric_memory as um
+from bio_inspired_nanochat.run_logging import RunLogger
 from bio_inspired_nanochat.torch_imports import torch
 
 pytestmark = pytest.mark.unit
@@ -47,7 +49,7 @@ def test_tree_distance_is_an_ultrametric():
     p, levels = 3, 4
     items = list(range(p ** levels))
     d = um.distance_matrix(items, p, levels)
-    assert um.ultrametricity_score(d) == 1.0 and um.is_ultrametric(d)
+    assert um.ultrametricity_score(d) == pytest.approx(1.0) and um.is_ultrametric(d)
     # explicit strong triangle inequality on every triple of a small sample.
     sample = list(range(0, p ** levels, 5))
     for x, y, z in itertools.combinations(sample, 3):
@@ -70,7 +72,7 @@ def test_lcp_kernel_is_monotone_in_shared_prefix():
     identical = um.lcp_kernel(0, 0, p, levels)
     same_category = um.lcp_kernel(0, 1, p, levels)        # share prefix [0,0,0], differ in last
     different_category = um.lcp_kernel(0, p ** (levels - 1), p, levels)  # differ in the first digit
-    assert identical == 1.0
+    assert identical == pytest.approx(1.0)
     assert identical > same_category > different_category > 0.0
     with pytest.raises(ValueError):
         um.lcp_kernel(0, 1, p, levels, alpha=1.5)
@@ -195,19 +197,29 @@ def test_rrp_depletion_drives_monotone_coarse_to_fine_descent_and_reset():
     retriever = um.DepletionDrivenPadicRetriever(cfg)
     memories = torch.tensor([0, 3, 4, 7])
 
-    coarse = retriever.retrieve(torch.tensor([3]), memories, rrp_fraction=1.0)
-    middle = retriever.retrieve(torch.tensor([3]), memories, rrp_fraction=0.6)
-    leaf = retriever.retrieve(torch.tensor([3]), memories, rrp_fraction=0.0)
-    refilled = retriever.retrieve(torch.tensor([3]), memories, rrp_fraction=1.0)
+    coarse = retriever.retrieve(
+        torch.tensor([3]), memories, rrp_fraction=1.0, tree_ness_score=1.0
+    )
+    middle = retriever.retrieve(
+        torch.tensor([3]), memories, rrp_fraction=0.6, tree_ness_score=1.0
+    )
+    leaf = retriever.retrieve(
+        torch.tensor([3]), memories, rrp_fraction=0.0, tree_ness_score=1.0
+    )
+    refilled = retriever.retrieve(
+        torch.tensor([3]), memories, rrp_fraction=1.0, tree_ness_score=1.0
+    )
 
     assert [step.active_levels.item() for step in (coarse, middle, leaf, refilled)] == [1, 2, 3, 3]
     assert [step.retrieved_coordinates.item() for step in (coarse, middle, leaf)] == [0, 3, 3]
     assert refilled.active_levels.item() == 3, "refill must not re-ascend within one sequence"
-    assert leaf.rrp_fraction is not None and leaf.rrp_fraction.item() == 0.0
+    assert leaf.rrp_fraction is not None and leaf.rrp_fraction.item() == pytest.approx(0.0)
 
     retriever.reset()
     assert retriever.active_levels is None
-    restarted = retriever.retrieve(torch.tensor([3]), memories, rrp_fraction=1.0)
+    restarted = retriever.retrieve(
+        torch.tensor([3]), memories, rrp_fraction=1.0, tree_ness_score=1.0
+    )
     assert restarted.active_levels.item() == 1
 
 
@@ -243,11 +255,189 @@ def test_runtime_kernel_and_depletion_inputs_fail_closed():
             um.depletion_levels(bad_rrp, n_levels=3)
     with pytest.raises(ValueError, match="alpha"):
         um.PadicRetrievalConfig(enabled=True, alpha=1.0)
+    with pytest.raises(ValueError, match="min_tree_ness"):
+        um.PadicRetrievalConfig(enabled=True, min_tree_ness=-0.1)
 
     retriever = um.DepletionDrivenPadicRetriever(cfg)
-    retriever.retrieve(torch.tensor([1]), torch.tensor([0, 1]), rrp_fraction=1.0)
+    retriever.retrieve(
+        torch.tensor([1]),
+        torch.tensor([0, 1]),
+        rrp_fraction=1.0,
+        tree_ness_score=1.0,
+    )
     with pytest.raises(ValueError, match="call reset"):
-        retriever.retrieve(torch.tensor([1, 2]), torch.tensor([0, 1, 2]), rrp_fraction=1.0)
+        retriever.retrieve(
+            torch.tensor([1, 2]),
+            torch.tensor([0, 1, 2]),
+            rrp_fraction=1.0,
+            tree_ness_score=1.0,
+        )
+
+
+def test_tree_ness_guard_falls_back_exactly_and_clears_descent_state():
+    cfg = um.PadicRetrievalConfig(
+        enabled=True,
+        branching=2,
+        n_levels=3,
+        min_tree_ness=0.9,
+    )
+    retriever = um.DepletionDrivenPadicRetriever(cfg)
+    queries = torch.tensor([3, 4])
+    memories = torch.tensor([0, 3, 4, 7])
+    hierarchical = retriever.retrieve(
+        queries,
+        memories,
+        rrp_fraction=torch.tensor([0.5, 0.0]),
+        tree_ness_score=0.95,
+    )
+    assert hierarchical.mode == "padic" and retriever.active_levels is not None
+
+    torch.manual_seed(17)
+    guarded = retriever.retrieve(
+        queries,
+        memories,
+        rrp_fraction=torch.tensor([0.5, 0.0]),
+        tree_ness_score=0.5,
+    )
+    torch.manual_seed(17)
+    flat = um.padic_retrieval_kernel(queries, memories, config=replace(cfg, enabled=False))
+
+    assert guarded.mode == "flat"
+    assert guarded.fallback_used
+    assert guarded.fallback_reason == "tree_ness_below_floor"
+    assert guarded.tree_ness_passed is not None
+    assert not guarded.tree_ness_passed
+    assert retriever.active_levels is None
+    torch.testing.assert_close(guarded.weights, flat.weights, rtol=0.0, atol=0.0)
+    torch.testing.assert_close(
+        guarded.retrieved_coordinates,
+        flat.retrieved_coordinates,
+        rtol=0.0,
+        atol=0.0,
+    )
+
+
+@pytest.mark.parametrize(
+    ("score", "reason"),
+    [
+        (None, "tree_ness_unavailable"),
+        (float("nan"), "tree_ness_non_finite"),
+        (-0.1, "tree_ness_out_of_range"),
+        (1.1, "tree_ness_out_of_range"),
+    ],
+)
+def test_tree_ness_guard_fails_closed_on_invalid_evidence(score, reason):
+    retriever = um.DepletionDrivenPadicRetriever(
+        um.PadicRetrievalConfig(enabled=True, branching=2, n_levels=3)
+    )
+    result = retriever.retrieve(
+        torch.tensor([3]),
+        torch.tensor([0, 3]),
+        rrp_fraction=1.0,
+        tree_ness_score=score,
+    )
+    assert result.mode == "flat"
+    assert result.fallback_used and result.fallback_reason == reason
+
+
+def test_tree_ness_floor_is_inclusive_and_malformed_scores_are_rejected():
+    retriever = um.DepletionDrivenPadicRetriever(
+        um.PadicRetrievalConfig(
+            enabled=True,
+            branching=2,
+            n_levels=3,
+            min_tree_ness=0.9,
+        )
+    )
+    result = retriever.retrieve(
+        torch.tensor([3]),
+        torch.tensor([0, 3]),
+        rrp_fraction=1.0,
+        tree_ness_score=0.9,
+    )
+    assert result.mode == "padic" and result.tree_ness_passed
+
+    for malformed in (True, [0.9, 0.8], 1 + 0j):
+        with pytest.raises(ValueError, match="numeric scalar"):
+            retriever.retrieve(
+                torch.tensor([3]),
+                torch.tensor([0, 3]),
+                rrp_fraction=1.0,
+                tree_ness_score=malformed,
+            )
+
+
+def test_default_off_ignores_tree_ness_and_is_exact_flat_identity():
+    cfg = um.PadicRetrievalConfig(enabled=False, branching=2, n_levels=3)
+    retriever = um.DepletionDrivenPadicRetriever(cfg)
+    result = retriever.retrieve(
+        torch.tensor([3]),
+        torch.tensor([0, 3, 4, 7]),
+        rrp_fraction=0.0,
+        tree_ness_score=float("nan"),
+    )
+    direct = um.padic_retrieval_kernel(
+        torch.tensor([3]),
+        torch.tensor([0, 3, 4, 7]),
+        config=cfg,
+    )
+    assert result.mode == "flat" and not result.fallback_used
+    assert result.fallback_reason is None and result.tree_ness_passed is None
+    torch.testing.assert_close(result.weights, direct.weights, rtol=0.0, atol=0.0)
+
+
+def test_tree_ness_fallback_writes_detailed_jsonl(tmp_path):
+    retriever = um.DepletionDrivenPadicRetriever(
+        um.PadicRetrievalConfig(
+            enabled=True,
+            branching=2,
+            n_levels=3,
+            min_tree_ness=0.9,
+        )
+    )
+    with RunLogger(
+        tmp_path,
+        name="ultrametric_guard",
+        console=False,
+        provenance={"seed": 17},
+    ) as logger:
+        passed = retriever.retrieve(
+            torch.tensor([3]),
+            torch.tensor([0, 3, 4, 7]),
+            rrp_fraction=1.0,
+            tree_ness_score=0.9,
+            run_logger=logger,
+            step=6,
+        )
+        result = retriever.retrieve(
+            torch.tensor([3]),
+            torch.tensor([0, 3, 4, 7]),
+            rrp_fraction=0.4,
+            tree_ness_score=0.5,
+            run_logger=logger,
+            step=7,
+        )
+
+    events = logger.read_events()
+    records = [event for event in events if event["event"] == "ultrametric_retrieval"]
+    run_start = next(event for event in events if event["event"] == "run_start")
+    assert run_start["provenance"]["seed"] == 17
+    assert len(records) == 2
+    passed_record, record = records
+    assert passed_record["step"] == 6
+    assert passed_record["mode"] == passed.mode == "padic"
+    assert passed_record["tree_ness_passed"] and not passed_record["fallback_used"]
+    assert record["step"] == 7
+    assert record["enabled"] and record["mode"] == result.mode == "flat"
+    assert record["tree_ness_score"] == pytest.approx(0.5)
+    assert record["tree_ness_floor"] == pytest.approx(0.9)
+    assert not record["tree_ness_passed"]
+    assert record["fallback_used"]
+    assert record["fallback_reason"] == "tree_ness_below_floor"
+    assert record["active_levels"] == [3]
+    assert record["rrp_fraction"] == pytest.approx([0.4])
+    assert record["retrieved_coordinates"] == [3]
+    assert len(record["max_weight"]) == len(record["weight_entropy"]) == 1
 
 
 # --------------------------------------------------------------------------- #

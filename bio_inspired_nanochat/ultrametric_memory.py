@@ -25,6 +25,7 @@ from dataclasses import dataclass, replace
 
 import numpy as np
 
+from bio_inspired_nanochat.run_logging import RunLogger
 from bio_inspired_nanochat.torch_imports import torch
 
 
@@ -157,7 +158,8 @@ class PadicRetrievalConfig:
 
     The toggle is default-off.  The disabled path is flat modern-Hopfield retrieval over all digits;
     the enabled path resolves only the currently active prefix.  ``alpha`` follows the theory note's
-    convention ``0 < alpha < 1`` in ``alpha ** (level - LCP)``.
+    convention ``0 < alpha < 1`` in ``alpha ** (level - LCP)``.  ``min_tree_ness`` is the runtime
+    certificate floor below which the guarded retriever takes the exact flat fallback.
     """
 
     enabled: bool = False
@@ -165,6 +167,7 @@ class PadicRetrievalConfig:
     n_levels: int = 4
     alpha: float = 0.5
     beta: float = 8.0
+    min_tree_ness: float = 0.95
 
     def __post_init__(self) -> None:
         if not isinstance(self.enabled, bool):
@@ -178,6 +181,10 @@ class PadicRetrievalConfig:
             raise ValueError(f"alpha must be finite and in (0, 1), got {self.alpha!r}")
         if not math.isfinite(self.beta) or self.beta <= 0.0:
             raise ValueError(f"beta must be finite and positive, got {self.beta!r}")
+        if not math.isfinite(self.min_tree_ness) or not 0.0 <= self.min_tree_ness <= 1.0:
+            raise ValueError(
+                f"min_tree_ness must be finite and in [0, 1], got {self.min_tree_ness!r}"
+            )
 
 
 @dataclass(frozen=True)
@@ -189,6 +196,11 @@ class PadicRetrievalResult:
     active_levels: torch.Tensor  # (B,), 1 = coarsest, L = leaf resolution
     mode: str  # "padic" | "flat"
     rrp_fraction: torch.Tensor | None = None  # (B,), populated by the depletion runtime
+    tree_ness_score: float | None = None
+    tree_ness_floor: float | None = None
+    tree_ness_passed: bool | None = None
+    fallback_used: bool = False
+    fallback_reason: str | None = None
 
 
 _INTEGER_DTYPES = {
@@ -326,13 +338,77 @@ def depletion_levels(rrp_fraction, *, n_levels: int, device=None) -> torch.Tenso
     return (1 + torch.floor((1.0 - rrp) * n_levels).to(dtype=torch.long)).clamp(max=n_levels)
 
 
+def _tree_ness_guard(
+    score,
+    *,
+    config: PadicRetrievalConfig,
+) -> tuple[bool, float | None, str | None]:
+    if not config.enabled:
+        return False, None, None
+    if score is None:
+        return False, None, "tree_ness_unavailable"
+    try:
+        score_tensor = torch.as_tensor(score)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("tree_ness_score must be a numeric scalar") from exc
+    if score_tensor.numel() != 1 or score_tensor.dtype == torch.bool:
+        raise ValueError("tree_ness_score must be a numeric scalar")
+    try:
+        value = float(score_tensor.item())
+    except (TypeError, ValueError) as exc:
+        raise ValueError("tree_ness_score must be a numeric scalar") from exc
+    if not math.isfinite(value):
+        return False, value, "tree_ness_non_finite"
+    if not 0.0 <= value <= 1.0:
+        return False, value, "tree_ness_out_of_range"
+    at_floor = math.isclose(value, config.min_tree_ness, rel_tol=1e-7, abs_tol=1e-7)
+    if value < config.min_tree_ness and not at_floor:
+        return False, value, "tree_ness_below_floor"
+    return True, value, None
+
+
+def _log_retrieval(
+    logger: RunLogger | None,
+    result: PadicRetrievalResult,
+    *,
+    config: PadicRetrievalConfig,
+    query_count: int,
+    memory_count: int,
+    step: int | None,
+) -> None:
+    if logger is None:
+        return
+    safe_weights = result.weights.clamp_min(torch.finfo(result.weights.dtype).tiny)
+    entropy = -(result.weights * safe_weights.log()).sum(dim=-1)
+    logger.event(
+        "ultrametric_retrieval",
+        step=step,
+        enabled=config.enabled,
+        mode=result.mode,
+        query_count=query_count,
+        memory_count=memory_count,
+        tree_ness_score=result.tree_ness_score,
+        tree_ness_floor=result.tree_ness_floor,
+        tree_ness_passed=result.tree_ness_passed,
+        fallback_used=result.fallback_used,
+        fallback_reason=result.fallback_reason,
+        active_levels=result.active_levels.tolist(),
+        rrp_fraction=None if result.rrp_fraction is None else result.rrp_fraction.tolist(),
+        retrieved_coordinates=result.retrieved_coordinates.tolist(),
+        max_weight=result.weights.max(dim=-1).values.tolist(),
+        weight_entropy=entropy.tolist(),
+    )
+
+
 class DepletionDrivenPadicRetriever:
     """Sequence-local coarse-to-fine retrieval state driven by live normalized RRP.
 
     Pass one RRP fraction per query row.  Depletion proposes a finer level and the runtime records the
-    cumulative maximum, making descent monotone even if endocytosis later refills the pool.  Call
-    :meth:`reset` at a sequence boundary.  The default-off configuration never creates hierarchy
-    state and returns the flat modern-Hopfield path.
+    cumulative maximum, making descent monotone even if endocytosis later refills the pool.  An
+    enabled runtime additionally requires a finite live tree-ness score at or above
+    ``config.min_tree_ness``; otherwise it clears hierarchy state and deterministically returns the
+    exact flat modern-Hopfield path.  Call :meth:`reset` at a sequence boundary.  The default-off
+    configuration never creates hierarchy state and always returns the flat path.
     """
 
     def __init__(self, config: PadicRetrievalConfig | None = None) -> None:
@@ -346,8 +422,18 @@ class DepletionDrivenPadicRetriever:
     def reset(self) -> None:
         self._active_levels = None
 
-    def retrieve(self, queries, memories, *, rrp_fraction) -> PadicRetrievalResult:
+    def retrieve(
+        self,
+        queries,
+        memories,
+        *,
+        rrp_fraction,
+        tree_ness_score=None,
+        run_logger: RunLogger | None = None,
+        step: int | None = None,
+    ) -> PadicRetrievalResult:
         query = _integer_vector(queries, name="queries")
+        memory = _integer_vector(memories, name="memories", device=query.device)
         rrp = torch.as_tensor(rrp_fraction, dtype=torch.float32, device=query.device)
         if rrp.ndim == 0:
             rrp = rrp.expand(query.numel())
@@ -359,24 +445,60 @@ class DepletionDrivenPadicRetriever:
             n_levels=self.config.n_levels,
             device=query.device,
         )
-        if not self.config.enabled:
-            result = padic_retrieval_kernel(query, memories, config=self.config)
-            return replace(result, rrp_fraction=rrp)
-
-        if self._active_levels is None:
-            active = proposed
-        else:
-            if self._active_levels.shape != proposed.shape or self._active_levels.device != proposed.device:
-                raise ValueError("query batch/device changed within a sequence; call reset() first")
-            active = torch.maximum(self._active_levels, proposed)
-        self._active_levels = active.detach().clone()
-        result = padic_retrieval_kernel(
-            query,
-            memories,
+        guard_passed, score, fallback_reason = _tree_ness_guard(
+            tree_ness_score,
             config=self.config,
-            active_levels=active,
         )
-        return replace(result, rrp_fraction=rrp)
+        if not self.config.enabled:
+            result = padic_retrieval_kernel(query, memory, config=self.config)
+            result = replace(result, rrp_fraction=rrp)
+        elif not guard_passed:
+            self._active_levels = None
+            flat_config = replace(self.config, enabled=False)
+            result = padic_retrieval_kernel(query, memory, config=flat_config)
+            result = replace(
+                result,
+                rrp_fraction=rrp,
+                tree_ness_score=score,
+                tree_ness_floor=self.config.min_tree_ness,
+                tree_ness_passed=False,
+                fallback_used=True,
+                fallback_reason=fallback_reason,
+            )
+        else:
+            if self._active_levels is None:
+                active = proposed
+            else:
+                if (
+                    self._active_levels.shape != proposed.shape
+                    or self._active_levels.device != proposed.device
+                ):
+                    raise ValueError("query batch/device changed within a sequence; call reset() first")
+                active = torch.maximum(self._active_levels, proposed)
+            self._active_levels = active.detach().clone()
+            result = padic_retrieval_kernel(
+                query,
+                memory,
+                config=self.config,
+                active_levels=active,
+            )
+            result = replace(
+                result,
+                rrp_fraction=rrp,
+                tree_ness_score=score,
+                tree_ness_floor=self.config.min_tree_ness,
+                tree_ness_passed=True,
+            )
+
+        _log_retrieval(
+            run_logger,
+            result,
+            config=self.config,
+            query_count=int(query.numel()),
+            memory_count=int(memory.numel()),
+            step=step,
+        )
+        return result
 
 
 # =========================================================================== #
