@@ -936,22 +936,25 @@ def _resize_layer_experts_(
     seed_idx: int,
     cfg: SplitMergeConfig,
     generator: Optional[torch.Generator] = None,
+    remove_indices: Optional[Sequence[int]] = None,
 ) -> List[int]:
     """Grow/shrink ``layer`` to ``target_E`` experts IN PLACE; returns touched slots.
 
     Grow: appends clones of expert ``seed_idx`` (full weights + synaptic state via
     :func:`_copy_expert_full_`), gives each a ``-ln2`` routing bias (low-mass fresh
     capacity, same convention as the uta.3 twin split) and small fc1 divergence noise.
-    Shrink with ``target_E < E`` drops the LAST ``E - target_E`` experts (callers fold
-    their contribution into a survivor first). Router, genome Xi, embeddings and the
-    metabolic buffers are rebuilt at the new size; NeuroScore bookkeeping self-heals
-    on its next step (size-mismatch reset).
+    Shrink with ``target_E < E`` drops ``remove_indices`` when supplied, otherwise the
+    LAST ``E - target_E`` experts. Callers fold their contribution into a survivor
+    first. Router, genome Xi, embeddings and the metabolic buffers are rebuilt at the
+    new size; NeuroScore bookkeeping self-heals on its next step (size-mismatch reset).
 
     NOTE (honest scope): unlike slot-reuse splits, count growth changes the top-k
     routing distribution, so the event is NOT output-preserving; survivor parameters
     are untouched bit-exact.
     """
     E_old = int(layer.num_experts)
+    if remove_indices is not None and target_E >= E_old:
+        raise ValueError("remove_indices is only valid when shrinking expert count")
     if target_E == E_old or target_E <= 0:
         return []
     dev = layer.router.weight.device
@@ -1010,8 +1013,20 @@ def _resize_layer_experts_(
         object.__setattr__(layer, "last_ctx", {})
     else:
         n_drop = E_old - target_E
-        drop = list(range(E_old - n_drop, E_old))
-        keep = [i for i in range(E_old) if i not in drop]
+        if remove_indices is None:
+            drop = list(range(E_old - n_drop, E_old))
+        else:
+            drop = sorted(int(index) for index in remove_indices)
+            if len(drop) != n_drop:
+                raise ValueError(
+                    "remove_indices count must equal the requested expert-count reduction"
+                )
+            if len(set(drop)) != len(drop):
+                raise ValueError("remove_indices must not contain duplicates")
+            if any(index < 0 or index >= E_old for index in drop):
+                raise ValueError("remove_indices contains an out-of-range expert index")
+        drop_set = set(drop)
+        keep = [i for i in range(E_old) if i not in drop_set]
         layer.experts = nn.ModuleList([layer.experts[i] for i in keep])
         new_router = nn.Linear(n_embd, target_E, bias=False).to(device=dev, dtype=dtype)
         with torch.no_grad():
@@ -2161,9 +2176,12 @@ class SplitMergeController:
 
         counter = [0]
         ops: List[Dict[str, Any]] = []
+        claimed: Set[int] = set()
         for i, j in self._pick_merge_pairs(layer):
             health = self._health(layer)
             winner, loser = (i, j) if health[i] >= health[j] else (j, i)
+            if winner in claimed or loser in claimed:
+                continue
             alpha = self._util_weight(layer, winner, loser)
             ops.append(
                 {
@@ -2174,21 +2192,49 @@ class SplitMergeController:
                     "seed": _seed("merge", counter),
                 }
             )
+            claimed.update((int(winner), int(loser)))
         sources = self._pick_split_sources(layer)
         if sources and self.cfg.splits_per_call > 0:
-            slots = self._weakest_slots(
-                layer, min(len(sources), self.cfg.splits_per_call)
-            )
-            for src, dst in zip(sources, slots):
-                if src != dst:
-                    ops.append(
-                        {"kind": "split", "src": int(src), "dst": int(dst), "seed": _seed("split", counter)}
-                    )
+            source_set = set(sources)
+            slots = self._weakest_slots(layer, int(layer.num_experts))
+            for src in sources:
+                if src in claimed:
+                    continue
+                dst = next(
+                    (
+                        slot
+                        for slot in slots
+                        if slot not in claimed
+                        and slot not in source_set
+                        and slot != src
+                    ),
+                    None,
+                )
+                if dst is None:
+                    continue
+                ops.append(
+                    {
+                        "kind": "split",
+                        "src": int(src),
+                        "dst": int(dst),
+                        "seed": _seed("split", counter),
+                    }
+                )
+                claimed.update((int(src), int(dst)))
         dead_slots = self._pick_dead_slots(layer)
         if dead_slots:
-            reset_sources = self._pick_reset_sources(layer, max(len(dead_slots), 1))
+            reset_sources = self._pick_reset_sources(layer, int(layer.num_experts))
             for slot in dead_slots:
-                src = next((c for c in reset_sources if c != slot), None)
+                if slot in claimed:
+                    continue
+                src = next(
+                    (
+                        candidate
+                        for candidate in reset_sources
+                        if candidate not in claimed and candidate != slot
+                    ),
+                    None,
+                )
                 if src is not None:
                     ops.append(
                         {
@@ -2198,8 +2244,16 @@ class SplitMergeController:
                             "seed": _seed("reset", counter),
                         }
                     )
+                    claimed.update((int(src), int(slot)))
         if self.cfg.variable_expert_count:
-            ops.extend(self._plan_resize_layer(layer, _seed, counter))
+            ops.extend(
+                self._plan_resize_layer(
+                    layer,
+                    _seed,
+                    counter,
+                    protected_indices=claimed,
+                )
+            )
         return ops
 
     @torch.no_grad()
@@ -2278,16 +2332,31 @@ class SplitMergeController:
             elif kind == "shrink":
                 victims = [int(v) for v in op["victims"]]
                 keeper = int(op["keeper"])
+                expert_count = int(getattr(layer, "num_experts"))
+                if not victims or len(set(victims)) != len(victims):
+                    raise ValueError("shrink victims must be a non-empty unique set")
+                if any(v < 0 or v >= expert_count for v in victims):
+                    raise ValueError("shrink victims contain an out-of-range expert index")
+                if keeper < 0 or keeper >= expert_count or keeper in victims:
+                    raise ValueError("shrink keeper must be a surviving expert index")
                 for v in victims:
-                    _fold_expert_into_(layer, victim_idx=v, keeper_idx=keeper, alpha=float(op.get("alpha", 0.5)))
-                for _v in sorted(victims, reverse=True):
-                    _resize_layer_experts_(
+                    _fold_expert_into_(
                         layer,
-                        target_E=int(getattr(layer, "num_experts")) - 1,
-                        seed_idx=keeper,
-                        cfg=self.cfg,
-                        generator=gen,
+                        victim_idx=v,
+                        keeper_idx=keeper,
+                        alpha=float(op.get("alpha", 0.5)),
                     )
+                _zero_optim_moments_for(
+                    optimizer, list(layer.experts[keeper].parameters())
+                )
+                _resize_layer_experts_(
+                    layer,
+                    target_E=expert_count - len(victims),
+                    seed_idx=keeper,
+                    cfg=self.cfg,
+                    generator=gen,
+                    remove_indices=victims,
+                )
                 self._net_added_experts -= len(victims)
                 changed = True
                 if _is_rank0() and self.logger is not None and hasattr(self.logger, "on_death"):
@@ -2319,9 +2388,11 @@ class SplitMergeController:
         layer: SynapticMoE,
         seed_fn,
         counter: List[int],
+        protected_indices: Optional[Set[int]] = None,
     ) -> List[Dict[str, Any]]:
         """Decision half of uta.4 resize — no mutation (uta.5)."""
         E = int(layer.num_experts)
+        protected = protected_indices or set()
         health = self._health(layer)
         dead = [
             i for i in range(E) if float(health[i]) <= self.cfg.reset_health_max
@@ -2339,7 +2410,10 @@ class SplitMergeController:
         ops: List[Dict[str, Any]] = []
         if demand_surplus > 0 and budget_room > 0 and dead_surplus <= 0:
             n_add = min(demand_surplus, budget_room)
-            seed_idx = int(max(strong, key=lambda i: float(health[i])))
+            available_strong = [i for i in strong if i not in protected]
+            if not available_strong:
+                return ops
+            seed_idx = int(max(available_strong, key=lambda i: float(health[i])))
             ops.append(
                 {
                     "kind": "grow",
@@ -2353,14 +2427,17 @@ class SplitMergeController:
         removable = len(dead) - self.cfg.resets_per_call
         floor_room = E - self.cfg.min_experts
         if removable > 0 and floor_room > 0:
-            n_drop = min(removable, floor_room)
-            victims = sorted(dead, key=lambda i: float(health[i]))[:n_drop]
-            keeper = int(
-                max(
-                    (i for i in range(E) if i not in victims),
-                    key=lambda i: float(health[i]),
-                )
-            )
+            available_dead = [i for i in dead if i not in protected]
+            n_drop = min(removable, floor_room, len(available_dead))
+            if n_drop <= 0:
+                return ops
+            victims = sorted(available_dead, key=lambda i: float(health[i]))[:n_drop]
+            keepers = [
+                i for i in range(E) if i not in victims and i not in protected
+            ]
+            if not keepers:
+                return ops
+            keeper = int(max(keepers, key=lambda i: float(health[i])))
             ops.append(
                 {
                     "kind": "shrink",

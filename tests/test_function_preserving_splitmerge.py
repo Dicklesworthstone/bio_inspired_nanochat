@@ -283,3 +283,40 @@ def test_controller_step_function_preserving_is_gentler_than_legacy():
         f"function-preserving controller step (relL2={fp_delta:.3e}) must be gentler than "
         f"legacy (relL2={legacy_delta:.3e})"
     )
+
+
+@pytest.mark.unit
+def test_planner_never_targets_one_expert_with_multiple_mutations():
+    moe = _pure_moe(9, 4, top_k=4)
+    with torch.no_grad():
+        moe.energy.fill_(1.0)
+        moe.fatigue.copy_(torch.tensor([0.9, 0.0, 0.4, 0.4]))
+        moe.router_logit_bias[1] = -50.0
+    x = torch.randn(2, 5, 16)
+    out0, _ = moe(x, update_mem=False)
+    ctrl = SplitMergeController(
+        moe,
+        SplitMergeConfig(
+            enabled=True,
+            merges_per_call=0,
+            splits_per_call=1,
+            resets_per_call=1,
+            split_health_min=0.8,
+            reset_health_max=0.05,
+            warmup_steps=0,
+            min_step_interval=0,
+            ddp_broadcast=False,
+            function_preserving=True,
+            fp_divergence_noise=0.0,
+        ),
+    )
+
+    plan = ctrl._plan_uta_layer(moe, step=0, layer_index=0)
+    touched: list[int] = []
+    for op in plan:
+        touched.extend([int(op["src"]), int(op["dst"])])
+    assert len(touched) == len(set(touched)), plan
+
+    ctrl._apply_uta_ops(moe, plan, optimizer=None, step=0)
+    out1, _ = moe(x, update_mem=False)
+    assert _rel_l2(out1, out0) < 1e-5

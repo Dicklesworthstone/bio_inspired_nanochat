@@ -89,6 +89,42 @@ def test_shrink_removes_rows_everywhere():
     assert torch.isfinite(y).all()
 
 
+def test_shrink_removes_the_exact_planned_victims():
+    moe = _moe(num_experts=5, seed=5)
+    _set_health(moe, [0.9, 0.9, 0.0, 0.0, 0.0])
+    original_experts = list(moe.experts)
+    original_router = moe.router.weight.detach().clone()
+    assert moe.Xi is not None
+    original_xi = moe.Xi.detach().clone()
+    ctrl = _controller(moe, resets_per_call=1, min_experts=2)
+
+    plan = ctrl._plan_resize_layer(moe, lambda _kind, count: 7 + count[0], [0])
+    shrink = next(op for op in plan if op["kind"] == "shrink")
+    assert shrink["victims"] == [2, 3]
+    ctrl._apply_uta_ops(moe, plan, optimizer=None, step=0)
+
+    survivors = [original_experts.index(expert) for expert in moe.experts]
+    resized_xi = moe.Xi
+    assert resized_xi is not None
+    assert survivors == [0, 1, 4]
+    assert torch.equal(moe.router.weight, original_router[survivors])
+    assert torch.equal(resized_xi, original_xi[survivors])
+    _shapes_consistent(moe)
+
+
+@pytest.mark.parametrize("remove_indices", ([3], [3, 3], [3, 5]))
+def test_shrink_rejects_invalid_explicit_victim_sets(remove_indices):
+    moe = _moe(num_experts=5)
+    with pytest.raises(ValueError):
+        _resize_layer_experts_(
+            moe,
+            target_E=3,
+            seed_idx=0,
+            cfg=SplitMergeConfig(),
+            remove_indices=remove_indices,
+        )
+
+
 # --------------------------------------------------------------------------- #
 # 3. Controller triggers + optimizer sync helpers
 # --------------------------------------------------------------------------- #
@@ -125,6 +161,48 @@ def test_optimizer_sync_preserves_survivor_moments_and_drops_removed():
     loss = (model.moe(x)[0] * model.stable(x.detach()).sum()).sum() + model.stable(x).sum()
     loss.backward()
     opt.step()
+
+
+def test_controller_shrink_keeps_untouched_moments_and_resets_folded_keeper():
+    class Container(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.moe = _moe(num_experts=5, seed=6)
+
+    model = Container()
+    opt = torch.optim.AdamW(model.parameters(), lr=1e-2)
+    loss = model.moe(torch.randn(2, 6, 8))[0].pow(2).mean()
+    loss.backward()
+    opt.step()
+
+    original_experts = list(model.moe.experts)
+    untouched_param = original_experts[0].fc1.w_slow
+    keeper_param = original_experts[4].fc1.w_slow
+    removed_param = original_experts[2].fc1.w_slow
+    untouched_moment = opt.state[untouched_param]["exp_avg"].clone()
+    assert float(opt.state[keeper_param]["exp_avg"].abs().sum()) > 0.0
+
+    _set_health(model.moe, [0.8, 0.9, 0.0, 0.0, 1.0])
+    ctrl = _controller(
+        model,
+        enabled=True,
+        merges_per_call=0,
+        splits_per_call=0,
+        resets_per_call=0,
+        min_experts=3,
+    )
+    ctrl.step(global_step=0, optimizer=opt)
+
+    assert list(model.moe.experts) == [
+        original_experts[0],
+        original_experts[1],
+        original_experts[4],
+    ]
+    assert torch.equal(opt.state[untouched_param]["exp_avg"], untouched_moment)
+    assert torch.count_nonzero(opt.state[keeper_param]["exp_avg"]) == 0
+    assert removed_param not in opt.state
+    grouped_ids = {id(param) for group in opt.param_groups for param in group["params"]}
+    assert grouped_ids == {id(param) for param in model.parameters()}
 
     layout = capture_optimizer_layout([opt], model)
     snap = snapshot_optimizer_state([opt])
