@@ -166,6 +166,52 @@ def test_best_record_excludes_ineligible_falsification_results():
 
 
 @pytest.mark.unit
+def test_legacy_free_text_verdict_is_ineligible_until_migrated():
+    legacy = RunRecord.from_json(
+        {
+            "run_id": "legacy",
+            "harness": "eval",
+            "metrics": {"eval_accuracy": 1.0},
+            "notes": "experiment=old; verdict=positive",
+        }
+    )
+    ordinary = RunRecord.from_json(
+        {"run_id": "ordinary", "harness": "eval", "metrics": {"eval_accuracy": 0.8}}
+    )
+    null = RunRecord.from_json(
+        {
+            "run_id": "null",
+            "harness": "eval",
+            "metrics": {"eval_accuracy": 1.0},
+            "verdict": "null",
+        }
+    )
+
+    assert not legacy.eligible_for_best
+    assert not null.eligible_for_best
+    assert ordinary.eligible_for_best
+    assert best_record([legacy, null, ordinary], "eval_accuracy") == ordinary
+
+
+@pytest.mark.unit
+def test_persisted_verdict_eligibility_invariant_fails_closed():
+    base = {"run_id": "bad", "harness": "eval", "metrics": {"eval_accuracy": 1.0}}
+
+    with pytest.raises(ValueError, match="cannot be eligible"):
+        RunRecord.from_json(
+            {**base, "verdict": "invalidated", "eligible_for_best": True}
+        )
+    with pytest.raises(TypeError, match="must be a bool"):
+        RunRecord.from_json(
+            {**base, "verdict": "positive", "eligible_for_best": "true"}
+        )
+    with pytest.raises(ValueError, match="verdict must be"):
+        RunRecord.from_json(
+            {**base, "verdict": "unknown", "eligible_for_best": False}
+        )
+
+
+@pytest.mark.unit
 def test_record_json_roundtrip():
     rec = make_record("tune", {"tune_objective": 1.2, "tune_generation": 3}, run_id="t", timestamp=5.0)
     rec2 = RunRecord.from_json(json.loads(json.dumps(rec.to_json())))

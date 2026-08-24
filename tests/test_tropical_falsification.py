@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
@@ -192,6 +193,30 @@ def test_tropical_falsification_rejects_nonempty_run_directory(tmp_path):
 
     with pytest.raises(FileExistsError, match="refusing to mix"):
         run_tropical_falsification(_fast_config(), run_dir=run_dir)
+
+
+@pytest.mark.unit
+def test_committed_held_out_report_is_machine_auditable():
+    artifact_path = (
+        Path(__file__).parents[1] / "results" / "tropical_falsification_b6ecc9dcd476.json"
+    )
+    payload = json.loads(artifact_path.read_text(encoding="utf-8"))
+
+    assert payload["schema_version"] == 1
+    assert payload["run_id"] == "b6ecc9dcd476"
+    assert payload["verdict"] == "positive"
+    assert payload["audit"] == {
+        "event_count": 99,
+        "event_run_ids": ["b6ecc9dcd476"],
+        "events_sha256": "72eac23e7550eee4d1b0c7ced8be01500a41d2c2b9d78e29407e6b066269acfe",
+        "protocol_git_sha": "5f699aef5598e8d90c111d1d23e244cedb30bf4f",
+        "source_statistics_sha256": (
+            "2e264e3c220c6ebbe68aba2df713f9733617b2fb6d39d221620b749b6984e589"
+        ),
+    }
+    assert len(payload["outcomes"]) == 8
+    assert sum(outcome["interior_flips"] for outcome in payload["outcomes"]) == 0
+    assert max(outcome["attack_resolution_error"] for outcome in payload["outcomes"]) < 1e-7
 
 
 @pytest.mark.unit

@@ -50,13 +50,31 @@ class RunRecord:
     verdict: Optional[str] = None
     eligible_for_best: bool = True
 
+    def __post_init__(self) -> None:
+        if self.verdict not in (None, "positive", "null", "invalidated"):
+            raise ValueError("verdict must be positive, null, invalidated, or None")
+        if not isinstance(self.eligible_for_best, bool):
+            raise TypeError("eligible_for_best must be a bool")
+        if self.verdict in ("null", "invalidated") and self.eligible_for_best:
+            raise ValueError("null and invalidated records cannot be eligible for best-result queries")
+
     def to_json(self) -> dict:
         return asdict(self)
 
     @classmethod
     def from_json(cls, d: Mapping[str, Any]) -> "RunRecord":
         known = set(cls.__dataclass_fields__)
-        return cls(**{k: v for k, v in d.items() if k in known})
+        payload = {k: v for k, v in d.items() if k in known}
+        if "eligible_for_best" not in payload:
+            # Legacy free-text verdicts cannot safely participate in best-result queries.  Their
+            # claims remain readable, but require an explicit schema migration before eligibility.
+            verdict = payload.get("verdict")
+            payload["eligible_for_best"] = (
+                verdict == "positive"
+                if verdict is not None
+                else "verdict=" not in str(payload.get("notes", ""))
+            )
+        return cls(**payload)
 
 
 def _hardware_string() -> str:

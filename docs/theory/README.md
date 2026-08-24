@@ -32,7 +32,7 @@ that the strata are decoupled enough for the thrusts to compose without interfer
 3. **The composition keystone** (`0642.10`) — the timescale-separation certificate that licenses
    composing everything else.
 4. **Thrust E** (thermo UQ), **Thrust B** (ultrametric memory), then **Thrust C** (topological NAS).
-5. **Thrust H** theory/runtime are specified; its held-out falsification protocol is committed. **D** (gauge)
+5. **Thrust H** theory/runtime and held-out falsification are complete. **D** (gauge)
    and **G** (sheaf) remain planned.
 
 ## Thrust map
@@ -44,7 +44,7 @@ that the strata are decoupled enough for the thrusts to compose without interfer
 | **E** | release | Stochastic thermodynamics (FT / TUR) | ✅ implemented | [stochastic_thermodynamics.md](stochastic_thermodynamics.md) | `stochastic_thermo.py` | TUR certificate + Crooks calibration monitor + Landauer temperature |
 | **B** | slow_weights | Ultrametric / RSB + p-adic | ✅ theory + reference | [ultrametric_memory.md](ultrametric_memory.md) | `ultrametric_memory.py` | p-adic LCP kernel + tree-ness gauge + capacity certificate |
 | **C** | structure | Free probability + TDA + optimal transport | ✅ theory + reference | [structural_geometry.md](structural_geometry.md) | `structural_geometry.py` | spectral-conditioning + H0 coverage + OT-barycenter merge |
-| **H** | attention / routing | Tropical / max-plus geometry | 🧪 theory + runtime + held-out protocol | [tropical.md](tropical.md) | confirmation evidence pending | active-face fingerprint + dual-norm radius + guarded fallback |
+| **H** | attention / routing | Tropical / max-plus geometry | ✅ theory + runtime + held-out falsification | [tropical.md](tropical.md) | positive on held-out exact-affine families | active-face fingerprint + dual-norm radius + guarded fallback |
 | **D** | — | Gauge theory | 🔮 planned | — | — | — |
 | **G** | — | Sheaf theory | 🔮 planned | — | — | — |
 

@@ -561,6 +561,30 @@ invalidated rows are ineligible for best-result queries. Run the held-out protoc
 uv run python -m scripts.e2e.tropical_falsification
 ```
 
+### Held-out result
+
+Protocol commit `5f699ae` was pushed before the confirmation seeds were executed. Run
+`b6ecc9dcd476` then produced a **positive** verdict:
+
+| Check | Held-out result |
+|---|---|
+| Runtime vs independent argmax | `8/8` seeds and all seven temperatures matched; exactness mean and 95% CI were `1.0` |
+| Soft-to-hard readout | cold-minus-`tau=1` mean L1 delta `-1.45541`, bootstrap 95% CI `[-1.46880, -1.44355]`, paired-t `p=1.42e-14`, Wilcoxon `p=.0078125` |
+| Exponential error bound | every temperature at every seed satisfied the declared bound |
+| Non-vacuous robustness | certified radii `[.234365, .311701]`, independent attack radii `[.246700, .328106]`, maximum analytic-boundary resolution error `7.73e-8`, and zero flips in 4,096 total interior trials |
+| Radius conformance | descriptive certified/attack ratio mean `.94999989`, 95% CI `[.94999981, .94999997]`; empirical-minus-certified margin CI `[.01319, .01515]` |
+| Frozen-readout lesion target | active-vertex L1 error `0` for all seeds; active-minus-`tau=.5` rollout mean delta `-1.18344`, 95% CI `[-1.21392, -1.15419]`, paired-t `p=2.91e-11`, Wilcoxon `p=.0078125` |
+| Runtime gate and fallback | `8/8` high-temperature decisions returned the supplied baseline object; `8/8` low-temperature decisions authorized the fingerprint-matching hard readout |
+
+The single-run event stream contains 99 records, all carrying run ID `b6ecc9dcd476`. The tracked
+strict report is [`results/tropical_falsification_b6ecc9dcd476.json`](../../results/tropical_falsification_b6ecc9dcd476.json);
+it includes the full per-seed statistics, protocol SHA, raw-statistics SHA-256, and the 99-record
+event-stream SHA-256. The eight committed registry rows carry source SHA `5f699ae`, a
+machine-readable positive verdict, and explicit best-query eligibility. Earlier exploratory run
+`fef071510c5d` is retained in the append-only corpus, but its mixed event artifact and
+pre-implementation SHA make it non-confirmatory; the legacy free-text verdict policy excludes those
+rows from best-result queries.
+
 The scope remains the standalone exact-affine, query-conditional selection skeleton. The lesion
 target makes the attribution check causal for this frozen hard-selection readout only; it does not
 establish causality for a downstream model prediction. The broader lesion and causal-tracing work in
