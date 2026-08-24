@@ -2,8 +2,9 @@
 Standardized evaluation harness (bio vs vanilla).
 
 Run:
-  python -m scripts.eval_matrix run --preset vanilla --train-tokens 1000000 --seed 1337 --data synthetic
-  python -m scripts.eval_matrix matrix --presets vanilla,bio_all --train-tokens 1000000 --seeds 1337,1338 --data synthetic
+  python -m scripts.eval_matrix run --preset vanilla --seed 1337 --checkpoint-dir /checkpoints/vanilla_s1337
+  python -m scripts.eval_matrix matrix --presets vanilla,bio_all --seeds 1337,1338 \
+    --checkpoint-dir '/checkpoints/{preset}_s{seed}'
 
 Design reference:
   docs/eval_benchmark_matrix.md
@@ -17,7 +18,7 @@ import inspect
 import json
 import math
 import time
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -33,7 +34,12 @@ from bio_inspired_nanochat.loss_eval import evaluate_bpb
 from bio_inspired_nanochat.torch_imports import F, Tensor, torch
 from bio_inspired_nanochat.tokenizer import get_token_bytes, get_tokenizer
 
-from bio_inspired_nanochat.ablation_registry import apply_preset
+from bio_inspired_nanochat.ablation_registry import MECHANISMS, apply_preset
+from bio_inspired_nanochat.checkpoint_manager import (
+    list_checkpoint_steps,
+    load_checkpoint,
+    synaptic_config_from_meta,
+)
 from bio_inspired_nanochat.gpt import GPT, GPTConfig
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
 from bio_inspired_nanochat.synaptic import SynapticConfig
@@ -73,8 +79,14 @@ SUMMARY_FIELDS: tuple[str, ...] = (
     "run_dir",
     "preset",
     "seed",
+    "recipe_source",
+    "checkpoint_dir",
+    "checkpoint_step",
+    "checkpoint_git_sha",
+    "checkpoint_config_hash",
     "data",
     "device_type",
+    "world_size",
     "init_type",
     "sequence_len",
     "vocab_size",
@@ -117,13 +129,16 @@ class HarnessRunSummary:
     train_tokens_processed: int
     walltime_sec: float
     tok_per_sec: float
-    train_loss_final: float
+    train_loss_final: Optional[float]
     val_loss: float
     val_ppl: float
     val_bpb: Optional[float]
     core_metric: Optional[float]
     ece: Optional[float]
     niah_acc: Optional[float]
+
+
+ComputeRuntime = tuple[bool, int, int, int, torch.device]
 
 
 def _parse_int_list(csv_str: str) -> list[int]:
@@ -175,7 +190,11 @@ def _synthetic_loader(
 
 
 def _get_logits(model: Any, idx: Tensor) -> Tensor:
-    out = model(idx)
+    out = (
+        model(idx, train_mode=False)
+        if "train_mode" in inspect.signature(model.forward).parameters
+        else model(idx)
+    )
     if isinstance(out, tuple):
         logits = out[0]
     elif hasattr(out, "logits"):
@@ -187,6 +206,25 @@ def _get_logits(model: Any, idx: Tensor) -> Tensor:
     return logits
 
 
+@contextmanager
+def _force_synaptic_eval_forward(model: Any):
+    """Make generic evaluators call a synaptic model with ``train_mode=False``."""
+    if "train_mode" not in inspect.signature(model.forward).parameters:
+        yield model
+        return
+    original_forward = model.forward
+
+    def eval_forward(idx: Tensor, targets: Optional[Tensor] = None, kv_cache=None, **kwargs: Any):
+        kwargs.pop("train_mode", None)
+        return original_forward(idx, targets, kv_cache, train_mode=False, **kwargs)
+
+    model.forward = eval_forward
+    try:
+        yield model
+    finally:
+        model.forward = original_forward
+
+
 def _val_loss_ppl_ece(
     model: Any,
     batches: Iterator[tuple[Tensor, Tensor]],
@@ -196,16 +234,17 @@ def _val_loss_ppl_ece(
     ddp: bool,
     ece_bins: int = 15,
 ) -> tuple[float, float, Optional[float]]:
-    model.eval()
+    model.train(False)
     autocast_ctx = (
         torch.amp.autocast(device_type=device_type, dtype=torch.bfloat16)
         if device_type == "cuda"
         else nullcontext()
     )
     # ECE accumulator: bins on max prob of predicted token.
-    conf_sum = torch.zeros(ece_bins, dtype=torch.float64, device="cpu")
-    acc_sum = torch.zeros(ece_bins, dtype=torch.float64, device="cpu")
-    count = torch.zeros(ece_bins, dtype=torch.float64, device="cpu")
+    accumulator_device = next(model.parameters()).device
+    conf_sum = torch.zeros(ece_bins, dtype=torch.float64, device=accumulator_device)
+    acc_sum = torch.zeros(ece_bins, dtype=torch.float64, device=accumulator_device)
+    count = torch.zeros(ece_bins, dtype=torch.float64, device=accumulator_device)
 
     losses: list[Tensor] = []
     for _ in range(steps):
@@ -242,6 +281,8 @@ def _val_loss_ppl_ece(
     val_loss = torch.stack(losses).mean()
     if ddp and torch.distributed.is_initialized():
         torch.distributed.all_reduce(val_loss, op=torch.distributed.ReduceOp.AVG)
+        for accumulator in (conf_sum, acc_sum, count):
+            torch.distributed.all_reduce(accumulator, op=torch.distributed.ReduceOp.SUM)
     val_loss_f = float(val_loss.item())
     val_ppl = float(math.exp(val_loss_f)) if math.isfinite(val_loss_f) else float("inf")
 
@@ -276,7 +317,7 @@ def _build_model(
     num_experts: int,
     moe_top_k: int,
 ) -> Any:
-    if preset == "vanilla":
+    if preset in {"vanilla"}:
         with torch.device("meta"):
             cfg = GPTConfig(
                 sequence_len=sequence_len,
@@ -315,6 +356,142 @@ def _build_model(
     model.to_empty(device=device)
     model.init_weights()
     return model
+
+
+def _resolve_checkpoint_dir(template: str, *, preset: str, seed: int) -> Path:
+    """Resolve a matrix checkpoint template without silently accepting unknown fields."""
+    try:
+        rendered = template.format(preset=preset, seed=seed)
+    except KeyError as exc:
+        raise ValueError(
+            "--checkpoint-dir only supports the {preset} and {seed} template fields"
+        ) from exc
+    if not rendered.strip():
+        raise ValueError("resolved checkpoint directory is empty")
+    return Path(rendered).expanduser().resolve()
+
+
+def _load_base_train_checkpoint(
+    checkpoint_dir: Path,
+    *,
+    step: int,
+    preset: PresetId,
+    seed: int,
+    device: torch.device,
+) -> tuple[Any, dict[str, Any], int]:
+    """Rebuild and load one real ``base_train`` checkpoint without tokenizer side effects.
+
+    Architecture, bio configuration, and learned tensors come exclusively from checkpoint
+    metadata/state.  CLI architecture flags therefore cannot turn evaluation into a subtly
+    different model.  The requested matrix cell is also checked against the checkpoint's model
+    family, seed, and canonical ablation flags so a mislabeled row fails closed.
+    """
+    available_steps = list_checkpoint_steps(str(checkpoint_dir))
+    if not available_steps:
+        raise FileNotFoundError(f"no model_*.pt checkpoints found in {checkpoint_dir}")
+    resolved_step = available_steps[-1] if step < 0 else step
+    if resolved_step not in available_steps:
+        raise FileNotFoundError(
+            f"checkpoint step {resolved_step} not found in {checkpoint_dir}; "
+            f"available={available_steps}"
+        )
+
+    model_data, _, meta_data = load_checkpoint(
+        str(checkpoint_dir), resolved_step, device, load_optimizer=False
+    )
+    model_config = meta_data.get("model_config")
+    if not isinstance(model_config, dict):
+        raise ValueError("base_train checkpoint metadata must contain a model_config object")
+
+    is_synaptic = bool(meta_data.get("synapses", False))
+    expects_synaptic = preset not in {"vanilla"}
+    if is_synaptic != expects_synaptic:
+        family = "synaptic" if is_synaptic else "vanilla"
+        raise ValueError(f"preset {preset!r} does not match {family} checkpoint")
+
+    checkpoint_seed = model_config.get(
+        "init_seed", (meta_data.get("user_config") or {}).get("init_seed")
+    )
+    if checkpoint_seed is not None and int(checkpoint_seed) != seed:
+        raise ValueError(
+            f"matrix seed {seed} does not match checkpoint init_seed {checkpoint_seed}"
+        )
+
+    if is_synaptic:
+        syn_cfg = synaptic_config_from_meta(meta_data)
+        expected_syn_cfg = apply_preset(preset, SynapticConfig())
+        mismatches = [
+            mechanism.field
+            for mechanism in MECHANISMS
+            if getattr(syn_cfg, mechanism.field) != getattr(expected_syn_cfg, mechanism.field)
+        ]
+        if mismatches:
+            raise ValueError(
+                f"checkpoint bio flags do not match preset {preset!r}: {sorted(mismatches)}"
+            )
+        cfg = GPTSynapticConfig(
+            sequence_len=int(model_config["sequence_len"]),
+            vocab_size=int(model_config["vocab_size"]),
+            n_layer=int(model_config["n_layer"]),
+            n_head=int(model_config["n_head"]),
+            n_kv_head=int(model_config.get("n_kv_head", model_config["n_head"])),
+            n_embd=int(model_config["n_embd"]),
+            synapses=True,
+            syn_cfg=syn_cfg,
+            dropout=float(model_config.get("dropout", 0.0)),
+            use_moe=bool(model_config.get("use_moe", False)),
+            num_experts=int(model_config.get("num_experts", 8)),
+            moe_experts_per_layer=(
+                tuple(int(value) for value in model_config["moe_experts_per_layer"])
+                if model_config.get("moe_experts_per_layer") is not None
+                else None
+            ),
+            moe_top_k=int(model_config.get("moe_top_k", 2)),
+            moe_hidden_mult=int(model_config.get("moe_hidden_mult", 4)),
+            moe_balance_loss=float(model_config.get("moe_balance_loss", 0.01)),
+            structural_every=int(model_config.get("structural_every", 0)),
+            init_type=str(model_config.get("init_type", "baseline")),
+            init_seed=int(model_config.get("init_seed", seed)),
+            tie_embeddings=bool(model_config.get("tie_embeddings", False)),
+        )
+        with torch.device("meta"):
+            model = GPTSynaptic(cfg)
+    else:
+        cfg = GPTConfig(**model_config)
+        with torch.device("meta"):
+            model = GPT(cfg)
+
+    if device.type in {"cpu", "mps"}:
+        model_data = {
+            name: value.float() if value.dtype == torch.bfloat16 else value
+            for name, value in model_data.items()
+        }
+    model_data = {name.removeprefix("_orig_mod."): value for name, value in model_data.items()}
+    model.to_empty(device=device)
+    model.init_weights()
+    model.load_state_dict(model_data, strict=True, assign=True)
+    model.tie_weights()
+    model.train(False)
+    return model, meta_data, resolved_step
+
+
+def _checkpoint_recipe_stats(
+    meta_data: dict[str, Any], checkpoint_step: int
+) -> tuple[int, int, float, float, Optional[float]]:
+    """Extract truthful training facts from ``base_train`` JSON metadata."""
+    user_config = meta_data.get("user_config") or {}
+    loop_state = meta_data.get("loop_state") or {}
+    total_batch = int(user_config.get("total_batch_size", 0))
+    configured_steps = int(user_config.get("num_iterations", checkpoint_step))
+    if configured_steps < 0:
+        configured_steps = checkpoint_step
+    requested = max(0, configured_steps) * total_batch
+    processed = max(0, checkpoint_step) * total_batch
+    walltime = float(loop_state.get("total_training_time", 0.0))
+    throughput = processed / walltime if processed > 0 and walltime > 0 else 0.0
+    smooth_loss = loop_state.get("smooth_train_loss")
+    train_loss = float(smooth_loss) if smooth_loss is not None else None
+    return requested, processed, walltime, throughput, train_loss
 
 
 def _write_jsonl(path: Path, record: dict[str, Any]) -> None:
@@ -356,8 +533,12 @@ def _error_row(
     run_id: str,
     preset: str,
     seed: int,
+    recipe_source: str,
+    checkpoint_dir: str,
+    checkpoint_step: int | None,
     data: str,
     device_type: str,
+    world_size: int,
     init_type: str,
     sequence_len: int,
     vocab_size: int,
@@ -397,8 +578,14 @@ def _error_row(
         "run_dir": "",
         "preset": preset,
         "seed": seed,
+        "recipe_source": recipe_source,
+        "checkpoint_dir": checkpoint_dir,
+        "checkpoint_step": checkpoint_step,
+        "checkpoint_git_sha": None,
+        "checkpoint_config_hash": None,
         "data": data,
         "device_type": device_type,
+        "world_size": world_size,
         "init_type": init_type,
         "sequence_len": sequence_len,
         "vocab_size": vocab_size,
@@ -479,15 +666,72 @@ def _run_one(
     use_moe: bool,
     num_experts: int,
     moe_top_k: int,
+    checkpoint_dir: str,
+    checkpoint_step: int,
+    runtime: ComputeRuntime,
 ) -> HarnessRunSummary:
-    ddp, ddp_rank, _, ddp_world_size, device = compute_init(device_type)
-    if ddp:
-        raise RuntimeError("eval_matrix harness currently supports single-process runs (no torchrun).")
-
+    ddp, ddp_rank, _, ddp_world_size, device = runtime
     g = _set_seed(seed, device_type=device_type)
-    run_id = f"Q-{preset}-t{train_tokens}-s{seed}-{_utc_stamp()}"
+    if ddp:
+        # The model seed stays identical on every rank; only synthetic data is rank-partitioned.
+        g.manual_seed(seed + ddp_rank)
+
+    checkpoint_path: Path | None = None
+    checkpoint_meta: dict[str, Any] = {}
+    resolved_checkpoint_step: int | None = None
+    recipe_source = "inline_smoke_noncanonical"
+    if checkpoint_dir:
+        checkpoint_path = _resolve_checkpoint_dir(checkpoint_dir, preset=preset, seed=seed)
+        model, checkpoint_meta, resolved_checkpoint_step = _load_base_train_checkpoint(
+            checkpoint_path,
+            step=checkpoint_step,
+            preset=preset,
+            seed=seed,
+            device=device,
+        )
+        recipe_source = "base_train_checkpoint"
+        config = model.config
+        sequence_len = int(config.sequence_len)
+        vocab_size = int(config.vocab_size)
+        n_layer = int(config.n_layer)
+        n_head = int(config.n_head)
+        n_embd = int(config.n_embd)
+        init_type = str(getattr(config, "init_type", "baseline"))
+        use_moe = bool(getattr(config, "use_moe", False))
+        num_experts = int(getattr(config, "num_experts", 0))
+        moe_top_k = int(getattr(config, "moe_top_k", 0))
+    else:
+        model = _build_model(
+            preset=preset,
+            seed=seed,
+            device=device,
+            sequence_len=sequence_len,
+            vocab_size=vocab_size,
+            n_layer=n_layer,
+            n_head=n_head,
+            n_embd=n_embd,
+            init_type=init_type,
+            use_moe=use_moe,
+            num_experts=num_experts,
+            moe_top_k=moe_top_k,
+        )
+        model.train()
+
+    stamp_payload = [_utc_stamp() if ddp_rank == 0 else ""]
+    if ddp and torch.distributed.is_initialized():
+        torch.distributed.broadcast_object_list(stamp_payload, src=0, device=device)
+    stamp = str(stamp_payload[0])
+    source_tag = (
+        f"ckpt{resolved_checkpoint_step}"
+        if resolved_checkpoint_step is not None
+        else f"t{train_tokens}"
+    )
+    run_id = f"Q-{preset}-{source_tag}-s{seed}-{stamp}"
     run_dir = out_dir / run_id
-    run_dir.mkdir(parents=True, exist_ok=True)
+    if ddp_rank == 0:
+        run_dir.mkdir(parents=True, exist_ok=True)
+    if ddp and torch.distributed.is_initialized():
+        torch.distributed.barrier()
 
     # Data loaders
     if data == "synthetic":
@@ -524,124 +768,156 @@ def _run_one(
             )
         )
         tokenizer = get_tokenizer()
+        if tokenizer.get_vocab_size() != vocab_size:
+            raise ValueError(
+                f"tokenizer vocab {tokenizer.get_vocab_size()} does not match model vocab "
+                f"{vocab_size}"
+            )
     else:
         raise ValueError(f"Unknown data source {data!r} (expected 'synthetic' or 'fineweb')")
 
-    # Model
-    model = _build_model(
-        preset=preset,
-        seed=seed,
-        device=device,
-        sequence_len=sequence_len,
-        vocab_size=vocab_size,
-        n_layer=n_layer,
-        n_head=n_head,
-        n_embd=n_embd,
-        init_type=init_type,
-        use_moe=use_moe,
-        num_experts=num_experts,
-        moe_top_k=moe_top_k,
-    )
-    model.train()
-
     # Batch math
-    tokens_per_micro = device_batch_size * sequence_len
-    if total_batch_size_tokens % tokens_per_micro != 0:
-        raise ValueError(
-            f"total_batch_size_tokens={total_batch_size_tokens} must be divisible by "
-            f"device_batch_size*sequence_len={tokens_per_micro}"
+    world_tokens_per_micro = device_batch_size * sequence_len * ddp_world_size
+    if checkpoint_path is None:
+        if total_batch_size_tokens % world_tokens_per_micro != 0:
+            raise ValueError(
+                f"total_batch_size_tokens={total_batch_size_tokens} must be divisible by "
+                "device_batch_size*sequence_len*world_size="
+                f"{world_tokens_per_micro}"
+            )
+        grad_accum_steps: int | None = total_batch_size_tokens // world_tokens_per_micro
+        steps = max(1, int(math.ceil(train_tokens / total_batch_size_tokens)))
+        tokens_requested = train_tokens
+        optimizers = model.setup_optimizers(
+            unembedding_lr=unembedding_lr,
+            embedding_lr=embedding_lr,
+            matrix_lr=matrix_lr,
+            weight_decay=weight_decay,
         )
-    grad_accum_steps = total_batch_size_tokens // tokens_per_micro
-    steps = max(1, int(math.ceil(train_tokens / total_batch_size_tokens)))
-
-    # Optimizers
-    optimizers = model.setup_optimizers(
-        unembedding_lr=unembedding_lr,
-        embedding_lr=embedding_lr,
-        matrix_lr=matrix_lr,
-        weight_decay=weight_decay,
+    else:
+        if resolved_checkpoint_step is None:
+            raise RuntimeError("checkpoint loader did not resolve a checkpoint step")
+        tokens_requested, tokens_processed, walltime_sec, tok_per_sec_avg, train_loss_final = (
+            _checkpoint_recipe_stats(checkpoint_meta, resolved_checkpoint_step)
+        )
+        steps = resolved_checkpoint_step
+        grad_accum_steps = None
+        optimizers = []
+    checkpoint_user_config = checkpoint_meta.get("user_config") or {}
+    recorded_device_batch_size = int(
+        checkpoint_meta.get("device_batch_size", device_batch_size)
+        if checkpoint_path is not None
+        else device_batch_size
+    )
+    recorded_total_batch_size = int(
+        checkpoint_user_config.get("total_batch_size", total_batch_size_tokens)
+        if checkpoint_path is not None
+        else total_batch_size_tokens
     )
 
     # Write config snapshot
-    _write_jsonl(
-        run_dir / "run_config.jsonl",
-        {
-            "run_id": run_id,
-            "preset": preset,
-            "seed": seed,
-            "data": data,
-            "train_tokens_requested": train_tokens,
-            "sequence_len": sequence_len,
-            "vocab_size": vocab_size,
-            "n_layer": n_layer,
-            "n_head": n_head,
-            "n_embd": n_embd,
-            "device_batch_size": device_batch_size,
-            "total_batch_size_tokens": total_batch_size_tokens,
-            "grad_accum_steps": grad_accum_steps,
-            "steps": steps,
-            "init_type": init_type,
-            "use_moe": use_moe,
-            "num_experts": num_experts,
-            "moe_top_k": moe_top_k,
-        },
-    )
+    if ddp_rank == 0:
+        _write_jsonl(
+            run_dir / "run_config.jsonl",
+            {
+                "run_id": run_id,
+                "preset": preset,
+                "seed": seed,
+                "recipe_source": recipe_source,
+                "checkpoint_dir": str(checkpoint_path) if checkpoint_path is not None else None,
+                "checkpoint_step": resolved_checkpoint_step,
+                "checkpoint_metadata": checkpoint_meta or None,
+                "data": data,
+                "world_size": ddp_world_size,
+                "train_tokens_requested": tokens_requested,
+                "sequence_len": sequence_len,
+                "vocab_size": vocab_size,
+                "n_layer": n_layer,
+                "n_head": n_head,
+                "n_embd": n_embd,
+                "device_batch_size": recorded_device_batch_size,
+                "eval_device_batch_size": device_batch_size,
+                "total_batch_size_tokens": recorded_total_batch_size,
+                "grad_accum_steps": grad_accum_steps,
+                "steps": steps,
+                "init_type": init_type,
+                "use_moe": use_moe,
+                "num_experts": num_experts,
+                "moe_top_k": moe_top_k,
+            },
+        )
 
-    # Training loop
-    progress = Progress(
-        SpinnerColumn(),
-        TextColumn("[bold]{task.description}[/bold]"),
-        BarColumn(),
-        TextColumn("{task.completed}/{task.total}"),
-        TimeElapsedColumn(),
-        console=console,
-    )
-    train_task = progress.add_task(f"train {run_id}", total=steps)
-    losses: list[float] = []
-    t_start = time.perf_counter()
-    supports_train_mode = "train_mode" in inspect.signature(model.forward).parameters
-    with progress:
-        for step in range(steps):
-            t0 = time.perf_counter()
-            for _ in range(grad_accum_steps):
-                x, y = next(train_iter)
-                result = model(x, y, train_mode=True) if supports_train_mode else model(x, y)
-                if isinstance(result, tuple):
-                    _, loss = result
-                else:
-                    loss = result
-                if loss is None:
-                    raise RuntimeError("Model returned loss=None during training")
-                (loss / grad_accum_steps).backward()
+    # The historical inline loop is retained only for explicit CI/smoke use. Scientific rows load
+    # the completed base_train model above and never retrain it under a divergent recipe.
+    if checkpoint_path is None:
+        if grad_accum_steps is None:
+            raise RuntimeError("inline training did not resolve gradient accumulation")
+        progress = Progress(
+            SpinnerColumn(),
+            TextColumn("[bold]{task.description}[/bold]"),
+            BarColumn(),
+            TextColumn("{task.completed}/{task.total}"),
+            TimeElapsedColumn(),
+            console=console,
+            disable=ddp_rank != 0,
+        )
+        train_task = progress.add_task(f"train {run_id}", total=steps)
+        losses: list[float] = []
+        if device.type == "cuda":
+            torch.cuda.synchronize(device)
+        t_start = time.perf_counter()
+        supports_train_mode = "train_mode" in inspect.signature(model.forward).parameters
+        with progress:
+            for train_step in range(steps):
+                t0 = time.perf_counter()
+                for _ in range(grad_accum_steps):
+                    x, y = next(train_iter)
+                    result = model(x, y, train_mode=True) if supports_train_mode else model(x, y)
+                    if isinstance(result, tuple):
+                        _, loss = result
+                    else:
+                        loss = result
+                    if loss is None:
+                        raise RuntimeError("Model returned loss=None during training")
+                    (loss / grad_accum_steps).backward()
 
-            for opt in optimizers:
-                opt.step()
-            model.zero_grad(set_to_none=True)
-            t1 = time.perf_counter()
+                for opt in optimizers:
+                    opt.step()
+                model.zero_grad(set_to_none=True)
+                if device.type == "cuda":
+                    torch.cuda.synchronize(device)
+                dt = time.perf_counter() - t0
+                tok_per_sec = total_batch_size_tokens / max(dt, 1e-12)
+                loss_f = float(loss.detach().float().item())
+                losses.append(loss_f)
 
-            dt = t1 - t0
-            tok_per_sec = total_batch_size_tokens / max(dt, 1e-12)
-            loss_f = float(loss.detach().float().item())
-            losses.append(loss_f)
+                if ddp_rank == 0:
+                    _write_jsonl(
+                        run_dir / "train_metrics.jsonl",
+                        {
+                            "step": train_step,
+                            "loss": loss_f,
+                            "dt_sec": dt,
+                            "tok_per_sec": tok_per_sec,
+                        },
+                    )
+                progress.update(train_task, advance=1)
 
-            _write_jsonl(
-                run_dir / "train_metrics.jsonl",
-                {
-                    "step": step,
-                    "loss": loss_f,
-                    "dt_sec": dt,
-                    "tok_per_sec": tok_per_sec,
-                },
-            )
-            progress.update(train_task, advance=1)
-
-    walltime_sec = time.perf_counter() - t_start
-    tokens_processed = steps * total_batch_size_tokens
-    tok_per_sec_avg = tokens_processed / max(walltime_sec, 1e-12)
-    train_loss_final = float(losses[-1]) if losses else float("nan")
+        walltime_sec = time.perf_counter() - t_start
+        if ddp and torch.distributed.is_initialized():
+            walltime_tensor = torch.tensor(walltime_sec, dtype=torch.float64, device=device)
+            torch.distributed.all_reduce(walltime_tensor, op=torch.distributed.ReduceOp.MAX)
+            walltime_sec = float(walltime_tensor.item())
+            final_loss_tensor = torch.tensor(losses[-1], dtype=torch.float64, device=device)
+            torch.distributed.all_reduce(final_loss_tensor, op=torch.distributed.ReduceOp.AVG)
+            losses[-1] = float(final_loss_tensor.item())
+        tokens_processed = steps * total_batch_size_tokens
+        tok_per_sec_avg = tokens_processed / max(walltime_sec, 1e-12)
+        train_loss_final = float(losses[-1]) if losses else None
+        model.train(False)
 
     # Evaluation
-    eval_steps = max(1, int(eval_tokens // (device_batch_size * sequence_len)))
+    eval_steps = max(1, int(eval_tokens // world_tokens_per_micro))
     val_loss, val_ppl, ece = _val_loss_ppl_ece(
         model, val_iter, steps=eval_steps, device_type=device_type, ddp=ddp, ece_bins=ece_bins
     )
@@ -687,11 +963,14 @@ def _run_one(
                     model.forward = orig_forward
 
     core_metric: Optional[float] = None
-    if core_eval:
+    if core_eval and ddp_rank == 0:
         if tokenizer is None:
             core_metric = None
         else:
-            out = evaluate_model(model, tokenizer, device, max_per_task=core_max_per_task)
+            with _force_synaptic_eval_forward(model) as eval_model:
+                out = evaluate_model(
+                    eval_model, tokenizer, device, max_per_task=core_max_per_task
+                )
             core_metric = float(out["core_metric"])
 
     # Needle-in-a-haystack long-context retrieval accuracy (74f.2): the key probe of
@@ -702,25 +981,27 @@ def _run_one(
 
         max_len = min(int(sequence_len) - 2, 256)
         lengths_used = _resolve_niah_lengths(niah_lengths, max_len)
-        if lengths_used:
-            niah_acc = float(
-                niah_accuracy_by_length(
-                    model,
-                    vocab_size=min(64, int(vocab_size)),
-                    lengths=lengths_used,
-                    batch=32,
-                    seed=int(seed),
-                    device=device,
-                )["overall"]
-            )
+        if lengths_used and ddp_rank == 0:
+            with _force_synaptic_eval_forward(model) as eval_model:
+                niah_acc = float(
+                    niah_accuracy_by_length(
+                        eval_model,
+                        vocab_size=min(64, int(vocab_size)),
+                        lengths=lengths_used,
+                        batch=32,
+                        seed=int(seed),
+                        device=device,
+                    )["overall"]
+                )
     except Exception as e:  # eval is best-effort; never fail a run on the probe
-        print(f"[niah] eval skipped: {e}")
+        if ddp_rank == 0:
+            console.print(f"[yellow][niah] eval skipped:[/yellow] {e}")
 
     summary = HarnessRunSummary(
         run_id=run_id,
         preset=preset,
         seed=seed,
-        train_tokens_requested=train_tokens,
+        train_tokens_requested=tokens_requested,
         train_tokens_processed=tokens_processed,
         walltime_sec=walltime_sec,
         tok_per_sec=tok_per_sec_avg,
@@ -741,8 +1022,16 @@ def _run_one(
         "run_dir": str(run_dir),
         "preset": summary.preset,
         "seed": summary.seed,
+        "recipe_source": recipe_source,
+        "checkpoint_dir": str(checkpoint_path) if checkpoint_path is not None else "",
+        "checkpoint_step": resolved_checkpoint_step,
+        "checkpoint_git_sha": (checkpoint_meta.get("provenance") or {}).get("git_sha"),
+        "checkpoint_config_hash": (checkpoint_meta.get("provenance") or {}).get(
+            "synaptic_config_hash"
+        ),
         "data": data,
         "device_type": device_type,
+        "world_size": ddp_world_size,
         "init_type": init_type,
         "sequence_len": sequence_len,
         "vocab_size": vocab_size,
@@ -752,10 +1041,10 @@ def _run_one(
         "use_moe": use_moe,
         "num_experts": num_experts,
         "moe_top_k": moe_top_k,
-        "device_batch_size": device_batch_size,
-        "total_batch_size_tokens": total_batch_size_tokens,
+        "device_batch_size": recorded_device_batch_size,
+        "total_batch_size_tokens": recorded_total_batch_size,
         "grad_accum_steps": grad_accum_steps,
-        "train_tokens_requested": train_tokens,
+        "train_tokens_requested": tokens_requested,
         "train_tokens_processed": tokens_processed,
         "steps": steps,
         "eval_tokens": eval_tokens,
@@ -774,7 +1063,8 @@ def _run_one(
         "ece": summary.ece,
         "niah_acc": summary.niah_acc,
     }
-    _write_summary(out_dir, row)
+    if ddp_rank == 0:
+        _write_summary(out_dir, row)
 
     # Pretty print
     if ddp_rank == 0:
@@ -785,40 +1075,46 @@ def _run_one(
             tbl.add_row(k, "" if v is None else str(v))
         console.print(tbl)
 
-    compute_cleanup()
     return summary
 
 
 def _cmd_run(args: argparse.Namespace) -> int:
-    _run_one(
-        preset=cast(PresetId, args.preset),
-        train_tokens=args.train_tokens,
-        seed=args.seed,
-        device_type=args.device_type,
-        data=args.data,
-        out_dir=Path(args.out_dir),
-        sequence_len=args.sequence_len,
-        vocab_size=args.vocab_size,
-        n_layer=args.n_layer,
-        n_head=args.n_head,
-        n_embd=args.n_embd,
-        device_batch_size=args.device_batch_size,
-        total_batch_size_tokens=args.total_batch_size_tokens,
-        embedding_lr=args.embedding_lr,
-        unembedding_lr=args.unembedding_lr,
-        matrix_lr=args.matrix_lr,
-        weight_decay=args.weight_decay,
-        eval_tokens=args.eval_tokens,
-        eval_bpb=args.eval_bpb,
-        core_eval=args.core_eval,
-        core_max_per_task=args.core_max_per_task,
-        ece_bins=args.ece_bins,
-        niah_lengths=args.niah_lengths,
-        init_type=args.init_type,
-        use_moe=args.use_moe,
-        num_experts=args.num_experts,
-        moe_top_k=args.moe_top_k,
-    )
+    runtime = compute_init(args.device_type)
+    try:
+        _run_one(
+            preset=cast(PresetId, args.preset),
+            train_tokens=args.train_tokens,
+            seed=args.seed,
+            device_type=args.device_type,
+            data=args.data,
+            out_dir=Path(args.out_dir),
+            sequence_len=args.sequence_len,
+            vocab_size=args.vocab_size,
+            n_layer=args.n_layer,
+            n_head=args.n_head,
+            n_embd=args.n_embd,
+            device_batch_size=args.device_batch_size,
+            total_batch_size_tokens=args.total_batch_size_tokens,
+            embedding_lr=args.embedding_lr,
+            unembedding_lr=args.unembedding_lr,
+            matrix_lr=args.matrix_lr,
+            weight_decay=args.weight_decay,
+            eval_tokens=args.eval_tokens,
+            eval_bpb=args.eval_bpb,
+            core_eval=args.core_eval,
+            core_max_per_task=args.core_max_per_task,
+            ece_bins=args.ece_bins,
+            niah_lengths=args.niah_lengths,
+            init_type=args.init_type,
+            use_moe=args.use_moe,
+            num_experts=args.num_experts,
+            moe_top_k=args.moe_top_k,
+            checkpoint_dir=args.checkpoint_dir,
+            checkpoint_step=args.checkpoint_step,
+            runtime=runtime,
+        )
+    finally:
+        compute_cleanup()
     return 0
 
 
@@ -829,88 +1125,121 @@ def _run_batch(
     seeds: list[int],
     args: argparse.Namespace,
 ) -> int:
-    batch_id = args.batch_id or f"{batch_kind}_{_utc_stamp()}"
+    runtime = compute_init(args.device_type)
+    ddp, ddp_rank, _, _, device = runtime
+    stamp_payload = [_utc_stamp() if ddp_rank == 0 else ""]
+    if ddp and torch.distributed.is_initialized():
+        torch.distributed.broadcast_object_list(stamp_payload, src=0, device=device)
+    batch_id = args.batch_id or f"{batch_kind}_{stamp_payload[0]}"
     batch_out_dir = Path(args.out_dir) / batch_id
-    batch_out_dir.mkdir(parents=True, exist_ok=True)
+    if ddp_rank == 0:
+        batch_out_dir.mkdir(parents=True, exist_ok=True)
+    if ddp and torch.distributed.is_initialized():
+        torch.distributed.barrier()
 
-    tbl = Table(title=f"Eval Matrix Batch: {batch_id}")
-    tbl.add_column("preset")
-    tbl.add_column("seed", justify="right")
-    for preset in presets:
-        for seed in seeds:
-            tbl.add_row(preset, str(seed))
-    console.print(tbl)
+    if ddp_rank == 0:
+        tbl = Table(title=f"Eval Matrix Batch: {batch_id}")
+        tbl.add_column("preset")
+        tbl.add_column("seed", justify="right")
+        for preset in presets:
+            for seed in seeds:
+                tbl.add_row(preset, str(seed))
+        console.print(tbl)
 
-    for preset in presets:
-        for seed in seeds:
-            try:
-                _run_one(
-                    preset=preset,
-                    train_tokens=args.train_tokens,
-                    seed=seed,
-                    device_type=args.device_type,
-                    data=args.data,
-                    out_dir=batch_out_dir,
-                    sequence_len=args.sequence_len,
-                    vocab_size=args.vocab_size,
-                    n_layer=args.n_layer,
-                    n_head=args.n_head,
-                    n_embd=args.n_embd,
-                    device_batch_size=args.device_batch_size,
-                    total_batch_size_tokens=args.total_batch_size_tokens,
-                    embedding_lr=args.embedding_lr,
-                    unembedding_lr=args.unembedding_lr,
-                    matrix_lr=args.matrix_lr,
-                    weight_decay=args.weight_decay,
-                    eval_tokens=args.eval_tokens,
-                    eval_bpb=args.eval_bpb,
-                    core_eval=args.core_eval,
-                    core_max_per_task=args.core_max_per_task,
-                    ece_bins=args.ece_bins,
-                    niah_lengths=args.niah_lengths,
-                    init_type=args.init_type,
-                    use_moe=args.use_moe,
-                    num_experts=args.num_experts,
-                    moe_top_k=args.moe_top_k,
-                )
-            except Exception as e:
-                err_id = f"ERR-{preset}-t{args.train_tokens}-s{seed}-{_utc_stamp()}"
-                row = _error_row(
-                    run_id=err_id,
-                    preset=preset,
-                    seed=seed,
-                    data=args.data,
-                    device_type=args.device_type,
-                    init_type=args.init_type,
-                    sequence_len=args.sequence_len,
-                    vocab_size=args.vocab_size,
-                    n_layer=args.n_layer,
-                    n_head=args.n_head,
-                    n_embd=args.n_embd,
-                    use_moe=args.use_moe,
-                    num_experts=args.num_experts,
-                    moe_top_k=args.moe_top_k,
-                    device_batch_size=args.device_batch_size,
-                    total_batch_size_tokens=args.total_batch_size_tokens,
-                    train_tokens_requested=args.train_tokens,
-                    eval_tokens=args.eval_tokens,
-                    eval_bpb=args.eval_bpb,
-                    core_eval=args.core_eval,
-                    core_max_per_task=args.core_max_per_task,
-                    ece_bins=args.ece_bins,
-                    error=repr(e),
-                )
-                _write_summary(batch_out_dir, row)
-                console.print(f"[bold red]Run failed:[/bold red] preset={preset} seed={seed} error={e!r}")
-                if args.fail_fast:
-                    raise
+    try:
+        for preset in presets:
+            for seed in seeds:
+                try:
+                    _run_one(
+                        preset=preset,
+                        train_tokens=args.train_tokens,
+                        seed=seed,
+                        device_type=args.device_type,
+                        data=args.data,
+                        out_dir=batch_out_dir,
+                        sequence_len=args.sequence_len,
+                        vocab_size=args.vocab_size,
+                        n_layer=args.n_layer,
+                        n_head=args.n_head,
+                        n_embd=args.n_embd,
+                        device_batch_size=args.device_batch_size,
+                        total_batch_size_tokens=args.total_batch_size_tokens,
+                        embedding_lr=args.embedding_lr,
+                        unembedding_lr=args.unembedding_lr,
+                        matrix_lr=args.matrix_lr,
+                        weight_decay=args.weight_decay,
+                        eval_tokens=args.eval_tokens,
+                        eval_bpb=args.eval_bpb,
+                        core_eval=args.core_eval,
+                        core_max_per_task=args.core_max_per_task,
+                        ece_bins=args.ece_bins,
+                        niah_lengths=args.niah_lengths,
+                        init_type=args.init_type,
+                        use_moe=args.use_moe,
+                        num_experts=args.num_experts,
+                        moe_top_k=args.moe_top_k,
+                        checkpoint_dir=args.checkpoint_dir,
+                        checkpoint_step=args.checkpoint_step,
+                        runtime=runtime,
+                    )
+                except Exception as e:
+                    err_id = f"ERR-{preset}-t{args.train_tokens}-s{seed}-{_utc_stamp()}"
+                    resolved_checkpoint = (
+                        str(_resolve_checkpoint_dir(args.checkpoint_dir, preset=preset, seed=seed))
+                        if args.checkpoint_dir
+                        else ""
+                    )
+                    row = _error_row(
+                        run_id=err_id,
+                        preset=preset,
+                        seed=seed,
+                        recipe_source=(
+                            "base_train_checkpoint"
+                            if args.checkpoint_dir
+                            else "inline_smoke_noncanonical"
+                        ),
+                        checkpoint_dir=resolved_checkpoint,
+                        checkpoint_step=(args.checkpoint_step if args.checkpoint_step >= 0 else None),
+                        data=args.data,
+                        device_type=args.device_type,
+                        world_size=runtime[3],
+                        init_type=args.init_type,
+                        sequence_len=args.sequence_len,
+                        vocab_size=args.vocab_size,
+                        n_layer=args.n_layer,
+                        n_head=args.n_head,
+                        n_embd=args.n_embd,
+                        use_moe=args.use_moe,
+                        num_experts=args.num_experts,
+                        moe_top_k=args.moe_top_k,
+                        device_batch_size=args.device_batch_size,
+                        total_batch_size_tokens=args.total_batch_size_tokens,
+                        train_tokens_requested=args.train_tokens,
+                        eval_tokens=args.eval_tokens,
+                        eval_bpb=args.eval_bpb,
+                        core_eval=args.core_eval,
+                        core_max_per_task=args.core_max_per_task,
+                        ece_bins=args.ece_bins,
+                        error=repr(e),
+                    )
+                    if ddp_rank == 0:
+                        _write_summary(batch_out_dir, row)
+                        console.print(
+                            f"[bold red]Run failed:[/bold red] preset={preset} "
+                            f"seed={seed} error={e!r}"
+                        )
+                    if args.fail_fast:
+                        raise
+    finally:
+        compute_cleanup()
 
-    console.print(f"Batch outputs: {batch_out_dir}")
+    if ddp_rank == 0:
+        console.print(f"Batch outputs: {batch_out_dir}")
     return 0
 
 
 def _cmd_matrix(args: argparse.Namespace) -> int:
-    allowed = set(PresetId.__args__)  # type: ignore[attr-defined]
+    allowed = set(PresetId.__args__)
     presets_raw = _parse_str_list(args.presets)
     presets: list[PresetId] = []
     for preset in presets_raw:
@@ -939,7 +1268,31 @@ def main() -> int:
         p.add_argument("--device-type", default="", help="cuda|cpu|mps (default: autodetect)")
         p.add_argument("--data", default="fineweb", choices=["fineweb", "synthetic"])
         p.add_argument("--out-dir", default="runs/eval_matrix")
-        p.add_argument("--train-tokens", type=int, default=10_000_000)
+        p.add_argument(
+            "--checkpoint-dir",
+            default="",
+            help=(
+                "base_train checkpoint directory; matrix runs may use {preset} and {seed} "
+                "template fields"
+            ),
+        )
+        p.add_argument(
+            "--checkpoint-step",
+            type=int,
+            default=-1,
+            help="base_train checkpoint step (-1 selects the latest complete model checkpoint)",
+        )
+        p.add_argument(
+            "--inline-smoke-training",
+            action="store_true",
+            help="explicitly allow the noncanonical tiny inline loop for CI/smoke only",
+        )
+        p.add_argument(
+            "--train-tokens",
+            type=int,
+            default=10_000_000,
+            help="token budget for --inline-smoke-training (ignored for checkpoint evaluation)",
+        )
         p.add_argument("--eval-tokens", type=int, default=1_000_000)
         p.add_argument("--eval-bpb", action="store_true", help="Also compute val bpb (requires tokenizer artifacts)")
         p.add_argument("--core-eval", action="store_true", help="Also compute CORE metric (requires eval bundle)")
@@ -978,7 +1331,7 @@ def main() -> int:
 
     p_run = sub.add_parser("run", help="Run a single preset/seed")
     add_common(p_run)
-    p_run.add_argument("--preset", required=True, choices=list(PresetId.__args__))  # type: ignore[attr-defined]
+    p_run.add_argument("--preset", required=True, choices=list(PresetId.__args__))
     p_run.add_argument("--seed", type=int, default=1337)
     p_run.set_defaults(func=_cmd_run)
 
@@ -996,6 +1349,11 @@ def main() -> int:
     args = parser.parse_args()
     if args.device_type == "":
         args.device_type = autodetect_device_type()
+    if not args.checkpoint_dir and not args.inline_smoke_training:
+        parser.error(
+            "scientific evaluation requires --checkpoint-dir from base_train; "
+            "use --inline-smoke-training only for CI plumbing smoke tests"
+        )
     return int(args.func(args))
 
 

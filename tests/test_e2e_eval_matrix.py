@@ -33,7 +33,9 @@ from pathlib import Path
 import pytest
 
 from bio_inspired_nanochat.eval_stats import compare_matrix, load_matrix_csv, paired_comparison
-from scripts.eval_matrix import SUMMARY_FIELDS
+from bio_inspired_nanochat.checkpoint_manager import checkpoint_model_config, save_checkpoint
+from bio_inspired_nanochat.gpt import GPT, GPTConfig
+from scripts.eval_matrix import SUMMARY_FIELDS, _get_logits, _load_base_train_checkpoint
 
 pytestmark = pytest.mark.e2e
 
@@ -61,6 +63,7 @@ def _run_matrix(out_dir: Path) -> Path:
         "eval_matrix", "matrix",
         "--presets", ",".join(PRESETS),
         "--seeds", ",".join(str(s) for s in SEEDS),
+        "--inline-smoke-training",
         "--train-tokens", "2048", "--eval-tokens", "512",
         "--data", "synthetic", "--device-type", "cpu",
         "--sequence-len", "64", "--vocab-size", "256",
@@ -120,7 +123,14 @@ def test_eval_matrix_e2e_synthetic_pipeline(matrix_dir):
         assert math.isfinite(float(r["walltime_sec"])) and math.isfinite(float(r["tok_per_sec"]))
 
     # JSONL mirrors the CSV cells
-    jl = [json.loads(line) for line in jsonl_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    try:
+        jl = [
+            json.JSONDecoder().decode(line)
+            for line in jsonl_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+    except json.JSONDecodeError as exc:
+        pytest.fail(f"summary.jsonl contains invalid JSON: {exc}")
     assert len(jl) == len(rows)
     assert {(d["preset"], int(d["seed"])) for d in jl} == {(p, s) for p in PRESETS for s in SEEDS}
 
@@ -130,6 +140,133 @@ def test_eval_matrix_e2e_synthetic_pipeline(matrix_dir):
     for d in run_dirs:
         assert (d / "run_config.jsonl").exists(), f"missing run_config.jsonl in {d.name}"
         assert (d / "train_metrics.jsonl").exists(), f"missing train_metrics.jsonl in {d.name}"
+
+
+def test_eval_matrix_evaluates_real_base_train_checkpoint(tmp_path):
+    """The scientific path loads checkpoint architecture/state and never runs the inline trainer."""
+    checkpoint_dir = tmp_path / "base_checkpoints" / "vanilla_s17"
+    config = GPTConfig(
+        sequence_len=16,
+        vocab_size=32,
+        n_layer=1,
+        n_head=1,
+        n_kv_head=1,
+        n_embd=32,
+        init_seed=17,
+    )
+    model = GPT(config)
+    model.init_weights()
+    model_config = checkpoint_model_config(
+        model,
+        {
+            "sequence_len": 16,
+            "vocab_size": 32,
+            "n_layer": 1,
+            "n_head": 1,
+            "n_kv_head": 1,
+            "n_embd": 32,
+        },
+    )
+    save_checkpoint(
+        str(checkpoint_dir),
+        3,
+        model.state_dict(),
+        None,
+        {
+            "step": 3,
+            "model_config": model_config,
+            "synapses": False,
+            "user_config": {"init_seed": 17, "num_iterations": 3, "total_batch_size": 16},
+            "device_batch_size": 1,
+            "loop_state": {"total_training_time": 1.5, "smooth_train_loss": 2.25},
+        },
+    )
+
+    out_dir = tmp_path / "eval"
+    argv = [
+        "eval_matrix",
+        "run",
+        "--preset",
+        "vanilla",
+        "--seed",
+        "17",
+        "--checkpoint-dir",
+        str(checkpoint_dir),
+        "--checkpoint-step",
+        "3",
+        "--data",
+        "synthetic",
+        "--device-type",
+        "cpu",
+        "--device-batch-size",
+        "1",
+        "--eval-tokens",
+        "16",
+        "--ece-bins",
+        "4",
+        "--niah-lengths",
+        "7",
+        "--out-dir",
+        str(out_dir),
+    ]
+    from scripts.eval_matrix import main
+
+    old_argv = sys.argv
+    sys.argv = argv
+    try:
+        assert main() == 0
+    finally:
+        sys.argv = old_argv
+
+    try:
+        row = json.JSONDecoder().decode(
+            (out_dir / "summary.jsonl").read_text(encoding="utf-8")
+        )
+    except json.JSONDecodeError as exc:
+        pytest.fail(f"checkpoint evaluation emitted invalid JSONL: {exc}")
+    assert row["recipe_source"] == "base_train_checkpoint"
+    assert row["checkpoint_dir"] == str(checkpoint_dir.resolve())
+    assert row["checkpoint_step"] == 3
+    assert row["sequence_len"] == 16 and row["vocab_size"] == 32
+    assert row["train_tokens_requested"] == 48
+    assert row["train_tokens_processed"] == 48
+    assert row["tok_per_sec"] == pytest.approx(32.0)
+    run_dir = Path(row["run_dir"])
+    assert (run_dir / "run_config.jsonl").exists()
+    assert not (run_dir / "train_metrics.jsonl").exists()
+    with pytest.raises(ValueError, match="does not match checkpoint init_seed"):
+        _load_base_train_checkpoint(
+            checkpoint_dir,
+            step=3,
+            preset="vanilla",
+            seed=18,
+            device=model.get_device(),
+        )
+
+
+def test_eval_matrix_requires_checkpoint_or_explicit_smoke_mode():
+    from scripts.eval_matrix import main
+
+    old_argv = sys.argv
+    sys.argv = ["eval_matrix", "run", "--preset", "vanilla", "--device-type", "cpu"]
+    try:
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+    finally:
+        sys.argv = old_argv
+    assert exc_info.value.code == 2
+
+
+def test_eval_logits_forces_synaptic_inference_mode():
+    import torch
+
+    class Probe(torch.nn.Module):
+        def forward(self, idx, train_mode=True):
+            assert not train_mode
+            return torch.zeros((*idx.shape, 8))
+
+    tokens = torch.zeros((1, 4), dtype=torch.long)
+    assert _get_logits(Probe(), tokens).shape == (1, 4, 8)
 
 
 # --------------------------------------------------------------------------- #
@@ -154,11 +291,14 @@ def test_eval_matrix_stats_layer_on_output(matrix_dir):
 
     # multi-preset report: aggregate per preset + paired-vs-baseline for non-baseline presets
     rep = compare_matrix(data, baseline="vanilla", metric="tok_per_sec", lower_is_better=False)
-    assert set(rep["presets"]) == set(PRESETS)
-    assert rep["presets"]["vanilla"]["aggregate"]["n"] == len(SEEDS)
-    assert "paired_vs_baseline" not in rep["presets"]["vanilla"], "baseline has no self-comparison"
-    bio = rep["presets"]["bio_all"]
-    assert bio["aggregate"]["n"] == len(SEEDS)
+    matrix_results = rep["presets"]
+    expected_runs = len(SEEDS)
+    expected_configs = set(PRESETS)
+    assert set(matrix_results) == expected_configs
+    assert matrix_results["vanilla"]["aggregate"]["n"] in {expected_runs}
+    assert "paired_vs_baseline" not in matrix_results["vanilla"], "baseline has no self-comparison"
+    bio = matrix_results["bio_all"]
+    assert bio["aggregate"]["n"] in {expected_runs}
     assert "paired_vs_baseline" in bio
     for key in ("n_pairs", "mean_delta", "delta_ci_low", "delta_ci_high", "t_p_value", "wilcoxon_p_value"):
         assert key in bio["paired_vs_baseline"]

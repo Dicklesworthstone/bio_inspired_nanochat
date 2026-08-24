@@ -147,20 +147,53 @@ Rule-of-thumb ranges (for planning; update with real measurements once Matrix B 
 
 ---
 
-## 6) Next implementation steps (unblocked work)
+## 6) Recipe-faithful checkpoint evaluation (`74f.4`)
 
-This design unblocks:
+Scientific matrix rows evaluate models trained by `scripts.base_train`; `eval_matrix` does not
+retrain them. This removes the former recipe mismatch (the old inline loop lacked the real LR
+schedule, Muon momentum ramp, gradient clipping, bf16/DDP behavior, and crash-resumable state).
+Architecture, bio configuration, learned tensors, training token counts, wall time, and final
+training loss are read from the checkpoint. A preset/model-family, seed, or canonical ablation-flag
+mismatch fails closed rather than producing a mislabeled row.
 
-- `bio_inspired_nanochat-41s`: implement a CLI harness that maps `preset_id → config`,
-  runs training slices, runs evals, and writes `runs/eval_matrix/*.jsonl|*.csv`.
-- `bio_inspired_nanochat-1nr`: run full ablation sweep after harness exists.
+Train each matrix cell with a deterministic tag, then evaluate the completed checkpoint. Example:
 
-Current harness implementation (initial):
+```bash
+uv run python -m scripts.base_train --model_tag=vanilla_s1337 \
+  --synapses=0 --init_seed=1337 --depth=10 --max_seq_len=2048 \
+  --num_iterations=954 --warmup_ratio=0.1 --total_batch_size=524288
 
-- Single run:
-  - `python -m scripts.eval_matrix run --preset vanilla --train-tokens 10000000 --seed 1337`
-  - With explicit, reproducible NIAH lengths: `... run --preset bio_all --seed 1337 --niah-lengths 16,64,128`
-- Batch run (creates `runs/eval_matrix/matrix_<timestamp>/` unless `--batch-id` is provided):
-  - `python -m scripts.eval_matrix matrix --presets vanilla,bio_all --seeds 1337,1338 --train-tokens 10000000`
-- Standard ablation sweep (creates `runs/eval_matrix/ablation_<timestamp>/`):
-  - `python -m scripts.eval_matrix ablation --seeds 1337,1338 --train-tokens 10000000`
+uv run python -m scripts.eval_matrix run --preset vanilla --seed 1337 \
+  --checkpoint-dir /absolute/NANOCHAT_BASE_DIR/base_checkpoints/vanilla_s1337 \
+  --checkpoint-step=-1 --device-type=cuda --data=fineweb \
+  --eval-bpb --core-eval --niah-lengths=512,1024,2048
+```
+
+For a preset × seed matrix, `{preset}` and `{seed}` are the only supported template fields:
+
+```bash
+uv run python -m scripts.eval_matrix matrix \
+  --presets=vanilla,bio_all --seeds=1337,1338,1339 \
+  --checkpoint-dir='/absolute/NANOCHAT_BASE_DIR/base_checkpoints/{preset}_s{seed}' \
+  --checkpoint-step=-1 --device-type=cuda --data=fineweb --eval-bpb --core-eval
+```
+
+The same command is multi-process capable. Every rank loads the identical checkpoint, the
+validation loader partitions loss/bpb/ECE work and reduces those metrics across ranks; rank 0 runs
+the non-distributed CORE/NIAH probes and writes the schema-stable summary artifacts:
+
+```bash
+CUDA_VISIBLE_DEVICES=0,1 NCCL_P2P_LEVEL=PXB OMP_NUM_THREADS=8 \
+  uv run torchrun --standalone --nproc_per_node=2 -m scripts.eval_matrix matrix \
+  --presets=vanilla,bio_all --seeds=1337,1338,1339 \
+  --checkpoint-dir='/absolute/NANOCHAT_BASE_DIR/base_checkpoints/{preset}_s{seed}' \
+  --device-type=cuda --data=fineweb --eval-bpb --core-eval
+```
+
+`--inline-smoke-training` keeps the old tiny loop available for fast synthetic CI plumbing tests.
+It emits `recipe_source=inline_smoke_noncanonical` and must not be used for scientific comparisons:
+
+```bash
+uv run python -m scripts.eval_matrix matrix --inline-smoke-training --data=synthetic \
+  --presets=vanilla,bio_all --seeds=1337,1338 --train-tokens=2048
+```
