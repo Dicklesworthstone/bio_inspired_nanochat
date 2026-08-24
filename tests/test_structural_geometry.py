@@ -414,7 +414,11 @@ def test_topological_split_prediction_bounds_measured_child_spectrum(tmp_path):
     _prime_routing(moe, with_gap=True)
     originals = [expert.fc1.w_slow.detach().clone() for expert in moe.experts]
     logger = RunLogger(tmp_path, name="topological_split", console=False)
-    controller = SplitMergeController(moe, _topological_cfg(), event_logger=logger)
+    controller = SplitMergeController(
+        moe,
+        _topological_cfg(homeostasis_guards=True),
+        event_logger=logger,
+    )
     redundant_before = controller._expert_weight_samples(moe, 0).copy()
 
     controller.step(global_step=7)
@@ -424,6 +428,8 @@ def test_topological_split_prediction_bounds_measured_child_spectrum(tmp_path):
     assert decision.split_source is not None and decision.split_destination is not None
     assert decision.merge_pair is not None
     assert decision.split_destination in decision.merge_pair
+    assert set(controller.homeo._ramps[0]) == {decision.split_destination}
+    assert controller.homeo._ramps[0][decision.split_destination][1] == decision.split_source
     assert decision.kappa_bound is not None and decision.split_noise_norm is not None
     parent = moe.experts[decision.split_source].fc1.w_slow.detach()
     child = moe.experts[decision.split_destination].fc1.w_slow.detach()

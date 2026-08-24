@@ -205,6 +205,7 @@ class TopologicalLifecycleDecision:
     mode: str
     action: str
     reason: str
+    rng_seed: int | None = None
     split_source: int | None = None
     split_destination: int | None = None
     merge_pair: tuple[int, int] | None = None
@@ -1475,7 +1476,8 @@ class SplitMergeController:
             # A dead-slot reset uses the same function-preserving reseed surgery as
             # a split, but its lineage semantics must remain distinguishable.
             if (
-                reset_lineage
+                _is_rank0()
+                and reset_lineage
                 and self.logger is not None
                 and hasattr(self.logger, "on_reset")
             ):
@@ -1486,7 +1488,11 @@ class SplitMergeController:
                 except Exception as _e:
                     if self.cfg.verbose:
                         print(f"[SplitMerge] logger.on_reset failed: {_e}")
-            elif self.logger is not None and hasattr(self.logger, "on_split"):
+            elif (
+                _is_rank0()
+                and self.logger is not None
+                and hasattr(self.logger, "on_split")
+            ):
                 # Legacy/custom loggers without on_reset keep receiving a split
                 # callback for reset reseeds rather than silently losing lineage.
                 try:
@@ -1598,7 +1604,11 @@ class SplitMergeController:
             else:
                 _merge_expert_into_and_clone_(layer, winner, loser, alpha, self.cfg)
             # emit lineage event: merge parents (winner,loser) -> child lives at index loser (clone slot reused)
-            if self.logger is not None and hasattr(self.logger, "on_merge"):
+            if (
+                _is_rank0()
+                and self.logger is not None
+                and hasattr(self.logger, "on_merge")
+            ):
                 try:
                     self.logger.on_merge(
                         layer,
@@ -1651,14 +1661,14 @@ class SplitMergeController:
                     _zero_optim_moment_rows_for(optimizer, entries_m)
                 else:
                     _zero_optim_moments_for(optimizer, changed_params)
-            if self.cfg.homeostasis_guards:
-                # uta.6: whichever slot was re-seeded as the fresh twin ramps its
-                # routed mass back in from ~zero (same expression as the lineage
-                # event's child_idx).
+            if self.cfg.homeostasis_guards and not reuse_loser:
+                # uta.6: a normal merge re-seeds the loser as a fresh twin. A
+                # merge-split only consolidates here; its subsequent split call
+                # registers the actual re-seeded loser slot exactly once.
                 self.homeo.on_seeded_children(
                     self._layer_pos(layer),
                     layer,
-                    [int(winner if reuse_loser else loser)],
+                    [int(loser)],
                     [int(winner)],
                 )
         return bool(pairs)
@@ -1894,6 +1904,14 @@ class SplitMergeController:
             reason=reason,
         )
 
+    @staticmethod
+    def _topological_rng_seed(step: int, layer_index: int, action: str) -> int:
+        digest = hashlib.blake2b(
+            f"{step}:{layer_index}:topological:{action}".encode(),
+            digest_size=8,
+        ).digest()
+        return int.from_bytes(digest, "big") % (2**63 - 1)
+
     def _plan_topological_lifecycle(
         self, layer: SynapticMoE, *, step: int, layer_index: int
     ) -> Tuple[TopologicalLifecycleDecision, Optional[StructuralGeometryRecord]]:
@@ -1997,7 +2015,6 @@ class SplitMergeController:
                     self.cfg.variable_expert_count
                     and layer.num_experts < self.cfg.max_experts
                     and self._growth_budget_remaining() > 0
-                    and not (dist.is_available() and dist.is_initialized())
                 )
                 action = "birth" if can_birth else "merge_split"
                 reason = "persistent_uncovered_h0_gap"
@@ -2051,6 +2068,7 @@ class SplitMergeController:
                 mode="topological",
                 action=action,
                 reason=reason,
+                rng_seed=self._topological_rng_seed(step, layer_index, action),
                 split_source=(source if action in ("birth", "merge_split") else None),
                 split_destination=(layer.num_experts if action == "birth" else destination),
                 merge_pair=(pair if action in ("merge", "merge_split") else None),
@@ -2076,6 +2094,8 @@ class SplitMergeController:
         record: Optional[StructuralGeometryRecord],
     ) -> None:
         self.topological_decisions.append(decision)
+        if not _is_rank0():
+            return
         if self.event_logger is None or not hasattr(self.event_logger, "event"):
             return
         fields: Dict[str, Any] = {"decision": asdict(decision)}
@@ -2094,43 +2114,82 @@ class SplitMergeController:
         decision: TopologicalLifecycleDecision,
         optimizer: OptimizersArg,
     ) -> bool:
-        if decision.action == "merge" and decision.merge_pair is not None:
+        valid_actions = {"noop", "merge", "merge_split", "birth"}
+        if decision.action not in valid_actions:
+            raise RuntimeError(f"unknown topological action: {decision.action}")
+        expert_count = int(layer.num_experts)
+        generator: Optional[torch.Generator] = None
+        if decision.action in ("merge", "merge_split", "birth"):
+            if decision.rng_seed is None:
+                raise RuntimeError("topological mutation lacks a deterministic RNG seed")
+            generator = torch.Generator(device=layer.router.weight.device)
+            generator.manual_seed(int(decision.rng_seed) % (2**63 - 1))
+        if decision.action in ("merge", "merge_split"):
+            if decision.merge_pair is None:
+                raise RuntimeError("topological merge decision lacks an OT pair")
+            if (
+                len(set(decision.merge_pair)) != 2
+                or any(index < 0 or index >= expert_count for index in decision.merge_pair)
+            ):
+                raise RuntimeError("topological merge pair is invalid for this layer")
+        if decision.action == "merge":
+            merge_pair = decision.merge_pair
+            if merge_pair is None:
+                raise RuntimeError("topological merge decision lacks an OT pair")
             return self._merge_pairs(
                 layer,
-                [decision.merge_pair],
+                [merge_pair],
                 optimizer,
                 decision.step,
                 balanced=True,
+                generator=generator,
             )
         if decision.action not in ("merge_split", "birth"):
             return False
         if decision.split_source is None or decision.split_noise_norm is None:
             raise RuntimeError("topological split decision lacks a source or noise certificate")
+        if not 0 <= decision.split_source < expert_count:
+            raise RuntimeError("topological split source is invalid for this layer")
+        if not math.isfinite(decision.split_noise_norm) or decision.split_noise_norm < 0:
+            raise RuntimeError("topological split noise must be finite and non-negative")
 
         destination = decision.split_destination
         if decision.action == "merge_split":
-            if decision.merge_pair is None:
+            merge_pair = decision.merge_pair
+            if merge_pair is None:
                 raise RuntimeError("topological merge_split decision lacks an OT pair")
+            if destination not in merge_pair:
+                raise RuntimeError("topological merge_split destination must reuse its OT pair")
+            if decision.split_source in merge_pair:
+                raise RuntimeError("topological merge_split source must be independent")
             self._merge_pairs(
                 layer,
-                [decision.merge_pair],
+                [merge_pair],
                 optimizer,
                 decision.step,
                 balanced=True,
                 reuse_loser=True,
+                generator=generator,
             )
         if decision.action == "birth":
+            if (
+                not self.cfg.variable_expert_count
+                or expert_count >= self.cfg.max_experts
+                or self._growth_budget_remaining() <= 0
+            ):
+                raise RuntimeError("topological birth exceeds configured capacity budget")
+            if decision.split_destination != expert_count:
+                raise RuntimeError("topological birth destination drifted before mutation")
             touched = _resize_layer_experts_(
                 layer,
                 target_E=layer.num_experts + 1,
                 seed_idx=decision.split_source,
                 cfg=self.cfg,
+                generator=generator,
             )
             if not touched:
                 raise RuntimeError("topological birth did not create an expert slot")
             destination = touched[0]
-            if decision.split_destination != destination:
-                raise RuntimeError("topological birth destination drifted from its decision record")
             self._net_added_experts += 1
         if destination is None:
             raise RuntimeError("topological split decision lacks a destination")
@@ -2141,8 +2200,14 @@ class SplitMergeController:
             optimizer,
             decision.step,
             spectral_noise_norms=[decision.split_noise_norm],
+            generator=generator,
         )
-        if decision.action == "birth" and self.logger is not None and hasattr(self.logger, "on_spawn"):
+        if (
+            decision.action == "birth"
+            and _is_rank0()
+            and self.logger is not None
+            and hasattr(self.logger, "on_spawn")
+        ):
             try:
                 self.logger.on_spawn(
                     layer,
@@ -2486,24 +2551,42 @@ class SplitMergeController:
         if rank0 and self.cfg.verbose:
             print(f"[SplitMerge] step @ {global_step}")
 
-        if distributed and not self.topological_nas:
+        if distributed:
             # ------------------------------------------------------------
-            # uta.5 protocol: decide on rank0, broadcast the DECISION, apply
-            # identical deterministic surgery on EVERY rank, then re-sync each
-            # rank's optimizer param-groups locally. Survivors keep their own
-            # moments; no blanket moment-zeroing is needed because no rank is
-            # a passive observer anymore.
+            # uta.5 protocol: rank0 plans either UTA or topological surgery,
+            # broadcasts only the serialized decision, and EVERY rank applies it
+            # with the transmitted RNG seed. Shape-changing events then rebuild
+            # optimizer groups locally, so no rank is a passive observer.
             # ------------------------------------------------------------
             plans: List[Dict[str, Any]] = []
+            topological_records: Dict[int, Optional[StructuralGeometryRecord]] = {}
             if rank0:
                 for layer_index, layer in enumerate(self._moe_layers):
-                    plans.append(
-                        {
-                            "layer": layer_index,
-                            "ops": self._plan_uta_layer(layer, global_step, layer_index),
-                            "experts_before": int(layer.num_experts),
-                        }
-                    )
+                    entry: Dict[str, Any] = {
+                        "layer": layer_index,
+                        "experts_before": int(layer.num_experts),
+                    }
+                    if self.topological_nas:
+                        decision, record = self._plan_topological_lifecycle(
+                            layer,
+                            step=global_step,
+                            layer_index=layer_index,
+                        )
+                        entry["topological_decision"] = asdict(decision)
+                        topological_records[layer_index] = record
+                        if decision.mode == "uta_fallback":
+                            entry["mode"] = "uta"
+                            entry["ops"] = self._plan_uta_layer(
+                                layer, global_step, layer_index
+                            )
+                        else:
+                            entry["mode"] = "topological"
+                    else:
+                        entry["mode"] = "uta"
+                        entry["ops"] = self._plan_uta_layer(
+                            layer, global_step, layer_index
+                        )
+                    plans.append(entry)
             handle = [plans]
             dist.broadcast_object_list(handle, src=0)
             plans = handle[0]
@@ -2511,6 +2594,10 @@ class SplitMergeController:
             for entry in plans:
                 layer = self._moe_layers[entry["layer"]]
                 experts_before = int(layer.num_experts)
+                if experts_before != int(entry["experts_before"]):
+                    raise RuntimeError(
+                        "distributed lifecycle replicas disagree on expert count before surgery"
+                    )
                 layout = (
                     capture_optimizer_layout(optimizer, self.model)
                     if optimizer is not None and self.cfg.variable_expert_count
@@ -2521,9 +2608,29 @@ class SplitMergeController:
                     if optimizer is not None and self.cfg.variable_expert_count
                     else None
                 )
-                changed = self._apply_uta_ops(
-                    layer, entry["ops"], optimizer, global_step
-                )
+                if entry["mode"] == "uta":
+                    self._apply_uta_ops(layer, entry["ops"], optimizer, global_step)
+                elif entry["mode"] == "topological":
+                    raw_decision = dict(entry["topological_decision"])
+                    merge_pair = raw_decision.get("merge_pair")
+                    if merge_pair is not None:
+                        raw_decision["merge_pair"] = tuple(merge_pair)
+                    decision = TopologicalLifecycleDecision(**raw_decision)
+                    self._run_topological_layer(layer, decision, optimizer)
+                else:
+                    raise RuntimeError(
+                        f"unknown distributed lifecycle mode: {entry['mode']}"
+                    )
+                if self.topological_nas:
+                    raw_decision = dict(entry["topological_decision"])
+                    merge_pair = raw_decision.get("merge_pair")
+                    if merge_pair is not None:
+                        raw_decision["merge_pair"] = tuple(merge_pair)
+                    decision = TopologicalLifecycleDecision(**raw_decision)
+                    self._log_topological_decision(
+                        decision,
+                        topological_records.get(int(entry["layer"])),
+                    )
                 if (
                     int(layer.num_experts) != experts_before
                     and optimizer is not None
@@ -2543,11 +2650,8 @@ class SplitMergeController:
             self._last_step = global_step
             return
 
-        # Single-process path (and, for now, the topological path under DDP,
-        # which keeps the legacy rank0-executes flow): perform operations
-        # layer-by-layer on rank 0.
-        changed_layers = [False] * len(self._moe_layers)
-        for layer_index, layer in enumerate(self._moe_layers if rank0 else []):
+        # Single-process path: plan and apply layer-by-layer locally.
+        for layer_index, layer in enumerate(self._moe_layers):
             experts_before = int(layer.num_experts)
             layout = (
                 capture_optimizer_layout(optimizer, self.model)
@@ -2561,7 +2665,7 @@ class SplitMergeController:
             )
             if not self.topological_nas:
                 ops = self._plan_uta_layer(layer, global_step, layer_index)
-                changed = self._apply_uta_ops(layer, ops, optimizer, global_step)
+                self._apply_uta_ops(layer, ops, optimizer, global_step)
             else:
                 decision, record = self._plan_topological_lifecycle(
                     layer,
@@ -2570,11 +2674,10 @@ class SplitMergeController:
                 )
                 if decision.mode == "uta_fallback":
                     ops = self._plan_uta_layer(layer, global_step, layer_index)
-                    changed = self._apply_uta_ops(layer, ops, optimizer, global_step)
+                    self._apply_uta_ops(layer, ops, optimizer, global_step)
                 else:
-                    changed = self._run_topological_layer(layer, decision, optimizer)
+                    self._run_topological_layer(layer, decision, optimizer)
                 self._log_topological_decision(decision, record)
-            changed_layers[layer_index] = changed
             if (
                 int(layer.num_experts) != experts_before
                 and optimizer is not None
@@ -2587,31 +2690,5 @@ class SplitMergeController:
                     layout,
                     optimizer_snapshot,
                 )
-
-        # Every rank must participate in the same broadcast sequence. Previously
-        # non-zero ranks entered the final barrier and returned before rank 0's
-        # broadcasts, mismatching collectives and deadlocking DDP lifecycle steps.
-        if self.cfg.ddp_broadcast and distributed:
-            if self._moe_layers:
-                flag_device = self._moe_layers[0].router.weight.device
-                change_flags = torch.tensor(
-                    changed_layers,
-                    dtype=torch.int64,
-                    device=flag_device,
-                )
-                dist.broadcast(change_flags, src=0)
-                changed_layers = [bool(value) for value in change_flags.tolist()]
-            for layer in self._moe_layers:
-                _broadcast_module_params(layer)
-            # Rank 0 resets touched moments during surgery in this legacy flow.
-            # Other ranks did not execute the surgery, so reset every parameter
-            # in each changed MoE on every rank to keep distributed optimizer
-            # state semantically aligned (uta.5's protocol replaces this for
-            # the UTA path by executing everywhere instead).
-            if optimizer is not None:
-                for changed, layer in zip(changed_layers, self._moe_layers):
-                    if changed:
-                        _zero_optim_moments_for(optimizer, list(layer.parameters()))
-            dist.barrier()
 
         self._last_step = global_step
