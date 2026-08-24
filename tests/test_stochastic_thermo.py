@@ -16,12 +16,27 @@ well sampled. Run:  pytest tests/test_stochastic_thermo.py -v
 
 from __future__ import annotations
 
+import json
 import math
 
 import numpy as np
 import pytest
+import torch
 
 from bio_inspired_nanochat import stochastic_thermo as st
+from scripts.e2e.stochastic_thermo_uq import (
+    ExperimentConfig,
+    _make_model,
+    _mc_dropout_prediction,
+    _reset_sequence,
+    _softmax_prediction,
+    _thermo_prediction,
+    binary_auroc,
+    binomial_crooks_curve,
+    expected_calibration_error,
+    run_experiment,
+    run_live_release_ft,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -315,3 +330,158 @@ def test_crooks_calibration_handles_min_count_zero():
     sig = rng.normal(0.0, 1.0, 5000)
     cal = st.crooks_calibration(sig, n_bins=15, min_count=0)  # must not divide by an empty mirror bin
     assert math.isfinite(cal.max_abs_residual) or cal.max_abs_residual == float("inf")
+
+
+# =========================================================================== #
+# 0642.3.3.1 — live-release FT + ECE/OOD-AUROC falsification
+# =========================================================================== #
+def test_falsification_metrics_have_exact_known_values():
+    probabilities = torch.tensor([[0.9, 0.1], [0.6, 0.4]])
+    targets = torch.tensor([0, 1])
+    ece, curve = expected_calibration_error(probabilities, targets, n_bins=2)
+    assert ece == pytest.approx(0.25)
+    assert sum(point.count for point in curve) == 2
+    assert binary_auroc(torch.tensor([0.1, 0.2]), torch.tensor([0.8, 0.9])) == 1.0
+    assert binary_auroc(torch.tensor([0.8, 0.9]), torch.tensor([0.1, 0.2])) == 0.0
+    assert binary_auroc(torch.tensor([0.5]), torch.tensor([0.5])) == 0.5
+    with pytest.raises(ValueError, match="sum to one"):
+        expected_calibration_error(torch.tensor([[0.8, 0.8]]), torch.tensor([0]))
+    with pytest.raises(ValueError, match="at least one prediction"):
+        expected_calibration_error(torch.empty((0, 2)), torch.empty(0, dtype=torch.long))
+    with pytest.raises(ValueError, match="finite"):
+        binary_auroc(torch.tensor([0.1]), torch.tensor([float("nan")]))
+
+
+def test_exact_binomial_crooks_curve_is_falsifiable():
+    rng = np.random.default_rng(31)
+    pool_size = 6
+    forward_probability = 0.32
+    reverse_probability = 0.24
+    currents = rng.binomial(pool_size, forward_probability, 120_000) - rng.binomial(
+        pool_size, reverse_probability, 120_000
+    )
+    exact_affinity = math.log(
+        forward_probability
+        * (1.0 - reverse_probability)
+        / (reverse_probability * (1.0 - forward_probability))
+    )
+    exact = binomial_crooks_curve(
+        currents, exact_affinity, pool_size=pool_size, min_count=100
+    )
+    misspecified = binomial_crooks_curve(
+        currents, exact_affinity + 0.5, pool_size=pool_size, min_count=100
+    )
+    assert len(exact) >= 3
+    assert max(abs(point.residual) for point in exact) < 0.25
+    assert max(abs(point.residual) for point in misspecified) > 0.25
+
+
+def test_live_release_trajectories_pass_the_exact_binomial_ft():
+    config = ExperimentConfig(
+        train_steps=0,
+        ft_trajectories=40_000,
+        ft_min_count=50,
+        ft_tolerance=0.3,
+        ft_integral_tolerance=0.06,
+    )
+    result = run_live_release_ft(config)
+    assert result.passed, (
+        f"live release failed Crooks/IFT: max_residual={result.max_crooks_residual:.4f}, "
+        f"integral_residual={result.integral_ft_residual:.4f}"
+    )
+    assert result.forward_probability == pytest.approx(config.ft_forward_probability, abs=1e-6)
+    assert result.reverse_probability == pytest.approx(config.ft_reverse_probability, abs=1e-6)
+    assert len(result.curve) >= 2
+    assert result.scope == "one_step_local_detailed_balance"
+    assert not result.predictive_distribution_claim
+
+
+def test_sequence_reset_preserves_backprop_trained_fast_weights():
+    model = _make_model(
+        ExperimentConfig(
+            vocab_size=16,
+            seq_len=6,
+            batch_size=1,
+            pool_size=1,
+            eval_pool_size=1,
+            n_head=1,
+            n_embd=16,
+            train_steps=0,
+        )
+    )
+    fast_weight = next(
+        module.w_fast
+        for module in model.modules()
+        if getattr(module, "w_fast", None) is not None
+    )
+    with torch.no_grad():
+        fast_weight.fill_(0.125)
+    _reset_sequence(model)
+    assert torch.equal(fast_weight, torch.full_like(fast_weight, 0.125))
+
+
+def test_all_uncertainty_paths_preserve_persistent_model_state():
+    config = ExperimentConfig(
+        vocab_size=16,
+        seq_len=6,
+        batch_size=1,
+        pool_size=1,
+        eval_pool_size=1,
+        n_head=1,
+        n_embd=16,
+        train_steps=0,
+        mc_samples=2,
+    )
+    model = _make_model(config)
+    inputs = torch.arange(config.seq_len).reshape(1, -1) % config.vocab_size
+    before = {name: value.detach().clone() for name, value in model.state_dict().items()}
+    _softmax_prediction(model, inputs)
+    _mc_dropout_prediction(model, inputs, n_samples=config.mc_samples)
+    _thermo_prediction(model, inputs, n_samples=config.mc_samples)
+    after = model.state_dict()
+    assert before.keys() == after.keys()
+    for name, expected in before.items():
+        assert torch.equal(after[name], expected), f"persistent state mutated: {name}"
+
+
+@pytest.mark.e2e
+def test_thermo_uq_e2e_reports_both_baselines_without_assuming_a_win():
+    config = ExperimentConfig(
+        vocab_size=16,
+        seq_len=6,
+        batch_size=2,
+        pool_size=2,
+        eval_pool_size=2,
+        train_steps=2,
+        n_head=1,
+        n_embd=16,
+        dropout=0.15,
+        mc_samples=2,
+        ece_bins=4,
+        ft_trajectories=30_000,
+        ft_min_count=40,
+        ft_tolerance=0.35,
+        ft_integral_tolerance=0.07,
+    )
+    report = run_experiment(config)
+    assert report.live_release_ft.passed
+    assert set(report.methods) == {"softmax_entropy", "mc_dropout", "thermo_uq"}
+    assert set(report.thermo_deltas) == {"vs_softmax_entropy", "vs_mc_dropout"}
+    for metrics in report.methods.values():
+        assert math.isfinite(metrics.ece)
+        assert 0.0 <= metrics.ood_auroc <= 1.0
+        assert sum(point.count for point in metrics.calibration_curve) == (
+            config.batch_size * config.eval_pool_size * config.seq_len
+        )
+    thermo = report.methods["thermo_uq"]
+    for baseline_name in ("softmax_entropy", "mc_dropout"):
+        baseline = report.methods[baseline_name]
+        delta = report.thermo_deltas[f"vs_{baseline_name}"]
+        assert delta["ece_delta_lower_is_better"] == pytest.approx(
+            thermo.ece - baseline.ece
+        )
+        assert delta["ood_auroc_delta_higher_is_better"] == pytest.approx(
+            thermo.ood_auroc - baseline.ood_auroc
+        )
+    json.dumps(report.to_dict(), allow_nan=False)
+    assert "does not assert an advantage" in report.comparison_policy
