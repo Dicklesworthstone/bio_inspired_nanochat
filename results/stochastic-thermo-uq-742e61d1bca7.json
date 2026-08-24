@@ -1,0 +1,3574 @@
+{
+  "bead": "bio_inspired_nanochat-0642.3.3.2",
+  "report_id": "stochastic-thermo-uq-742e61d1bca7",
+  "seeds": [
+    11,
+    23,
+    37,
+    53,
+    71,
+    89,
+    107,
+    131,
+    149,
+    167
+  ],
+  "reports": [
+    {
+      "bead": "bio_inspired_nanochat-0642.3.3.1",
+      "config": {
+        "seed": 11,
+        "device": "cpu",
+        "vocab_size": 32,
+        "seq_len": 12,
+        "batch_size": 4,
+        "pool_size": 2,
+        "eval_pool_size": 2,
+        "train_steps": 24,
+        "learning_rate": 0.003,
+        "n_layer": 1,
+        "n_head": 2,
+        "n_embd": 32,
+        "dropout": 0.2,
+        "mc_samples": 8,
+        "ece_bins": 10,
+        "ft_trajectories": 80000,
+        "ft_forward_probability": 0.32,
+        "ft_reverse_probability": 0.24,
+        "ft_tolerance": 0.25,
+        "ft_integral_tolerance": 0.04,
+        "ft_min_count": 100,
+        "predictive_min_samples": 8,
+        "predictive_min_tested_fraction": 0.75,
+        "predictive_min_symmetric_bins": 2,
+        "predictive_crooks_min_count": 5,
+        "predictive_crooks_tolerance": 0.35,
+        "predictive_min_tur_bound_ratio": 0.95,
+        "predictive_max_events_per_head": 100000
+      },
+      "live_release_ft": {
+        "scope": "one_step_local_detailed_balance",
+        "reverse_transition": "live binomial counter-protocol matched to the configured recovery propensity; not a certificate for recurrent hidden-state dynamics",
+        "predictive_distribution_claim": false,
+        "passed": true,
+        "n_trajectories": 80000,
+        "pool_size": 6,
+        "forward_drive": -0.4151349812746048,
+        "reverse_drive": -0.7916535437107086,
+        "forward_probability": 0.320000022649765,
+        "reverse_probability": 0.24000000953674316,
+        "affinity": 0.3989077593662215,
+        "integral_ft": 0.9998206638536802,
+        "integral_ft_residual": 0.00017933614631981953,
+        "max_crooks_residual": 0.047475858091769796,
+        "tolerance": 0.25,
+        "integral_tolerance": 0.04,
+        "curve": [
+          {
+            "current": 1,
+            "positive_count": 19281,
+            "negative_count": 13109,
+            "observed_log_ratio": 0.3858211378415866,
+            "expected_log_ratio": 0.3989077593662215,
+            "residual": -0.013086621524634912
+          },
+          {
+            "current": 2,
+            "positive_count": 13004,
+            "negative_count": 5822,
+            "observed_log_ratio": 0.8036131571182275,
+            "expected_log_ratio": 0.797815518732443,
+            "residual": 0.005797638385784398
+          },
+          {
+            "current": 3,
+            "positive_count": 5636,
+            "negative_count": 1639,
+            "observed_log_ratio": 1.2350882942747412,
+            "expected_log_ratio": 1.1967232780986645,
+            "residual": 0.03836501617607668
+          },
+          {
+            "current": 4,
+            "positive_count": 1519,
+            "negative_count": 323,
+            "observed_log_ratio": 1.5481551793731163,
+            "expected_log_ratio": 1.595631037464886,
+            "residual": -0.047475858091769796
+          }
+        ],
+        "tur": {
+          "scope": "classic_continuous_time_tur_on_exact_one_step_paired_binomial_moments",
+          "relative_variance": 10.416663593302882,
+          "entropy_bound": 10.44518660232838,
+          "slack": -0.028523009025498425,
+          "bound_ratio": 0.9972692676434196,
+          "nonvacuous": true,
+          "satisfied": false
+        }
+      },
+      "methods": {
+        "softmax_entropy": {
+          "ece": 0.0632807028790315,
+          "ood_auroc": 0.994140625,
+          "id_accuracy": 1.0,
+          "mean_id_confidence": 0.9367193579673767,
+          "mean_id_uncertainty": 0.2732536494731903,
+          "mean_ood_uncertainty": 2.2565836906433105,
+          "calibration_curve": [
+            {
+              "lower": 0.7,
+              "upper": 0.8,
+              "count": 2,
+              "mean_confidence": 0.7715585231781006,
+              "accuracy": 1.0,
+              "absolute_gap": 0.22844147682189941
+            },
+            {
+              "lower": 0.8,
+              "upper": 0.9,
+              "count": 12,
+              "mean_confidence": 0.8458538055419922,
+              "accuracy": 1.0,
+              "absolute_gap": 0.1541461944580078
+            },
+            {
+              "lower": 0.9,
+              "upper": 1.0,
+              "count": 82,
+              "mean_confidence": 0.9540449976921082,
+              "accuracy": 1.0,
+              "absolute_gap": 0.045955002307891846
+            }
+          ]
+        },
+        "mc_dropout": {
+          "ece": 0.1062596949438254,
+          "ood_auroc": 0.9992404513888888,
+          "id_accuracy": 1.0,
+          "mean_id_confidence": 0.8937402367591858,
+          "mean_id_uncertainty": 0.4406817853450775,
+          "mean_ood_uncertainty": 2.47660231590271,
+          "calibration_curve": [
+            {
+              "lower": 0.5,
+              "upper": 0.6,
+              "count": 1,
+              "mean_confidence": 0.5862647294998169,
+              "accuracy": 1.0,
+              "absolute_gap": 0.4137352705001831
+            },
+            {
+              "lower": 0.6,
+              "upper": 0.7,
+              "count": 3,
+              "mean_confidence": 0.6895576119422913,
+              "accuracy": 1.0,
+              "absolute_gap": 0.31044238805770874
+            },
+            {
+              "lower": 0.7,
+              "upper": 0.8,
+              "count": 8,
+              "mean_confidence": 0.745093047618866,
+              "accuracy": 1.0,
+              "absolute_gap": 0.25490695238113403
+            },
+            {
+              "lower": 0.8,
+              "upper": 0.9,
+              "count": 25,
+              "mean_confidence": 0.8611712455749512,
+              "accuracy": 1.0,
+              "absolute_gap": 0.13882875442504883
+            },
+            {
+              "lower": 0.9,
+              "upper": 1.0,
+              "count": 59,
+              "mean_confidence": 0.9432899355888367,
+              "accuracy": 1.0,
+              "absolute_gap": 0.05671006441116333
+            }
+          ]
+        },
+        "thermo_uq": {
+          "ece": 0.06331922796865305,
+          "ood_auroc": 0.994140625,
+          "id_accuracy": 1.0,
+          "mean_id_confidence": 0.936680793762207,
+          "mean_id_uncertainty": 0.2734634578227997,
+          "mean_ood_uncertainty": 2.259385108947754,
+          "calibration_curve": [
+            {
+              "lower": 0.7,
+              "upper": 0.8,
+              "count": 2,
+              "mean_confidence": 0.7752243280410767,
+              "accuracy": 1.0,
+              "absolute_gap": 0.22477567195892334
+            },
+            {
+              "lower": 0.8,
+              "upper": 0.9,
+              "count": 13,
+              "mean_confidence": 0.8498824238777161,
+              "accuracy": 1.0,
+              "absolute_gap": 0.15011757612228394
+            },
+            {
+              "lower": 0.9,
+              "upper": 1.0,
+              "count": 81,
+              "mean_confidence": 0.9545979499816895,
+              "accuracy": 1.0,
+              "absolute_gap": 0.04540205001831055
+            }
+          ]
+        }
+      },
+      "thermo_deltas": {
+        "vs_softmax_entropy": {
+          "ece_delta_lower_is_better": 3.852508962155776e-05,
+          "ood_auroc_delta_higher_is_better": 0.0
+        },
+        "vs_mc_dropout": {
+          "ece_delta_lower_is_better": -0.04294046697517234,
+          "ood_auroc_delta_higher_is_better": -0.0050998263888888395
+        }
+      },
+      "training_loss": [
+        3.4531562328338623,
+        3.383066415786743,
+        3.2648963928222656,
+        3.177593231201172,
+        3.0649774074554443,
+        2.970475435256958,
+        2.8742876052856445,
+        2.7513933181762695,
+        2.6008598804473877,
+        2.4103872776031494,
+        2.2524514198303223,
+        2.021867513656616,
+        1.7829595804214478,
+        1.514245867729187,
+        1.435530185699463,
+        1.0115580558776855,
+        0.8677565455436707,
+        0.6433598399162292,
+        0.631104052066803,
+        0.39182618260383606,
+        0.34267711639404297,
+        0.2068347930908203,
+        0.17969971895217896,
+        0.1277267336845398
+      ],
+      "predictive_thermo_evidence": {
+        "provenance": {
+          "run_id": "stochastic-thermo-predictive-d07c99f79f9c-s11",
+          "checkpoint_id": "e8076cb55245ddfc86a7fef04b86640f63f78e18289a349747ef6c533e82857c",
+          "config_hash": "d07c99f79f9c3134f1e7bffb6b291d0de699b4c8e8594531f32f6ae24f3ea9af",
+          "rng_seed": 312
+        },
+        "policy": {
+          "min_samples": 8,
+          "min_tested_fraction": 0.75,
+          "min_symmetric_bins": 2,
+          "crooks_bins": 21,
+          "crooks_min_count": 5,
+          "crooks_tolerance": 0.35,
+          "min_tur_bound_ratio": 0.95,
+          "max_events_per_head": 100000
+        },
+        "heads": [
+          {
+            "layer_address": "h.0.attn.attn.pre",
+            "head_index": 0,
+            "sampling_modes": [
+              "straight_through"
+            ],
+            "sample_count": 8,
+            "observed_events": 4992,
+            "tested_events": 4992,
+            "retained_events": 4992,
+            "degenerate_events": 0,
+            "tested_fraction": 1.0,
+            "symmetric_bins": 1,
+            "crooks_residual": 0.5644508099675307,
+            "tur_relative_variance": 0.7694455339174509,
+            "tur_entropy_bound": 0.2666730490250104,
+            "tur_bound_ratio": 2.885351694633705,
+            "finite": true,
+            "passed": false,
+            "refusal_reasons": [
+              "insufficient_symmetric_support",
+              "crooks_gate_failed"
+            ]
+          },
+          {
+            "layer_address": "h.0.attn.attn.pre",
+            "head_index": 1,
+            "sampling_modes": [
+              "straight_through"
+            ],
+            "sample_count": 8,
+            "observed_events": 4992,
+            "tested_events": 4992,
+            "retained_events": 4992,
+            "degenerate_events": 0,
+            "tested_fraction": 1.0,
+            "symmetric_bins": 2,
+            "crooks_residual": 0.5215226692579691,
+            "tur_relative_variance": 0.8489673645917237,
+            "tur_entropy_bound": 0.28679266212800747,
+            "tur_bound_ratio": 2.960212992523478,
+            "finite": true,
+            "passed": false,
+            "refusal_reasons": [
+              "crooks_gate_failed"
+            ]
+          }
+        ],
+        "observed_events": 9984,
+        "tested_events": 9984,
+        "retained_events": 9984,
+        "degenerate_events": 0,
+        "tested_fraction": 1.0,
+        "fresh": true,
+        "local_gates_passed": false,
+        "multi_seed_statistics_passed": false,
+        "predictive_distribution_claim": false,
+        "calibration_mode": "empirical_ece_fallback",
+        "refusal_reasons": [
+          "local_layer_head_gates_failed",
+          "multi_seed_statistics_pending_or_failed"
+        ]
+      },
+      "comparison_policy": "Negative ECE delta and positive OOD-AUROC delta favor thermo-UQ; the harness reports measurements and does not assert an advantage."
+    },
+    {
+      "bead": "bio_inspired_nanochat-0642.3.3.1",
+      "config": {
+        "seed": 23,
+        "device": "cpu",
+        "vocab_size": 32,
+        "seq_len": 12,
+        "batch_size": 4,
+        "pool_size": 2,
+        "eval_pool_size": 2,
+        "train_steps": 24,
+        "learning_rate": 0.003,
+        "n_layer": 1,
+        "n_head": 2,
+        "n_embd": 32,
+        "dropout": 0.2,
+        "mc_samples": 8,
+        "ece_bins": 10,
+        "ft_trajectories": 80000,
+        "ft_forward_probability": 0.32,
+        "ft_reverse_probability": 0.24,
+        "ft_tolerance": 0.25,
+        "ft_integral_tolerance": 0.04,
+        "ft_min_count": 100,
+        "predictive_min_samples": 8,
+        "predictive_min_tested_fraction": 0.75,
+        "predictive_min_symmetric_bins": 2,
+        "predictive_crooks_min_count": 5,
+        "predictive_crooks_tolerance": 0.35,
+        "predictive_min_tur_bound_ratio": 0.95,
+        "predictive_max_events_per_head": 100000
+      },
+      "live_release_ft": {
+        "scope": "one_step_local_detailed_balance",
+        "reverse_transition": "live binomial counter-protocol matched to the configured recovery propensity; not a certificate for recurrent hidden-state dynamics",
+        "predictive_distribution_claim": false,
+        "passed": true,
+        "n_trajectories": 80000,
+        "pool_size": 6,
+        "forward_drive": -0.4151349812746048,
+        "reverse_drive": -0.7916535437107086,
+        "forward_probability": 0.320000022649765,
+        "reverse_probability": 0.24000000953674316,
+        "affinity": 0.3989077593662215,
+        "integral_ft": 1.0027901960523464,
+        "integral_ft_residual": 0.0027901960523464275,
+        "max_crooks_residual": 0.11105242051388342,
+        "tolerance": 0.25,
+        "integral_tolerance": 0.04,
+        "curve": [
+          {
+            "current": 1,
+            "positive_count": 19367,
+            "negative_count": 12927,
+            "observed_log_ratio": 0.40425243944378425,
+            "expected_log_ratio": 0.3989077593662215,
+            "residual": 0.0053446800775627246
+          },
+          {
+            "current": 2,
+            "positive_count": 12798,
+            "negative_count": 5816,
+            "observed_log_ratio": 0.7886761684860504,
+            "expected_log_ratio": 0.797815518732443,
+            "residual": -0.009139350246392675
+          },
+          {
+            "current": 3,
+            "positive_count": 5646,
+            "negative_count": 1694,
+            "observed_log_ratio": 1.203854733601435,
+            "expected_log_ratio": 1.1967232780986645,
+            "residual": 0.00713145550277039
+          },
+          {
+            "current": 4,
+            "positive_count": 1549,
+            "negative_count": 351,
+            "observed_log_ratio": 1.4845786169510027,
+            "expected_log_ratio": 1.595631037464886,
+            "residual": -0.11105242051388342
+          }
+        ],
+        "tur": {
+          "scope": "classic_continuous_time_tur_on_exact_one_step_paired_binomial_moments",
+          "relative_variance": 10.416663593302882,
+          "entropy_bound": 10.44518660232838,
+          "slack": -0.028523009025498425,
+          "bound_ratio": 0.9972692676434196,
+          "nonvacuous": true,
+          "satisfied": false
+        }
+      },
+      "methods": {
+        "softmax_entropy": {
+          "ece": 0.07703787212570509,
+          "ood_auroc": 1.0,
+          "id_accuracy": 1.0,
+          "mean_id_confidence": 0.9229621291160583,
+          "mean_id_uncertainty": 0.31837233901023865,
+          "mean_ood_uncertainty": 1.9966679811477661,
+          "calibration_curve": [
+            {
+              "lower": 0.7,
+              "upper": 0.8,
+              "count": 2,
+              "mean_confidence": 0.7851013541221619,
+              "accuracy": 1.0,
+              "absolute_gap": 0.21489864587783813
+            },
+            {
+              "lower": 0.8,
+              "upper": 0.9,
+              "count": 28,
+              "mean_confidence": 0.844952404499054,
+              "accuracy": 1.0,
+              "absolute_gap": 0.15504759550094604
+            },
+            {
+              "lower": 0.9,
+              "upper": 1.0,
+              "count": 66,
+              "mean_confidence": 0.9602347612380981,
+              "accuracy": 1.0,
+              "absolute_gap": 0.039765238761901855
+            }
+          ]
+        },
+        "mc_dropout": {
+          "ece": 0.12739578199883303,
+          "ood_auroc": 0.9955512152777778,
+          "id_accuracy": 1.0,
+          "mean_id_confidence": 0.8726041316986084,
+          "mean_id_uncertainty": 0.5021546483039856,
+          "mean_ood_uncertainty": 2.2382078170776367,
+          "calibration_curve": [
+            {
+              "lower": 0.5,
+              "upper": 0.6,
+              "count": 1,
+              "mean_confidence": 0.5957490801811218,
+              "accuracy": 1.0,
+              "absolute_gap": 0.4042509198188782
+            },
+            {
+              "lower": 0.6,
+              "upper": 0.7,
+              "count": 10,
+              "mean_confidence": 0.6556507349014282,
+              "accuracy": 1.0,
+              "absolute_gap": 0.3443492650985718
+            },
+            {
+              "lower": 0.7,
+              "upper": 0.8,
+              "count": 10,
+              "mean_confidence": 0.7435440421104431,
+              "accuracy": 1.0,
+              "absolute_gap": 0.2564559578895569
+            },
+            {
+              "lower": 0.8,
+              "upper": 0.9,
+              "count": 22,
+              "mean_confidence": 0.8576422333717346,
+              "accuracy": 1.0,
+              "absolute_gap": 0.14235776662826538
+            },
+            {
+              "lower": 0.9,
+              "upper": 1.0,
+              "count": 53,
+              "mean_confidence": 0.9493241310119629,
+              "accuracy": 1.0,
+              "absolute_gap": 0.05067586898803711
+            }
+          ]
+        },
+        "thermo_uq": {
+          "ece": 0.0772638339549303,
+          "ood_auroc": 1.0,
+          "id_accuracy": 1.0,
+          "mean_id_confidence": 0.9227362275123596,
+          "mean_id_uncertainty": 0.3187144696712494,
+          "mean_ood_uncertainty": 2.0024192333221436,
+          "calibration_curve": [
+            {
+              "lower": 0.7,
+              "upper": 0.8,
+              "count": 2,
+              "mean_confidence": 0.7687277793884277,
+              "accuracy": 1.0,
+              "absolute_gap": 0.23127222061157227
+            },
+            {
+              "lower": 0.8,
+              "upper": 0.9,
+              "count": 29,
+              "mean_confidence": 0.8473007678985596,
+              "accuracy": 1.0,
+              "absolute_gap": 0.15269923210144043
+            },
+            {
+              "lower": 0.9,
+              "upper": 1.0,
+              "count": 65,
+              "mean_confidence": 0.961130678653717,
+              "accuracy": 1.0,
+              "absolute_gap": 0.03886932134628296
+            }
+          ]
+        }
+      },
+      "thermo_deltas": {
+        "vs_softmax_entropy": {
+          "ece_delta_lower_is_better": 0.00022596182922521302,
+          "ood_auroc_delta_higher_is_better": 0.0
+        },
+        "vs_mc_dropout": {
+          "ece_delta_lower_is_better": -0.050131948043902724,
+          "ood_auroc_delta_higher_is_better": 0.00444878472222221
+        }
+      },
+      "training_loss": [
+        3.42486572265625,
+        3.3413913249969482,
+        3.251319169998169,
+        3.169909715652466,
+        3.0623390674591064,
+        2.980257987976074,
+        2.86603045463562,
+        2.746217966079712,
+        2.6461493968963623,
+        2.457341432571411,
+        2.3463847637176514,
+        2.082791566848755,
+        1.8520957231521606,
+        1.528079628944397,
+        1.3396626710891724,
+        1.0184993743896484,
+        0.9253122210502625,
+        0.5365110039710999,
+        0.5975058674812317,
+        0.3152390122413635,
+        0.3327847719192505,
+        0.14612439274787903,
+        0.21453583240509033,
+        0.11818883568048477
+      ],
+      "predictive_thermo_evidence": {
+        "provenance": {
+          "run_id": "stochastic-thermo-predictive-488b9c865bdf-s23",
+          "checkpoint_id": "7730282f3084000dd1e9e82ee223cb0ead0210e3526fc32c11b4a9469d2afabb",
+          "config_hash": "488b9c865bdfef32651be5bdf80338b2fbf8b16f830f5129eb32d6eaa64cc65f",
+          "rng_seed": 324
+        },
+        "policy": {
+          "min_samples": 8,
+          "min_tested_fraction": 0.75,
+          "min_symmetric_bins": 2,
+          "crooks_bins": 21,
+          "crooks_min_count": 5,
+          "crooks_tolerance": 0.35,
+          "min_tur_bound_ratio": 0.95,
+          "max_events_per_head": 100000
+        },
+        "heads": [
+          {
+            "layer_address": "h.0.attn.attn.pre",
+            "head_index": 0,
+            "sampling_modes": [
+              "straight_through"
+            ],
+            "sample_count": 8,
+            "observed_events": 4992,
+            "tested_events": 4992,
+            "retained_events": 4992,
+            "degenerate_events": 0,
+            "tested_fraction": 1.0,
+            "symmetric_bins": 1,
+            "crooks_residual": 0.6981070694563445,
+            "tur_relative_variance": 0.6678044843810397,
+            "tur_entropy_bound": 0.2591233096091157,
+            "tur_bound_ratio": 2.577168705464647,
+            "finite": true,
+            "passed": false,
+            "refusal_reasons": [
+              "insufficient_symmetric_support",
+              "crooks_gate_failed"
+            ]
+          },
+          {
+            "layer_address": "h.0.attn.attn.pre",
+            "head_index": 1,
+            "sampling_modes": [
+              "straight_through"
+            ],
+            "sample_count": 8,
+            "observed_events": 4992,
+            "tested_events": 4992,
+            "retained_events": 4992,
+            "degenerate_events": 0,
+            "tested_fraction": 1.0,
+            "symmetric_bins": 1,
+            "crooks_residual": 0.547816808499237,
+            "tur_relative_variance": 0.7239708327733502,
+            "tur_entropy_bound": 0.261863536691489,
+            "tur_bound_ratio": 2.764687447211433,
+            "finite": true,
+            "passed": false,
+            "refusal_reasons": [
+              "insufficient_symmetric_support",
+              "crooks_gate_failed"
+            ]
+          }
+        ],
+        "observed_events": 9984,
+        "tested_events": 9984,
+        "retained_events": 9984,
+        "degenerate_events": 0,
+        "tested_fraction": 1.0,
+        "fresh": true,
+        "local_gates_passed": false,
+        "multi_seed_statistics_passed": false,
+        "predictive_distribution_claim": false,
+        "calibration_mode": "empirical_ece_fallback",
+        "refusal_reasons": [
+          "local_layer_head_gates_failed",
+          "multi_seed_statistics_pending_or_failed"
+        ]
+      },
+      "comparison_policy": "Negative ECE delta and positive OOD-AUROC delta favor thermo-UQ; the harness reports measurements and does not assert an advantage."
+    },
+    {
+      "bead": "bio_inspired_nanochat-0642.3.3.1",
+      "config": {
+        "seed": 37,
+        "device": "cpu",
+        "vocab_size": 32,
+        "seq_len": 12,
+        "batch_size": 4,
+        "pool_size": 2,
+        "eval_pool_size": 2,
+        "train_steps": 24,
+        "learning_rate": 0.003,
+        "n_layer": 1,
+        "n_head": 2,
+        "n_embd": 32,
+        "dropout": 0.2,
+        "mc_samples": 8,
+        "ece_bins": 10,
+        "ft_trajectories": 80000,
+        "ft_forward_probability": 0.32,
+        "ft_reverse_probability": 0.24,
+        "ft_tolerance": 0.25,
+        "ft_integral_tolerance": 0.04,
+        "ft_min_count": 100,
+        "predictive_min_samples": 8,
+        "predictive_min_tested_fraction": 0.75,
+        "predictive_min_symmetric_bins": 2,
+        "predictive_crooks_min_count": 5,
+        "predictive_crooks_tolerance": 0.35,
+        "predictive_min_tur_bound_ratio": 0.95,
+        "predictive_max_events_per_head": 100000
+      },
+      "live_release_ft": {
+        "scope": "one_step_local_detailed_balance",
+        "reverse_transition": "live binomial counter-protocol matched to the configured recovery propensity; not a certificate for recurrent hidden-state dynamics",
+        "predictive_distribution_claim": false,
+        "passed": true,
+        "n_trajectories": 80000,
+        "pool_size": 6,
+        "forward_drive": -0.4151349812746048,
+        "reverse_drive": -0.7916535437107086,
+        "forward_probability": 0.320000022649765,
+        "reverse_probability": 0.24000000953674316,
+        "affinity": 0.3989077593662215,
+        "integral_ft": 1.0024073690699113,
+        "integral_ft_residual": 0.002407369069911347,
+        "max_crooks_residual": 0.018942421825929756,
+        "tolerance": 0.25,
+        "integral_tolerance": 0.04,
+        "curve": [
+          {
+            "current": 1,
+            "positive_count": 19224,
+            "negative_count": 13105,
+            "observed_log_ratio": 0.3831656616587982,
+            "expected_log_ratio": 0.3989077593662215,
+            "residual": -0.015742097707423353
+          },
+          {
+            "current": 2,
+            "positive_count": 12873,
+            "negative_count": 5804,
+            "observed_log_ratio": 0.796584759655556,
+            "expected_log_ratio": 0.797815518732443,
+            "residual": -0.001230759076887078
+          },
+          {
+            "current": 3,
+            "positive_count": 5732,
+            "negative_count": 1747,
+            "observed_log_ratio": 1.188164478814006,
+            "expected_log_ratio": 1.1967232780986645,
+            "residual": -0.008558799284658525
+          },
+          {
+            "current": 4,
+            "positive_count": 1592,
+            "negative_count": 329,
+            "observed_log_ratio": 1.5766886156389563,
+            "expected_log_ratio": 1.595631037464886,
+            "residual": -0.018942421825929756
+          }
+        ],
+        "tur": {
+          "scope": "classic_continuous_time_tur_on_exact_one_step_paired_binomial_moments",
+          "relative_variance": 10.416663593302882,
+          "entropy_bound": 10.44518660232838,
+          "slack": -0.028523009025498425,
+          "bound_ratio": 0.9972692676434196,
+          "nonvacuous": true,
+          "satisfied": false
+        }
+      },
+      "methods": {
+        "softmax_entropy": {
+          "ece": 0.0617450475692749,
+          "ood_auroc": 1.0,
+          "id_accuracy": 1.0,
+          "mean_id_confidence": 0.9382548928260803,
+          "mean_id_uncertainty": 0.22266371548175812,
+          "mean_ood_uncertainty": 2.1606369018554688,
+          "calibration_curve": [
+            {
+              "lower": 0.7,
+              "upper": 0.8,
+              "count": 8,
+              "mean_confidence": 0.7699844241142273,
+              "accuracy": 1.0,
+              "absolute_gap": 0.2300155758857727
+            },
+            {
+              "lower": 0.8,
+              "upper": 0.9,
+              "count": 18,
+              "mean_confidence": 0.8595858216285706,
+              "accuracy": 1.0,
+              "absolute_gap": 0.14041417837142944
+            },
+            {
+              "lower": 0.9,
+              "upper": 1.0,
+              "count": 70,
+              "mean_confidence": 0.9777150750160217,
+              "accuracy": 1.0,
+              "absolute_gap": 0.02228492498397827
+            }
+          ]
+        },
+        "mc_dropout": {
+          "ece": 0.093592818826437,
+          "ood_auroc": 1.0,
+          "id_accuracy": 1.0,
+          "mean_id_confidence": 0.9064071774482727,
+          "mean_id_uncertainty": 0.3568057715892792,
+          "mean_ood_uncertainty": 2.3675854206085205,
+          "calibration_curve": [
+            {
+              "lower": 0.6,
+              "upper": 0.7,
+              "count": 1,
+              "mean_confidence": 0.6983134746551514,
+              "accuracy": 1.0,
+              "absolute_gap": 0.30168652534484863
+            },
+            {
+              "lower": 0.7,
+              "upper": 0.8,
+              "count": 17,
+              "mean_confidence": 0.7802315950393677,
+              "accuracy": 1.0,
+              "absolute_gap": 0.21976840496063232
+            },
+            {
+              "lower": 0.8,
+              "upper": 0.9,
+              "count": 25,
+              "mean_confidence": 0.8463451266288757,
+              "accuracy": 1.0,
+              "absolute_gap": 0.15365487337112427
+            },
+            {
+              "lower": 0.9,
+              "upper": 1.0,
+              "count": 53,
+              "mean_confidence": 0.979136049747467,
+              "accuracy": 1.0,
+              "absolute_gap": 0.02086395025253296
+            }
+          ]
+        },
+        "thermo_uq": {
+          "ece": 0.061870213598012924,
+          "ood_auroc": 1.0,
+          "id_accuracy": 1.0,
+          "mean_id_confidence": 0.9381299018859863,
+          "mean_id_uncertainty": 0.22307027876377106,
+          "mean_ood_uncertainty": 2.1637887954711914,
+          "calibration_curve": [
+            {
+              "lower": 0.7,
+              "upper": 0.8,
+              "count": 8,
+              "mean_confidence": 0.7691465616226196,
+              "accuracy": 1.0,
+              "absolute_gap": 0.23085343837738037
+            },
+            {
+              "lower": 0.8,
+              "upper": 0.9,
+              "count": 18,
+              "mean_confidence": 0.8594427108764648,
+              "accuracy": 1.0,
+              "absolute_gap": 0.14055728912353516
+            },
+            {
+              "lower": 0.9,
+              "upper": 1.0,
+              "count": 70,
+              "mean_confidence": 0.9776759743690491,
+              "accuracy": 1.0,
+              "absolute_gap": 0.022324025630950928
+            }
+          ]
+        }
+      },
+      "thermo_deltas": {
+        "vs_softmax_entropy": {
+          "ece_delta_lower_is_better": 0.00012516602873802185,
+          "ood_auroc_delta_higher_is_better": 0.0
+        },
+        "vs_mc_dropout": {
+          "ece_delta_lower_is_better": -0.03172260522842407,
+          "ood_auroc_delta_higher_is_better": 0.0
+        }
+      },
+      "training_loss": [
+        3.4479410648345947,
+        3.369823455810547,
+        3.265273094177246,
+        3.183389902114868,
+        3.0835235118865967,
+        2.9953835010528564,
+        2.8778674602508545,
+        2.768186330795288,
+        2.6447558403015137,
+        2.4871463775634766,
+        2.2920193672180176,
+        2.114750385284424,
+        1.859920620918274,
+        1.6177366971969604,
+        1.348010540008545,
+        1.0575196743011475,
+        0.7684959769248962,
+        0.6070685982704163,
+        0.4098348617553711,
+        0.3684772551059723,
+        0.2117609977722168,
+        0.17846707999706268,
+        0.10094494372606277,
+        0.09002124518156052
+      ],
+      "predictive_thermo_evidence": {
+        "provenance": {
+          "run_id": "stochastic-thermo-predictive-950e19d41b7d-s37",
+          "checkpoint_id": "2197aa73d948e518967cc308a90540b4bb9a7c7b3d7546fb5398de1d67ac3823",
+          "config_hash": "950e19d41b7d238786842a0402501e043cc20e139638b5b6379dec6f6320f92d",
+          "rng_seed": 338
+        },
+        "policy": {
+          "min_samples": 8,
+          "min_tested_fraction": 0.75,
+          "min_symmetric_bins": 2,
+          "crooks_bins": 21,
+          "crooks_min_count": 5,
+          "crooks_tolerance": 0.35,
+          "min_tur_bound_ratio": 0.95,
+          "max_events_per_head": 100000
+        },
+        "heads": [
+          {
+            "layer_address": "h.0.attn.attn.pre",
+            "head_index": 0,
+            "sampling_modes": [
+              "straight_through"
+            ],
+            "sample_count": 8,
+            "observed_events": 4992,
+            "tested_events": 4992,
+            "retained_events": 4992,
+            "degenerate_events": 0,
+            "tested_fraction": 1.0,
+            "symmetric_bins": 1,
+            "crooks_residual": 0.5357323376052845,
+            "tur_relative_variance": 0.6799228198272861,
+            "tur_entropy_bound": 0.2650941894275528,
+            "tur_bound_ratio": 2.564834866035799,
+            "finite": true,
+            "passed": false,
+            "refusal_reasons": [
+              "insufficient_symmetric_support",
+              "crooks_gate_failed"
+            ]
+          },
+          {
+            "layer_address": "h.0.attn.attn.pre",
+            "head_index": 1,
+            "sampling_modes": [
+              "straight_through"
+            ],
+            "sample_count": 8,
+            "observed_events": 4992,
+            "tested_events": 4992,
+            "retained_events": 4992,
+            "degenerate_events": 0,
+            "tested_fraction": 1.0,
+            "symmetric_bins": 2,
+            "crooks_residual": 0.5497284214123961,
+            "tur_relative_variance": 0.7989390072228747,
+            "tur_entropy_bound": 0.28351702112209576,
+            "tur_bound_ratio": 2.817957821582832,
+            "finite": true,
+            "passed": false,
+            "refusal_reasons": [
+              "crooks_gate_failed"
+            ]
+          }
+        ],
+        "observed_events": 9984,
+        "tested_events": 9984,
+        "retained_events": 9984,
+        "degenerate_events": 0,
+        "tested_fraction": 1.0,
+        "fresh": true,
+        "local_gates_passed": false,
+        "multi_seed_statistics_passed": false,
+        "predictive_distribution_claim": false,
+        "calibration_mode": "empirical_ece_fallback",
+        "refusal_reasons": [
+          "local_layer_head_gates_failed",
+          "multi_seed_statistics_pending_or_failed"
+        ]
+      },
+      "comparison_policy": "Negative ECE delta and positive OOD-AUROC delta favor thermo-UQ; the harness reports measurements and does not assert an advantage."
+    },
+    {
+      "bead": "bio_inspired_nanochat-0642.3.3.1",
+      "config": {
+        "seed": 53,
+        "device": "cpu",
+        "vocab_size": 32,
+        "seq_len": 12,
+        "batch_size": 4,
+        "pool_size": 2,
+        "eval_pool_size": 2,
+        "train_steps": 24,
+        "learning_rate": 0.003,
+        "n_layer": 1,
+        "n_head": 2,
+        "n_embd": 32,
+        "dropout": 0.2,
+        "mc_samples": 8,
+        "ece_bins": 10,
+        "ft_trajectories": 80000,
+        "ft_forward_probability": 0.32,
+        "ft_reverse_probability": 0.24,
+        "ft_tolerance": 0.25,
+        "ft_integral_tolerance": 0.04,
+        "ft_min_count": 100,
+        "predictive_min_samples": 8,
+        "predictive_min_tested_fraction": 0.75,
+        "predictive_min_symmetric_bins": 2,
+        "predictive_crooks_min_count": 5,
+        "predictive_crooks_tolerance": 0.35,
+        "predictive_min_tur_bound_ratio": 0.95,
+        "predictive_max_events_per_head": 100000
+      },
+      "live_release_ft": {
+        "scope": "one_step_local_detailed_balance",
+        "reverse_transition": "live binomial counter-protocol matched to the configured recovery propensity; not a certificate for recurrent hidden-state dynamics",
+        "predictive_distribution_claim": false,
+        "passed": true,
+        "n_trajectories": 80000,
+        "pool_size": 6,
+        "forward_drive": -0.4151349812746048,
+        "reverse_drive": -0.7916535437107086,
+        "forward_probability": 0.320000022649765,
+        "reverse_probability": 0.24000000953674316,
+        "affinity": 0.3989077593662215,
+        "integral_ft": 1.0013865727504663,
+        "integral_ft_residual": 0.001386572750466275,
+        "max_crooks_residual": 0.05049628293648034,
+        "tolerance": 0.25,
+        "integral_tolerance": 0.04,
+        "curve": [
+          {
+            "current": 1,
+            "positive_count": 19347,
+            "negative_count": 12827,
+            "observed_log_ratio": 0.4109850443786363,
+            "expected_log_ratio": 0.3989077593662215,
+            "residual": 0.012077285012414785
+          },
+          {
+            "current": 2,
+            "positive_count": 13041,
+            "negative_count": 5841,
+            "observed_log_ratio": 0.8031962256165924,
+            "expected_log_ratio": 0.797815518732443,
+            "residual": 0.005380706884149378
+          },
+          {
+            "current": 3,
+            "positive_count": 5484,
+            "negative_count": 1743,
+            "observed_log_ratio": 1.1462269951621842,
+            "expected_log_ratio": 1.1967232780986645,
+            "residual": -0.05049628293648034
+          },
+          {
+            "current": 4,
+            "positive_count": 1553,
+            "negative_count": 314,
+            "observed_log_ratio": 1.5985508372404338,
+            "expected_log_ratio": 1.595631037464886,
+            "residual": 0.0029197997755476823
+          }
+        ],
+        "tur": {
+          "scope": "classic_continuous_time_tur_on_exact_one_step_paired_binomial_moments",
+          "relative_variance": 10.416663593302882,
+          "entropy_bound": 10.44518660232838,
+          "slack": -0.028523009025498425,
+          "bound_ratio": 0.9972692676434196,
+          "nonvacuous": true,
+          "satisfied": false
+        }
+      },
+      "methods": {
+        "softmax_entropy": {
+          "ece": 0.08251008577644825,
+          "ood_auroc": 0.9958767361111112,
+          "id_accuracy": 1.0,
+          "mean_id_confidence": 0.9174898266792297,
+          "mean_id_uncertainty": 0.32047224044799805,
+          "mean_ood_uncertainty": 2.1418471336364746,
+          "calibration_curve": [
+            {
+              "lower": 0.7,
+              "upper": 0.8,
+              "count": 11,
+              "mean_confidence": 0.7558361291885376,
+              "accuracy": 1.0,
+              "absolute_gap": 0.2441638708114624
+            },
+            {
+              "lower": 0.8,
+              "upper": 0.9,
+              "count": 20,
+              "mean_confidence": 0.8697039484977722,
+              "accuracy": 1.0,
+              "absolute_gap": 0.13029605150222778
+            },
+            {
+              "lower": 0.9,
+              "upper": 1.0,
+              "count": 65,
+              "mean_confidence": 0.9595500826835632,
+              "accuracy": 1.0,
+              "absolute_gap": 0.04044991731643677
+            }
+          ]
+        },
+        "mc_dropout": {
+          "ece": 0.1263237496217092,
+          "ood_auroc": 0.9971788194444444,
+          "id_accuracy": 1.0,
+          "mean_id_confidence": 0.8736761212348938,
+          "mean_id_uncertainty": 0.5041077136993408,
+          "mean_ood_uncertainty": 2.343651533126831,
+          "calibration_curve": [
+            {
+              "lower": 0.6,
+              "upper": 0.7,
+              "count": 4,
+              "mean_confidence": 0.6754426956176758,
+              "accuracy": 1.0,
+              "absolute_gap": 0.3245573043823242
+            },
+            {
+              "lower": 0.7,
+              "upper": 0.8,
+              "count": 21,
+              "mean_confidence": 0.7612965106964111,
+              "accuracy": 1.0,
+              "absolute_gap": 0.23870348930358887
+            },
+            {
+              "lower": 0.8,
+              "upper": 0.9,
+              "count": 26,
+              "mean_confidence": 0.8553244471549988,
+              "accuracy": 1.0,
+              "absolute_gap": 0.14467555284500122
+            },
+            {
+              "lower": 0.9,
+              "upper": 1.0,
+              "count": 45,
+              "mean_confidence": 0.9543441534042358,
+              "accuracy": 1.0,
+              "absolute_gap": 0.04565584659576416
+            }
+          ]
+        },
+        "thermo_uq": {
+          "ece": 0.08240050325791042,
+          "ood_auroc": 0.9963107638888888,
+          "id_accuracy": 1.0,
+          "mean_id_confidence": 0.9175994396209717,
+          "mean_id_uncertainty": 0.3205791711807251,
+          "mean_ood_uncertainty": 2.1455180644989014,
+          "calibration_curve": [
+            {
+              "lower": 0.7,
+              "upper": 0.8,
+              "count": 11,
+              "mean_confidence": 0.7558805346488953,
+              "accuracy": 1.0,
+              "absolute_gap": 0.24411946535110474
+            },
+            {
+              "lower": 0.8,
+              "upper": 0.9,
+              "count": 20,
+              "mean_confidence": 0.870320200920105,
+              "accuracy": 1.0,
+              "absolute_gap": 0.12967979907989502
+            },
+            {
+              "lower": 0.9,
+              "upper": 1.0,
+              "count": 65,
+              "mean_confidence": 0.9595147967338562,
+              "accuracy": 1.0,
+              "absolute_gap": 0.0404852032661438
+            }
+          ]
+        }
+      },
+      "thermo_deltas": {
+        "vs_softmax_entropy": {
+          "ece_delta_lower_is_better": -0.00010958251853783463,
+          "ood_auroc_delta_higher_is_better": 0.0004340277777776791
+        },
+        "vs_mc_dropout": {
+          "ece_delta_lower_is_better": -0.04392324636379878,
+          "ood_auroc_delta_higher_is_better": -0.0008680555555555802
+        }
+      },
+      "training_loss": [
+        3.466569662094116,
+        3.3899261951446533,
+        3.2972469329833984,
+        3.2038280963897705,
+        3.1087687015533447,
+        2.9970510005950928,
+        2.9115512371063232,
+        2.7921993732452393,
+        2.66410756111145,
+        2.4915006160736084,
+        2.3712971210479736,
+        2.171358823776245,
+        1.8868483304977417,
+        1.6012109518051147,
+        1.3792238235473633,
+        1.1359143257141113,
+        0.8586903214454651,
+        0.760540783405304,
+        0.5009968876838684,
+        0.3809826672077179,
+        0.24369359016418457,
+        0.22544606029987335,
+        0.1663828343153,
+        0.1535198837518692
+      ],
+      "predictive_thermo_evidence": {
+        "provenance": {
+          "run_id": "stochastic-thermo-predictive-97ce4e6f663b-s53",
+          "checkpoint_id": "472037beb8e4bc8a338454184aab582205532c2b3094e0c9a5f9725c4b3a2afc",
+          "config_hash": "97ce4e6f663b58e792367ba66a3bc44ad5f47093b8ba71a0ef72e206b0314022",
+          "rng_seed": 354
+        },
+        "policy": {
+          "min_samples": 8,
+          "min_tested_fraction": 0.75,
+          "min_symmetric_bins": 2,
+          "crooks_bins": 21,
+          "crooks_min_count": 5,
+          "crooks_tolerance": 0.35,
+          "min_tur_bound_ratio": 0.95,
+          "max_events_per_head": 100000
+        },
+        "heads": [
+          {
+            "layer_address": "h.0.attn.attn.pre",
+            "head_index": 0,
+            "sampling_modes": [
+              "straight_through"
+            ],
+            "sample_count": 8,
+            "observed_events": 4992,
+            "tested_events": 4992,
+            "retained_events": 4992,
+            "degenerate_events": 0,
+            "tested_fraction": 1.0,
+            "symmetric_bins": 1,
+            "crooks_residual": 0.4905815268877518,
+            "tur_relative_variance": 0.8368245367836092,
+            "tur_entropy_bound": 0.2971639411750531,
+            "tur_bound_ratio": 2.8160366075191243,
+            "finite": true,
+            "passed": false,
+            "refusal_reasons": [
+              "insufficient_symmetric_support",
+              "crooks_gate_failed"
+            ]
+          },
+          {
+            "layer_address": "h.0.attn.attn.pre",
+            "head_index": 1,
+            "sampling_modes": [
+              "straight_through"
+            ],
+            "sample_count": 8,
+            "observed_events": 4992,
+            "tested_events": 4992,
+            "retained_events": 4992,
+            "degenerate_events": 0,
+            "tested_fraction": 1.0,
+            "symmetric_bins": 2,
+            "crooks_residual": 0.7930362979079524,
+            "tur_relative_variance": 0.7494196470142658,
+            "tur_entropy_bound": 0.2702076057317425,
+            "tur_bound_ratio": 2.7734957533293003,
+            "finite": true,
+            "passed": false,
+            "refusal_reasons": [
+              "crooks_gate_failed"
+            ]
+          }
+        ],
+        "observed_events": 9984,
+        "tested_events": 9984,
+        "retained_events": 9984,
+        "degenerate_events": 0,
+        "tested_fraction": 1.0,
+        "fresh": true,
+        "local_gates_passed": false,
+        "multi_seed_statistics_passed": false,
+        "predictive_distribution_claim": false,
+        "calibration_mode": "empirical_ece_fallback",
+        "refusal_reasons": [
+          "local_layer_head_gates_failed",
+          "multi_seed_statistics_pending_or_failed"
+        ]
+      },
+      "comparison_policy": "Negative ECE delta and positive OOD-AUROC delta favor thermo-UQ; the harness reports measurements and does not assert an advantage."
+    },
+    {
+      "bead": "bio_inspired_nanochat-0642.3.3.1",
+      "config": {
+        "seed": 71,
+        "device": "cpu",
+        "vocab_size": 32,
+        "seq_len": 12,
+        "batch_size": 4,
+        "pool_size": 2,
+        "eval_pool_size": 2,
+        "train_steps": 24,
+        "learning_rate": 0.003,
+        "n_layer": 1,
+        "n_head": 2,
+        "n_embd": 32,
+        "dropout": 0.2,
+        "mc_samples": 8,
+        "ece_bins": 10,
+        "ft_trajectories": 80000,
+        "ft_forward_probability": 0.32,
+        "ft_reverse_probability": 0.24,
+        "ft_tolerance": 0.25,
+        "ft_integral_tolerance": 0.04,
+        "ft_min_count": 100,
+        "predictive_min_samples": 8,
+        "predictive_min_tested_fraction": 0.75,
+        "predictive_min_symmetric_bins": 2,
+        "predictive_crooks_min_count": 5,
+        "predictive_crooks_tolerance": 0.35,
+        "predictive_min_tur_bound_ratio": 0.95,
+        "predictive_max_events_per_head": 100000
+      },
+      "live_release_ft": {
+        "scope": "one_step_local_detailed_balance",
+        "reverse_transition": "live binomial counter-protocol matched to the configured recovery propensity; not a certificate for recurrent hidden-state dynamics",
+        "predictive_distribution_claim": false,
+        "passed": true,
+        "n_trajectories": 80000,
+        "pool_size": 6,
+        "forward_drive": -0.4151349812746048,
+        "reverse_drive": -0.7916535437107086,
+        "forward_probability": 0.320000022649765,
+        "reverse_probability": 0.24000000953674316,
+        "affinity": 0.3989077593662215,
+        "integral_ft": 0.999833528073737,
+        "integral_ft_residual": 0.0001664719262629566,
+        "max_crooks_residual": 0.0322846227302509,
+        "tolerance": 0.25,
+        "integral_tolerance": 0.04,
+        "curve": [
+          {
+            "current": 1,
+            "positive_count": 19352,
+            "negative_count": 12661,
+            "observed_log_ratio": 0.42426937076960997,
+            "expected_log_ratio": 0.3989077593662215,
+            "residual": 0.02536161140338844
+          },
+          {
+            "current": 2,
+            "positive_count": 12929,
+            "negative_count": 5913,
+            "observed_log_ratio": 0.7823195334337233,
+            "expected_log_ratio": 0.797815518732443,
+            "residual": -0.015495985298719761
+          },
+          {
+            "current": 3,
+            "positive_count": 5672,
+            "negative_count": 1737,
+            "observed_log_ratio": 1.1833823019708585,
+            "expected_log_ratio": 1.1967232780986645,
+            "residual": -0.013340976127806048
+          },
+          {
+            "current": 4,
+            "positive_count": 1584,
+            "negative_count": 311,
+            "observed_log_ratio": 1.627915660195137,
+            "expected_log_ratio": 1.595631037464886,
+            "residual": 0.0322846227302509
+          }
+        ],
+        "tur": {
+          "scope": "classic_continuous_time_tur_on_exact_one_step_paired_binomial_moments",
+          "relative_variance": 10.416663593302882,
+          "entropy_bound": 10.44518660232838,
+          "slack": -0.028523009025498425,
+          "bound_ratio": 0.9972692676434196,
+          "nonvacuous": true,
+          "satisfied": false
+        }
+      },
+      "methods": {
+        "softmax_entropy": {
+          "ece": 0.06849350035190582,
+          "ood_auroc": 0.9887152777777778,
+          "id_accuracy": 1.0,
+          "mean_id_confidence": 0.9315064549446106,
+          "mean_id_uncertainty": 0.27490416169166565,
+          "mean_ood_uncertainty": 2.088592529296875,
+          "calibration_curve": [
+            {
+              "lower": 0.6,
+              "upper": 0.7,
+              "count": 3,
+              "mean_confidence": 0.6918426156044006,
+              "accuracy": 1.0,
+              "absolute_gap": 0.30815738439559937
+            },
+            {
+              "lower": 0.7,
+              "upper": 0.8,
+              "count": 2,
+              "mean_confidence": 0.755715012550354,
+              "accuracy": 1.0,
+              "absolute_gap": 0.244284987449646
+            },
+            {
+              "lower": 0.8,
+              "upper": 0.9,
+              "count": 20,
+              "mean_confidence": 0.8577283620834351,
+              "accuracy": 1.0,
+              "absolute_gap": 0.14227163791656494
+            },
+            {
+              "lower": 0.9,
+              "upper": 1.0,
+              "count": 71,
+              "mean_confidence": 0.9673675894737244,
+              "accuracy": 1.0,
+              "absolute_gap": 0.032632410526275635
+            }
+          ]
+        },
+        "mc_dropout": {
+          "ece": 0.09551360147694746,
+          "ood_auroc": 0.9991319444444444,
+          "id_accuracy": 1.0,
+          "mean_id_confidence": 0.904486358165741,
+          "mean_id_uncertainty": 0.39675799012184143,
+          "mean_ood_uncertainty": 2.3250463008880615,
+          "calibration_curve": [
+            {
+              "lower": 0.6,
+              "upper": 0.7,
+              "count": 3,
+              "mean_confidence": 0.6511983275413513,
+              "accuracy": 1.0,
+              "absolute_gap": 0.3488016724586487
+            },
+            {
+              "lower": 0.7,
+              "upper": 0.8,
+              "count": 5,
+              "mean_confidence": 0.7554157972335815,
+              "accuracy": 1.0,
+              "absolute_gap": 0.24458420276641846
+            },
+            {
+              "lower": 0.8,
+              "upper": 0.9,
+              "count": 35,
+              "mean_confidence": 0.862257719039917,
+              "accuracy": 1.0,
+              "absolute_gap": 0.137742280960083
+            },
+            {
+              "lower": 0.9,
+              "upper": 1.0,
+              "count": 53,
+              "mean_confidence": 0.9607735872268677,
+              "accuracy": 1.0,
+              "absolute_gap": 0.039226412773132324
+            }
+          ]
+        },
+        "thermo_uq": {
+          "ece": 0.06883700999120872,
+          "ood_auroc": 0.9895833333333334,
+          "id_accuracy": 1.0,
+          "mean_id_confidence": 0.9311630129814148,
+          "mean_id_uncertainty": 0.27625134587287903,
+          "mean_ood_uncertainty": 2.0969109535217285,
+          "calibration_curve": [
+            {
+              "lower": 0.6,
+              "upper": 0.7,
+              "count": 3,
+              "mean_confidence": 0.6933925747871399,
+              "accuracy": 1.0,
+              "absolute_gap": 0.3066074252128601
+            },
+            {
+              "lower": 0.7,
+              "upper": 0.8,
+              "count": 2,
+              "mean_confidence": 0.7545160055160522,
+              "accuracy": 1.0,
+              "absolute_gap": 0.24548399448394775
+            },
+            {
+              "lower": 0.8,
+              "upper": 0.9,
+              "count": 20,
+              "mean_confidence": 0.8573700189590454,
+              "accuracy": 1.0,
+              "absolute_gap": 0.1426299810409546
+            },
+            {
+              "lower": 0.9,
+              "upper": 1.0,
+              "count": 71,
+              "mean_confidence": 0.9669723510742188,
+              "accuracy": 1.0,
+              "absolute_gap": 0.03302764892578125
+            }
+          ]
+        }
+      },
+      "thermo_deltas": {
+        "vs_softmax_entropy": {
+          "ece_delta_lower_is_better": 0.00034350963930289413,
+          "ood_auroc_delta_higher_is_better": 0.0008680555555555802
+        },
+        "vs_mc_dropout": {
+          "ece_delta_lower_is_better": -0.02667659148573874,
+          "ood_auroc_delta_higher_is_better": -0.00954861111111105
+        }
+      },
+      "training_loss": [
+        3.4921176433563232,
+        3.422748565673828,
+        3.283635377883911,
+        3.2004611492156982,
+        3.1226348876953125,
+        3.027661085128784,
+        2.8910627365112305,
+        2.786858320236206,
+        2.621764898300171,
+        2.50787615776062,
+        2.2563581466674805,
+        2.0906131267547607,
+        1.7494884729385376,
+        1.5830894708633423,
+        1.3281605243682861,
+        1.0815449953079224,
+        0.8098500370979309,
+        0.6412472128868103,
+        0.40409910678863525,
+        0.31073930859565735,
+        0.2034401297569275,
+        0.1701154112815857,
+        0.14138011634349823,
+        0.11300119012594223
+      ],
+      "predictive_thermo_evidence": {
+        "provenance": {
+          "run_id": "stochastic-thermo-predictive-9b405117e6f8-s71",
+          "checkpoint_id": "5ee91008b1bb6b1ac0c2a77057ef85a7309c5e237dc15d6ebabf9f7af5c5c61d",
+          "config_hash": "9b405117e6f84751d6084628e3a4986a1a7e8974519d3b95b54eb988583c85a5",
+          "rng_seed": 372
+        },
+        "policy": {
+          "min_samples": 8,
+          "min_tested_fraction": 0.75,
+          "min_symmetric_bins": 2,
+          "crooks_bins": 21,
+          "crooks_min_count": 5,
+          "crooks_tolerance": 0.35,
+          "min_tur_bound_ratio": 0.95,
+          "max_events_per_head": 100000
+        },
+        "heads": [
+          {
+            "layer_address": "h.0.attn.attn.pre",
+            "head_index": 0,
+            "sampling_modes": [
+              "straight_through"
+            ],
+            "sample_count": 8,
+            "observed_events": 4992,
+            "tested_events": 4992,
+            "retained_events": 4992,
+            "degenerate_events": 0,
+            "tested_fraction": 1.0,
+            "symmetric_bins": 1,
+            "crooks_residual": 0.677724157218496,
+            "tur_relative_variance": 0.9481219830120651,
+            "tur_entropy_bound": 0.3065816420576734,
+            "tur_bound_ratio": 3.0925595435153506,
+            "finite": true,
+            "passed": false,
+            "refusal_reasons": [
+              "insufficient_symmetric_support",
+              "crooks_gate_failed"
+            ]
+          },
+          {
+            "layer_address": "h.0.attn.attn.pre",
+            "head_index": 1,
+            "sampling_modes": [
+              "straight_through"
+            ],
+            "sample_count": 8,
+            "observed_events": 4992,
+            "tested_events": 4992,
+            "retained_events": 4992,
+            "degenerate_events": 0,
+            "tested_fraction": 1.0,
+            "symmetric_bins": 1,
+            "crooks_residual": 0.5726329643905244,
+            "tur_relative_variance": 0.8803874650705794,
+            "tur_entropy_bound": 0.27871488209821577,
+            "tur_bound_ratio": 3.158738630828983,
+            "finite": true,
+            "passed": false,
+            "refusal_reasons": [
+              "insufficient_symmetric_support",
+              "crooks_gate_failed"
+            ]
+          }
+        ],
+        "observed_events": 9984,
+        "tested_events": 9984,
+        "retained_events": 9984,
+        "degenerate_events": 0,
+        "tested_fraction": 1.0,
+        "fresh": true,
+        "local_gates_passed": false,
+        "multi_seed_statistics_passed": false,
+        "predictive_distribution_claim": false,
+        "calibration_mode": "empirical_ece_fallback",
+        "refusal_reasons": [
+          "local_layer_head_gates_failed",
+          "multi_seed_statistics_pending_or_failed"
+        ]
+      },
+      "comparison_policy": "Negative ECE delta and positive OOD-AUROC delta favor thermo-UQ; the harness reports measurements and does not assert an advantage."
+    },
+    {
+      "bead": "bio_inspired_nanochat-0642.3.3.1",
+      "config": {
+        "seed": 89,
+        "device": "cpu",
+        "vocab_size": 32,
+        "seq_len": 12,
+        "batch_size": 4,
+        "pool_size": 2,
+        "eval_pool_size": 2,
+        "train_steps": 24,
+        "learning_rate": 0.003,
+        "n_layer": 1,
+        "n_head": 2,
+        "n_embd": 32,
+        "dropout": 0.2,
+        "mc_samples": 8,
+        "ece_bins": 10,
+        "ft_trajectories": 80000,
+        "ft_forward_probability": 0.32,
+        "ft_reverse_probability": 0.24,
+        "ft_tolerance": 0.25,
+        "ft_integral_tolerance": 0.04,
+        "ft_min_count": 100,
+        "predictive_min_samples": 8,
+        "predictive_min_tested_fraction": 0.75,
+        "predictive_min_symmetric_bins": 2,
+        "predictive_crooks_min_count": 5,
+        "predictive_crooks_tolerance": 0.35,
+        "predictive_min_tur_bound_ratio": 0.95,
+        "predictive_max_events_per_head": 100000
+      },
+      "live_release_ft": {
+        "scope": "one_step_local_detailed_balance",
+        "reverse_transition": "live binomial counter-protocol matched to the configured recovery propensity; not a certificate for recurrent hidden-state dynamics",
+        "predictive_distribution_claim": false,
+        "passed": true,
+        "n_trajectories": 80000,
+        "pool_size": 6,
+        "forward_drive": -0.4151349812746048,
+        "reverse_drive": -0.7916535437107086,
+        "forward_probability": 0.320000022649765,
+        "reverse_probability": 0.24000000953674316,
+        "affinity": 0.3989077593662215,
+        "integral_ft": 0.9971204513207337,
+        "integral_ft_residual": 0.0028795486792663194,
+        "max_crooks_residual": 0.06078198202185825,
+        "tolerance": 0.25,
+        "integral_tolerance": 0.04,
+        "curve": [
+          {
+            "current": 1,
+            "positive_count": 19346,
+            "negative_count": 12808,
+            "observed_log_ratio": 0.4124157040659417,
+            "expected_log_ratio": 0.3989077593662215,
+            "residual": 0.013507944699720165
+          },
+          {
+            "current": 2,
+            "positive_count": 13070,
+            "negative_count": 5824,
+            "observed_log_ratio": 0.8083322167417458,
+            "expected_log_ratio": 0.797815518732443,
+            "residual": 0.010516698009302772
+          },
+          {
+            "current": 3,
+            "positive_count": 5759,
+            "negative_count": 1730,
+            "observed_log_ratio": 1.2026424400148477,
+            "expected_log_ratio": 1.1967232780986645,
+            "residual": 0.0059191619161831355
+          },
+          {
+            "current": 4,
+            "positive_count": 1485,
+            "negative_count": 320,
+            "observed_log_ratio": 1.5348490554430279,
+            "expected_log_ratio": 1.595631037464886,
+            "residual": -0.06078198202185825
+          }
+        ],
+        "tur": {
+          "scope": "classic_continuous_time_tur_on_exact_one_step_paired_binomial_moments",
+          "relative_variance": 10.416663593302882,
+          "entropy_bound": 10.44518660232838,
+          "slack": -0.028523009025498425,
+          "bound_ratio": 0.9972692676434196,
+          "nonvacuous": true,
+          "satisfied": false
+        }
+      },
+      "methods": {
+        "softmax_entropy": {
+          "ece": 0.07561503195514281,
+          "ood_auroc": 0.9775390625,
+          "id_accuracy": 0.9791666865348816,
+          "mean_id_confidence": 0.9199007153511047,
+          "mean_id_uncertainty": 0.3381071090698242,
+          "mean_ood_uncertainty": 2.205472230911255,
+          "calibration_curve": [
+            {
+              "lower": 0.3,
+              "upper": 0.4,
+              "count": 1,
+              "mean_confidence": 0.3660573363304138,
+              "accuracy": 0.0,
+              "absolute_gap": 0.3660573363304138
+            },
+            {
+              "lower": 0.4,
+              "upper": 0.5,
+              "count": 1,
+              "mean_confidence": 0.4186975061893463,
+              "accuracy": 0.0,
+              "absolute_gap": 0.4186975061893463
+            },
+            {
+              "lower": 0.5,
+              "upper": 0.6,
+              "count": 4,
+              "mean_confidence": 0.5836168527603149,
+              "accuracy": 1.0,
+              "absolute_gap": 0.41638314723968506
+            },
+            {
+              "lower": 0.6,
+              "upper": 0.7,
+              "count": 2,
+              "mean_confidence": 0.6040235757827759,
+              "accuracy": 1.0,
+              "absolute_gap": 0.3959764242172241
+            },
+            {
+              "lower": 0.8,
+              "upper": 0.9,
+              "count": 8,
+              "mean_confidence": 0.8908575773239136,
+              "accuracy": 1.0,
+              "absolute_gap": 0.10914242267608643
+            },
+            {
+              "lower": 0.9,
+              "upper": 1.0,
+              "count": 80,
+              "mean_confidence": 0.9607042074203491,
+              "accuracy": 1.0,
+              "absolute_gap": 0.03929579257965088
+            }
+          ]
+        },
+        "mc_dropout": {
+          "ece": 0.1131542461613814,
+          "ood_auroc": 0.9848090277777778,
+          "id_accuracy": 0.9791666865348816,
+          "mean_id_confidence": 0.8714136481285095,
+          "mean_id_uncertainty": 0.531750500202179,
+          "mean_ood_uncertainty": 2.475266933441162,
+          "calibration_curve": [
+            {
+              "lower": 0.2,
+              "upper": 0.3,
+              "count": 1,
+              "mean_confidence": 0.2592570185661316,
+              "accuracy": 0.0,
+              "absolute_gap": 0.2592570185661316
+            },
+            {
+              "lower": 0.3,
+              "upper": 0.4,
+              "count": 2,
+              "mean_confidence": 0.3680334985256195,
+              "accuracy": 0.5,
+              "absolute_gap": 0.1319665014743805
+            },
+            {
+              "lower": 0.4,
+              "upper": 0.5,
+              "count": 4,
+              "mean_confidence": 0.4426630139350891,
+              "accuracy": 1.0,
+              "absolute_gap": 0.5573369860649109
+            },
+            {
+              "lower": 0.5,
+              "upper": 0.6,
+              "count": 1,
+              "mean_confidence": 0.5344614386558533,
+              "accuracy": 1.0,
+              "absolute_gap": 0.46553856134414673
+            },
+            {
+              "lower": 0.7,
+              "upper": 0.8,
+              "count": 5,
+              "mean_confidence": 0.7532672882080078,
+              "accuracy": 1.0,
+              "absolute_gap": 0.2467327117919922
+            },
+            {
+              "lower": 0.8,
+              "upper": 0.9,
+              "count": 23,
+              "mean_confidence": 0.8659911751747131,
+              "accuracy": 1.0,
+              "absolute_gap": 0.13400882482528687
+            },
+            {
+              "lower": 0.9,
+              "upper": 1.0,
+              "count": 60,
+              "mean_confidence": 0.9445189237594604,
+              "accuracy": 1.0,
+              "absolute_gap": 0.05548107624053955
+            }
+          ]
+        },
+        "thermo_uq": {
+          "ece": 0.07566520416488251,
+          "ood_auroc": 0.9764539930555556,
+          "id_accuracy": 0.9791666865348816,
+          "mean_id_confidence": 0.9196802973747253,
+          "mean_id_uncertainty": 0.33886829018592834,
+          "mean_ood_uncertainty": 2.208589792251587,
+          "calibration_curve": [
+            {
+              "lower": 0.3,
+              "upper": 0.4,
+              "count": 1,
+              "mean_confidence": 0.3660573661327362,
+              "accuracy": 0.0,
+              "absolute_gap": 0.3660573661327362
+            },
+            {
+              "lower": 0.4,
+              "upper": 0.5,
+              "count": 1,
+              "mean_confidence": 0.41052865982055664,
+              "accuracy": 0.0,
+              "absolute_gap": 0.41052865982055664
+            },
+            {
+              "lower": 0.5,
+              "upper": 0.6,
+              "count": 4,
+              "mean_confidence": 0.582305908203125,
+              "accuracy": 1.0,
+              "absolute_gap": 0.417694091796875
+            },
+            {
+              "lower": 0.6,
+              "upper": 0.7,
+              "count": 2,
+              "mean_confidence": 0.6051869988441467,
+              "accuracy": 1.0,
+              "absolute_gap": 0.39481300115585327
+            },
+            {
+              "lower": 0.8,
+              "upper": 0.9,
+              "count": 8,
+              "mean_confidence": 0.8898159861564636,
+              "accuracy": 1.0,
+              "absolute_gap": 0.11018401384353638
+            },
+            {
+              "lower": 0.9,
+              "upper": 1.0,
+              "count": 80,
+              "mean_confidence": 0.9606825113296509,
+              "accuracy": 1.0,
+              "absolute_gap": 0.03931748867034912
+            }
+          ]
+        }
+      },
+      "thermo_deltas": {
+        "vs_softmax_entropy": {
+          "ece_delta_lower_is_better": 5.0172209739698936e-05,
+          "ood_auroc_delta_higher_is_better": -0.0010850694444444198
+        },
+        "vs_mc_dropout": {
+          "ece_delta_lower_is_better": -0.037489041996498884,
+          "ood_auroc_delta_higher_is_better": -0.00835503472222221
+        }
+      },
+      "training_loss": [
+        3.4519331455230713,
+        3.3665874004364014,
+        3.2541186809539795,
+        3.191490888595581,
+        3.082763671875,
+        2.9790430068969727,
+        2.8015315532684326,
+        2.754427909851074,
+        2.570747137069702,
+        2.424082040786743,
+        2.20581316947937,
+        2.0027101039886475,
+        1.6908878087997437,
+        1.5844684839248657,
+        1.2174488306045532,
+        1.1182631254196167,
+        0.8348903656005859,
+        0.7839105725288391,
+        0.47071340680122375,
+        0.5203198790550232,
+        0.33450862765312195,
+        0.34584495425224304,
+        0.226892352104187,
+        0.2145841121673584
+      ],
+      "predictive_thermo_evidence": {
+        "provenance": {
+          "run_id": "stochastic-thermo-predictive-d0f8fc203d6a-s89",
+          "checkpoint_id": "7d401d1baca176aaebd2c8dc85c669c6601a61ba569ea1d2bcebec9f5570bafc",
+          "config_hash": "d0f8fc203d6a7124e94bf5b93b090c795d42af920ede8d6732dd603ed17c5ade",
+          "rng_seed": 390
+        },
+        "policy": {
+          "min_samples": 8,
+          "min_tested_fraction": 0.75,
+          "min_symmetric_bins": 2,
+          "crooks_bins": 21,
+          "crooks_min_count": 5,
+          "crooks_tolerance": 0.35,
+          "min_tur_bound_ratio": 0.95,
+          "max_events_per_head": 100000
+        },
+        "heads": [
+          {
+            "layer_address": "h.0.attn.attn.pre",
+            "head_index": 0,
+            "sampling_modes": [
+              "straight_through"
+            ],
+            "sample_count": 8,
+            "observed_events": 4992,
+            "tested_events": 4992,
+            "retained_events": 4992,
+            "degenerate_events": 0,
+            "tested_fraction": 1.0,
+            "symmetric_bins": 3,
+            "crooks_residual": 0.9616671458544968,
+            "tur_relative_variance": 0.7612036088334115,
+            "tur_entropy_bound": 0.2680068802756203,
+            "tur_bound_ratio": 2.8402390567383344,
+            "finite": true,
+            "passed": false,
+            "refusal_reasons": [
+              "crooks_gate_failed"
+            ]
+          },
+          {
+            "layer_address": "h.0.attn.attn.pre",
+            "head_index": 1,
+            "sampling_modes": [
+              "straight_through"
+            ],
+            "sample_count": 8,
+            "observed_events": 4992,
+            "tested_events": 4992,
+            "retained_events": 4992,
+            "degenerate_events": 0,
+            "tested_fraction": 1.0,
+            "symmetric_bins": 2,
+            "crooks_residual": 0.42397257210071704,
+            "tur_relative_variance": 0.8952235925876676,
+            "tur_entropy_bound": 0.2777774051757914,
+            "tur_bound_ratio": 3.2228092562860735,
+            "finite": true,
+            "passed": false,
+            "refusal_reasons": [
+              "crooks_gate_failed"
+            ]
+          }
+        ],
+        "observed_events": 9984,
+        "tested_events": 9984,
+        "retained_events": 9984,
+        "degenerate_events": 0,
+        "tested_fraction": 1.0,
+        "fresh": true,
+        "local_gates_passed": false,
+        "multi_seed_statistics_passed": false,
+        "predictive_distribution_claim": false,
+        "calibration_mode": "empirical_ece_fallback",
+        "refusal_reasons": [
+          "local_layer_head_gates_failed",
+          "multi_seed_statistics_pending_or_failed"
+        ]
+      },
+      "comparison_policy": "Negative ECE delta and positive OOD-AUROC delta favor thermo-UQ; the harness reports measurements and does not assert an advantage."
+    },
+    {
+      "bead": "bio_inspired_nanochat-0642.3.3.1",
+      "config": {
+        "seed": 107,
+        "device": "cpu",
+        "vocab_size": 32,
+        "seq_len": 12,
+        "batch_size": 4,
+        "pool_size": 2,
+        "eval_pool_size": 2,
+        "train_steps": 24,
+        "learning_rate": 0.003,
+        "n_layer": 1,
+        "n_head": 2,
+        "n_embd": 32,
+        "dropout": 0.2,
+        "mc_samples": 8,
+        "ece_bins": 10,
+        "ft_trajectories": 80000,
+        "ft_forward_probability": 0.32,
+        "ft_reverse_probability": 0.24,
+        "ft_tolerance": 0.25,
+        "ft_integral_tolerance": 0.04,
+        "ft_min_count": 100,
+        "predictive_min_samples": 8,
+        "predictive_min_tested_fraction": 0.75,
+        "predictive_min_symmetric_bins": 2,
+        "predictive_crooks_min_count": 5,
+        "predictive_crooks_tolerance": 0.35,
+        "predictive_min_tur_bound_ratio": 0.95,
+        "predictive_max_events_per_head": 100000
+      },
+      "live_release_ft": {
+        "scope": "one_step_local_detailed_balance",
+        "reverse_transition": "live binomial counter-protocol matched to the configured recovery propensity; not a certificate for recurrent hidden-state dynamics",
+        "predictive_distribution_claim": false,
+        "passed": true,
+        "n_trajectories": 80000,
+        "pool_size": 6,
+        "forward_drive": -0.4151349812746048,
+        "reverse_drive": -0.7916535437107086,
+        "forward_probability": 0.320000022649765,
+        "reverse_probability": 0.24000000953674316,
+        "affinity": 0.3989077593662215,
+        "integral_ft": 1.0011853800280266,
+        "integral_ft_residual": 0.0011853800280265947,
+        "max_crooks_residual": 0.02509934126738611,
+        "tolerance": 0.25,
+        "integral_tolerance": 0.04,
+        "curve": [
+          {
+            "current": 1,
+            "positive_count": 19379,
+            "negative_count": 13084,
+            "observed_log_ratio": 0.39279989586797487,
+            "expected_log_ratio": 0.3989077593662215,
+            "residual": -0.006107863498246657
+          },
+          {
+            "current": 2,
+            "positive_count": 12863,
+            "negative_count": 5753,
+            "observed_log_ratio": 0.804633515215422,
+            "expected_log_ratio": 0.797815518732443,
+            "residual": 0.006817996482978983
+          },
+          {
+            "current": 3,
+            "positive_count": 5576,
+            "negative_count": 1715,
+            "observed_log_ratio": 1.1790585928403197,
+            "expected_log_ratio": 1.1967232780986645,
+            "residual": -0.01766468525834486
+          },
+          {
+            "current": 4,
+            "positive_count": 1603,
+            "negative_count": 317,
+            "observed_log_ratio": 1.6207303787322722,
+            "expected_log_ratio": 1.595631037464886,
+            "residual": 0.02509934126738611
+          }
+        ],
+        "tur": {
+          "scope": "classic_continuous_time_tur_on_exact_one_step_paired_binomial_moments",
+          "relative_variance": 10.416663593302882,
+          "entropy_bound": 10.44518660232838,
+          "slack": -0.028523009025498425,
+          "bound_ratio": 0.9972692676434196,
+          "nonvacuous": true,
+          "satisfied": false
+        }
+      },
+      "methods": {
+        "softmax_entropy": {
+          "ece": 0.06613979674875736,
+          "ood_auroc": 1.0,
+          "id_accuracy": 1.0,
+          "mean_id_confidence": 0.9338601231575012,
+          "mean_id_uncertainty": 0.2570076584815979,
+          "mean_ood_uncertainty": 2.4476613998413086,
+          "calibration_curve": [
+            {
+              "lower": 0.6,
+              "upper": 0.7,
+              "count": 3,
+              "mean_confidence": 0.681703507900238,
+              "accuracy": 1.0,
+              "absolute_gap": 0.31829649209976196
+            },
+            {
+              "lower": 0.7,
+              "upper": 0.8,
+              "count": 6,
+              "mean_confidence": 0.7628943920135498,
+              "accuracy": 1.0,
+              "absolute_gap": 0.2371056079864502
+            },
+            {
+              "lower": 0.8,
+              "upper": 0.9,
+              "count": 9,
+              "mean_confidence": 0.8555808067321777,
+              "accuracy": 1.0,
+              "absolute_gap": 0.14441919326782227
+            },
+            {
+              "lower": 0.9,
+              "upper": 1.0,
+              "count": 78,
+              "mean_confidence": 0.9657419919967651,
+              "accuracy": 1.0,
+              "absolute_gap": 0.03425800800323486
+            }
+          ]
+        },
+        "mc_dropout": {
+          "ece": 0.09834182386596997,
+          "ood_auroc": 1.0,
+          "id_accuracy": 1.0,
+          "mean_id_confidence": 0.9016580581665039,
+          "mean_id_uncertainty": 0.3968857526779175,
+          "mean_ood_uncertainty": 2.627845525741577,
+          "calibration_curve": [
+            {
+              "lower": 0.6,
+              "upper": 0.7,
+              "count": 1,
+              "mean_confidence": 0.6949828863143921,
+              "accuracy": 1.0,
+              "absolute_gap": 0.3050171136856079
+            },
+            {
+              "lower": 0.7,
+              "upper": 0.8,
+              "count": 14,
+              "mean_confidence": 0.7557812333106995,
+              "accuracy": 1.0,
+              "absolute_gap": 0.24421876668930054
+            },
+            {
+              "lower": 0.8,
+              "upper": 0.9,
+              "count": 22,
+              "mean_confidence": 0.8567168712615967,
+              "accuracy": 1.0,
+              "absolute_gap": 0.14328312873840332
+            },
+            {
+              "lower": 0.9,
+              "upper": 1.0,
+              "count": 59,
+              "mean_confidence": 0.9565337896347046,
+              "accuracy": 1.0,
+              "absolute_gap": 0.04346621036529541
+            }
+          ]
+        },
+        "thermo_uq": {
+          "ece": 0.06661902368068695,
+          "ood_auroc": 1.0,
+          "id_accuracy": 1.0,
+          "mean_id_confidence": 0.9333809018135071,
+          "mean_id_uncertainty": 0.25826534628868103,
+          "mean_ood_uncertainty": 2.4472618103027344,
+          "calibration_curve": [
+            {
+              "lower": 0.6,
+              "upper": 0.7,
+              "count": 3,
+              "mean_confidence": 0.6792559027671814,
+              "accuracy": 1.0,
+              "absolute_gap": 0.3207440972328186
+            },
+            {
+              "lower": 0.7,
+              "upper": 0.8,
+              "count": 6,
+              "mean_confidence": 0.763073742389679,
+              "accuracy": 1.0,
+              "absolute_gap": 0.23692625761032104
+            },
+            {
+              "lower": 0.8,
+              "upper": 0.9,
+              "count": 9,
+              "mean_confidence": 0.8519293665885925,
+              "accuracy": 1.0,
+              "absolute_gap": 0.14807063341140747
+            },
+            {
+              "lower": 0.9,
+              "upper": 1.0,
+              "count": 78,
+              "mean_confidence": 0.9656538367271423,
+              "accuracy": 1.0,
+              "absolute_gap": 0.034346163272857666
+            }
+          ]
+        }
+      },
+      "thermo_deltas": {
+        "vs_softmax_entropy": {
+          "ece_delta_lower_is_better": 0.0004792269319295883,
+          "ood_auroc_delta_higher_is_better": 0.0
+        },
+        "vs_mc_dropout": {
+          "ece_delta_lower_is_better": -0.03172280018528302,
+          "ood_auroc_delta_higher_is_better": 0.0
+        }
+      },
+      "training_loss": [
+        3.478982925415039,
+        3.392930030822754,
+        3.2940890789031982,
+        3.208388566970825,
+        3.107478380203247,
+        3.0257790088653564,
+        2.8803961277008057,
+        2.777623176574707,
+        2.632939338684082,
+        2.45119309425354,
+        2.3134427070617676,
+        2.102966785430908,
+        1.8414415121078491,
+        1.5479270219802856,
+        1.2967637777328491,
+        1.097687840461731,
+        0.878957986831665,
+        0.6088439226150513,
+        0.4600219428539276,
+        0.33025699853897095,
+        0.27442699670791626,
+        0.14209724962711334,
+        0.1003793254494667,
+        0.12326475977897644
+      ],
+      "predictive_thermo_evidence": {
+        "provenance": {
+          "run_id": "stochastic-thermo-predictive-3c51d58b445b-s107",
+          "checkpoint_id": "cdd861235cb49a36611c61593dedcf866691e782a2e07aa2ab3f3cfef2b09d27",
+          "config_hash": "3c51d58b445b2ce8cd4c0bc0ce0e07560394c5fd704007a97c9b7b338ea0c35b",
+          "rng_seed": 408
+        },
+        "policy": {
+          "min_samples": 8,
+          "min_tested_fraction": 0.75,
+          "min_symmetric_bins": 2,
+          "crooks_bins": 21,
+          "crooks_min_count": 5,
+          "crooks_tolerance": 0.35,
+          "min_tur_bound_ratio": 0.95,
+          "max_events_per_head": 100000
+        },
+        "heads": [
+          {
+            "layer_address": "h.0.attn.attn.pre",
+            "head_index": 0,
+            "sampling_modes": [
+              "straight_through"
+            ],
+            "sample_count": 8,
+            "observed_events": 4992,
+            "tested_events": 4992,
+            "retained_events": 4992,
+            "degenerate_events": 0,
+            "tested_fraction": 1.0,
+            "symmetric_bins": 2,
+            "crooks_residual": 0.4803833058381355,
+            "tur_relative_variance": 0.5834358150817106,
+            "tur_entropy_bound": 0.23058715018692086,
+            "tur_bound_ratio": 2.5302182476723445,
+            "finite": true,
+            "passed": false,
+            "refusal_reasons": [
+              "crooks_gate_failed"
+            ]
+          },
+          {
+            "layer_address": "h.0.attn.attn.pre",
+            "head_index": 1,
+            "sampling_modes": [
+              "straight_through"
+            ],
+            "sample_count": 8,
+            "observed_events": 4992,
+            "tested_events": 4992,
+            "retained_events": 4992,
+            "degenerate_events": 0,
+            "tested_fraction": 1.0,
+            "symmetric_bins": 2,
+            "crooks_residual": 0.9384165565707692,
+            "tur_relative_variance": 0.7814600393235112,
+            "tur_entropy_bound": 0.2896816062369907,
+            "tur_bound_ratio": 2.6976515681295723,
+            "finite": true,
+            "passed": false,
+            "refusal_reasons": [
+              "crooks_gate_failed"
+            ]
+          }
+        ],
+        "observed_events": 9984,
+        "tested_events": 9984,
+        "retained_events": 9984,
+        "degenerate_events": 0,
+        "tested_fraction": 1.0,
+        "fresh": true,
+        "local_gates_passed": false,
+        "multi_seed_statistics_passed": false,
+        "predictive_distribution_claim": false,
+        "calibration_mode": "empirical_ece_fallback",
+        "refusal_reasons": [
+          "local_layer_head_gates_failed",
+          "multi_seed_statistics_pending_or_failed"
+        ]
+      },
+      "comparison_policy": "Negative ECE delta and positive OOD-AUROC delta favor thermo-UQ; the harness reports measurements and does not assert an advantage."
+    },
+    {
+      "bead": "bio_inspired_nanochat-0642.3.3.1",
+      "config": {
+        "seed": 131,
+        "device": "cpu",
+        "vocab_size": 32,
+        "seq_len": 12,
+        "batch_size": 4,
+        "pool_size": 2,
+        "eval_pool_size": 2,
+        "train_steps": 24,
+        "learning_rate": 0.003,
+        "n_layer": 1,
+        "n_head": 2,
+        "n_embd": 32,
+        "dropout": 0.2,
+        "mc_samples": 8,
+        "ece_bins": 10,
+        "ft_trajectories": 80000,
+        "ft_forward_probability": 0.32,
+        "ft_reverse_probability": 0.24,
+        "ft_tolerance": 0.25,
+        "ft_integral_tolerance": 0.04,
+        "ft_min_count": 100,
+        "predictive_min_samples": 8,
+        "predictive_min_tested_fraction": 0.75,
+        "predictive_min_symmetric_bins": 2,
+        "predictive_crooks_min_count": 5,
+        "predictive_crooks_tolerance": 0.35,
+        "predictive_min_tur_bound_ratio": 0.95,
+        "predictive_max_events_per_head": 100000
+      },
+      "live_release_ft": {
+        "scope": "one_step_local_detailed_balance",
+        "reverse_transition": "live binomial counter-protocol matched to the configured recovery propensity; not a certificate for recurrent hidden-state dynamics",
+        "predictive_distribution_claim": false,
+        "passed": true,
+        "n_trajectories": 80000,
+        "pool_size": 6,
+        "forward_drive": -0.4151349812746048,
+        "reverse_drive": -0.7916535437107086,
+        "forward_probability": 0.320000022649765,
+        "reverse_probability": 0.24000000953674316,
+        "affinity": 0.3989077593662215,
+        "integral_ft": 1.0027213832765194,
+        "integral_ft_residual": 0.0027213832765193846,
+        "max_crooks_residual": 0.028672966006118683,
+        "tolerance": 0.25,
+        "integral_tolerance": 0.04,
+        "curve": [
+          {
+            "current": 1,
+            "positive_count": 19382,
+            "negative_count": 13009,
+            "observed_log_ratio": 0.3987033746929363,
+            "expected_log_ratio": 0.3989077593662215,
+            "residual": -0.00020438467328520726
+          },
+          {
+            "current": 2,
+            "positive_count": 12885,
+            "negative_count": 5871,
+            "observed_log_ratio": 0.7860388670222795,
+            "expected_log_ratio": 0.797815518732443,
+            "residual": -0.01177665171016351
+          },
+          {
+            "current": 3,
+            "positive_count": 5669,
+            "negative_count": 1750,
+            "observed_log_ratio": 1.1753969474067438,
+            "expected_log_ratio": 1.1967232780986645,
+            "residual": -0.021326330691920692
+          },
+          {
+            "current": 4,
+            "positive_count": 1567,
+            "negative_count": 327,
+            "observed_log_ratio": 1.5669580714587674,
+            "expected_log_ratio": 1.595631037464886,
+            "residual": -0.028672966006118683
+          }
+        ],
+        "tur": {
+          "scope": "classic_continuous_time_tur_on_exact_one_step_paired_binomial_moments",
+          "relative_variance": 10.416663593302882,
+          "entropy_bound": 10.44518660232838,
+          "slack": -0.028523009025498425,
+          "bound_ratio": 0.9972692676434196,
+          "nonvacuous": true,
+          "satisfied": false
+        }
+      },
+      "methods": {
+        "softmax_entropy": {
+          "ece": 0.10652248809734981,
+          "ood_auroc": 1.0,
+          "id_accuracy": 1.0,
+          "mean_id_confidence": 0.8934774994850159,
+          "mean_id_uncertainty": 0.3690609037876129,
+          "mean_ood_uncertainty": 2.1939585208892822,
+          "calibration_curve": [
+            {
+              "lower": 0.6,
+              "upper": 0.7,
+              "count": 1,
+              "mean_confidence": 0.6659063696861267,
+              "accuracy": 1.0,
+              "absolute_gap": 0.3340936303138733
+            },
+            {
+              "lower": 0.7,
+              "upper": 0.8,
+              "count": 15,
+              "mean_confidence": 0.7582221627235413,
+              "accuracy": 1.0,
+              "absolute_gap": 0.24177783727645874
+            },
+            {
+              "lower": 0.8,
+              "upper": 0.9,
+              "count": 25,
+              "mean_confidence": 0.8491238355636597,
+              "accuracy": 1.0,
+              "absolute_gap": 0.15087616443634033
+            },
+            {
+              "lower": 0.9,
+              "upper": 1.0,
+              "count": 55,
+              "mean_confidence": 0.9546637535095215,
+              "accuracy": 1.0,
+              "absolute_gap": 0.045336246490478516
+            }
+          ]
+        },
+        "mc_dropout": {
+          "ece": 0.13790427707135677,
+          "ood_auroc": 1.0,
+          "id_accuracy": 1.0,
+          "mean_id_confidence": 0.8620957732200623,
+          "mean_id_uncertainty": 0.5027530789375305,
+          "mean_ood_uncertainty": 2.399563789367676,
+          "calibration_curve": [
+            {
+              "lower": 0.5,
+              "upper": 0.6,
+              "count": 1,
+              "mean_confidence": 0.5673608183860779,
+              "accuracy": 1.0,
+              "absolute_gap": 0.4326391816139221
+            },
+            {
+              "lower": 0.6,
+              "upper": 0.7,
+              "count": 3,
+              "mean_confidence": 0.6749429106712341,
+              "accuracy": 1.0,
+              "absolute_gap": 0.32505708932876587
+            },
+            {
+              "lower": 0.7,
+              "upper": 0.8,
+              "count": 17,
+              "mean_confidence": 0.7579130530357361,
+              "accuracy": 1.0,
+              "absolute_gap": 0.24208694696426392
+            },
+            {
+              "lower": 0.8,
+              "upper": 0.9,
+              "count": 37,
+              "mean_confidence": 0.848554253578186,
+              "accuracy": 1.0,
+              "absolute_gap": 0.15144574642181396
+            },
+            {
+              "lower": 0.9,
+              "upper": 1.0,
+              "count": 38,
+              "mean_confidence": 0.9444202780723572,
+              "accuracy": 1.0,
+              "absolute_gap": 0.05557972192764282
+            }
+          ]
+        },
+        "thermo_uq": {
+          "ece": 0.10528454929590227,
+          "ood_auroc": 1.0,
+          "id_accuracy": 1.0,
+          "mean_id_confidence": 0.8947154879570007,
+          "mean_id_uncertainty": 0.36799630522727966,
+          "mean_ood_uncertainty": 2.1937997341156006,
+          "calibration_curve": [
+            {
+              "lower": 0.6,
+              "upper": 0.7,
+              "count": 1,
+              "mean_confidence": 0.673734188079834,
+              "accuracy": 1.0,
+              "absolute_gap": 0.326265811920166
+            },
+            {
+              "lower": 0.7,
+              "upper": 0.8,
+              "count": 13,
+              "mean_confidence": 0.7574571371078491,
+              "accuracy": 1.0,
+              "absolute_gap": 0.24254286289215088
+            },
+            {
+              "lower": 0.8,
+              "upper": 0.9,
+              "count": 27,
+              "mean_confidence": 0.8467292785644531,
+              "accuracy": 1.0,
+              "absolute_gap": 0.15327072143554688
+            },
+            {
+              "lower": 0.9,
+              "upper": 1.0,
+              "count": 55,
+              "mean_confidence": 0.9547330141067505,
+              "accuracy": 1.0,
+              "absolute_gap": 0.04526698589324951
+            }
+          ]
+        }
+      },
+      "thermo_deltas": {
+        "vs_softmax_entropy": {
+          "ece_delta_lower_is_better": -0.0012379388014475412,
+          "ood_auroc_delta_higher_is_better": 0.0
+        },
+        "vs_mc_dropout": {
+          "ece_delta_lower_is_better": -0.03261972777545451,
+          "ood_auroc_delta_higher_is_better": 0.0
+        }
+      },
+      "training_loss": [
+        3.501338243484497,
+        3.4102067947387695,
+        3.3172264099121094,
+        3.2246644496917725,
+        3.133692979812622,
+        3.0100810527801514,
+        2.915540933609009,
+        2.7779195308685303,
+        2.5898542404174805,
+        2.4717347621917725,
+        2.294809579849243,
+        2.018564462661743,
+        1.8577481508255005,
+        1.565746784210205,
+        1.3117120265960693,
+        1.1101852655410767,
+        0.9505916237831116,
+        0.7545903325080872,
+        0.6083783507347107,
+        0.3983464241027832,
+        0.36187973618507385,
+        0.27169397473335266,
+        0.265163391828537,
+        0.20917034149169922
+      ],
+      "predictive_thermo_evidence": {
+        "provenance": {
+          "run_id": "stochastic-thermo-predictive-eb7133ed439a-s131",
+          "checkpoint_id": "868eeaa330810523f1fac4336f19cecd2db918de3244d48edad1a0e99ed824b3",
+          "config_hash": "eb7133ed439a8e27dc352e8aca9c898de6635fa810abc18b8fcf3c6c3b190ab4",
+          "rng_seed": 432
+        },
+        "policy": {
+          "min_samples": 8,
+          "min_tested_fraction": 0.75,
+          "min_symmetric_bins": 2,
+          "crooks_bins": 21,
+          "crooks_min_count": 5,
+          "crooks_tolerance": 0.35,
+          "min_tur_bound_ratio": 0.95,
+          "max_events_per_head": 100000
+        },
+        "heads": [
+          {
+            "layer_address": "h.0.attn.attn.pre",
+            "head_index": 0,
+            "sampling_modes": [
+              "straight_through"
+            ],
+            "sample_count": 8,
+            "observed_events": 4992,
+            "tested_events": 4992,
+            "retained_events": 4992,
+            "degenerate_events": 0,
+            "tested_fraction": 1.0,
+            "symmetric_bins": 2,
+            "crooks_residual": 0.5893475363303082,
+            "tur_relative_variance": 0.750299068353628,
+            "tur_entropy_bound": 0.26267522535356236,
+            "tur_bound_ratio": 2.8563754626791362,
+            "finite": true,
+            "passed": false,
+            "refusal_reasons": [
+              "crooks_gate_failed"
+            ]
+          },
+          {
+            "layer_address": "h.0.attn.attn.pre",
+            "head_index": 1,
+            "sampling_modes": [
+              "straight_through"
+            ],
+            "sample_count": 8,
+            "observed_events": 4992,
+            "tested_events": 4992,
+            "retained_events": 4992,
+            "degenerate_events": 0,
+            "tested_fraction": 1.0,
+            "symmetric_bins": 1,
+            "crooks_residual": 0.49669804509403237,
+            "tur_relative_variance": 0.7030887887369933,
+            "tur_entropy_bound": 0.26121432601858796,
+            "tur_bound_ratio": 2.6916164953638937,
+            "finite": true,
+            "passed": false,
+            "refusal_reasons": [
+              "insufficient_symmetric_support",
+              "crooks_gate_failed"
+            ]
+          }
+        ],
+        "observed_events": 9984,
+        "tested_events": 9984,
+        "retained_events": 9984,
+        "degenerate_events": 0,
+        "tested_fraction": 1.0,
+        "fresh": true,
+        "local_gates_passed": false,
+        "multi_seed_statistics_passed": false,
+        "predictive_distribution_claim": false,
+        "calibration_mode": "empirical_ece_fallback",
+        "refusal_reasons": [
+          "local_layer_head_gates_failed",
+          "multi_seed_statistics_pending_or_failed"
+        ]
+      },
+      "comparison_policy": "Negative ECE delta and positive OOD-AUROC delta favor thermo-UQ; the harness reports measurements and does not assert an advantage."
+    },
+    {
+      "bead": "bio_inspired_nanochat-0642.3.3.1",
+      "config": {
+        "seed": 149,
+        "device": "cpu",
+        "vocab_size": 32,
+        "seq_len": 12,
+        "batch_size": 4,
+        "pool_size": 2,
+        "eval_pool_size": 2,
+        "train_steps": 24,
+        "learning_rate": 0.003,
+        "n_layer": 1,
+        "n_head": 2,
+        "n_embd": 32,
+        "dropout": 0.2,
+        "mc_samples": 8,
+        "ece_bins": 10,
+        "ft_trajectories": 80000,
+        "ft_forward_probability": 0.32,
+        "ft_reverse_probability": 0.24,
+        "ft_tolerance": 0.25,
+        "ft_integral_tolerance": 0.04,
+        "ft_min_count": 100,
+        "predictive_min_samples": 8,
+        "predictive_min_tested_fraction": 0.75,
+        "predictive_min_symmetric_bins": 2,
+        "predictive_crooks_min_count": 5,
+        "predictive_crooks_tolerance": 0.35,
+        "predictive_min_tur_bound_ratio": 0.95,
+        "predictive_max_events_per_head": 100000
+      },
+      "live_release_ft": {
+        "scope": "one_step_local_detailed_balance",
+        "reverse_transition": "live binomial counter-protocol matched to the configured recovery propensity; not a certificate for recurrent hidden-state dynamics",
+        "predictive_distribution_claim": false,
+        "passed": true,
+        "n_trajectories": 80000,
+        "pool_size": 6,
+        "forward_drive": -0.4151349812746048,
+        "reverse_drive": -0.7916535437107086,
+        "forward_probability": 0.320000022649765,
+        "reverse_probability": 0.24000000953674316,
+        "affinity": 0.3989077593662215,
+        "integral_ft": 0.9991890011727265,
+        "integral_ft_residual": 0.0008109988272735347,
+        "max_crooks_residual": 0.02244091542312665,
+        "tolerance": 0.25,
+        "integral_tolerance": 0.04,
+        "curve": [
+          {
+            "current": 1,
+            "positive_count": 19410,
+            "negative_count": 13057,
+            "observed_log_ratio": 0.3964640087550174,
+            "expected_log_ratio": 0.3989077593662215,
+            "residual": -0.0024437506112041096
+          },
+          {
+            "current": 2,
+            "positive_count": 12866,
+            "negative_count": 5736,
+            "observed_log_ratio": 0.8078260696914893,
+            "expected_log_ratio": 0.797815518732443,
+            "residual": 0.010010550959046238
+          },
+          {
+            "current": 3,
+            "positive_count": 5660,
+            "negative_count": 1707,
+            "observed_log_ratio": 1.198686448402788,
+            "expected_log_ratio": 1.1967232780986645,
+            "residual": 0.001963170304123407
+          },
+          {
+            "current": 4,
+            "positive_count": 1490,
+            "negative_count": 309,
+            "observed_log_ratio": 1.5731901220417595,
+            "expected_log_ratio": 1.595631037464886,
+            "residual": -0.02244091542312665
+          }
+        ],
+        "tur": {
+          "scope": "classic_continuous_time_tur_on_exact_one_step_paired_binomial_moments",
+          "relative_variance": 10.416663593302882,
+          "entropy_bound": 10.44518660232838,
+          "slack": -0.028523009025498425,
+          "bound_ratio": 0.9972692676434196,
+          "nonvacuous": true,
+          "satisfied": false
+        }
+      },
+      "methods": {
+        "softmax_entropy": {
+          "ece": 0.06780252481500308,
+          "ood_auroc": 1.0,
+          "id_accuracy": 1.0,
+          "mean_id_confidence": 0.9321975111961365,
+          "mean_id_uncertainty": 0.28541111946105957,
+          "mean_ood_uncertainty": 2.457392454147339,
+          "calibration_curve": [
+            {
+              "lower": 0.7,
+              "upper": 0.8,
+              "count": 7,
+              "mean_confidence": 0.7397056818008423,
+              "accuracy": 1.0,
+              "absolute_gap": 0.2602943181991577
+            },
+            {
+              "lower": 0.8,
+              "upper": 0.9,
+              "count": 16,
+              "mean_confidence": 0.8815312385559082,
+              "accuracy": 1.0,
+              "absolute_gap": 0.1184687614440918
+            },
+            {
+              "lower": 0.9,
+              "upper": 1.0,
+              "count": 73,
+              "mean_confidence": 0.9617605209350586,
+              "accuracy": 1.0,
+              "absolute_gap": 0.038239479064941406
+            }
+          ]
+        },
+        "mc_dropout": {
+          "ece": 0.11332725174725056,
+          "ood_auroc": 1.0,
+          "id_accuracy": 1.0,
+          "mean_id_confidence": 0.8866727352142334,
+          "mean_id_uncertainty": 0.46254220604896545,
+          "mean_ood_uncertainty": 2.64904522895813,
+          "calibration_curve": [
+            {
+              "lower": 0.6,
+              "upper": 0.7,
+              "count": 3,
+              "mean_confidence": 0.6730906367301941,
+              "accuracy": 1.0,
+              "absolute_gap": 0.3269093632698059
+            },
+            {
+              "lower": 0.7,
+              "upper": 0.8,
+              "count": 12,
+              "mean_confidence": 0.762276828289032,
+              "accuracy": 1.0,
+              "absolute_gap": 0.23772317171096802
+            },
+            {
+              "lower": 0.8,
+              "upper": 0.9,
+              "count": 33,
+              "mean_confidence": 0.8523998260498047,
+              "accuracy": 1.0,
+              "absolute_gap": 0.1476001739501953
+            },
+            {
+              "lower": 0.9,
+              "upper": 1.0,
+              "count": 48,
+              "mean_confidence": 0.954683244228363,
+              "accuracy": 1.0,
+              "absolute_gap": 0.04531675577163696
+            }
+          ]
+        },
+        "thermo_uq": {
+          "ece": 0.0677847924331824,
+          "ood_auroc": 1.0,
+          "id_accuracy": 1.0,
+          "mean_id_confidence": 0.9322153925895691,
+          "mean_id_uncertainty": 0.2854819893836975,
+          "mean_ood_uncertainty": 2.4636824131011963,
+          "calibration_curve": [
+            {
+              "lower": 0.7,
+              "upper": 0.8,
+              "count": 7,
+              "mean_confidence": 0.7398605942726135,
+              "accuracy": 1.0,
+              "absolute_gap": 0.2601394057273865
+            },
+            {
+              "lower": 0.8,
+              "upper": 0.9,
+              "count": 17,
+              "mean_confidence": 0.883140504360199,
+              "accuracy": 1.0,
+              "absolute_gap": 0.11685949563980103
+            },
+            {
+              "lower": 0.9,
+              "upper": 1.0,
+              "count": 72,
+              "mean_confidence": 0.9625034332275391,
+              "accuracy": 1.0,
+              "absolute_gap": 0.03749656677246094
+            }
+          ]
+        }
+      },
+      "thermo_deltas": {
+        "vs_softmax_entropy": {
+          "ece_delta_lower_is_better": -1.773238182067871e-05,
+          "ood_auroc_delta_higher_is_better": 0.0
+        },
+        "vs_mc_dropout": {
+          "ece_delta_lower_is_better": -0.045542459314068154,
+          "ood_auroc_delta_higher_is_better": 0.0
+        }
+      },
+      "training_loss": [
+        3.513986825942993,
+        3.4173526763916016,
+        3.312183141708374,
+        3.2247562408447266,
+        3.1219749450683594,
+        3.0321900844573975,
+        2.9042584896087646,
+        2.820427179336548,
+        2.6617770195007324,
+        2.557020664215088,
+        2.3268344402313232,
+        2.1521434783935547,
+        1.906960129737854,
+        1.7223191261291504,
+        1.4517422914505005,
+        1.2976535558700562,
+        0.9623084664344788,
+        0.8411088585853577,
+        0.5162538886070251,
+        0.46549972891807556,
+        0.26356008648872375,
+        0.29442641139030457,
+        0.1516527384519577,
+        0.17350991070270538
+      ],
+      "predictive_thermo_evidence": {
+        "provenance": {
+          "run_id": "stochastic-thermo-predictive-41417a0fa4cc-s149",
+          "checkpoint_id": "8ce2a8355f5d32f941e62fd193cada7be62f958132f50eb386c3018dae0d3674",
+          "config_hash": "41417a0fa4ccd54c2b37cb69a8803be6d759d96b092285a936b38092396caf71",
+          "rng_seed": 450
+        },
+        "policy": {
+          "min_samples": 8,
+          "min_tested_fraction": 0.75,
+          "min_symmetric_bins": 2,
+          "crooks_bins": 21,
+          "crooks_min_count": 5,
+          "crooks_tolerance": 0.35,
+          "min_tur_bound_ratio": 0.95,
+          "max_events_per_head": 100000
+        },
+        "heads": [
+          {
+            "layer_address": "h.0.attn.attn.pre",
+            "head_index": 0,
+            "sampling_modes": [
+              "straight_through"
+            ],
+            "sample_count": 8,
+            "observed_events": 4992,
+            "tested_events": 4992,
+            "retained_events": 4992,
+            "degenerate_events": 0,
+            "tested_fraction": 1.0,
+            "symmetric_bins": 2,
+            "crooks_residual": 1.097407277265237,
+            "tur_relative_variance": 0.711175733063491,
+            "tur_entropy_bound": 0.24806248320555058,
+            "tur_bound_ratio": 2.866921768553746,
+            "finite": true,
+            "passed": false,
+            "refusal_reasons": [
+              "crooks_gate_failed"
+            ]
+          },
+          {
+            "layer_address": "h.0.attn.attn.pre",
+            "head_index": 1,
+            "sampling_modes": [
+              "straight_through"
+            ],
+            "sample_count": 8,
+            "observed_events": 4992,
+            "tested_events": 4992,
+            "retained_events": 4992,
+            "degenerate_events": 0,
+            "tested_fraction": 1.0,
+            "symmetric_bins": 3,
+            "crooks_residual": 0.6131608841431202,
+            "tur_relative_variance": 0.7526834611860257,
+            "tur_entropy_bound": 0.27485241400281574,
+            "tur_bound_ratio": 2.7385004563878956,
+            "finite": true,
+            "passed": false,
+            "refusal_reasons": [
+              "crooks_gate_failed"
+            ]
+          }
+        ],
+        "observed_events": 9984,
+        "tested_events": 9984,
+        "retained_events": 9984,
+        "degenerate_events": 0,
+        "tested_fraction": 1.0,
+        "fresh": true,
+        "local_gates_passed": false,
+        "multi_seed_statistics_passed": false,
+        "predictive_distribution_claim": false,
+        "calibration_mode": "empirical_ece_fallback",
+        "refusal_reasons": [
+          "local_layer_head_gates_failed",
+          "multi_seed_statistics_pending_or_failed"
+        ]
+      },
+      "comparison_policy": "Negative ECE delta and positive OOD-AUROC delta favor thermo-UQ; the harness reports measurements and does not assert an advantage."
+    },
+    {
+      "bead": "bio_inspired_nanochat-0642.3.3.1",
+      "config": {
+        "seed": 167,
+        "device": "cpu",
+        "vocab_size": 32,
+        "seq_len": 12,
+        "batch_size": 4,
+        "pool_size": 2,
+        "eval_pool_size": 2,
+        "train_steps": 24,
+        "learning_rate": 0.003,
+        "n_layer": 1,
+        "n_head": 2,
+        "n_embd": 32,
+        "dropout": 0.2,
+        "mc_samples": 8,
+        "ece_bins": 10,
+        "ft_trajectories": 80000,
+        "ft_forward_probability": 0.32,
+        "ft_reverse_probability": 0.24,
+        "ft_tolerance": 0.25,
+        "ft_integral_tolerance": 0.04,
+        "ft_min_count": 100,
+        "predictive_min_samples": 8,
+        "predictive_min_tested_fraction": 0.75,
+        "predictive_min_symmetric_bins": 2,
+        "predictive_crooks_min_count": 5,
+        "predictive_crooks_tolerance": 0.35,
+        "predictive_min_tur_bound_ratio": 0.95,
+        "predictive_max_events_per_head": 100000
+      },
+      "live_release_ft": {
+        "scope": "one_step_local_detailed_balance",
+        "reverse_transition": "live binomial counter-protocol matched to the configured recovery propensity; not a certificate for recurrent hidden-state dynamics",
+        "predictive_distribution_claim": false,
+        "passed": true,
+        "n_trajectories": 80000,
+        "pool_size": 6,
+        "forward_drive": -0.4151349812746048,
+        "reverse_drive": -0.7916535437107086,
+        "forward_probability": 0.320000022649765,
+        "reverse_probability": 0.24000000953674316,
+        "affinity": 0.3989077593662215,
+        "integral_ft": 0.9967974555859979,
+        "integral_ft_residual": 0.0032025444140021397,
+        "max_crooks_residual": 0.08257373221630648,
+        "tolerance": 0.25,
+        "integral_tolerance": 0.04,
+        "curve": [
+          {
+            "current": 1,
+            "positive_count": 19262,
+            "negative_count": 12895,
+            "observed_log_ratio": 0.4012946038053644,
+            "expected_log_ratio": 0.3989077593662215,
+            "residual": 0.002386844439142888
+          },
+          {
+            "current": 2,
+            "positive_count": 12945,
+            "negative_count": 5761,
+            "observed_log_ratio": 0.8095985424532549,
+            "expected_log_ratio": 0.797815518732443,
+            "residual": 0.011783023720811858
+          },
+          {
+            "current": 3,
+            "positive_count": 5755,
+            "negative_count": 1698,
+            "observed_log_ratio": 1.2206179542846904,
+            "expected_log_ratio": 1.1967232780986645,
+            "residual": 0.02389467618602592
+          },
+          {
+            "current": 4,
+            "positive_count": 1580,
+            "negative_count": 295,
+            "observed_log_ratio": 1.6782047696811926,
+            "expected_log_ratio": 1.595631037464886,
+            "residual": 0.08257373221630648
+          }
+        ],
+        "tur": {
+          "scope": "classic_continuous_time_tur_on_exact_one_step_paired_binomial_moments",
+          "relative_variance": 10.416663593302882,
+          "entropy_bound": 10.44518660232838,
+          "slack": -0.028523009025498425,
+          "bound_ratio": 0.9972692676434196,
+          "nonvacuous": true,
+          "satisfied": false
+        }
+      },
+      "methods": {
+        "softmax_entropy": {
+          "ece": 0.05019472911953926,
+          "ood_auroc": 0.9912109375,
+          "id_accuracy": 1.0,
+          "mean_id_confidence": 0.9498052597045898,
+          "mean_id_uncertainty": 0.22036606073379517,
+          "mean_ood_uncertainty": 1.9744634628295898,
+          "calibration_curve": [
+            {
+              "lower": 0.7,
+              "upper": 0.8,
+              "count": 4,
+              "mean_confidence": 0.7886731624603271,
+              "accuracy": 1.0,
+              "absolute_gap": 0.21132683753967285
+            },
+            {
+              "lower": 0.8,
+              "upper": 0.9,
+              "count": 13,
+              "mean_confidence": 0.8743159770965576,
+              "accuracy": 1.0,
+              "absolute_gap": 0.12568402290344238
+            },
+            {
+              "lower": 0.9,
+              "upper": 1.0,
+              "count": 79,
+              "mean_confidence": 0.9703861474990845,
+              "accuracy": 1.0,
+              "absolute_gap": 0.029613852500915527
+            }
+          ]
+        },
+        "mc_dropout": {
+          "ece": 0.09058838151395321,
+          "ood_auroc": 0.9969618055555556,
+          "id_accuracy": 1.0,
+          "mean_id_confidence": 0.9094116687774658,
+          "mean_id_uncertainty": 0.3839397728443146,
+          "mean_ood_uncertainty": 2.243044137954712,
+          "calibration_curve": [
+            {
+              "lower": 0.6,
+              "upper": 0.7,
+              "count": 1,
+              "mean_confidence": 0.6410975456237793,
+              "accuracy": 1.0,
+              "absolute_gap": 0.3589024543762207
+            },
+            {
+              "lower": 0.7,
+              "upper": 0.8,
+              "count": 10,
+              "mean_confidence": 0.7709895372390747,
+              "accuracy": 1.0,
+              "absolute_gap": 0.2290104627609253
+            },
+            {
+              "lower": 0.8,
+              "upper": 0.9,
+              "count": 28,
+              "mean_confidence": 0.8530130386352539,
+              "accuracy": 1.0,
+              "absolute_gap": 0.1469869613647461
+            },
+            {
+              "lower": 0.9,
+              "upper": 1.0,
+              "count": 57,
+              "mean_confidence": 0.9661080241203308,
+              "accuracy": 1.0,
+              "absolute_gap": 0.03389197587966919
+            }
+          ]
+        },
+        "thermo_uq": {
+          "ece": 0.0503394262244304,
+          "ood_auroc": 0.9926215277777778,
+          "id_accuracy": 1.0,
+          "mean_id_confidence": 0.94966059923172,
+          "mean_id_uncertainty": 0.2212291806936264,
+          "mean_ood_uncertainty": 1.9801772832870483,
+          "calibration_curve": [
+            {
+              "lower": 0.7,
+              "upper": 0.8,
+              "count": 4,
+              "mean_confidence": 0.7902328968048096,
+              "accuracy": 1.0,
+              "absolute_gap": 0.20976710319519043
+            },
+            {
+              "lower": 0.8,
+              "upper": 0.9,
+              "count": 13,
+              "mean_confidence": 0.8732322454452515,
+              "accuracy": 1.0,
+              "absolute_gap": 0.12676775455474854
+            },
+            {
+              "lower": 0.9,
+              "upper": 1.0,
+              "count": 79,
+              "mean_confidence": 0.9703096747398376,
+              "accuracy": 1.0,
+              "absolute_gap": 0.029690325260162354
+            }
+          ]
+        }
+      },
+      "thermo_deltas": {
+        "vs_softmax_entropy": {
+          "ece_delta_lower_is_better": 0.00014469710489113663,
+          "ood_auroc_delta_higher_is_better": 0.0014105902777777901
+        },
+        "vs_mc_dropout": {
+          "ece_delta_lower_is_better": -0.04024895528952281,
+          "ood_auroc_delta_higher_is_better": -0.00434027777777779
+        }
+      },
+      "training_loss": [
+        3.4832887649536133,
+        3.3668100833892822,
+        3.282843828201294,
+        3.196927309036255,
+        3.0943925380706787,
+        2.969111204147339,
+        2.878528356552124,
+        2.732666015625,
+        2.58495831489563,
+        2.4140594005584717,
+        2.218360662460327,
+        1.9589842557907104,
+        1.783331274986267,
+        1.4810806512832642,
+        1.254930019378662,
+        1.0305989980697632,
+        0.8000660538673401,
+        0.6164516806602478,
+        0.39784786105155945,
+        0.3124685287475586,
+        0.24933022260665894,
+        0.2321440726518631,
+        0.12565669417381287,
+        0.11052050441503525
+      ],
+      "predictive_thermo_evidence": {
+        "provenance": {
+          "run_id": "stochastic-thermo-predictive-642a18773b44-s167",
+          "checkpoint_id": "660e44055c0e83157971f48151bb0dba694f5d9ef5186b42ee4fc05e84e317d5",
+          "config_hash": "642a18773b440468ac86fbf2043d501856a026a2ce433e02a7c42f8d27a4e7a1",
+          "rng_seed": 468
+        },
+        "policy": {
+          "min_samples": 8,
+          "min_tested_fraction": 0.75,
+          "min_symmetric_bins": 2,
+          "crooks_bins": 21,
+          "crooks_min_count": 5,
+          "crooks_tolerance": 0.35,
+          "min_tur_bound_ratio": 0.95,
+          "max_events_per_head": 100000
+        },
+        "heads": [
+          {
+            "layer_address": "h.0.attn.attn.pre",
+            "head_index": 0,
+            "sampling_modes": [
+              "straight_through"
+            ],
+            "sample_count": 8,
+            "observed_events": 4992,
+            "tested_events": 4992,
+            "retained_events": 4992,
+            "degenerate_events": 0,
+            "tested_fraction": 1.0,
+            "symmetric_bins": 2,
+            "crooks_residual": 0.3989460880548572,
+            "tur_relative_variance": 0.7079338728905435,
+            "tur_entropy_bound": 0.2770221715537424,
+            "tur_bound_ratio": 2.5555134050099095,
+            "finite": true,
+            "passed": false,
+            "refusal_reasons": [
+              "crooks_gate_failed"
+            ]
+          },
+          {
+            "layer_address": "h.0.attn.attn.pre",
+            "head_index": 1,
+            "sampling_modes": [
+              "straight_through"
+            ],
+            "sample_count": 8,
+            "observed_events": 4992,
+            "tested_events": 4992,
+            "retained_events": 4992,
+            "degenerate_events": 0,
+            "tested_fraction": 1.0,
+            "symmetric_bins": 2,
+            "crooks_residual": 0.5106961954709703,
+            "tur_relative_variance": 0.8871472615044387,
+            "tur_entropy_bound": 0.3027939463018667,
+            "tur_bound_ratio": 2.929871195707487,
+            "finite": true,
+            "passed": false,
+            "refusal_reasons": [
+              "crooks_gate_failed"
+            ]
+          }
+        ],
+        "observed_events": 9984,
+        "tested_events": 9984,
+        "retained_events": 9984,
+        "degenerate_events": 0,
+        "tested_fraction": 1.0,
+        "fresh": true,
+        "local_gates_passed": false,
+        "multi_seed_statistics_passed": false,
+        "predictive_distribution_claim": false,
+        "calibration_mode": "empirical_ece_fallback",
+        "refusal_reasons": [
+          "local_layer_head_gates_failed",
+          "multi_seed_statistics_pending_or_failed"
+        ]
+      },
+      "comparison_policy": "Negative ECE delta and positive OOD-AUROC delta favor thermo-UQ; the harness reports measurements and does not assert an advantage."
+    }
+  ],
+  "method_aggregates": {
+    "mc_dropout": {
+      "ece": {
+        "n": 10,
+        "mean": 0.1102401627227664,
+        "std": 0.016241014694642328,
+        "sem": 0.00513585979473338,
+        "ci_low": 0.09862204070098299,
+        "ci_high": 0.12185828474454982
+      },
+      "ood_auroc": {
+        "n": 10,
+        "mean": 0.9972873263888887,
+        "std": 0.004660608700186512,
+        "sem": 0.0014738138775386195,
+        "ci_low": 0.9939533277691833,
+        "ci_high": 1.000621325008594
+      },
+      "id_accuracy": {
+        "n": 10,
+        "mean": 0.9979166686534882,
+        "std": 0.006588072175802903,
+        "sem": 0.002083331346511841,
+        "ci_low": 0.9932038457254944,
+        "ci_high": 1.002629491581482
+      }
+    },
+    "softmax_entropy": {
+      "ece": {
+        "n": 10,
+        "mean": 0.07193417794381579,
+        "std": 0.01513489611346306,
+        "sem": 0.004786074386857346,
+        "ci_low": 0.06110732548790143,
+        "ci_high": 0.08276103039973015
+      },
+      "ood_auroc": {
+        "n": 10,
+        "mean": 0.9947482638888889,
+        "std": 0.007337972376019928,
+        "sem": 0.00232047061156205,
+        "ci_low": 0.9894989946738811,
+        "ci_high": 0.9999975331038967
+      },
+      "id_accuracy": {
+        "n": 10,
+        "mean": 0.9979166686534882,
+        "std": 0.006588072175802903,
+        "sem": 0.002083331346511841,
+        "ci_low": 0.9932038457254944,
+        "ci_high": 1.002629491581482
+      }
+    },
+    "thermo_uq": {
+      "ece": {
+        "n": 10,
+        "mean": 0.07193837845697999,
+        "std": 0.014761103564029087,
+        "sem": 0.0046678708039961025,
+        "ci_low": 0.061378921082703604,
+        "ci_high": 0.08249783583125639
+      },
+      "ood_auroc": {
+        "n": 10,
+        "mean": 0.9949110243055557,
+        "std": 0.0075005869555067484,
+        "sem": 0.0023718938567549347,
+        "ci_low": 0.9895454276281005,
+        "ci_high": 1.000276620983011
+      },
+      "id_accuracy": {
+        "n": 10,
+        "mean": 0.9979166686534882,
+        "std": 0.006588072175802903,
+        "sem": 0.002083331346511841,
+        "ci_low": 0.9932038457254944,
+        "ci_high": 1.002629491581482
+      }
+    }
+  },
+  "paired_comparisons": {
+    "vs_softmax_entropy": {
+      "ece": {
+        "n_pairs": 10,
+        "mean_delta": 4.20051316420561e-06,
+        "delta_ci_low": -0.0003159451810643039,
+        "delta_ci_high": 0.00022390460440268342,
+        "t_stat": 0.02829157587728992,
+        "t_p_value": 0.9780470158006732,
+        "wilcoxon_p_value": 0.232421875,
+        "cohen_dz": 0.008946581836771253,
+        "n_favorable": 3
+      },
+      "ood_auroc": {
+        "n_pairs": 10,
+        "mean_delta": 0.00016276041666666297,
+        "delta_ci_low": -0.00021701388888888394,
+        "delta_ci_high": 0.000553385416666663,
+        "t_stat": 0.78753691665821,
+        "t_p_value": 0.4512089049016146,
+        "wilcoxon_p_value": 0.625,
+        "cohen_dz": 0.24904103981061443,
+        "n_favorable": 3
+      }
+    },
+    "vs_mc_dropout": {
+      "ece": {
+        "n_pairs": 10,
+        "mean_delta": -0.038301784265786405,
+        "delta_ci_low": -0.042648325092159205,
+        "delta_ci_high": -0.033841009084135294,
+        "t_stat": -16.1862626438298,
+        "t_p_value": 5.814746593356418e-08,
+        "wilcoxon_p_value": 0.001953125,
+        "cohen_dz": -5.118545676020094,
+        "n_favorable": 10
+      },
+      "ood_auroc": {
+        "n_pairs": 10,
+        "mean_delta": -0.0023763020833333258,
+        "delta_ci_low": -0.004980740017361098,
+        "delta_ci_high": 5.4253472222220986e-05,
+        "t_stat": -1.7294924120945179,
+        "t_p_value": 0.11777884073305087,
+        "wilcoxon_p_value": 0.15625,
+        "cohen_dz": -0.5469135218197219,
+        "n_favorable": 1
+      }
+    }
+  },
+  "predictive_distribution": {
+    "seed_count": 10,
+    "local_seed_pass_rate": 0.0,
+    "multi_seed_statistics_passed": false,
+    "predictive_distribution_claim": false,
+    "calibration_mode": "empirical_ece_fallback",
+    "refusal_reasons": [
+      "local_layer_head_gates_failed",
+      "multi_seed_statistics_failed"
+    ]
+  },
+  "ft_pass_rate": 1.0,
+  "ft_aggregates": {
+    "max_crooks_residual": {
+      "n": 10,
+      "mean": 0.04798205430331104,
+      "std": 0.029783272410045872,
+      "sem": 0.00941829769889973,
+      "ci_low": 0.026676384702379183,
+      "ci_high": 0.0692877239042429
+    },
+    "integral_ft_residual": {
+      "n": 10,
+      "mean": 0.0017729801170394798,
+      "std": 0.0011616729511734244,
+      "sem": 0.0003673532421917592,
+      "ci_low": 0.0009419693489382488,
+      "ci_high": 0.0026039908851407108
+    }
+  },
+  "live_tur": {
+    "scope": "classic_continuous_time_tur_on_exact_one_step_paired_binomial_moments",
+    "relative_variance": 10.416663593302882,
+    "entropy_bound": 10.44518660232838,
+    "slack": -0.028523009025498425,
+    "bound_ratio": 0.9972692676434196,
+    "nonvacuous": true,
+    "satisfied": false
+  },
+  "alpha": 0.05,
+  "bootstrap_samples": 10000,
+  "verdict": "null",
+  "verdict_reason": "All live one-step FT checks passed, but the strict paired ECE/AUROC improvement gate was not met and the finite-binomial live current had a non-vacuous but slightly violated classic continuous-time TUR bound.",
+  "comparison_policy": "Positive requires the paired-bootstrap 95% interval to exclude zero in the favorable direction and both paired t and Wilcoxon p-values <= alpha for ECE and OOD AUROC against both softmax entropy and MC-dropout; every live FT seed must pass and the classic TUR must transfer to the live finite-binomial process."
+}

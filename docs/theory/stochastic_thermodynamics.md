@@ -315,6 +315,22 @@ JSON `NaN`/`Infinity`, retain the refusal reasons, and deterministically select
 while preserving the scientific limitation: a local FT pass is necessary evidence, not an automatic
 token-calibration theorem.
 
+The canonical 10-seed run exercised that refusal path on the exact predictive draws. It emitted 20
+finite layer/head records (two heads at `h.0.attn.attn.pre` per seed), with 99,840 of 99,840 observed
+events tested and retained, zero degenerate events, and 100% tested coverage. All 10 provenance
+tuples had distinct run IDs, checkpoint fingerprints, config hashes, and predictive RNG seeds. The
+finite-binomial TUR ratios passed the declared `0.95` floor (`2.530218`–`3.222809`), but all 20
+Crooks residuals exceeded the predeclared `0.35` tolerance (`0.398946`–`1.097407`); eight heads also
+had only one populated symmetric bin instead of the required two. Consequently, zero local seeds
+passed. The matched-seed ECE/AUROC superiority rule remained null as reported in §7.1, so the group
+claim stayed false with reasons `local_layer_head_gates_failed` and
+`multi_seed_statistics_failed`, and calibration stayed in `empirical_ece_fallback` mode.
+
+Evidence collection was observational: the training losses, method metrics, paired comparisons,
+one-step FT aggregates, and live TUR result exactly matched the earlier no-collector artifact. The
+strict-JSON report is `results/stochastic-thermo-uq-742e61d1bca7.json`; its 30 registry rows are
+provenance-stamped to implementation commit `d2382cd`.
+
 ---
 
 ## References
