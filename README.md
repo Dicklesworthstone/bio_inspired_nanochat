@@ -103,6 +103,8 @@ These events are **function-preserving** (Net2Net / firefly, `sm_function_preser
 
 When `use_neuroscore` is enabled, NeuroScore fitness (below) is blended into that health signal so credit assignment — not just utilization × energy — drives these decisions.
 
+When `homeostasis_guards` is enabled (`SplitMergeConfig`, default off, `uta.6`), every lifecycle event additionally stabilizes the touched experts: a freshly seeded slot ramps its routed mass in from ~zero over `gate_ramp_forwards` training forwards with exact pair-mass compensation (the dense-regime output stays preserved throughout the transient, not just at the event), per-expert energy is held at or above `energy_floor` so a collapsed metabolism cannot produce winner-take-all routing, and optimizer moments are reset only for the *changed rows* of the shared router/genome tensors — a short warm restart for touched experts that leaves everyone else's AdamW/Muon state intact.
+
 **The Effect**: **Neural Architecture Search**. The model starts small and *grows* capacity exactly where the data complexity demands it.
 
 ```mermaid

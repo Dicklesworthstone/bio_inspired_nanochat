@@ -21,7 +21,7 @@ import math
 import hashlib
 from dataclasses import asdict, dataclass
 from collections import defaultdict
-from typing import List, Tuple, Optional, Iterable, Any, Dict, Mapping, Set, cast
+from typing import List, Tuple, Optional, Iterable, Any, Dict, Mapping, Sequence, Set, cast
 import numpy as np
 from bio_inspired_nanochat.torch_imports import torch, nn, Tensor
 import torch.distributed as torch_dist
@@ -134,6 +134,26 @@ class SplitMergeConfig:
     max_experts: int = 64
     growth_budget_pct: float = 0.5  # max NET added experts, fraction of initial total
     neuroscore_weight: float = 0.5  # blend weight in [0,1]: health=(1-w)*health + w*score
+    # HOMEOSTATIC STABILITY GUARDS (uta.6). Default-off; when enabled the
+    # controller stabilizes experts touched by any lifecycle event:
+    #   • ROUTED-MASS RAMP: a freshly seeded child (split/reset/grow/merge-reseed)
+    #     starts with ~zero routing mass and ramps to its full twin share over
+    #     ``gate_ramp_forwards`` training forwards. Compensation keeps the pair's
+    #     TOTAL mass at the pre-event value, so in the dense regime the model
+    #     output is preserved at every point of the ramp (uta.3's static -ln2
+    #     exactness contract extended to the transient); the child cannot shock
+    #     the residual stream while the pair diverges under SGD.
+    #   • ENERGY FLOOR: per-expert metabolism energy is clamped to >=
+    #     ``energy_floor`` after every event and on every guarded forward, so a
+    #     collapsed expert cannot drag health (utilization*energy) into a
+    #     winner-take-all routing collapse.
+    #   • ROW-WISE MOMENT WARM RESTART: optimizer moments are zeroed only for the
+    #     CHANGED rows of shared tensors (router weight / genome Xi rows of the
+    #     touched experts) instead of whole tensors, so unrelated experts keep
+    #     their optimization state (short warm restart for changed rows only).
+    homeostasis_guards: bool = False
+    gate_ramp_forwards: int = 512
+    energy_floor: float = 0.05
     # Logging
     verbose: bool = False
 
@@ -163,6 +183,11 @@ class SplitMergeConfig:
             raise ValueError("topological_max_spectral_candidates must be >= 1")
         if self.topological_max_exact_merge_candidates < 1:
             raise ValueError("topological_max_exact_merge_candidates must be >= 1")
+        if self.homeostasis_guards:
+            if self.gate_ramp_forwards < 1:
+                raise ValueError("gate_ramp_forwards must be >= 1")
+            if not math.isfinite(self.energy_floor) or not 0.0 <= self.energy_floor <= 1.0:
+                raise ValueError("energy_floor must be finite and in [0, 1]")
         StructuralGeometryMonitorConfig(
             persistence_ratio_threshold=self.topological_persistence_ratio_threshold,
             max_points=self.topological_max_points,
@@ -285,6 +310,54 @@ def _zero_optim_moments_for(
                             if torch.is_tensor(state[k]):
                                 state[k].zero_()
 
+
+
+@torch.no_grad()
+def _zero_optim_moment_rows_for(
+    optimizers: "Optional[torch.optim.Optimizer | Iterable[torch.optim.Optimizer]]",
+    entries: "Iterable[Tuple[nn.Parameter, Optional[Sequence[int]]]]",
+) -> None:
+    """uta.6 row-wise warm restart: zero moment buffers only for the given ROWS of
+    shared tensors. ``entries`` maps a parameter to the rows touched by a lifecycle
+    event, or ``None`` for whole-tensor zeroing (per-expert tensors are exclusive to
+    one expert, so they always reset whole). Unrelated experts' AdamW/Muon state is
+    left intact — only changed rows take the short LR warm restart."""
+    if optimizers is None:
+        return
+    if isinstance(optimizers, torch.optim.Optimizer):
+        optimizers = (optimizers,)
+    row_map: Dict[int, Optional[Sequence[int]]] = {
+        id(p): rows for p, rows in entries
+    }
+    pset = set(row_map.keys())
+    for optimizer in optimizers:
+        if optimizer is None:
+            continue
+        for group in optimizer.param_groups:
+            for p in group["params"]:
+                if id(p) not in pset:
+                    continue
+                state = optimizer.state.get(p, None)
+                if not state:
+                    continue
+                rows = row_map[id(p)]
+                for k in list(state.keys()):
+                    v = state[k]
+                    if not torch.is_tensor(v):
+                        continue
+                    # Never touch the shared step counter in row mode: it is one
+                    # scalar per parameter and zeroing it would corrupt AdamW's
+                    # bias correction for the rows we deliberately preserved.
+                    if k == "step" or v.dim() == 0:
+                        continue
+                    if rows is None:
+                        v.zero_()
+                    elif v.dim() >= 2 and v.shape[0] == p.shape[0]:
+                        # NOTE: ``v[rows].zero_()`` would zero the temporary COPY
+                        # produced by advanced indexing — assign in place instead.
+                        v[list(rows)] = 0.0
+                    else:
+                        v.zero_()
 
 @torch.no_grad()
 def _broadcast_module_params(module: nn.Module):
@@ -971,6 +1044,150 @@ def _fold_expert_into_(layer: SynapticMoE, victim_idx: int, keeper_idx: int, alp
 
 
 # ---------------------------------------------------------------------------
+# Homeostatic stability guards (uta.6)
+# ---------------------------------------------------------------------------
+
+
+class HomeostasisGuard:
+    """Post-event stabilization for SynapticMoE lifecycle surgery (uta.6).
+
+    Three cooperating mechanisms, all driven from the controller that owns this
+    guard plus one forward PRE-HOOK per managed layer (no changes to
+    ``SynapticMoE.forward``):
+
+    1. ROUTED-MASS RAMP (the output-gate analog): a freshly seeded child starts
+       with ~zero routing mass and anneals to its full twin share over
+       ``gate_ramp_forwards`` training forwards. For a function-preserving pair
+       (identical twins, static biases -ln2 each after uta.3 surgery) we write
+       transient additive offsets
+
+           child:  +ln(g)          parent: +ln(2-g)      g = ramp(t) in (0, 1]
+
+       so the absolute pair logits become (ln(1-g/2), ln(g/2)): their softmax mass
+       sums to exactly 1 (= the pre-event single-parent mass) at EVERY t while the
+       gated child contribution g*(g/2) grows smoothly. Dense-regime model output
+       is therefore preserved throughout the ramp — the transient generalization
+       of uta.3's event-time exactness — and the residual stream cannot be shocked
+       by a fresh slot whose weights then diverge under SGD.
+    2. ENERGY FLOOR: ``layer.energy`` is clamped to >= ``energy_floor`` after each
+       event and on every guarded forward.
+    3. ROW-WISE MOMENT WARM RESTART lives in the controller's surgery paths via
+       :func:`_zero_optim_moment_rows_for`; the guard only tracks state here.
+
+    The hook mutates only buffers (under no_grad); ramps advance once per TRAIN
+    forward (``update_mem=True``), so eval passes neither advance nor perturb the
+    schedule. All writes are deterministic per rank order, keeping every rank's
+    ``router_logit_bias`` identical under DDP without extra collectives.
+    """
+
+    def __init__(self, cfg: SplitMergeConfig):
+        self.cfg = cfg
+        # layer position -> {child_idx: [forwards_done, parent_idx or None]}
+        self._ramps: Dict[int, Dict[int, List[int]]] = {}
+        # layer position -> baseline router_logit_bias captured post-surgery.
+        self._baseline: Dict[int, Tensor] = {}
+        self._layers: List[SynapticMoE] = []
+        self._hooks: List[Any] = []
+
+    # -- wiring ------------------------------------------------------------
+
+    def attach(self, layers: Sequence[SynapticMoE]) -> None:
+        """Install the guard hooks on each managed MoE layer: a PRE-hook drives
+        the routed-mass ramp (must run before logits are computed) and a POST-hook
+        re-clamps the energy floor (the metabolism EMA inside ``forward`` runs
+        after the pre-hook and can legitimately pull energy back below it)."""
+        self._layers = list(layers)
+        for pos, layer in enumerate(self._layers):
+            self._hooks.append(
+                layer.register_forward_pre_hook(self._make_pre_hook(pos), with_kwargs=True)
+            )
+            self._hooks.append(layer.register_forward_hook(self._make_post_hook(pos)))
+
+    def detach(self) -> None:
+        for h in self._hooks:
+            h.remove()
+        self._hooks.clear()
+        self._ramps.clear()
+        self._baseline.clear()
+        self._layers = []
+
+    def _make_pre_hook(self, pos: int):
+        guard = self
+
+        @torch.no_grad()
+        def _pre_hook(module: nn.Module, args: Tuple[Any, ...], kwargs: Mapping[str, Any]):
+            if not guard.cfg.homeostasis_guards:
+                return
+            update_mem = (
+                kwargs.get("update_mem", True)
+                if kwargs
+                else (args[1] if len(args) > 1 else True)
+            )
+            ramps = guard._ramps.get(pos)
+            if not ramps or not update_mem:
+                return
+            bias = cast(Tensor, module.router_logit_bias)
+            base = guard._baseline[pos]
+            bias.copy_(base)
+            n = guard.cfg.gate_ramp_forwards
+            finished: List[int] = []
+            for child in sorted(ramps.keys()):
+                done, parent = ramps[child]
+                done += 1
+                if done >= n:
+                    finished.append(child)
+                    continue
+                ramps[child] = [done, parent]
+                g = float(done) / float(n)
+                bias[child] += math.log(max(g, 1e-12))
+                if parent is not None and parent not in ramps:
+                    bias[parent] += math.log(2.0 - g)
+
+        return _pre_hook
+
+    def _make_post_hook(self, pos: int):
+        guard = self
+
+        @torch.no_grad()
+        def _post_hook(module: nn.Module, args: Any, output: Any):
+            if not guard.cfg.homeostasis_guards:
+                return
+            # uta.6: hold the metabolic floor at the END of every guarded forward
+            # so a collapsed expert cannot drag health into winner-take-all routing.
+            cast(Tensor, module.energy).clamp_min_(guard.cfg.energy_floor)
+
+        return _post_hook
+
+    # -- event notifications (called by SplitMergeController surgery) -------
+
+    def on_seeded_children(
+        self,
+        layer_pos: int,
+        layer: SynapticMoE,
+        children: Sequence[int],
+        parents: Sequence[int],
+    ) -> None:
+        """Register freshly seeded slots for the ramp; capture the post-surgery
+        routing-bias baseline and enforce the energy floor immediately."""
+        if not self.cfg.homeostasis_guards:
+            return
+        with torch.no_grad():
+            self._baseline[layer_pos] = cast(Tensor, layer.router_logit_bias).detach().clone()
+            cast(Tensor, layer.energy).clamp_min_(self.cfg.energy_floor)
+        ramps = self._ramps.setdefault(layer_pos, {})
+        for child, parent in zip(children, parents):
+            ramps[int(child)] = [0, int(parent)]
+
+    # -- persistence ---------------------------------------------------------
+
+    def state_dict(self) -> Dict[str, Any]:
+        return {"ramps": {str(k): v for k, v in self._ramps.items()}}
+
+    def load_state_dict(self, state: Mapping[str, Any]) -> None:
+        raw = state.get("ramps", {})
+        self._ramps = {int(k): v for k, v in dict(raw).items()}
+
+# ---------------------------------------------------------------------------
 # Controller
 # ---------------------------------------------------------------------------
 
@@ -1015,14 +1232,21 @@ class SplitMergeController:
         # NET added experts (fraction of the initial total) is the compute budget.
         self._initial_total_experts = sum(m.num_experts for m in self._moe_layers)
         self._net_added_experts = 0
+        # uta.6: post-event homeostasis (routed-mass ramp + energy floor). The
+        # guard installs one forward pre-hook per MoE layer when enabled.
+        self.homeo = HomeostasisGuard(cfg)
+        if cfg.homeostasis_guards:
+            self.homeo.attach(self._moe_layers)
 
-    def state_dict(self) -> Dict[str, int]:
+    def state_dict(self) -> Dict[str, Any]:
         """Return scheduling and growth-budget state needed for exact resume."""
-        return {
+        state: Dict[str, Any] = {
             "last_step": int(self._last_step),
             "initial_total_experts": int(self._initial_total_experts),
             "net_added_experts": int(self._net_added_experts),
         }
+        state["homeostasis"] = self.homeo.state_dict()
+        return state
 
     def load_state_dict(self, state: Mapping[str, Any]) -> None:
         """Restore lifecycle state, rejecting inconsistent growth accounting."""
@@ -1049,6 +1273,9 @@ class SplitMergeController:
         self._last_step = values["last_step"]
         self._initial_total_experts = initial
         self._net_added_experts = net_added
+        # uta.6: optional guard state (absent in pre-uta.6 checkpoints).
+        if "homeostasis" in state:
+            self.homeo.load_state_dict(state["homeostasis"])
 
     def _find_moe_layers(self, module: nn.Module) -> List[SynapticMoE]:
         moes: List[SynapticMoE] = []
@@ -1056,6 +1283,10 @@ class SplitMergeController:
             if isinstance(m, SynapticMoE):
                 moes.append(m)
         return moes
+
+    def _layer_pos(self, layer: SynapticMoE) -> int:
+        """Stable position of ``layer`` in ``self._moe_layers`` (uta.6 guard key)."""
+        return self._moe_layers.index(layer)
 
     @torch.no_grad()
     def _health(self, layer: SynapticMoE) -> Tensor:
@@ -1271,7 +1502,28 @@ class SplitMergeController:
                 changed_params: List[nn.Parameter] = [
                     param for param in changed if isinstance(param, nn.Parameter)
                 ]
-                _zero_optim_moments_for(optimizer, changed_params)
+                if self.cfg.homeostasis_guards:
+                    # uta.6 row-wise warm restart: per-expert tensors are exclusive
+                    # to one expert (whole reset); router/Xi are shared across all
+                    # experts, so only the touched rows take the fresh moments.
+                    rows = [int(dst), int(src)]
+                    entries: List[Tuple[nn.Parameter, Optional[Sequence[int]]]] = [
+                        (p, None)
+                        for p in changed_params
+                        if p is not W and p is not cast(Any, layer).Xi
+                    ]
+                    entries.append((W, rows))
+                    xi = cast(Any, layer).Xi
+                    if isinstance(xi, nn.Parameter):
+                        entries.append((xi, rows))
+                    _zero_optim_moment_rows_for(optimizer, entries)
+                else:
+                    _zero_optim_moments_for(optimizer, changed_params)
+            if self.cfg.homeostasis_guards:
+                # uta.6: ramp the fresh child's routed mass in from ~zero.
+                self.homeo.on_seeded_children(
+                    self._layer_pos(layer), layer, [int(dst)], [int(src)]
+                )
         return changed_any
 
     @torch.no_grad()
@@ -1344,6 +1596,7 @@ class SplitMergeController:
                     if self.cfg.verbose:
                         print(f"[SplitMerge] logger.on_merge failed: {_e}")
             # zero optimizer moments for both experts + router rows
+            W_m = layer.router.weight
             if optimizer is not None:
                 changed = [
                     layer.experts[winner].fc1.w_slow,
@@ -1368,7 +1621,31 @@ class SplitMergeController:
                 changed_params = [
                     param for param in changed if isinstance(param, nn.Parameter)
                 ]
-                _zero_optim_moments_for(optimizer, changed_params)
+                if self.cfg.homeostasis_guards:
+                    # uta.6 row-wise warm restart (see _split_into_slots).
+                    rows = [int(winner), int(loser)]
+                    entries_m: List[Tuple[nn.Parameter, Optional[Sequence[int]]]] = [
+                        (p, None)
+                        for p in changed_params
+                        if p is not W_m and p is not cast(Any, layer).Xi
+                    ]
+                    entries_m.append((W_m, rows))
+                    xi_m = cast(Any, layer).Xi
+                    if isinstance(xi_m, nn.Parameter):
+                        entries_m.append((xi_m, rows))
+                    _zero_optim_moment_rows_for(optimizer, entries_m)
+                else:
+                    _zero_optim_moments_for(optimizer, changed_params)
+            if self.cfg.homeostasis_guards:
+                # uta.6: whichever slot was re-seeded as the fresh twin ramps its
+                # routed mass back in from ~zero (same expression as the lineage
+                # event's child_idx).
+                self.homeo.on_seeded_children(
+                    self._layer_pos(layer),
+                    layer,
+                    [int(winner if reuse_loser else loser)],
+                    [int(winner)],
+                )
         return bool(pairs)
 
     @staticmethod
