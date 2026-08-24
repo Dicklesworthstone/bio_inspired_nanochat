@@ -65,6 +65,105 @@
       "mathlib_revision": "a3a10db0e9d66acbebf76c5e6a135066525ac900",
       "build_command": "rch exec -- lake build",
       "build_result": "passed-locally-rch-had-no-workers"
+    },
+    {
+      "cycle_id": "lfl-r00r.4.2-2026-08-24",
+      "frog_id": "bio_inspired_nanochat-r00r.4.2",
+      "theorem_ids": [
+        "deltaStar_of_nonnegative",
+        "deltaStar_pos",
+        "fold_discriminant_zero",
+        "inside_retention_window_iff_discriminant_pos",
+        "perturbation_below_margin_stays_inside",
+        "logMeanGap_nonnegative",
+        "log_rate_tur_core",
+        "tur_calibration_inequality",
+        "crooks_log_calibration"
+      ],
+      "route": "theorem-first",
+      "proof_friction_class": "premise_gap",
+      "runtime_defect_found": false,
+      "theory_defect_found": true,
+      "theory_correction": "docs/theory/singular_perturbation.md now distinguishes calcium slaving from the runtime's frozen-PP1 chart and states the usable retention budget as deltaStar minus abs(b_rest); formal/lean/README.md records Poisson, Skellam, and local-detailed-balance derivations as external assumptions",
+      "artifact_hash": "sha256:831498bc2853d86701250ea89024ab5f5f6190d2e3a5a9ae66f93a7d5d42d963",
+      "hash_scope": "formal/lean/BioInspiredNanochat.lean",
+      "sorry_or_admit_present": false,
+      "axioms": [
+        "propext",
+        "Classical.choice",
+        "Quot.sound"
+      ],
+      "assurance": {
+        "constructed_cusp_algebra": "E",
+        "conditional_driven_tur_algebra": "E",
+        "runtime_regressions": "B",
+        "floating_point_and_model_refinement": "documented-runtime-gap"
+      },
+      "conformance": {
+        "statement_parity": "pass-constructed-cubic-and-conditional-driven-tur-algebra",
+        "state_parity": "pass-reduced-state",
+        "transition_parity": "pass-analytic-reference-runtime-dynamics-documented-gap",
+        "concurrency_parity": "not-applicable-pure-transform",
+        "cancel_drain_parity": "not-applicable",
+        "runtime_evidence": "pass",
+        "drift_gate": "pass"
+      },
+      "history_signals": [
+        {
+          "source_path": "/home/ubuntu/.omp/agent/sessions/--data-projects-bio_inspired_nanochat--/2026-08-23T23-54-11-695Z_01a0310b-cb6f-7585-9546-37b246e30ae8.jsonl",
+          "line_number": 9,
+          "clue": "identified the 7a251f6 theory and af26383 runtime-certificate lineage",
+          "bug_prior_effect": "lowered-runtime-raised-model-drift"
+        },
+        {
+          "source_path": "/home/ubuntu/.omp/agent/sessions/--data-projects-bio_inspired_nanochat--/2026-08-24T01-21-52-251Z_01a0315c-107b-715b-946c-723941942091.jsonl",
+          "line_number": 42,
+          "clue": "identified the existing cusp regression and falsification surface",
+          "bug_prior_effect": "lowered-runtime"
+        },
+        {
+          "source_path": "/home/ubuntu/.omp/agent/sessions/--data-projects-bio_inspired_nanochat--/2026-08-23T23-54-08-779Z_01a0310b-c00b-72c2-b6e4-0f44e9983e83.jsonl",
+          "line_number": 46,
+          "clue": "confirmed cusp_certificate.py as the live coefficient and margin implementation",
+          "bug_prior_effect": "raised-abstraction-gap"
+        }
+      ],
+      "runtime_mapping": [
+        {
+          "path": "docs/theory/singular_perturbation.md",
+          "sha256": "2e1c9653f4329c529268cfbd1ee3fc1a4bb21682398f7703f55eb51b3748aafe"
+        },
+        {
+          "path": "bio_inspired_nanochat/cusp_certificate.py",
+          "sha256": "27a343b40436afdf5414bb4f1c40a046af52fc1b28465db23780e5e644c2f416"
+        },
+        {
+          "path": "bio_inspired_nanochat/stochastic_thermo.py",
+          "sha256": "ab674d1363194c2bbe71cda8040b4253b835b7154ae5e4e7f2c7cf7b8e4b280b"
+        },
+        {
+          "path": "tests/test_cusp_certificate.py",
+          "sha256": "9128264ec2fa68aa06041cba8b84742127aadc03401e350512c16339fbffa7e6"
+        },
+        {
+          "path": "tests/test_cusp_falsification.py",
+          "sha256": "dfdfefa2d2a019567375f00d804a60294cff28ff91d6df202aa5e3ab8973f1c6"
+        },
+        {
+          "path": "tests/test_singular_perturbation_theory.py",
+          "sha256": "2a0b8b5a2e8f256ef822b8ccf33075549f60086fa4c747d517b032fcc6d51419"
+        },
+        {
+          "path": "tests/test_stochastic_thermo.py",
+          "sha256": "be0ed188a9d27833f1d8f90bcdb91bf3bc87e4b43e81ee970e976989984c9257"
+        }
+      ],
+      "regression_command": "uv run --no-sync python -m pytest tests/test_metriplectic_theory.py tests/test_metriplectic_integrator.py tests/test_metriplectic_runtime.py tests/test_cusp_certificate.py tests/test_cusp_falsification.py tests/test_singular_perturbation_theory.py tests/test_stochastic_thermo.py -v --tb=short",
+      "regression_result": "89 passed",
+      "lean_toolchain": "leanprover/lean4:v4.27.0",
+      "mathlib_revision": "a3a10db0e9d66acbebf76c5e6a135066525ac900",
+      "build_command": "LEAN_PATH=<pinned-package-build-paths> rch exec -- <lean-4.27.0>/bin/lean BioInspiredNanochat.lean",
+      "build_result": "passed-locally-rch-had-no-workers-lake-wrapper-unavailable"
     }
   ]
 }

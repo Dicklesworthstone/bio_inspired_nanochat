@@ -15,8 +15,8 @@ three results and the assumptions they rest on, so the downstream implementation
    *memory flow* is a regular `O(ε)` perturbation of an explicit reduced flow (§2).
 3. **A reduction of the latch to the cusp catastrophe normal form** `m̃³ + a·m̃ + b = 0` (§3), whose
    fold set `4a³ + 27b² = 0` yields a **closed-form hysteresis half-width** `δ*(a) = (2/3√3)·(−a)^{3/2}`
-   — the retention certificate: a latched state survives any control perturbation of magnitude `< δ*`
-   (§4).
+   (§4). At a resting bias `b_rest` inside that window, the certified additive-perturbation budget is
+   the remaining margin `δ* − |b_rest|`, not the centered half-width `δ*` itself.
 
 Everything is grounded in the *live* code: the latch map is `PostsynapticHebb.update`
 (`bio_inspired_nanochat/synaptic.py`), and the normal-hyperbolicity hypothesis is discharged by the
@@ -138,10 +138,12 @@ dy/dt = g(h(y, ε), y) = g(h₀(y), y) + O(ε)        — the "memory flow".
 
 **Consequence for this model.** On `M_ε` the calcium is slaved to its quasi-steady value
 `c = h(drive)`, so the BCM drives `d(c), e(c)` become functions of the *drive* alone, and the latch
-`(m, p)` evolves by the reduced map of §0 with `c` replaced by `h(drive)`. **All of the catastrophe
-analysis in §3–§4 is performed on this reduced flow**, and is correct up to `O(ε)` for the true
-system by Fenichel. The error is uniform on compact sets where normal hyperbolicity holds; it is
-*not* controlled where `ε̂` is not small (§5 failure mode).
+`(m, p)` evolves by the reduced map of §0 with `c` replaced by `h(drive)`. This Fenichel reduction
+slaves **calcium**, not PP1: the latch on the slow manifold still has both `(m,p)` coordinates. The
+catastrophe analysis in §3–§4 applies an additional frozen-PP1 local chart to that reduced latch.
+Fenichel controls the calcium-reduction error up to `O(ε)` on compact normally-hyperbolic sets; it
+does not by itself bound the frozen-PP1 chart error, and neither error is controlled where `ε̂` is
+not small (§5 failure mode).
 
 ---
 
@@ -155,30 +157,40 @@ On `M_ε`, equilibria of the reduced latch satisfy (interior of the clamps):
 ```
 
 `(†)` **slaves PP1 to CaMKII** (a smooth, monotone `p(m)`); substituting into `(★)` gives a single
-scalar equilibrium condition `G(m; d, e) = 0`. The S-shape — hence multistability — comes entirely
-from the **self-excitation Hill `H(m)`**, the only nonconvex term.
+scalar equilibrium condition `G(m; d, e) = 0`. The S-shape — hence multistability — comes from the
+**self-excitation Hill `H(m)`**, the only nonconvex term.
 
-**Organizing center.** Expand about the inflection of `H`, where `H''(m_*) = 0`:
+The runtime certificate uses a deliberately narrower local chart: it freezes PP1 at the chart value
+`p_*` (the configured basal floor for `cusp_coefficients`) while Taylor-expanding the CaMKII residual.
+In that frozen-PP1 chart every non-Hill term is affine in `m`, so the Hill inflection really does
+remove the quadratic coefficient. If instead the exact slaving function `p(m)` above is substituted
+before expansion, derivatives of `-β_pp1·p(m)·m` generally produce a quadratic term. The resulting
+generic cubic can still be translated to depressed-cubic normal form, but its translated `a,b` are
+not the coefficients computed by the current runtime certificate. Thus the closed-form certificate
+below is exact for the constructed frozen-PP1 cubic; its conservatism for the full two-state latch is
+a numerical/runtime obligation, not an unstated algebraic identity.
+
+**Organizing center.** In the frozen-PP1 chart, expand about the inflection of `H`, where
+`H''(m_*) = 0`:
 
 ```
 m_* = k · ((n−1)/(n+1))^{1/n},        H'(m_*) = γ · (n² − 1) / (4 n m_*),        H''(m_*) = 0.
 ```
 
 (For the defaults `n=6, k=0.6`: `m_* ≈ 0.566`, `H'(m_*) ≈ 2.57·γ`.) Put `u = m − m_*`. Because the
-**quadratic term of `H` vanishes** at `m_*` and the remaining terms of `(★)` are smooth, the
-equilibrium condition Taylor-expands as a *cubic with no quadratic term to leading order* (the
-defining feature of a cusp organizing center):
+**quadratic term of `H` vanishes** at `m_*` and the remaining frozen-PP1 terms are affine, the local
+equilibrium condition Taylor-expands as a *cubic with no quadratic term to leading order*:
 
 ```
-G(m) ≈ C₀ + C₁·u + C₃·u³ + O(u⁴),
+G_{p_*}(m) ≈ C₀ + C₁·u + C₃·u³ + O(u⁴),
 ```
 
 with
 
 ```
 C₃ = (1/6)·H'''(m_*) < 0            (Hill is concave just past its inflection),
-C₁ = H'(m_*) − [ α_ca·d + β_pp1·p(m_*) ]   =  (self-excitation slope) − (linear decay),
-C₀ = γ·H(m_*) + α_ca·d·(1 − m_*) − β_pp1·p(m_*)·m_*   (the net bias at the center).
+C₁ = H'(m_*) − [ α_ca·d + β_pp1·p_* ]   =  (self-excitation slope) − (linear decay),
+C₀ = γ·H(m_*) + α_ca·d·(1 − m_*) − β_pp1·p_*·m_*   (the net bias at the center).
 ```
 
 Dividing by `|C₃| > 0` and rescaling `m̃ = u` yields the **cusp normal form**
@@ -189,12 +201,12 @@ Dividing by `|C₃| > 0` and rescaling `m̃ = u` yields the **cusp normal form**
 
 **Interpretation of the two controls.**
 
-- `a` is the **splitting (bistability) parameter**. `a < 0 ⟺ C₁ > 0 ⟺ H'(m_*) > α_ca·d + β_pp1·p`:
+- `a` is the **splitting (bistability) parameter**. `a < 0 ⟺ C₁ > 0 ⟺ H'(m_*) > α_ca·d + β_pp1·p_*`:
   the synapse is bistable exactly when the **self-excitation slope exceeds the linear decay**. This
   makes the *cusp threshold* explicit — bistability switches on when
 
   ```
-  γ > γ_c := (α_ca·d + β_pp1·p(m_*)) · 4 n m_* / (n² − 1).
+  γ > γ_c := (α_ca·d + β_pp1·p_*) · 4 n m_* / (n² − 1).
   ```
 
   Below `γ_c` (e.g. `γ = 0`, self-excitation off) the synapse is **monostable — no memory**.
@@ -241,19 +253,20 @@ Hence the **closed-form hysteresis half-width**
   disappears, leaving only ON `m̃ > 0`). The *minimal write* is the pulse that reaches `b = −δ*` (the
   minimum-energy pulse is the subject of `0642.2.1.5`).
 - **Erase**: to drop ON→OFF, the input must push `b` above `+δ*` (the upper fold).
-- **Retention certificate**: once latched, the ON state **persists against any bias perturbation of
-  magnitude `< δ*`**. In particular, at quiescence the resting bias `b_rest` (set by basal drive and
-  the floor `p₀`) must satisfy `|b_rest| < δ*`; the **retention margin** is `δ* − |b_rest| > 0`. This
-  is the precise content of *"cusp ⟹ retention ≥ δ*"*.
+- **Retention certificate**: at quiescence the resting bias `b_rest` (set by basal drive and the
+  floor `p₀`) must satisfy `|b_rest| < δ*`. The ON state then persists under any additive bias
+  perturbation `η` satisfying `|η| < δ* − |b_rest|`, because
+  `|b_rest + η| < δ*`. Thus `δ*` is the centered fold half-width, while the operational
+  **retention margin at rest** is `δ* − |b_rest| > 0`.
 
 `δ*` is **monotone increasing in `(−a)`**: deeper into the bistable wedge (larger self-excitation `γ`
 relative to decay) → wider hysteresis → more robust memory. This is the design dial: `δ*` trades
 retention robustness against write/erase energy (both grow with `−a`).
 
-Mapping back to the model: `b = −C₀/|C₃|` and `C₀` is affine in the calcium-set drive `d(c)`, so a
-bias margin `δ*` corresponds to an explicit **calcium / threshold margin** `Δc* = δ*·|C₃| / (∂C₀/∂c)`,
-i.e. how far the resting calcium may drift before the latch is at risk — the runtime-checkable form
-of the certificate.
+Mapping back to the model: `b = −C₀/|C₃|` and `C₀` is affine in the calcium-set drive `d(c)`. The
+centered half-width maps to `δ*·|C₃| / |∂C₀/∂c|`; from a nonzero resting bias the usable
+**calcium / threshold margin** instead maps from `δ* − |b_rest|`. This is how far the resting
+calcium may drift before the latch is at risk — the runtime-checkable form of the certificate.
 
 ---
 
@@ -266,9 +279,9 @@ fallback the runtime takes when the assumption is not discharged.
 |---|---|---|---|---|
 | F1 | **Normal hyperbolicity**: fast Jacobian eigenvalue gap below `|λ|=1`, uniform in the slow vars — *discharged* by `cb_spectral_radius < 1 ∀β` (`yw9.7`, asserted in code). | The critical calcium manifold `M₀` is uniformly attracting. | A learned/extreme kinetic pushes `ρ(J_fast) → 1` (gap closes). | Clamp kinetics to the certified region; else heuristic latch (no certificate). |
 | F2 | **Timescale separation**: `ε̂ = τ_fast/τ_slow ≤ ε_max` (gauge, §1; `ε_max` set with the composition harness `0642.10`). | Fenichel: `M_ε = {x=h(y,ε)}` persists `C^r`, `O(ε)`-close; the reduced memory flow is valid up to `O(ε)`. | `ε̂` not small — calcium and latch co-move; reduction invalid. | Integrate the full coupled system (no reduction); flag certificate as void. |
-| C1 | **Smoothness**: latch maps `C^∞` near `m_*` (Hill, sigmoids — true by construction). | Equilibrium condition reduces to the cusp normal form `m̃³+a m̃+b`. | State pinned on a clamp boundary (`m∈{0,1}`, `p=p₀`): the smooth interior model breaks. | Treat the clamp as the boundary of the chart; analyze the active interior branch. |
+| C1 | **Local scalar chart**: latch maps are `C^∞` near `m_*`, and certified coefficient extraction freezes PP1 at `p_*` (as `cusp_coefficients` does). A fully slaved `p(m)` chart must first translate its generic cubic to depressed form. | The constructed equilibrium condition reduces to `m̃³+a m̃+b`; its fold algebra is exact. | Clamp boundary, higher-order Taylor error, or treating frozen-PP1 `a,b` as the translated full-slaving coefficients. | Treat the clamp as the chart boundary; gate the analytic claim on the runtime falsification/conservatism tests. |
 | C2 | **Above the cusp**: `γ > γ_c` ⟺ `a < 0` (self-excitation slope > linear decay; §3). | Two stable states (ON/OFF) coexist; genuine memory. | `γ ≤ γ_c` (`a ≥ 0`), e.g. self-excitation off: monostable, **no retention**. | Raise `γ` or sharpen `(n,k)` into the bistable wedge; else accept no memory. |
-| R1 | **Sub-fold quiescence**: resting bias `|b_rest| < δ*` (calcium margin `Δc*`). | Latched ON state persists; **retention ≥ δ***. | Drift/noise pushes `|b|` past `δ*` (a fold) → state collapses. | Refresh pulse (re-write) before the margin is exhausted; or widen `δ*` (increase `−a`). |
+| R1 | **Sub-fold quiescence**: resting bias `|b_rest| < δ*`. | Latched ON persists under additive bias noise `|η| < δ* − |b_rest|`. | Drift/noise pushes `|b_rest+η|` past `δ*` (a fold) → state collapses. | Refresh pulse (re-write) before the margin is exhausted; or widen `δ*` (increase `−a`). |
 
 **Composition note** (for `0642.10`/`0642.11.1`): the certificate composes with the other thrusts
 only while F1–F2 hold *simultaneously* with the other mechanisms' contraction/Lyapunov hypotheses —
@@ -303,11 +316,11 @@ wedge), which is what a normal-form reduction licenses; the exact `δ*` value de
 
 The shipped `sax.2` latch **is** the system analyzed here: it exhibits hysteresis empirically
 (`tests/test_bistable_latch.py`) but carries **no retention bound**. This note upgrades it from
-"observed hysteresis" to a **certified** mechanism: `δ*` is a closed-form, runtime-checkable lower
-bound on retention, with explicit assumptions (F1–F2, C1–C2, R1) and a deterministic fallback when
-any fails. The implementation bead `0642.2.2.1` compiles `δ*` (and the minimum-energy write/erase
-pulses, `0642.2.1.5`) into the runtime, gated by the ε-gauge, with the heuristic `sax.2` latch as the
-fallback path.
+"observed hysteresis" to a **certified** mechanism: `δ*` is a closed-form, runtime-checkable fold
+half-width, and `δ* − |b_rest|` is the certified retention margin under the explicit assumptions
+F1–F2, C1–C2, and R1. The implementation bead `0642.2.2.1` compiles `δ*` (and the minimum-energy
+write/erase pulses, `0642.2.1.5`) into the runtime, gated by the ε-gauge, with the heuristic `sax.2`
+latch as the fallback path.
 
 ---
 
@@ -358,7 +371,8 @@ Two honest readings, both shipped:
   `Ca ≈ 0.51`–`0.52`). The cusp's edge at default is the **tight certificate**, not raw margin. At a
   mild erase both arms retain the bit (fraction-ON = 1.0).
 - **The certified dial buys real robustness.** `δ*` grows monotonically with the self-excitation `γ`
-  (a tunable, *guaranteed* margin). Under a **near-critical noisy erase** (`hold=0.54`, zero-mean
+  (a tunable fold half-width whose guaranteed margin at bias `b` is `δ*−|b|`). Under a
+  **near-critical noisy erase** (`hold=0.54`, zero-mean
   per-channel calcium noise `±0.15`, the regime where `sax.2`'s one-way LTD push collapses and never
   recovers while the cusp's symmetric well returns to the ON root), the certified cusp at `γ=0.8`
   retains essentially all of its CaMKII while `sax.2` loses the bit:
