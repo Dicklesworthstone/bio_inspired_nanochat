@@ -26,13 +26,22 @@ from bio_inspired_nanochat.engine import Engine, KVCache
 from bio_inspired_nanochat.gpt import GPT, GPTConfig
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
 from bio_inspired_nanochat.run_logging import RunLogger
-from bio_inspired_nanochat.synaptic import SynapticConfig
+from bio_inspired_nanochat.synaptic import SynapticConfig, SynapticPresyn, build_presyn_state
 
 
 # --------------------------------------------------------------------------- #
 # fixtures / helpers
 # --------------------------------------------------------------------------- #
-def _model(seed: int = 0) -> tuple[GPTSynaptic, GPTSynapticConfig]:
+def _model(
+    seed: int = 0,
+    *,
+    n_layer: int = 2,
+    n_head: int = 2,
+    n_kv_head: int = 2,
+    n_embd: int = 32,
+    attn_topk: int = 32,
+    stochastic_train_frac: float = 0.12,
+) -> tuple[GPTSynaptic, GPTSynapticConfig]:
     """A GPTSynaptic whose forward is a PURE function of params + the per-sequence presyn state:
     the per-sequence calcium/RRP recurrence (enable_presyn) is ON — that is exactly the KV-cache
     state whose decode parity we test — but the module-state-mutating plasticity (Hebbian
@@ -48,9 +57,17 @@ def _model(seed: int = 0) -> tuple[GPTSynaptic, GPTSynapticConfig]:
         enable_metabolism=False,
         router_contrastive_push=0.0,
         router_contrastive_lr=0.0,
+        attn_topk=attn_topk,
+        stochastic_train_frac=stochastic_train_frac,
     )
     cfg = GPTSynapticConfig(
-        sequence_len=64, vocab_size=64, n_layer=2, n_head=2, n_kv_head=2, n_embd=32, syn_cfg=syn
+        sequence_len=64,
+        vocab_size=64,
+        n_layer=n_layer,
+        n_head=n_head,
+        n_kv_head=n_kv_head,
+        n_embd=n_embd,
+        syn_cfg=syn,
     )
     return GPTSynaptic(cfg).eval(), cfg
 
@@ -72,6 +89,27 @@ def _reset(model: GPTSynaptic) -> None:
 
 def _presyn_tensors(st: dict) -> dict[str, torch.Tensor]:
     return {k: v for k, v in st.items() if isinstance(v, torch.Tensor)}
+
+
+def _assert_presyn_state_close(actual: dict, expected: dict, *, context: str) -> None:
+    assert actual.keys() == expected.keys(), f"{context}: state schemas differ"
+    for key in actual:
+        left, right = actual[key], expected[key]
+        if key == "DELAY":
+            assert len(left) == len(right), f"{context}: DELAY lengths differ"
+            for delay_index, (left_delay, right_delay) in enumerate(zip(left, right)):
+                assert left_delay.shape == right_delay.shape
+                assert torch.allclose(left_delay, right_delay, atol=1e-4, rtol=1e-4), (
+                    f"{context}: DELAY[{delay_index}] differs"
+                )
+            continue
+        if isinstance(left, torch.Tensor) and isinstance(right, torch.Tensor):
+            assert left.shape == right.shape, f"{context}: {key} shapes differ"
+            assert torch.allclose(left, right, atol=1e-4, rtol=1e-4), (
+                f"{context}: {key} differs"
+            )
+            continue
+        assert left == right, f"{context}: {key} differs"
 
 
 # --------------------------------------------------------------------------- #
@@ -99,18 +137,9 @@ def test_vanilla_decode_parity_is_causal():
 
 
 # --------------------------------------------------------------------------- #
-# 1. incremental decode == contiguous forward (logits + presyn-state parity)
-#    KNOWN GAP (bug 08hm): the synaptic forward is NOT causal — calcium is a key-side accumulator
-#    driven by all attending (future) queries in a batched forward but built causally in
-#    incremental decode, so contiguous and incremental synaptic-state evolution diverge (logits
-#    ~6e-4, presyn calcium O(1)). xfail until 08hm is fixed; remove the marker when it xpasses.
+# 1. incremental decode == contiguous forward (logits + every presyn-state component)
 # --------------------------------------------------------------------------- #
 @pytest.mark.e2e
-@pytest.mark.xfail(
-    reason="bug 08hm: synaptic contiguous forward leaks future into past positions "
-           "(calcium key-accumulator) → incremental≠contiguous decode skew",
-    strict=False,
-)
 def test_decode_parity_incremental_vs_contiguous():
     model, cfg = _model(0)
     B, prompt_len, cont_len = 1, 6, 5
@@ -142,14 +171,154 @@ def test_decode_parity_incremental_vs_contiguous():
     assert isinstance(kv_full.presyn_state, list) and isinstance(kv_inc.presyn_state, list)
     assert len(kv_full.presyn_state) == len(kv_inc.presyn_state) == cfg.n_layer
     for layer, (sf, si) in enumerate(zip(kv_full.presyn_state, kv_inc.presyn_state)):
-        tf, ti = _presyn_tensors(sf), _presyn_tensors(si)
-        assert tf.keys() == ti.keys()
-        for key in tf:
-            if tf[key].shape != ti[key].shape:
-                continue  # non-positional buffers may differ in layout; positional state is the contract
-            assert torch.allclose(tf[key], ti[key], atol=1e-4, rtol=1e-4), (
-                f"presyn-state '{key}' mismatch at layer {layer} (incremental vs contiguous)"
+        _assert_presyn_state_close(sf, si, context=f"layer {layer}")
+
+
+@pytest.mark.e2e
+@pytest.mark.parametrize("train_mode", [False, True])
+def test_appending_future_tokens_does_not_change_prefix_logits(train_mode: bool):
+    """Both eval and deterministic adaptation mode must remain causally prefix-invariant."""
+    short_model, cfg = _model(0, stochastic_train_frac=0.0)
+    long_model, _ = _model(0, stochastic_train_frac=0.0)
+    torch.manual_seed(11)
+    tokens = torch.randint(0, cfg.vocab_size, (1, 11), dtype=torch.long)
+
+    with torch.no_grad():
+        short_logits, _ = short_model(
+            tokens[:, :6], kv_cache=_kv(cfg, 1, 11), train_mode=train_mode
+        )
+        long_logits, _ = long_model(tokens, kv_cache=_kv(cfg, 1, 11), train_mode=train_mode)
+    assert torch.allclose(short_logits, long_logits[:, :6], atol=1e-5, rtol=1e-5)
+
+
+@pytest.mark.e2e
+@pytest.mark.parametrize(
+    ("n_layer", "n_head", "n_kv_head", "attn_topk"),
+    [(1, 4, 1, 1), (3, 4, 2, 64)],
+)
+def test_contiguous_matches_token_zero_incremental_across_gqa_and_topk_boundaries(
+    n_layer: int, n_head: int, n_kv_head: int, attn_topk: int
+):
+    model, cfg = _model(
+        3,
+        n_layer=n_layer,
+        n_head=n_head,
+        n_kv_head=n_kv_head,
+        attn_topk=attn_topk,
+    )
+    torch.manual_seed(13)
+    tokens = torch.randint(0, cfg.vocab_size, (1, 7), dtype=torch.long)
+
+    _reset(model)
+    full_cache = _kv(cfg, 1, 7)
+    full_logits, _ = model(tokens, kv_cache=full_cache, train_mode=False)
+
+    _reset(model)
+    incremental_cache = _kv(cfg, 1, 7)
+    incremental_logits = []
+    for position in range(tokens.size(1)):
+        logits, _ = model(
+            tokens[:, position : position + 1],
+            kv_cache=incremental_cache,
+            train_mode=False,
+        )
+        incremental_logits.append(logits)
+    actual_logits = torch.cat(incremental_logits, dim=1)
+
+    assert torch.allclose(actual_logits, full_logits, atol=1e-4, rtol=1e-4)
+    for layer, (full_state, incremental_state) in enumerate(
+        zip(full_cache.presyn_state, incremental_cache.presyn_state)
+    ):
+        _assert_presyn_state_close(full_state, incremental_state, context=f"layer {layer}")
+
+
+@pytest.mark.e2e
+def test_multi_token_append_matches_one_token_appends():
+    model, cfg = _model(5)
+    torch.manual_seed(17)
+    tokens = torch.randint(0, cfg.vocab_size, (1, 8), dtype=torch.long)
+
+    _reset(model)
+    chunk_cache = _kv(cfg, 1, 8)
+    model(tokens[:, :4], kv_cache=chunk_cache, train_mode=False)
+    chunk_logits, _ = model(tokens[:, 4:], kv_cache=chunk_cache, train_mode=False)
+
+    _reset(model)
+    step_cache = _kv(cfg, 1, 8)
+    model(tokens[:, :4], kv_cache=step_cache, train_mode=False)
+    step_logits = []
+    for position in range(4, 8):
+        logits, _ = model(
+            tokens[:, position : position + 1], kv_cache=step_cache, train_mode=False
+        )
+        step_logits.append(logits)
+
+    assert torch.allclose(torch.cat(step_logits, dim=1), chunk_logits, atol=1e-4, rtol=1e-4)
+    for layer, (chunk_state, step_state) in enumerate(
+        zip(chunk_cache.presyn_state, step_cache.presyn_state)
+    ):
+        _assert_presyn_state_close(chunk_state, step_state, context=f"layer {layer}")
+
+
+@pytest.mark.unit
+def test_inactive_future_state_slots_remain_at_initial_values():
+    cfg = SynapticConfig(stochastic_train_frac=0.0)
+    presyn = SynapticPresyn(d_head=8, cfg=cfg)
+    state = build_presyn_state(1, 5, 2, torch.device("cpu"), torch.float32, cfg)
+    before = {
+        key: [item.clone() for item in value] if key == "DELAY" else value.clone()
+        for key, value in state.items()
+    }
+    drive = torch.tensor([[[[0.5, -0.25]], [[0.1, 0.2]]]])
+    idx = torch.tensor([[[[0, 1]], [[1, 0]]]])
+
+    presyn.release_canonical(
+        state,
+        drive,
+        idx,
+        train=False,
+        active_key_count=2,
+    )
+
+    for key, value in state.items():
+        if key == "DELAY":
+            for current, initial in zip(value, before[key]):
+                assert torch.equal(current[..., 2:], initial[..., 2:])
+        else:
+            assert torch.equal(value[..., 2:], before[key][..., 2:]), key
+
+
+@pytest.mark.e2e
+def test_train_mode_ema_matches_contiguous_and_incremental_schedules():
+    full_model, cfg = _model(7, stochastic_train_frac=0.0)
+    incremental_model, _ = _model(7, stochastic_train_frac=0.0)
+    torch.manual_seed(19)
+    tokens = torch.randint(0, cfg.vocab_size, (1, 7), dtype=torch.long)
+
+    with torch.no_grad():
+        full_cache = _kv(cfg, 1, 7)
+        full_logits, _ = full_model(tokens, kv_cache=full_cache, train_mode=True)
+
+        incremental_cache = _kv(cfg, 1, 7)
+        incremental_logits = []
+        for position in range(tokens.size(1)):
+            logits, _ = incremental_model(
+                tokens[:, position : position + 1],
+                kv_cache=incremental_cache,
+                train_mode=True,
             )
+            incremental_logits.append(logits)
+
+    assert torch.allclose(
+        torch.cat(incremental_logits, dim=1), full_logits, atol=1e-4, rtol=1e-4
+    )
+    for full_block, incremental_block in zip(full_model.h, incremental_model.h):
+        assert torch.allclose(
+            full_block.attn.attn.pre.ema_e,
+            incremental_block.attn.attn.pre.ema_e,
+            atol=1e-7,
+            rtol=1e-7,
+        )
 
 
 # --------------------------------------------------------------------------- #
