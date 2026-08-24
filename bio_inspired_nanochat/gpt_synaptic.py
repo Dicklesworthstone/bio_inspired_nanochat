@@ -487,6 +487,14 @@ class GPTSynaptic(nn.Module):
                     module.u_buf.zero_()
                 if module.v_buf is not None:
                     module.v_buf.zero_()
+                # ``to_empty`` materializes meta-device buffers as uninitialized storage. The
+                # fixed rank-R projections are used to build online Hebbian traces, so leaving
+                # either one untouched can poison a finite training forward and only surface as
+                # NaN on the next forward when the deferred trace update is applied (809i).
+                if module.proj_in is not None:
+                    nn.init.normal_(module.proj_in, std=module.w_slow.size(0) ** -0.5)
+                if module.proj_out is not None:
+                    nn.init.normal_(module.proj_out, std=module.w_slow.size(1) ** -0.5)
                 continue
 
             if isinstance(module, PostsynapticHebb):

@@ -8,15 +8,13 @@ for 2 presets × 2 seeds and verifies the **pipeline** (not the scientific resul
      required scalar fields present and parseable.
   2. **Artifacts** — ``summary.csv`` + ``summary.jsonl`` (mirroring each other) plus, per run, the
      detailed ``run_config.jsonl`` and ``train_metrics.jsonl`` logs.
-  3. **Stats layer** — the harness output feeds the ``eval_stats`` layer: a paired test + bootstrap
-     CI and the multi-preset ``compare_matrix`` report compute over matched seeds, and the loader's
-     non-finite filtering behaves on a real quality metric.
+  3. **Stats layer** — finite ``val_loss`` from every model family feeds a paired test + bootstrap
+     CI and the multi-preset ``compare_matrix`` report over matched seeds.
 
-Metric note: the bio synaptic stack produces NaN ``val_loss`` on this degenerate synthetic ramp
-(every bio preset; tracked as ``809i``), so the paired test here runs on a **finite** per-run
-metric (``tok_per_sec``) — the point of eqyk.6 is to exercise the harness→stats pipeline, not to
-land a quality verdict. We additionally assert the loader keeps vanilla's finite ``val_loss`` and
-never leaks a non-finite value (its NaN-filtering contract on real, imperfect harness output).
+The synthetic ramp is also a numerical smoke test for the bio stack: every preset must produce a
+finite ``val_loss``. In particular, this locks the ``809i`` fix for meta-device initialization of
+the fixed Hebbian projection buffers, which previously poisoned the deferred online update before
+evaluation. The paired statistics therefore exercise a real quality metric again.
 
 Run:  pytest tests/test_e2e_eval_matrix.py -v
 """
@@ -43,8 +41,8 @@ pytestmark = pytest.mark.e2e
 PRESETS = ("vanilla", "bio_all")
 SEEDS = (1337, 1338)
 # Required scalar columns that must be present + non-empty for an `ok` run (a subset of the
-# full SUMMARY_FIELDS schema; the quality metrics like val_bpb/core_metric are legitimately blank
-# on synthetic data, and val_loss/val_ppl are present-but-"nan" for the bio presets — see 809i).
+# full SUMMARY_FIELDS schema; metrics such as val_bpb/core_metric are legitimately blank on
+# synthetic data).
 _REQUIRED_FIELDS = (
     "run_id", "preset", "seed", "data", "device_type", "sequence_len", "vocab_size",
     "n_layer", "n_head", "n_embd", "train_tokens_requested", "train_tokens_processed",
@@ -288,13 +286,11 @@ def test_eval_logits_forces_synaptic_inference_mode():
 def test_eval_matrix_stats_layer_on_output(matrix_dir):
     csv_path = matrix_dir / "summary.csv"
 
-    # tok_per_sec is finite for every run (a quality metric is NOT — see 809i), so we exercise the
-    # paired test + CI on it: the pipeline (harness output → stats), not the scientific result.
-    data = load_matrix_csv(csv_path, "tok_per_sec")
+    data = load_matrix_csv(csv_path, "val_loss")
     assert set(data) == set(PRESETS)
     assert all(sorted(data[p]) == list(SEEDS) for p in PRESETS)
 
-    paired = paired_comparison(data["bio_all"], data["vanilla"], lower_is_better=False)
+    paired = paired_comparison(data["bio_all"], data["vanilla"], lower_is_better=True)
     assert paired is not None, "expected a paired result with 2 shared seeds"
     assert paired.n_pairs == len(SEEDS)
     assert math.isfinite(paired.mean_delta)
@@ -303,7 +299,7 @@ def test_eval_matrix_stats_layer_on_output(matrix_dir):
     assert isinstance(paired.t_p_value, float) and isinstance(paired.wilcoxon_p_value, float)
 
     # multi-preset report: aggregate per preset + paired-vs-baseline for non-baseline presets
-    rep = compare_matrix(data, baseline="vanilla", metric="tok_per_sec", lower_is_better=False)
+    rep = compare_matrix(data, baseline="vanilla", metric="val_loss", lower_is_better=True)
     matrix_results = rep["presets"]
     expected_runs = len(SEEDS)
     expected_configs = set(PRESETS)
@@ -318,11 +314,10 @@ def test_eval_matrix_stats_layer_on_output(matrix_dir):
 
 
 # --------------------------------------------------------------------------- #
-# 3. stats layer is robust to the harness's non-finite quality metrics
+# 3. every model family emits finite quality metrics
 # --------------------------------------------------------------------------- #
-def test_eval_matrix_stats_filters_nonfinite_quality_metric(matrix_dir):
-    # load_matrix_csv must keep vanilla's finite val_loss (both seeds) and never leak a non-finite
-    # value — the bio presets' NaN val_loss (809i) is filtered, so downstream stats stay well-defined.
+def test_eval_matrix_quality_metric_is_finite(matrix_dir):
     data = load_matrix_csv(matrix_dir / "summary.csv", "val_loss")
-    assert sorted(data.get("vanilla", {})) == list(SEEDS), "vanilla val_loss must be finite for both seeds"
+    assert set(data) == set(PRESETS)
+    assert all(sorted(data[p]) == list(SEEDS) for p in PRESETS)
     assert all(math.isfinite(v) for by_seed in data.values() for v in by_seed.values())

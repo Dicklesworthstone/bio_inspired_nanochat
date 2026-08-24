@@ -578,7 +578,7 @@ def test_generate_resets_per_sequence_state_at_start():
 
 def test_gpt_synaptic_init_weights_after_to_empty_is_finite():
     from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
-    from bio_inspired_nanochat.synaptic import SynapticConfig
+    from bio_inspired_nanochat.synaptic import SynapticConfig, SynapticLinear
 
     cfg = GPTSynapticConfig(
         sequence_len=16,
@@ -601,10 +601,41 @@ def test_gpt_synaptic_init_weights_after_to_empty_is_finite():
     with torch.device("meta"):
         model = GPTSynaptic(cfg)
     model.to_empty(device=torch.device("cpu"))
+
+    # Make coverage deterministic: ``to_empty`` storage can look finite by accident. Poison the
+    # fixed eligibility projections so this test proves init_weights resets them explicitly.
+    projections = []
+    for module in model.modules():
+        if isinstance(module, SynapticLinear):
+            assert module.proj_in is not None and module.proj_out is not None
+            module.proj_in.fill_(float("nan"))
+            module.proj_out.fill_(float("nan"))
+            projections.extend((module.proj_in, module.proj_out))
+    assert projections
+
     model.init_weights()
+    assert all(torch.isfinite(projection).all() for projection in projections)
 
     idx = torch.randint(0, cfg.vocab_size, (2, 16), dtype=torch.long)
-    logits, loss = model(idx, targets=None)
+    model.eval()
+    with torch.no_grad():
+        logits, loss = model(idx, targets=None, train_mode=False)
     assert loss is None
     assert logits.shape == (2, 16, cfg.vocab_size)
     assert torch.isfinite(logits).all()
+
+    # One train step leaves a deferred Hebbian write. The following eval flushes it before the
+    # first matmul; poisoned projections used to turn that otherwise-finite eval into all NaNs.
+    model.train()
+    optimizer = model.setup_optimizers(lr=1e-4, wd=0.0)[0]
+    targets = torch.roll(idx, shifts=-1, dims=1)
+    optimizer.zero_grad(set_to_none=True)
+    _, train_loss = model(idx, targets=targets, train_mode=True)
+    assert train_loss is not None and torch.isfinite(train_loss)
+    train_loss.backward()
+    optimizer.step()
+
+    model.eval()
+    with torch.no_grad():
+        eval_logits, _ = model(idx, targets=None, train_mode=False)
+    assert torch.isfinite(eval_logits).all()
