@@ -10,6 +10,9 @@ import torch
 
 from bio_inspired_nanochat.sheaf_obstruction import (
     MVP_CERTIFICATE_KIND,
+    ObstructionAction,
+    SheafDetectorConfig,
+    SheafObstructionDetector,
     fit_obstruction_calibrator,
     measure_sheaf_obstruction,
     reliability_diagram_svg,
@@ -93,6 +96,11 @@ def test_unassessable_graph_falls_back_neutrally(
 
 
 def test_invalid_graph_inputs_fail_loudly() -> None:
+    with pytest.raises(ValueError, match="floating dtype"):
+        measure_sheaf_obstruction(
+            torch.ones((2, 2), dtype=torch.int64),
+            torch.tensor([[0], [1]], dtype=torch.long),
+        )
     with pytest.raises(ValueError, match="integer dtype"):
         measure_sheaf_obstruction(torch.ones((2, 2)), torch.zeros((2, 1)))
     with pytest.raises(ValueError, match="outside"):
@@ -204,3 +212,179 @@ def test_calibration_harness_writes_disjoint_split_evidence(tmp_path) -> None:
         "sheaf_obstruction_reliability",
         "sheaf_obstruction_calibration_verdict",
     }
+
+
+def test_detector_is_default_off_and_exactly_behavior_neutral() -> None:
+    stalks = torch.randn(3, 4)
+    detector = SheafObstructionDetector()
+
+    decision = detector.inspect(stalks, _ring(3))
+
+    assert decision.output_stalks is stalks
+    assert not decision.enabled
+    assert not decision.flagged
+    assert decision.action_taken == "noop"
+    assert decision.fallback_reason == "disabled"
+
+
+def test_enabled_detector_fails_closed_without_calibration() -> None:
+    stalks = torch.tensor([[1.0, 0.0], [1.0, 0.0], [-1.0, 0.0]])
+    detector = SheafObstructionDetector(SheafDetectorConfig(enabled=True))
+
+    decision = detector.inspect(stalks, _ring(3))
+
+    assert decision.available
+    assert not decision.flagged
+    assert decision.output_stalks is stalks
+    assert decision.fallback_reason == "calibration_unavailable"
+
+
+@pytest.mark.parametrize(
+    ("action", "action_taken", "signal_field"),
+    [
+        (ObstructionAction.FLAG_ONLY, "flag_only", None),
+        (ObstructionAction.ABSTAIN, "abstain", "should_abstain"),
+        (ObstructionAction.CLARIFY, "clarify", "should_clarify"),
+        (ObstructionAction.DELIBERATE, "deliberate", "should_deliberate"),
+    ],
+)
+def test_detector_emits_nonmutating_runtime_actions(
+    action: ObstructionAction,
+    action_taken: str,
+    signal_field: str | None,
+) -> None:
+    stalks = torch.tensor([[1.0, 0.0], [1.0, 0.0], [-1.0, 0.0]])
+    detector = SheafObstructionDetector(
+        SheafDetectorConfig(enabled=True, action=action, threshold=0.05)
+    )
+
+    decision = detector.inspect(stalks, _ring(3))
+
+    assert decision.flagged
+    assert decision.action_taken == action_taken
+    assert decision.output_stalks is stalks
+    if signal_field is not None:
+        assert getattr(decision, signal_field) is True
+    json.dumps(decision.to_event_dict(), allow_nan=False)
+
+
+def test_below_threshold_detector_path_returns_original_tensor() -> None:
+    stalks = torch.tensor([[1.0, -0.5], [1.0, -0.5], [1.0, -0.5]])
+    detector = SheafObstructionDetector(
+        SheafDetectorConfig(enabled=True, threshold=0.05)
+    )
+
+    decision = detector.inspect(stalks, _ring(3))
+
+    assert not decision.flagged
+    assert decision.action_taken == "below_threshold_noop"
+    assert decision.output_stalks is stalks
+
+
+def test_repair_action_lowers_obstruction_without_mutating_input() -> None:
+    stalks = torch.tensor([[1.0, 0.0], [1.0, 0.0], [-1.0, 0.0]])
+    original = stalks.clone()
+    detector = SheafObstructionDetector(
+        SheafDetectorConfig(
+            enabled=True,
+            action=ObstructionAction.REPAIR,
+            threshold=0.05,
+            repair_steps=8,
+        )
+    )
+
+    decision = detector.inspect(stalks, _ring(3))
+
+    assert decision.flagged
+    assert decision.repaired
+    assert decision.action_taken == "repair"
+    assert decision.score_after < decision.score
+    assert decision.output_stalks is not stalks
+    assert torch.equal(stalks, original)
+
+
+def test_failed_repair_falls_back_to_nonmutating_flag_only() -> None:
+    stalks = torch.tensor([[1.0, 0.0], [1.0, 0.0], [-1.0, 0.0]])
+    detector = SheafObstructionDetector(
+        SheafDetectorConfig(
+            enabled=True,
+            action=ObstructionAction.REPAIR,
+            threshold=0.05,
+            repair_backtracks=0,
+        )
+    )
+
+    decision = detector.inspect(stalks, _ring(3))
+
+    assert decision.flagged
+    assert not decision.repaired
+    assert decision.action_taken == "repair_failed_flag_only"
+    assert decision.output_stalks is stalks
+    assert decision.fallback_reason == "repair_no_descent_step"
+
+
+def test_unavailable_detector_graph_is_a_behavior_neutral_fallback() -> None:
+    stalks = torch.randn(2, 3)
+    detector = SheafObstructionDetector(
+        SheafDetectorConfig(enabled=True, threshold=0.05)
+    )
+
+    decision = detector.inspect(
+        stalks,
+        torch.empty((2, 0), dtype=torch.long),
+    )
+
+    assert not decision.available
+    assert not decision.flagged
+    assert decision.output_stalks is stalks
+    assert decision.fallback_reason == "no_edges"
+
+
+def test_calibrator_threshold_takes_precedence_over_manual_threshold() -> None:
+    calibrator = fit_obstruction_calibrator(
+        [0.01, 0.02, 0.03, 0.2, 0.3, 0.4],
+        [0, 0, 0, 1, 1, 1],
+        target_false_positive_rate=0.5,
+        probability_bins=3,
+    )
+    detector = SheafObstructionDetector(
+        SheafDetectorConfig(enabled=True, threshold=1.0),
+        calibrator=calibrator,
+    )
+    stalks = torch.tensor([[1.0, 0.0], [1.0, 0.0], [-1.0, 0.0]])
+
+    decision = detector.inspect(stalks, _ring(3))
+
+    assert decision.threshold == calibrator.threshold
+    assert decision.flagged
+    assert decision.calibrated_probability is not None
+
+
+def test_detector_honors_fail_closed_calibration_threshold() -> None:
+    calibrator = fit_obstruction_calibrator(
+        [0.01, 0.02, 0.8, 0.9],
+        [0, 0, 1, 1],
+        target_false_positive_rate=0.1,
+        probability_bins=2,
+    )
+    detector = SheafObstructionDetector(
+        SheafDetectorConfig(enabled=True, action=ObstructionAction.ABSTAIN),
+        calibrator=calibrator,
+    )
+    stalks = torch.tensor([[1.0, 0.0], [1.0, 0.0], [-1.0, 0.0]])
+
+    decision = detector.inspect(stalks, _ring(3))
+
+    assert not decision.flagged
+    assert not decision.should_abstain
+    assert decision.output_stalks is stalks
+    assert decision.threshold is None
+    assert decision.fallback_reason == "calibration_threshold_disabled"
+    json.dumps(decision.to_event_dict(), allow_nan=False)
+
+
+def test_detector_config_rejects_unsafe_runtime_settings() -> None:
+    with pytest.raises(ValueError, match="repair_steps"):
+        SheafObstructionDetector(SheafDetectorConfig(enabled=True, repair_steps=0))
+    with pytest.raises(ValueError, match="threshold"):
+        SheafObstructionDetector(SheafDetectorConfig(enabled=True, threshold=math.nan))

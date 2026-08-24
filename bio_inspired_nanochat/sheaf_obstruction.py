@@ -21,10 +21,21 @@ import bisect
 import math
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
+from enum import StrEnum
 
 from bio_inspired_nanochat.torch_imports import Tensor, torch
 
 MVP_CERTIFICATE_KIND = "fixed_sheaf_laplacian_residual_mvp"
+
+
+class ObstructionAction(StrEnum):
+    """Runtime action requested when a calibrated obstruction is detected."""
+
+    FLAG_ONLY = "flag_only"
+    ABSTAIN = "abstain"
+    CLARIFY = "clarify"
+    DELIBERATE = "deliberate"
+    REPAIR = "repair"
 
 
 @dataclass(frozen=True)
@@ -176,6 +187,275 @@ class ObstructionCalibrator:
         }
 
 
+@dataclass(frozen=True)
+class SheafDetectorConfig:
+    """Conservative runtime policy for the obstruction detector.
+
+    The detector is default-off.  ``threshold`` is an explicit deployment
+    threshold for callers that persist calibration separately; supplying an
+    :class:`ObstructionCalibrator` to the detector takes precedence.  With no
+    threshold source, the enabled detector fails closed to an exact no-op.
+    """
+
+    enabled: bool = False
+    action: ObstructionAction = ObstructionAction.FLAG_ONLY
+    threshold: float | None = None
+    repair_steps: int = 5
+    repair_step_size: float = 0.25
+    repair_backtracks: int = 8
+    repair_min_improvement: float = 1e-9
+
+    def validate(self) -> None:
+        try:
+            ObstructionAction(self.action)
+        except ValueError as error:
+            raise ValueError(f"unknown obstruction action: {self.action!r}") from error
+        if self.threshold is not None and (
+            not math.isfinite(self.threshold) or not 0.0 <= self.threshold <= 1.0
+        ):
+            raise ValueError("threshold must be finite and in [0,1] when supplied")
+        if self.repair_steps < 1:
+            raise ValueError("repair_steps must be >= 1")
+        if not math.isfinite(self.repair_step_size) or self.repair_step_size <= 0.0:
+            raise ValueError("repair_step_size must be finite and > 0")
+        if self.repair_backtracks < 0:
+            raise ValueError("repair_backtracks must be >= 0")
+        if (
+            not math.isfinite(self.repair_min_improvement)
+            or self.repair_min_improvement < 0.0
+        ):
+            raise ValueError("repair_min_improvement must be finite and non-negative")
+
+
+@dataclass(frozen=True)
+class SheafDetectorDecision:
+    """Auditable runtime decision with behavior-neutral output when inactive."""
+
+    enabled: bool
+    available: bool
+    flagged: bool
+    score: float
+    score_after: float
+    threshold: float | None
+    calibrated_probability: float | None
+    requested_action: ObstructionAction
+    action_taken: str
+    output_stalks: Tensor
+    should_abstain: bool = False
+    should_clarify: bool = False
+    should_deliberate: bool = False
+    repaired: bool = False
+    fallback_reason: str | None = None
+    certificate_kind: str = MVP_CERTIFICATE_KIND
+    h1_certified: bool = False
+
+    def to_event_dict(self) -> dict[str, object]:
+        """Return JSON-safe decision metadata, intentionally excluding the tensor."""
+        return {
+            "enabled": self.enabled,
+            "available": self.available,
+            "flagged": self.flagged,
+            "score": self.score,
+            "score_after": self.score_after,
+            "threshold": self.threshold,
+            "calibrated_probability": self.calibrated_probability,
+            "requested_action": self.requested_action.value,
+            "action_taken": self.action_taken,
+            "should_abstain": self.should_abstain,
+            "should_clarify": self.should_clarify,
+            "should_deliberate": self.should_deliberate,
+            "repaired": self.repaired,
+            "fallback_reason": self.fallback_reason,
+            "certificate_kind": self.certificate_kind,
+            "h1_certified": self.h1_certified,
+        }
+
+
+class SheafObstructionDetector:
+    """Apply a calibrated obstruction policy without changing baseline behavior.
+
+    Disabled, unavailable, uncalibrated, and below-threshold paths return the
+    original ``stalks`` tensor object.  Repair uses deterministic gradient
+    descent with backtracking and is accepted only when it lowers the same
+    normalized obstruction score used for detection.  A failed repair degrades
+    to flag-only instead of mutating activations.
+    """
+
+    def __init__(
+        self,
+        config: SheafDetectorConfig | None = None,
+        *,
+        calibrator: ObstructionCalibrator | None = None,
+    ) -> None:
+        if config is None:
+            config = SheafDetectorConfig()
+        config.validate()
+        self.config = config
+        self.calibrator = calibrator
+
+    def inspect(
+        self,
+        stalks: Tensor,
+        edge_index: Tensor,
+        *,
+        tail_restrictions: Tensor | None = None,
+        head_restrictions: Tensor | None = None,
+        edge_weight: Tensor | None = None,
+        eps: float = 1e-8,
+    ) -> SheafDetectorDecision:
+        """Measure the graph and apply the configured action when flagged."""
+        action = ObstructionAction(self.config.action)
+        if not self.config.enabled:
+            return self._noop(
+                stalks,
+                action=action,
+                available=False,
+                fallback_reason="disabled",
+            )
+
+        result = measure_sheaf_obstruction(
+            stalks,
+            edge_index,
+            tail_restrictions=tail_restrictions,
+            head_restrictions=head_restrictions,
+            edge_weight=edge_weight,
+            eps=eps,
+        )
+        threshold = self._threshold()
+        probability = (
+            self.calibrator.predict_probability(result.score)
+            if self.calibrator is not None and result.available
+            else None
+        )
+        if not result.available:
+            return self._noop(
+                stalks,
+                action=action,
+                available=False,
+                fallback_reason=result.fallback_reason,
+                threshold=threshold,
+            )
+        if threshold is None:
+            return self._noop(
+                stalks,
+                action=action,
+                available=True,
+                score=result.score,
+                fallback_reason="calibration_unavailable",
+                calibrated_probability=probability,
+            )
+        if not math.isfinite(threshold):
+            return self._noop(
+                stalks,
+                action=action,
+                available=True,
+                score=result.score,
+                fallback_reason="calibration_threshold_disabled",
+                calibrated_probability=probability,
+            )
+
+        flagged = result.score >= threshold
+        if not flagged:
+            return SheafDetectorDecision(
+                enabled=True,
+                available=True,
+                flagged=False,
+                score=result.score,
+                score_after=result.score,
+                threshold=threshold,
+                calibrated_probability=probability,
+                requested_action=action,
+                action_taken="below_threshold_noop",
+                output_stalks=stalks,
+            )
+        if action is not ObstructionAction.REPAIR:
+            return SheafDetectorDecision(
+                enabled=True,
+                available=True,
+                flagged=True,
+                score=result.score,
+                score_after=result.score,
+                threshold=threshold,
+                calibrated_probability=probability,
+                requested_action=action,
+                action_taken=action.value,
+                output_stalks=stalks,
+                should_abstain=action is ObstructionAction.ABSTAIN,
+                should_clarify=action is ObstructionAction.CLARIFY,
+                should_deliberate=action is ObstructionAction.DELIBERATE,
+            )
+
+        repaired_stalks, repaired_score, repair_reason = _repair_obstruction(
+            stalks,
+            edge_index,
+            tail_restrictions=tail_restrictions,
+            head_restrictions=head_restrictions,
+            edge_weight=edge_weight,
+            eps=eps,
+            steps=self.config.repair_steps,
+            step_size=self.config.repair_step_size,
+            backtracks=self.config.repair_backtracks,
+            min_improvement=self.config.repair_min_improvement,
+        )
+        if repair_reason is not None:
+            return SheafDetectorDecision(
+                enabled=True,
+                available=True,
+                flagged=True,
+                score=result.score,
+                score_after=result.score,
+                threshold=threshold,
+                calibrated_probability=probability,
+                requested_action=action,
+                action_taken="repair_failed_flag_only",
+                output_stalks=stalks,
+                fallback_reason=repair_reason,
+            )
+        return SheafDetectorDecision(
+            enabled=True,
+            available=True,
+            flagged=True,
+            score=result.score,
+            score_after=repaired_score,
+            threshold=threshold,
+            calibrated_probability=probability,
+            requested_action=action,
+            action_taken="repair",
+            output_stalks=repaired_stalks,
+            repaired=True,
+        )
+
+    def _threshold(self) -> float | None:
+        if self.calibrator is not None:
+            return self.calibrator.threshold
+        return self.config.threshold
+
+    def _noop(
+        self,
+        stalks: Tensor,
+        *,
+        action: ObstructionAction,
+        available: bool,
+        fallback_reason: str | None,
+        score: float = 0.0,
+        threshold: float | None = None,
+        calibrated_probability: float | None = None,
+    ) -> SheafDetectorDecision:
+        return SheafDetectorDecision(
+            enabled=self.config.enabled,
+            available=available,
+            flagged=False,
+            score=score,
+            score_after=score,
+            threshold=threshold,
+            calibrated_probability=calibrated_probability,
+            requested_action=action,
+            action_taken="noop",
+            output_stalks=stalks,
+            fallback_reason=fallback_reason,
+        )
+
+
 def measure_sheaf_obstruction(
     stalks: Tensor,
     edge_index: Tensor,
@@ -197,6 +477,8 @@ def measure_sheaf_obstruction(
         raise ValueError(
             f"stalks must have shape (nodes, stalk_dim), got {tuple(stalks.shape)}"
         )
+    if not stalks.is_floating_point():
+        raise ValueError(f"stalks must use a floating dtype, got {stalks.dtype}")
     if edge_index.ndim != 2 or edge_index.shape[0] != 2:
         raise ValueError(f"edge_index must have shape (2, edges), got {tuple(edge_index.shape)}")
     if edge_index.dtype not in (torch.int32, torch.int64):
@@ -274,6 +556,113 @@ def measure_sheaf_obstruction(
             float(value) for value in residual_sq.detach().sqrt().cpu().tolist()
         ),
     )
+
+
+def _repair_obstruction(
+    stalks: Tensor,
+    edge_index: Tensor,
+    *,
+    tail_restrictions: Tensor | None,
+    head_restrictions: Tensor | None,
+    edge_weight: Tensor | None,
+    eps: float,
+    steps: int,
+    step_size: float,
+    backtracks: int,
+    min_improvement: float,
+) -> tuple[Tensor, float, str | None]:
+    initial = measure_sheaf_obstruction(
+        stalks,
+        edge_index,
+        tail_restrictions=tail_restrictions,
+        head_restrictions=head_restrictions,
+        edge_weight=edge_weight,
+        eps=eps,
+    )
+    if not initial.available:
+        return stalks, initial.score, initial.fallback_reason or "repair_unavailable"
+
+    working = stalks.detach().clone()
+    current_score = initial.score
+    accepted_steps = 0
+    for _ in range(steps):
+        with torch.enable_grad():
+            differentiable = working.detach().requires_grad_(True)
+            objective = _obstruction_score_tensor(
+                differentiable,
+                edge_index,
+                tail_restrictions=tail_restrictions,
+                head_restrictions=head_restrictions,
+                edge_weight=edge_weight,
+                eps=eps,
+            )
+            gradient = torch.autograd.grad(objective, differentiable)[0]
+        if not bool(torch.isfinite(gradient).all()):
+            return stalks, initial.score, "repair_nonfinite_gradient"
+        if float(gradient.norm().item()) <= eps:
+            break
+
+        candidate_step = step_size
+        accepted = False
+        for _ in range(backtracks):
+            candidate = (working - candidate_step * gradient).detach()
+            candidate_result = measure_sheaf_obstruction(
+                candidate,
+                edge_index,
+                tail_restrictions=tail_restrictions,
+                head_restrictions=head_restrictions,
+                edge_weight=edge_weight,
+                eps=eps,
+            )
+            if candidate_result.score <= current_score - min_improvement:
+                working = candidate
+                current_score = candidate_result.score
+                accepted_steps += 1
+                accepted = True
+                break
+            candidate_step *= 0.5
+        if not accepted:
+            break
+
+    if accepted_steps == 0:
+        return stalks, initial.score, "repair_no_descent_step"
+    return working, current_score, None
+
+
+def _obstruction_score_tensor(
+    stalks: Tensor,
+    edge_index: Tensor,
+    *,
+    tail_restrictions: Tensor | None,
+    head_restrictions: Tensor | None,
+    edge_weight: Tensor | None,
+    eps: float,
+) -> Tensor:
+    tail_values = stalks.index_select(0, edge_index[0].to(torch.int64))
+    head_values = stalks.index_select(0, edge_index[1].to(torch.int64))
+    if tail_restrictions is None or head_restrictions is None:
+        restricted_tail = tail_values
+        restricted_head = head_values
+    else:
+        tail_maps = tail_restrictions.to(device=stalks.device, dtype=stalks.dtype)
+        head_maps = head_restrictions.to(device=stalks.device, dtype=stalks.dtype)
+        restricted_tail = torch.einsum("erd,ed->er", tail_maps, tail_values)
+        restricted_head = torch.einsum("erd,ed->er", head_maps, head_values)
+    weights = (
+        torch.ones(edge_index.shape[1], device=stalks.device, dtype=stalks.dtype)
+        if edge_weight is None
+        else edge_weight.to(device=stalks.device, dtype=stalks.dtype)
+    )
+    residual_energy = (weights * (restricted_tail - restricted_head).square().sum(-1)).sum()
+    reference_energy = (
+        weights
+        * (
+            restricted_tail.square().sum(-1)
+            + restricted_head.square().sum(-1)
+        )
+    ).sum()
+    normalized = residual_energy / (reference_energy + eps)
+    return normalized / (1.0 + normalized)
 
 
 def fit_obstruction_calibrator(
