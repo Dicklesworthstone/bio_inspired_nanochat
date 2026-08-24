@@ -20,8 +20,8 @@ staged compute with a GPU-hour gate, and the pinned statistical decision rule.
 ## 1) The confound, and the three anchors
 
 `GPTSynaptic` with *every* bio flag off is **still a different architecture** than vanilla `GPT`:
-it carries the presynaptic attention augmentation, the router probe, the per-expert genome `Xi`, and
-the MoE structure. So a naïve `vanilla` vs `bio_all` contrast **confounds the architecture with the
+it carries the presynaptic attention augmentation, the router probe, the genome-decoder scaffold,
+and the MoE structure. So a naïve `vanilla` vs `bio_all` contrast **confounds the architecture with the
 mechanisms** — a positive result could be the scaffolding, not the biology.
 
 We therefore run **three anchors** and read the experiment as a decomposition:
@@ -54,7 +54,8 @@ performance toggles, not biology.
 `bio_all` minus each **default-on** mechanism. Answers "what do we lose by removing X, given the rest?"
 
 `bio_no_presyn`, `bio_no_hebbian`, `bio_no_metabolism`, `bio_no_stochastic_release`, `bio_no_doc2`,
-`bio_no_septin_barrier`, `bio_no_bdnf`.
+`bio_no_septin_barrier`, `bio_no_bdnf`, `bio_no_genome` (sets `xi_dim=0`, retaining one learned
+shared phenotype while removing per-expert kinetic specialization).
 
 ### Add-one-in — standalone effect (secondary)
 `synaptic_off` plus each **opt-in** mechanism (with its prerequisites turned back on). Answers "what
@@ -64,12 +65,14 @@ column turns on the whole prerequisite chain (e.g. `add_differentiable_recurrenc
 prerequisite-only baseline.
 
 `add_bistable_latch` (needs `enable_hebbian`), `add_learnable_kinetics` (needs `enable_presyn`),
-`add_differentiable_recurrence` (needs `learnable_kinetics`, `enable_presyn`).
+`add_differentiable_recurrence` (needs `learnable_kinetics`, `enable_presyn`), `add_cusp_latch`
+(needs `bistable_latch`, `enable_hebbian`), and `add_metriplectic_integrator` (needs
+`enable_presyn`).
 
 Add-one-in is more interpretable for "which mechanism helps"; leave-one-out catches interactions.
 We run both where compute allows; the staging below keeps the cost bounded.
 
-**Total screening columns:** 3 anchors + 7 leave-one-out + 3 add-one-in = **13**.
+**Total screening columns:** 3 anchors + 8 leave-one-out + 5 add-one-in = **16**.
 
 ---
 

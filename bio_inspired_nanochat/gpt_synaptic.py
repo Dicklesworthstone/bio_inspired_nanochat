@@ -442,13 +442,11 @@ class GPTSynaptic(nn.Module):
             adam_params = embedding_params + lm_head_params + other_params
             use_fused = (not ddp) and any(p.is_cuda for p in adam_params)
             AdamWFactory = DistAdamW if ddp else partial(torch.optim.AdamW, fused=use_fused)
-            # Pre-existing ty false positive: it infers the DistAdamW branch's param
-            # type for `adam_groups` even on the partial(torch.optim.AdamW) path.
-            adamw_optimizer = AdamWFactory(adam_groups, **adamw_kwargs)  # ty: ignore[invalid-argument-type]
+            adamw_optimizer = AdamWFactory(adam_groups, **adamw_kwargs)
 
             muon_kwargs = dict(lr=matrix_lr, momentum=0.95)
             MuonFactory = DistMuon if ddp else Muon
-            muon_optimizer = MuonFactory(matrix_params, **muon_kwargs)  # ty: ignore[invalid-argument-type]
+            muon_optimizer = MuonFactory(matrix_params, **muon_kwargs)
             optimizers = [adamw_optimizer, muon_optimizer]
             for opt in optimizers:
                 for group in opt.param_groups:
@@ -525,7 +523,8 @@ class GPTSynaptic(nn.Module):
                 )
                 emb = emb / (emb.norm(dim=-1, keepdim=True) + 1e-8)
                 module.router_embeddings.copy_(emb)
-                nn.init.normal_(module.Xi, std=0.1)
+                if module.Xi.numel() > 0:
+                    nn.init.normal_(module.Xi, std=0.1)
                 continue
 
             if isinstance(module, StructuralPlasticity):

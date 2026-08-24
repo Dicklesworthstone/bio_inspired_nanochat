@@ -53,6 +53,10 @@ MECHANISMS: tuple[MechanismFlag, ...] = (
         "MoE expert fatigue/energy metabolism bias.",
     ),
     MechanismFlag(
+        "genome", "xi_dim", 4, 0, True, (),
+        "Low-dimensional per-expert Xi decoded to bounded kinetics; xi_dim=0 shares kinetics.",
+    ),
+    MechanismFlag(
         "stochastic_release", "stochastic_train_frac", 0.12, 0.0, True, ("enable_presyn",),
         "Stochastic (Binomial STE) vesicle release during training.",
     ),
@@ -119,6 +123,7 @@ ABLATION_PRESETS: dict[str, dict[str, Any]] = {
     "bio_no_presyn": {"enable_presyn": False},
     "bio_no_hebbian": {"enable_hebbian": False},
     "bio_no_metabolism": {"enable_metabolism": False},
+    "bio_no_genome": {"xi_dim": 0},
     "bio_no_stochastic_release": {"stochastic_train_frac": 0.0},
     "bio_no_doc2": {"doc2_gain": 0.0},
     "bio_no_bdnf": {"bdnf_scale": 0.0},
@@ -176,6 +181,12 @@ def validate_config(cfg: SynapticConfig) -> tuple[list[str], list[str]]:
         errors.append(
             f"stochastic_train_frac must be in [0,1], got {cfg.stochastic_train_frac}"
         )
+    if cfg.xi_dim < 0:
+        errors.append(f"xi_dim must be >= 0 (0 = shared kinetics), got {cfg.xi_dim}")
+    if cfg.tau_c <= 0.0:
+        errors.append(f"tau_c must be > 0, got {cfg.tau_c}")
+    if cfg.alpha_ca < 0.0:
+        errors.append(f"alpha_ca must be >= 0, got {cfg.alpha_ca}")
     if cfg.bistable_latch:
         if cfg.latch_hill_n <= 0:
             errors.append(f"latch_hill_n must be > 0, got {cfg.latch_hill_n}")

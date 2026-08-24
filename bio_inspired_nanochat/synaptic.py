@@ -318,10 +318,10 @@ class SynapticConfig:
     topological_nas: bool = False
 
     # Genetics
-    # Per-expert genome embedding (Xi). A decoder maps Xi -> phenotype scalars that
-    # control expert-specific kinetics without storing a full per-expert copy of
-    # every kinetic parameter.
-    xi_dim: int = 4  # [alpha_fatigue, alpha_energy, camkii_gain, pp1_gain]
+    # Per-expert genome embedding (Xi). A shared learned decoder maps this low-dimensional
+    # latent to a larger set of bounded kinetics. Set to 0 for the shared-kinetics ablation:
+    # the decoder bias still learns, but there is no expert-specific genome or divergence.
+    xi_dim: int = 4
 
     # Feature Toggles (Modular Control)
     enable_presyn: bool = True
@@ -1901,6 +1901,7 @@ class SynapticExpert(nn.Module):
         self, n_embd: int, hidden_mult: int, cfg: SynapticConfig, dropout: float = 0.0
     ):
         super().__init__()
+        object.__setattr__(self, "cfg", cfg)
         h = hidden_mult * n_embd
         self.fc1 = SynapticLinear(n_embd, h, cfg, bias=True, use_input_ln=False)
         self.fc2 = SynapticLinear(h, n_embd, cfg, bias=True, use_input_ln=False)
@@ -1912,14 +1913,28 @@ class SynapticExpert(nn.Module):
         device = x.device
 
         if energy_override is not None:
+            # Snapshot the persistent buffer: SynapticMoE updates its storage before backward.
+            # Once genome-derived calcium requires grad, autograd also saves this multiplier;
+            # retaining an expanded view of the live buffer would then trip a version mismatch.
+            energy_snapshot = energy_override.detach().clone()
             if energy_override.ndim == 0:
-                e_tens = energy_override.expand(N)
+                e_tens = energy_snapshot.expand(N)
             else:
-                e_tens = energy_override.view(-1).expand(N)
+                e_tens = energy_snapshot.view(-1).expand(N)
         else:
             e_tens = torch.ones(N, device=device)
 
-        c_tens = torch.ones(N, device=device)
+        # yw9.4: the decoder's calcium-retention/influx kinetics must affect the live,
+        # differentiable expert path, not only the detached Hebbian state update. Normalize the
+        # decoded one-step calcium response around 0.8 at the configured baseline; this leaves
+        # headroom below SynapticLinear's [0,1] fast-path gate and therefore preserves gradient.
+        if genes is not None and genes.numel() >= 6:
+            rho_c0 = math.exp(-1.0 / max(self.cfg.tau_c, 1e-6))
+            baseline_response = max(rho_c0 + self.cfg.alpha_ca, 1e-6)
+            calcium_response = 0.8 * (genes[4] + genes[5]) / baseline_response
+            c_tens = calcium_response.clamp(0.25, 1.0).expand(N)
+        else:
+            c_tens = torch.ones(N, device=device)
 
         y = self.fc1(
             x,
@@ -1938,6 +1953,101 @@ class SynapticExpert(nn.Module):
             update_mem=update_mem,
         )
         return y
+
+
+GENOME_PHENOTYPE_FIELDS: tuple[str, ...] = (
+    "alpha_fatigue",
+    "alpha_energy",
+    "camkii_gain",
+    "pp1_gain",
+    "rho_c",
+    "alpha_ca",
+)
+
+# Closed intervals keep every decoded value biologically meaningful and numerically stable.
+# rho_c additionally implies tau_c=-1/log(rho_c)>0; alpha_energy implies the recovery
+# time-constant tau_rec=-1/log(1-alpha_energy)>0.
+_GENOME_PHENOTYPE_BOUNDS: tuple[tuple[float, float], ...] = (
+    (0.001, 0.030),  # fatigue EMA rate
+    (0.001, 0.020),  # energy recovery EMA rate
+    (0.250, 2.500),  # CaMKII gain
+    (0.250, 2.500),  # PP1 gain
+    (0.500, 0.980),  # calcium retention rho_c
+    (0.050, 1.000),  # calcium influx alpha_ca
+)
+
+
+def _bounded_logit(value: float, low: float, high: float) -> float:
+    """Inverse of ``low + (high-low)*sigmoid(raw)`` for decoder initialization."""
+    unit = min(1.0 - 1e-6, max(1e-6, (value - low) / (high - low)))
+    return math.log(unit / (1.0 - unit))
+
+
+class SynapticGenomeDecoder(nn.Module):
+    """Shared Xi-to-kinetics decoder with stability-preserving output maps (yw9.4).
+
+    The only per-expert learned state is the compact ``Xi`` row. A single shared affine decoder
+    expands it to six phenotype values, after which bounded sigmoid maps make invalid kinetics
+    unrepresentable. With ``xi_dim=0`` the affine term is absent and the learned bias is a genuine
+    shared-kinetics control rather than a frozen hand-tuned fallback.
+    """
+
+    def __init__(self, xi_dim: int, cfg: SynapticConfig):
+        super().__init__()
+        object.__setattr__(self, "xi_dim", xi_dim)
+        object.__setattr__(self, "cfg", cfg)
+        if xi_dim > 0:
+            self.raw_weight = nn.Parameter(torch.empty(xi_dim, len(GENOME_PHENOTYPE_FIELDS)))
+        else:
+            self.register_parameter("raw_weight", None)
+        self.raw_bias = nn.Parameter(torch.empty(len(GENOME_PHENOTYPE_FIELDS)))
+        self.reset_parameters()
+
+    @torch.no_grad()
+    def reset_parameters(self) -> None:
+        if self.raw_weight is not None:
+            nn.init.normal_(self.raw_weight, std=0.05)
+        defaults = (
+            0.011,
+            0.0055,
+            math.log1p(math.exp(1.0)),
+            math.log1p(math.exp(0.5)),
+            math.exp(-1.0 / max(self.cfg.tau_c, 1e-6)),
+            self.cfg.alpha_ca,
+        )
+        raw_defaults = [
+            _bounded_logit(value, low, high)
+            for value, (low, high) in zip(defaults, _GENOME_PHENOTYPE_BOUNDS)
+        ]
+        self.raw_bias.copy_(
+            torch.tensor(raw_defaults, dtype=self.raw_bias.dtype, device=self.raw_bias.device)
+        )
+
+    def forward(self, xi: Tensor) -> Tensor:
+        raw = self.raw_bias.expand(*xi.shape[:-1], -1)
+        if self.raw_weight is not None:
+            raw = raw + xi @ self.raw_weight
+        values = [
+            low + (high - low) * torch.sigmoid(raw[..., i])
+            for i, (low, high) in enumerate(_GENOME_PHENOTYPE_BOUNDS)
+        ]
+        return torch.stack(values, dim=-1)
+
+    def kinetics(self, xi: Tensor) -> Dict[str, Tensor]:
+        """Decode named kinetics, including positive time constants derived from EMA rates."""
+        phenotype = self(xi)
+        alpha_energy = phenotype[..., 1]
+        rho_c = phenotype[..., 4]
+        return {
+            "alpha_fatigue": phenotype[..., 0],
+            "alpha_energy": alpha_energy,
+            "camkii_gain": phenotype[..., 2],
+            "pp1_gain": phenotype[..., 3],
+            "rho_c": rho_c,
+            "tau_c": -1.0 / torch.log(rho_c),
+            "tau_rec": -1.0 / torch.log1p(-alpha_energy),
+            "alpha_ca": phenotype[..., 5],
+        }
 
 
 class SynapticMoE(nn.Module):
@@ -1993,9 +2103,14 @@ class SynapticMoE(nn.Module):
         # The split/merge controller blends it into health when cfg.use_neuroscore.
         object.__setattr__(self, "last_neuroscore", None)
 
-        # Molecular Genetics: Xi (The Genome)
-        self.Xi = nn.Parameter(torch.zeros(num_experts, cfg.xi_dim))
-        nn.init.normal_(self.Xi, std=0.1)
+        # Molecular genetics (yw9.4): compact per-expert Xi plus one shared decoder. The
+        # xi_dim=0 ablation retains a learned shared phenotype while removing expert identity.
+        self.genome_decoder = SynapticGenomeDecoder(cfg.xi_dim, cfg)
+        if cfg.xi_dim > 0:
+            self.Xi = nn.Parameter(torch.empty(num_experts, cfg.xi_dim))
+            nn.init.normal_(self.Xi, std=0.1)
+        else:
+            self.register_buffer("Xi", torch.empty(num_experts, 0))
 
     def _load_from_state_dict(self, state_dict, prefix, *args, **kwargs):
         # Backward compat (uta.3): checkpoints predating router_logit_bias lack this key.
@@ -2007,12 +2122,12 @@ class SynapticMoE(nn.Module):
         super()._load_from_state_dict(state_dict, prefix, *args, **kwargs)
 
     def _get_phenotype(self, xi: Tensor) -> Tensor:
-        """Map Xi logits to biological range constants."""
-        fatigue_rate = 0.01 * (torch.sigmoid(xi[..., 0]) * 2.0 + 0.1)
-        energy_fill = 0.005 * (torch.sigmoid(xi[..., 1]) * 2.0 + 0.1)
-        camkii_gain = F.softplus(xi[..., 2] + 1.0)
-        pp1_gain = F.softplus(xi[..., 3] + 0.5)
-        return torch.stack([fatigue_rate, energy_fill, camkii_gain, pp1_gain], dim=-1)
+        """Decode Xi to bounded biological kinetics (kept for telemetry callers)."""
+        return self.genome_decoder(xi)
+
+    def genome_kinetics(self) -> Dict[str, Tensor]:
+        """Return the live, named per-expert kinetics for telemetry and evaluation."""
+        return self.genome_decoder.kinetics(self.Xi)
 
     def forward(self, x: Tensor, update_mem: bool = True) -> Tuple[Tensor, Tensor]:
         B, T, C = x.shape
@@ -2021,7 +2136,7 @@ class SynapticMoE(nn.Module):
         fatigue_buf = self.fatigue
         energy_buf = self.energy
 
-        pheno = self._get_phenotype(self.Xi) # (E, 4)
+        pheno = self._get_phenotype(self.Xi)  # (E, 6)
         alpha_fatigue = pheno[:, 0]
         alpha_energy = pheno[:, 1]
 

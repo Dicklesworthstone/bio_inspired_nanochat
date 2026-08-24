@@ -99,7 +99,7 @@ The standardized harness (`bio_inspired_nanochat-41s`) should own preset → con
 | `bio_no_doc2` | `doc2_gain=0.0` | disable slow calcium sensor path |
 | `bio_no_bdnf` | `bdnf_scale=0.0` | disable metaplasticity modulation |
 | `bio_no_septin_barrier` | `barrier_strength=0.0` | remove distance barrier on logits |
-| `bio_no_genome` | `xi_dim=0` (or bypass decoder) | may require code path changes |
+| `bio_no_genome` | `xi_dim=0` | shared learned kinetics; removes per-expert Xi specialization |
 
 ---
 

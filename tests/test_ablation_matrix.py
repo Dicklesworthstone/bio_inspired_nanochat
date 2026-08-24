@@ -78,6 +78,12 @@ def test_leave_one_out_actually_turns_the_mechanism_off():
         assert not is_mechanism_on(cfg, m.field), f"{mech} must be off in {c.config_id}"
 
 
+def test_genome_ablation_uses_shared_kinetics():
+    (column,) = [c for c in am.leave_one_out() if c.config_id == "bio_no_genome"]
+    cfg = column.build_syn_cfg()
+    assert cfg is not None and cfg.xi_dim == 0
+
+
 def test_add_one_in_covers_exactly_the_optin_science_mechanisms():
     expected = {
         m.mechanism for m in MECHANISMS

@@ -338,10 +338,11 @@ def build_census() -> dict[str, Any]:
         "collision_fields": sorted(n for n in collision if n in SUBSYSTEM),
         "learned_genome_note": (
             "The biological 'genome' is the learned per-expert Xi vector "
-            "(xi_dim=4: [alpha_fatigue, alpha_energy, camkii_gain, pp1_gain]), a "
-            "torch parameter decoded to phenotype kinetics -- NOT the SynapticConfig "
-            "hyperparameters. Every field here is a fixed hyperparameter, not a "
-            "learned weight."
+            "(xi_dim=4), expanded by one shared learned decoder to six bounded phenotype "
+            "kinetics (fatigue/recovery rates, CaMKII/PP1 gains, calcium retention/influx). "
+            "Set xi_dim=0 for learned shared kinetics without per-expert Xi. The genome is "
+            "NOT the SynapticConfig hyperparameters; every field here is a fixed "
+            "hyperparameter, not a learned weight."
         ),
         "fields": records,
     }
