@@ -1,4 +1,4 @@
-"""Read-only tropical selection certificates and interpretability fingerprints.
+"""Tropical selection certificates, fingerprints, and guarded hard routing.
 
 The affine score skeleton is ``z_j(x) = a_j @ x + b_j``.  This module records
 the selected polyhedral cell, exact dual-norm distances to its relevant score
@@ -13,7 +13,10 @@ Claim scopes stay separate throughout:
 * a pointwise fingerprint of nonlinear scores is not an affine-region proof.
 
 Unbounded quantities use ``None`` plus an explicit ``*_unbounded`` flag so all
-records remain strict JSON (no ``NaN`` or ``Infinity``).
+records remain strict JSON (no ``NaN`` or ``Infinity``).  The default-off
+controller added by ``0642.6.2.2`` consumes an already-bound certificate; it
+never promotes schedule progress or a pointwise ``local_only`` fingerprint into
+permission to mutate routing.
 """
 
 from __future__ import annotations
@@ -54,6 +57,24 @@ class CertificateScope(StrEnum):
     MOE_HARD_TOP1 = "moe_hard_top1"
 
 
+class TropicalRoutingMode(StrEnum):
+    """Action selected by the default-off tropical routing controller."""
+
+    DISABLED = "disabled"
+    SOFT_APPROXIMATION = "soft_approximation"
+    HARD = "hard"
+
+
+class TropicalRoutingTransition(StrEnum):
+    """Auditable state transition made on one routing observation."""
+
+    DISABLED = "disabled"
+    STAY_SOFT = "stay_soft"
+    ENTER_HARD = "enter_hard"
+    STAY_HARD = "stay_hard"
+    EXIT_TO_SOFT = "exit_to_soft"
+
+
 class EventLogger(Protocol):
     """The subset of :class:`run_logging.RunLogger` used by the monitor."""
 
@@ -65,6 +86,13 @@ class EventLogger(Protocol):
         step: int | None = None,
         **fields: Any,
     ) -> dict[str, Any]: ...
+
+
+class TropicalToggleSource(Protocol):
+    """Synaptic config fields that authorize and anchor tropical routing."""
+
+    tropical_skeleton: bool
+    barrier_strength: float
 
 
 @dataclass(frozen=True)
@@ -213,6 +241,94 @@ class TropicalCertificateRecord:
     artifacts_bound: bool
     certified: bool
     reason: str
+    schedule_digest: str | None = None
+
+
+@dataclass(frozen=True)
+class TropicalRoutingConfig:
+    """Validated schedule and hysteresis policy for optional hard routing.
+
+    Authorization comes only from ``SynapticConfig.tropical_skeleton`` supplied
+    to the controller. ``barrier_end=None`` leaves that config's septin barrier
+    unchanged even while temperature cools. Entry requires consecutive certified
+    observations from one routing site; exit is immediate.
+    """
+
+    tau_start: float = 1.0
+    tau_min: float = 0.05
+    anneal_steps: int = 1_000
+    barrier_end: float | None = None
+    entry_windows: int = 3
+
+    def __post_init__(self) -> None:
+        if not math.isfinite(self.tau_start) or self.tau_start <= 0.0:
+            raise ValueError("tau_start must be finite and positive")
+        if not math.isfinite(self.tau_min) or self.tau_min <= 0.0:
+            raise ValueError("tau_min must be finite and positive")
+        if self.tau_min > self.tau_start:
+            raise ValueError("tau_min must be less than or equal to tau_start")
+        if not isinstance(self.anneal_steps, int) or isinstance(self.anneal_steps, bool) or self.anneal_steps < 1:
+            raise ValueError("anneal_steps must be an integer >= 1")
+        if self.barrier_end is not None and (
+            not math.isfinite(self.barrier_end) or self.barrier_end < 0.0
+        ):
+            raise ValueError("barrier_end must be None or a finite non-negative value")
+        if not isinstance(self.entry_windows, int) or isinstance(self.entry_windows, bool) or self.entry_windows < 1:
+            raise ValueError("entry_windows must be an integer >= 1")
+
+
+@dataclass(frozen=True)
+class TropicalSchedulePoint:
+    """One replayable point on the geometric temperature/septin schedule."""
+
+    step: int
+    progress: float
+    tau: float
+    barrier_strength: float
+    digest: str
+
+
+@dataclass(frozen=True)
+class TropicalRoutingState:
+    """Persisted controller state; no stochastic or process-local state is hidden."""
+
+    schedule_step: int
+    entry_streak: int
+    hard_active: bool
+    decision_count: int
+    route_digest: str | None
+
+
+@dataclass(frozen=True)
+class TropicalRoutingDecision:
+    """One strict-JSON routing authorization or deterministic fallback."""
+
+    decision_index: int
+    mode: TropicalRoutingMode
+    transition: TropicalRoutingTransition
+    use_hard_path: bool
+    used_baseline: bool
+    gate_passed: bool
+    hard_active: bool
+    entry_streak: int
+    schedule: TropicalSchedulePoint
+    certificate_digest: str | None
+    authorized_score_digest: str | None
+    authorized_choice_ids: tuple[str, ...]
+    authorized_choice_id: str | None
+    route_digest: str | None
+    reason: str
+
+
+@dataclass(frozen=True)
+class TropicalReadout:
+    """Result of applying a routing decision to a supplied baseline/readout table."""
+
+    value: np.ndarray
+    used_hard_path: bool
+    choice_id: str | None
+    choice_index: int | None
+    reason: str
 
 
 @dataclass(frozen=True)
@@ -242,6 +358,21 @@ def _json_digest(payload: Any) -> str:
         separators=(",", ":"),
     ).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
+
+
+def _same_choice_ids(left: tuple[str, ...], right: tuple[str, ...]) -> bool:
+    """Compare ordered choice IDs through their canonical binding digests."""
+    return hmac.compare_digest(
+        _json_digest({"choice_ids": left}),
+        _json_digest({"choice_ids": right}),
+    )
+
+
+def _same_optional_digest(left: str | None, right: str | None) -> bool:
+    """Timing-safe equality for optional artifact digests."""
+    if left is None or right is None:
+        return left is None and right is None
+    return hmac.compare_digest(left, right)
 
 
 def _prepare_scores(
@@ -1210,6 +1341,627 @@ def temperature_gate(
     )
 
 
+def deterministic_argmax(
+    scores: np.ndarray,
+    *,
+    choice_ids: tuple[str, ...] | None = None,
+) -> tuple[int, str]:
+    """Return score-descending, choice-ID-ascending argmax attribution.
+
+    This deterministic tie rule is useful for replay, but an exact tie still
+    cannot authorize hard routing because the certificate requires uniqueness.
+    """
+    score_array = np.asarray(scores, dtype=np.float64)
+    if score_array.ndim != 1 or score_array.size < 1:
+        raise ValueError("scores must be a non-empty one-dimensional array")
+    if not np.isfinite(score_array).all():
+        raise ValueError("scores must contain only finite values")
+    ids = (
+        tuple(str(index) for index in range(score_array.size))
+        if choice_ids is None
+        else tuple(str(choice_id) for choice_id in choice_ids)
+    )
+    if len(ids) != score_array.size or len(set(ids)) != len(ids):
+        raise ValueError("choice_ids must be unique and have one entry per score")
+    max_score = float(np.max(score_array))
+    candidates = [
+        (choice_id, index)
+        for index, (choice_id, score) in enumerate(zip(ids, score_array))
+        if float(score) == max_score
+    ]
+    choice_id, index = min(candidates)
+    return index, choice_id
+
+
+def tropical_readout_or_baseline(
+    baseline_readout: np.ndarray,
+    values: np.ndarray,
+    scores: np.ndarray,
+    decision: TropicalRoutingDecision,
+    *,
+    choice_ids: tuple[str, ...] | None = None,
+) -> TropicalReadout:
+    """Apply an authorized hard readout or return the exact supplied baseline.
+
+    The fallback deliberately returns ``baseline_readout`` itself rather than a
+    recomputation or copy.  Thus the controller cannot perturb the baseline on
+    a disabled, warming-up, high-temperature, or failed-certificate decision.
+    """
+    if not isinstance(baseline_readout, np.ndarray):
+        raise TypeError("baseline_readout must be a numpy array")
+    if not decision.use_hard_path:
+        return TropicalReadout(
+            value=baseline_readout,
+            used_hard_path=False,
+            choice_id=None,
+            choice_index=None,
+            reason=decision.reason,
+        )
+
+    try:
+        value_array = np.asarray(values)
+        score_array = np.asarray(scores, dtype=np.float64)
+        ids = (
+            tuple(str(index) for index in range(score_array.size))
+            if choice_ids is None
+            else tuple(str(choice_id) for choice_id in choice_ids)
+        )
+        if score_array.ndim != 1:
+            raise ValueError("scores must be one-dimensional")
+        if value_array.ndim < 1 or value_array.shape[0] != score_array.size:
+            raise ValueError("values must have one leading row per score")
+        if not np.isfinite(value_array).all():
+            raise ValueError("values contained non-finite entries")
+        if not _same_choice_ids(ids, decision.authorized_choice_ids):
+            raise ValueError("choice IDs did not match the certificate authorization")
+        if not np.isfinite(score_array).all():
+            raise ValueError("scores contained non-finite values")
+        observed_score_digest = _score_digest(
+            tuple((choice_id, float(score)) for choice_id, score in zip(ids, score_array))
+        )
+        if (
+            decision.authorized_score_digest is None
+            or not hmac.compare_digest(
+                observed_score_digest,
+                decision.authorized_score_digest,
+            )
+        ):
+            raise ValueError("scores did not match the certificate authorization")
+        index, choice_id = deterministic_argmax(score_array, choice_ids=ids)
+        if decision.authorized_choice_id is None:
+            raise ValueError("hard decision omitted its authorized choice ID")
+        if not hmac.compare_digest(choice_id, decision.authorized_choice_id):
+            raise ValueError(
+                "hard readout attribution did not match the certificate-authorized choice"
+            )
+    except (TypeError, ValueError) as exc:
+        return TropicalReadout(
+            value=baseline_readout,
+            used_hard_path=False,
+            choice_id=None,
+            choice_index=None,
+            reason=f"hard readout fallback: {exc}",
+        )
+    return TropicalReadout(
+        value=value_array[index],
+        used_hard_path=True,
+        choice_id=choice_id,
+        choice_index=index,
+        reason="certificate-authorized exact hard attribution",
+    )
+
+
+class TropicalRoutingController:
+    """Persisted anneal/hysteresis controller with fail-closed hard routing.
+
+    Call :meth:`schedule_point` first, evaluate scores at that exact temperature
+    and (for attention) barrier, build a bound :class:`TropicalCertificateRecord`,
+    then call :meth:`observe`.  A certified observation can enter hard mode only
+    after ``entry_windows`` consecutive passes.  Any failure while hard exits to
+    the supplied baseline on that same decision.
+    """
+
+    _STATE_SCHEMA_VERSION = 1
+
+    def __init__(
+        self,
+        syn_cfg: TropicalToggleSource,
+        config: TropicalRoutingConfig | None = None,
+        *,
+        logger: EventLogger | None = None,
+    ) -> None:
+        self.config = config or TropicalRoutingConfig()
+        authorization = syn_cfg.tropical_skeleton
+        if not isinstance(authorization, bool):
+            raise TypeError("syn_cfg.tropical_skeleton must be a bool")
+        self.enabled = authorization
+        baseline_barrier_strength = syn_cfg.barrier_strength
+        if (
+            not math.isfinite(baseline_barrier_strength)
+            or baseline_barrier_strength < 0.0
+        ):
+            raise ValueError(
+                "baseline_barrier_strength must be finite and non-negative"
+            )
+        self.baseline_barrier_strength = float(baseline_barrier_strength)
+        self.logger = logger
+        self._schedule_step = 0
+        self._entry_streak = 0
+        self._hard_active = False
+        self._decision_count = 0
+        self._active_route_digest: str | None = None
+        self.decisions: list[TropicalRoutingDecision] = []
+
+    def _config_digest(self) -> str:
+        return _json_digest(
+            {
+                "config": asdict(self.config),
+                "tropical_skeleton": self.enabled,
+                "baseline_barrier_strength": self.baseline_barrier_strength,
+            }
+        )
+
+    def state(self) -> TropicalRoutingState:
+        """Return an immutable snapshot suitable for assertions and summaries."""
+        return TropicalRoutingState(
+            schedule_step=self._schedule_step,
+            entry_streak=self._entry_streak,
+            hard_active=self._hard_active,
+            decision_count=self._decision_count,
+            route_digest=self._active_route_digest,
+        )
+
+    def schedule_point(self) -> TropicalSchedulePoint:
+        """Return the current geometric temperature and linear barrier point."""
+        progress = min(self._schedule_step / self.config.anneal_steps, 1.0)
+        tau = self.config.tau_start * (
+            self.config.tau_min / self.config.tau_start
+        ) ** progress
+        barrier_end = (
+            self.baseline_barrier_strength
+            if self.config.barrier_end is None
+            else self.config.barrier_end
+        )
+        barrier = self.baseline_barrier_strength + progress * (
+            barrier_end - self.baseline_barrier_strength
+        )
+        payload = {
+            "step": self._schedule_step,
+            "progress": progress,
+            "tau": tau,
+            "barrier_strength": barrier,
+            "config_digest": self._config_digest(),
+        }
+        return TropicalSchedulePoint(
+            step=self._schedule_step,
+            progress=progress,
+            tau=tau,
+            barrier_strength=barrier,
+            digest=_json_digest(payload),
+        )
+
+    @staticmethod
+    def _record_gate(
+        record: TropicalCertificateRecord | None,
+        point: TropicalSchedulePoint,
+        *,
+        observed_barrier_strength: float | None,
+        expected_record_step: int,
+    ) -> tuple[bool, str, str | None, str | None]:
+        if record is None:
+            return False, "certificate record was missing", None, None
+        try:
+            certificate_digest = _json_digest(asdict(record))
+        except (TypeError, ValueError):
+            return False, "certificate record was not strict finite JSON", None, None
+        if (
+            not isinstance(record.step, int)
+            or isinstance(record.step, bool)
+            or record.step != expected_record_step
+        ):
+            return (
+                False,
+                "certificate record step did not match the current decision index",
+                certificate_digest,
+                None,
+            )
+        if (
+            not isinstance(record.schedule_digest, str)
+            or not hmac.compare_digest(record.schedule_digest, point.digest)
+        ):
+            return (
+                False,
+                "certificate schedule digest did not match the current schedule point",
+                certificate_digest,
+                None,
+            )
+        if record.certificate_scope is CertificateScope.MOE_TOPK_MEMBERSHIP:
+            return (
+                False,
+                "MoE top-k membership cannot authorize a hard readout",
+                certificate_digest,
+                None,
+            )
+        if record.certificate_scope not in (
+            CertificateScope.ATTENTION_HARD_READOUT,
+            CertificateScope.MOE_HARD_TOP1,
+        ):
+            return False, "unsupported hard-readout certificate scope", certificate_digest, None
+        if not isinstance(record.layer, str) or not record.layer.strip():
+            return False, "hard routing requires a non-empty layer/site ID", certificate_digest, None
+        if (
+            record.certificate_scope is CertificateScope.ATTENTION_HARD_READOUT
+            and (
+                not isinstance(record.head, int)
+                or isinstance(record.head, bool)
+                or record.head < 0
+            )
+        ):
+            return False, "attention hard routing requires a non-negative head ID", certificate_digest, None
+        if (
+            record.certificate_scope is CertificateScope.MOE_HARD_TOP1
+            and (
+                not isinstance(record.router_top_k, int)
+                or isinstance(record.router_top_k, bool)
+                or record.router_top_k < 1
+            )
+        ):
+            return False, "MoE hard routing requires a positive router_top_k", certificate_digest, None
+        if record.geometry.scope is not GeometryScope.EXACT_AFFINE:
+            return False, "hard routing requires exact_affine geometry", certificate_digest, None
+        if (
+            record.fingerprint.valid is not True
+            or record.fingerprint.active_vertex_certified is not True
+            or record.fingerprint.replayable is not True
+        ):
+            return False, "hard routing requires a replayable fingerprint", certificate_digest, None
+        if (
+            not isinstance(record.fingerprint.score_digest, str)
+            or not isinstance(record.fingerprint.eligible_ids, tuple)
+            or not all(
+                isinstance(choice_id, str)
+                for choice_id in record.fingerprint.eligible_ids
+            )
+            or not isinstance(record.fingerprint.active_ids, tuple)
+            or not all(
+                isinstance(choice_id, str)
+                for choice_id in record.fingerprint.active_ids
+            )
+            or not isinstance(record.fingerprint.topk_order, tuple)
+            or not all(
+                isinstance(choice_id, str)
+                for choice_id in record.fingerprint.topk_order
+            )
+        ):
+            return False, "fingerprint schema was malformed", certificate_digest, None
+        temperature = record.temperature
+        if temperature is None:
+            return False, "measured temperature evidence was missing", certificate_digest, None
+        if (
+            temperature.certificate_scope is not record.certificate_scope
+            or temperature.applicable is not True
+            or temperature.valid is not True
+            or temperature.passed is not True
+        ):
+            return False, temperature.reason, certificate_digest, None
+        if (
+            not isinstance(temperature.score_digest, str)
+            or not isinstance(temperature.choice_ids, tuple)
+            or not all(isinstance(choice_id, str) for choice_id in temperature.choice_ids)
+        ):
+            return False, "temperature evidence schema was malformed", certificate_digest, None
+        if temperature.tau is None or temperature.tau != point.tau:
+            return (
+                False,
+                "certificate temperature did not match the current schedule point",
+                certificate_digest,
+                None,
+            )
+        if record.certificate_scope is CertificateScope.ATTENTION_HARD_READOUT:
+            if (
+                observed_barrier_strength is None
+                or not math.isfinite(observed_barrier_strength)
+                or observed_barrier_strength != point.barrier_strength
+            ):
+                return (
+                    False,
+                    "observed attention barrier did not match the current schedule point",
+                    certificate_digest,
+                    None,
+                )
+        elif observed_barrier_strength is not None:
+            return (
+                False,
+                "MoE hard-top-1 routing must not claim an attention barrier binding",
+                certificate_digest,
+                None,
+            )
+        if record.artifacts_bound is not True:
+            return False, "certificate artifacts were not mutually bound", certificate_digest, None
+        if (
+            not _same_choice_ids(
+                temperature.choice_ids,
+                record.fingerprint.eligible_ids,
+            )
+            or not hmac.compare_digest(
+                temperature.score_digest,
+                record.fingerprint.score_digest,
+            )
+        ):
+            return False, "temperature evidence was not bound to the fingerprint", certificate_digest, None
+        if (
+            record.selection_certified is not True
+            or record.geometry.certified is not True
+            or record.lipschitz_certified is not True
+            or record.lipschitz.valid is not True
+            or record.pre_dropout is not True
+            or record.certified is not True
+            or record.readout_certified is not True
+        ):
+            return False, record.reason, certificate_digest, None
+        if len(record.fingerprint.active_ids) != 1:
+            return False, "hard routing requires exactly one active ID", certificate_digest, None
+        winner_id = record.fingerprint.active_ids[0]
+        if not record.fingerprint.topk_order or not hmac.compare_digest(
+            record.fingerprint.topk_order[0],
+            winner_id,
+        ):
+            return False, "active ID and deterministic top-k order disagreed", certificate_digest, None
+        return True, "all measured hard-routing gates passed", certificate_digest, winner_id
+
+    @staticmethod
+    def _record_route_digest(record: TropicalCertificateRecord) -> str:
+        """Identify one controller site without binding it to input-varying scores."""
+        return _json_digest(
+            {
+                "certificate_scope": record.certificate_scope,
+                "layer": record.layer,
+                "head": record.head,
+                "router_top_k": record.router_top_k,
+            }
+        )
+
+    def observe(
+        self,
+        record: TropicalCertificateRecord | None,
+        *,
+        observed_barrier_strength: float | None = None,
+    ) -> TropicalRoutingDecision:
+        """Consume one observation and authorize hard routing or the exact baseline."""
+        point = self.schedule_point()
+        if not self.enabled:
+            return TropicalRoutingDecision(
+                decision_index=self._decision_count,
+                mode=TropicalRoutingMode.DISABLED,
+                transition=TropicalRoutingTransition.DISABLED,
+                use_hard_path=False,
+                used_baseline=True,
+                gate_passed=False,
+                hard_active=False,
+                entry_streak=0,
+                schedule=point,
+                certificate_digest=None,
+                authorized_score_digest=None,
+                authorized_choice_ids=(),
+                authorized_choice_id=None,
+                route_digest=None,
+                reason="tropical_skeleton is disabled; unchanged baseline selected",
+            )
+
+        passed, gate_reason, certificate_digest, winner_id = self._record_gate(
+            record,
+            point,
+            observed_barrier_strength=observed_barrier_strength,
+            expected_record_step=self._decision_count,
+        )
+        observed_route_digest = (
+            self._record_route_digest(record) if passed and record is not None else None
+        )
+        was_hard = self._hard_active
+        if was_hard and passed and not _same_optional_digest(
+            observed_route_digest,
+            self._active_route_digest,
+        ):
+            passed = False
+            gate_reason = "routing site changed while hard mode was active"
+            winner_id = None
+        if was_hard and not passed:
+            self._hard_active = False
+            self._entry_streak = 0
+            self._active_route_digest = None
+            transition = TropicalRoutingTransition.EXIT_TO_SOFT
+            reason = f"immediate certificate fallback: {gate_reason}"
+        elif was_hard:
+            self._entry_streak = self.config.entry_windows
+            transition = TropicalRoutingTransition.STAY_HARD
+            reason = gate_reason
+        elif passed:
+            if not _same_optional_digest(
+                observed_route_digest,
+                self._active_route_digest,
+            ):
+                self._active_route_digest = observed_route_digest
+                self._entry_streak = 1
+            else:
+                self._entry_streak += 1
+            if self._entry_streak >= self.config.entry_windows:
+                self._entry_streak = self.config.entry_windows
+                self._hard_active = True
+                transition = TropicalRoutingTransition.ENTER_HARD
+                reason = (
+                    f"entry gate passed for {self.config.entry_windows} consecutive windows"
+                )
+            else:
+                transition = TropicalRoutingTransition.STAY_SOFT
+                reason = (
+                    f"entry gate passed for {self._entry_streak}/"
+                    f"{self.config.entry_windows} consecutive windows"
+                )
+        else:
+            self._entry_streak = 0
+            self._active_route_digest = None
+            transition = TropicalRoutingTransition.STAY_SOFT
+            reason = f"soft approximation; unchanged baseline fallback: {gate_reason}"
+
+        mode = (
+            TropicalRoutingMode.HARD
+            if self._hard_active
+            else TropicalRoutingMode.SOFT_APPROXIMATION
+        )
+        decision = TropicalRoutingDecision(
+            decision_index=self._decision_count,
+            mode=mode,
+            transition=transition,
+            use_hard_path=self._hard_active,
+            used_baseline=not self._hard_active,
+            gate_passed=passed,
+            hard_active=self._hard_active,
+            entry_streak=self._entry_streak,
+            schedule=point,
+            certificate_digest=certificate_digest,
+            authorized_score_digest=(
+                record.fingerprint.score_digest
+                if self._hard_active and record is not None
+                else None
+            ),
+            authorized_choice_ids=(
+                record.fingerprint.eligible_ids
+                if self._hard_active and record is not None
+                else ()
+            ),
+            authorized_choice_id=winner_id if self._hard_active else None,
+            route_digest=self._active_route_digest,
+            reason=reason,
+        )
+        self.decisions.append(decision)
+        self._decision_count += 1
+        self._schedule_step = min(
+            self._schedule_step + 1,
+            self.config.anneal_steps,
+        )
+        if self.logger is not None:
+            self.logger.event(
+                "tropical_routing_transition",
+                level="info" if decision.use_hard_path else "warning",
+                step=decision.decision_index,
+                decision=asdict(decision),
+            )
+        return decision
+
+    def state_dict(self) -> dict[str, Any]:
+        """Serialize all state needed for deterministic schedule replay."""
+        return {
+            "schema_version": self._STATE_SCHEMA_VERSION,
+            "config_digest": self._config_digest(),
+            **asdict(self.state()),
+        }
+
+    def load_state_dict(self, state: dict[str, Any]) -> None:
+        """Restore a state produced by :meth:`state_dict`, failing closed on drift."""
+        expected_keys = {
+            "schema_version",
+            "config_digest",
+            "schedule_step",
+            "entry_streak",
+            "hard_active",
+            "decision_count",
+            "route_digest",
+        }
+        if set(state) != expected_keys:
+            raise ValueError("routing state keys did not match the strict schema")
+        if state["schema_version"] != self._STATE_SCHEMA_VERSION:
+            raise ValueError("unsupported routing state schema version")
+        digest = state["config_digest"]
+        if not isinstance(digest, str) or not hmac.compare_digest(
+            digest,
+            self._config_digest(),
+        ):
+            raise ValueError("routing state was produced by a different schedule config")
+        schedule_step = state["schedule_step"]
+        entry_streak = state["entry_streak"]
+        hard_active = state["hard_active"]
+        decision_count = state["decision_count"]
+        route_digest = state["route_digest"]
+        if not isinstance(schedule_step, int) or isinstance(schedule_step, bool):
+            raise TypeError("schedule_step must be an integer")
+        if not 0 <= schedule_step <= self.config.anneal_steps:
+            raise ValueError("schedule_step is outside the configured schedule")
+        if not isinstance(entry_streak, int) or isinstance(entry_streak, bool):
+            raise TypeError("entry_streak must be an integer")
+        if not 0 <= entry_streak <= self.config.entry_windows:
+            raise ValueError("entry_streak is outside the configured hysteresis window")
+        if not isinstance(hard_active, bool):
+            raise TypeError("hard_active must be a bool")
+        if route_digest is not None and not isinstance(route_digest, str):
+            raise TypeError("route_digest must be a string or None")
+        if hard_active and entry_streak != self.config.entry_windows:
+            raise ValueError("hard_active requires a complete entry streak")
+        if not hard_active and entry_streak == self.config.entry_windows:
+            raise ValueError("a complete entry streak must have activated hard routing")
+        if not isinstance(decision_count, int) or isinstance(decision_count, bool):
+            raise TypeError("decision_count must be an integer")
+        if decision_count < 0:
+            raise ValueError("decision_count must be a non-negative integer")
+        if schedule_step != min(decision_count, self.config.anneal_steps):
+            raise ValueError("schedule_step was not reachable from decision_count")
+        if entry_streak > decision_count:
+            raise ValueError("entry_streak cannot exceed decision_count")
+        if (entry_streak == 0) != (route_digest is None):
+            raise ValueError("route_digest must exist exactly while an entry streak is active")
+        if not self.enabled and (
+            schedule_step != 0
+            or entry_streak != 0
+            or hard_active
+            or decision_count != 0
+            or route_digest is not None
+        ):
+            raise ValueError("a disabled routing config cannot restore active schedule state")
+        self._schedule_step = schedule_step
+        self._entry_streak = entry_streak
+        self._hard_active = hard_active
+        self._decision_count = decision_count
+        self._active_route_digest = route_digest
+        self.decisions.clear()
+
+    def to_jsonl(self) -> list[str]:
+        """Return strict, deterministically keyed transition JSONL."""
+        return [
+            json.dumps(
+                asdict(decision),
+                ensure_ascii=False,
+                allow_nan=False,
+                sort_keys=True,
+            )
+            for decision in self.decisions
+        ]
+
+    def render(self, console: Any | None = None) -> None:
+        """Render routing transitions with Rich."""
+        from rich.console import Console
+        from rich.table import Table
+
+        output = console or Console()
+        table = Table(title="Tropical routing transitions")
+        table.add_column("Decision", justify="right")
+        table.add_column("Schedule")
+        table.add_column("Transition")
+        table.add_column("Gate")
+        table.add_column("Action / reason")
+        for decision in self.decisions:
+            table.add_row(
+                str(decision.decision_index),
+                (
+                    f"s={decision.schedule.progress:.3f}; "
+                    f"tau={decision.schedule.tau:.6g}; "
+                    f"barrier={decision.schedule.barrier_strength:.6g}"
+                ),
+                decision.transition.value,
+                "pass" if decision.gate_passed else "fail",
+                f"{decision.mode.value}\n{decision.reason}",
+            )
+        output.print(table)
+
+
 class TropicalCertificateMonitor:
     """Collect, log, serialize, and render tropical certificates without changing routing."""
 
@@ -1230,6 +1982,7 @@ class TropicalCertificateMonitor:
         router_top_k: int | None = None,
         pre_dropout: bool | None = None,
         values_frozen: bool = False,
+        schedule_digest: str | None = None,
     ) -> TropicalCertificateRecord:
         """Compose scope-correct verdicts and append one structured record."""
         scope = _enum_value(certificate_scope, CertificateScope, "certificate_scope")
@@ -1237,6 +1990,10 @@ class TropicalCertificateMonitor:
             raise ValueError("temperature gate scope does not match certificate scope")
         if router_top_k is not None and router_top_k < 1:
             raise ValueError("router_top_k must be positive when supplied")
+        if schedule_digest is not None and (
+            not isinstance(schedule_digest, str) or not schedule_digest
+        ):
+            raise ValueError("schedule_digest must be a non-empty string when supplied")
 
         lipschitz_binding = bool(
             selection.geometry.input_norm is lipschitz.input_norm
@@ -1353,6 +2110,7 @@ class TropicalCertificateMonitor:
             artifacts_bound=artifacts_bound,
             certified=certified,
             reason=reason,
+            schedule_digest=schedule_digest,
         )
         self.records.append(record)
         if self.logger is not None:

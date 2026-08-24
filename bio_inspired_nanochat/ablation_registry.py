@@ -110,6 +110,11 @@ MECHANISMS: tuple[MechanismFlag, ...] = (
         "Certificate-driven MoE split/merge/birth using spectral conditioning, H0 persistence, "
         "and optimal transport (0642.5.2.2); deterministically falls back to UTA.",
     ),
+    MechanismFlag(
+        "tropical_skeleton", "tropical_skeleton", False, False, False, (),
+        "Certified low-temperature hard-routing controller (0642.6.2.2); requires an explicit "
+        "exact-affine score adapter and otherwise preserves the unchanged soft baseline.",
+    ),
 )
 
 _BY_FIELD: dict[str, MechanismFlag] = {m.field: m for m in MECHANISMS}
@@ -183,6 +188,10 @@ def validate_config(cfg: SynapticConfig) -> tuple[list[str], list[str]]:
         )
     if cfg.xi_dim < 0:
         errors.append(f"xi_dim must be >= 0 (0 = shared kinetics), got {cfg.xi_dim}")
+    if not isinstance(cfg.tropical_skeleton, bool):
+        errors.append(
+            f"tropical_skeleton must be a bool, got {cfg.tropical_skeleton!r}"
+        )
     if cfg.tau_c <= 0.0:
         errors.append(f"tau_c must be > 0, got {cfg.tau_c}")
     if cfg.alpha_ca < 0.0:

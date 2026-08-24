@@ -161,6 +161,7 @@ SUBSYSTEM: dict[str, str] = {
     "enable_hebbian": "toggle",
     "enable_metabolism": "toggle",
     "use_flex_attention": "toggle",
+    "tropical_skeleton": "toggle",
     "native_genetics": "native_toggle",
 }
 

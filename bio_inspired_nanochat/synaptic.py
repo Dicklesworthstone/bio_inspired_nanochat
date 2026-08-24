@@ -329,6 +329,11 @@ class SynapticConfig:
     enable_hebbian: bool = True
     enable_metabolism: bool = True
     use_flex_attention: bool = False
+    # 0642.6.2.2: authorize the standalone tropical routing controller. Default-off and
+    # intentionally not consulted by the live tensor forwards: current biological attention
+    # and MoE scores are generally nonlinear/local-only, so they must first pass through an
+    # explicit exact-affine adapter and certificate before hard routing is allowed.
+    tropical_skeleton: bool = False
 
     # Native (Rust) Kernel Toggles
     # native_genetics gates the fused metabolism/genetics kernel (synaptic.py, MoE
