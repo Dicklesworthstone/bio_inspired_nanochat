@@ -18,6 +18,7 @@
 #   ctrl.step(global_step, optimizer=opt)    # call periodically (e.g. every 50k steps)
 
 import math
+import hashlib
 from dataclasses import asdict, dataclass
 from collections import defaultdict
 from typing import List, Tuple, Optional, Iterable, Any, Dict, Mapping, Set, cast
@@ -216,16 +217,28 @@ def _cosine(a: Tensor, b: Tensor, eps: float = 1e-8) -> Tensor:
     return a @ b.T
 
 
+def _randn_like(t: Tensor, generator: Optional[torch.Generator] = None) -> Tensor:
+    """``torch.randn_like`` that also accepts an explicit generator (uta.5).
+
+    Some torch builds reject ``generator=`` on ``randn_like``; going through
+    ``torch.randn(shape, ...)`` keeps one code path for both.
+    """
+    if generator is None:
+        return torch.randn_like(t)
+    return torch.randn(tuple(t.shape), dtype=t.dtype, device=t.device, generator=generator)
+
+
 @torch.no_grad()
-def _orthogonal_perturb_like(vec: Tensor, noise_scale: float) -> Tensor:
+def _orthogonal_perturb_like(
+    vec: Tensor, noise_scale: float, generator: Optional[torch.Generator] = None
+) -> Tensor:
     """Return a unit-length vector: normalized(vec + noise in orthogonal subspace).
 
     When noise_scale <= 0, returns vec unchanged (no normalization, exact copy).
     """
     if noise_scale <= 0:
         return vec.clone()
-    vec.shape[-1]
-    noise = torch.randn_like(vec)
+    noise = _randn_like(vec, generator)
     proj = (noise * vec).sum(dim=-1, keepdim=True) * vec
     tangent = noise - proj
     out = vec + noise_scale * tangent
@@ -233,10 +246,12 @@ def _orthogonal_perturb_like(vec: Tensor, noise_scale: float) -> Tensor:
 
 
 @torch.no_grad()
-def _add_noise_(t: Tensor, scale: float):
+def _add_noise_(
+    t: Tensor, scale: float, generator: Optional[torch.Generator] = None
+):
     if scale <= 0:
         return
-    t.add_(torch.randn_like(t) * scale)
+    t.add_(_randn_like(t, generator) * scale)
 
 
 @torch.no_grad()
@@ -413,14 +428,18 @@ def _merge_linear_into_(winner: SynapticLinear, loser: SynapticLinear, alpha: fl
     _clone_linear_from_(loser, winner, cfg.clone_noise_linear)
 
 
-@torch.no_grad()
-def _clone_linear_from_(dst: SynapticLinear, src: SynapticLinear, noise_scale: float):
+def _clone_linear_from_(
+    dst: SynapticLinear,
+    src: SynapticLinear,
+    noise_scale: float,
+    generator: Optional[torch.Generator] = None,
+):
     _copy_synaptic_linear_(dst, src)
-    _add_noise_(dst.w_slow, noise_scale)
+    _add_noise_(dst.w_slow, noise_scale, generator=generator)
     if dst.w_fast is not None:
-        _add_noise_(dst.w_fast, noise_scale)
+        _add_noise_(dst.w_fast, noise_scale, generator=generator)
     if dst.bias is not None:
-        _add_noise_(cast(Tensor, dst.bias), noise_scale)
+        _add_noise_(cast(Tensor, dst.bias), noise_scale, generator=generator)
     # reset fast Hebbian traces for cloned expert
     if dst.post is not None:
         cast(Tensor, dst.post.fast).zero_()
@@ -465,6 +484,7 @@ def _antisym_perturb_fc1_(
     child_lin: SynapticLinear,
     scale: float,
     spectral_norm_cap: float | None = None,
+    generator: Optional[torch.Generator] = None,
 ):
     """Antisymmetric perturbation: parent -= δ, child += δ on fc1 weights.
 
@@ -495,13 +515,15 @@ def _antisym_perturb_fc1_(
         return delta * (cap / norm)
 
     d = _cap_spectral_norm(
-        torch.randn_like(parent_lin.w_slow) * (scale * _rms(parent_lin.w_slow))
+        _randn_like(parent_lin.w_slow, generator)
+        * (scale * _rms(parent_lin.w_slow))
     )
     parent_lin.w_slow.sub_(d)
     child_lin.w_slow.add_(d)
     if (parent_lin.w_fast is not None) and (child_lin.w_fast is not None):
         df = _cap_spectral_norm(
-            torch.randn_like(parent_lin.w_fast) * (scale * _rms(parent_lin.w_fast))
+            _randn_like(parent_lin.w_fast, generator)
+            * (scale * _rms(parent_lin.w_fast))
         )
         parent_lin.w_fast.sub_(df)
         child_lin.w_fast.add_(df)
@@ -535,6 +557,7 @@ def _function_preserving_split_(
     dst_idx: int,
     cfg: SplitMergeConfig,
     spectral_noise_norm: float | None = None,
+    generator: Optional[torch.Generator] = None,
 ):
     """Split parent into (parent, child@dst_idx) without changing the model output.
 
@@ -553,6 +576,7 @@ def _function_preserving_split_(
         layer.experts[dst_idx].fc1,
         cfg.fp_divergence_noise,
         spectral_noise_norm,
+        generator=generator,
     )
 
 
@@ -629,6 +653,7 @@ def _function_preserving_merge_(
     alpha: float,
     cfg: SplitMergeConfig,
     ot_barycenter: bool = False,
+    generator: Optional[torch.Generator] = None,
 ):
     """Merge loser into winner, then refill its slot with a twin of the winner.
 
@@ -650,6 +675,7 @@ def _function_preserving_merge_(
         loser_idx,
         cfg,
         spectral_noise_norm=0.0 if ot_barycenter else None,
+        generator=generator,
     )
 
 
@@ -842,6 +868,7 @@ def _resize_layer_experts_(
     target_E: int,
     seed_idx: int,
     cfg: SplitMergeConfig,
+    generator: Optional[torch.Generator] = None,
 ) -> List[int]:
     """Grow/shrink ``layer`` to ``target_E`` experts IN PLACE; returns touched slots.
 
@@ -905,7 +932,9 @@ def _resize_layer_experts_(
             # still start at LOW mass, so (re)apply the -ln2 gate afterwards.
             cast(Tensor, layer.router_logit_bias)[dst] = -cfg.gate_split_bias
             e = layer.experts[dst]
-            _add_noise_(cast(Tensor, e.fc1.w_slow), cfg.clone_noise_linear * 0.5)
+            _add_noise_(
+                cast(Tensor, e.fc1.w_slow), cfg.clone_noise_linear * 0.5, generator=generator
+            )
             fatigue = cast(Tensor, layer.fatigue)
             energy = cast(Tensor, layer.energy)
             fatigue[dst] = 0.0
@@ -993,7 +1022,6 @@ class SplitMergeController:
         # NET added experts (fraction of the initial total) is the compute budget.
         self._initial_total_experts = sum(m.num_experts for m in self._moe_layers)
         self._net_added_experts = 0
-        self._warned_ddp_variable = False
 
     def state_dict(self) -> Dict[str, int]:
         """Return scheduling and growth-budget state needed for exact resume."""
@@ -1152,6 +1180,7 @@ class SplitMergeController:
         optimizer: OptimizersArg,
         step: int,
         spectral_noise_norms: Optional[List[float]] = None,
+        generator: Optional[torch.Generator] = None,
     ) -> bool:
         W = layer.router.weight
         changed_any = False
@@ -1173,6 +1202,7 @@ class SplitMergeController:
                     dst,
                     self.cfg,
                     spectral_noise_norm=noise_norm,
+                    generator=generator,
                 )
             else:
                 # Legacy: clone src → dst with noise & embedding tweak (discontinuous).
@@ -1180,20 +1210,23 @@ class SplitMergeController:
                     layer.experts[dst].fc1,
                     layer.experts[src].fc1,
                     self.cfg.clone_noise_linear,
+                    generator=generator,
                 )
                 _clone_linear_from_(
                     layer.experts[dst].fc2,
                     layer.experts[src].fc2,
                     self.cfg.clone_noise_linear,
+                    generator=generator,
                 )
                 # router weight row (expert row)
                 W[dst].copy_(W[src])
-                _add_noise_(W[dst], self.cfg.clone_noise_router)
+                _add_noise_(W[dst], self.cfg.clone_noise_router, generator=generator)
                 # embedding
                 layer.router_embeddings[dst : dst + 1].copy_(
                     _orthogonal_perturb_like(
                         layer.router_embeddings[src : src + 1].clone(),
                         self.cfg.clone_noise_embed,
+                        generator=generator,
                     )
                 )
                 # reset stats
@@ -1252,6 +1285,7 @@ class SplitMergeController:
         step: int,
         balanced: bool = False,
         reuse_loser: bool = False,
+        generator: Optional[torch.Generator] = None,
     ) -> bool:
         for i, j in pairs:
             # UTA keeps the healthier expert and weights by utilization. The
@@ -1285,6 +1319,7 @@ class SplitMergeController:
                         alpha,
                         self.cfg,
                         ot_barycenter=balanced,
+                        generator=generator,
                     )
             else:
                 _merge_expert_into_and_clone_(layer, winner, loser, alpha, self.cfg)
@@ -1811,45 +1846,164 @@ class SplitMergeController:
                 self.logger.on_spawn(
                     layer,
                     parent_idx=int(decision.split_source),
-                    children=[int(destination)],
+                    children=[destination],
                     step=decision.step,
                 )
-            except Exception as exc:
+            except Exception as _e:
                 if self.cfg.verbose:
-                    print(f"[SplitMerge] logger.on_spawn failed: {exc}")
+                    print(f"[SplitMerge] logger.on_spawn failed: {_e}")
         return changed
 
-    def _run_uta_layer(
-        self, layer: SynapticMoE, optimizer: OptimizersArg, step: int
-    ) -> bool:
-        changed = self._do_merges(layer, optimizer, step)
+    def _plan_uta_layer(
+        self, layer: SynapticMoE, step: int, layer_index: int
+    ) -> List[Dict[str, Any]]:
+        """Compute this round's UTA lifecycle ops WITHOUT mutating anything (uta.5).
+
+        Rank0 runs this; the resulting JSON-safe dicts are broadcast to every rank,
+        which applies them bit-identically via :meth:`_apply_uta_ops`. Alphas are
+        computed here from rank0's (authoritative) health and carried inside the ops
+        so no rank ever re-derives a decision from stale replicas.
+        """
+
+        def _seed(kind: str, counter: List[int]) -> int:
+            digest = hashlib.blake2b(
+                f"{step}:{layer_index}:{kind}:{counter[0]}".encode(),
+                digest_size=8,
+            ).digest()
+            counter[0] += 1
+            return int.from_bytes(digest, "big")
+
+        counter = [0]
+        ops: List[Dict[str, Any]] = []
+        for i, j in self._pick_merge_pairs(layer):
+            health = self._health(layer)
+            winner, loser = (i, j) if health[i] >= health[j] else (j, i)
+            alpha = self._util_weight(layer, winner, loser)
+            ops.append(
+                {
+                    "kind": "merge",
+                    "winner": int(winner),
+                    "loser": int(loser),
+                    "alpha": float(alpha),
+                    "seed": _seed("merge", counter),
+                }
+            )
         sources = self._pick_split_sources(layer)
         if sources and self.cfg.splits_per_call > 0:
             slots = self._weakest_slots(
                 layer, min(len(sources), self.cfg.splits_per_call)
             )
-            if self.cfg.verbose:
-                print(f"[SplitMerge] Splitting {list(zip(sources, slots))}")
-            changed |= self._split_into_slots(layer, sources, slots, optimizer, step)
+            for src, dst in zip(sources, slots):
+                if src != dst:
+                    ops.append(
+                        {"kind": "split", "src": int(src), "dst": int(dst), "seed": _seed("split", counter)}
+                    )
         dead_slots = self._pick_dead_slots(layer)
         if dead_slots:
-            sources = self._pick_reset_sources(layer, max(len(dead_slots), 1))
-            reset_pairs = [
-                (src, slot)
-                for slot in dead_slots
-                if (src := next((candidate for candidate in sources if candidate != slot), None))
-                is not None
-            ]
-            if reset_pairs:
-                reset_sources, reset_slots = map(list, zip(*reset_pairs))
-                if self.cfg.verbose:
-                    print(f"[SplitMerge] Resetting {reset_pairs}")
-                changed |= self._split_into_slots(
-                    layer, reset_sources, reset_slots, optimizer, step
-                )
+            reset_sources = self._pick_reset_sources(layer, max(len(dead_slots), 1))
+            for slot in dead_slots:
+                src = next((c for c in reset_sources if c != slot), None)
+                if src is not None:
+                    ops.append(
+                        {"kind": "split", "src": int(src), "dst": int(slot), "seed": _seed("reset", counter)}
+                    )
         if self.cfg.variable_expert_count:
-            changed |= self._maybe_resize_layer(layer, optimizer, step)
+            ops.extend(self._plan_resize_layer(layer, _seed, counter))
+        return ops
+
+    @torch.no_grad()
+    def _apply_uta_ops(
+        self,
+        layer: SynapticMoE,
+        ops: List[Dict[str, Any]],
+        optimizer: OptimizersArg,
+        step: int,
+    ) -> bool:
+        """Execute planned ops deterministically on EVERY rank (uta.5).
+
+        Each op carries its own RNG seed; the executor derives an isolated
+        generator per op, so noise draws are identical across ranks regardless of
+        their local global-RNG state. Lineage logging fires on rank0 only.
+        """
+        changed = False
+        dev = layer.router.weight.device
+        for op in ops:
+            gen = torch.Generator(device=dev)
+            gen.manual_seed(int(op["seed"]) % (2**63 - 1))
+            kind = op["kind"]
+            if kind == "merge":
+                changed |= self._merge_pairs(
+                    layer,
+                    [(int(op["winner"]), int(op["loser"]))],
+                    optimizer,
+                    step,
+                    generator=gen,
+                )
+            elif kind == "split":
+                changed |= self._split_into_slots(
+                    layer,
+                    [int(op["src"])],
+                    [int(op["dst"])],
+                    optimizer,
+                    step,
+                    generator=gen,
+                )
+            elif kind == "grow":
+                touched = _resize_layer_experts_(
+                    layer,
+                    target_E=int(op["target_E"]),
+                    seed_idx=int(op["seed_idx"]),
+                    cfg=self.cfg,
+                    generator=gen,
+                )
+                if touched:
+                    self._net_added_experts += len(touched)
+                    changed = True
+                    sources = [int(op["seed_idx"])] * len(touched)
+                    self._split_into_slots(
+                        layer, sources, touched, optimizer, step, generator=gen
+                    )
+                    if _is_rank0() and self.logger is not None and hasattr(self.logger, "on_spawn"):
+                        try:
+                            self.logger.on_spawn(
+                                layer,
+                                parent_idx=int(op["seed_idx"]),
+                                children=touched,
+                                step=step,
+                            )
+                        except Exception as _e:
+                            if self.cfg.verbose:
+                                print(f"[SplitMerge] logger.on_spawn failed: {_e}")
+            elif kind == "shrink":
+                victims = [int(v) for v in op["victims"]]
+                keeper = int(op["keeper"])
+                for v in victims:
+                    _fold_expert_into_(layer, victim_idx=v, keeper_idx=keeper, alpha=float(op.get("alpha", 0.5)))
+                for _v in sorted(victims, reverse=True):
+                    _resize_layer_experts_(
+                        layer,
+                        target_E=int(getattr(layer, "num_experts")) - 1,
+                        seed_idx=keeper,
+                        cfg=self.cfg,
+                        generator=gen,
+                    )
+                self._net_added_experts -= len(victims)
+                changed = True
+                if _is_rank0() and self.logger is not None and hasattr(self.logger, "on_death"):
+                    try:
+                        self.logger.on_death(layer, removed=victims, keeper=keeper, step=step)
+                    except Exception as _e:
+                        if self.cfg.verbose:
+                            print(f"[SplitMerge] logger.on_death failed: {_e}")
+            else:
+                raise ValueError(f"[SplitMerge] unknown lifecycle op kind: {kind}")
         return changed
+
+    def _run_uta_layer(
+        self, layer: SynapticMoE, optimizer: OptimizersArg, step: int
+    ) -> bool:
+        ops = self._plan_uta_layer(layer, step, layer_index=0)
+        return self._apply_uta_ops(layer, ops, optimizer, step)
 
     # ------------------------------------------------------------------
     # uta.4: variable expert count
@@ -1859,39 +2013,20 @@ class SplitMergeController:
         cap = int(self._initial_total_experts * self.cfg.growth_budget_pct)
         return max(0, cap - max(0, self._net_added_experts))
 
-    @torch.no_grad()
-    def _maybe_resize_layer(
-        self, layer: SynapticMoE, optimizer: OptimizersArg, step: int
-    ) -> bool:
-        """Grow/shrink this layer's expert count under pressure + budget (uta.4).
-
-        GROW when strong-expert count exceeds what splits_per_call can serve — i.e.
-        sustained demand for capacity instead of overwriting healthy slots — and the
-        hard cap plus cumulative growth budget allow it, AND no reclaimable dead
-        surplus exists (recycle before grow). Each appended slot receives a
-        function-preserving twin split of the strongest expert (reusing the uta.3
-        machinery, including lineage events and moment resets).
-        SHRINK when dead-slot surplus exceeds what resets_per_call can service: the
-        doomed experts are folded into the healthiest survivor (+ln2 routing mass) and
-        their rows removed everywhere.
-        """
-        if dist.is_available() and dist.is_initialized():
-            if not self._warned_ddp_variable:
-                print(
-                    "[SplitMerge] variable_expert_count skipped under DDP; "
-                    "variable-shape surgery is unsupported until all ranks resize "
-                    "before tensor and optimizer-state synchronization."
-                )
-                self._warned_ddp_variable = True
-            return False
-
+    def _plan_resize_layer(
+        self,
+        layer: SynapticMoE,
+        seed_fn,
+        counter: List[int],
+    ) -> List[Dict[str, Any]]:
+        """Decision half of uta.4 resize — no mutation (uta.5)."""
         E = int(layer.num_experts)
         health = self._health(layer)
         dead = [
             i for i in range(E) if float(health[i]) <= self.cfg.reset_health_max
         ]
-        # recycle-before-grow: reclaimable dead slots must be serviced (by the
-        # reset pass above and/or removal below) before fresh capacity is added.
+        # recycle-before-grow: reclaimable dead slots must be serviced before
+        # fresh capacity is added.
         dead_surplus = len(dead) - self.cfg.resets_per_call
 
         strong = [
@@ -1900,61 +2035,64 @@ class SplitMergeController:
         demand_surplus = len(strong) - self.cfg.splits_per_call
         cap_room = self.cfg.max_experts - E
         budget_room = min(cap_room, self._growth_budget_remaining())
+        ops: List[Dict[str, Any]] = []
         if demand_surplus > 0 and budget_room > 0 and dead_surplus <= 0:
             n_add = min(demand_surplus, budget_room)
-            newE = E + n_add
-            seed = max(strong, key=lambda i: float(health[i]))
-            touched = _resize_layer_experts_(layer, newE, seed_idx=seed, cfg=self.cfg)
-            if touched:
-                sources = [seed] * len(touched)
-                self._split_into_slots(layer, sources, touched, optimizer, step)
-                self._net_added_experts += len(touched)
-                if self.logger is not None and hasattr(self.logger, "on_spawn"):
-                    try:
-                        self.logger.on_spawn(
-                            layer, parent_idx=int(seed), children=touched, step=step
-                        )
-                    except Exception as _e:
-                        if self.cfg.verbose:
-                            print(f"[SplitMerge] logger.on_spawn failed: {_e}")
-                if self.cfg.verbose:
-                    print(f"[SplitMerge] grew layer to {newE} experts (spawned {touched})")
-                return True  # one resize per call keeps surgery auditable
+            seed_idx = int(max(strong, key=lambda i: float(health[i])))
+            ops.append(
+                {
+                    "kind": "grow",
+                    "target_E": E + n_add,
+                    "seed_idx": seed_idx,
+                    "seed": seed_fn("grow", counter),
+                }
+            )
+            return ops  # one resize per call keeps surgery auditable
 
-        # --- SHRINK ---
         removable = len(dead) - self.cfg.resets_per_call
         floor_room = E - self.cfg.min_experts
         if removable > 0 and floor_room > 0:
             n_drop = min(removable, floor_room)
             victims = sorted(dead, key=lambda i: float(health[i]))[:n_drop]
-            keeper = max(
-                (i for i in range(E) if i not in victims),
-                key=lambda i: float(health[i]),
+            keeper = int(
+                max(
+                    (i for i in range(E) if i not in victims),
+                    key=lambda i: float(health[i]),
+                )
             )
-            for v in victims:
-                _fold_expert_into_(layer, victim_idx=v, keeper_idx=keeper, alpha=0.5)
-            # remove highest indices first so remaining victim indices stay valid
-            for _v in sorted(victims, reverse=True):
-                _resize_layer_experts_(
-                    layer,
-                    target_E=int(getattr(layer, "num_experts")) - 1,
-                    seed_idx=keeper,
-                    cfg=self.cfg,
-                )
-            self._net_added_experts -= n_drop
-            if self.logger is not None and hasattr(self.logger, "on_death"):
-                try:
-                    self.logger.on_death(layer, removed=victims, keeper=int(keeper), step=step)
-                except Exception as _e:
-                    if self.cfg.verbose:
-                        print(f"[SplitMerge] logger.on_death failed: {_e}")
-            if self.cfg.verbose:
-                print(
-                    f"[SplitMerge] shrank layer {E}->{int(layer.num_experts)} "
-                    f"(folded {victims} into {keeper})"
-                )
-            return True
-        return False
+            ops.append(
+                {
+                    "kind": "shrink",
+                    "victims": [int(v) for v in victims],
+                    "keeper": keeper,
+                    "alpha": 0.5,
+                    "seed": seed_fn("shrink", counter),
+                }
+            )
+        return ops
+
+    @torch.no_grad()
+    def _maybe_resize_layer(
+        self, layer: SynapticMoE, optimizer: OptimizersArg, step: int
+    ) -> bool:
+        """Plan + immediately apply a resize decision for one layer.
+
+        Single-process convenience API (tests, non-distributed runs); the
+        distributed path plans on rank0 via :meth:`_plan_uta_layer` and applies
+        the broadcast ops everywhere instead of calling this directly.
+        """
+        counter = [0]
+
+        def _seed(kind: str, cnt: List[int]) -> int:
+            digest = hashlib.blake2b(
+                f"{step}:{id(layer) % 100003}:{kind}:{cnt[0]}".encode(),
+                digest_size=8,
+            ).digest()
+            cnt[0] += 1
+            return int.from_bytes(digest, "big")
+
+        ops = self._plan_resize_layer(layer, _seed, counter)
+        return self._apply_uta_ops(layer, ops, optimizer, step)
 
     @torch.no_grad()
     def step(self, global_step: int, optimizer: OptimizersArg = None):
@@ -1965,13 +2103,71 @@ class SplitMergeController:
         if global_step - self._last_step < self.cfg.min_step_interval:
             return
 
+        distributed = dist.is_available() and dist.is_initialized()
         rank0 = _is_rank0()
         if rank0 and self.cfg.verbose:
             print(f"[SplitMerge] step @ {global_step}")
 
-        # Perform operations layer-by-layer on rank 0. The default-off topological
-        # path is all-or-nothing per layer: incomplete evidence runs the exact UTA
-        # lifecycle, never a half-geometric hybrid that would confound ablations.
+        if distributed and not self.topological_nas:
+            # ------------------------------------------------------------
+            # uta.5 protocol: decide on rank0, broadcast the DECISION, apply
+            # identical deterministic surgery on EVERY rank, then re-sync each
+            # rank's optimizer param-groups locally. Survivors keep their own
+            # moments; no blanket moment-zeroing is needed because no rank is
+            # a passive observer anymore.
+            # ------------------------------------------------------------
+            plans: List[Dict[str, Any]] = []
+            if rank0:
+                for layer_index, layer in enumerate(self._moe_layers):
+                    plans.append(
+                        {
+                            "layer": layer_index,
+                            "ops": self._plan_uta_layer(layer, global_step, layer_index),
+                            "experts_before": int(layer.num_experts),
+                        }
+                    )
+            handle = [plans]
+            dist.broadcast_object_list(handle, src=0)
+            plans = handle[0]
+
+            for entry in plans:
+                layer = self._moe_layers[entry["layer"]]
+                experts_before = int(layer.num_experts)
+                layout = (
+                    capture_optimizer_layout(optimizer, self.model)
+                    if optimizer is not None and self.cfg.variable_expert_count
+                    else None
+                )
+                optimizer_snapshot = (
+                    snapshot_optimizer_state(optimizer)
+                    if optimizer is not None and self.cfg.variable_expert_count
+                    else None
+                )
+                changed = self._apply_uta_ops(
+                    layer, entry["ops"], optimizer, global_step
+                )
+                if (
+                    int(layer.num_experts) != experts_before
+                    and optimizer is not None
+                    and layout is not None
+                    and optimizer_snapshot is not None
+                ):
+                    synchronize_optimizers_with_model(
+                        optimizer,
+                        self.model,
+                        layout,
+                        optimizer_snapshot,
+                    )
+            if self.cfg.ddp_broadcast:
+                for layer in self._moe_layers:
+                    _broadcast_module_params(layer)
+                dist.barrier()
+            self._last_step = global_step
+            return
+
+        # Single-process path (and, for now, the topological path under DDP,
+        # which keeps the legacy rank0-executes flow): perform operations
+        # layer-by-layer on rank 0.
         changed_layers = [False] * len(self._moe_layers)
         for layer_index, layer in enumerate(self._moe_layers if rank0 else []):
             experts_before = int(layer.num_experts)
@@ -1986,7 +2182,8 @@ class SplitMergeController:
                 else None
             )
             if not self.topological_nas:
-                changed = self._run_uta_layer(layer, optimizer, global_step)
+                ops = self._plan_uta_layer(layer, global_step, layer_index)
+                changed = self._apply_uta_ops(layer, ops, optimizer, global_step)
             else:
                 decision, record = self._plan_topological_lifecycle(
                     layer,
@@ -1994,7 +2191,8 @@ class SplitMergeController:
                     layer_index=layer_index,
                 )
                 if decision.mode == "uta_fallback":
-                    changed = self._run_uta_layer(layer, optimizer, global_step)
+                    ops = self._plan_uta_layer(layer, global_step, layer_index)
+                    changed = self._apply_uta_ops(layer, ops, optimizer, global_step)
                 else:
                     changed = self._run_topological_layer(layer, decision, optimizer)
                 self._log_topological_decision(decision, record)
@@ -2015,7 +2213,7 @@ class SplitMergeController:
         # Every rank must participate in the same broadcast sequence. Previously
         # non-zero ranks entered the final barrier and returned before rank 0's
         # broadcasts, mismatching collectives and deadlocking DDP lifecycle steps.
-        if self.cfg.ddp_broadcast and dist.is_available() and dist.is_initialized():
+        if self.cfg.ddp_broadcast and distributed:
             if self._moe_layers:
                 flag_device = self._moe_layers[0].router.weight.device
                 change_flags = torch.tensor(
@@ -2027,9 +2225,11 @@ class SplitMergeController:
                 changed_layers = [bool(value) for value in change_flags.tolist()]
             for layer in self._moe_layers:
                 _broadcast_module_params(layer)
-            # Rank 0 resets touched moments during surgery. Other ranks did not
-            # execute the surgery, so reset every parameter in each changed MoE on
-            # every rank to keep distributed optimizer state semantically aligned.
+            # Rank 0 resets touched moments during surgery in this legacy flow.
+            # Other ranks did not execute the surgery, so reset every parameter
+            # in each changed MoE on every rank to keep distributed optimizer
+            # state semantically aligned (uta.5's protocol replaces this for
+            # the UTA path by executing everywhere instead).
             if optimizer is not None:
                 for changed, layer in zip(changed_layers, self._moe_layers):
                     if changed:
