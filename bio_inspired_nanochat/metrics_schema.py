@@ -78,6 +78,18 @@ _M("rrp_mean", "vesicles", Direction.NEUTRAL, "mean readily-releasable vesicle p
 _M("eval_bpb", "bits/byte", Direction.LOWER_BETTER, "evaluation bits-per-byte")
 _M("eval_accuracy", "fraction", Direction.HIGHER_BETTER, "evaluation accuracy")
 _M("niah_accuracy", "fraction", Direction.HIGHER_BETTER, "needle-in-haystack retrieval accuracy")
+_M(
+    "integrator_endpoint_loss",
+    "mean_squared_error",
+    Direction.LOWER_BETTER,
+    "fixed-horizon endpoint error against an independent continuous-flow reference",
+)
+_M(
+    "integrator_divergence_rate",
+    "fraction",
+    Direction.LOWER_BETTER,
+    "fraction of predeclared stress-step evaluations classified as divergent",
+)
 # -- NeuroScore (neuroscore.py) --
 _M("neuroscore_efficiency", "ratio", Direction.HIGHER_BETTER, "expert efficiency (contribution/energy)")
 _M("neuroscore_specialization", "ratio", Direction.HIGHER_BETTER, "expert input-distribution specialization")

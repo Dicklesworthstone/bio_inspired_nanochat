@@ -16,6 +16,7 @@ import pytest
 
 from bio_inspired_nanochat.metrics_schema import UnknownMetricError
 from bio_inspired_nanochat.results_registry import (
+    DEFAULT_REGISTRY,
     RunRecord,
     _main,
     append_record,
@@ -55,6 +56,11 @@ def test_make_record_rejects_unknown_harness():
 
 
 @pytest.mark.unit
+def test_default_registry_is_a_committable_results_path():
+    assert DEFAULT_REGISTRY == "results/registry.jsonl"
+
+
+@pytest.mark.unit
 def test_append_and_read_roundtrip(tmp_path):
     path = str(tmp_path / "registry.jsonl")
     append_record(make_record("train", {"val_bpb": 1.5}, run_id="a", timestamp=1.0), path)
@@ -67,6 +73,17 @@ def test_append_and_read_roundtrip(tmp_path):
 @pytest.mark.unit
 def test_read_missing_registry_is_empty(tmp_path):
     assert read_records(str(tmp_path / "nope.jsonl")) == []
+
+
+@pytest.mark.unit
+def test_read_registry_reports_corrupt_line(tmp_path):
+    path = tmp_path / "registry.jsonl"
+    path.write_text(
+        '{"run_id":"ok","harness":"eval","metrics":{}}\n{broken}\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match=r"registry\.jsonl:2"):
+        read_records(str(path))
 
 
 @pytest.mark.unit

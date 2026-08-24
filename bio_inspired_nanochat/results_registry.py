@@ -2,8 +2,8 @@
 Committed results corpus + experiment registry — bead hm4.1.
 
 A tracked, schema'd results store so findings accumulate and every claim is verifiable. Every
-run (train / eval / tune) emits a provenance-stamped, schema-valid `RunRecord` appended to a
-committed JSONL registry; a query CLI summarizes past runs.
+run (train / eval / tune) emits a provenance-stamped, schema-valid `RunRecord` appended to the
+committable `results/registry.jsonl` JSONL registry; a query CLI summarizes past runs.
 
 Provenance reuses checkpoint_manager (git SHA + config hash); metrics are validated against the
 canonical schema (metrics_schema / hm4.2). The registry is the audit trail the project was
@@ -29,7 +29,7 @@ from bio_inspired_nanochat.metrics_schema import Direction, get_metric, validate
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_REGISTRY = os.path.join("runs", "registry.jsonl")
+DEFAULT_REGISTRY = os.path.join("results", "registry.jsonl")
 _HARNESSES = ("train", "eval", "tune")
 
 
@@ -61,8 +61,8 @@ def _hardware_string() -> str:
 
         if torch.cuda.is_available():
             return f"cuda:{torch.cuda.get_device_name(0)} x{torch.cuda.device_count()}"
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("CUDA hardware probe failed; recording CPU fallback: %s", exc)
     return f"cpu:{platform.machine()}"
 
 
@@ -115,10 +115,16 @@ def read_records(path: str = DEFAULT_REGISTRY) -> List[RunRecord]:
         return []
     out: List[RunRecord] = []
     with open(path, encoding="utf-8") as f:
-        for line in f:
+        for line_number, line in enumerate(f, start=1):
             line = line.strip()
             if line:
-                out.append(RunRecord.from_json(json.loads(line)))
+                try:
+                    payload = json.loads(line)
+                except json.JSONDecodeError as exc:
+                    raise ValueError(
+                        f"invalid registry JSON at {path}:{line_number}: {exc.msg}"
+                    ) from exc
+                out.append(RunRecord.from_json(payload))
     return out
 
 

@@ -288,6 +288,48 @@ exactly the L/M decomposition above. The full derivation is `0642.1.1.6`.
 
 ---
 
+## 11. Falsification and paired multi-seed verdict  → bead `0642.1.3`
+
+The runtime claim is now tested by `scripts/e2e/metriplectic_stability_curve.py`, not inferred from
+the algebra alone. The experiment advances the live guarded torch recurrence and its byte-identical
+clamped-Euler fallback over the same fixed physical horizon. An independent matrix-exponential
+solution supplies the endpoint target. The step-size sweep
+`{0.025, 0.05, 0.1, 0.2, 0.25, 0.5, 1.0}` straddles the analytic explicit-Euler boundary: its
+spectral radius first exceeds one at `dt=0.5`, and the measured baseline first increases free energy
+at that same point. The guarded arm remains finite, physical, fallback-free, energy-conserving, and
+entropy-producing through `dt=1.0`.
+
+The paired analysis predeclares two lower-is-better headline metrics. Endpoint loss is the MSE at
+`dt=1.0`; divergence rate is the fraction of the analytically unstable stress steps `{0.5, 1.0}`
+classified as divergent. Eight fixed seeds independently sample conservative physical batches
+(`8` states per seed), and `eval_stats.paired_comparison` supplies the paired t-test, exact Wilcoxon
+test, effect size, and 10,000-sample paired-bootstrap interval.
+
+| metric | clamped Euler mean | guarded metriplectic mean | paired Δ (guarded − baseline) | bootstrap 95% CI | paired-t p | Wilcoxon p | favorable |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| endpoint loss | `2.7084e-2` | `3.7578e-4` | `-2.6709e-2` | `[-2.7658e-2, -2.5724e-2]` | `3.13e-10` | `0.0078125` | `8/8` |
+| stress divergence rate | `1.0` | `0.0` | `-1.0` | `[-1.0, -1.0]` | `0` | `0.0078125` | `8/8` |
+
+**Verdict: positive for this closed-system falsification.** Both predeclared metrics improve, both
+paired bootstrap intervals exclude zero, and both paired tests meet `α=0.05`. The constant `-1`
+divergence-rate shift has zero sample variance, so its mathematical t statistic is infinite; the
+strict JSON report records that field as `null` while retaining the exact shift, interval, and
+`p=0`.
+
+The durable evidence is joined rather than hand-pasted: per-step and per-seed traces live below the
+run's artifact directory, `statistics.json` stores the strict paired report, and each seed/arm
+observation is appended to `results/registry.jsonl` under the canonical
+`integrator_endpoint_loss` and `integrator_divergence_rate` metrics. The run ID links those records
+back to the report.
+
+This is deliberately a narrow claim. The system is a linear, closed calcium/buffer/heat core with
+conservative sampled initial states; the analytic instability boundary is state-independent, and
+the experiment measures numerical integration error and thermodynamic stability—not language-model
+loss, throughput, stochastic synaptic release, or end-to-end training quality. Those broader claims
+require separate matched-compute experiments.
+
+---
+
 ## References
 
 - Öttinger, H.C. (2005). *Beyond Equilibrium Thermodynamics.* Wiley. — GENERIC, the two-generator

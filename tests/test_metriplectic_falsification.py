@@ -12,11 +12,14 @@ Run with:
 from __future__ import annotations
 
 import json
+import math
 
 import pytest
 
+from bio_inspired_nanochat.results_registry import read_records
 from scripts.e2e.metriplectic_stability_curve import (
     StabilitySweepConfig,
+    run_statistical_stability_sweep,
     run_stability_sweep,
 )
 
@@ -116,6 +119,72 @@ def test_stability_curve_is_deterministic(tmp_path):
     assert first.leapfrog_reproduced == second.leapfrog_reproduced
 
 
+def test_multiseed_paired_verdict_and_registry_evidence(tmp_path):
+    seeds = (11, 23, 37, 53, 71, 89, 107, 131)
+    registry_path = tmp_path / "results" / "registry.jsonl"
+    report = run_statistical_stability_sweep(
+        seeds=seeds,
+        bootstrap_samples=1_000,
+        run_dir=tmp_path / "statistics",
+        registry_path=registry_path,
+    )
+
+    report.assert_positive()
+    assert report.stress_step_sizes == (0.5, 1.0)
+    assert all(outcome.baseline_boundary == pytest.approx(0.5) for outcome in report.outcomes)
+    assert all(outcome.metriplectic_boundary is None for outcome in report.outcomes)
+
+    loss = report.endpoint_loss_comparison
+    assert loss.mean_delta < 0.0
+    assert loss.delta_ci_high < 0.0
+    assert loss.t_p_value < 0.05
+    assert loss.wilcoxon_p_value <= 0.05
+    assert loss.n_favorable == loss.n_pairs == len(seeds)
+
+    divergence = report.divergence_rate_comparison
+    assert divergence.mean_delta == pytest.approx(-1.0)
+    assert divergence.delta_ci_low == pytest.approx(-1.0)
+    assert divergence.delta_ci_high == pytest.approx(-1.0)
+    assert math.isinf(divergence.t_stat)
+    assert divergence.t_p_value == pytest.approx(0.0)
+    assert divergence.wilcoxon_p_value <= 0.05
+    assert divergence.n_favorable == divergence.n_pairs == len(seeds)
+
+    records = read_records(str(registry_path))
+    assert len(records) == 2 * len(seeds)
+    assert {record.seed for record in records} == set(seeds)
+    assert all(record.harness == "eval" for record in records)
+    assert all("paired_verdict=positive" in record.notes for record in records)
+    assert all(
+        set(record.metrics)
+        == {"integrator_endpoint_loss", "integrator_divergence_rate"}
+        for record in records
+    )
+
+    payload = json.loads((tmp_path / "statistics" / "statistics.json").read_text())
+    assert payload["verdict"] == "positive"
+    assert payload["divergence_rate_comparison"]["t_stat"] is None
+
+
+def test_multiseed_statistics_are_deterministic(tmp_path):
+    seeds = (11, 23, 37, 53, 71, 89)
+    first = run_statistical_stability_sweep(
+        seeds=seeds,
+        bootstrap_samples=500,
+        run_dir=tmp_path / "first",
+    )
+    second = run_statistical_stability_sweep(
+        seeds=seeds,
+        bootstrap_samples=500,
+        run_dir=tmp_path / "second",
+    )
+
+    assert first.outcomes == second.outcomes
+    assert first.endpoint_loss_comparison == second.endpoint_loss_comparison
+    assert first.divergence_rate_comparison == second.divergence_rate_comparison
+    assert first.verdict == second.verdict == "positive"
+
+
 @pytest.mark.parametrize(
     ("cfg", "message"),
     [
@@ -130,3 +199,12 @@ def test_stability_curve_is_deterministic(tmp_path):
 def test_stability_config_rejects_invalid_sweeps(cfg, message):
     with pytest.raises(ValueError, match=message):
         cfg.validate()
+
+
+def test_statistical_sweep_rejects_invalid_controls(tmp_path):
+    with pytest.raises(ValueError, match="at least two unique"):
+        run_statistical_stability_sweep(run_dir=tmp_path / "one", seeds=(11,))
+    with pytest.raises(ValueError, match="at least two unique"):
+        run_statistical_stability_sweep(run_dir=tmp_path / "duplicate", seeds=(11, 11))
+    with pytest.raises(ValueError, match="bootstrap_samples must be positive"):
+        run_statistical_stability_sweep(run_dir=tmp_path / "bootstrap", bootstrap_samples=0)

@@ -1,4 +1,4 @@
-"""Falsification curve for the live metriplectic recurrence (bead ``0642.1.3.1``).
+"""Falsification curve for the live metriplectic recurrence (bead ``0642.1.3``).
 
 This experiment advances a tiny closed calcium/buffer/heat system over a fixed physical horizon with
 two implementations:
@@ -13,8 +13,10 @@ sweep straddles that prediction: the baseline starts increasing free energy at `
 metriplectic arm preserves energy, produces entropy, remains finite and physical, uses no fallback,
 and has no worse endpoint loss at every matched step size.
 
-Every state transition is written to ``events.jsonl``. A strict JSON report and a Rich summary table
-make both the detailed proof evidence and the divergence boundary auditable.
+Every state transition is written to ``events.jsonl``. The multi-seed path routes paired endpoint
+loss and stress-regime divergence through ``eval_stats``, emits a strict JSON report, and appends the
+underlying observations to the committed results registry. Rich tables make the boundary and honest
+verdict auditable.
 
 Run with:
 
@@ -24,7 +26,7 @@ Run with:
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 import json
 import math
 from pathlib import Path
@@ -34,6 +36,7 @@ import numpy as np
 from rich.console import Console
 from rich.table import Table
 
+from bio_inspired_nanochat.eval_stats import PairedResult, paired_comparison
 from bio_inspired_nanochat.metriplectic_integrator import (
     GuardThresholds,
     M_op,
@@ -41,6 +44,7 @@ from bio_inspired_nanochat.metriplectic_integrator import (
     guarded_step,
     torch_guarded_step,
 )
+from bio_inspired_nanochat.results_registry import DEFAULT_REGISTRY, append_record, make_record
 from bio_inspired_nanochat.run_logging import RunLogger
 from bio_inspired_nanochat.torch_imports import Tensor, torch
 
@@ -182,6 +186,55 @@ class StabilitySweepReport:
             f"measured baseline boundary={self.measured_baseline_boundary}, "
             f"metriplectic boundary={self.measured_metriplectic_boundary}"
         )
+
+
+@dataclass(frozen=True)
+class SeededOutcome:
+    """Matched headline outcomes for one independently sampled physical state batch."""
+
+    seed: int
+    baseline_endpoint_loss: float
+    metriplectic_endpoint_loss: float
+    baseline_divergence_rate: float
+    metriplectic_divergence_rate: float
+    baseline_boundary: float | None
+    metriplectic_boundary: float | None
+
+
+@dataclass(frozen=True)
+class StatisticalSweepReport:
+    """Multi-seed paired analysis and predeclared honest verdict."""
+
+    bead: str
+    run_id: str
+    seeds: tuple[int, ...]
+    stress_step_sizes: tuple[float, ...]
+    outcomes: tuple[SeededOutcome, ...]
+    endpoint_loss_comparison: PairedResult
+    divergence_rate_comparison: PairedResult
+    verdict: str
+    verdict_reason: str
+    report_path: str
+    events_path: str
+    registry_path: str | None
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = asdict(self)
+        # A constant non-zero paired shift has an infinite t statistic. JSON has no portable
+        # infinity literal, so strict evidence records it as null while retaining p=0 and the
+        # exact constant bootstrap interval.
+        for key in ("endpoint_loss_comparison", "divergence_rate_comparison"):
+            t_stat = payload[key]["t_stat"]
+            if not math.isfinite(t_stat):
+                payload[key]["t_stat"] = None
+        return payload
+
+    def assert_positive(self) -> None:
+        if self.verdict != "positive":
+            raise AssertionError(
+                f"expected positive paired verdict, got {self.verdict}: "
+                f"{self.verdict_reason}"
+            )
 
 
 def _energy(calcium: Tensor, buffer: Tensor, heat: Tensor) -> Tensor:
@@ -601,6 +654,225 @@ def run_stability_sweep(
     return report
 
 
+def _seeded_config(cfg: StabilitySweepConfig, seed: int) -> StabilitySweepConfig:
+    """Sample a conservative physical batch without changing the analytic stability boundary."""
+    rng = np.random.default_rng(seed)
+    batch_size = 8
+    calcium0 = tuple(float(value) for value in rng.uniform(0.60, 0.82, batch_size))
+    buffer0 = tuple(float(value) for value in rng.uniform(0.18, 0.32, batch_size))
+    heat0 = tuple(float(value) for value in rng.uniform(0.0, 0.10, batch_size))
+    seeded = replace(cfg, calcium0=calcium0, buffer0=buffer0, heat0=heat0)
+    seeded.validate()
+    return seeded
+
+
+def _paired_verdict(loss: PairedResult, divergence: PairedResult) -> tuple[str, str]:
+    """Apply the predeclared two-metric rule; inconclusive evidence is an honest null."""
+
+    def supports_improvement(result: PairedResult) -> bool:
+        return (
+            result.mean_delta < 0.0
+            and result.delta_ci_high < 0.0
+            and result.t_p_value < 0.05
+            and result.wilcoxon_p_value <= 0.05
+        )
+
+    def supports_harm(result: PairedResult) -> bool:
+        return (
+            result.mean_delta > 0.0
+            and result.delta_ci_low > 0.0
+            and result.t_p_value < 0.05
+            and result.wilcoxon_p_value <= 0.05
+        )
+
+    if supports_improvement(loss) and supports_improvement(divergence):
+        return (
+            "positive",
+            "both endpoint loss and stress-regime divergence rate improve; both paired "
+            "bootstrap intervals exclude zero and both paired tests meet alpha=0.05",
+        )
+    if supports_harm(loss) and supports_harm(divergence):
+        return (
+            "worse",
+            "both endpoint loss and stress-regime divergence rate worsen with supported "
+            "paired effects",
+        )
+    return (
+        "null",
+        "the two predeclared metrics do not both support improvement or both support harm",
+    )
+
+
+def _append_statistical_records(
+    report: StatisticalSweepReport,
+    cfg: StabilitySweepConfig,
+    registry_path: str,
+) -> None:
+    """Append the matched seed/arm observations that underlie the paired verdict."""
+    loss = report.endpoint_loss_comparison
+    divergence = report.divergence_rate_comparison
+    comparison_note = (
+        f"experiment=metriplectic_stability; paired_verdict={report.verdict}; "
+        f"endpoint_delta={loss.mean_delta:.17g}; "
+        f"endpoint_ci=[{loss.delta_ci_low:.17g},{loss.delta_ci_high:.17g}]; "
+        f"divergence_delta={divergence.mean_delta:.17g}; "
+        f"divergence_ci=[{divergence.delta_ci_low:.17g},{divergence.delta_ci_high:.17g}]; "
+        f"artifact={report.report_path}"
+    )
+    for outcome in report.outcomes:
+        seeded_cfg = _seeded_config(cfg, outcome.seed)
+        for arm, endpoint_loss, divergence_rate in (
+            (
+                "baseline",
+                outcome.baseline_endpoint_loss,
+                outcome.baseline_divergence_rate,
+            ),
+            (
+                "metriplectic",
+                outcome.metriplectic_endpoint_loss,
+                outcome.metriplectic_divergence_rate,
+            ),
+        ):
+            record = make_record(
+                "eval",
+                {
+                    "integrator_endpoint_loss": endpoint_loss,
+                    "integrator_divergence_rate": divergence_rate,
+                },
+                run_id=f"{report.run_id}-{arm}-s{outcome.seed}",
+                syn_cfg=seeded_cfg,
+                seed=outcome.seed,
+                notes=f"arm={arm}; {comparison_note}",
+            )
+            append_record(record, registry_path)
+
+
+def run_statistical_stability_sweep(
+    cfg: StabilitySweepConfig | None = None,
+    *,
+    seeds: tuple[int, ...] = (11, 23, 37, 53, 71, 89, 107, 131),
+    bootstrap_samples: int = 10_000,
+    run_dir: str | Path | None = None,
+    registry_path: str | Path | None = None,
+) -> StatisticalSweepReport:
+    """Run matched seeded batches and persist paired loss/divergence statistics."""
+    cfg = cfg or StabilitySweepConfig()
+    cfg.validate()
+    if len(seeds) < 2 or len(set(seeds)) != len(seeds):
+        raise ValueError("seeds must contain at least two unique values")
+    if bootstrap_samples < 1:
+        raise ValueError("bootstrap_samples must be positive")
+
+    output_dir = (
+        Path(run_dir)
+        if run_dir is not None
+        else Path("runs/e2e/metriplectic_stability/statistics")
+    )
+    output_dir.mkdir(parents=True, exist_ok=True)
+    report_path = output_dir / "statistics.json"
+    registry_path_str = str(registry_path) if registry_path is not None else None
+    outcomes: list[SeededOutcome] = []
+    stress_step_sizes: tuple[float, ...] | None = None
+
+    with RunLogger(
+        output_dir,
+        name="metriplectic_stability_statistics",
+        console=False,
+        provenance={
+            "bead": "bio_inspired_nanochat-0642.1.3.2",
+            "config": asdict(cfg),
+            "seeds": seeds,
+        },
+    ) as logger:
+        for seed in seeds:
+            seeded_report = run_stability_sweep(
+                _seeded_config(cfg, seed),
+                run_dir=output_dir / f"seed-{seed}",
+            )
+            seeded_stress = tuple(
+                point.step_size
+                for point in seeded_report.curve
+                if point.predicted_euler_unstable
+            )
+            if not seeded_stress:
+                raise ValueError("the sweep must include at least one predicted-unstable step size")
+            if stress_step_sizes is None:
+                stress_step_sizes = seeded_stress
+            elif seeded_stress != stress_step_sizes:
+                raise AssertionError("analytic stress regime changed across seeded states")
+            stress_points = [
+                point for point in seeded_report.curve if point.step_size in seeded_stress
+            ]
+            headline = seeded_report.curve[-1]
+            outcome = SeededOutcome(
+                seed=seed,
+                baseline_endpoint_loss=headline.baseline.endpoint_loss,
+                metriplectic_endpoint_loss=headline.metriplectic.endpoint_loss,
+                baseline_divergence_rate=sum(
+                    not point.baseline.stable for point in stress_points
+                )
+                / len(stress_points),
+                metriplectic_divergence_rate=sum(
+                    not point.metriplectic.stable for point in stress_points
+                )
+                / len(stress_points),
+                baseline_boundary=seeded_report.measured_baseline_boundary,
+                metriplectic_boundary=seeded_report.measured_metriplectic_boundary,
+            )
+            outcomes.append(outcome)
+            logger.event("metriplectic_stability_seed_outcome", **asdict(outcome))
+
+        baseline_loss = {outcome.seed: outcome.baseline_endpoint_loss for outcome in outcomes}
+        metriplectic_loss = {
+            outcome.seed: outcome.metriplectic_endpoint_loss for outcome in outcomes
+        }
+        baseline_divergence = {
+            outcome.seed: outcome.baseline_divergence_rate for outcome in outcomes
+        }
+        metriplectic_divergence = {
+            outcome.seed: outcome.metriplectic_divergence_rate for outcome in outcomes
+        }
+        loss_comparison = paired_comparison(
+            metriplectic_loss,
+            baseline_loss,
+            lower_is_better=True,
+            n_boot=bootstrap_samples,
+            seed=0,
+        )
+        divergence_comparison = paired_comparison(
+            metriplectic_divergence,
+            baseline_divergence,
+            lower_is_better=True,
+            n_boot=bootstrap_samples,
+            seed=1,
+        )
+        if loss_comparison is None or divergence_comparison is None:
+            raise AssertionError("validated multi-seed inputs did not produce paired statistics")
+        verdict, verdict_reason = _paired_verdict(loss_comparison, divergence_comparison)
+        report = StatisticalSweepReport(
+            bead="bio_inspired_nanochat-0642.1.3.2",
+            run_id=logger.run_id,
+            seeds=seeds,
+            stress_step_sizes=stress_step_sizes or (),
+            outcomes=tuple(outcomes),
+            endpoint_loss_comparison=loss_comparison,
+            divergence_rate_comparison=divergence_comparison,
+            verdict=verdict,
+            verdict_reason=verdict_reason,
+            report_path=str(report_path),
+            events_path=str(output_dir / "events.jsonl"),
+            registry_path=registry_path_str,
+        )
+        report_path.write_text(
+            json.dumps(report.to_dict(), indent=2, sort_keys=True, allow_nan=False) + "\n",
+            encoding="utf-8",
+        )
+        if registry_path_str is not None:
+            _append_statistical_records(report, cfg, registry_path_str)
+        logger.event("metriplectic_stability_statistical_summary", **report.to_dict())
+    return report
+
+
 def render_report(report: StabilitySweepReport, *, console: Console | None = None) -> None:
     """Render the matched stability/loss curve through Rich."""
     console = console or Console()
@@ -646,6 +918,42 @@ def render_report(report: StabilitySweepReport, *, console: Console | None = Non
     console.print(f"Detailed events: {report.events_path}")
 
 
+def render_statistical_report(
+    report: StatisticalSweepReport,
+    *,
+    console: Console | None = None,
+) -> None:
+    """Render the paired multi-seed evidence and honest verdict through Rich."""
+    console = console or Console()
+    table = Table(title="Metriplectic paired multi-seed verdict")
+    table.add_column("metric")
+    table.add_column("mean Δ (GENERIC - baseline)", justify="right")
+    table.add_column("bootstrap 95% CI", justify="right")
+    table.add_column("paired-t p", justify="right")
+    table.add_column("Wilcoxon p", justify="right")
+    table.add_column("favorable", justify="right")
+    for name, comparison in (
+        ("endpoint loss", report.endpoint_loss_comparison),
+        ("divergence rate", report.divergence_rate_comparison),
+    ):
+        table.add_row(
+            name,
+            f"{comparison.mean_delta:.6g}",
+            f"[{comparison.delta_ci_low:.6g}, {comparison.delta_ci_high:.6g}]",
+            f"{comparison.t_p_value:.3g}",
+            f"{comparison.wilcoxon_p_value:.3g}",
+            f"{comparison.n_favorable}/{comparison.n_pairs}",
+        )
+    console.print(table)
+    color = {"positive": "green", "null": "yellow", "worse": "red"}[report.verdict]
+    console.print(
+        f"[{color}]VERDICT: {report.verdict.upper()}[/{color}] — {report.verdict_reason}"
+    )
+    console.print(f"Statistical report: {report.report_path}")
+    if report.registry_path is not None:
+        console.print(f"Result observations appended to: {report.registry_path}")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Clamped-Euler versus guarded metriplectic stability curve"
@@ -662,6 +970,24 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="strictly increasing step sizes that divide the fixed duration",
     )
+    parser.add_argument(
+        "--seeds",
+        nargs="+",
+        type=int,
+        default=[11, 23, 37, 53, 71, 89, 107, 131],
+        help="matched seeds for the paired statistical verdict",
+    )
+    parser.add_argument(
+        "--bootstrap-samples",
+        type=int,
+        default=10_000,
+        help="paired-bootstrap resamples",
+    )
+    parser.add_argument(
+        "--registry-path",
+        default=DEFAULT_REGISTRY,
+        help="append-only committed results registry",
+    )
     args = parser.parse_args(argv)
     cfg = StabilitySweepConfig(
         step_sizes=tuple(args.step_sizes)
@@ -670,7 +996,21 @@ def main(argv: list[str] | None = None) -> int:
     )
     report = run_stability_sweep(cfg, run_dir=args.run_dir)
     render_report(report)
-    return 0 if report.leapfrog_reproduced and report.proof_obligation.verified else 1
+    statistical_report = run_statistical_stability_sweep(
+        cfg,
+        seeds=tuple(args.seeds),
+        bootstrap_samples=args.bootstrap_samples,
+        run_dir=Path(args.run_dir) / "statistics",
+        registry_path=args.registry_path,
+    )
+    render_statistical_report(statistical_report)
+    return (
+        0
+        if report.leapfrog_reproduced
+        and report.proof_obligation.verified
+        and statistical_report.verdict == "positive"
+        else 1
+    )
 
 
 if __name__ == "__main__":
