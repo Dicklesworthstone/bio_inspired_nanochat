@@ -30,6 +30,20 @@ def test_stability_curve_reproduces_the_predicted_leapfrog(tmp_path):
     assert report.predicted_baseline_boundary == pytest.approx(0.5)
     assert report.measured_baseline_boundary == pytest.approx(0.5)
     assert report.measured_metriplectic_boundary is None
+    proof = report.proof_obligation
+    assert proof.verified
+    assert proof.max_abs_energy_drift <= 1e-10
+    assert proof.min_entropy_production >= -1e-10
+    assert proof.max_free_energy_delta <= 1e-10
+    assert proof.max_degeneracy_residual <= 1e-10
+    assert proof.structural_fallback_count == 0
+    assert proof.fallback_injection.verified
+    assert proof.fallback_injection.fallback_count == proof.fallback_injection.steps
+    assert proof.fallback_injection.max_residual > 1e-10
+    assert proof.fallback_injection.every_breach_was_degeneracy
+    assert proof.fallback_injection.every_fallback_matched_baseline
+    assert proof.fallback_injection.trajectory_finite
+    assert proof.fallback_injection.physical_domain
 
     for point in report.curve:
         assert point.metriplectic.stable
@@ -66,15 +80,28 @@ def test_stability_curve_emits_complete_strict_json_evidence(tmp_path):
     summaries = [
         event for event in events if event["event"] == "metriplectic_stability_summary"
     ]
+    injections = [
+        event
+        for event in events
+        if event["event"] == "metriplectic_fallback_injection_step"
+    ]
     expected_steps = 2 * sum(round(cfg.duration / dt) for dt in cfg.step_sizes)
     assert len(steps) == expected_steps
     assert {event["arm"] for event in steps} == {"baseline", "metriplectic"}
     assert len(points) == len(cfg.step_sizes)
     assert len(summaries) == 1 and summaries[0]["leapfrog_reproduced"]
+    assert summaries[0]["proof_obligation_verified"]
+    assert len(injections) == report.proof_obligation.fallback_injection.steps
+    assert all(event["breach"] == "degeneracy" for event in injections)
+    assert all(event["used_fallback"] for event in injections)
+    assert all(event["fallback_matches_baseline"] for event in injections)
+    structural_steps = [event for event in steps if event["arm"] == "metriplectic"]
+    assert all(max(event["res_L_gradS"] + event["res_M_gradE"]) <= 1e-10 for event in structural_steps)
 
     payload = json.loads((tmp_path / "stability_curve.json").read_text(encoding="utf-8"))
     assert payload["bead"] == "bio_inspired_nanochat-0642.1.3.1"
     assert payload["leapfrog_reproduced"]
+    assert payload["proof_obligation"]["verified"]
     assert payload["report_path"] == report.report_path
 
 

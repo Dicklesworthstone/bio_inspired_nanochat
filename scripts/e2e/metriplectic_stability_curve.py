@@ -30,10 +30,17 @@ import math
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 from rich.console import Console
 from rich.table import Table
 
-from bio_inspired_nanochat.metriplectic_integrator import torch_guarded_step
+from bio_inspired_nanochat.metriplectic_integrator import (
+    GuardThresholds,
+    M_op,
+    field,
+    guarded_step,
+    torch_guarded_step,
+)
 from bio_inspired_nanochat.run_logging import RunLogger
 from bio_inspired_nanochat.torch_imports import Tensor, torch
 
@@ -103,6 +110,7 @@ class ArmResult:
     max_abs_energy_drift: float
     min_entropy_production: float
     max_free_energy_delta: float
+    max_degeneracy_residual: float | None
     fallback_count: int
     clamp_count: int
     divergence_reasons: tuple[str, ...]
@@ -121,6 +129,33 @@ class CurvePoint:
 
 
 @dataclass(frozen=True)
+class FallbackInjectionResult:
+    """Evidence from a deliberately degeneracy-breaking operator."""
+
+    steps: int
+    fallback_count: int
+    max_residual: float
+    every_breach_was_degeneracy: bool
+    every_fallback_matched_baseline: bool
+    trajectory_finite: bool
+    physical_domain: bool
+    verified: bool
+
+
+@dataclass(frozen=True)
+class ProofObligationResult:
+    """Aggregate certificate and safety-net verdict over the real sweep."""
+
+    max_abs_energy_drift: float
+    min_entropy_production: float
+    max_free_energy_delta: float
+    max_degeneracy_residual: float
+    structural_fallback_count: int
+    fallback_injection: FallbackInjectionResult
+    verified: bool
+
+
+@dataclass(frozen=True)
 class StabilitySweepReport:
     """Complete stability curve and predeclared leapfrog verdict."""
 
@@ -131,6 +166,7 @@ class StabilitySweepReport:
     measured_baseline_boundary: float | None
     measured_metriplectic_boundary: float | None
     leapfrog_reproduced: bool
+    proof_obligation: ProofObligationResult
     report_path: str
     events_path: str
 
@@ -216,6 +252,7 @@ def _simulate_arm(
     max_abs_energy_drift = 0.0
     min_entropy_production = math.inf
     max_free_energy_delta = -math.inf
+    max_degeneracy_residual: float | None = None
     fallback_count = 0
     clamp_count = 0
     finite = True
@@ -237,6 +274,8 @@ def _simulate_arm(
         clamp_count += int(torch.count_nonzero(buffer_euler != buffer_raw).item())
 
         breach_codes: list[int] = []
+        res_l_grad_s: list[float] = []
+        res_m_grad_e: list[float] = []
         if arm == "baseline":
             calcium_next, buffer_next, heat_next = calcium_euler, buffer_euler, heat
             used_fallbacks = 0
@@ -255,6 +294,10 @@ def _simulate_arm(
             used_fallbacks = int(record.fallback_mask.sum().item())
             fallback_count += used_fallbacks
             breach_codes = [int(value) for value in record.breach_code.tolist()]
+            res_l_grad_s = [float(value) for value in record.res_L_gradS.tolist()]
+            res_m_grad_e = [float(value) for value in record.res_M_gradE.tolist()]
+            step_residual = max((*res_l_grad_s, *res_m_grad_e), default=0.0)
+            max_degeneracy_residual = max(max_degeneracy_residual or 0.0, step_residual)
         else:
             raise ValueError(f"unknown arm {arm!r}")
 
@@ -298,6 +341,8 @@ def _simulate_arm(
             physical_domain=step_physical,
             fallbacks=used_fallbacks,
             breach_codes=breach_codes,
+            res_L_gradS=res_l_grad_s,
+            res_M_gradE=res_m_grad_e,
         )
         calcium, buffer, heat = calcium_next, buffer_next, heat_next
 
@@ -326,9 +371,141 @@ def _simulate_arm(
         max_abs_energy_drift=max_abs_energy_drift,
         min_entropy_production=min_entropy_production,
         max_free_energy_delta=max_free_energy_delta,
+        max_degeneracy_residual=max_degeneracy_residual,
         fallback_count=fallback_count,
         clamp_count=clamp_count,
         divergence_reasons=tuple(reasons),
+    )
+
+
+def _run_fallback_injection(
+    cfg: StabilitySweepConfig,
+    logger: RunLogger,
+    *,
+    steps: int = 16,
+    dt: float = 0.05,
+) -> FallbackInjectionResult:
+    """Break ``M*grad(E)=0`` while leaving the Euler fallback vector field unchanged."""
+
+    def bad_m(
+        state: np.ndarray,
+        g_c: float = cfg.gamma_calcium,
+        g_b: float = cfg.gamma_buffer,
+    ) -> np.ndarray:
+        # The added C/B diagonal violates M*grad(E)=0, but annihilates grad(S)=(0,0,1).
+        # Therefore the proposed structural step is rejected while the deterministic Euler
+        # fallback remains exactly the engineering baseline rather than inheriting the defect.
+        return M_op(state, g_c, g_b) + np.diag([0.3, 0.3, 0.0])
+
+    state = np.array([cfg.calcium0[0], cfg.buffer0[0], cfg.heat0[0]], dtype=np.float64)
+    fallback_count = 0
+    max_residual = 0.0
+    every_breach_was_degeneracy = True
+    every_fallback_matched_baseline = True
+    trajectory_finite = True
+    physical_domain = True
+    thresholds = GuardThresholds(
+        eps_E=cfg.certificate_tolerance,
+        eps_S=cfg.certificate_tolerance,
+        eps_D=cfg.certificate_tolerance,
+    )
+
+    for local_step in range(steps):
+        expected = state + dt * field(
+            state,
+            cfg.omega,
+            cfg.gamma_calcium,
+            cfg.gamma_buffer,
+        )
+        state, record = guarded_step(
+            state,
+            dt,
+            local_step,
+            thresholds,
+            omega=cfg.omega,
+            gC=cfg.gamma_calcium,
+            gB=cfg.gamma_buffer,
+            T=cfg.temperature,
+            M_fn=bad_m,
+        )
+        fallback_count += int(record.used_fallback)
+        max_residual = max(max_residual, record.res_L_gradS, record.res_M_gradE)
+        every_breach_was_degeneracy &= record.breach == "degeneracy"
+        matches_baseline = bool(np.array_equal(state, expected))
+        every_fallback_matched_baseline &= matches_baseline
+        step_finite = bool(np.all(np.isfinite(state)))
+        step_physical = bool(
+            state[0] >= -cfg.certificate_tolerance
+            and -cfg.certificate_tolerance <= state[1] <= 1.0 + cfg.certificate_tolerance
+            and state[2] >= -cfg.certificate_tolerance
+        )
+        trajectory_finite &= step_finite
+        physical_domain &= step_physical
+        logger.event(
+            "metriplectic_fallback_injection_step",
+            local_step=local_step,
+            step_size=dt,
+            state=state.tolist(),
+            breach=record.breach,
+            used_fallback=record.used_fallback,
+            fallback_matches_baseline=matches_baseline,
+            res_L_gradS=record.res_L_gradS,
+            res_M_gradE=record.res_M_gradE,
+            finite=step_finite,
+            physical_domain=step_physical,
+        )
+
+    verified = (
+        fallback_count == steps
+        and max_residual > cfg.certificate_tolerance
+        and every_breach_was_degeneracy
+        and every_fallback_matched_baseline
+        and trajectory_finite
+        and physical_domain
+    )
+    result = FallbackInjectionResult(
+        steps=steps,
+        fallback_count=fallback_count,
+        max_residual=max_residual,
+        every_breach_was_degeneracy=every_breach_was_degeneracy,
+        every_fallback_matched_baseline=every_fallback_matched_baseline,
+        trajectory_finite=trajectory_finite,
+        physical_domain=physical_domain,
+        verified=verified,
+    )
+    logger.event("metriplectic_fallback_injection_summary", **asdict(result))
+    return result
+
+
+def _proof_obligation(
+    cfg: StabilitySweepConfig,
+    curve: list[CurvePoint],
+    injection: FallbackInjectionResult,
+) -> ProofObligationResult:
+    structural = [point.metriplectic for point in curve]
+    max_energy_drift = max(result.max_abs_energy_drift for result in structural)
+    min_entropy_production = min(result.min_entropy_production for result in structural)
+    max_free_energy_delta = max(result.max_free_energy_delta for result in structural)
+    max_degeneracy_residual = max(
+        result.max_degeneracy_residual or 0.0 for result in structural
+    )
+    fallback_count = sum(result.fallback_count for result in structural)
+    verified = (
+        max_energy_drift <= cfg.certificate_tolerance
+        and min_entropy_production >= -cfg.certificate_tolerance
+        and max_free_energy_delta <= cfg.certificate_tolerance
+        and max_degeneracy_residual <= cfg.certificate_tolerance
+        and fallback_count == 0
+        and injection.verified
+    )
+    return ProofObligationResult(
+        max_abs_energy_drift=max_energy_drift,
+        min_entropy_production=min_entropy_production,
+        max_free_energy_delta=max_free_energy_delta,
+        max_degeneracy_residual=max_degeneracy_residual,
+        structural_fallback_count=fallback_count,
+        fallback_injection=injection,
+        verified=verified,
     )
 
 
@@ -394,6 +571,8 @@ def run_stability_sweep(
             and metriplectic_boundary is None
             and all(point.metriplectic_loss_no_worse for point in curve)
         )
+        injection = _run_fallback_injection(cfg, logger)
+        proof_obligation = _proof_obligation(cfg, curve, injection)
         report_path = output_dir / "stability_curve.json"
         report = StabilitySweepReport(
             bead="bio_inspired_nanochat-0642.1.3.1",
@@ -403,6 +582,7 @@ def run_stability_sweep(
             measured_baseline_boundary=baseline_boundary,
             measured_metriplectic_boundary=metriplectic_boundary,
             leapfrog_reproduced=leapfrog,
+            proof_obligation=proof_obligation,
             report_path=str(report_path),
             events_path=str(output_dir / "events.jsonl"),
         )
@@ -412,6 +592,7 @@ def run_stability_sweep(
             measured_baseline_boundary=baseline_boundary,
             measured_metriplectic_boundary=metriplectic_boundary,
             leapfrog_reproduced=leapfrog,
+            proof_obligation_verified=proof_obligation.verified,
         )
         report_path.write_text(
             json.dumps(report.to_dict(), indent=2, sort_keys=True, allow_nan=False) + "\n",
@@ -452,6 +633,15 @@ def render_report(report: StabilitySweepReport, *, console: Console | None = Non
         f"{report.predicted_baseline_boundary}/{report.measured_baseline_boundary}; "
         f"metriplectic boundary {report.measured_metriplectic_boundary}."
     )
+    proof = report.proof_obligation
+    console.print(
+        f"Proof obligation {'VERIFIED' if proof.verified else 'FAILED'}: "
+        f"max |dE|={proof.max_abs_energy_drift:.3e}, "
+        f"min dS={proof.min_entropy_production:.3e}, "
+        f"max degeneracy residual={proof.max_degeneracy_residual:.3e}; "
+        f"injected fallbacks={proof.fallback_injection.fallback_count}/"
+        f"{proof.fallback_injection.steps}."
+    )
     console.print(f"JSON report: {report.report_path}")
     console.print(f"Detailed events: {report.events_path}")
 
@@ -480,7 +670,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     report = run_stability_sweep(cfg, run_dir=args.run_dir)
     render_report(report)
-    return 0 if report.leapfrog_reproduced else 1
+    return 0 if report.leapfrog_reproduced and report.proof_obligation.verified else 1
 
 
 if __name__ == "__main__":
