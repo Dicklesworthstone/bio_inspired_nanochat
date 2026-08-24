@@ -110,10 +110,15 @@ class FreeEnergyLandscapeProjector:
             fe = float(self.compute_energy_at(cx, cy))
 
             # Nearest basin
-            nearest_b = min(
-                self.basins,
-                key=lambda b: (cx - b.center_2d[0]) ** 2 + (cy - b.center_2d[1]) ** 2,
-            )
+            if self.basins:
+                nearest_b = min(
+                    self.basins,
+                    key=lambda b: (cx - b.center_2d[0]) ** 2 + (cy - b.center_2d[1]) ** 2,
+                )
+                nearest_id = nearest_b.basin_id
+            else:
+                nearest_id = 0
+
             t_str = tokens[i] if tokens and i < len(tokens) else f"tok_{i}"
 
             trajectory.append(
@@ -122,7 +127,7 @@ class FreeEnergyLandscapeProjector:
                     token_str=t_str,
                     coord_2d=(cx, cy),
                     free_energy=fe,
-                    nearest_basin_id=nearest_b.basin_id,
+                    nearest_basin_id=nearest_id,
                 )
             )
 
@@ -171,7 +176,9 @@ class FreeEnergyLandscapeProjector:
         table.add_column("Attractor Basin", style="cyan")
 
         for p in trajectory:
-            b_name = self.basins[p.nearest_basin_id].name if p.nearest_basin_id < len(self.basins) else "Unknown"
+            b_name = "Global Minimum"
+            if self.basins and 0 <= p.nearest_basin_id < len(self.basins):
+                b_name = self.basins[p.nearest_basin_id].name
             table.add_row(
                 str(p.token_idx),
                 p.token_str,

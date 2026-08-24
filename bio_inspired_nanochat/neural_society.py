@@ -149,8 +149,9 @@ class NeuralSociety:
         # Step 1: Agent 1 (Perception/Retrieval) inspects prompt and publishes memory binding
         a1_id = agent_names[0]
         a1_model = self.agents[a1_id]
+        a1_device = next(a1_model.parameters()).device
         with torch.no_grad():
-            wte_out = a1_model.wte(task_prompt)
+            wte_out = a1_model.wte(task_prompt.to(a1_device))
             # Robust 1D vector aggregation across batch and sequence dimensions
             if wte_out.ndim == 3:
                 emb = wte_out.mean(dim=(0, 1))
@@ -170,10 +171,11 @@ class NeuralSociety:
         # Step 2: Agent 2 (Reasoner) mounts collective memory and executes forward deduction
         a2_id = agent_names[min(1, len(agent_names) - 1)]
         a2_model = self.agents[a2_id]
+        a2_device = next(a2_model.parameters()).device
         self.bus.sync_to_agent(a2_model, topic=topic, layer_idx=0)
 
         with torch.no_grad():
-            logits, _ = a2_model(task_prompt)
+            logits, _ = a2_model(task_prompt.to(a2_device))
 
         dt = (time.perf_counter() - t0) * 1000.0
         return {

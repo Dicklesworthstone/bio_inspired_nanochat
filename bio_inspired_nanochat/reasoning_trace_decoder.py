@@ -102,6 +102,17 @@ class ReasoningTraceDecoder:
     def decode_energy_trajectory(self, energy_trajectory: List[float]) -> MechanisticTrace:
         """Decode a list of successive energy values into structured reasoning steps."""
         traj = energy_trajectory
+        if len(traj) < 2:
+            init_e = traj[0] if traj else 0.0
+            return MechanisticTrace(
+                steps=[],
+                initial_energy=init_e,
+                final_energy=init_e,
+                total_energy_reduction=0.0,
+                is_causally_faithful=True,
+                summary_narrative="Single-step immediate decision (no multi-step deliberation trajectory).",
+            )
+
         K = len(traj) - 1
         steps: List[ReasoningStep] = []
 

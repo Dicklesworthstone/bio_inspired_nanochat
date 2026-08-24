@@ -110,3 +110,32 @@ def test_layer_targeted_clamping():
     # After exit, Layer 1 restored
     assert syn_l1.w_fast.data[0, 0].item() != pytest.approx(7.5)
 
+
+def test_site_type_filtering():
+    """Verify that specifying site_type filters target linear modules accurately."""
+    cfg = GPTSynapticConfig(
+        sequence_len=8,
+        vocab_size=32,
+        n_layer=1,
+        n_head=2,
+        n_kv_head=2,
+        n_embd=16,
+        synapses=True,
+        use_moe=False,
+    )
+    model = GPTSynaptic(cfg)
+    stimulator = OptogeneticStimulator(model)
+
+    clamp_dense = SynapticClamp(
+        site_type="dense_fc",
+        variable_name="w_fast",
+        mode=ClampMode.PIN_VALUE,
+        value=4.0,
+    )
+
+    with stimulator.stimulate([clamp_dense]):
+        for name, mod in model.named_modules():
+            if isinstance(mod, SynapticLinear) and mod.w_fast is not None:
+                assert mod.w_fast.data[0, 0].item() == pytest.approx(4.0)
+
+

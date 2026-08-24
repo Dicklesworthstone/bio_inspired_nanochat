@@ -30,3 +30,16 @@ def test_rich_table_logging():
     traj = [2.00, 1.20, 0.50]
     trace = decoder.decode_energy_trajectory(traj)
     decoder.log_trace(trace)
+
+
+def test_decode_short_trajectory():
+    """Verify single-step or empty trajectories produce valid traces."""
+    decoder = ReasoningTraceDecoder()
+
+    trace_single = decoder.decode_energy_trajectory([1.0])
+    assert len(trace_single.steps) == 0
+    assert trace_single.total_energy_reduction == 0.0
+
+    trace_empty = decoder.decode_energy_trajectory([])
+    assert len(trace_empty.steps) == 0
+

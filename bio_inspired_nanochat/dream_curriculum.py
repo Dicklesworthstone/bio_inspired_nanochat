@@ -97,18 +97,20 @@ class CurriculumFromDreamsEngine:
         selected_dreams = candidate_tokens[selected_indices]
 
         # Step 4: Execute offline consolidation pass using the targeted dreams
+        from bio_inspired_nanochat.sleep_consolidation import PrioritizedReplayBuffer
+
+        dream_buffer = PrioritizedReplayBuffer(capacity=max(1, len(selected_indices)))
+        for i in range(len(selected_indices)):
+            dream_buffer.push(selected_dreams[i].cpu(), surprise_score=2.0)
+
         cons_report = self.controller.run_sleep_phase(
             model=model,
-            replay_buffer=None,
+            replay_buffer=dream_buffer,
             sleep_steps=2,
-            batch_size=replay_batch_size,
+            batch_size=min(replay_batch_size, max(1, len(selected_indices))),
             use_dream_replay=False,
             device=device,
         )
-
-        # Re-play specifically selected dreams through model
-        with torch.no_grad():
-            model(selected_dreams.to(device))
 
         dt = (time.perf_counter() - t0) * 1000.0
         report = DreamCurriculumReport(

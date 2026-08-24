@@ -121,6 +121,8 @@ class PersistentLifelongMemoryManager:
             slow_deltas = old_data.get("slow_deltas", {})
             created_at = old_data.get("created_at", created_at)
 
+        is_active = (self.active_user == user_id)
+
         for idx, mod in enumerate(syn_layers):
             if consolidate and mod.w_fast is not None and mod.w_fast.norm() > 1e-6:
                 # Fast->Slow consolidation
@@ -143,7 +145,7 @@ class PersistentLifelongMemoryManager:
                 mod.w_fast.data.zero_()
 
             # Revert applied slow delta so living model returns to pristine base state
-            if idx in self._active_slow_deltas:
+            if is_active and idx in self._active_slow_deltas:
                 mod.w_slow.data.sub_(self._active_slow_deltas[idx].to(mod.w_slow.device))
 
         # Save partition to disk
@@ -158,8 +160,9 @@ class PersistentLifelongMemoryManager:
             path,
         )
 
-        self._active_slow_deltas.clear()
-        self.active_user = None
+        if is_active:
+            self._active_slow_deltas.clear()
+            self.active_user = None
 
     def forget_user(self, user_id: str, model: Optional[GPTSynaptic] = None) -> bool:
         """Right-to-be-forgotten: Permanently delete user memory partition and revert active weights."""

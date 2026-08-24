@@ -62,6 +62,12 @@ class OptogeneticStimulator:
                     if clamp.layer_idx is not None and mod_layer is not None and clamp.layer_idx != mod_layer:
                         continue
 
+                    # Filter by site_type if specified
+                    if clamp.site_type == "dense_fc" and ("experts" in name or "moe" in name):
+                        continue
+                    if clamp.site_type == "moe_expert" and not ("experts" in name or "moe" in name):
+                        continue
+
                     if clamp.variable_name == "w_fast" and mod.w_fast is not None:
                         saved_states.append((mod, "w_fast", mod.w_fast.data.clone()))
                         if clamp.mode == ClampMode.PIN_VALUE:

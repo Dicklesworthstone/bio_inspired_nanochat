@@ -154,7 +154,8 @@ class SynapticServingEngine:
 
         # Step 2: Forward Autoregressive Generation
         self.model.eval()
-        tokens = req.prompt_tokens.clone()
+        device = next(self.model.parameters()).device
+        tokens = req.prompt_tokens.clone().to(device)
         atp_consumed = 0.0
         trust_scores: List[float] = []
 

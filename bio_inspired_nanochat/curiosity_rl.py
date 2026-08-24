@@ -63,7 +63,7 @@ class CuriosityRewardEngine:
 
         # 2. Latent Lyapunov Free Energy: E(h) = 0.5 * ||h||^2 - logsumexp(h)
         with torch.no_grad():
-            h_flat = hidden_states.view(-1, hidden_states.shape[-1])
+            h_flat = hidden_states.detach().float().view(-1, hidden_states.shape[-1])
             fe = 0.5 * torch.norm(h_flat, dim=-1).mean().item()
 
         intrinsic_r = (
