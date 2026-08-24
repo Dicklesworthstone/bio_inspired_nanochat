@@ -331,6 +331,39 @@ one-step FT aggregates, and live TUR result exactly matched the earlier no-colle
 strict-JSON report is `results/stochastic-thermo-uq-742e61d1bca7.json`; its 30 registry rows are
 provenance-stamped to implementation commit `d2382cd`.
 
+### 7.4 Calibration and selective-prediction evaluation (`u2t.2`)
+
+The same matched-seed protocol now records the complete selective risk-coverage curve for every
+method. Predictions are accepted from lowest to highest uncertainty, ties are resolved by stable
+input order, and every attainable coverage threshold is retained. `selective_aurc` is the discrete
+mean risk over that curve; the report exposes risk at 50% and 80% coverage, while the registry keeps
+the predeclared 80% operating point. In this
+experiment, `thermo_uq` is the **synaptic stochastic-release MC** predictor from `u2t.1`; the name
+indicates that its draws also feed the optional thermodynamic evidence monitor.
+
+The preregistered capability threshold is evaluated separately from the much stricter
+predictive-thermodynamic claim above. On the same 10 matched seeds:
+
+- synaptic MC ECE was `0.071938` versus MC-dropout `0.110240`, a `34.74%` relative improvement;
+  the paired delta was `-0.038302` with bootstrap 95% CI `[-0.042648, -0.033841]`, paired-t
+  `p=5.81e-8`, and Wilcoxon `p=0.00195`;
+- synaptic MC mean OOD AUROC was `0.994911`, with Student-t 95% lower bound `0.989545`, above the
+  declared `0.70` threshold;
+- synaptic MC and softmax entropy had identical mean selective AURC (`0.0000327`) and risk at 80%
+  coverage (`0.0`); neither selective AURC comparison was statistically supported.
+
+Thus `u2t.2` receives a **positive threshold verdict**: both its ECE-vs-a-baseline and absolute
+OOD-AUROC criteria were met. This is not evidence that synaptic MC dominates the stronger softmax
+baseline: their ECE/AUROC deltas remain indistinguishable, and the near-perfect ID accuracy makes
+this tiny cyclic benchmark too saturated to discriminate selective risk. The separate
+thermodynamic verdict therefore remains **null**, and calibration remains empirical-ECE fallback.
+
+Canonical strict-JSON evidence (including every per-seed risk-coverage curve and matched tests):
+`results/calibration-selective-prediction-86aad7037a51.json`. The 30 per-seed/method registry rows
+record `id_ece`, `ood_auroc`, `selective_aurc`, and `selective_risk_at_80_coverage` alongside the
+existing live-process diagnostics. The artifact replayed exactly under implementation commit
+`40535bc`.
+
 ---
 
 ## References
