@@ -365,7 +365,7 @@ class DeliberationController:
         Falls back to `base_temp` (single-step decode) when deliberation is disabled or there is no
         synaptic state. Logs an auditable F-trajectory record when it ponders.
         """
-        if not self.cfg.enabled:
+        if not self.cfg.enabled or self.cfg.max_iters == 0:
             return base_temp
         z = self.synaptic_z(presyn_state)
         if z is None:

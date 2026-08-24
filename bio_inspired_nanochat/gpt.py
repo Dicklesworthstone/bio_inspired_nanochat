@@ -484,8 +484,32 @@ class GPT(nn.Module):
                 group["initial_lr"] = group["lr"]
         return optimizers
 
-    def forward(self, idx, targets=None, kv_cache=None, loss_reduction='mean'):
+    def forward(
+        self,
+        idx,
+        targets=None,
+        kv_cache=None,
+        loss_reduction='mean',
+        max_layers: int | None = None,
+    ):
         B, T = idx.size()
+
+        active_layers = self.config.n_layer if max_layers is None else max_layers
+        if (
+            isinstance(active_layers, bool)
+            or not isinstance(active_layers, int)
+            or not 1 <= active_layers <= self.config.n_layer
+        ):
+            raise ValueError(
+                f"max_layers must be an integer in [1, {self.config.n_layer}], got {max_layers!r}"
+            )
+        if kv_cache is not None:
+            cache_layers = getattr(kv_cache, "kv_shape", (None,))[0]
+            if cache_layers != active_layers:
+                raise ValueError(
+                    "KV cache layer count must equal max_layers so the final active layer advances "
+                    f"the cache position; got cache_layers={cache_layers}, max_layers={active_layers}"
+                )
 
         # Grab the rotary embeddings for the current sequence length (they are of shape (1, seq_len, 1, head_dim/2))
         assert T <= self.cos.size(1), f"Sequence length grew beyond the rotary embeddings cache: {T} > {self.cos.size(1)}"
@@ -498,7 +522,9 @@ class GPT(nn.Module):
         # Forward the trunk of the Transformer
         x = self.wte(idx)
         x = norm(x)
-        for block in self.blocks:
+        for layer_index, block in enumerate(self.blocks):
+            if layer_index >= active_layers:
+                break
             x = block(x, cos_sin, kv_cache)
         x = norm(x)
 

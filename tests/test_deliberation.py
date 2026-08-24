@@ -22,6 +22,7 @@ import numpy as np
 import pytest
 
 from _bio_testkit import make_tiny_synaptic
+from bio_inspired_nanochat import engine as engine_module
 from bio_inspired_nanochat.deliberation import (
     ATPBudget,
     DeliberationConfig,
@@ -216,6 +217,9 @@ def test_effective_temperature_falls_back_without_state_or_when_disabled():
     ps = [{"C": torch.tensor([1.0]), "BUF": torch.tensor([0.5])}]
     assert off.effective_temperature(ps, 0.9) == 0.9              # disabled ⟹ base temp
     assert off.records == []                                       # disabled never ponders/logs
+    zero_budget = DeliberationController(DeliberationConfig(enabled=True, max_iters=0))
+    assert zero_budget.effective_temperature(ps, 0.9) == 0.9
+    assert zero_budget.records == []
 
 
 @pytest.mark.unit
@@ -281,7 +285,7 @@ class _FakeTokenizer:
 
 def _engine():
     model = make_tiny_synaptic(seed=1234)
-    model.eval()
+    model.train(False)
     return Engine(model, _FakeTokenizer())
 
 
@@ -291,11 +295,26 @@ def _decode(engine, **kw):
 
 @pytest.mark.e2e
 def test_generate_deliberation_off_is_byte_identical_baseline():
-    """deliberation=None must reproduce the no-deliberation decode exactly (the default-off contract)."""
+    """No controller or a zero-step budget must reproduce the default decode exactly."""
     e = _engine()
     base = _decode(e, temperature=0.8)
     off = _decode(e, temperature=0.8, deliberation=None)
     assert base == off, "deliberation=None must not perturb the decode path"
+    zero_budget = DeliberationController(DeliberationConfig(enabled=True, max_iters=0))
+    assert _decode(e, temperature=0.8, deliberation=zero_budget) == base
+    assert zero_budget.records == []
+
+
+@pytest.mark.e2e
+def test_zero_token_request_does_not_create_a_deliberation_record():
+    controller = DeliberationController(DeliberationConfig(enabled=True))
+    generated = list(
+        _engine().generate(
+            [1, 2, 3, 4], max_tokens=0, temperature=0.8, seed=7, deliberation=controller
+        )
+    )
+    assert generated == []
+    assert controller.records == []
 
 
 @pytest.mark.e2e
@@ -308,9 +327,28 @@ def test_generate_greedy_is_invariant_yet_deliberation_runs_and_logs():
     controller = DeliberationController(DeliberationConfig(enabled=True))
     on = _decode(e, temperature=0.0, deliberation=controller)
     assert on == base, "greedy decode must be invariant to deliberation"
-    assert len(controller.records) > 0, "the controller must have pondered in the decode loop"
+    assert len(controller.records) == len(on), "every generated token must have a controller record"
+    assert [record.token_index for record in controller.records] == list(range(len(on)))
     assert all(r.effort >= 1 for r in controller.records)
     assert all(r.F_drop >= -1e-9 for r in controller.records), "free energy must not increase"
+
+
+@pytest.mark.e2e
+def test_first_generated_token_uses_deliberation_temperature(monkeypatch):
+    observed_temperatures = []
+    sample_next_token = engine_module.sample_next_token
+
+    def record_temperature(logits, rng, temperature=1.0, top_k=None):
+        observed_temperatures.append(float(temperature))
+        return sample_next_token(logits, rng, temperature, top_k)
+
+    monkeypatch.setattr(engine_module, "sample_next_token", record_temperature)
+    controller = DeliberationController(
+        DeliberationConfig(enabled=True, max_iters=4, temp_floor=0.5, temp_ceil=0.5)
+    )
+    tokens = _decode(_engine(), temperature=0.8, deliberation=controller)
+    assert observed_temperatures == pytest.approx([0.4] * len(tokens))
+    assert len(controller.records) == len(tokens)
 
 
 @pytest.mark.e2e
@@ -321,7 +359,7 @@ def test_generate_with_deliberation_runs_and_produces_trajectory():
     assert len(toks) > 0, "generation must produce tokens"
     assert len(controller.records) > 0
     summary = controller.summary()
-    assert summary["tokens"] == len(controller.records)
+    assert summary["tokens"] in {len(controller.records)}
     assert 1 <= summary["max_effort"] <= 32, "effort must respect the compute budget"
 
 

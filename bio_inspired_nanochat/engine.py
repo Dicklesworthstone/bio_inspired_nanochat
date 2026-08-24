@@ -362,7 +362,13 @@ class Engine:
         else:
             logits = result
         logits = logits[:, -1, :]
-        next_ids = sample_next_token(logits, rng, temperature, top_k)  # (B, 1)
+        # The prefill logits choose the first generated token, so they must use the same
+        # deliberation hook as every subsequent decode step.  Do not ponder for a zero-token
+        # request: no token will consume the result and the controller trace must stay empty.
+        prefill_temperature = temperature
+        if max_tokens is None or max_tokens > 0:
+            prefill_temperature = _decode_temperature(kv_cache_prefill)
+        next_ids = sample_next_token(logits, rng, prefill_temperature, top_k)  # (B, 1)
         sampled_tokens = next_ids[:, 0].tolist()
 
         # 2) Replicate the KV cache for each sample/row
@@ -397,7 +403,7 @@ class Engine:
                 else:
                     # Sample independently per row from the same prefill logits
                     logits_rep = logits.expand(num_samples, -1).contiguous()
-                    next_ids = sample_next_token(logits_rep, rng, temperature, top_k)
+                    next_ids = sample_next_token(logits_rep, rng, prefill_temperature, top_k)
                     sampled_tokens = next_ids[:, 0].tolist()
                 first_iteration = False
             else:

@@ -24,8 +24,10 @@ Crooks calibration monitor (`0642.3.2.1`) is built to certify. Default-off: with
 from __future__ import annotations
 
 import inspect
+from collections.abc import Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
+from typing import Any
 
 from bio_inspired_nanochat.synaptic import SynapticPresyn
 from bio_inspired_nanochat.torch_imports import torch
@@ -73,11 +75,16 @@ def _reset_sequence_state(model) -> None:
         fn(reset_fast_weights=True, reset_consolidation=True)
 
 
-def _forward_logits(model, input_ids):
+def _forward_logits(
+    model,
+    input_ids,
+    *,
+    forward_kwargs: Mapping[str, Any] | None = None,
+):
     """Call the model and return next-token logits `(B, T, V)`, handling GPT vs GPTSynaptic outputs."""
-    kwargs = {}
+    kwargs = dict(forward_kwargs or {})
     try:
-        if "train_mode" in inspect.signature(model.forward).parameters:
+        if "train_mode" in inspect.signature(model.forward).parameters and "train_mode" not in kwargs:
             kwargs["train_mode"] = False  # eval-mode dynamics (no plasticity); MC flag drives the noise
     except (TypeError, ValueError):
         pass
@@ -112,12 +119,21 @@ class MCPrediction:
 
 
 @torch.no_grad()
-def mc_predict(model, input_ids, *, n_samples: int = 16, temperature: float = 1.0) -> MCPrediction:
+def mc_predict(
+    model,
+    input_ids,
+    *,
+    n_samples: int = 16,
+    temperature: float = 1.0,
+    forward_kwargs: Mapping[str, Any] | None = None,
+) -> MCPrediction:
     """Run `n_samples` stochastic-release forward passes and aggregate the predictive distribution.
 
     Each pass is an independent draw (fresh per-call synaptic state ⟹ independent release noise), so the
     sample mean is the predictive distribution and the spread is the model's uncertainty. Restores the
     model's training/sampling state on exit. `n_samples == 1` reduces to a single stochastic forward.
+    ``forward_kwargs`` carries runtime compute controls such as an adaptive depth cap without
+    coupling this uncertainty primitive to a particular model class.
     """
     if n_samples < 1:
         raise ValueError(f"n_samples must be >= 1, got {n_samples}")
@@ -131,7 +147,7 @@ def mc_predict(model, input_ids, *, n_samples: int = 16, temperature: float = 1.
         with mc_sampling(model):
             for _ in range(n_samples):
                 _reset_sequence_state(model)  # i.i.d. draw from a clean per-sequence baseline
-                logits = _forward_logits(model, input_ids).float()
+                logits = _forward_logits(model, input_ids, forward_kwargs=forward_kwargs).float()
                 probs = torch.softmax(logits / temperature, dim=-1)
                 ent = _entropy(probs)
                 probs_sum = probs if probs_sum is None else probs_sum + probs

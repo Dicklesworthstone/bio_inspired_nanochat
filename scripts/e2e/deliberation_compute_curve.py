@@ -412,7 +412,7 @@ def run_experiment(config: ExperimentConfig | None = None) -> ExperimentReport:
         task="held-out copy-continuation consistency",
         mechanism_scope=(
             "temperature-only free-energy controller; the relaxed state is not fed back into logits, "
-            "and the engine's first generated token remains uncovered by deliberation"
+            "and the controller is evaluated on every generated token"
         ),
         config=config,
         training_loss_by_seed=training_loss_by_seed,
