@@ -74,3 +74,25 @@ def test_debugger_edit_state_and_resume():
 
     assert tokens_resumed.shape[1] == tokens_paused.shape[1] + 3
     assert not debugger.is_paused
+
+
+def test_debugger_step_over_execution():
+    """Verify single-step stepping through generation with step_over."""
+    model = _make_model()
+    debugger = SynapticDebugger(model)
+
+    prompt = torch.randint(0, 32, (1, 2))
+    debugger.run_until_breakpoint(prompt, max_tokens=0)
+
+    # Step over twice
+    frame1 = debugger.step_over()
+    assert frame1 is not None
+    assert frame1.step == 0
+    assert debugger.current_tokens is not None
+    assert debugger.current_tokens.shape[1] == 3
+
+    frame2 = debugger.step_over()
+    assert frame2 is not None
+    assert frame2.step == 1
+    assert debugger.current_tokens.shape[1] == 4
+
