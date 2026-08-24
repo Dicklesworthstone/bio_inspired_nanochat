@@ -74,7 +74,7 @@ depth = (
 max_seq_len = 2048  # max context length
 synapses = 0  # use synaptic model (GPTSynaptic) if 1, otherwise use standard GPT
 use_flex_attention = 0 # use FlexAttention (requires torch>=2.5) if 1
-# Weight initialization
+load_cmaes_params = ""  # optional path to a CMA-ES params JSON overlaid onto SynapticConfig (bead c2l; see docs/cmaes_params.md)
 init_type = "baseline"  # baseline | ca_rule30 | ca_rule116
 init_seed = 42
 tie_embeddings = 0  # hwxb.2.9: tie wte/lm_head into one shared matrix (1=on; recommended for small scale-up models)
@@ -350,11 +350,17 @@ if use_syn:
             topological_nas=bool(topological_nas),
         )
     )
-    # Reject silently-broken configs and surface risky combinations early (hm4.7).
-    from bio_inspired_nanochat.ablation_registry import assert_valid_config
+    if load_cmaes_params:
+        if resume_meta is not None:
+            raise ValueError(
+                "load_cmaes_params cannot be combined with --resume: overlaying search "
+                "parameters onto a resumed run would desync the model from its checkpoint "
+                "config. Start a fresh run with synapses=1 instead."
+            )
+        from bio_inspired_nanochat.cmaes_params import apply_cmaes_params
 
-    for _w in assert_valid_config(syn_cfg):
-        print0(f"[config] WARNING: {_w}")
+        syn_cfg = apply_cmaes_params(syn_cfg, load_cmaes_params)
+        print0(f"[config] overlaid CMA-ES params from {load_cmaes_params}")
     model_config = GPTSynapticConfig(
         sequence_len=max_seq_len,
         vocab_size=vocab_size,
