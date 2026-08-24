@@ -305,6 +305,68 @@
           "sha256": "d85cf219ca09d1ce0eee2219d2444f79611bac3922e3f5747846b86e53a75b8b"
         }
       ]
+    },
+    {
+      "cycle_id": "lfl-0642.1.2.6-reversible-l-cpu-foundation-2026-08-24",
+      "frog_id": "bio_inspired_nanochat-0642.1.2.6",
+      "theorem_ids": [
+        "BioInspiredNanochat.Metriplectic.poisson_entropy_degeneracy",
+        "BioInspiredNanochat.Metriplectic.friction_energy_degeneracy",
+        "BioInspiredNanochat.Metriplectic.energyRate_zero",
+        "BioInspiredNanochat.Metriplectic.entropyRate_nonnegative",
+        "BioInspiredNanochat.Metriplectic.freeEnergyRate_nonpositive",
+        "BioInspiredNanochat.Metriplectic.freeEnergy_nonincreasing",
+        "BioInspiredNanochat.Metriplectic.trajectory_energy_constant",
+        "BioInspiredNanochat.Metriplectic.trajectory_entropy_from_start",
+        "BioInspiredNanochat.Metriplectic.trajectory_freeEnergy_nonincreasing",
+        "BioInspiredNanochat.Metriplectic.trajectory_component_bounds"
+      ],
+      "route": "runtime-first-proof-preserving",
+      "proof_friction_class": "finite-precision-reconstruction",
+      "runtime_defect_found": true,
+      "artifact_hash": "sha256:831498bc2853d86701250ea89024ab5f5f6190d2e3a5a9ae66f93a7d5d42d963",
+      "hash_scope": "formal/lean/BioInspiredNanochat.lean",
+      "sorry_or_admit_present": false,
+      "axioms": [
+        "propext",
+        "Classical.choice",
+        "Quot.sound"
+      ],
+      "assurance": {
+        "exact_real_algebra": "E",
+        "live_torch_regressions": "B",
+        "floating_point_refinement": "fp64-gradcheck-fp32-drift-low-precision-rejection-and-depth-sweep"
+      },
+      "conformance": {
+        "statement_parity": "pass-isolated-L-core",
+        "state_parity": "pass-C-B-HEAT-reduced-core",
+        "transition_parity": "pass-bit-exact-vs-guarded-pure-L-proposal-all-live-dtypes",
+        "concurrency_parity": "not-applicable-pure-tensor-transform",
+        "cancel_drain_parity": "not-applicable",
+        "runtime_evidence": "partial-CPU-only",
+        "drift_gate": "pass-fp64-fp32"
+      },
+      "change_scope": "Implements an isolated CPU pure-L algebraic Cayley inverse and a sequence-level first-order custom backward that saves only the terminal reduced state, with all-live-dtype forward parity, depth-4096 round trips, fp64 scalar and broadcast gradcheck/VJP, fp32 gradient-drift, low-precision inverse rejection, and saved-tensor scaling tests. Adversarial review found and this cycle fixed an initial fp16/bf16 parameter pre-quantization and silent wrong-gradient defect. It does not alter the live combined guarded L+M recurrence and does not satisfy the CUDA peak-VRAM or longer-context acceptance gates; bead 0642.1.2.6 remains open.",
+      "runtime_mapping": [
+        {
+          "path": "bio_inspired_nanochat/metriplectic_integrator.py",
+          "sha256": "6a13a4c9ce66aac3ba0d3912894f1506d48cfae58b24eb3d8cc70130b656218d"
+        },
+        {
+          "path": "tests/test_metriplectic_runtime.py",
+          "sha256": "073bc5f635dea75a686ff11a51eaef81daa02a012eea1ab344cf5ef55aa261da"
+        },
+        {
+          "path": "docs/theory/metriplectic.md",
+          "sha256": "b702511f5a0475855ba48ce3951c710431c647ad7129381f861784bd887dec97"
+        }
+      ],
+      "regression_command": "uv run --no-sync python -m pytest tests/test_metriplectic_theory.py tests/test_metriplectic_integrator.py tests/test_metriplectic_runtime.py -v --tb=short",
+      "regression_result": "58 passed (2026-08-24)",
+      "lean_toolchain": "leanprover/lean4:v4.27.0",
+      "mathlib_revision": "a3a10db0e9d66acbebf76c5e6a135066525ac900",
+      "build_command": "rch exec -- lake build",
+      "build_result": "not-rerun-proof-source-unchanged"
     }
   ]
 }

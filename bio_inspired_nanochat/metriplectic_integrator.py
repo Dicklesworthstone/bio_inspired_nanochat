@@ -24,7 +24,8 @@ Euler at first order. See `docs/theory/metriplectic.md` §4–§5; tested in
 
 Scope: the NumPy reference implements `0642.1.2.1`; :func:`torch_guarded_step` compiles that core
 into the live synaptic recurrence for `0642.1.2`. The free-energy deliberation loop that consumes
-the same structure is `r00r.1.2`.
+the same structure is `r00r.1.2`. :func:`reversible_l_sequence` is the isolated, fallback-free
+pure-`L` reconstruction core for `0642.1.2.6`; it is deliberately not the combined live recurrence.
 """
 
 from __future__ import annotations
@@ -218,6 +219,220 @@ def _torch_scalar(value: float | Tensor, like: Tensor) -> Tensor:
     return torch.as_tensor(value, dtype=like.dtype, device=like.device)
 
 
+def _torch_midpoint_proposal(
+    calcium: Tensor,
+    buffer: Tensor,
+    half_dt: Tensor,
+    omega: Tensor,
+    gC: Tensor,
+    gB: Tensor,
+) -> tuple[Tensor, Tensor, Tensor, Tensor]:
+    """Return the combined ``L+M`` midpoint proposal and its singularity mask."""
+    a11 = 1.0 + half_dt * gC
+    a12 = -half_dt * omega
+    a21 = half_dt * omega
+    a22 = 1.0 + half_dt * gB
+    rhs_c = (1.0 - half_dt * gC) * calcium + half_dt * omega * buffer
+    rhs_b = -half_dt * omega * calcium + (1.0 - half_dt * gB) * buffer
+    determinant = a11 * a22 - a12 * a21
+    singular = determinant.abs() <= torch.finfo(calcium.dtype).eps
+    safe_determinant = torch.where(singular, torch.ones_like(determinant), determinant)
+    inverse_determinant = torch.reciprocal(safe_determinant)
+    c_prop = (rhs_c * a22 - a12 * rhs_b) * inverse_determinant
+    b_prop = (a11 * rhs_b - rhs_c * a21) * inverse_determinant
+    return c_prop, b_prop, determinant, singular
+
+
+def _torch_l_step_unchecked(
+    calcium: Tensor,
+    buffer: Tensor,
+    heat: Tensor,
+    omega: Tensor,
+    dt: Tensor,
+) -> tuple[Tensor, Tensor, Tensor]:
+    """Apply the guard-free L-only midpoint map with the live operation order.
+
+    This helper intentionally contains no physical-domain guard: a rotation does not preserve the
+    live calcium/buffer quadrant. It is the exact discrete map used by the isolated reversible
+    sequence below, not an alternative dispatch for the guarded live recurrence.
+    """
+    work_dtype = torch.float64 if calcium.dtype == torch.float64 else torch.float32
+    c0 = calcium.to(work_dtype)
+    b0 = buffer.to(work_dtype)
+    h0 = heat.to(work_dtype)
+    omega_t = omega.to(dtype=work_dtype, device=calcium.device)
+    dt_t = dt.to(dtype=work_dtype, device=calcium.device)
+    zero = torch.zeros((), dtype=work_dtype, device=calcium.device)
+    c_prop, b_prop, _, _ = _torch_midpoint_proposal(
+        c0, b0, 0.5 * dt_t, omega_t, zero, zero
+    )
+    c_next = c_prop.to(calcium.dtype).to(work_dtype)
+    b_next = b_prop.to(buffer.dtype).to(work_dtype)
+    mechanical0 = 0.5 * (c0.square() + b0.square())
+    mechanical1 = 0.5 * (c_next.square() + b_next.square())
+    h_next = (h0 + mechanical0 - mechanical1).to(heat.dtype)
+    return c_next.to(calcium.dtype), b_next.to(buffer.dtype), h_next
+
+
+def cayley_l_step(
+    calcium: Tensor,
+    buffer: Tensor,
+    heat: Tensor,
+    *,
+    omega: float | Tensor = OMEGA,
+    dt: float | Tensor = 1.0,
+) -> tuple[Tensor, Tensor, Tensor]:
+    """Apply one guard-free L-only implicit-midpoint/Cayley step.
+
+    The operation order matches the ``gC=gB=0`` proposal in :func:`torch_guarded_step`, including
+    live-dtype quantization and the energy-shell update for ``heat``. Callers are responsible for
+    restricting this reduced map to fallback-free states.
+    """
+    if calcium.shape != buffer.shape or calcium.shape != heat.shape:
+        raise ValueError("calcium, buffer, and heat must have identical shapes")
+    if not calcium.is_floating_point():
+        raise TypeError(f"metriplectic state must be floating point, got {calcium.dtype}")
+    if buffer.dtype != calcium.dtype or heat.dtype != calcium.dtype:
+        raise TypeError("calcium, buffer, and heat must have identical dtypes")
+    if buffer.device != calcium.device or heat.device != calcium.device:
+        raise ValueError("calcium, buffer, and heat must be on the same device")
+    work_dtype = torch.float64 if calcium.dtype == torch.float64 else torch.float32
+    work_reference = calcium.to(work_dtype)
+    omega_t = _torch_scalar(omega, work_reference)
+    dt_t = _torch_scalar(dt, work_reference)
+    if dt_t.numel() != 1 or float(dt_t.detach()) <= 0.0:
+        raise ValueError(f"dt must be a positive scalar, got shape={tuple(dt_t.shape)}")
+    return _torch_l_step_unchecked(calcium, buffer, heat, omega_t, dt_t)
+
+
+def cayley_l_inverse(
+    calcium_next: Tensor,
+    buffer_next: Tensor,
+    heat_next: Tensor,
+    *,
+    omega: float | Tensor = OMEGA,
+    dt: float | Tensor = 1.0,
+) -> tuple[Tensor, Tensor, Tensor]:
+    """Approximately reconstruct the preceding state with the algebraic Cayley inverse.
+
+    Replacing ``omega`` by ``-omega`` transposes the orthogonal midpoint map. Running the reverse
+    step through the same energy-shell closure also reconstructs the heat ledger; blindly returning
+    ``heat_next`` would miss live-dtype roundoff booked by the forward shell identity. Float16 and
+    bfloat16 are rejected because their forward casts discard too much information for this
+    inverse-only policy.
+    """
+    if calcium_next.dtype not in {torch.float32, torch.float64}:
+        raise TypeError(
+            "cayley_l_inverse requires float32 or float64 state until low-precision replay exists"
+        )
+    return cayley_l_step(
+        calcium_next,
+        buffer_next,
+        heat_next,
+        omega=-omega,
+        dt=dt,
+    )
+
+
+class _ReversibleLSequence(torch.autograd.Function):
+    """First-order reverse-mode implementation saving one terminal L state."""
+
+    @staticmethod
+    def forward(
+        ctx,
+        calcium: Tensor,
+        buffer: Tensor,
+        heat: Tensor,
+        omega: Tensor,
+        dt: Tensor,
+        steps: int,
+    ) -> tuple[Tensor, Tensor, Tensor]:
+        c_next, b_next, h_next = calcium.clone(), buffer.clone(), heat.clone()
+        for _ in range(steps):
+            c_next, b_next, h_next = _torch_l_step_unchecked(
+                c_next, b_next, h_next, omega, dt
+            )
+        ctx.steps = steps
+        ctx.save_for_backward(c_next, b_next, h_next, omega, dt)
+        return c_next, b_next, h_next
+
+    @staticmethod
+    def backward(
+        ctx,
+        grad_calcium: Tensor | None,
+        grad_buffer: Tensor | None,
+        grad_heat: Tensor | None,
+    ) -> tuple[Tensor | None, Tensor | None, Tensor | None, Tensor | None, Tensor | None, None]:
+        c_next, b_next, h_next, omega, dt = ctx.saved_tensors
+        grad_c = torch.zeros_like(c_next) if grad_calcium is None else grad_calcium
+        grad_b = torch.zeros_like(b_next) if grad_buffer is None else grad_buffer
+        grad_h = torch.zeros_like(h_next) if grad_heat is None else grad_heat
+        grad_omega = torch.zeros_like(omega)
+        grad_dt = torch.zeros_like(dt)
+        omega_leaf = omega.detach().requires_grad_(True)
+        dt_leaf = dt.detach().requires_grad_(True)
+
+        for _ in range(ctx.steps):
+            with torch.no_grad():
+                c_prev, b_prev, h_prev = _torch_l_step_unchecked(
+                    c_next, b_next, h_next, -omega, dt
+                )
+            c_leaf = c_prev.detach().requires_grad_(True)
+            b_leaf = b_prev.detach().requires_grad_(True)
+            h_leaf = h_prev.detach().requires_grad_(True)
+            with torch.enable_grad():
+                replay = _torch_l_step_unchecked(
+                    c_leaf, b_leaf, h_leaf, omega_leaf, dt_leaf
+                )
+            local_grads = torch.autograd.grad(
+                replay,
+                (c_leaf, b_leaf, h_leaf, omega_leaf, dt_leaf),
+                grad_outputs=(grad_c, grad_b, grad_h),
+                create_graph=False,
+            )
+            grad_c, grad_b, grad_h = local_grads[:3]
+            grad_omega = grad_omega + local_grads[3]
+            grad_dt = grad_dt + local_grads[4]
+            c_next, b_next, h_next = c_prev, b_prev, h_prev
+
+        return grad_c, grad_b, grad_h, grad_omega, grad_dt, None
+
+
+def reversible_l_sequence(
+    calcium: Tensor,
+    buffer: Tensor,
+    heat: Tensor,
+    *,
+    omega: float | Tensor = OMEGA,
+    dt: float | Tensor = 1.0,
+    steps: int,
+) -> tuple[Tensor, Tensor, Tensor]:
+    """Run ``steps`` Cayley L updates with constant saved activation storage in ``steps``.
+
+    Backward reconstructs one preceding state at a time with :func:`cayley_l_inverse`, replays that
+    local step, and immediately consumes its VJP. Only the terminal ``(C, B, heat)`` plus ``omega``
+    and ``dt`` are saved. This is a first-order, fallback-free reduced-core primitive; it does not
+    claim that the driven, dissipative, guarded live recurrence is reversible.
+    """
+    if isinstance(steps, bool) or not isinstance(steps, int) or steps < 0:
+        raise ValueError(f"steps must be a non-negative integer, got {steps!r}")
+    if calcium.shape != buffer.shape or calcium.shape != heat.shape:
+        raise ValueError("calcium, buffer, and heat must have identical shapes")
+    if calcium.dtype not in {torch.float32, torch.float64}:
+        raise TypeError(
+            "reversible_l_sequence requires float32 or float64 state until low-precision replay exists"
+        )
+    if buffer.dtype != calcium.dtype or heat.dtype != calcium.dtype:
+        raise TypeError("calcium, buffer, and heat must have identical dtypes")
+    if buffer.device != calcium.device or heat.device != calcium.device:
+        raise ValueError("calcium, buffer, and heat must be on the same device")
+    omega_t = _torch_scalar(omega, calcium)
+    dt_t = _torch_scalar(dt, calcium)
+    if dt_t.numel() != 1 or float(dt_t.detach()) <= 0.0:
+        raise ValueError(f"dt must be a positive scalar, got shape={tuple(dt_t.shape)}")
+    return _ReversibleLSequence.apply(calcium, buffer, heat, omega_t, dt_t, steps)
+
+
 def torch_guarded_step(
     calcium: Tensor,
     buffer: Tensor,
@@ -269,18 +484,9 @@ def torch_guarded_step(
     # Implicit-midpoint 2×2 system:
     #   (1+a*gC) C' - a*w B' = (1-a*gC) C + a*w B
     #    a*w C' + (1+a*gB) B' = -a*w C + (1-a*gB) B
-    a11 = 1.0 + half_dt * gc_t
-    a12 = -half_dt * omega_t
-    a21 = half_dt * omega_t
-    a22 = 1.0 + half_dt * gb_t
-    rhs_c = (1.0 - half_dt * gc_t) * c0 + half_dt * omega_t * b0
-    rhs_b = -half_dt * omega_t * c0 + (1.0 - half_dt * gb_t) * b0
-    determinant = a11 * a22 - a12 * a21
-    singular = determinant.abs() <= torch.finfo(work_dtype).eps
-    safe_determinant = torch.where(singular, torch.ones_like(determinant), determinant)
-    inverse_determinant = torch.reciprocal(safe_determinant)
-    c_prop = (rhs_c * a22 - a12 * rhs_b) * inverse_determinant
-    b_prop = (a11 * rhs_b - rhs_c * a21) * inverse_determinant
+    c_prop, b_prop, determinant, singular = _torch_midpoint_proposal(
+        c0, b0, half_dt, omega_t, gc_t, gb_t
+    )
 
     # Quantize C/B to the live state dtype before closing the energy shell. This makes the guard
     # certify the values that are actually persisted (including bf16), not an fp32 proposal that

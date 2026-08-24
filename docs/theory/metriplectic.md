@@ -348,6 +348,15 @@ reduce these cotangents back to their original shapes. A custom backward may eva
 directly or reconstruct `x`, detach it, replay one local forward with gradients enabled, and call
 autograd on that local graph. `h` is an identity coordinate in the `L` flow.
 
+The CPU reference now exposes this narrower contract directly. `cayley_l_step` preserves the live
+pure-`L` operation order, `cayley_l_inverse` evaluates the algebraic inverse with `−ω`, and
+`reversible_l_sequence` places one custom-autograd boundary around the entire sequence. That
+sequence boundary is essential: wrapping every step separately would still save one output per
+step and therefore remain `Θ(N)`. The custom backward reconstructs one predecessor at a time and
+locally replays the forward map to obtain first-order VJPs; it makes no `gradgrad` promise. The
+inverse-only API rejects fp16/bf16 because their forward casts lose information; those dtypes need
+deterministic replay from a higher-precision checkpoint or an explicitly stored residual.
+
 ### 10.4 Where reversibility stops
 
 The current live path does **not** yet implement reversible backprop or an operator-split `L` step.
@@ -406,6 +415,13 @@ and persistent synaptic state are additional.
 | dense two-plane `M` correction at every step (`HEAT` from the energy shell) | `(3+2N)ns` | `Θ(Nn)` |
 | uniform full-core checkpoint/replay windows of length `K` | approximately `(3N/K+3K+3)ns` | minimized at `Θ(ns√N)` |
 
+The CPU saved-tensor-hook test measures unique backing storage for a 32-site fp64 case. In the
+current environment, eager autograd grows from roughly 2.1 KiB at depth 1 to roughly 104 KiB at
+depth 64, while the reversible sequence remains below 1 KiB at both depths. The test locks the
+scaling and ratio rather than allocator-specific byte totals. This is structural evidence about
+tensors retained for backward, not a CUDA peak-VRAM result: it excludes allocator overhead, replay
+workspace, the rest of the model, and the non-`L` live recurrence.
+
 Thus “O(1)-memory” means a constant number of **`L`-core activation snapshots in `L`-step depth at
 fixed tensor shape**. It does not mean constant memory in context length, constant whole-model VRAM,
 or longer context for free. If `M`, fallback, or non-`L` checkpoints occur at every step, the total is
@@ -440,10 +456,14 @@ The implementation bead must meet all of these gates before making a runtime mem
    control. The full guarded recurrence must fit its declared `O(N/K+K)` checkpoint budget and be
    reported separately, including recompute count and slowdown.
 
-This subtask establishes the inverse and the honest storage/test contract only. The runtime still
-uses ordinary autograd through the combined guarded `L+M` midpoint proposal. Custom backward code,
-a default-off integration toggle, reconstruction-error checkpoint tuning, and measured memory
-claims belong to `0642.1.2.6`.
+The isolated CPU foundation now evaluates the algebraic Cayley inverse in live precision and
+implements a first-order custom backward, with fp64 gradcheck/VJP parity, bounded fp32 gradient
+drift, round trips through depth
+4,096, and constant saved-tensor storage in `L`-step depth. The live runtime still uses ordinary
+autograd through the combined guarded `L+M` midpoint proposal. Functional full-state
+checkpoint/replay, a default-off live integration toggle, CUDA scatter/fallback parity,
+reconstruction-error tuning, peak-VRAM measurement, and a demonstrated longer-context run remain
+acceptance gates for `0642.1.2.6`; the isolated result alone does not close the bead.
 
 ---
 

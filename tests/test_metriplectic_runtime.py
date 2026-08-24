@@ -10,7 +10,9 @@ Locks the runtime-certificate contract on top of the discrete-gradient integrato
     degeneracy-breaking (learned-style) operator trips the guard and deterministically falls back to
     the clamped-Euler baseline — never corrupting the run (0642.1.2.3);
   - the `metriplectic_integrator` toggle is default-off and registered with its prerequisite
-    (0642.1.2.4).
+    (0642.1.2.4);
+  - the isolated pure-`L` sequence keeps Cayley forward parity while reconstructing activations in
+    backward with depth-independent saved-tensor storage (0642.1.2.6).
 
 Run:  pytest tests/test_metriplectic_runtime.py -v
 """
@@ -184,6 +186,243 @@ def test_torch_guard_selects_the_supplied_live_fallback_exactly():
     assert torch.equal(c_next, fallback[0])
     assert torch.equal(b_next, fallback[1])
     assert torch.equal(h_next, fallback[2])
+
+
+# --------------------------------------------------------------------------- #
+# 5. Isolated reversible L sequence foundation (0642.1.2.6 CPU contract).
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize(
+    "dtype", [torch.float64, torch.float32, torch.bfloat16, torch.float16]
+)
+def test_cayley_l_step_is_bit_exact_with_the_guarded_pure_l_proposal(dtype):
+    calcium = torch.tensor([1.2, 0.42], dtype=dtype)
+    buffer = torch.tensor([0.07, 0.15], dtype=dtype)
+    heat = torch.ones_like(calcium)
+    expected = mi.torch_guarded_step(
+        calcium,
+        buffer,
+        heat,
+        dt=0.03,
+        omega=1.3,
+        gC=0.0,
+        gB=0.0,
+    )
+    actual = mi.cayley_l_step(calcium, buffer, heat, dt=0.03, omega=1.3)
+
+    assert not torch.any(expected[3].fallback_mask)
+    for got, want in zip(actual, expected[:3]):
+        assert torch.equal(got, want)
+
+
+@pytest.mark.parametrize("dtype", [torch.float64, torch.float32])
+@pytest.mark.parametrize("steps", [1, 16, 256, 4096])
+def test_cayley_l_inverse_round_trip_has_linear_precision_envelope(dtype, steps):
+    initial = (
+        torch.tensor([0.31, -0.27], dtype=dtype),
+        torch.tensor([0.22, 0.18], dtype=dtype),
+        torch.tensor([1.2, 0.9], dtype=dtype),
+    )
+    state = initial
+    for _ in range(steps):
+        state = mi.cayley_l_step(*state, omega=-0.17, dt=0.2)
+    for _ in range(steps):
+        state = mi.cayley_l_inverse(*state, omega=-0.17, dt=0.2)
+
+    envelope = max(1e-12, 16.0 * steps * torch.finfo(dtype).eps)
+    for reconstructed, expected in zip(state, initial):
+        torch.testing.assert_close(reconstructed, expected, atol=envelope, rtol=envelope)
+
+
+@pytest.mark.parametrize("steps", [0, 1, 8])
+def test_reversible_l_sequence_forward_is_bit_exact_with_eager_steps(steps):
+    initial = (
+        torch.tensor([0.31, 0.27], dtype=torch.float64),
+        torch.tensor([0.22, 0.18], dtype=torch.float64),
+        torch.tensor([1.2, 0.9], dtype=torch.float64),
+    )
+    omega = torch.tensor(-0.07, dtype=torch.float64)
+    dt = torch.tensor(0.15, dtype=torch.float64)
+    expected = initial
+    for _ in range(steps):
+        expected = mi.cayley_l_step(*expected, omega=omega, dt=dt)
+    actual = mi.reversible_l_sequence(*initial, omega=omega, dt=dt, steps=steps)
+
+    for got, want in zip(actual, expected):
+        assert torch.equal(got, want)
+
+
+def test_reversible_l_sequence_gradcheck_matches_finite_differences():
+    torch.manual_seed(642126)
+    inputs = (
+        torch.rand(2, 3, dtype=torch.float64, requires_grad=True) * 0.2 + 0.3,
+        torch.rand(2, 3, dtype=torch.float64, requires_grad=True) * 0.1 + 0.2,
+        torch.ones(2, 3, dtype=torch.float64, requires_grad=True),
+        torch.tensor(-0.05, dtype=torch.float64, requires_grad=True),
+        torch.tensor(0.1, dtype=torch.float64, requires_grad=True),
+    )
+
+    assert torch.autograd.gradcheck(
+        lambda c, b, h, omega, dt: mi.reversible_l_sequence(
+            c, b, h, omega=omega, dt=dt, steps=5
+        ),
+        inputs,
+        eps=1e-6,
+        atol=1e-5,
+        rtol=1e-3,
+        nondet_tol=0.0,
+    )
+
+
+def test_reversible_l_sequence_reduces_broadcast_parameter_gradients():
+    torch.manual_seed(642126)
+    inputs = (
+        torch.rand(2, 3, dtype=torch.float64, requires_grad=True) * 0.2 + 0.3,
+        torch.rand(2, 3, dtype=torch.float64, requires_grad=True) * 0.1 + 0.2,
+        torch.ones(2, 3, dtype=torch.float64, requires_grad=True),
+        torch.full((1, 3), -0.05, dtype=torch.float64, requires_grad=True),
+        torch.tensor(0.1, dtype=torch.float64, requires_grad=True),
+    )
+
+    assert torch.autograd.gradcheck(
+        lambda c, b, h, omega, dt: mi.reversible_l_sequence(
+            c, b, h, omega=omega, dt=dt, steps=3
+        ),
+        inputs,
+        eps=1e-6,
+        atol=1e-5,
+        rtol=1e-3,
+        nondet_tol=0.0,
+    )
+
+
+@pytest.mark.parametrize("dtype", [torch.bfloat16, torch.float16])
+def test_inverse_only_reconstruction_rejects_lossy_low_precision(dtype):
+    state = tuple(torch.ones(2, dtype=dtype) for _ in range(3))
+
+    with pytest.raises(TypeError, match="float32 or float64"):
+        mi.cayley_l_inverse(*state, omega=0.5, dt=0.1)
+    with pytest.raises(TypeError, match="float32 or float64"):
+        mi.reversible_l_sequence(*state, omega=0.5, dt=0.1, steps=2)
+
+
+def test_reversible_l_sequence_vjp_matches_standard_autograd():
+    def make_inputs():
+        return (
+            torch.tensor([0.31, 0.27], dtype=torch.float64, requires_grad=True),
+            torch.tensor([0.22, 0.18], dtype=torch.float64, requires_grad=True),
+            torch.tensor([1.2, 0.9], dtype=torch.float64, requires_grad=True),
+            torch.tensor(-0.07, dtype=torch.float64, requires_grad=True),
+            torch.tensor(0.15, dtype=torch.float64, requires_grad=True),
+        )
+
+    weights = (
+        torch.tensor([0.7, -0.2], dtype=torch.float64),
+        torch.tensor([-0.4, 0.9], dtype=torch.float64),
+        torch.tensor([0.3, -0.8], dtype=torch.float64),
+    )
+    eager_inputs = make_inputs()
+    eager_state = eager_inputs[:3]
+    for _ in range(8):
+        eager_state = mi.cayley_l_step(
+            *eager_state, omega=eager_inputs[3], dt=eager_inputs[4]
+        )
+    eager_loss = sum((value * weight).sum() for value, weight in zip(eager_state, weights))
+    eager_grads = torch.autograd.grad(eager_loss, eager_inputs)
+
+    reversible_inputs = make_inputs()
+    reversible_state = mi.reversible_l_sequence(
+        *reversible_inputs[:3],
+        omega=reversible_inputs[3],
+        dt=reversible_inputs[4],
+        steps=8,
+    )
+    reversible_loss = sum(
+        (value * weight).sum() for value, weight in zip(reversible_state, weights)
+    )
+    reversible_grads = torch.autograd.grad(reversible_loss, reversible_inputs)
+
+    for got, want in zip(reversible_grads, eager_grads):
+        torch.testing.assert_close(got, want, atol=2e-10, rtol=2e-8)
+
+
+def test_reversible_l_sequence_fp32_gradient_drift_stays_below_contract():
+    def run(*, reversible: bool):
+        inputs = (
+            torch.linspace(0.2, 0.5, 64, requires_grad=True),
+            torch.linspace(0.1, 0.25, 64, requires_grad=True),
+            torch.linspace(0.8, 1.1, 64, requires_grad=True),
+            torch.tensor(-0.01, requires_grad=True),
+            torch.tensor(0.1, requires_grad=True),
+        )
+        state = inputs[:3]
+        if reversible:
+            state = mi.reversible_l_sequence(
+                *state, omega=inputs[3], dt=inputs[4], steps=32
+            )
+        else:
+            for _ in range(32):
+                state = mi.cayley_l_step(*state, omega=inputs[3], dt=inputs[4])
+        weights = torch.linspace(-0.7, 1.3, 64)
+        loss = (
+            (state[0] * weights).sum()
+            + (state[1] * weights.flip(0)).sum()
+            + 0.3 * state[2].sum()
+        )
+        return torch.autograd.grad(loss, inputs)
+
+    eager = torch.cat([gradient.flatten() for gradient in run(reversible=False)])
+    reconstructed = torch.cat([gradient.flatten() for gradient in run(reversible=True)])
+    relative_error = (reconstructed - eager).norm() / eager.norm()
+    cosine = torch.nn.functional.cosine_similarity(eager, reconstructed, dim=0)
+
+    assert relative_error <= 5e-5
+    assert cosine >= 0.99999
+
+
+def test_reversible_l_sequence_saved_activation_bytes_are_constant_in_depth():
+    def saved_bytes(*, steps: int, reversible: bool) -> tuple[int, int]:
+        nominal = 0
+        storages: dict[tuple[str, int, int], int] = {}
+
+        def pack(tensor):
+            nonlocal nominal
+            nominal += tensor.numel() * tensor.element_size()
+            storage = tensor.untyped_storage()
+            key = (str(tensor.device), storage.data_ptr(), storage.nbytes())
+            storages[key] = storage.nbytes()
+            return tensor
+
+        def unpack(tensor):
+            return tensor
+
+        state = (
+            torch.full((32,), 0.31, dtype=torch.float64, requires_grad=True),
+            torch.full((32,), 0.22, dtype=torch.float64, requires_grad=True),
+            torch.full((32,), 1.2, dtype=torch.float64, requires_grad=True),
+        )
+        omega = torch.tensor(-0.07, dtype=torch.float64, requires_grad=True)
+        dt = torch.tensor(0.15, dtype=torch.float64, requires_grad=True)
+        with torch.autograd.graph.saved_tensors_hooks(pack, unpack):
+            if reversible:
+                state = mi.reversible_l_sequence(
+                    *state, omega=omega, dt=dt, steps=steps
+                )
+            else:
+                for _ in range(steps):
+                    state = mi.cayley_l_step(*state, omega=omega, dt=dt)
+            loss = state[0].sum() + state[1].sum() + state[2].sum()
+        loss.backward()
+        return nominal, sum(storages.values())
+
+    reversible_one = saved_bytes(steps=1, reversible=True)
+    reversible_deep = saved_bytes(steps=64, reversible=True)
+    eager_one = saved_bytes(steps=1, reversible=False)
+    eager_deep = saved_bytes(steps=64, reversible=False)
+
+    assert reversible_deep == reversible_one
+    assert eager_deep[0] > 32 * eager_one[0]
+    assert eager_deep[1] > 32 * eager_one[1]
+    assert reversible_deep[1] <= eager_deep[1] / 4
 
 
 def test_release_canonical_wires_metriplectic_heat_and_guard_ledger():
