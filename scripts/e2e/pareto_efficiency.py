@@ -258,12 +258,16 @@ def _score_sequence_adaptive(
             nll_sum += -math.log(max(float(probs[gold]), 1e-12))
             correct += int(pred == gold)
             n_scored += 1
-            units_sum += int(result.executed_plan.compute_units)
+            # A rejected cheap prediction consumed real work before the full fallback. Count both;
+            # using only the served plan would make fallback-heavy policies appear artificially
+            # cheaper than fixed inference.
+            units_sum += int(result.attempted_compute_units)
             fallbacks += int(result.fallback_used)
             records.append({
-                "pos": pos, "units": int(result.executed_plan.compute_units),
+                "pos": pos, "units": int(result.attempted_compute_units),
                 "spent": int(result.token_spent_atp),
                 "fallback": bool(result.fallback_used),
+                "fallback_reexecuted": bool(result.fallback_reexecuted),
                 "difficulty": float(result.proposed_plan.difficulty.score),
             })
     finally:

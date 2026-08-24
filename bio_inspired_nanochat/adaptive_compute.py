@@ -12,9 +12,10 @@ that floor, planning fails before mutating the account; it never returns zero la
 zero predictive samples.  The feature is default-off: a disabled controller returns the fixed
 maximum-compute plan and does not touch the ATP account.  The
 :func:`quality_guarded_predict` inference primitive adds the downstream ``r00r.3.3`` safety contract:
-reserve enough ATP for a same-token fixed-compute fallback, serve the adaptive prediction only when
-its predictive confidence meets a configured quality floor, and emit one detailed JSONL audit event
-per token.  Cached decoding may use an early-exit prefix when the cache itself is allocated
+atomically reserve enough ATP for both the adaptive attempt and a possible same-token fixed-compute
+fallback, serve the adaptive prediction only when its predictive confidence meets a configured
+quality floor, and emit one detailed JSONL audit event per token.  Cached decoding may use an
+early-exit prefix when the cache itself is allocated
 for that fixed prefix depth; changing depth inside one existing cache would create missing-layer
 history and is deliberately rejected by the model forward.
 """
@@ -135,13 +136,22 @@ class GuardedAdaptivePrediction:
     quality_floor: float
     quality_floor_passed: bool
     fallback_used: bool
+    fallback_reexecuted: bool
     fallback_reason: str | None
     token_spent_atp: int
 
     @property
+    def attempted_compute_units(self) -> int:
+        """All lever units physically attempted, including a discarded cheap prediction."""
+        attempted = self.proposed_plan.compute_units
+        if self.fallback_reexecuted:
+            attempted += self.executed_plan.compute_units
+        return attempted
+
+    @property
     def saved_compute_units(self) -> int:
-        """Lever units saved against fixed compute for the prediction that was served."""
-        return self.executed_plan.maximum_compute_units - self.executed_plan.compute_units
+        """Lever-unit savings against one fixed pass; negative means fallback overhead."""
+        return self.executed_plan.maximum_compute_units - self.attempted_compute_units
 
 
 class InsufficientATPError(RuntimeError):
@@ -425,25 +435,24 @@ def _fallback_plan(
     budget: ATPBudget,
     controller: AdaptiveComputeController,
 ) -> AdaptiveComputePlan:
-    """Buy the proposed-to-fixed delta; the caller has already reserved enough ATP."""
+    """Buy a complete fixed pass after a discarded cheap attempt."""
     cfg = controller.config
     records = list(proposed.debit_records)
-    for action, current, maximum, unit_cost in (
-        ("quality_fallback_depth_layer", proposed.depth_layers, proposed.max_depth_layers, cfg.layer_cost_atp),
-        ("quality_fallback_expert", proposed.expert_top_k, proposed.max_experts, cfg.expert_cost_atp),
-        ("quality_fallback_mc_sample", proposed.mc_samples, proposed.max_mc_samples, cfg.mc_sample_cost_atp),
+    for action, maximum, unit_cost in (
+        ("quality_fallback_depth_layer", proposed.max_depth_layers, cfg.layer_cost_atp),
+        ("quality_fallback_expert", proposed.max_experts, cfg.expert_cost_atp),
+        ("quality_fallback_mc_sample", proposed.max_mc_samples, cfg.mc_sample_cost_atp),
     ):
-        delta = maximum - current
-        if delta == 0:
+        if maximum == 0:
             continue
         debit = budget.debit(
             token_index=proposed.token_index,
             action=action,
             difficulty_score=proposed.difficulty.score,
-            requested_units=delta,
+            requested_units=maximum,
             unit_cost_atp=unit_cost,
         )
-        if debit.granted_units != delta:
+        if debit.granted_units != maximum:
             raise RuntimeError("reserved fixed-compute fallback ATP was unexpectedly unavailable")
         records.append(debit)
     return replace(
@@ -452,6 +461,28 @@ def _fallback_plan(
         expert_top_k=proposed.max_experts,
         mc_samples=proposed.max_mc_samples,
         debit_records=tuple(records),
+    )
+
+
+def _commit_shadow_plan(
+    shadow_plan: AdaptiveComputePlan,
+    budget: ATPBudget,
+) -> AdaptiveComputePlan:
+    """Replay a validated shadow plan into the real sequence account exactly once."""
+    starting_record_count = len(budget.records)
+    for record in shadow_plan.debit_records:
+        debit = budget.debit(
+            token_index=record.token_index,
+            action=record.action,
+            difficulty_score=record.difficulty_score,
+            requested_units=record.granted_units,
+            unit_cost_atp=record.unit_cost_atp,
+        )
+        if debit.granted_units != record.granted_units:
+            raise RuntimeError("reserved adaptive-attempt ATP was unexpectedly unavailable")
+    return replace(
+        shadow_plan,
+        debit_records=tuple(budget.records[starting_record_count:]),
     )
 
 
@@ -491,7 +522,9 @@ def _log_guarded_prediction(
         quality_floor=result.quality_floor,
         quality_floor_passed=result.quality_floor_passed,
         fallback_used=result.fallback_used,
+        fallback_reexecuted=result.fallback_reexecuted,
         fallback_reason=result.fallback_reason,
+        attempted_compute_units=result.attempted_compute_units,
         saved_compute_units=result.saved_compute_units,
         token_spent_atp=result.token_spent_atp,
         sequence_spent_atp=budget.spent_atp,
@@ -517,9 +550,11 @@ def quality_guarded_predict(
 
     One ATP account maps to one sequence, so batched inputs are rejected rather than silently sharing
     a budget across rows.  Before any debit, an enabled controller verifies that the current token's
-    entire fixed path is affordable.  The cheap path may then spend less; if its confidence is below
-    the floor (or non-finite), the remaining delta is debited and the fixed path is executed.  Thus a
-    fallback can never overdraw the hard sequence budget or leave it partially charged.
+    adaptive attempt plus a complete fixed fallback are affordable.  If the cheap path's confidence
+    is below the floor (or non-finite), the complete fallback is additionally debited and executed;
+    the discarded attempt remains charged because it consumed physical work.  Thus a fallback can
+    never overdraw the hard sequence budget, leave it partially charged, or manufacture savings by
+    hiding its failed attempt.
 
     When adaptive compute is disabled, this is the exact fixed-compute path and retains the existing
     no-debit behavior.  The confidence floor is a calibration contract, not a correctness proof; the
@@ -536,20 +571,70 @@ def quality_guarded_predict(
             max_depth_layers=max_depth_layers,
             max_experts=max_experts,
         )
-        if budget.remaining_atp < fixed_cost:
+        # First determine whether routing already selects the full path. Such a plan needs no second
+        # execution if the guard rejects it. A cheaper plan is recomputed against only the ATP left
+        # after reserving one complete fallback, so optional work cannot consume its own safety net.
+        probe_budget = ATPBudget(budget.remaining_atp)
+        probe_proposed = controller.plan(
+            routing_logits,
+            probe_budget,
+            token_index=token_index,
+            max_depth_layers=max_depth_layers,
+            max_experts=max_experts,
+            free_energy_value=free_energy_value,
+        )
+        proposed_is_fixed = (
+            probe_proposed.depth_layers == probe_proposed.max_depth_layers
+            and probe_proposed.expert_top_k == probe_proposed.max_experts
+            and probe_proposed.mc_samples == probe_proposed.max_mc_samples
+        )
+        if proposed_is_fixed:
+            shadow_budget = probe_budget
+            shadow_proposed = probe_proposed
+            required_atp = shadow_budget.spent_atp
+        else:
+            cfg = controller.config
+            minimum_experts = 0 if max_experts == 0 else cfg.min_experts
+            minimum_attempt_cost = (
+                cfg.min_depth_layers * cfg.layer_cost_atp
+                + minimum_experts * cfg.expert_cost_atp
+                + cfg.min_mc_samples * cfg.mc_sample_cost_atp
+            )
+            required_atp = fixed_cost + minimum_attempt_cost
+            if budget.remaining_atp < required_atp:
+                raise InsufficientATPError(
+                    "quality guard's adaptive attempt plus fixed-compute fallback requires at least "
+                    f"{required_atp} ATP but only {budget.remaining_atp} ATP remains"
+                )
+            shadow_budget = ATPBudget(budget.remaining_atp - fixed_cost)
+            shadow_proposed = controller.plan(
+                routing_logits,
+                shadow_budget,
+                token_index=token_index,
+                max_depth_layers=max_depth_layers,
+                max_experts=max_experts,
+                free_energy_value=free_energy_value,
+            )
+            required_atp = shadow_budget.spent_atp + fixed_cost
+        if budget.remaining_atp < required_atp:
             raise InsufficientATPError(
-                f"quality guard must reserve {fixed_cost} ATP for the fixed-compute fallback but only "
+                "quality guard's adaptive attempt plus fixed-compute fallback requires "
+                f"{required_atp} ATP but only "
                 f"{budget.remaining_atp} ATP remains"
             )
 
     spent_before = budget.spent_atp
-    proposed = controller.plan(
-        routing_logits,
-        budget,
-        token_index=token_index,
-        max_depth_layers=max_depth_layers,
-        max_experts=max_experts,
-        free_energy_value=free_energy_value,
+    proposed = (
+        _commit_shadow_plan(shadow_proposed, budget)
+        if controller.config.enabled
+        else controller.plan(
+            routing_logits,
+            budget,
+            token_index=token_index,
+            max_depth_layers=max_depth_layers,
+            max_experts=max_experts,
+            free_energy_value=free_energy_value,
+        )
     )
     cpu_rng_state = torch.random.get_rng_state()
     cuda_rng_states = torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None
@@ -573,6 +658,7 @@ def quality_guarded_predict(
         prediction = adaptive_prediction
         executed = proposed
         fallback_used = False
+        fallback_reexecuted = False
         fallback_reason = None
     else:
         fallback_used = True
@@ -581,16 +667,24 @@ def quality_guarded_predict(
             if not math.isfinite(adaptive_confidence)
             else "predictive_confidence_below_floor"
         )
-        executed = _fallback_plan(proposed, budget, controller)
-        if executed.compute_units == proposed.compute_units:
+        proposed_is_fixed = (
+            proposed.depth_layers == proposed.max_depth_layers
+            and proposed.expert_top_k == proposed.max_experts
+            and proposed.mc_samples == proposed.max_mc_samples
+        )
+        if proposed_is_fixed:
+            executed = proposed
             prediction = adaptive_prediction
+            fallback_reexecuted = False
         else:
+            executed = _fallback_plan(proposed, budget, controller)
             # The failed cheap attempt is observational: a fallback must see the exact RNG stream a
             # fixed-compute call would have seen, not the stream after speculative MC draws.
             torch.random.set_rng_state(cpu_rng_state)
             if cuda_rng_states is not None:
                 torch.cuda.set_rng_state_all(cuda_rng_states)
             prediction = adaptive_mc_predict(model, input_ids, executed, temperature=temperature)
+            fallback_reexecuted = True
 
     result = GuardedAdaptivePrediction(
         prediction=prediction,
@@ -601,6 +695,7 @@ def quality_guarded_predict(
         quality_floor=quality.min_predictive_confidence,
         quality_floor_passed=quality_passed,
         fallback_used=fallback_used,
+        fallback_reexecuted=fallback_reexecuted,
         fallback_reason=fallback_reason,
         token_spent_atp=budget.spent_atp - spent_before,
     )

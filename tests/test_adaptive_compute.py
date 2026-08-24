@@ -327,7 +327,7 @@ def test_quality_floor_config_rejects_invalid_confidence_thresholds():
 def test_quality_guard_accepts_confident_path_without_spending_fallback_atp():
     model = make_tiny_vanilla(n_layer=3)
     inputs = random_tokens(batch=1, seq=4)
-    budget = ATPBudget(7)
+    budget = ATPBudget(9)  # exact cheap attempt (2) + reserved full fallback (7)
     result = quality_guarded_predict(
         model,
         inputs,
@@ -339,17 +339,19 @@ def test_quality_guard_accepts_confident_path_without_spending_fallback_atp():
     )
 
     assert result.quality_floor_passed and not result.fallback_used
+    assert not result.fallback_reexecuted
     assert result.executed_plan == result.proposed_plan
+    assert result.attempted_compute_units == result.proposed_plan.compute_units == 2
     assert result.saved_compute_units > 0
     assert result.token_spent_atp == budget.spent_atp < 7
     assert budget.spent_atp + budget.remaining_atp == budget.total_atp
 
 
 @pytest.mark.unit
-def test_quality_guard_falls_back_to_fixed_compute_and_charges_exact_delta():
+def test_quality_guard_falls_back_to_fixed_compute_and_charges_both_passes():
     model = make_tiny_vanilla(n_layer=3)
     inputs = random_tokens(batch=1, seq=4)
-    budget = ATPBudget(7)
+    budget = ATPBudget(9)  # cheap attempt (2) + complete full fallback (7)
     result = quality_guarded_predict(
         model,
         inputs,
@@ -361,10 +363,12 @@ def test_quality_guard_falls_back_to_fixed_compute_and_charges_exact_delta():
     )
 
     assert not result.quality_floor_passed and result.fallback_used
+    assert result.fallback_reexecuted
     assert result.fallback_reason == "predictive_confidence_below_floor"
     assert result.executed_plan.compute_units == result.executed_plan.maximum_compute_units == 7
-    assert result.saved_compute_units == 0
-    assert result.token_spent_atp == budget.spent_atp == budget.total_atp == 7
+    assert result.attempted_compute_units == 9
+    assert result.saved_compute_units == -2
+    assert result.token_spent_atp == budget.spent_atp == budget.total_atp == 9
     assert [record.action for record in result.executed_plan.debit_records] == [
         "depth_layer",
         "mc_sample",
@@ -388,11 +392,44 @@ def test_quality_guard_falls_back_to_fixed_compute_and_charges_exact_delta():
 
 
 @pytest.mark.unit
+def test_quality_guard_does_not_rerun_an_already_full_attempt():
+    model = make_tiny_vanilla(n_layer=3)
+    inputs = random_tokens(batch=1, seq=4)
+    calls = 0
+
+    def count_call(_module, _args, _output):
+        nonlocal calls
+        calls += 1
+
+    handle = model.blocks[0].register_forward_hook(count_call)
+    try:
+        result = quality_guarded_predict(
+            model,
+            inputs,
+            torch.zeros(3),  # maximum entropy selects the full plan immediately
+            ATPBudget(7),
+            controller=_controller(),
+            token_index=0,
+            quality=QualityFloorConfig(min_predictive_confidence=1.0),
+        )
+    finally:
+        handle.remove()
+
+    assert result.fallback_used
+    assert not result.fallback_reexecuted
+    assert result.proposed_plan == result.executed_plan
+    assert result.attempted_compute_units == result.executed_plan.maximum_compute_units == 7
+    assert result.saved_compute_units == 0
+    assert result.token_spent_atp == 7
+    assert calls == 4  # one model forward for each MC draw, never a second full pass
+
+
+@pytest.mark.unit
 def test_quality_fallback_covers_moe_experts_and_replays_fixed_rng_stream():
     model = make_tiny_synaptic(n_layer=2, use_moe=True, num_experts=3, moe_top_k=2)
     inputs = random_tokens(batch=1, seq=3)
     routing_logits = torch.tensor([20.0, 0.0, 0.0])
-    budget = ATPBudget(9)  # 2 layers + 3 experts + 4 MC samples
+    budget = ATPBudget(12)  # cheap attempt (3) + full fallback (9)
     torch.manual_seed(77)
     result = quality_guarded_predict(
         model,
@@ -404,6 +441,10 @@ def test_quality_fallback_covers_moe_experts_and_replays_fixed_rng_stream():
         quality=QualityFloorConfig(min_predictive_confidence=1.0),
     )
     assert result.fallback_used
+    assert result.fallback_reexecuted
+    assert result.token_spent_atp == 12
+    assert result.attempted_compute_units == 12
+    assert result.saved_compute_units == -3
     assert result.executed_plan.expert_top_k == result.executed_plan.max_experts == 3
     assert "quality_fallback_expert" in {
         record.action for record in result.executed_plan.debit_records
@@ -428,8 +469,8 @@ def test_quality_fallback_covers_moe_experts_and_replays_fixed_rng_stream():
 @pytest.mark.unit
 def test_quality_guard_reserves_fallback_before_any_atp_debit():
     model = make_tiny_vanilla(n_layer=3)
-    budget = ATPBudget(6)
-    with pytest.raises(InsufficientATPError, match="reserve 7 ATP"):
+    budget = ATPBudget(8)
+    with pytest.raises(InsufficientATPError, match="requires at least 9 ATP"):
         quality_guarded_predict(
             model,
             random_tokens(batch=1, seq=3),
@@ -440,6 +481,26 @@ def test_quality_guard_reserves_fallback_before_any_atp_debit():
         )
     assert budget.spent_atp == 0
     assert budget.records == []
+
+
+@pytest.mark.unit
+def test_quality_guard_caps_optional_attempt_work_behind_fallback_reserve():
+    model = make_tiny_vanilla(n_layer=3)
+    budget = ATPBudget(10)
+    result = quality_guarded_predict(
+        model,
+        random_tokens(batch=1, seq=3),
+        torch.tensor([2.0, 0.0, 0.0]),  # requests five units without the reserve
+        budget,
+        controller=_controller(),
+        token_index=0,
+        quality=QualityFloorConfig(min_predictive_confidence=0.0),
+    )
+
+    assert result.quality_floor_passed
+    assert result.proposed_plan.compute_units == result.attempted_compute_units == 3
+    assert result.token_spent_atp == budget.spent_atp == 3
+    assert budget.remaining_atp == 7  # one complete fixed path remains available
 
 
 @pytest.mark.unit
@@ -457,14 +518,16 @@ def test_disabled_guarded_runner_is_fixed_compute_identity_without_debits():
     )
     assert result.quality_floor_passed
     assert not result.fallback_used
+    assert not result.fallback_reexecuted
     assert result.executed_plan.compute_units == result.executed_plan.maximum_compute_units
+    assert result.attempted_compute_units == result.executed_plan.maximum_compute_units
     assert budget.records == []
 
 
 @pytest.mark.e2e
 def test_quality_guard_logs_detailed_per_token_compute_and_fallback(tmp_path):
     model = make_tiny_vanilla(n_layer=3)
-    budget = ATPBudget(14)
+    budget = ATPBudget(18)
     with RunLogger(tmp_path, name="adaptive_quality_guard", console=False) as logger:
         result = quality_guarded_predict(
             model,
@@ -485,13 +548,16 @@ def test_quality_guard_logs_detailed_per_token_compute_and_fallback(tmp_path):
     assert record["step"] == record["token_index"] == 4
     assert record["fallback_used"] == result.fallback_used
     assert record["fallback_used"]
+    assert record["fallback_reexecuted"]
     assert record["fallback_reason"] == "predictive_confidence_below_floor"
     assert record["quality_floor"] == 1.0
     assert not record["quality_floor_passed"]
     assert record["executed"] == record["maximum"]
     assert record["proposed"]["compute_units"] < record["executed"]["compute_units"]
-    assert record["token_spent_atp"] == 7
-    assert record["sequence_spent_atp"] == 7
-    assert record["sequence_remaining_atp"] == 7
+    assert record["attempted_compute_units"] == 9
+    assert record["saved_compute_units"] == -2
+    assert record["token_spent_atp"] == 9
+    assert record["sequence_spent_atp"] == 9
+    assert record["sequence_remaining_atp"] == 9
     assert record["difficulty"]["free_energy"] == pytest.approx(0.25)
     assert len(record["debit_records"]) == 4
