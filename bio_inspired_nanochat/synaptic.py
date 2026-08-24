@@ -334,13 +334,12 @@ class SynapticConfig:
     # explicit exact-affine adapter and certificate before hard routing is allowed.
     tropical_skeleton: bool = False
 
-    # Native (Rust) Kernel Toggles
-    # native_genetics gates the fused metabolism/genetics kernel (synaptic.py, MoE
-    # forward). The sibling toggles native_presyn / native_metrics / native_plasticity
-    # were removed in 8j9.5 as dead no-op knobs: the presyn fused kernel is not on the
-    # live path (jyb.2 will wire it and reintroduce a toggle then), the fused-metrics
-    # path is gated independently by the FUSED_METRICS module constant in neuroscore.py,
-    # and no fused-plasticity kernel exists.
+    # Native kernel toggles. Both are default-off so unsupported hardware/modes retain
+    # the canonical Python implementation exactly.
+    # jyb.2: the live presyn Triton kernel is deliberately narrow until jyb.3 supplies
+    # autograd: deterministic FP32 CUDA decode only (one query, no grad/MC/learnable kinetics/
+    # metriplectic integration). Every other shape/mode falls back to release_canonical.
+    native_presyn: bool = decouple_config("BIO_FUSED_PRESYN", default=False, cast=bool)
     native_genetics: bool = decouple_config("BIO_FUSED_GENETICS", default=False, cast=bool)
 
 
@@ -805,6 +804,44 @@ class SynapticPresyn(nn.Module):
         d_bilin = torch.sigmoid(drive)  # drive == q.k/sqrt(d), the top-k attention logit
         return (fuse_base * d_bilin).clamp(0.0, 1.0)
 
+    def _can_use_native_presyn_decode(
+        self,
+        state: Dict[str, Any],
+        drive: Tensor,
+        *,
+        train: bool,
+        differentiable: bool,
+        apply_barrier: bool,
+        q_pos: Optional[Tensor],
+    ) -> bool:
+        """Whether jyb.2's exact one-kernel deterministic decode slice is legal.
+
+        The returned release bias remains differentiable with respect to ``drive`` even when the
+        recurrent state update is detached, so *every* grad-enabled call must stay on Python until
+        jyb.3 adds a backward kernel. General prefill also stays on Python because duplicate-key
+        reductions across queries require a second launch before nonlinear state finalization.
+        """
+        return bool(
+            self.cfg.enable_presyn
+            and self.cfg.native_presyn
+            and drive.is_cuda
+            and drive.dtype == torch.float32
+            and drive.ndim == 4
+            and drive.shape[2] == 1
+            and drive.shape[3] == self.cfg.attn_topk
+            and not torch.is_grad_enabled()
+            and not train
+            and not differentiable
+            and not self.cfg.differentiable_recurrence
+            and not self.cfg.use_flex_attention
+            and not bool(getattr(self, "_mc_sampling", False))
+            and self.kinetics is None
+            and not self.use_metriplectic_integrator()
+            and "HEAT" not in state
+            and not apply_barrier
+            and q_pos is None
+        )
+
     def release_canonical(
         self,
         state: Dict[str, Any],
@@ -815,6 +852,7 @@ class SynapticPresyn(nn.Module):
         q_pos: Optional[Tensor] = None,
         apply_barrier: bool = False,
         differentiable: bool = False,
+        logits: Optional[Tensor] = None,
     ) -> Tensor:
         """CANONICAL unified presynaptic release — the single, faithful, differentiable
         source of truth (8j9.2).
@@ -842,6 +880,34 @@ class SynapticPresyn(nn.Module):
         """
         if not self.cfg.enable_presyn:
             return torch.ones_like(drive)
+
+        native_decode = logits is not None and self._can_use_native_presyn_decode(
+            state,
+            drive,
+            train=train,
+            differentiable=differentiable,
+            apply_barrier=apply_barrier,
+            q_pos=q_pos,
+        )
+        if native_decode:
+            from bio_inspired_nanochat.kernels.presyn_fused import (
+                presyn_live_decode_step,
+            )
+
+            return presyn_live_decode_step(
+                state,
+                drive,
+                idx,
+                self.cfg,
+                ema_e=self.ema_e,
+                valid=valid,
+                logits=logits,
+            )
+        if logits is not None:
+            raise RuntimeError(
+                "in-kernel logit augmentation was requested outside the supported native "
+                "deterministic decode path"
+            )
 
         cfg = self.cfg
         B, H, T, K = drive.shape
@@ -1977,29 +2043,60 @@ class SynapticCausalSelfAttention(nn.Module):
         # query chunks (autograd) so the learnable kinetics get gradient; the single non-causal
         # snapshot is the default. Gated to the full-sequence training/prefill path (prefix_len<=0);
         # decode is already per-step causal and uses the single call.
+        native_decode = self.pre._can_use_native_presyn_decode(
+            presyn_state,
+            vals,
+            train=train_mode,
+            differentiable=False,
+            apply_barrier=False,
+            q_pos=None,
+        )
         if self.cfg.differentiable_recurrence and prefix_len <= 0:
             e = self._chunked_release_bias(presyn_state, vals, idx, valid, train_mode)
+        elif native_decode:
+            e = self.pre.release_canonical(
+                presyn_state,
+                vals,
+                idx,
+                train_mode,
+                valid=valid,
+                logits=dots,
+            )
         else:
-            e = self.pre.release_canonical(presyn_state, vals, idx, train_mode, valid=valid)
+            e = self.pre.release_canonical(
+                presyn_state,
+                vals,
+                idx,
+                train_mode,
+                valid=valid,
+            )
 
         # Scatter biological log-bias back into the logits, preserving masking.
-        aug = torch.zeros_like(dots)
-        src_val = self.cfg.lambda_loge * torch.log(self.cfg.epsilon + e).to(aug.dtype)
-        # Clamp the log-release bias to a finite range so no single edge can dominate
-        # the softmax when the normalized release spikes (numerical hardening, vg9.5).
-        clamp = self.cfg.loge_bias_clamp
-        if clamp and clamp > 0.0:
-            src_val = src_val.clamp(-clamp, clamp)
-        src_val = src_val * valid.to(src_val.dtype)
-        aug.scatter_add_(-1, idx, src_val)
+        if native_decode:
+            augmented_dots = dots
+        else:
+            aug = torch.zeros_like(dots)
+            src_val = self.cfg.lambda_loge * torch.log(self.cfg.epsilon + e).to(
+                aug.dtype
+            )
+            # Clamp the log-release bias to a finite range so no single edge can dominate
+            # the softmax when the normalized release spikes (numerical hardening, vg9.5).
+            clamp = self.cfg.loge_bias_clamp
+            if clamp and clamp > 0.0:
+                src_val = src_val.clamp(-clamp, clamp)
+            src_val = src_val * valid.to(src_val.dtype)
+            aug.scatter_add_(-1, idx, src_val)
+            augmented_dots = dots + aug
 
         # Septin-like distance barrier in global positions.
-        q_pos = torch.arange(prefix_len, prefix_len + Tq, device=device, dtype=torch.float32)
+        q_pos = torch.arange(
+            prefix_len, prefix_len + Tq, device=device, dtype=torch.float32
+        )
         k_pos = torch.arange(0, Tk, device=device, dtype=torch.float32)
         dist = (q_pos[:, None] - k_pos[None, :]).abs() / float(max(1, Tk))
-        logits = dots + aug - (self.cfg.barrier_strength * dist.to(dots.dtype)).view(
-            1, 1, Tq, Tk
-        )
+        logits = augmented_dots - (
+            self.cfg.barrier_strength * dist.to(dots.dtype)
+        ).view(1, 1, Tq, Tk)
 
         P = F.softmax(logits, dim=-1)
         P = self.attn_drop(P)

@@ -20,12 +20,13 @@ pytestmark = pytest.mark.unit
 
 # Fields whose status is non-obvious (shared names / indirect handles) and must
 # resolve LIVE — these are exactly the cases the disambiguation rule exists for.
-# (8j9.5 pruned the six formerly-dead fields: enabled, camkii_down,
-# router_sim_threshold, native_presyn, native_metrics, native_plasticity.)
+# (8j9.5 pruned the formerly-dead fields; jyb.2 intentionally reintroduced
+# native_presyn only after wiring it to the live deterministic decode path.)
 KNOWN_LIVE = {
     "router_contrastive_lr",
     "router_contrastive_push",
     "native_genetics",
+    "native_presyn",
     "init_amp",
     "structural_age_bias",
     "rec_rate",

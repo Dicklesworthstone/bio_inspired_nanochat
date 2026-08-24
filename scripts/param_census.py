@@ -162,15 +162,18 @@ SUBSYSTEM: dict[str, str] = {
     "enable_metabolism": "toggle",
     "use_flex_attention": "toggle",
     "tropical_skeleton": "toggle",
+    "native_presyn": "native_toggle",
     "native_genetics": "native_toggle",
 }
 
 # Curated, human-verified nuance notes for fields whose LIVE/DEAD status needs
 # more than a binary. Keyed by field name; merged into the per-field record.
 NOTES: dict[str, str] = {
+    "native_presyn": "LIVE: gates the fused Triton deterministic FP32 Tq=1 decode path in "
+    "SynapticPresyn.release_canonical; unsupported shapes/modes fall back to Python.",
     "native_genetics": "LIVE: gates the fused metabolism/genetics kernel at "
-    "synaptic.py (MoE forward). Its dead sibling toggles (native_presyn / "
-    "native_metrics / native_plasticity) were pruned in 8j9.5.",
+    "synaptic.py (MoE forward). The dead native_metrics / native_plasticity siblings "
+    "were pruned in 8j9.5.",
     "init_amp": "LIVE-but-inert: the AMP state is initialized from this and "
     "carried, but its dynamics are frozen (or4t removed amp_load/amp_leak); the "
     "canonical path uses energy->qamp instead.",
@@ -334,7 +337,7 @@ def build_census() -> dict[str, Any]:
             "synaptic-native files (synaptic.py, flex_synaptic.py, "
             "kernels/presyn_fused.py) credit cfg./self.cfg./syn_cfg.; other files "
             "credit syn_cfg. always and <obj>.cfg.<f> only when <f> is not shared "
-            "with another config dataclass; Rust credits getattr(\"<f>\")."
+            'with another config dataclass; Rust credits getattr("<f>").'
         ),
         "collision_fields": sorted(n for n in collision if n in SUBSYSTEM),
         "learned_genome_note": (
@@ -397,7 +400,8 @@ def render_markdown(census: dict[str, Any]) -> str:
             f"- **The config surface is {census['field_count']} hyperparameters**, "
             "every one of which is read by runtime code — `8j9.5` pruned the last "
             "dead fields (`enabled`, `camkii_down`, `router_sim_threshold`, "
-            "`native_presyn`, `native_metrics`, `native_plasticity`).\n"
+            "`native_metrics`, `native_plasticity`); `jyb.2` later reintroduced "
+            "`native_presyn` only after wiring it to live decode.\n"
         )
 
     out.append("\n## Dead fields (read by nothing)\n")
@@ -441,7 +445,9 @@ def render_markdown(census: dict[str, Any]) -> str:
         out.append("|---|---|---|---|---|")
         for r in rows:
             sites = r["runtime_read_sites"] + r["rust_read_sites"]
-            where = sites[0] if sites else ("scripts only" if r["script_sites"] else "—")
+            where = (
+                sites[0] if sites else ("scripts only" if r["script_sites"] else "—")
+            )
             tuned = "✓" if r["tuned_phase1"] else ""
             out.append(
                 f"| `{r['name']}` | `{r['default']}` | {r['status']} | {tuned} | "

@@ -107,6 +107,15 @@ def test_is_mechanism_on_reads_off_value():
     assert is_mechanism_on(SynapticConfig(tropical_skeleton=True), "tropical_skeleton") is True
 
 
+def test_native_presyn_is_registered_default_off_and_requires_presyn():
+    cfg = SynapticConfig()
+    assert not cfg.native_presyn
+    assert not is_mechanism_on(cfg, "native_presyn")
+    assert is_mechanism_on(SynapticConfig(native_presyn=True), "native_presyn")
+    errors, _ = validate_config(SynapticConfig(native_presyn=True, enable_presyn=False))
+    assert any("native_presyn" in error and "enable_presyn" in error for error in errors)
+
+
 def test_unknown_preset_raises():
     with pytest.raises(ValueError, match="Unknown ablation preset"):
         apply_preset("bio_no_telepathy", SynapticConfig())

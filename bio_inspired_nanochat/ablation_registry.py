@@ -81,6 +81,10 @@ MECHANISMS: tuple[MechanismFlag, ...] = (
         "FlexAttention O(N) presyn path. PREFILL-ONLY: incompatible with KV-cache decode.",
     ),
     MechanismFlag(
+        "native_presyn", "native_presyn", False, False, False, ("enable_presyn",),
+        "Fused Triton deterministic FP32 decode at the configured top-k width.",
+    ),
+    MechanismFlag(
         "native_genetics", "native_genetics", False, False, False, ("enable_metabolism",),
         "Fused Rust metabolism/genetics kernel (CUDA).",
     ),
@@ -234,6 +238,11 @@ def validate_config(cfg: SynapticConfig) -> tuple[list[str], list[str]]:
         warnings.append(
             "use_flex_attention=True is PREFILL-ONLY; it cannot serve KV-cache decoding. "
             "Use it for training/prefill benchmarks only."
+        )
+    if cfg.native_presyn and cfg.use_flex_attention:
+        warnings.append(
+            "native_presyn accelerates the standard Tq=1 decode path only; "
+            "FlexAttention state advancement uses the canonical Python fallback."
         )
 
     return errors, warnings
