@@ -267,6 +267,44 @@
           "sha256": "e3e4d9e238f34b3516a1dc447d229e288b38f10d7fe057032772642896d646a7"
         }
       ]
+    },
+    {
+      "cycle_id": "lfl-0642.1.1.6-reversible-l-contract-2026-08-24",
+      "frog_id": "bio_inspired_nanochat-0642.1.1.6",
+      "theorem_ids": [
+        "BioInspiredNanochat.Metriplectic.poisson_entropy_degeneracy",
+        "BioInspiredNanochat.Metriplectic.friction_energy_degeneracy",
+        "BioInspiredNanochat.Metriplectic.energyRate_zero",
+        "BioInspiredNanochat.Metriplectic.entropyRate_nonnegative",
+        "BioInspiredNanochat.Metriplectic.freeEnergyRate_nonpositive",
+        "BioInspiredNanochat.Metriplectic.freeEnergy_nonincreasing",
+        "BioInspiredNanochat.Metriplectic.trajectory_energy_constant",
+        "BioInspiredNanochat.Metriplectic.trajectory_entropy_from_start",
+        "BioInspiredNanochat.Metriplectic.trajectory_freeEnergy_nonincreasing",
+        "BioInspiredNanochat.Metriplectic.trajectory_component_bounds"
+      ],
+      "route": "theory-first-proof-preserving",
+      "proof_friction_class": "discrete-inverse-design",
+      "runtime_defect_found": false,
+      "artifact_hash": "sha256:831498bc2853d86701250ea89024ab5f5f6190d2e3a5a9ae66f93a7d5d42d963",
+      "hash_scope": "formal/lean/BioInspiredNanochat.lean",
+      "sorry_or_admit_present": false,
+      "axioms": [
+        "propext",
+        "Classical.choice",
+        "Quot.sound"
+      ],
+      "change_scope": "Theory-only derivation of the continuous constant-L inverse and the matching L-only midpoint/Cayley inverse, plus an explicit activation-memory budget, dissipative/fallback checkpoint boundaries, and the gradcheck/falsification contract for the dependent implementation bead. The current runtime remains a combined guarded L+M midpoint step using ordinary autograd; neither the Lean theorem source nor mapped runtime dynamics changed. This append-only record also refreshes the inherited stochastic-thermodynamics test hash after the concurrently landed u2t.2 evidence update.",
+      "runtime_mapping": [
+        {
+          "path": "docs/theory/metriplectic.md",
+          "sha256": "56fc7204764eb2a34b45cc95e9f55308488e7cc6f2c17211cdcd0f5b7996ffb1"
+        },
+        {
+          "path": "tests/test_stochastic_thermo.py",
+          "sha256": "d85cf219ca09d1ce0eee2219d2444f79611bac3922e3f5747846b86e53a75b8b"
+        }
+      ]
     }
   ]
 }

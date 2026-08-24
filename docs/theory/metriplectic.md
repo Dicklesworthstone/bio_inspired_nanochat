@@ -85,7 +85,7 @@ leaves the heat untouched:
 
 ```
                 ⎡  0    ω    0 ⎤
-        L  =    ⎢ −ω    0    0 ⎥ ,        ω > 0  (exchange rate; the buffer on/off scale).
+        L  =    ⎢ −ω    0    0 ⎥ ,        ω ∈ ℝ  (signed exchange orientation and rate).
                 ⎣  0    0    0 ⎦
 ```
 
@@ -98,6 +98,9 @@ constant `L` here it is automatic.)
 
 The reversible flow `L∇E = (ω·B, −ω·C, 0)` conserves the mechanical energy:
 `dH/dt|_rev = C·(ωB) + B·(−ωC) = 0`, and conserves the total `E` (it does not touch `h`).
+The sign fixes the orientation, not the invariants. The live presynaptic reduction uses
+`ω = −½(α_buf_on + α_buf_off)`: its negative orientation makes positive free calcium increase the
+buffer coordinate under the reduced exchange convention.
 
 ---
 
@@ -271,7 +274,7 @@ clamped-Euler tensors and selects them directly; it does not reimplement or appr
 
 ---
 
-## 10. Relationship to the `vg9` baseline & the reversible-flow backprop  → subtask `0642.1.1.6`
+## 10. Relationship to the `vg9` baseline & reversible-flow backprop  → subtask `0642.1.1.6`
 
 The shipped dynamics are the **`vg9` clamped-Euler** step: stable (the `yw9.7` contraction) and
 conservation-bounded for the pools (`yw9.2.2`), but it enforces stability by **clamping** and does
@@ -279,12 +282,168 @@ not exactly conserve `E` or respect the metriplectic split. This note upgrades "
 clamp" to "stable **by construction**": `E` coercive + conserved ⟹ bounded; `M` PSD + degenerate ⟹
 entropy production; `F` Lyapunov ⟹ relaxation to the MaxEnt equilibrium.
 
-**Reversible-flow ⟹ O(1)-memory backprop** (`0642.1.1.6`, sketch). The reversible sub-flow `ż = L∇E`
-is *volume-preserving and time-reversible* (a constant-`L` Hamiltonian flow): its inverse is the flow
-under `−L`. So activations along the reversible part need **not** be stored for backprop — they can be
-**recomputed by integrating backward**, giving O(1) activation memory in depth (the synaptic analog of
-reversible residual nets). The dissipative part is not reversible, so it is checkpointed; the split is
-exactly the L/M decomposition above. The full derivation is `0642.1.1.6`.
+### 10.1 Exact continuous `L` flow and inverse
+
+Let `x = (C, B)ᵀ`, `J = [[0, 1], [−1, 0]]`, and `θ = ω·Δt`. For constant `ω`, the exact
+continuous reversible flow is
+
+```
+        x⁺ = R(θ)x,       R(θ) = exp(θJ) = ⎡ cos θ   sin θ ⎤,
+                                                 ⎣−sin θ   cos θ ⎦
+        h⁺ = h.
+```
+
+Because `R(θ)ᵀR(θ) = I` and `det R(θ) = 1`, the map preserves `H`, volume, and orientation. Its
+closed-form inverse is
+
+```
+        x = R(−θ)x⁺ = R(θ)ᵀx⁺,
+        C = cos(θ)·C⁺ − sin(θ)·B⁺,
+        B = sin(θ)·C⁺ + cos(θ)·B⁺,        h = h⁺.
+```
+
+This statement holds for either sign of `ω`. It assumes `ω` and `Δt` are known and unchanged while
+the forward step is reconstructed.
+
+### 10.2 The inverse compatible with the current midpoint discretization
+
+The continuous inverse is **not** the inverse of every discrete `L` integrator. The `L`-only
+restriction of the live implicit-midpoint proposal is the Cayley map. With
+`q = ω·Δt/2`, `a = (1−q²)/(1+q²)`, and `b = 2q/(1+q²)`, it is
+
+```
+        x⁺ = Q(q)x,       Q(q) = ⎡ a   b ⎤,
+                                     ⎣−b   a ⎦
+```
+
+`a²+b² = 1`, so `Q(q)ᵀQ(q) = I`, `det Q(q) = 1`, and
+
+```
+        Q(q)⁻¹ = Q(q)ᵀ = Q(−q),
+        C = a·C⁺ − b·B⁺,       B = b·C⁺ + a·B⁺,       h = h⁺.
+```
+
+The Cayley rotation angle is `2·atan(q)`, not `ω·Δt`. Applying the trigonometric continuous-flow
+inverse to a Cayley forward step would therefore introduce an `O(Δt³)` local reconstruction error.
+The implementation bead `0642.1.2.6` must use the Cayley inverse if it retains the current
+midpoint forward values; changing to an exact exponential or split forward is a separately reviewed
+numerical change.
+
+### 10.3 Reverse-mode contract
+
+For either orthogonal map `y = Qx`, the reconstructed input and input cotangent are
+`x = Qᵀy` and `g_x = Qᵀg_y`. For the Cayley map,
+
+```
+        da/dq = −4q/(1+q²)²,       db/dq = 2(1−q²)/(1+q²)²,
+        dQ/dq = ⎡ da/dq    db/dq ⎤,
+                 ⎣−db/dq    da/dq ⎦,
+        g_q = g_yᵀ(dQ/dq)x,
+        g_ω = (Δt/2)·g_q,          g_Δt = (ω/2)·g_q.
+```
+
+Equivalently, `g_q = 2·g_yᵀJy/(1+q²)`. The continuous rotation uses
+`g_θ = g_yᵀJy`, `g_ω = Δt·g_θ`, and `g_Δt = ω·g_θ`. Tensor-valued or broadcast parameters must
+reduce these cotangents back to their original shapes. A custom backward may evaluate these formulas
+directly or reconstruct `x`, detach it, replay one local forward with gradients enabled, and call
+autograd on that local graph. `h` is an identity coordinate in the `L` flow.
+
+### 10.4 Where reversibility stops
+
+The current live path does **not** yet implement reversible backprop or an operator-split `L` step.
+It solves a combined `L+M` 2×2 midpoint system, converts the proposal to the live dtype, evaluates
+guards, and may select a clamped-Euler fallback. Thermodynamic irreversibility of `M` does not by
+itself imply non-bijectivity: the fallback-free combined linear map is algebraically invertible when
+its reverse solve is nonsingular. Its inverse is nevertheless poorly conditioned under damping. In
+the scalar case, reverse error is amplified by `(1+aγ)/(1−aγ)` per step for `a = Δt/2`, so a safe
+checkpoint interval must come from measured reconstruction error rather than algebra alone. At the
+current `dt=1`, `τ_buf=4` default, the uncoupled buffer mode amplifies reverse error by approximately
+`2.43×`, `5.91×`, `34.9×`, and `1221×` over 4, 8, 16, and 32 steps. A span of eight steps is therefore
+the initial implementation hypothesis, not a theorem; the dtype drift gate below may shorten it.
+
+The following are hard boundaries of the narrower `L`-reconstruction claim:
+
+- fp32/bf16 rounding is many-to-one; even the condition-one `L` rotation is not bitwise reversible;
+- clamps are non-injective, and reconstruction error can change a guard decision; every fallback
+  ends a reversible segment and retains its forward mask plus a full boundary checkpoint;
+- calcium influx is injected before the closed relaxation, so its drive must be deterministically
+  replayed or stored and subtracted after reconstructing the post-influx state;
+- top-k indices, validity masks, stochastic draws or RNG state, train-time EMA history, and unchanged
+  parameters are replay inputs, not information recoverable from `(C, BUF, HEAT)`;
+- `RRP`, `RES`, `DELAY`, `PR`, `CL`, and `E` use clamps, scatter updates, or queue mutation and are
+  outside the reversible core; their state policy must be budgeted independently;
+- neither the continuous rotation nor the Cayley rotation preserves the physical quadrant in
+  general, so fallback-free execution is an assumption to test, not an invariant of the `L` map.
+
+For a future split implementation, define a reversible segment as accepted, deterministic `L`-only
+Cayley steps between non-reversible boundaries. A stored dissipative correction
+`δ_M = Ψ_M(x) − x` can recover the input to a following `M` update, but storing a dense correction at
+every step remains linear in depth even when its numerical magnitude is small. The safe initial
+policy is therefore: checkpoint/replay `M` and all exogenous/non-`L` state on an explicitly measured
+schedule, and terminate the segment immediately on fallback. An inverse of an accepted `M` step may
+replace a checkpoint only after its conditioning and finite-precision drift satisfy the same error
+gate.
+
+The existing `recurrence_chunk_len` mechanism is not this policy: it detaches carried state and
+therefore truncates gradients. Reversible checkpoints must use a separate setting and preserve the
+same full-BPTT gradient as the uncheckpointed control. In particular, bf16 inverse-only
+reconstruction cannot recover information lost at the forward cast; it needs deterministic segment
+replay from an exact live checkpoint or an explicitly budgeted higher-precision rounding residual.
+
+### 10.5 Memory budget
+
+Let `N` be the number of recurrent substeps, `n` the number of scalar sites in one core invocation,
+and `s` the bytes per scalar. For the live recurrence, budget both the full-key surface
+`n_key = batch·heads·key_length` and the gathered-edge surface
+`n_edge = batch·heads·query_block·top_k`; sums over unequal invocations replace `Nn` below. The table
+counts only reduced-core boundary tensors. Autograd intermediates, model activations, replay inputs,
+and persistent synaptic state are additional.
+
+| policy | reduced-core snapshot storage | scaling in `N` |
+|---|---:|---:|
+| standard BPTT lower bound (`C`, `BUF`, `HEAT` at every boundary) | `≥ 3Nns` | `Θ(Nn)` |
+| fallback-free `L` reconstruction (terminal state only) | `3ns + O(parameters)` | `Θ(n)`, or `O(1)` only in `N` |
+| dense two-plane `M` correction at every step (`HEAT` from the energy shell) | `(3+2N)ns` | `Θ(Nn)` |
+| uniform full-core checkpoint/replay windows of length `K` | approximately `(3N/K+3K+3)ns` | minimized at `Θ(ns√N)` |
+
+Thus “O(1)-memory” means a constant number of **`L`-core activation snapshots in `L`-step depth at
+fixed tensor shape**. It does not mean constant memory in context length, constant whole-model VRAM,
+or longer context for free. If `M`, fallback, or non-`L` checkpoints occur at every step, the total is
+again `Θ(Nn)`. Total constant-in-depth storage requires a bounded number of such boundaries or a
+constant-memory deterministic recomputation/inversion schedule.
+
+### 10.6 Correctness and falsification plan for `0642.1.2.6`
+
+The implementation bead must meet all of these gates before making a runtime memory claim:
+
+1. **Algebraic identities:** verify `QᵀQ = I`, `det Q = 1`, and `Q(−q)Q(q) = I` in fp64 over both
+   signs of `ω`, broadcast shapes, and a wide `Δt` range.
+2. **Forward parity:** on guard-free interior states, compare the Cayley forward with the existing
+   pure-`L` `discrete_gradient_step` and `torch_guarded_step` (`γ_C = γ_B = 0`). Do not compare a
+   Cayley inverse against an exponential forward, or vice versa. A wrapper around the combined live
+   step must keep all forward tensors and every `TorchStepRecord` field bit-identical to eager mode.
+3. **Round-trip drift:** sweep depths `{1, 16, 256, 4096}` in fp64 and fp32, plus bf16 where the
+   backend supports it. Report error growth against machine epsilon; do not require or advertise
+   bitwise reconstruction.
+4. **Gradient parity:** compare `C`, `BUF`, `HEAT`, `ω`, and `Δt` cotangents with ordinary autograd;
+   any combined-step wrapper must also cover `γ_C` and `γ_B`. Then run `torch.autograd.gradcheck`
+   in float64 (`eps=1e-6`, `atol=1e-5`, `rtol=1e-3`, `nondet_tol=0`). Add `gradgradcheck` if the
+   custom backward promises higher-order derivatives.
+5. **Replay inputs:** test deterministic reconstruction with influx, top-k indices, validity masks,
+   stochastic samples/RNG state, and EMA history held to their recorded forward values.
+6. **Fallback boundary:** plant mixed accepted/fallback masks; accepted elements may reconstruct,
+   while rejected elements must use the stored forward mask and checkpointed baseline state. The
+   backward pass must never re-decide the branch from reconstructed values.
+7. **Memory scaling:** use PyTorch saved-tensor hooks to measure saved bytes versus depth, and use
+   separate warmed, synchronized GPU processes for eager and reversible peak-memory measurements.
+   Demonstrate a near-zero depth slope for the isolated `L` core against a linear standard-autograd
+   control. The full guarded recurrence must fit its declared `O(N/K+K)` checkpoint budget and be
+   reported separately, including recompute count and slowdown.
+
+This subtask establishes the inverse and the honest storage/test contract only. The runtime still
+uses ordinary autograd through the combined guarded `L+M` midpoint proposal. Custom backward code,
+a default-off integration toggle, reconstruction-error checkpoint tuning, and measured memory
+claims belong to `0642.1.2.6`.
 
 ---
 
