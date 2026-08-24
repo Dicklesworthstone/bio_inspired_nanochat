@@ -4,13 +4,13 @@ Wiring the differentiable synaptic recurrence into the model attention forward (
 The live attention path always advances presynaptic state causally. With
 ``differentiable_recurrence=False`` that exact per-query recurrence is detached between queries;
 enabling the flag carries gradients through its query blocks so decay kinetics can learn through
-time. ``recurrence_block_size>1`` is an explicit training-throughput approximation: queries inside
-one block share a state snapshot, while future blocks and future key slots remain causal.
+time. ``recurrence_block_size`` groups exact query steps for autograd/checkpoint orchestration;
+queries never share a state snapshot, and block size cannot change forward values.
 
 These tests lock the wiring contract:
   1. default-off is byte-identical to the ordinary exact causal path,
   2. the ``differentiable`` flag changes only gradients, never forward values (parity),
-  3. a sequence-sized block is observably approximate rather than silently called exact,
+  3. recurrence block size changes graph grouping only, never causal forward values,
   4. through-state decay gradients appear only when differentiable recurrence is on,
   5. all kinetic gradients are finite, including under bf16,
   6. an analytic-vs-numeric gradcheck on a decay parameter through the wired block,
@@ -109,29 +109,15 @@ def test_differentiable_flag_changes_only_gradients_not_values():
     assert torch.equal(lo_nograd, lo_grad), "forward value must not depend on grad-tracking"
 
 
-def test_enabling_grouped_wiring_changes_the_computation():
-    # Sanity that the flag is not a silent no-op: the explicitly grouped recurrence differs from
-    # the exact one-query default because queries inside each block share a state snapshot.
+@pytest.mark.parametrize("block", [1, 8, 512])
+def test_recurrence_block_size_does_not_change_forward_values(block: int):
     x = random_tokens(2, 48, 97, seed=5)
-    m_on = _model(diff_rec=True, block=8)
+    m_on = _model(diff_rec=True, block=block)
     m_off = _model(diff_rec=False)
     with torch.no_grad():
         a, _ = m_on(x, None, train_mode=False)
         b, _ = m_off(x, None, train_mode=False)
-    assert (a - b).abs().max().item() > 1e-4
-
-
-# --------------------------------------------------------------------------- #
-# 3. A sequence-sized differentiable block is explicitly approximate.
-# --------------------------------------------------------------------------- #
-def test_block_size_ge_seqlen_differs_from_exact_causal_default():
-    x = random_tokens(2, 48, 97, seed=5)
-    m_block = _model(diff_rec=True, block=512)  # one block covers the whole sequence
-    m_off = _model(diff_rec=False)
-    with torch.no_grad():
-        a, _ = m_block(x, None, train_mode=False)
-        b, _ = m_off(x, None, train_mode=False)
-    assert (a - b).abs().max().item() > 1e-4
+    assert torch.equal(a, b)
 
 
 # --------------------------------------------------------------------------- #
@@ -362,7 +348,7 @@ def test_validator_rejects_checkpoint_without_full_differentiable_bptt():
 
 def test_default_config_does_not_engage_the_recurrence():
     cfg = SynapticConfig()
-    assert cfg.differentiable_recurrence is False
+    assert not cfg.differentiable_recurrence
     assert cfg.recurrence_checkpoint_len == 0
     assert _BY_FIELD["recurrence_checkpoint_len"].requires == (
         "differentiable_recurrence",

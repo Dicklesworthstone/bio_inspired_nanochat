@@ -162,7 +162,9 @@ def test_predictive_evidence_observes_live_counts_without_perturbing_model_rng()
     assert len(evidence.heads) == 2
     assert all(head.layer_address.endswith(".pre") for head in evidence.heads)
     assert all(head.sample_count == 4 for head in evidence.heads)
-    assert evidence.observed_events == evidence.tested_events > 0
+    assert 0 < evidence.tested_events < evidence.observed_events
+    assert evidence.tested_events + evidence.degenerate_events == evidence.observed_events
+    assert all("under_covered" in head.refusal_reasons for head in evidence.heads)
 
 
 def test_mc_predict_validates_n_samples_and_supports_single_draw():

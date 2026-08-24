@@ -22,6 +22,7 @@ from _bio_testkit import set_seed
 
 from bio_inspired_nanochat.flex_synaptic import SynapticFlexAttention
 from bio_inspired_nanochat.synaptic import (
+    SynapticCausalSelfAttention,
     SynapticConfig,
     SynapticPresyn,
     build_presyn_state,
@@ -134,6 +135,116 @@ def test_flex_no_longer_reads_amp():
         state["AMP"].fill_(99.0)  # corrupt AMP
     kf1, q1 = flex.precompute_bio_factors(state, cfg)
     assert torch.equal(kf0, kf1) and torch.equal(q0, q1), "flex must not read AMP anymore"
+
+
+@pytest.mark.unit
+def test_flex_attention_uses_each_querys_causal_state_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import importlib
+
+    flex_module = importlib.import_module("torch.nn.attention.flex_attention")
+    monkeypatch.setattr(
+        flex_module,
+        "create_block_mask",
+        lambda _mask_mod, _b, _h, _q, _kv, *, device: None,
+    )
+
+    class SnapshotFlex(torch.nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.snapshots: list[dict[str, torch.Tensor]] = []
+            self.offsets: list[int] = []
+
+        def forward(
+            self,
+            q,
+            _k,
+            _v,
+            presyn_state,
+            block_mask=None,
+            *,
+            query_offset: int = 0,
+        ):
+            del block_mask
+            self.snapshots.append(
+                {
+                    key: value.detach().clone()
+                    for key, value in presyn_state.items()
+                    if isinstance(value, torch.Tensor)
+                }
+            )
+            self.offsets.append(query_offset)
+            return torch.zeros_like(q)
+
+    sequence_len = 6
+    head_dim = 8
+    cfg = SynapticConfig(
+        enable_presyn=True,
+        use_flex_attention=True,
+        stochastic_train_frac=0.0,
+    )
+    rope_cos = torch.ones(1, sequence_len, head_dim // 2)
+    rope_sin = torch.zeros_like(rope_cos)
+    attention = SynapticCausalSelfAttention(
+        n_embd=2 * head_dim,
+        n_head=2,
+        n_kv_head=2,
+        rope_cos=rope_cos,
+        rope_sin=rope_sin,
+        cfg=cfg,
+        layer_idx=0,
+    )
+    recorder = SnapshotFlex()
+    attention.flex = recorder
+
+    output, state = attention(
+        torch.randn(1, sequence_len, 2 * head_dim), train_mode=False
+    )
+
+    assert output.shape == (1, sequence_len, 2 * head_dim)
+    assert recorder.offsets == list(range(sequence_len))
+    assert len(recorder.snapshots) == sequence_len
+    for query_index, snapshot in enumerate(recorder.snapshots):
+        future = slice(query_index + 1, None)
+        assert torch.equal(snapshot["C"][..., future], torch.zeros_like(snapshot["C"][..., future]))
+        assert torch.equal(
+            snapshot["RRP"][..., future],
+            torch.full_like(snapshot["RRP"][..., future], cfg.init_rrp),
+        )
+    assert state is not None
+
+
+@pytest.mark.unit
+def test_flex_barrier_uses_absolute_query_causal_extent(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    observed: dict[str, torch.Tensor] = {}
+
+    def fake_flex_attention(q, _k, _v, *, score_mod, block_mask):
+        del block_mask
+        score = torch.zeros(())
+        observed["same_key"] = score_mod(score, 0, 0, 0, 5)
+        observed["distant_key"] = score_mod(score, 0, 0, 0, 0)
+        return torch.zeros_like(q)
+
+    monkeypatch.setattr(
+        "bio_inspired_nanochat.flex_synaptic.flex_attention", fake_flex_attention
+    )
+    cfg = SynapticConfig(enable_presyn=True, barrier_strength=0.6)
+    flex = SynapticFlexAttention(cfg)
+    state = build_presyn_state(1, 6, 1, DEV, DT, cfg)
+    q = torch.randn(1, 1, 1, 8)
+    k = torch.randn(1, 1, 6, 8)
+    v = torch.randn(1, 1, 6, 8)
+
+    flex(q, k, v, state, query_offset=5)
+
+    expected_barrier = cfg.barrier_strength * (5.0 / 6.0)
+    assert torch.allclose(
+        observed["same_key"] - observed["distant_key"],
+        torch.tensor(expected_barrier),
+    )
 
 
 @pytest.mark.unit

@@ -106,18 +106,17 @@ def test_verdict_table_renders_all_presets(dryrun):
 
 def test_module_enumerates_the_full_matrix():
     # The reduced test runs a slice; assert the module still defines the full screening matrix.
-    # 17 = 3 anchors + 9 leave-one-out + 5 add-one-in. The ninth leave-one-out
-    # column is the default-off native presyn decode backend; controller-driven
-    # topological_nas is intentionally excluded from this config-only matrix.
+    # 19 = 3 anchors + 8 leave-one-out + 8 add-one-in. Infrastructure toggles and
+    # controller-driven topological_nas remain excluded from this config-only matrix.
     expected = len(am.anchors()) + len(am.leave_one_out()) + len(am.add_one_in())
-    assert len(am.screening_columns()) == expected == 17
+    assert len(am.screening_columns()) == expected == 19
 
 
 # --------------------------------------------------------------------------- #
 # 2. Per-mechanism engagement: differentiable learnable kinetics (hwxb.4.6 at scale)
 # --------------------------------------------------------------------------- #
 def _train_reduced(*, differentiable_recurrence: bool, steps: int = 40, seq: int = 48):
-    """A real reduced training loop; returns (model, calcium-decay movement, max spectral radius)."""
+    """A real reduced loop; returns (model, through-state buffer-decay movement, max radius)."""
     syn = SynapticConfig(
         learnable_kinetics=True,
         differentiable_recurrence=differentiable_recurrence,
@@ -125,7 +124,7 @@ def _train_reduced(*, differentiable_recurrence: bool, steps: int = 40, seq: int
     )
     model = make_tiny_synaptic(seed=0, train=True, sequence_len=seq, syn_cfg=syn)
     kin = model.h[0].attn.attn.pre.kinetics
-    theta0 = float(kin.theta_rho_c.detach())
+    theta0 = float(kin.theta_rho_b.detach())
     opt = torch.optim.AdamW(model.parameters(), lr=5e-3)
     x = random_tokens(2, seq, 97, seed=1)
     y = random_tokens(2, seq, 97, seed=2)
@@ -137,16 +136,16 @@ def _train_reduced(*, differentiable_recurrence: bool, steps: int = 40, seq: int
         loss.backward()
         opt.step()
         max_rho = max(max_rho, float(kin.spectral_radius().detach()))
-    movement = abs(float(kin.theta_rho_c.detach()) - theta0)
+    movement = abs(float(kin.theta_rho_b.detach()) - theta0)
     return model, movement, max_rho
 
 
-def test_calcium_decay_moves_under_sgd_only_when_wired():
+def test_through_state_buffer_decay_moves_under_sgd_only_when_wired():
     _, moved_on, _ = _train_reduced(differentiable_recurrence=True)
     _, moved_off, _ = _train_reduced(differentiable_recurrence=False)
-    assert moved_on > 1e-5, f"the calcium decay must learn when wired on (moved {moved_on:.2e})"
-    # On the single-call snapshot path the decay gets ~no gradient, so it barely moves; the wired
-    # run must move it at least an order of magnitude more.
+    assert moved_on > 1e-5, f"the buffer decay must learn when wired on (moved {moved_on:.2e})"
+    # Buffer decay only influences later-query state. The detached exact schedule therefore gives
+    # it no through-state gradient, while differentiable recurrence does.
     assert moved_on > 10 * moved_off + 1e-6, (
         f"wired-on movement ({moved_on:.2e}) must dominate off ({moved_off:.2e})"
     )
@@ -245,4 +244,3 @@ def test_structural_function_preserving_splitmerge_at_scale(tmp_path):
 
         controller.step(global_step=step, optimizer=optimizer)
         assert torch.isfinite(loss), f"Loss must stay finite during structural evolution (step {step})"
-

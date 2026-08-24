@@ -121,7 +121,11 @@ def test_uncertainty_e2e_logs_metrics_actions_and_thermodynamic_evidence(
     assert math.isfinite(thermodynamic["integral_ft_residual"])
     assert math.isfinite(thermodynamic["max_crooks_residual"])
     evidence = thermodynamic["predictive_thermo_evidence"]
-    assert evidence["observed_events"] == evidence["tested_events"] > 0
+    assert 0 < evidence["tested_events"] <= evidence["observed_events"]
+    assert (
+        evidence["tested_events"] + evidence["degenerate_events"]
+        == evidence["observed_events"]
+    )
 
     validation = json.loads(summary_path.read_text(encoding="utf-8"))
     assert validation["schema_version"] == 1

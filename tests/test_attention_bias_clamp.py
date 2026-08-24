@@ -34,7 +34,7 @@ def _build(clamp: float, **syn) -> GPTSynaptic:
     return GPTSynaptic(cfg).eval()
 
 
-def _huge_release(self, state, drive, idx, train, valid=None):
+def _huge_release(self, state, drive, idx, train, valid=None, **_kwargs):
     """Drop-in for SynapticPresyn.release_canonical (the live attention entry point) that
     returns an enormous release everywhere,
     which would make the RAW log-bias ~log(1e6)=13.8 — well past a clamp of 0.5/10."""

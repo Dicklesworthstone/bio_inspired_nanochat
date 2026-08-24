@@ -57,12 +57,12 @@ class SynapticFlexAttention(nn.Module):
         qamp = torch.sigmoid(cfg.q_beta * (e - 0.5)) * cfg.qmax  # energy-gated AMPA amplitude
         return key_factor, qamp
 
-    def forward(self, q, k, v, presyn_state, block_mask=None):
+    def forward(self, q, k, v, presyn_state, block_mask=None, *, query_offset: int = 0):
         """
         q, k, v: (B, H, T, D)
         presyn_state: Dict of (B, H, T)
         """
-        B, H, T, _D = q.shape
+        B, H, _Tq, _D = q.shape
         
         # 1. Pre-compute biological factors O(N)
         key_factor, qamp = self.precompute_bio_factors(presyn_state, self.config)
@@ -89,7 +89,9 @@ class SynapticFlexAttention(nn.Module):
             bio_bias = lambda_loge * torch.log(release * qa_val + epsilon)
 
             # Septin-like distance barrier.
-            dist = abs(q_idx - kv_idx) / max(1, T)
+            absolute_q_idx = q_idx + query_offset
+            causal_extent = absolute_q_idx + 1
+            dist = abs(absolute_q_idx - kv_idx) / causal_extent
             barrier = barrier_strength * dist
 
             return scaled_score + bio_bias - barrier

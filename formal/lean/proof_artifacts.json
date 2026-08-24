@@ -513,6 +513,112 @@
       "mathlib_revision": "a3a10db0e9d66acbebf76c5e6a135066525ac900",
       "build_command": "rch exec -- lake build",
       "build_result": "rch-refused-non-compilation-command-no-workers; proof-source-unchanged"
+    },
+    {
+      "cycle_id": "lfl-08hm-exact-causal-presyn-2026-08-24",
+      "frog_id": "bio_inspired_nanochat-08hm",
+      "theorem_ids": [
+        "BioInspiredNanochat.Metriplectic.poisson_entropy_degeneracy",
+        "BioInspiredNanochat.Metriplectic.friction_energy_degeneracy",
+        "BioInspiredNanochat.Metriplectic.energyRate_zero",
+        "BioInspiredNanochat.Metriplectic.entropyRate_nonnegative",
+        "BioInspiredNanochat.Metriplectic.freeEnergyRate_nonpositive",
+        "BioInspiredNanochat.Metriplectic.freeEnergy_nonincreasing",
+        "BioInspiredNanochat.Metriplectic.trajectory_energy_constant",
+        "BioInspiredNanochat.Metriplectic.trajectory_entropy_from_start",
+        "BioInspiredNanochat.Metriplectic.trajectory_freeEnergy_nonincreasing",
+        "BioInspiredNanochat.Metriplectic.trajectory_component_bounds",
+        "BioInspiredNanochat.StochasticThermodynamics.logMeanGap_nonnegative",
+        "BioInspiredNanochat.StochasticThermodynamics.log_rate_tur_core",
+        "BioInspiredNanochat.StochasticThermodynamics.tur_calibration_inequality",
+        "BioInspiredNanochat.StochasticThermodynamics.crooks_log_calibration"
+      ],
+      "route": "runtime-first-proof-preserving",
+      "proof_friction_class": "causal-query-recurrence",
+      "runtime_defect_found": true,
+      "artifact_hash": "sha256:831498bc2853d86701250ea89024ab5f5f6190d2e3a5a9ae66f93a7d5d42d963",
+      "hash_scope": "formal/lean/BioInspiredNanochat.lean",
+      "sorry_or_admit_present": false,
+      "axioms": [
+        "propext",
+        "Classical.choice",
+        "Quot.sound"
+      ],
+      "assurance": {
+        "exact_real_algebra": "E-unchanged",
+        "live_causal_regressions": "B",
+        "floating_point_refinement": "cpu-fp32-decode-parity"
+      },
+      "conformance": {
+        "statement_parity": "pass-proof-source-unchanged",
+        "state_parity": "pass-all-presyn-state-and-delay-components",
+        "transition_parity": "pass-contiguous-tokenwise-and-multitoken-append",
+        "concurrency_parity": "not-applicable-pure-query-order",
+        "cancel_drain_parity": "not-applicable",
+        "runtime_evidence": "pass-focused-cpu-suite",
+        "drift_gate": "pass-runtime-hash-refresh"
+      },
+      "change_scope": "Makes the live presynaptic recurrence exactly causal across contiguous, tokenwise, and multi-token append schedules. Query barriers use causal extents; future state slots do not age or enter metriplectic telemetry before materialization; recurrence blocks group graph/checkpoint work without sharing state snapshots; MC sampling uses reproducible per-layer streams and valid edges while preserving honest zero-pool refusal evidence; FlexAttention consumes per-query state snapshots with absolute query barriers. Lean theorem statements and analytic thermodynamic functions are unchanged.",
+      "runtime_mapping": [
+        {
+          "path": "bio_inspired_nanochat/synaptic.py",
+          "sha256": "400accf1d913b22f2326199a74146f43ec809168ec6fe0d60c8d8b21927a6b18"
+        },
+        {
+          "path": "bio_inspired_nanochat/flex_synaptic.py",
+          "sha256": "7cbf78c9112b339ab670d9108f987a3128bde152d52c1c8388941cad6b325b61"
+        },
+        {
+          "path": "bio_inspired_nanochat/mc_ensemble.py",
+          "sha256": "ae056ec599282973f94c1b3bd189b648c0b08906120c49c6305b1371935b4631"
+        },
+        {
+          "path": "scripts/e2e/uncertainty_calibration.py",
+          "sha256": "5a7ec60dc8887d84a8d31c89e8a579d1a7971f863189494bf2420d1ed0abb16e"
+        },
+        {
+          "path": "tests/test_attention_bias_clamp.py",
+          "sha256": "69ea14848287f3145f460222d93fa3c69ebbb247f7dbd732175a4402556a2e87"
+        },
+        {
+          "path": "tests/test_diff_recurrence_wiring.py",
+          "sha256": "0dd62863c7e4e97fb1202790093ddc570f5ffd67033aef643d03cf6da181fc90"
+        },
+        {
+          "path": "tests/test_e2e_decode_parity.py",
+          "sha256": "cb39defd977cda8e726aec485cbf8f1d24353bca17a1e306332957491d23b213"
+        },
+        {
+          "path": "tests/test_e2e_uncertainty.py",
+          "sha256": "896501278ef8802ce4ed9f99fca9cb2e664739c1128b9054a6fcdd68f3daa3fb"
+        },
+        {
+          "path": "tests/test_flex_canonical.py",
+          "sha256": "da384233b61cd03b65c8b0e54cb1a1c558608ef1a26d508d66210b32d8c5e808"
+        },
+        {
+          "path": "tests/test_mc_ensemble.py",
+          "sha256": "1e496b51bc57249e662b42b7b49100565015d47e7fab7acc4b1961a527b37cc2"
+        },
+        {
+          "path": "tests/test_scaleup_ablation_e2e.py",
+          "sha256": "1deea1917c20e04d0aef8e38b69a2eb328c80a06bd4985c97d25d0a33d6d451c"
+        },
+        {
+          "path": "tests/test_stochastic_thermo.py",
+          "sha256": "81bb6f838d9702cd79440732259b773eb38a036a77e6bd33d5a59a047faed0f1"
+        },
+        {
+          "path": "bio_inspired_nanochat/ablation_registry.py",
+          "sha256": "7693b338ae8a304dc9c5083dba736f65c8a8472729809a9ea74974285d59353a"
+        }
+      ],
+      "regression_command": "uv run --no-sync python -m pytest tests/test_e2e_decode_parity.py tests/test_diff_recurrence_wiring.py tests/test_chunked_tbptt.py tests/test_attention_bias_clamp.py tests/test_mc_ensemble.py tests/test_stochastic_thermo.py tests/test_e2e_uncertainty.py tests/test_flex_canonical.py tests/test_scaleup_ablation_e2e.py -q",
+      "regression_result": "122 passed, 2 environment skips (2026-08-24)",
+      "lean_toolchain": "leanprover/lean4:v4.27.0",
+      "mathlib_revision": "a3a10db0e9d66acbebf76c5e6a135066525ac900",
+      "build_command": "rch exec -- lake build",
+      "build_result": "not-rerun-proof-source-unchanged"
     }
   ]
 }

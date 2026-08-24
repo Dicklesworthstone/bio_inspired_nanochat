@@ -312,7 +312,9 @@ def run_uncertainty_e2e(
             ),
             InvariantResult(
                 "predictive_thermo_evidence_observed",
-                evidence.observed_events == evidence.tested_events > 0,
+                0 < evidence.tested_events <= evidence.observed_events
+                and evidence.tested_events + evidence.degenerate_events
+                == evidence.observed_events,
                 evidence.observed_events,
                 f"observed/tested predictive events={evidence.observed_events}/"
                 f"{evidence.tested_events}",

@@ -20,6 +20,7 @@
 
 import contextlib
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Optional, Tuple, List, Dict, Literal, cast, Any
 
@@ -66,6 +67,7 @@ def _sample_binomial_counts(
     tau: float,
     mode: Literal["gumbel_sigmoid_ste", "straight_through", "normal_reparam"],
     eps: float = 1e-6,
+    generator: Optional[torch.Generator] = None,
 ) -> Tensor:
     """Sample Binomial(total_count, probs) counts with a cheap, GPU-friendly estimator.
 
@@ -87,7 +89,10 @@ def _sample_binomial_counts(
         mean = count_f32 * p
         var = count_f32 * p * (1.0 - p)
         std = torch.sqrt(var + eps)
-        samp = mean + std * torch.randn_like(mean)
+        noise = torch.randn(
+            mean.shape, device=mean.device, dtype=mean.dtype, generator=generator
+        )
+        samp = mean + std * noise
         samp = samp.clamp(min=0.0)
         # Clamp high-end based on per-entry count.
         samp = torch.minimum(samp, count_f32)
@@ -105,7 +110,12 @@ def _sample_binomial_counts(
     trial_mask = trial_idx < count_i64.unsqueeze(-1)
 
     # One uniform per Bernoulli trial.
-    u = torch.rand((*probs_32.shape, max_count), device=probs.device, dtype=torch.float32)
+    u = torch.rand(
+        (*probs_32.shape, max_count),
+        device=probs.device,
+        dtype=torch.float32,
+        generator=generator,
+    )
     u = u.clamp(min=eps, max=1.0 - eps)
 
     if mode == "gumbel_sigmoid_ste":
@@ -583,6 +593,61 @@ def _runtime_buffer_mapping(tensors: tuple[Tensor, ...]) -> Dict[str, Tensor]:
     return dict(zip(_PRESYN_RUNTIME_BUFFER_NAMES, tensors))
 
 
+def _release_recurrence_group(
+    presyn: "SynapticPresyn",
+    state: Dict[str, Any],
+    drive: Tensor,
+    idx: Tensor,
+    valid: Optional[Tensor],
+    *,
+    train: bool,
+    differentiable: bool,
+    active_key_count: Optional[int],
+    runtime_buffers: Optional[Dict[str, Tensor]] = None,
+) -> Tensor:
+    """Advance one graph/checkpoint group while preserving per-query causal values."""
+    query_count = int(drive.size(2))
+    if active_key_count is None or query_count == 1:
+        return presyn.release_canonical(
+            state,
+            drive,
+            idx,
+            train=train,
+            valid=valid,
+            differentiable=differentiable,
+            runtime_buffers=runtime_buffers,
+            active_key_count=active_key_count,
+        )
+
+    first_active_key_count = active_key_count - query_count + 1
+    if first_active_key_count < 1:
+        raise ValueError(
+            "active_key_count must cover every query in its recurrence group; "
+            f"got end={active_key_count}, queries={query_count}"
+        )
+    drives = drive.split(1, dim=2)
+    idxs = idx.split(1, dim=2)
+    valids: Sequence[Optional[Tensor]] = (
+        [None] * query_count if valid is None else valid.split(1, dim=2)
+    )
+    outputs = [
+        presyn.release_canonical(
+            state,
+            step_drive,
+            step_idx,
+            train=train,
+            valid=step_valid,
+            differentiable=differentiable,
+            runtime_buffers=runtime_buffers,
+            active_key_count=first_active_key_count + offset,
+        )
+        for offset, (step_drive, step_idx, step_valid) in enumerate(
+            zip(drives, idxs, valids)
+        )
+    ]
+    return torch.cat(outputs, dim=2)
+
+
 def _checkpoint_recurrence_segment(
     presyn: "SynapticPresyn",
     state: Dict[str, Any],
@@ -668,7 +733,8 @@ def _checkpoint_recurrence_segment(
         segment_idxs = inputs[idx_start:valid_start]
         segment_valids = inputs[valid_start:]
         outputs = [
-            presyn.release_canonical(
+            _release_recurrence_group(
+                presyn,
                 local_state,
                 drive,
                 idx,
@@ -743,6 +809,9 @@ def chunked_recurrence(
 
     ``valids`` (optional) is a matching list of per-step ``(B,H,T,K)`` boolean masks for the live
     attention path (causal top-k masking); ``None`` (or a ``None`` entry) means all edges valid.
+    ``active_key_counts`` gives each step/group's final materialized key extent. When a group holds
+    multiple queries, it is still evaluated one query at a time; grouping changes graph/checkpoint
+    boundaries, never forward values or causal state evolution.
     ``differentiable`` toggles the autograd state recurrence: ``True`` (default) carries gradient
     through the state for BPTT; ``False`` runs the same causal schedule under no_grad (the live eval
     path — identical forward values, no graph). hwxb.4.6 wires this into the model attention forward.
@@ -795,7 +864,8 @@ def chunked_recurrence(
             _detach_presyn_state(state)
         valid = normalized_valids[t]
         outs.append(
-            presyn.release_canonical(
+            _release_recurrence_group(
+                presyn,
                 state,
                 drive,
                 idx,
@@ -974,19 +1044,50 @@ class SynapticPresyn(nn.Module):
         integration call site is wired in 0642.1.2 — this is the toggle read."""
         return bool(self.cfg.metriplectic_integrator)
 
+    @staticmethod
+    def _reduce_metriplectic_step(
+        record: TorchStepRecord, active_mask: Optional[Tensor]
+    ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
+        """Reduce guard evidence over materialized state slots only."""
+        if active_mask is None:
+            metric_mask = torch.ones_like(record.fallback_mask, dtype=torch.bool)
+        else:
+            metric_mask = active_mask.expand_as(record.fallback_mask)
+        steps = metric_mask.sum(dtype=torch.int64)
+        fallbacks = (record.fallback_mask & metric_mask).sum(dtype=torch.int64)
+        energy_drift = torch.where(
+            metric_mask,
+            record.energy_drift.detach().abs(),
+            torch.zeros_like(record.energy_drift),
+        ).max()
+        entropy_production = torch.where(
+            metric_mask,
+            record.entropy_production.detach(),
+            torch.full_like(record.entropy_production, float("inf")),
+        ).min()
+        free_energy_delta = torch.where(
+            metric_mask,
+            record.free_energy_delta.detach(),
+            torch.full_like(record.free_energy_delta, float("-inf")),
+        ).max()
+        return steps, fallbacks, energy_drift, entropy_production, free_energy_delta
+
     @torch.no_grad()
-    def _record_metriplectic_step(self, record: TorchStepRecord) -> None:
+    def _record_metriplectic_step(
+        self, record: TorchStepRecord, active_mask: Optional[Tensor] = None
+    ) -> None:
         """Retain compact live guard/ledger evidence without holding the autograd graph."""
-        self.metriplectic_steps.add_(record.fallback_mask.numel())
-        self.metriplectic_fallbacks.add_(record.fallback_mask.sum().to(torch.int64))
-        self.metriplectic_last_energy_drift.copy_(
-            record.energy_drift.detach().abs().max().to(torch.float32)
+        steps, fallbacks, energy_drift, entropy_production, free_energy_delta = (
+            self._reduce_metriplectic_step(record, active_mask)
         )
+        self.metriplectic_steps.add_(steps)
+        self.metriplectic_fallbacks.add_(fallbacks)
+        self.metriplectic_last_energy_drift.copy_(energy_drift.to(torch.float32))
         self.metriplectic_last_entropy_production.copy_(
-            record.entropy_production.detach().min().to(torch.float32)
+            entropy_production.to(torch.float32)
         )
         self.metriplectic_last_free_energy_delta.copy_(
-            record.free_energy_delta.detach().max().to(torch.float32)
+            free_energy_delta.to(torch.float32)
         )
 
     def get_metriplectic_metrics(self) -> Dict[str, float | int]:
@@ -1016,6 +1117,7 @@ class SynapticPresyn(nn.Module):
         alpha_buf_off: float | Tensor,
         record_metrics: bool = False,
         runtime_buffers: Optional[Dict[str, Tensor]] = None,
+        metric_active_mask: Optional[Tensor] = None,
     ) -> tuple[Tensor, Tensor, Tensor]:
         """Advance the live calcium/buffer subsystem or its exact guarded fallback.
 
@@ -1051,22 +1153,25 @@ class SynapticPresyn(nn.Module):
         )
         if record_metrics:
             if runtime_buffers is None:
-                self._record_metriplectic_step(record)
+                self._record_metriplectic_step(record, metric_active_mask)
             else:
+                steps, fallbacks, energy_drift, entropy_production, free_energy_delta = (
+                    self._reduce_metriplectic_step(record, metric_active_mask)
+                )
                 runtime_buffers["metriplectic_steps"] = runtime_buffers[
                     "metriplectic_steps"
-                ] + record.fallback_mask.numel()
+                ] + steps
                 runtime_buffers["metriplectic_fallbacks"] = runtime_buffers[
                     "metriplectic_fallbacks"
-                ] + record.fallback_mask.sum().to(torch.int64)
+                ] + fallbacks
                 runtime_buffers["metriplectic_last_energy_drift"] = (
-                    record.energy_drift.detach().abs().max().to(torch.float32)
+                    energy_drift.to(torch.float32)
                 )
                 runtime_buffers["metriplectic_last_entropy_production"] = (
-                    record.entropy_production.detach().min().to(torch.float32)
+                    entropy_production.to(torch.float32)
                 )
                 runtime_buffers["metriplectic_last_free_energy_delta"] = (
-                    record.free_energy_delta.detach().max().to(torch.float32)
+                    free_energy_delta.to(torch.float32)
                 )
         return c_next, b_next, h_next
 
@@ -1294,24 +1399,38 @@ class SynapticPresyn(nn.Module):
         if mc_sampling:
             ach_frac = min(1.0, max(0.0, float(getattr(self, "_mc_frac", 1.0))))
         evidence_sink = getattr(self, "_mc_evidence_sink", None) if mc_sampling else None
+        mc_generator = getattr(self, "_mc_generator", None) if mc_sampling else None
+        sample_pool_sizes: Optional[Tensor] = None
         sampled_mask = (
             torch.zeros_like(p, dtype=torch.bool) if evidence_sink is not None else None
         )
         if (train or mc_sampling) and ach_frac > 0:
-            do_stoch = torch.rand_like(p[..., 0].to(torch.float32)) < float(ach_frac)
+            sample_pool_sizes = torch.clamp(
+                rrp_edge.round(), 0.0, float(cfg.stochastic_count_cap)
+            )
+            do_stoch = (
+                torch.rand(
+                    p[..., 0].shape,
+                    device=p.device,
+                    dtype=torch.float32,
+                    generator=mc_generator,
+                )
+                < float(ach_frac)
+            )
             rel_det = p * rrp_edge
-            if do_stoch.any():
-                stoch_mask = do_stoch.unsqueeze(-1).expand_as(p)
+            stoch_mask = do_stoch.unsqueeze(-1).expand_as(p)
+            if valid is not None:
+                stoch_mask = stoch_mask & valid
+            if stoch_mask.any():
                 if sampled_mask is not None:
                     sampled_mask = stoch_mask
                 k_rel = _sample_binomial_counts(
                     probs=p[stoch_mask],
-                    total_count=torch.clamp(
-                        rrp_edge[stoch_mask], 0.0, float(cfg.stochastic_count_cap)
-                    ),
+                    total_count=sample_pool_sizes[stoch_mask],
                     max_count=int(cfg.stochastic_count_cap),
                     tau=float(cfg.stochastic_tau),
                     mode=cfg.stochastic_mode,
+                    generator=mc_generator,
                 )
                 rel = rel_det.clone()
                 rel[stoch_mask] = k_rel
@@ -1322,12 +1441,14 @@ class SynapticPresyn(nn.Module):
         if valid is not None:
             rel = rel * valid.to(rel.dtype)
         if evidence_sink is not None:
+            if sample_pool_sizes is None:
+                sample_pool_sizes = torch.clamp(
+                    rrp_edge.round(), 0.0, float(cfg.stochastic_count_cap)
+                )
             evidence_sink.record(
                 layer_address=str(getattr(self, "_mc_evidence_address", "")),
                 probabilities=p,
-                pool_sizes=torch.clamp(
-                    rrp_edge, 0.0, float(cfg.stochastic_count_cap)
-                ),
+                pool_sizes=sample_pool_sizes,
                 forward_counts=rel,
                 reverse_probability=float(cfg.rec_rate),
                 sampling_mode=cfg.stochastic_mode,
@@ -1401,6 +1522,7 @@ class SynapticPresyn(nn.Module):
                 alpha_buf_off=alpha_buf_off,
                 record_metrics=True,
                 runtime_buffers=runtime_buffers,
+                metric_active_mask=active_keys,
             )
 
             # RRP depletion + endocytosis delay queue + priming refill
@@ -2268,10 +2390,10 @@ class SynapticCausalSelfAttention(nn.Module):
     ) -> Tensor:
         """Causal presynaptic release bias, optionally grouped for differentiable BPTT.
 
-        Ordinary forwards advance one query at a time, matching token-by-token decoding exactly.
-        When differentiable recurrence is explicitly enabled, ``recurrence_block_size`` may group
-        queries into an approximate chunk recurrence for training throughput. Every step receives
-        its causal active-key extent, so preallocated future state is never passively aged.
+        Every forward advances one query at a time, matching token-by-token decoding exactly.
+        ``recurrence_block_size`` groups those exact query steps only for autograd truncation and
+        checkpoint orchestration; it never lets queries share a state snapshot. Every group receives
+        its causal final key extent, so preallocated future state is never passively aged.
         ``release_canonical(differentiable=…)`` carries gradient through state so the learnable
         kinetics receive a real training signal. Backprop is truncated every
         ``recurrence_chunk_len`` chunks to bound activation memory. The per-chunk biases are
@@ -2279,11 +2401,7 @@ class SynapticCausalSelfAttention(nn.Module):
         is unchanged and still spans the full sequence. The state-recurrence autograd is requested
         only when both configured and grad is enabled.
         """
-        block = (
-            max(1, int(self.cfg.recurrence_block_size))
-            if self.cfg.differentiable_recurrence
-            else 1
-        )
+        block = max(1, int(self.cfg.recurrence_block_size))
         drives = list(vals.split(block, dim=2))
         idxs = list(idx.split(block, dim=2))
         valids = list(valid.split(block, dim=2))
@@ -2427,26 +2545,48 @@ class SynapticCausalSelfAttention(nn.Module):
             topk = min(self.cfg.attn_topk, Tk)
             vals, idx = torch.topk(dots, topk, dim=-1)
             valid = torch.isfinite(vals)
-            # s3w9: the FlexAttention path now computes its bias from the CANONICAL faithful
-            # formulation (flex_synaptic.precompute_bio_factors: Hill + energy-qamp), so it
-            # advances presyn_state via release_canonical too — consistent with the standard path
-            # (BUF active, AMP superseded by energy-qamp). The flex score_mod applies its own
-            # logit-level bias + barrier, so the canonical barrier stays off here.
-            _ = self.pre.release_canonical(presyn_state, vals, idx, train_mode, valid=valid)
-
             from torch.nn.attention.flex_attention import create_block_mask
-
-            def causal_mask(_b, _h, q_idx, kv_idx):
-                return q_idx >= kv_idx
-
-            block_mask = create_block_mask(causal_mask, B, H, Tq, Tk, device=device)
 
             if q.dtype != v_full.dtype:
                 q = q.to(v_full.dtype)
             if k_full.dtype != v_full.dtype:
                 k_full = k_full.to(v_full.dtype)
 
-            y = self.flex(q, k_full, v_full, presyn_state, block_mask=block_mask)
+            # FlexAttention must see the state snapshot belonging to each query, rather than the
+            # final state after the whole prefill. Advance and attend one query at a time so neither
+            # recurrent state nor the score modifier can read/age future-token slots. This keeps
+            # Flex's O(N) memory property, trading prefill launch count for exact causal semantics.
+            def make_causal_mask(query_offset: int):
+                def causal_mask(_b, _h, q_idx, kv_idx):
+                    return q_idx + query_offset >= kv_idx
+
+                return causal_mask
+
+            query_outputs = []
+            for query_index in range(Tq):
+                _ = self.pre.release_canonical(
+                    presyn_state,
+                    vals[:, :, query_index : query_index + 1],
+                    idx[:, :, query_index : query_index + 1],
+                    train_mode,
+                    valid=valid[:, :, query_index : query_index + 1],
+                    active_key_count=query_index + 1,
+                )
+                query_offset = query_index
+                block_mask = create_block_mask(
+                    make_causal_mask(query_offset), B, H, 1, Tk, device=device
+                )
+                query_outputs.append(
+                    self.flex(
+                        q[:, :, query_index : query_index + 1],
+                        k_full,
+                        v_full,
+                        presyn_state,
+                        block_mask=block_mask,
+                        query_offset=query_offset,
+                    )
+                )
+            y = torch.cat(query_outputs, dim=2)
             y = y.transpose(1, 2).contiguous().view(B, Tq, H * D)
             y = self.resid_drop(self.o_proj(y))
             return y, presyn_state

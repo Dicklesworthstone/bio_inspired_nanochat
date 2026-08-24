@@ -25,6 +25,7 @@ import pytest
 from bio_inspired_nanochat.engine import Engine, KVCache
 from bio_inspired_nanochat.gpt import GPT, GPTConfig
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
+from bio_inspired_nanochat.mc_ensemble import mc_sampling
 from bio_inspired_nanochat.run_logging import RunLogger
 from bio_inspired_nanochat.synaptic import SynapticConfig, SynapticPresyn, build_presyn_state
 
@@ -41,6 +42,10 @@ def _model(
     n_embd: int = 32,
     attn_topk: int = 32,
     stochastic_train_frac: float = 0.12,
+    learnable_kinetics: bool = False,
+    differentiable_recurrence: bool = False,
+    recurrence_checkpoint_len: int = 0,
+    metriplectic_integrator: bool = False,
 ) -> tuple[GPTSynaptic, GPTSynapticConfig]:
     """A GPTSynaptic whose forward is a PURE function of params + the per-sequence presyn state:
     the per-sequence calcium/RRP recurrence (enable_presyn) is ON — that is exactly the KV-cache
@@ -59,6 +64,10 @@ def _model(
         router_contrastive_lr=0.0,
         attn_topk=attn_topk,
         stochastic_train_frac=stochastic_train_frac,
+        learnable_kinetics=learnable_kinetics,
+        differentiable_recurrence=differentiable_recurrence,
+        recurrence_checkpoint_len=recurrence_checkpoint_len,
+        metriplectic_integrator=metriplectic_integrator,
     )
     cfg = GPTSynapticConfig(
         sequence_len=64,
@@ -226,6 +235,8 @@ def test_contiguous_matches_token_zero_incremental_across_gqa_and_topk_boundarie
     actual_logits = torch.cat(incremental_logits, dim=1)
 
     assert torch.allclose(actual_logits, full_logits, atol=1e-4, rtol=1e-4)
+    assert isinstance(full_cache.presyn_state, list)
+    assert isinstance(incremental_cache.presyn_state, list)
     for layer, (full_state, incremental_state) in enumerate(
         zip(full_cache.presyn_state, incremental_cache.presyn_state)
     ):
@@ -254,6 +265,8 @@ def test_multi_token_append_matches_one_token_appends():
         step_logits.append(logits)
 
     assert torch.allclose(torch.cat(step_logits, dim=1), chunk_logits, atol=1e-4, rtol=1e-4)
+    assert isinstance(chunk_cache.presyn_state, list)
+    assert isinstance(step_cache.presyn_state, list)
     for layer, (chunk_state, step_state) in enumerate(
         zip(chunk_cache.presyn_state, step_cache.presyn_state)
     ):
@@ -265,7 +278,7 @@ def test_inactive_future_state_slots_remain_at_initial_values():
     cfg = SynapticConfig(stochastic_train_frac=0.0)
     presyn = SynapticPresyn(d_head=8, cfg=cfg)
     state = build_presyn_state(1, 5, 2, torch.device("cpu"), torch.float32, cfg)
-    before = {
+    before: dict[str, torch.Tensor | list[torch.Tensor]] = {
         key: [item.clone() for item in value] if key == "DELAY" else value.clone()
         for key, value in state.items()
     }
@@ -282,10 +295,14 @@ def test_inactive_future_state_slots_remain_at_initial_values():
 
     for key, value in state.items():
         if key == "DELAY":
-            for current, initial in zip(value, before[key]):
+            initial_value = before[key]
+            assert isinstance(value, list) and isinstance(initial_value, list)
+            for current, initial in zip(value, initial_value):
                 assert torch.equal(current[..., 2:], initial[..., 2:])
         else:
-            assert torch.equal(value[..., 2:], before[key][..., 2:]), key
+            initial_value = before[key]
+            assert isinstance(value, torch.Tensor) and isinstance(initial_value, torch.Tensor)
+            assert torch.equal(value[..., 2:], initial_value[..., 2:]), key
 
 
 @pytest.mark.e2e
@@ -321,6 +338,89 @@ def test_train_mode_ema_matches_contiguous_and_incremental_schedules():
         )
 
 
+@pytest.mark.e2e
+def test_mc_release_rng_is_prefix_and_decode_schedule_invariant():
+    short_model, cfg = _model(23, attn_topk=8)
+    full_model, _ = _model(23, attn_topk=8)
+    incremental_model, _ = _model(23, attn_topk=8)
+    torch.manual_seed(29)
+    tokens = torch.randint(0, cfg.vocab_size, (1, 11), dtype=torch.long)
+
+    torch.manual_seed(31)
+    with mc_sampling(short_model):
+        short_logits, _ = short_model(
+            tokens[:, :6], kv_cache=_kv(cfg, 1, 11), train_mode=False
+        )
+    torch.manual_seed(31)
+    with mc_sampling(full_model):
+        full_logits, _ = full_model(
+            tokens, kv_cache=_kv(cfg, 1, 11), train_mode=False
+        )
+    assert torch.allclose(short_logits, full_logits[:, :6], atol=1e-6, rtol=1e-6)
+
+    torch.manual_seed(31)
+    incremental_cache = _kv(cfg, 1, 11)
+    incremental_logits = []
+    with mc_sampling(incremental_model):
+        for position in range(tokens.size(1)):
+            logits, _ = incremental_model(
+                tokens[:, position : position + 1],
+                kv_cache=incremental_cache,
+                train_mode=False,
+            )
+            incremental_logits.append(logits)
+    assert torch.allclose(
+        torch.cat(incremental_logits, dim=1), full_logits, atol=1e-6, rtol=1e-6
+    )
+
+
+@pytest.mark.e2e
+def test_metriplectic_telemetry_ignores_unmaterialized_future_slots():
+    def make_model():
+        return _model(
+            37,
+            stochastic_train_frac=0.0,
+            learnable_kinetics=True,
+            differentiable_recurrence=True,
+            recurrence_checkpoint_len=2,
+            metriplectic_integrator=True,
+        )
+
+    full_model, cfg = make_model()
+    incremental_model, _ = make_model()
+    torch.manual_seed(41)
+    tokens = torch.randint(0, cfg.vocab_size, (1, 8), dtype=torch.long)
+
+    full_logits, _ = full_model(tokens, kv_cache=_kv(cfg, 1, 8), train_mode=True)
+    incremental_cache = _kv(cfg, 1, 8)
+    incremental_logits = []
+    for position in range(tokens.size(1)):
+        logits, _ = incremental_model(
+            tokens[:, position : position + 1],
+            kv_cache=incremental_cache,
+            train_mode=True,
+        )
+        incremental_logits.append(logits)
+
+    assert torch.allclose(
+        torch.cat(incremental_logits, dim=1), full_logits, atol=1e-6, rtol=1e-6
+    )
+    for full_block, incremental_block in zip(full_model.h, incremental_model.h):
+        full_metrics = full_block.attn.attn.pre.get_metriplectic_metrics()
+        incremental_metrics = incremental_block.attn.attn.pre.get_metriplectic_metrics()
+        assert full_metrics["steps"] == incremental_metrics["steps"]
+        assert full_metrics["fallbacks"] == incremental_metrics["fallbacks"]
+        for metric in (
+            "last_max_energy_drift",
+            "last_min_entropy_production",
+            "last_max_free_energy_delta",
+        ):
+            assert full_metrics[metric] == pytest.approx(
+                incremental_metrics[metric], abs=1e-8
+            )
+        assert full_metrics["steps"] == 2 * sum(range(1, tokens.size(1) + 1))
+
+
 # --------------------------------------------------------------------------- #
 # 2. prefill fork broadcasts presyn-state to every decode row
 # --------------------------------------------------------------------------- #
@@ -339,6 +439,7 @@ def test_prefill_fork_preserves_presyn_state():
     kv_fork.prefill(kv_src)
 
     assert isinstance(kv_fork.presyn_state, list) and len(kv_fork.presyn_state) == cfg.n_layer
+    assert isinstance(kv_src.presyn_state, list)
     for sf, ss in zip(kv_fork.presyn_state, kv_src.presyn_state):
         tf, ts = _presyn_tensors(sf), _presyn_tensors(ss)
         for key in ts:
@@ -403,6 +504,7 @@ def test_decode_logs_bio_state_per_step(tmp_path):
     _reset(model)
     kv = _kv(cfg, 1, 5 + n_steps)
     model(prompt, kv_cache=kv, train_mode=False)
+    assert isinstance(kv.presyn_state, list)
     nxt = prompt[:, -1:]
     for step in range(n_steps):
         model(nxt, kv_cache=kv, train_mode=False)

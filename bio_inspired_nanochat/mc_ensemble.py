@@ -45,6 +45,15 @@ def set_mc_sampling(model, enabled: bool, *, frac: float = 1.0) -> int:
         if isinstance(module, SynapticPresyn):
             module._mc_sampling = bool(enabled)
             module._mc_frac = float(frac)
+            if enabled:
+                seed = int(
+                    torch.randint(0, torch.iinfo(torch.int64).max, ()).item()
+                )
+                generator = torch.Generator(device=module.ema_e.device)
+                generator.manual_seed(seed)
+                module._mc_generator = generator
+            elif hasattr(module, "_mc_generator"):
+                delattr(module, "_mc_generator")
             n += 1
     return n
 
@@ -68,6 +77,8 @@ def mc_sampling(model, *, frac: float = 1.0, evidence_collector: Any | None = No
             getattr(module, "_mc_evidence_sink", None),
             hasattr(module, "_mc_evidence_address"),
             getattr(module, "_mc_evidence_address", None),
+            hasattr(module, "_mc_generator"),
+            getattr(module, "_mc_generator", None),
         )
         for name, module in model.named_modules()
         if isinstance(module, SynapticPresyn)
@@ -92,6 +103,8 @@ def mc_sampling(model, *, frac: float = 1.0, evidence_collector: Any | None = No
             prior_sink,
             had_address,
             prior_address,
+            had_generator,
+            prior_generator,
         ) in prior:
             module._mc_sampling = was_on
             module._mc_frac = was_frac
@@ -103,6 +116,10 @@ def mc_sampling(model, *, frac: float = 1.0, evidence_collector: Any | None = No
                 module._mc_evidence_address = prior_address
             else:
                 delattr(module, "_mc_evidence_address")
+            if had_generator:
+                module._mc_generator = prior_generator
+            elif hasattr(module, "_mc_generator"):
+                delattr(module, "_mc_generator")
 
 
 def _reset_sequence_state(model) -> None:

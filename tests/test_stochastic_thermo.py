@@ -763,7 +763,8 @@ def test_thermo_uq_e2e_reports_both_baselines_without_assuming_a_win():
     assert evidence.fresh and not evidence.predictive_distribution_claim
     assert evidence.calibration_mode == "empirical_ece_fallback"
     assert len(evidence.heads) == config.n_layer * config.n_head
-    assert evidence.observed_events == evidence.tested_events > 0
+    assert 0 < evidence.tested_events <= evidence.observed_events
+    assert evidence.tested_events + evidence.degenerate_events == evidence.observed_events
     assert all(head.finite for head in evidence.heads)
 
 
