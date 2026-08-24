@@ -3,14 +3,16 @@
 # NeuroScore: Evolutionary Credit Assignment for Synaptic Experts
 # -----------------------------------------------------------------------------
 # Measures:
-#   1. Loss Contribution: How much did this expert reduce the loss? (Approx via routing weight * |dL/dx|)
+#   1. Loss Contribution: first-order leave-one-expert-out advantage
+#      ``-sum(<dL/d(expert_out), expert_out>)`` captured by backward hooks (uta.2),
+#      falling back to the legacy sum-of-gates proxy when no fresh training gradients exist.
 #   2. Specialization: How unique is this expert's input distribution? (Cosine distance from global mean)
 #   3. Efficiency: Performance per unit of energy.
 #   4. Resilience: Stability of contribution over time.
 # -----------------------------------------------------------------------------
 
 from dataclasses import dataclass
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from bio_inspired_nanochat.common import decouple_config
 from bio_inspired_nanochat.torch_imports import F, Tensor, nn, torch
@@ -27,6 +29,15 @@ class NeuroScoreConfig:
     update_every: int = 100  # Compute expensive metrics every N steps
     decay: float = 0.99  # EMA decay for resilience tracking
 
+    # uta.2: estimator for per-expert loss contribution. "gradient" attributes the
+    # first-order leave-one-expert-out advantage -sum(<dL/d(expert_out), expert_out>)
+    # via backward hooks on each expert (signed: positive = genuinely useful).
+    # Falls back to the routing proxy whenever no fresh training-time gradients
+    # exist — eval/inference-only flows, or the first step after hooks are installed
+    # (they attach lazily during the first step call). "proxy" keeps the legacy
+    # sum-of-routing-gates heuristic unconditionally.
+    credit_mode: str = "gradient"
+
 
 class NeuroScore:
     """
@@ -40,7 +51,7 @@ class NeuroScore:
         self.stats: Dict[str, Dict[str, Any]] = {}  # layer_name -> metrics
         self._last_loss = None
 
-    def register_layer(self, name: str, num_experts: int):
+    def register_layer(self, name: str, num_experts: int, module: Optional[nn.Module] = None):
         if name not in self.stats:
             self.stats[name] = {
                 "loss_contrib": torch.zeros(num_experts),  # Rolling sum
@@ -51,19 +62,113 @@ class NeuroScore:
                 "prev_contrib": torch.zeros(num_experts),  # For resilience
                 "updates": 0,
             }
+        if module is not None:
+            self._install_hooks(module)
+
+    def _uses_gradient_credit(self) -> bool:
+        return getattr(self.cfg, "credit_mode", "gradient") == "gradient"
+
+    def _install_hooks(self, module: nn.Module) -> None:
+        """Attach per-expert backward captures (uta.2), idempotently.
+
+        A pre-forward hook on the MoE clears the stash at the start of every forward,
+        so anything in ``module._ns_grad_stash`` afterwards provably belongs to THAT
+        forward: each expert's hook registers a tensor hook on its output tensor, and
+        when the training backward reaches it the per-selected-token first-order
+        advantage ``<dL/dy_e, y_e>`` is stored under its expert index. Consequences:
+        - an expert ABSENT from the stash was not invoked this forward (it received no
+          tokens) — its marginal credit for the step is genuinely zero;
+        - eval / inference forwards register no captures (grad mode off), so they wipe
+          the snapshot without writing a new one — the next step falls back to the
+          routing proxy instead of consuming stale numbers.
+        Hooks are plain attributes + autograd hooks — nothing enters state_dict.
+        """
+        if getattr(module, "_ns_hooks_installed", False):
+            return
+        experts = getattr(module, "experts", None)
+        if experts is None:
+            return
+        stash: Dict[int, Any] = {}
+        object.__setattr__(module, "_ns_grad_stash", stash)
+
+        def _pre_clear(_mod: nn.Module, _args: tuple) -> None:
+            stash.clear()
+
+        module.register_forward_pre_hook(_pre_clear)
+
+        def _fwd_hook(_mod: nn.Module, _args: tuple, output: Any, _idx: int) -> None:
+            out = output[0] if isinstance(output, tuple) else output
+            # NOTE: ``Tensor`` from torch_imports is a typing shim (== Any), so the
+            # runtime isinstance check must use the concrete torch class.
+            if not (torch.is_grad_enabled() and isinstance(out, torch.Tensor) and out.requires_grad):
+                return
+
+            def _capture(grad: Tensor, _i: int = _idx, _out: Tensor = out) -> None:
+                # First-order leave-one-expert-out advantage per selected token:
+                # <dL/dy_e, y_e>. Zeroing expert e moves the loss by
+                # -<dL/dy_e, y_e> + O(||y_e||^2), so the NEGATED sum is "how much
+                # loss would RISE if this expert were removed" — signed, so a
+                # consistently harmful expert lands below zero.
+                stash[_i] = (grad.detach().float() * _out.detach().float()).sum(dim=-1).cpu()
+            out.register_hook(_capture)
+
+        for e_idx, expert in enumerate(experts):
+            expert.register_forward_hook(
+                lambda m, a, o, _i=e_idx: _fwd_hook(m, a, o, _i)
+            )
+        object.__setattr__(module, "_ns_hooks_installed", True)
+
+    def _collect_gradient_credit(
+        self,
+        module: nn.Module,
+        st: Dict[str, Any],
+        indices: Tensor,
+        batch_size: int,
+    ) -> Optional[Tensor]:
+        """Turn the freshest backward stash into a normalized contribution vector.
+
+        For every expert invoked this forward: negated sum of ``<dL/dy_e, y_e>``
+        over its selected tokens, normalized by B*T — a cheap leave-one-expert-out
+        counterfactual advantage (the uta.2 spec's second estimator). Because the
+        expert output enters the mixture as ``gate * y_e``, autograd already hands
+        back ``gate * dL/dout`` at the hook, so each token's dot product is
+        gate-weighted with no extra bookkeeping. Positive = removing the expert
+        would raise the loss (genuinely useful); negative = it currently hurts.
+        Experts absent from the stash were not invoked (no tokens routed) and earn
+        exactly zero. Returns None only on a genuine inconsistency (an entry whose
+        size disagrees with the current routing — possible only under multi-backward
+        accumulation); callers then fall back to the whole-vector proxy so the EMA
+        never mixes epochs of bookkeeping.
+        """
+        stash = getattr(module, "_ns_grad_stash", None)
+        if not stash:
+            return None
+        contrib = torch.zeros_like(st["loss_contrib"])
+        for e in range(st["loss_contrib"].numel()):
+            dot = stash.get(e)
+            if dot is None:
+                continue  # not invoked this forward -> true zero marginal credit
+            mask = indices == e
+            flat_pos = mask.any(dim=-1).view(-1).nonzero(as_tuple=False).squeeze(1)
+            if dot.numel() != flat_pos.numel():
+                return None  # snapshot predates the current routing pattern
+            contrib[e] -= dot.sum()
+        stash.clear()
+        return contrib / float(batch_size)
 
     @torch.no_grad()
     def step(self, model: nn.Module, loss: Tensor, global_step: int):
         if not self.cfg.enabled:
             return
 
-        # We need the gradient to estimate contribution, so we can't do this
-        # strictly inside torch.no_grad(), but the METRIC update is no_grad.
-        # ACTUALLY: We can approximate contribution using the stored context
-        # and the current loss magnitude, or hook into backward.
-        # For simplicity/speed in this "v1", we use a forward-pass proxy:
-        # Contribution ~ RoutingWeight * ExpertEnergy (Heuristic: "Active & High Energy" ~ doing work)
-        # A better "v2" would be RoutingWeight * |Grad_Expert_Output|
+        # uta.2: contribution is estimated from REAL gradients when available. Backward
+        # hooks on each expert's output capture <dL/d(expert_out), expert_out> during
+        # the normal training backward (which has already fired by the time viz.step
+        # runs), so the metric update itself stays under no_grad. The capture inherently
+        # includes the routing gate (the output is mixed in as gate * y_e), making it a
+        # cheap first-order leave-one-expert-out counterfactual. Without fresh grads
+        # (eval-only flow, or the very first step after hook installation) we fall back
+        # to the legacy forward-pass proxy: Contribution ~ sum(RoutingGates).
 
         for name, module in model.named_modules():
             if isinstance(module, SynapticMoE):
@@ -76,9 +181,13 @@ class NeuroScore:
                     if mapped:
                         layer_name = mapped
                 if layer_name not in self.stats:
-                    self.register_layer(layer_name, module.num_experts)
+                    self.register_layer(layer_name, module.num_experts, module=module)
 
                 st = self.stats[layer_name]
+                if self._uses_gradient_credit():
+                    # uta.2: ensure the backward captures exist before we need them;
+                    # idempotent and inert under no_grad.
+                    self._install_hooks(module)
                 ctx = module.last_ctx
                 gates = ctx["gates"]  # (B,T,k)
                 indices = ctx["indices"]  # (B,T,k)
@@ -111,26 +220,30 @@ class NeuroScore:
                 if global_step % self.cfg.update_every == 0:
                     self._update_specialization(st, x_in, indices, module.num_experts)
 
-                # 2. Loss Contribution Proxy
-                # We use the routing weights as a proxy for "responsibility"
-                # scaled by the global loss (if loss is high, and you were picked, you share blame/credit)
-                # In a real RL setting, we'd use Advantage, but here:
-                # If loss is dropping, high routing weight = Good.
-                # If loss is flat, high routing weight = Neutral.
-                # We simplify: Contribution = Sum(Gates)
-                # This seems trivial, but combined with Energy it gives Efficiency.
-                
-                # Flatten batch/time
+                # 2. Loss Contribution (uta.2).
+                # Preferred estimator: gradient-based marginal credit — for every token
+                # routed to it, ||dL/d(expert output)|| captured by the per-expert
+                # backward hooks installed above during the normal training backward.
+                # This measures how much an expert's ACTUAL OUTPUT moves the loss, not
+                # merely how often it gets routed. Fallbacks (eval/inference-only flows,
+                # first step after hook installation, or cfg.credit_mode="proxy"): the
+                # legacy sum-of-gates routing proxy.
+                batch_size = gates.shape[0] * gates.shape[1]
                 gates_flat = gates.view(-1)
                 indices_flat = indices.view(-1)
-                
-                # Scatter add
-                contrib_update = torch.zeros_like(st["loss_contrib"])
-                contrib_update.index_add_(0, indices_flat.cpu(), gates_flat.float().cpu())
-
-                # Normalize by batch size
-                batch_size = gates.shape[0] * gates.shape[1]
-                contrib_update /= batch_size
+                grad_credit = (
+                    self._collect_gradient_credit(module, st, indices, batch_size)
+                    if self._uses_gradient_credit()
+                    else None
+                )
+                if grad_credit is not None:
+                    contrib_update = grad_credit
+                    st["credit_source"] = "gradient"
+                else:
+                    contrib_update = torch.zeros_like(st["loss_contrib"])
+                    contrib_update.index_add_(0, indices_flat.cpu(), gates_flat.float().cpu())
+                    contrib_update /= batch_size
+                    st["credit_source"] = "proxy"
 
                 # Routing frequency (counts per token, sums to top_k)
                 freq_update = torch.zeros_like(st["routing_freq"])
