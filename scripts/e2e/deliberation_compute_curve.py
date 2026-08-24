@@ -1,9 +1,9 @@
-"""Stats-backed falsification curve for free-energy deliberation (bead ``r00r.1.4``).
+"""Stats-backed falsification curve for free-energy deliberation (beads ``r00r.1.4/1.6``).
 
-The live deliberation controller currently changes decode temperature from a low-dimensional
-presynaptic free-energy proxy; it does not feed the relaxed state back into model logits.  This
-experiment therefore asks a deliberately narrow, falsifiable question: after training a tiny
-synaptic model on a copy-consistency task, does increasing the deliberation budget improve held-out
+The live controller branches a bounded model-top-k candidate set, advances each continuation on an
+isolated KV/presynaptic cache, relaxes its state, and adds the resulting physical free energy to the
+candidate's model energy. This experiment asks a narrow, falsifiable question: after training a tiny
+synaptic model on a copy-consistency task, does increasing that deliberation budget improve held-out
 continuation accuracy at controlled extra effort?
 
 Every budget is evaluated on the same model weights, prompts, and sampling seeds.  The report carries
@@ -56,6 +56,8 @@ class ExperimentConfig:
     n_head: int = 2
     n_embd: int = 32
     eps: float = 1e-4
+    candidate_top_k: int = 8
+    candidate_energy_weight: float = 1.0
     alpha: float = 0.05
     bootstrap_samples: int = 10_000
     min_skill_over_chance: float = 0.10
@@ -81,6 +83,10 @@ class ExperimentConfig:
             raise ValueError("n_embd must be divisible by n_head")
         if self.eps <= 0.0 or not np.isfinite(self.eps):
             raise ValueError("eps must be finite and positive")
+        if self.candidate_top_k < 1:
+            raise ValueError("candidate_top_k must be positive")
+        if not np.isfinite(self.candidate_energy_weight) or self.candidate_energy_weight < 0.0:
+            raise ValueError("candidate_energy_weight must be finite and non-negative")
         if not 0.0 < self.alpha < 1.0:
             raise ValueError("alpha must be in (0, 1)")
         if self.bootstrap_samples < 1:
@@ -252,6 +258,8 @@ def _evaluate_mode(
                     enabled=True,
                     eps=config.eps,
                     max_iters=max_iters,
+                    candidate_top_k=config.candidate_top_k,
+                    candidate_energy_weight=config.candidate_energy_weight,
                 )
             )
         generated: list[int] = []
@@ -275,7 +283,7 @@ def _evaluate_mode(
         exact_sequences += int(all(matches))
         generated_tokens += len(generated)
         if controller is not None:
-            effort += sum(record.effort for record in controller.records)
+            effort += sum(record.total_effort for record in controller.records)
             pondered_tokens += len(controller.records)
     return SeedMetrics(
         seed=seed,
@@ -408,11 +416,11 @@ def run_experiment(config: ExperimentConfig | None = None) -> ExperimentReport:
         min_skill_over_chance=config.min_skill_over_chance,
     )
     return ExperimentReport(
-        bead="bio_inspired_nanochat-r00r.1.4",
+        bead="bio_inspired_nanochat-r00r.1.6",
         task="held-out copy-continuation consistency",
         mechanism_scope=(
-            "temperature-only free-energy controller; the relaxed state is not fed back into logits, "
-            "and the controller is evaluated on every generated token"
+            "bounded model-top-k candidate continuations are advanced on isolated cache branches; "
+            "their relaxed free energy is added to the actual decode logits on every generated token"
         ),
         config=config,
         training_loss_by_seed=training_loss_by_seed,

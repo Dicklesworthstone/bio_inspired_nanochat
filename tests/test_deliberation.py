@@ -7,9 +7,9 @@ in `Engine.generate`, against the contract of `docs/theory/free_energy_deliberat
   - effort SELF-ALLOCATES — a far-from-equilibrium (active, high-calcium) token uses more iterations
     than a near-equilibrium one ("compute scales with difficulty");
   - the adaptive decode temperature is bounded and commits when self-consistent / explores when not;
-  - the energy-based sampler is the Boltzmann softmax over logits;
-  - the engine REDUCES TO BASELINE when deliberation is off (byte-identical decode), and RUNS in the
-    decode path when on (greedy decode is invariant yet the per-token F-trajectory is logged).
+  - isolated candidate branches preserve row identity and feed relaxed energy into actual logits;
+  - the engine REDUCES TO BASELINE when deliberation is off or has zero budget, and logs bounded
+    per-token current-state plus candidate effort when on.
 
 Run:  pytest tests/test_deliberation.py -v
 """
@@ -25,13 +25,14 @@ from _bio_testkit import make_tiny_synaptic
 from bio_inspired_nanochat import engine as engine_module
 from bio_inspired_nanochat.deliberation import (
     ATPBudget,
+    CandidateEnergyBatch,
     DeliberationConfig,
     DeliberationController,
     DifficultyRouter,
     DifficultyRouterConfig,
     make_controller,
 )
-from bio_inspired_nanochat.engine import Engine
+from bio_inspired_nanochat.engine import Engine, KVCache
 from bio_inspired_nanochat.metriplectic_integrator import boltzmann_weights, run_monitored
 from bio_inspired_nanochat.torch_imports import torch
 
@@ -246,6 +247,51 @@ def test_boltzmann_token_weights_normalize_per_row_for_batches():
 
 
 @pytest.mark.unit
+def test_candidate_energy_feedback_is_shape_safe_and_changes_selected_logits():
+    controller = DeliberationController(
+        DeliberationConfig(enabled=True, candidate_top_k=2, candidate_energy_weight=1.0)
+    )
+    logits = torch.tensor([[5.0, 5.0, 1.0, 0.0]])
+    candidate_ids = torch.tensor([[0, 1]])
+    scores = CandidateEnergyBatch(
+        F_initial=np.array([[3.0, 1.0]]),
+        F_final=np.array([[2.0, 0.0]]),
+        effort=np.array([[4, 2]]),
+        halted_converged=np.array([[True, True]]),
+    )
+    adjusted = controller.candidate_energy_logits(logits, candidate_ids, scores)
+    torch.testing.assert_close(adjusted[0, :2], torch.tensor([3.0, 5.0]))
+    assert bool(torch.isneginf(adjusted[0, 2:]).all())
+    assert int(adjusted.argmax(dim=-1)) == 1
+
+    wrong_shape = CandidateEnergyBatch(
+        F_initial=np.zeros((1, 1)),
+        F_final=np.zeros((1, 1)),
+        effort=np.ones((1, 1), dtype=np.int64),
+        halted_converged=np.ones((1, 1), dtype=np.bool_),
+    )
+    with pytest.raises(ValueError, match="does not match"):
+        controller.candidate_energy_logits(logits, candidate_ids, wrong_shape)
+
+
+@pytest.mark.unit
+def test_candidate_relaxation_preserves_branch_rows_and_is_bounded():
+    controller = DeliberationController(
+        DeliberationConfig(enabled=True, max_iters=3, candidate_top_k=2)
+    )
+    state = [{
+        "C": torch.tensor([[[0.1]], [[0.4]], [[0.8]], [[1.2]]]),
+        "BUF": torch.zeros(4, 1, 1),
+    }]
+    scores = controller.relax_candidate_states(state, candidate_shape=(2, 2))
+    assert scores is not None
+    assert scores.shape == (2, 2)
+    assert np.unique(scores.F_final).size > 1
+    assert bool(np.all((1 <= scores.effort) & (scores.effort <= 3)))
+    assert scores.max_effort_per_row <= 2 * 3
+
+
+@pytest.mark.unit
 def test_f_trajectory_and_summary_are_well_formed():
     c = DeliberationController(DeliberationConfig(enabled=True))
     ps = [{"C": torch.tensor([1.0]), "BUF": torch.tensor([0.4])}]
@@ -255,7 +301,7 @@ def test_f_trajectory_and_summary_are_well_formed():
     assert len(traj) == 3
     assert {"token_index", "effort", "F_initial", "F_final", "F_drop", "effective_temperature"} <= set(traj[0])
     s = c.summary()
-    assert s["tokens"] == 3 and s["enabled"] and s["max_budget"] == 64
+    assert s["tokens"] == 3 and s["enabled"] and s["max_budget"] == 9 * 64
     assert s["mean_effort"] > 0
 
 
@@ -294,6 +340,53 @@ def _decode(engine, **kw):
 
 
 @pytest.mark.e2e
+def test_candidate_cache_fork_is_batch_aligned_and_does_not_mutate_committed_state():
+    model = make_tiny_synaptic(seed=1234)
+    model.train(False)
+    cache = KVCache(
+        batch_size=2,
+        num_heads=model.config.n_kv_head,
+        seq_len=8,
+        head_dim=model.config.n_embd // model.config.n_head,
+        num_layers=model.config.n_layer,
+    )
+    model(torch.tensor([[1, 2, 3], [4, 5, 6]]), kv_cache=cache, train_mode=False)
+    assert cache.kv_cache is not None
+    assert isinstance(cache.presyn_state, list)
+    committed_kv = cache.kv_cache.clone()
+    committed_calcium = cache.presyn_state[0]["C"].clone()
+    committed_pos = cache.pos
+
+    forked = cache.fork_batch(2)
+    torch.testing.assert_close(
+        forked.kv_cache[:, :, 0, :, :committed_pos],
+        committed_kv[:, :, 0, :, :committed_pos],
+    )
+    torch.testing.assert_close(
+        forked.kv_cache[:, :, 1, :, :committed_pos],
+        committed_kv[:, :, 0, :, :committed_pos],
+    )
+    torch.testing.assert_close(
+        forked.kv_cache[:, :, 2, :, :committed_pos],
+        committed_kv[:, :, 1, :, :committed_pos],
+    )
+    torch.testing.assert_close(
+        forked.kv_cache[:, :, 3, :, :committed_pos],
+        committed_kv[:, :, 1, :, :committed_pos],
+    )
+    model(torch.tensor([[7], [8], [9], [10]]), kv_cache=forked, train_mode=False)
+
+    assert forked.kv_cache is not None
+    assert isinstance(forked.presyn_state, list)
+    assert forked.kv_cache.shape[2] == 4
+    assert forked.pos == committed_pos + 1
+    assert forked.presyn_state[0]["C"].shape[0] == 4
+    assert cache.pos == committed_pos
+    torch.testing.assert_close(cache.kv_cache, committed_kv)
+    torch.testing.assert_close(cache.presyn_state[0]["C"], committed_calcium)
+
+
+@pytest.mark.e2e
 def test_generate_deliberation_off_is_byte_identical_baseline():
     """No controller or a zero-step budget must reproduce the default decode exactly."""
     e = _engine()
@@ -318,19 +411,49 @@ def test_zero_token_request_does_not_create_a_deliberation_record():
 
 
 @pytest.mark.e2e
-def test_generate_greedy_is_invariant_yet_deliberation_runs_and_logs():
-    """At temperature 0 the argmax is invariant to the temperature knob, so an ENABLED deliberation
-    produces the SAME tokens as baseline — while still running per token (records logged). This is the
-    'runs in the engine decode path AND reduces to baseline' acceptance, pinned in one test."""
-    e = _engine()
-    base = _decode(e, temperature=0.0)
+def test_generate_greedy_deliberation_runs_candidate_feedback_and_logs():
+    """Greedy sampling still executes the bounded candidate-energy path on every token."""
     controller = DeliberationController(DeliberationConfig(enabled=True))
-    on = _decode(e, temperature=0.0, deliberation=controller)
-    assert on == base, "greedy decode must be invariant to deliberation"
+    on = _decode(_engine(), temperature=0.0, deliberation=controller)
     assert len(controller.records) == len(on), "every generated token must have a controller record"
     assert [record.token_index for record in controller.records] == list(range(len(on)))
     assert all(r.effort >= 1 for r in controller.records)
     assert all(r.F_drop >= -1e-9 for r in controller.records), "free energy must not increase"
+    assert all(r.candidate_count == controller.cfg.candidate_top_k for r in controller.records)
+    assert all(
+        r.total_effort <= (controller.cfg.candidate_top_k + 1) * controller.cfg.max_iters
+        for r in controller.records
+    )
+
+
+@pytest.mark.e2e
+def test_first_token_candidate_energy_feedback_can_change_greedy_choice(monkeypatch):
+    baseline = next(_engine().generate([1, 2, 3, 4], max_tokens=1, temperature=0.0))[0][0]
+    controller = DeliberationController(
+        DeliberationConfig(enabled=True, max_iters=2, candidate_top_k=2)
+    )
+    observed_branch_state = []
+
+    def penalize_model_favorite(presyn_state, *, candidate_shape):
+        observed_branch_state.append(presyn_state)
+        return CandidateEnergyBatch(
+            F_initial=np.zeros(candidate_shape),
+            F_final=np.array([[100.0, 0.0]]),
+            effort=np.ones(candidate_shape, dtype=np.int64),
+            halted_converged=np.ones(candidate_shape, dtype=np.bool_),
+        )
+
+    monkeypatch.setattr(controller, "relax_candidate_states", penalize_model_favorite)
+    changed = next(
+        _engine().generate(
+            [1, 2, 3, 4],
+            max_tokens=1,
+            temperature=0.0,
+            deliberation=controller,
+        )
+    )[0][0]
+    assert observed_branch_state and changed != baseline
+    assert controller.records[0].candidate_count == 2
 
 
 @pytest.mark.e2e
@@ -360,7 +483,7 @@ def test_generate_with_deliberation_runs_and_produces_trajectory():
     assert len(controller.records) > 0
     summary = controller.summary()
     assert summary["tokens"] == len(controller.records)
-    assert 1 <= summary["max_effort"] <= 32, "effort must respect the compute budget"
+    assert 1 <= summary["max_effort"] <= 9 * 32, "effort must respect the compute budget"
 
 
 # --------------------------------------------------------------------------- #

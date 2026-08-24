@@ -4,11 +4,10 @@ Implements the live per-token wiring of the design note `docs/theory/free_energy
 (`r00r.1.1`) on top of the reference `deliberate()` / `boltzmann_weights()` API in
 `metriplectic_integrator.py`. Per token, the model's synaptic state is mapped to the metriplectic core
 `z = (C, B, h)`, relaxed by extra free-energy-minimization steps ("ponder") until it self-consistently
-halts (`|ΔF| < eps`) or a compute budget (`max_iters`, the latency bound) is hit, and the resulting
-**effort** (iterations) + **confidence** (final free energy) modulate the decode temperature — the
-model commits sharply when the state is self-consistent (easy token) and explores when it is not
-(hard token). Energy-based decoding is then the Boltzmann softmax `p ∝ exp(−F/kT)` over the model's
-logits at that deliberation-derived temperature.
+halts (`|ΔF| < eps`) or a compute budget (`max_iters`, the latency bound) is hit. For each token, the
+engine also advances a bounded model-top-k set on isolated KV/presynaptic cache branches and relaxes
+each continuation. Its `F_final` is added to the model energy (`-logit + lambda*F_final`), so the
+relaxed state affects the actual candidate logits. Effort/confidence still modulate temperature.
 
 Convergence is guaranteed by Thrust A (the structure-preserving step makes `F` monotonically
 non-increasing and bounded below — `docs/theory/metriplectic.md` §5), so the ponder always halts in a
@@ -17,17 +16,12 @@ whole mechanism is **default-off**: with no `DeliberationController` the engine 
 before (single-step). Nothing here mutates the model — deliberation only runs the existing descent
 longer and reads the result.
 
-**Scope of this wiring (`r00r.1.2`), stated honestly.** The relaxed state `z` is *read*, not fed back:
-its effort/confidence set the **decode temperature** only — the model's logits are unchanged, so this
-is a confidence-calibrated temperature controller, not (yet) a state-feedback "ponder" that re-runs the
-model on a relaxed state. Because the metriplectic core here is the low-dimensional aggregate
-`z = (mean C, mean B, 0)`, the effort and `F` are both monotone functions of the mean presynaptic
-calcium magnitude (`F_final = (1−T)·½‖(C,B)‖²`), i.e. a simple "how active is the synapse" difficulty
-proxy rather than an independent self-consistency measure. The decode temperature is one scalar per
-decoded step (shared across the batch, matching `sample_next_token`'s single-temperature API). The
-fuller programme — feeding the relaxed state back into the forward, and per-candidate energy decoding
-(`boltzmann_weights` over each relaxed continuation's `F`) — is the downstream `re4e.*` work; this
-module is the bounded, default-off substrate it builds on.
+**Scope, stated honestly.** The candidate path (`r00r.1.6`) is one-step energy-guided decoding, not a
+learned hidden-state recurrent ponder: it branches only the model's top-k candidates, scores the
+low-dimensional aggregate `z = (mean C, mean B, 0)`, and leaves the committed cache untouched until a
+token is selected normally. The additive coefficient `lambda` controls the physical energy term.
+The work per sequence/token is bounded by `(candidate_top_k + 1) * max_iters`; `max_iters=0` bypasses
+both branching and pondering exactly. Deeper tree search remains downstream `re4e.3` work.
 """
 
 from __future__ import annotations
@@ -274,6 +268,41 @@ class DeliberationConfig:
     # caller's base temperature, so base_temp=0 (greedy) stays greedy and `enabled=False` is identity.
     temp_floor: float = 0.7
     temp_ceil: float = 1.3
+    # r00r.1.6: evaluate a bounded model-top-k set by the relaxed free energy of each
+    # continuation.  The model logit is the base energy (-logit); candidate free energy is an
+    # additive physical energy term with this coefficient (design note section 4).
+    candidate_top_k: int = 8
+    candidate_energy_weight: float = 1.0
+
+    def __post_init__(self) -> None:
+        if isinstance(self.candidate_top_k, bool) or not isinstance(self.candidate_top_k, int):
+            raise TypeError("candidate_top_k must be a positive integer")
+        if self.candidate_top_k < 1:
+            raise ValueError("candidate_top_k must be a positive integer")
+        if not np.isfinite(self.candidate_energy_weight) or self.candidate_energy_weight < 0.0:
+            raise ValueError("candidate_energy_weight must be finite and non-negative")
+
+
+@dataclass(frozen=True)
+class CandidateEnergyBatch:
+    """Relaxed free-energy results for a `(batch, candidate)` continuation grid."""
+
+    F_initial: np.ndarray
+    F_final: np.ndarray
+    effort: np.ndarray
+    halted_converged: np.ndarray
+
+    @property
+    def shape(self) -> tuple[int, ...]:
+        return self.F_final.shape
+
+    @property
+    def candidate_count(self) -> int:
+        return int(self.F_final.shape[-1])
+
+    @property
+    def max_effort_per_row(self) -> int:
+        return int(np.max(np.sum(self.effort, axis=-1)))
 
 
 @dataclass
@@ -290,6 +319,15 @@ class DeliberationRecord:
     effective_temperature: float
     calcium: float             # the aggregated synaptic state that seeded z
     buffer: float
+    candidate_count: int = 0
+    candidate_effort: int = 0
+    candidate_F_min: float | None = None
+    candidate_F_max: float | None = None
+
+    @property
+    def total_effort(self) -> int:
+        """Worst-row bounded ponder effort, including candidate continuations."""
+        return self.effort + self.candidate_effort
 
 
 class DeliberationController:
@@ -340,6 +378,74 @@ class DeliberationController:
         b_mean = float(np.mean(bs)) if bs else 0.0
         return np.array([c_mean, b_mean, 0.0], dtype=np.float64)
 
+    @staticmethod
+    def synaptic_z_rows(presyn_state) -> np.ndarray | None:
+        """Map each cache row to its own `(C, B, h)` core without mixing candidates.
+
+        Candidate branches are packed as rows in one batched forward.  Preserving that leading
+        dimension is essential: averaging it away would assign every candidate the same energy and
+        make the apparent logit feedback a no-op.
+        """
+        if presyn_state is None:
+            return None
+        layers = presyn_state if isinstance(presyn_state, list) else [presyn_state]
+        c_sum = b_sum = None
+        c_count = b_count = None
+        batch_size = None
+        for state in layers:
+            if not isinstance(state, dict) or state.get("C") is None:
+                continue
+            calcium = torch.as_tensor(state["C"], dtype=torch.float64)
+            if calcium.ndim == 0:
+                calcium = calcium.reshape(1, 1)
+            else:
+                calcium = calcium.reshape(calcium.shape[0], -1)
+            if batch_size is None:
+                batch_size = int(calcium.shape[0])
+                c_sum = np.zeros(batch_size, dtype=np.float64)
+                b_sum = np.zeros(batch_size, dtype=np.float64)
+                c_count = np.zeros(batch_size, dtype=np.int64)
+                b_count = np.zeros(batch_size, dtype=np.int64)
+            elif calcium.shape[0] != batch_size:
+                return None
+            calcium_mean = calcium.mean(dim=1).detach().cpu().numpy()
+            calcium_valid = np.isfinite(calcium_mean)
+            c_sum[calcium_valid] += calcium_mean[calcium_valid]
+            c_count[calcium_valid] += 1
+
+            buffer = state.get("BUF")
+            if buffer is None:
+                continue
+            buffer_tensor = torch.as_tensor(buffer, dtype=torch.float64)
+            if buffer_tensor.ndim == 0:
+                buffer_tensor = buffer_tensor.reshape(1, 1)
+            else:
+                buffer_tensor = buffer_tensor.reshape(buffer_tensor.shape[0], -1)
+            if buffer_tensor.shape[0] != batch_size:
+                return None
+            buffer_mean = buffer_tensor.mean(dim=1).detach().cpu().numpy()
+            buffer_valid = np.isfinite(buffer_mean)
+            b_sum[buffer_valid] += buffer_mean[buffer_valid]
+            b_count[buffer_valid] += 1
+
+        if (
+            batch_size is None
+            or c_sum is None
+            or b_sum is None
+            or c_count is None
+            or b_count is None
+            or np.any(c_count == 0)
+        ):
+            return None
+        calcium_rows = c_sum / c_count
+        buffer_rows = np.divide(
+            b_sum,
+            b_count,
+            out=np.zeros_like(b_sum),
+            where=b_count > 0,
+        )
+        return np.column_stack((calcium_rows, buffer_rows, np.zeros(batch_size)))
+
     # -- the ponder ----------------------------------------------------------- #
     def ponder(self, z: np.ndarray) -> DeliberationResult:
         """Run the bounded free-energy-minimization loop on `z` (the design §1 deliberation loop)."""
@@ -359,7 +465,76 @@ class DeliberationController:
         mult = self.cfg.temp_floor + (self.cfg.temp_ceil - self.cfg.temp_floor) * frac
         return base_temp * mult
 
-    def effective_temperature(self, presyn_state, base_temp: float, *, token_index: int | None = None) -> float:
+    def relax_candidate_states(
+        self,
+        presyn_state,
+        *,
+        candidate_shape: tuple[int, int],
+    ) -> CandidateEnergyBatch | None:
+        """Relax every packed candidate row, preserving its `(batch, top-k)` identity."""
+        if not self.cfg.enabled or self.cfg.max_iters == 0:
+            return None
+        rows = self.synaptic_z_rows(presyn_state)
+        expected_rows = int(np.prod(candidate_shape))
+        if rows is None:
+            return None
+        if rows.shape != (expected_rows, 3):
+            raise ValueError(
+                "candidate presynaptic state does not match candidate grid: "
+                f"got {rows.shape[0]} rows for shape {candidate_shape}"
+            )
+        results = [self.ponder(row) for row in rows]
+        return CandidateEnergyBatch(
+            F_initial=np.asarray(
+                [free_energy(row, self.cfg.T) for row in rows], dtype=np.float64
+            ).reshape(candidate_shape),
+            F_final=np.asarray([result.F_final for result in results], dtype=np.float64).reshape(
+                candidate_shape
+            ),
+            effort=np.asarray([result.iters for result in results], dtype=np.int64).reshape(
+                candidate_shape
+            ),
+            halted_converged=np.asarray(
+                [result.halted_converged for result in results], dtype=np.bool_
+            ).reshape(candidate_shape),
+        )
+
+    def candidate_energy_logits(
+        self,
+        logits,
+        candidate_ids,
+        scores: CandidateEnergyBatch,
+    ):
+        """Add relaxed candidate free energy to the model energy and return shape-safe logits.
+
+        `-model_logit` is the base candidate energy.  The physical continuation energy is additive,
+        so the adjusted score is `model_logit - lambda * F_final`; candidates outside the bounded
+        model-top-k set receive `-inf` and cannot be sampled.
+        """
+        values = torch.as_tensor(logits)
+        ids = torch.as_tensor(candidate_ids, device=values.device)
+        if values.ndim != 2 or ids.ndim != 2 or ids.shape[0] != values.shape[0]:
+            raise ValueError("logits and candidate_ids must have shapes (batch, vocab) and (batch, k)")
+        if tuple(ids.shape) != scores.shape:
+            raise ValueError(
+                f"candidate energy shape {scores.shape} does not match ids shape {tuple(ids.shape)}"
+            )
+        energies = torch.as_tensor(scores.F_final, dtype=values.dtype, device=values.device)
+        if not bool(torch.isfinite(energies).all()):
+            raise ValueError("candidate free energies must be finite")
+        selected_logits = values.gather(1, ids)
+        selected_logits = selected_logits - self.cfg.candidate_energy_weight * energies
+        adjusted = torch.full_like(values, -torch.inf)
+        return adjusted.scatter(1, ids, selected_logits)
+
+    def effective_temperature(
+        self,
+        presyn_state,
+        base_temp: float,
+        *,
+        token_index: int | None = None,
+        candidate_scores: CandidateEnergyBatch | None = None,
+    ) -> float:
         """The per-token engine hook: ponder the synaptic state and return the decode temperature.
 
         Falls back to `base_temp` (single-step decode) when deliberation is disabled or there is no
@@ -383,6 +558,16 @@ class DeliberationController:
             effective_temperature=temp_eff,
             calcium=float(z[0]),
             buffer=float(z[1]),
+            candidate_count=(0 if candidate_scores is None else candidate_scores.candidate_count),
+            candidate_effort=(
+                0 if candidate_scores is None else candidate_scores.max_effort_per_row
+            ),
+            candidate_F_min=(
+                None if candidate_scores is None else float(np.min(candidate_scores.F_final))
+            ),
+            candidate_F_max=(
+                None if candidate_scores is None else float(np.max(candidate_scores.F_final))
+            ),
         ))
         return temp_eff
 
@@ -428,7 +613,7 @@ class DeliberationController:
     def summary(self) -> dict:
         if not self.records:
             return {"tokens": 0, "enabled": self.cfg.enabled}
-        efforts = [r.effort for r in self.records]
+        efforts = [r.total_effort for r in self.records]
         return {
             "tokens": len(self.records),
             "enabled": self.cfg.enabled,
@@ -436,7 +621,7 @@ class DeliberationController:
             "max_effort": int(np.max(efforts)),
             "frac_converged": sum(r.halted_converged for r in self.records) / len(self.records),
             "mean_F_drop": float(np.mean([r.F_drop for r in self.records])),
-            "max_budget": self.cfg.max_iters,
+            "max_budget": (self.cfg.candidate_top_k + 1) * self.cfg.max_iters,
         }
 
 

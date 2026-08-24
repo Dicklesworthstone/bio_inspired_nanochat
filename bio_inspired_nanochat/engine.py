@@ -220,6 +220,72 @@ class KVCache:
             else:
                 self.presyn_state = None
 
+    def fork_batch(self, repeats: int):
+        """Clone each cache row `repeats` times for isolated candidate continuations.
+
+        Candidate branches must never advance or mutate the committed decode cache. Rows are
+        repeat-interleaved so flattened `(batch, candidate)` token ids align with both KV tensors and
+        every tensor in the per-layer presynaptic state.
+        """
+        if isinstance(repeats, bool) or not isinstance(repeats, int):
+            raise TypeError(f"repeats must be a positive integer, got {repeats!r}")
+        if repeats < 1:
+            raise ValueError(f"repeats must be a positive integer, got {repeats!r}")
+        if self.kv_cache is None:
+            raise ValueError("cannot fork an uninitialized KV cache")
+
+        source_batch = int(self.kv_cache.size(2))
+        forked = KVCache(
+            batch_size=source_batch * repeats,
+            num_heads=int(self.kv_cache.size(3)),
+            seq_len=self.pos + 1,
+            head_dim=int(self.kv_cache.size(5)),
+            num_layers=int(self.kv_cache.size(0)),
+        )
+        forked.kv_cache = torch.empty(
+            forked.kv_shape,
+            dtype=self.kv_cache.dtype,
+            device=self.kv_cache.device,
+        )
+        forked.kv_cache[:, :, :, :, : self.pos, :] = self.kv_cache[
+            :, :, :, :, : self.pos, :
+        ].repeat_interleave(repeats, dim=2)
+        forked.pos = self.pos
+
+        def repeat_state(state):
+            if state is None:
+                return None
+            repeated = {}
+            for key, value in state.items():
+                if isinstance(value, list):
+                    repeated[key] = [
+                        (
+                            item.repeat_interleave(repeats, dim=0).clone()
+                            if isinstance(item, torch.Tensor)
+                            and item.ndim > 0
+                            and item.shape[0] == source_batch
+                            else item.clone() if isinstance(item, torch.Tensor) else item
+                        )
+                        for item in value
+                    ]
+                elif (
+                    isinstance(value, torch.Tensor)
+                    and value.ndim > 0
+                    and value.shape[0] == source_batch
+                ):
+                    repeated[key] = value.repeat_interleave(repeats, dim=0).clone()
+                elif isinstance(value, torch.Tensor):
+                    repeated[key] = value.clone()
+                else:
+                    repeated[key] = value
+            return repeated
+
+        if isinstance(self.presyn_state, list):
+            forked.presyn_state = [repeat_state(state) for state in self.presyn_state]
+        elif isinstance(self.presyn_state, dict):
+            forked.presyn_state = repeat_state(self.presyn_state)
+        return forked
+
     def insert_kv(self, layer_idx, k, v):
         # Lazy initialize the cache here because we need to know the dtype/device
         if self.kv_cache is None:
@@ -301,10 +367,10 @@ class Engine:
         """Same as generate, but does single prefill and then clones the KV cache.
 
         ``deliberation`` (bead r00r.1.2): an optional ``DeliberationConfig`` (or a prebuilt
-        ``DeliberationController``) that turns on free-energy "ponder" — per token, the synaptic state
-        is relaxed by extra free-energy-minimization steps and the resulting effort/confidence modulate
-        the decode temperature (commit when self-consistent, explore when not). Default ``None`` ⟹ the
-        decode path is byte-for-byte the single-step baseline (the deterministic fallback).
+        ``DeliberationController``) that turns on free-energy "ponder". Per token, bounded candidate
+        continuations are advanced on isolated cache branches; their relaxed free energies enter the
+        actual decode logits, while effort/confidence modulate temperature. Default ``None`` and a
+        zero-step budget preserve the single-step baseline exactly.
         """
         assert isinstance(tokens, list) and isinstance(tokens[0], int), "expecting list of ints"
         device = self.model.get_device()
@@ -328,12 +394,47 @@ class Engine:
                 make_controller(deliberation) if isinstance(deliberation, DeliberationConfig) else deliberation
             )
 
-        def _decode_temperature(kv_cache_for_state):
+        def _decode_temperature(kv_cache_for_state, candidate_scores=None):
             """Per-token effective decode temperature; identity (= ``temperature``) without deliberation."""
             if deliberation_controller is None:
                 return temperature
             return deliberation_controller.effective_temperature(
-                getattr(kv_cache_for_state, "presyn_state", None), temperature
+                getattr(kv_cache_for_state, "presyn_state", None),
+                temperature,
+                candidate_scores=candidate_scores,
+            )
+
+        def _deliberated_logits(step_logits, kv_cache_for_state):
+            """Score bounded candidate continuations by relaxed free energy on isolated branches."""
+            if (
+                deliberation_controller is None
+                or deliberation_controller.cfg.max_iters == 0
+                or getattr(kv_cache_for_state, "presyn_state", None) is None
+            ):
+                return step_logits, None
+            candidate_k = min(
+                deliberation_controller.cfg.candidate_top_k,
+                int(step_logits.shape[-1]),
+            )
+            if top_k is not None and top_k > 0:
+                candidate_k = min(candidate_k, top_k)
+            candidate_ids = torch.topk(step_logits, candidate_k, dim=-1).indices
+            candidate_cache = kv_cache_for_state.fork_batch(candidate_k)
+            packed_ids = candidate_ids.reshape(-1, 1)
+            self._forward(packed_ids, candidate_cache)
+            candidate_scores = deliberation_controller.relax_candidate_states(
+                candidate_cache.presyn_state,
+                candidate_shape=tuple(candidate_ids.shape),
+            )
+            if candidate_scores is None:
+                return step_logits, None
+            return (
+                deliberation_controller.candidate_energy_logits(
+                    step_logits,
+                    candidate_ids,
+                    candidate_scores,
+                ),
+                candidate_scores,
             )
 
         # Get the special tokens we need to coordinate the tool use state machine
@@ -366,8 +467,13 @@ class Engine:
         # deliberation hook as every subsequent decode step.  Do not ponder for a zero-token
         # request: no token will consume the result and the controller trace must stay empty.
         prefill_temperature = temperature
+        prefill_candidate_scores = None
         if max_tokens is None or max_tokens > 0:
-            prefill_temperature = _decode_temperature(kv_cache_prefill)
+            logits, prefill_candidate_scores = _deliberated_logits(logits, kv_cache_prefill)
+            prefill_temperature = _decode_temperature(
+                kv_cache_prefill,
+                prefill_candidate_scores,
+            )
         next_ids = sample_next_token(logits, rng, prefill_temperature, top_k)  # (B, 1)
         sampled_tokens = next_ids[:, 0].tolist()
 
@@ -415,9 +521,15 @@ class Engine:
                 else:
                     logits = result
                 logits = logits[:, -1, :]  # (B, vocab_size) at last time step
-                # r00r.1.2: per-token free-energy deliberation modulates the decode temperature
-                # (identity when deliberation is off ⟹ exact single-step baseline).
-                next_ids = sample_next_token(logits, rng, _decode_temperature(kv_cache_decode), top_k)  # (B, 1)
+                # r00r.1.6: candidate-specific relaxed free energy is an additive energy term in
+                # the actual decode logits. The branch cache is isolated; max_iters=0 is identity.
+                logits, candidate_scores = _deliberated_logits(logits, kv_cache_decode)
+                next_ids = sample_next_token(
+                    logits,
+                    rng,
+                    _decode_temperature(kv_cache_decode, candidate_scores),
+                    top_k,
+                )  # (B, 1)
                 sampled_tokens = next_ids[:, 0].tolist()
 
             # Process each row: choose the next token, update state, optional tool use
