@@ -1,20 +1,17 @@
 """
 Wiring the differentiable synaptic recurrence into the model attention forward (bead hwxb.4.6).
 
-The yw9 primitives (``release_canonical(differentiable=True)``, ``chunked_recurrence``,
-``LearnableKinetics``) existed but were NOT on the live training path: the attention forward called
-``release_canonical`` once over the whole sequence with the default ``differentiable=False``, so
-(a) the recurrence was detached and (b) — even differentiable — a single fresh-state call only
-trains ``alpha_ca`` (the decay kinetics ``rho_c``/``rho_b`` multiply the zero-initialised state, so
-they need accumulation across steps to see any gradient). hwxb.4.6 adds a config-gated, default-off
-``differentiable_recurrence`` that routes the attention bias through a CAUSAL, chunked-TBPTT
-recurrence over query blocks, so the learnable kinetics get a real gradient in a real run.
+The live attention path always advances presynaptic state causally. With
+``differentiable_recurrence=False`` that exact per-query recurrence is detached between queries;
+enabling the flag carries gradients through its query blocks so decay kinetics can learn through
+time. ``recurrence_block_size>1`` is an explicit training-throughput approximation: queries inside
+one block share a state snapshot, while future blocks and future key slots remain causal.
 
 These tests lock the wiring contract:
-  1. default-off is byte-identical to today's single non-causal call,
+  1. default-off is byte-identical to the ordinary exact causal path,
   2. the ``differentiable`` flag changes only gradients, never forward values (parity),
-  3. ``recurrence_block_size >= seq_len`` collapses to the single call exactly,
-  4. the decay kinetics receive gradient ONLY when the wiring is on (the headline),
+  3. a sequence-sized block is observably approximate rather than silently called exact,
+  4. through-state decay gradients appear only when differentiable recurrence is on,
   5. all kinetic gradients are finite, including under bf16,
   6. an analytic-vs-numeric gradcheck on a decay parameter through the wired block,
   7. the validator rejects the foot-gun configs.
@@ -83,19 +80,19 @@ def _backward_loss(model, seq=48, seed=5):
 
 
 # --------------------------------------------------------------------------- #
-# 1. DEFAULT-OFF is byte-identical to the legacy single non-causal call.
+# 1. DEFAULT-OFF is byte-identical to the ordinary exact causal path.
 # --------------------------------------------------------------------------- #
-def test_flag_off_is_byte_identical_to_legacy_single_call():
+def test_flag_off_is_byte_identical_to_default_causal_path():
     x = random_tokens(2, 48, 97, seed=5)
-    # `differentiable_recurrence=False` must take the exact same code path as a config that never
-    # set the field (the legacy single release_canonical call).
+    # Setting unrelated recurrence-block tuning while differentiability is off must not weaken
+    # the exact causal default.
     m_off = _model(diff_rec=False)
     m_legacy = make_tiny_synaptic(seed=3, train=False, sequence_len=48,
                                   syn_cfg=SynapticConfig(learnable_kinetics=True))
     with torch.no_grad():
         a, _ = m_off(x, None, train_mode=False)
         b, _ = m_legacy(x, None, train_mode=False)
-    assert torch.equal(a, b), "default-off wiring must be byte-identical to the legacy path"
+    assert torch.equal(a, b), "default-off wiring must be byte-identical to the causal path"
 
 
 # --------------------------------------------------------------------------- #
@@ -112,40 +109,43 @@ def test_differentiable_flag_changes_only_gradients_not_values():
     assert torch.equal(lo_nograd, lo_grad), "forward value must not depend on grad-tracking"
 
 
-def test_enabling_wiring_changes_the_computation_to_causal():
-    # Sanity that the flag is not a silent no-op: the causal chunked recurrence differs from the
-    # non-causal single-call snapshot (later queries see vesicle depletion from earlier ones).
+def test_enabling_grouped_wiring_changes_the_computation():
+    # Sanity that the flag is not a silent no-op: the explicitly grouped recurrence differs from
+    # the exact one-query default because queries inside each block share a state snapshot.
     x = random_tokens(2, 48, 97, seed=5)
     m_on = _model(diff_rec=True, block=8)
     m_off = _model(diff_rec=False)
     with torch.no_grad():
         a, _ = m_on(x, None, train_mode=False)
         b, _ = m_off(x, None, train_mode=False)
-    assert (a - b).abs().max().item() > 1e-4, "causal recurrence must differ from the snapshot"
+    assert (a - b).abs().max().item() > 1e-4
 
 
 # --------------------------------------------------------------------------- #
-# 3. block_size >= seq_len => one block => exactly the single non-causal call.
+# 3. A sequence-sized differentiable block is explicitly approximate.
 # --------------------------------------------------------------------------- #
-def test_block_size_ge_seqlen_recovers_single_call_exactly():
+def test_block_size_ge_seqlen_differs_from_exact_causal_default():
     x = random_tokens(2, 48, 97, seed=5)
     m_block = _model(diff_rec=True, block=512)  # one block covers the whole sequence
     m_off = _model(diff_rec=False)
     with torch.no_grad():
         a, _ = m_block(x, None, train_mode=False)
         b, _ = m_off(x, None, train_mode=False)
-    assert torch.equal(a, b), "a single block must reduce to the single release_canonical call"
+    assert (a - b).abs().max().item() > 1e-4
 
 
 # --------------------------------------------------------------------------- #
-# 4. THE HEADLINE: the decay kinetics receive gradient ONLY when the wiring is on.
+# 4. THE HEADLINE: through-state decay gradients require differentiable recurrence.
 # --------------------------------------------------------------------------- #
-def test_decay_kinetics_get_gradient_only_when_wired():
+def test_through_state_decay_kinetics_get_gradient_only_when_wired():
     g_off = _kinetic_grads(_backward_loss_model(diff_rec=False, seq=64))
     g_on = _kinetic_grads(_backward_loss_model(diff_rec=True, block=8, seq=64))
-    # Single-call snapshot: the calcium DECAY gets exactly zero gradient.
-    assert g_off["rho_c"] == 0.0, f"legacy path must not train the calcium decay, got {g_off['rho_c']}"
-    # Wired causal recurrence: the calcium decay AND the influx gain both get gradient.
+    # The exact detached schedule still trains kinetics from each query's local state snapshot.
+    assert g_off["rho_c"] > 0.0
+    # Buffer decay only influences later-query state, so it isolates through-state BPTT.
+    assert g_off["rho_b"] == 0.0
+    assert g_on["rho_b"] > 0.0
+    # Wired recurrence also preserves the expected calcium-decay and influx gradients.
     assert g_on["rho_c"] > 0.0, "the wiring must give the calcium decay a nonzero gradient"
     assert g_on["alpha_ca"] > 0.0, "the influx gain must also receive gradient"
 
