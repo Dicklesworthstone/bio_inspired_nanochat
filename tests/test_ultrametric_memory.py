@@ -7,6 +7,9 @@ implementation (`bio_inspired_nanochat/ultrametric_memory.py`):
     score 1.0) while the flat Hamming distance is not (§1–§2);
   - the LCP kernel is monotone in the shared prefix (deeper common ancestor ⟹ more similar);
   - the capacity certificate is **exponential in depth** (`p^L` leaves) (§3);
+  - the batched Torch kernel resolves exact p-adic prefixes and degenerates exactly to flat retrieval
+    at depth one;
+  - normalized RRP depletion drives a monotone, resettable coarse-to-fine descent (§4);
   - the leapfrog: under instance corruption a sparse ultrametric memory recovers the **category**
     robustly, beating the flat modern-Hopfield baseline (§4).
 
@@ -16,11 +19,13 @@ Run:  pytest tests/test_ultrametric_memory.py -v
 from __future__ import annotations
 
 import itertools
+from dataclasses import replace
 
 import numpy as np
 import pytest
 
 from bio_inspired_nanochat import ultrametric_memory as um
+from bio_inspired_nanochat.torch_imports import torch
 
 pytestmark = pytest.mark.unit
 
@@ -87,7 +92,166 @@ def test_capacity_certificate_is_exponential_in_depth():
 
 
 # --------------------------------------------------------------------------- #
-# §4. Retrieval + the leapfrog
+# §4. Runtime p-adic kernel + depletion-driven coarse-to-fine descent
+# --------------------------------------------------------------------------- #
+def test_padic_runtime_kernel_is_batched_normalized_and_level_selective():
+    cfg = um.PadicRetrievalConfig(
+        enabled=True,
+        branching=2,
+        n_levels=3,
+        alpha=0.25,
+        beta=20.0,
+    )
+    memories = torch.tensor([0, 3, 4, 7])  # 000, 011, 100, 111
+    result = um.padic_retrieval_kernel(
+        torch.tensor([3, 4]),
+        memories,
+        config=cfg,
+        active_levels=torch.tensor([1, 3]),
+    )
+
+    assert result.mode == "padic"
+    assert result.weights.shape == (2, 4)
+    torch.testing.assert_close(
+        result.weights.sum(dim=-1),
+        torch.ones(2, dtype=result.weights.dtype),
+    )
+    assert result.retrieved_coordinates.tolist() == [0, 4]
+    assert result.active_levels.tolist() == [1, 3]
+    # Resolving all three digits removes the intentional within-category tie for query 011.
+    fine = um.padic_retrieval_kernel(
+        torch.tensor([3]),
+        memories,
+        config=cfg,
+        active_levels=3,
+    )
+    assert fine.retrieved_coordinates.item() == 3
+
+
+def test_batched_kernel_matches_scalar_lcp_reference_at_each_level():
+    cfg = um.PadicRetrievalConfig(
+        enabled=True,
+        branching=3,
+        n_levels=4,
+        alpha=0.4,
+        beta=6.0,
+    )
+    queries = [5, 40]
+    memories = [0, 5, 26, 40, 80]
+    for level in range(1, cfg.n_levels + 1):
+        got = um.padic_retrieval_kernel(
+            torch.tensor(queries),
+            torch.tensor(memories),
+            config=cfg,
+            active_levels=level,
+        )
+        similarities = np.array(
+            [
+                [
+                    cfg.alpha ** (level - min(um.lcp(query, memory, 3, 4), level))
+                    for memory in memories
+                ]
+                for query in queries
+            ],
+            dtype=np.float64,
+        )
+        logits = cfg.beta * similarities
+        expected = np.exp(logits - logits.max(axis=-1, keepdims=True))
+        expected /= expected.sum(axis=-1, keepdims=True)
+        torch.testing.assert_close(
+            got.weights,
+            torch.from_numpy(expected).to(dtype=got.weights.dtype),
+            rtol=1e-6,
+            atol=1e-7,
+        )
+
+
+def test_depth_one_padic_kernel_is_exact_flat_retrieval():
+    enabled = um.PadicRetrievalConfig(enabled=True, branching=3, n_levels=1, alpha=0.4, beta=7.0)
+    disabled = replace(enabled, enabled=False)
+    queries = torch.tensor([0, 1, 2])
+    memories = torch.tensor([2, 0, 1])
+    padic = um.padic_retrieval_kernel(queries, memories, config=enabled)
+    flat = um.padic_retrieval_kernel(queries, memories, config=disabled)
+
+    assert padic.mode == flat.mode == "flat"
+    torch.testing.assert_close(padic.weights, flat.weights, rtol=0.0, atol=0.0)
+    torch.testing.assert_close(
+        padic.retrieved_coordinates,
+        flat.retrieved_coordinates,
+        rtol=0.0,
+        atol=0.0,
+    )
+
+
+def test_rrp_depletion_drives_monotone_coarse_to_fine_descent_and_reset():
+    cfg = um.PadicRetrievalConfig(
+        enabled=True,
+        branching=2,
+        n_levels=3,
+        alpha=0.25,
+        beta=20.0,
+    )
+    retriever = um.DepletionDrivenPadicRetriever(cfg)
+    memories = torch.tensor([0, 3, 4, 7])
+
+    coarse = retriever.retrieve(torch.tensor([3]), memories, rrp_fraction=1.0)
+    middle = retriever.retrieve(torch.tensor([3]), memories, rrp_fraction=0.6)
+    leaf = retriever.retrieve(torch.tensor([3]), memories, rrp_fraction=0.0)
+    refilled = retriever.retrieve(torch.tensor([3]), memories, rrp_fraction=1.0)
+
+    assert [step.active_levels.item() for step in (coarse, middle, leaf, refilled)] == [1, 2, 3, 3]
+    assert [step.retrieved_coordinates.item() for step in (coarse, middle, leaf)] == [0, 3, 3]
+    assert refilled.active_levels.item() == 3, "refill must not re-ascend within one sequence"
+    assert leaf.rrp_fraction is not None and leaf.rrp_fraction.item() == 0.0
+
+    retriever.reset()
+    assert retriever.active_levels is None
+    restarted = retriever.retrieve(torch.tensor([3]), memories, rrp_fraction=1.0)
+    assert restarted.active_levels.item() == 1
+
+
+def test_default_off_retriever_is_flat_and_keeps_no_hierarchy_state():
+    retriever = um.DepletionDrivenPadicRetriever(
+        um.PadicRetrievalConfig(enabled=False, branching=2, n_levels=3)
+    )
+    result = retriever.retrieve(
+        torch.tensor([3]),
+        torch.tensor([0, 3, 4, 7]),
+        rrp_fraction=1.0,
+    )
+    assert result.mode == "flat"
+    assert result.retrieved_coordinates.item() == 3
+    assert retriever.active_levels is None
+
+
+def test_runtime_kernel_and_depletion_inputs_fail_closed():
+    cfg = um.PadicRetrievalConfig(enabled=True, branching=2, n_levels=3)
+    with pytest.raises(ValueError, match="coordinates must be in"):
+        um.padic_retrieval_kernel(torch.tensor([8]), torch.tensor([0, 1]), config=cfg)
+    with pytest.raises(ValueError, match="must contain integers"):
+        um.padic_retrieval_kernel(torch.tensor([1.0]), torch.tensor([0, 1]), config=cfg)
+    with pytest.raises(ValueError, match="active_levels"):
+        um.padic_retrieval_kernel(
+            torch.tensor([1, 2]),
+            torch.tensor([0, 1]),
+            config=cfg,
+            active_levels=torch.tensor([1]),
+        )
+    for bad_rrp in (-0.1, 1.1, float("nan")):
+        with pytest.raises(ValueError, match="rrp_fraction"):
+            um.depletion_levels(bad_rrp, n_levels=3)
+    with pytest.raises(ValueError, match="alpha"):
+        um.PadicRetrievalConfig(enabled=True, alpha=1.0)
+
+    retriever = um.DepletionDrivenPadicRetriever(cfg)
+    retriever.retrieve(torch.tensor([1]), torch.tensor([0, 1]), rrp_fraction=1.0)
+    with pytest.raises(ValueError, match="call reset"):
+        retriever.retrieve(torch.tensor([1, 2]), torch.tensor([0, 1, 2]), rrp_fraction=1.0)
+
+
+# --------------------------------------------------------------------------- #
+# §5. Scalar retrieval + the leapfrog
 # --------------------------------------------------------------------------- #
 def test_retrieve_recovers_an_exact_stored_pattern():
     p, levels = 3, 4

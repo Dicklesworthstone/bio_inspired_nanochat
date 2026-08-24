@@ -13,16 +13,19 @@ This buys **provable coarse-to-fine retrieval**: a query whose fine (low-order) 
 still retrieves the correct *category* (its high-order prefix), degrading gracefully down the tree —
 the leapfrog over flat retrieval, which has no notion of category and is misled by instance noise.
 Bio mapping: vesicle depletion is the literal gradient flow *down* the tree (deplete the coarse
-attractor, descend to finer basins). This module is the theory + reference math; the live p-adic
-retrieval kernel + depletion-driven descent (`0642.4.2.1`) and the falsification vs flat
-modern-Hopfield (`0642.4.3`) build on it.
+attractor, descend to finer basins). In addition to the scalar reference math, this module contains
+the batched Torch p-adic retrieval kernel and the sequence-local, RRP-driven descent runtime
+(`0642.4.2.1`). The falsification vs flat modern-Hopfield (`0642.4.3`) builds on those artifacts.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import math
+from dataclasses import dataclass, replace
 
 import numpy as np
+
+from bio_inspired_nanochat.torch_imports import torch
 
 
 # =========================================================================== #
@@ -146,7 +149,238 @@ def capacity_certificate(p: int, n_levels: int) -> CapacityCertificate:
 
 
 # =========================================================================== #
-# §4. Hierarchical retrieval + coarse-to-fine descent
+# §4. Runtime p-adic kernel + vesicle-depletion descent (0642.4.2.1)
+# =========================================================================== #
+@dataclass(frozen=True)
+class PadicRetrievalConfig:
+    """Configuration for the exact-coordinate runtime retrieval path.
+
+    The toggle is default-off.  The disabled path is flat modern-Hopfield retrieval over all digits;
+    the enabled path resolves only the currently active prefix.  ``alpha`` follows the theory note's
+    convention ``0 < alpha < 1`` in ``alpha ** (level - LCP)``.
+    """
+
+    enabled: bool = False
+    branching: int = 2
+    n_levels: int = 4
+    alpha: float = 0.5
+    beta: float = 8.0
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.enabled, bool):
+            raise ValueError(f"enabled must be bool, got {self.enabled!r}")
+        for name in ("branching", "n_levels"):
+            value = getattr(self, name)
+            minimum = 2 if name == "branching" else 1
+            if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+                raise ValueError(f"{name} must be an integer >= {minimum}, got {value!r}")
+        if not math.isfinite(self.alpha) or not 0.0 < self.alpha < 1.0:
+            raise ValueError(f"alpha must be finite and in (0, 1), got {self.alpha!r}")
+        if not math.isfinite(self.beta) or self.beta <= 0.0:
+            raise ValueError(f"beta must be finite and positive, got {self.beta!r}")
+
+
+@dataclass(frozen=True)
+class PadicRetrievalResult:
+    """One batched retrieval step with its auditable active hierarchy level."""
+
+    retrieved_coordinates: torch.Tensor  # (B,)
+    weights: torch.Tensor  # (B, M)
+    active_levels: torch.Tensor  # (B,), 1 = coarsest, L = leaf resolution
+    mode: str  # "padic" | "flat"
+    rrp_fraction: torch.Tensor | None = None  # (B,), populated by the depletion runtime
+
+
+_INTEGER_DTYPES = {
+    torch.int8,
+    torch.int16,
+    torch.int32,
+    torch.int64,
+    torch.uint8,
+}
+
+
+def _integer_vector(values, *, name: str, device=None) -> torch.Tensor:
+    tensor = torch.as_tensor(values, device=device)
+    if tensor.ndim != 1 or tensor.numel() < 1:
+        raise ValueError(f"{name} must be a non-empty one-dimensional integer vector")
+    if tensor.dtype not in _INTEGER_DTYPES:
+        raise ValueError(f"{name} must contain integers, got dtype {tensor.dtype}")
+    return tensor.to(dtype=torch.long)
+
+
+def _coordinate_digits(coordinates: torch.Tensor, config: PadicRetrievalConfig) -> torch.Tensor:
+    capacity = config.branching ** config.n_levels
+    if bool(((coordinates < 0) | (coordinates >= capacity)).any()):
+        raise ValueError(
+            f"coordinates must be in [0, {capacity}) for p={config.branching}, "
+            f"L={config.n_levels}"
+        )
+    divisors = torch.tensor(
+        [config.branching ** power for power in range(config.n_levels - 1, -1, -1)],
+        dtype=torch.long,
+        device=coordinates.device,
+    )
+    return torch.remainder(
+        torch.div(coordinates.unsqueeze(-1), divisors, rounding_mode="floor"),
+        config.branching,
+    )
+
+
+def _active_level_vector(
+    active_levels,
+    *,
+    batch_size: int,
+    config: PadicRetrievalConfig,
+    device,
+) -> torch.Tensor:
+    if active_levels is None:
+        return torch.full(
+            (batch_size,),
+            config.n_levels,
+            dtype=torch.long,
+            device=device,
+        )
+    levels = torch.as_tensor(active_levels, device=device)
+    if levels.ndim == 0:
+        levels = levels.expand(batch_size)
+    if levels.ndim != 1 or levels.numel() != batch_size or levels.dtype not in _INTEGER_DTYPES:
+        raise ValueError(f"active_levels must be an integer scalar or shape ({batch_size},)")
+    levels = levels.to(dtype=torch.long)
+    if bool(((levels < 1) | (levels > config.n_levels)).any()):
+        raise ValueError(f"active_levels must lie in [1, {config.n_levels}]")
+    return levels
+
+
+def padic_retrieval_kernel(
+    queries,
+    memories,
+    *,
+    config: PadicRetrievalConfig,
+    active_levels=None,
+) -> PadicRetrievalResult:
+    """Batched exact-coordinate LCP retrieval over a shared memory bank.
+
+    ``queries`` has shape ``(B,)`` and ``memories`` has shape ``(M,)``.  At active level ``ell`` the
+    kernel compares only the first ``ell`` digits and uses
+    ``sim = alpha ** (ell - min(LCP, ell))``.  At depth one the hierarchy has only one decision and
+    the implementation deliberately takes the exact flat modern-Hopfield path.  The disabled toggle
+    likewise performs flat Hamming retrieval over all digits.
+    """
+    query = _integer_vector(queries, name="queries")
+    memory = _integer_vector(memories, name="memories", device=query.device)
+    query_digits = _coordinate_digits(query, config)
+    memory_digits = _coordinate_digits(memory, config)
+    batch_size = int(query.numel())
+    levels = _active_level_vector(
+        active_levels,
+        batch_size=batch_size,
+        config=config,
+        device=query.device,
+    )
+
+    if not config.enabled or config.n_levels == 1:
+        hamming = (query_digits.unsqueeze(1) != memory_digits.unsqueeze(0)).sum(dim=-1)
+        logits = -config.beta * hamming.to(dtype=torch.float32)
+        mode = "flat"
+    else:
+        matches = query_digits.unsqueeze(1) == memory_digits.unsqueeze(0)  # (B, M, L)
+        matching_prefix = matches.to(dtype=torch.long).cumprod(dim=-1)
+        positions = torch.arange(1, config.n_levels + 1, device=query.device)
+        active_mask = positions.view(1, 1, -1) <= levels.view(-1, 1, 1)
+        capped_lcp = (matching_prefix * active_mask).sum(dim=-1)
+        exponent = levels.view(-1, 1) - capped_lcp
+        similarity = torch.pow(
+            torch.tensor(config.alpha, dtype=torch.float32, device=query.device),
+            exponent,
+        )
+        logits = config.beta * similarity
+        mode = "padic"
+
+    weights = torch.softmax(logits, dim=-1)
+    retrieved = memory[weights.argmax(dim=-1)]
+    return PadicRetrievalResult(
+        retrieved_coordinates=retrieved,
+        weights=weights,
+        active_levels=levels,
+        mode=mode,
+    )
+
+
+def depletion_levels(rrp_fraction, *, n_levels: int, device=None) -> torch.Tensor:
+    """Map normalized readily-releasable-pool occupancy to a tree level.
+
+    Fresh synapses (``RRP=1``) start at the coarsest level.  Each depleted ``1/L`` fraction opens the
+    next finer level; an empty pool resolves the leaf.  The sequence runtime below takes a cumulative
+    maximum so refill cannot cause an already-descended retrieval to re-ascend within one sequence.
+    """
+    if isinstance(n_levels, bool) or not isinstance(n_levels, int) or n_levels < 1:
+        raise ValueError(f"n_levels must be a positive integer, got {n_levels!r}")
+    rrp = torch.as_tensor(rrp_fraction, dtype=torch.float32, device=device)
+    if rrp.ndim == 0:
+        rrp = rrp.unsqueeze(0)
+    if rrp.ndim != 1 or rrp.numel() < 1:
+        raise ValueError("rrp_fraction must be a non-empty scalar or one-dimensional vector")
+    if not bool(torch.isfinite(rrp).all()) or bool(((rrp < 0.0) | (rrp > 1.0)).any()):
+        raise ValueError("rrp_fraction must be finite and in [0, 1]")
+    return (1 + torch.floor((1.0 - rrp) * n_levels).to(dtype=torch.long)).clamp(max=n_levels)
+
+
+class DepletionDrivenPadicRetriever:
+    """Sequence-local coarse-to-fine retrieval state driven by live normalized RRP.
+
+    Pass one RRP fraction per query row.  Depletion proposes a finer level and the runtime records the
+    cumulative maximum, making descent monotone even if endocytosis later refills the pool.  Call
+    :meth:`reset` at a sequence boundary.  The default-off configuration never creates hierarchy
+    state and returns the flat modern-Hopfield path.
+    """
+
+    def __init__(self, config: PadicRetrievalConfig | None = None) -> None:
+        self.config = config or PadicRetrievalConfig()
+        self._active_levels: torch.Tensor | None = None
+
+    @property
+    def active_levels(self) -> torch.Tensor | None:
+        return None if self._active_levels is None else self._active_levels.clone()
+
+    def reset(self) -> None:
+        self._active_levels = None
+
+    def retrieve(self, queries, memories, *, rrp_fraction) -> PadicRetrievalResult:
+        query = _integer_vector(queries, name="queries")
+        rrp = torch.as_tensor(rrp_fraction, dtype=torch.float32, device=query.device)
+        if rrp.ndim == 0:
+            rrp = rrp.expand(query.numel())
+        if rrp.ndim != 1 or rrp.numel() != query.numel():
+            raise ValueError(f"rrp_fraction must be scalar or shape ({query.numel()},)")
+
+        proposed = depletion_levels(
+            rrp,
+            n_levels=self.config.n_levels,
+            device=query.device,
+        )
+        if not self.config.enabled:
+            result = padic_retrieval_kernel(query, memories, config=self.config)
+            return replace(result, rrp_fraction=rrp)
+
+        if self._active_levels is None:
+            active = proposed
+        else:
+            if self._active_levels.shape != proposed.shape or self._active_levels.device != proposed.device:
+                raise ValueError("query batch/device changed within a sequence; call reset() first")
+            active = torch.maximum(self._active_levels, proposed)
+        self._active_levels = active.detach().clone()
+        result = padic_retrieval_kernel(
+            query,
+            memories,
+            config=self.config,
+            active_levels=active,
+        )
+        return replace(result, rrp_fraction=rrp)
+
+
+# =========================================================================== #
+# §5. Scalar reference retrieval + coarse-to-fine theory probes
 # =========================================================================== #
 def retrieve(query: int, memories: list[int], p: int, n_levels: int, *,
              alpha: float = 0.5, beta: float = 8.0) -> tuple[int, np.ndarray]:
