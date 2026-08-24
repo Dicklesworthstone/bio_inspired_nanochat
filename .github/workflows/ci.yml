@@ -168,6 +168,9 @@ jobs:
           axiom-audit: true
           axiom-audit-root: BioInspiredNanochat
 
+      - name: Resolve mapped theorem identities in compiled Lean
+        run: uv run --no-sync python -m scripts.formal_feedback --run-lean-audit
+
   # ============================================================
   # Build Verification (Maturin)
   # ============================================================

@@ -116,9 +116,23 @@ uv run --no-sync python -m scripts.formal_feedback --run-tests
 
 Artifact records are append-only history. For the current checkout, the validator uses the latest
 occurrence of each Lean `hash_scope` and each `runtime_mapping.path`; this preserves older proof
-cycles without mistaking their historical hashes for the HEAD contract. It also checks that every
-recorded theorem still has a Lean declaration and `#print axioms` audit. Stored command strings are
-provenance only and are never executed.
+cycles without mistaking their historical hashes for the HEAD contract. A later record may retire
+obsolete entries with `retired_hash_scopes`, `retired_runtime_paths`, and `retired_theorem_ids`, so
+renamed or intentionally removed files do not have to remain in the tree forever. Retirements must
+name an active mapping, cannot also replace the same mapping in one record, and leave the historical
+record intact. The validator also masks nested Lean comments and strings before checking that every
+effective theorem has a source declaration and `#print axioms` command as an early diagnostic. Each
+`theorem_ids` entry is fully qualified under `BioInspiredNanochat`, the same namespace covered by
+CI's compiled axiom allowlist. After Lake builds the module, CI runs the compiled audit:
+
+```bash
+uv run --no-sync python -m scripts.formal_feedback --run-lean-audit
+```
+
+That audit imports every effective module through `lake env lean --stdin` and asks Lean itself to
+`#check` and `#print axioms` for every mapped identity. Compiled lookup is authoritative, so comments,
+strings, or syntax quotations cannot spoof theorem presence. Stored command strings are provenance
+only and are never executed.
 
 The `formal-feedback` CI job enforces this validator, builds the pinned Lake project with warnings as
 errors, and audits the compiled namespace against the approved axiom allowlist. The static artifact
