@@ -1174,6 +1174,7 @@ class SplitMergeController:
         step: int,
         spectral_noise_norms: Optional[List[float]] = None,
         generator: Optional[torch.Generator] = None,
+        reset_lineage: bool = False,
     ) -> bool:
         W = layer.router.weight
         changed_any = False
@@ -1225,8 +1226,23 @@ class SplitMergeController:
                 # reset stats
                 layer.fatigue[dst] = 0.0
                 layer.energy[dst] = 1.0
-            # emit lineage event: split parent src -> child dst
-            if self.logger is not None and hasattr(self.logger, "on_split"):
+            # A dead-slot reset uses the same function-preserving reseed surgery as
+            # a split, but its lineage semantics must remain distinguishable.
+            if (
+                reset_lineage
+                and self.logger is not None
+                and hasattr(self.logger, "on_reset")
+            ):
+                try:
+                    self.logger.on_reset(
+                        layer, source_idx=int(src), reset_idx=int(dst), step=step
+                    )
+                except Exception as _e:
+                    if self.cfg.verbose:
+                        print(f"[SplitMerge] logger.on_reset failed: {_e}")
+            elif self.logger is not None and hasattr(self.logger, "on_split"):
+                # Legacy/custom loggers without on_reset keep receiving a split
+                # callback for reset reseeds rather than silently losing lineage.
                 try:
                     self.logger.on_split(
                         layer, parent_idx=int(src), child_idx=int(dst), step=step
@@ -1898,7 +1914,12 @@ class SplitMergeController:
                 src = next((c for c in reset_sources if c != slot), None)
                 if src is not None:
                     ops.append(
-                        {"kind": "split", "src": int(src), "dst": int(slot), "seed": _seed("reset", counter)}
+                        {
+                            "kind": "reset",
+                            "src": int(src),
+                            "dst": int(slot),
+                            "seed": _seed("reset", counter),
+                        }
                     )
         if self.cfg.variable_expert_count:
             ops.extend(self._plan_resize_layer(layer, _seed, counter))
@@ -1940,6 +1961,16 @@ class SplitMergeController:
                     optimizer,
                     step,
                     generator=gen,
+                )
+            elif kind == "reset":
+                changed |= self._split_into_slots(
+                    layer,
+                    [int(op["src"])],
+                    [int(op["dst"])],
+                    optimizer,
+                    step,
+                    generator=gen,
+                    reset_lineage=True,
                 )
             elif kind == "grow":
                 touched = _resize_layer_experts_(

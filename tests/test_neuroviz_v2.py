@@ -35,6 +35,10 @@ from bio_inspired_nanochat.neuroviz import (
     write_bio_dashboard,
 )
 from bio_inspired_nanochat.synaptic import SynapticConfig, SynapticMoE
+from bio_inspired_nanochat.synaptic_splitmerge import (
+    SplitMergeConfig,
+    SplitMergeController,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -120,7 +124,7 @@ def test_lineage_book_persists_events(tmp_path):
     assert events[2] == [30, "reset", [4, 1]]
 
 
-def test_neuroviz_manager_logs_reset_and_dead_expert_fraction(tmp_path):
+def test_controller_logs_reset_and_dead_expert_fraction(tmp_path):
     moe = SynapticMoE(
         n_embd=8,
         num_experts=3,
@@ -142,7 +146,18 @@ def test_neuroviz_manager_logs_reset_and_dead_expert_fraction(tmp_path):
     )
     try:
         manager.register_model(moe)
-        manager.on_reset(moe, source_idx=2, reset_idx=0, step=30)
+        controller = SplitMergeController(
+            moe,
+            SplitMergeConfig(
+                merges_per_call=0,
+                splits_per_call=0,
+                resets_per_call=1,
+                warmup_steps=0,
+                min_step_interval=0,
+            ),
+            logger=manager,
+        )
+        controller.step(global_step=30)
         manager.step(moe, step=30, loss=torch.tensor(1.25))
     finally:
         manager.close()
