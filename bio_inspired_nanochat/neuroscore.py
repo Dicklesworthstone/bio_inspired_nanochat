@@ -83,18 +83,20 @@ class NeuroScore:
           routing proxy instead of consuming stale numbers.
         Hooks are plain attributes + autograd hooks — nothing enters state_dict.
         """
-        if getattr(module, "_ns_hooks_installed", False):
-            return
         experts = getattr(module, "experts", None)
         if experts is None:
             return
-        stash: Dict[int, Any] = {}
-        object.__setattr__(module, "_ns_grad_stash", stash)
+        stash: Dict[int, Any] = getattr(module, "_ns_grad_stash", None)
+        if stash is None:
+            stash = {}
+            object.__setattr__(module, "_ns_grad_stash", stash)
+        if not getattr(module, "_ns_pre_attached", False):
 
-        def _pre_clear(_mod: nn.Module, _args: tuple) -> None:
-            stash.clear()
+            def _pre_clear(_mod: nn.Module, _args: tuple) -> None:
+                stash.clear()
 
-        module.register_forward_pre_hook(_pre_clear)
+            module.register_forward_pre_hook(_pre_clear)
+            object.__setattr__(module, "_ns_pre_attached", True)
 
         def _fwd_hook(_mod: nn.Module, _args: tuple, output: Any, _idx: int) -> None:
             out = output[0] if isinstance(output, tuple) else output
@@ -113,10 +115,12 @@ class NeuroScore:
             out.register_hook(_capture)
 
         for e_idx, expert in enumerate(experts):
+            if getattr(expert, "_ns_hook_attached", False):
+                continue  # survivor expert across a uta.4 resize: already armed
             expert.register_forward_hook(
                 lambda m, a, o, _i=e_idx: _fwd_hook(m, a, o, _i)
             )
-        object.__setattr__(module, "_ns_hooks_installed", True)
+            object.__setattr__(expert, "_ns_hook_attached", True)
 
     def _collect_gradient_credit(
         self,
@@ -184,6 +188,15 @@ class NeuroScore:
                     self.register_layer(layer_name, module.num_experts, module=module)
 
                 st = self.stats[layer_name]
+                if st["loss_contrib"].numel() != int(module.num_experts):
+                    # Layer was resized (uta.4 variable expert count): reset the
+                    # bookkeeping; per-expert hook guards re-arm only new experts.
+                    del self.stats[layer_name]
+                    stash = getattr(module, "_ns_grad_stash", None)
+                    if stash is not None:
+                        stash.clear()
+                    self.register_layer(layer_name, module.num_experts, module=module)
+                    st = self.stats[layer_name]
                 if self._uses_gradient_credit():
                     # uta.2: ensure the backward captures exist before we need them;
                     # idempotent and inert under no_grad.
