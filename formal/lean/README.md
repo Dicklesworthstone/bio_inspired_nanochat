@@ -107,6 +107,19 @@ rch exec -- lake build
 
 The `#print axioms` commands at the end of the Lean module provide an explicit axiom audit during
 compilation. The proof artifact hash and mapped runtime evidence live in `proof_artifacts.json`.
-That artifact is consumed by the planned `r00r.4.3` drift gate, prevents theorem/runtime mapping
-changes from being silently accepted, and should be retired in favor of CI-generated records once
-that gate owns the evidence automatically.
+Validate the complete Lean↔Python contract and run its effective mapped regressions from the
+repository root with:
+
+```bash
+uv run --no-sync python -m scripts.formal_feedback --run-tests
+```
+
+Artifact records are append-only history. For the current checkout, the validator uses the latest
+occurrence of each Lean `hash_scope` and each `runtime_mapping.path`; this preserves older proof
+cycles without mistaking their historical hashes for the HEAD contract. It also checks that every
+recorded theorem still has a Lean declaration and `#print axioms` audit. Stored command strings are
+provenance only and are never executed.
+
+The `formal-feedback` CI job enforces this validator, builds the pinned Lake project with warnings as
+errors, and audits the compiled namespace against the approved axiom allowlist. The static artifact
+records can be retired once CI emits and retains equivalent generated provenance automatically.

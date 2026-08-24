@@ -133,6 +133,42 @@ jobs:
           fi
 
   # ============================================================
+  # Lean ↔ Python Proof Feedback
+  # ============================================================
+  formal-feedback:
+    name: Lean/Python Proof Feedback
+    runs-on: ubuntu-latest
+    needs: [python-quality]
+    env:
+      UV_PYTHON: "3.14.2"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+      - name: Install Python 3.14
+        run: uv python install 3.14.2
+
+      - name: Sync Python dependencies without the optional Rust extension
+        run: uv sync --no-install-project --extra cpu --dev
+
+      - name: Validate proof/runtime hashes and run mapped regressions
+        run: uv run --no-sync python -m scripts.formal_feedback --run-tests
+
+      - name: Build Lean proofs and audit axioms
+        uses: leanprover/lean-action@v1
+        with:
+          lake-package-directory: formal/lean
+          auto-config: false
+          build: true
+          test: false
+          lint: false
+          build-args: "--wfail"
+          axiom-audit: true
+          axiom-audit-root: BioInspiredNanochat
+
+  # ============================================================
   # Build Verification (Maturin)
   # ============================================================
   build-wheel:
