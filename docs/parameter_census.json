@@ -1,8 +1,8 @@
 {
   "generated_by": "scripts/param_census.py (bead bio_inspired_nanochat-8j9.6)",
   "config_class": "bio_inspired_nanochat.synaptic.SynapticConfig",
-  "field_count": 96,
-  "live_count": 96,
+  "field_count": 102,
+  "live_count": 102,
   "dead_count": 0,
   "tuned_phase1_count": 10,
   "tuned_phase1_params": [
@@ -29,10 +29,10 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:1552",
-        "bio_inspired_nanochat/synaptic.py:1800",
-        "bio_inspired_nanochat/synaptic.py:1801",
-        "bio_inspired_nanochat/synaptic.py:1807"
+        "bio_inspired_nanochat/synaptic.py:1563",
+        "bio_inspired_nanochat/synaptic.py:1811",
+        "bio_inspired_nanochat/synaptic.py:1812",
+        "bio_inspired_nanochat/synaptic.py:1818"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -49,9 +49,9 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:1084",
-        "bio_inspired_nanochat/synaptic.py:2291",
-        "bio_inspired_nanochat/synaptic.py:2319"
+        "bio_inspired_nanochat/synaptic.py:1095",
+        "bio_inspired_nanochat/synaptic.py:2302",
+        "bio_inspired_nanochat/synaptic.py:2330"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -66,11 +66,11 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/ablation_registry.py:195",
-        "bio_inspired_nanochat/ablation_registry.py:197",
-        "bio_inspired_nanochat/ablation_registry.py:246",
-        "bio_inspired_nanochat/synaptic.py:594",
-        "bio_inspired_nanochat/synaptic.py:1232"
+        "bio_inspired_nanochat/ablation_registry.py:199",
+        "bio_inspired_nanochat/ablation_registry.py:201",
+        "bio_inspired_nanochat/ablation_registry.py:268",
+        "bio_inspired_nanochat/synaptic.py:605",
+        "bio_inspired_nanochat/synaptic.py:1243"
       ],
       "rust_read_sites": [
         "rust_src/src/presyn.rs:46"
@@ -92,8 +92,10 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:1257",
-        "bio_inspired_nanochat/synaptic.py:1276"
+        "bio_inspired_nanochat/certificate_bundle.py:2412",
+        "bio_inspired_nanochat/certificate_bundle.py:2806",
+        "bio_inspired_nanochat/synaptic.py:1268",
+        "bio_inspired_nanochat/synaptic.py:1287"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -108,7 +110,7 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:1256"
+        "bio_inspired_nanochat/synaptic.py:1267"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -123,9 +125,9 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:1253",
-        "bio_inspired_nanochat/synaptic.py:1255",
-        "bio_inspired_nanochat/synaptic.py:1272"
+        "bio_inspired_nanochat/synaptic.py:1264",
+        "bio_inspired_nanochat/synaptic.py:1266",
+        "bio_inspired_nanochat/synaptic.py:1283"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -140,15 +142,16 @@
       "status": "LIVE",
       "tuned_phase1": true,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/ablation_registry.py:205",
-        "bio_inspired_nanochat/ablation_registry.py:206",
+        "bio_inspired_nanochat/ablation_registry.py:227",
+        "bio_inspired_nanochat/ablation_registry.py:228",
+        "bio_inspired_nanochat/hf_bio_adapter.py:159",
         "bio_inspired_nanochat/cusp_certificate.py:113",
         "bio_inspired_nanochat/cusp_certificate.py:414",
-        "bio_inspired_nanochat/synaptic.py:830",
-        "bio_inspired_nanochat/synaptic.py:1190",
-        "bio_inspired_nanochat/synaptic.py:1429",
-        "bio_inspired_nanochat/synaptic.py:2456",
-        "bio_inspired_nanochat/synaptic.py:2539",
+        "bio_inspired_nanochat/synaptic.py:841",
+        "bio_inspired_nanochat/synaptic.py:1201",
+        "bio_inspired_nanochat/synaptic.py:1440",
+        "bio_inspired_nanochat/synaptic.py:2467",
+        "bio_inspired_nanochat/synaptic.py:2550",
         "bio_inspired_nanochat/separation_gauge.py:44",
         "bio_inspired_nanochat/separation_gauge.py:65",
         "bio_inspired_nanochat/kernels/presyn_fused.py:391"
@@ -175,8 +178,8 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:583",
-        "bio_inspired_nanochat/synaptic.py:928"
+        "bio_inspired_nanochat/synaptic.py:594",
+        "bio_inspired_nanochat/synaptic.py:939"
       ],
       "rust_read_sites": [
         "rust_src/src/presyn.rs:48"
@@ -193,11 +196,11 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/ablation_registry.py:226",
-        "bio_inspired_nanochat/ablation_registry.py:258",
-        "bio_inspired_nanochat/synaptic.py:584",
-        "bio_inspired_nanochat/synaptic.py:1088",
-        "bio_inspired_nanochat/synaptic.py:2337"
+        "bio_inspired_nanochat/ablation_registry.py:248",
+        "bio_inspired_nanochat/ablation_registry.py:280",
+        "bio_inspired_nanochat/synaptic.py:595",
+        "bio_inspired_nanochat/synaptic.py:1099",
+        "bio_inspired_nanochat/synaptic.py:2348"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -214,9 +217,9 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/ablation_registry.py:227",
-        "bio_inspired_nanochat/ablation_registry.py:229",
-        "bio_inspired_nanochat/synaptic.py:2156"
+        "bio_inspired_nanochat/ablation_registry.py:249",
+        "bio_inspired_nanochat/ablation_registry.py:251",
+        "bio_inspired_nanochat/synaptic.py:2167"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -231,10 +234,10 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/ablation_registry.py:231",
-        "bio_inspired_nanochat/ablation_registry.py:233",
-        "bio_inspired_nanochat/ablation_registry.py:241",
-        "bio_inspired_nanochat/synaptic.py:2165"
+        "bio_inspired_nanochat/ablation_registry.py:253",
+        "bio_inspired_nanochat/ablation_registry.py:255",
+        "bio_inspired_nanochat/ablation_registry.py:263",
+        "bio_inspired_nanochat/synaptic.py:2176"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -249,10 +252,10 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/ablation_registry.py:235",
-        "bio_inspired_nanochat/ablation_registry.py:238",
-        "bio_inspired_nanochat/ablation_registry.py:240",
-        "bio_inspired_nanochat/synaptic.py:2166"
+        "bio_inspired_nanochat/ablation_registry.py:257",
+        "bio_inspired_nanochat/ablation_registry.py:260",
+        "bio_inspired_nanochat/ablation_registry.py:262",
+        "bio_inspired_nanochat/synaptic.py:2177"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -270,7 +273,7 @@
       "tuned_phase1": true,
       "runtime_read_sites": [
         "bio_inspired_nanochat/flex_synaptic.py:52",
-        "bio_inspired_nanochat/synaptic.py:1054",
+        "bio_inspired_nanochat/synaptic.py:1065",
         "bio_inspired_nanochat/kernels/presyn_fused.py:398"
       ],
       "rust_read_sites": [
@@ -288,8 +291,8 @@
       "status": "LIVE",
       "tuned_phase1": true,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:1355",
-        "bio_inspired_nanochat/synaptic.py:1356",
+        "bio_inspired_nanochat/synaptic.py:1366",
+        "bio_inspired_nanochat/synaptic.py:1367",
         "bio_inspired_nanochat/kernels/presyn_fused.py:402"
       ],
       "rust_read_sites": [
@@ -309,8 +312,8 @@
       "status": "LIVE",
       "tuned_phase1": true,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:1360",
-        "bio_inspired_nanochat/synaptic.py:1365",
+        "bio_inspired_nanochat/synaptic.py:1371",
+        "bio_inspired_nanochat/synaptic.py:1376",
         "bio_inspired_nanochat/kernels/presyn_fused.py:403"
       ],
       "rust_read_sites": [
@@ -328,7 +331,7 @@
       "status": "LIVE",
       "tuned_phase1": true,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:1361",
+        "bio_inspired_nanochat/synaptic.py:1372",
         "bio_inspired_nanochat/kernels/presyn_fused.py:404"
       ],
       "rust_read_sites": [
@@ -346,8 +349,8 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:1275",
-        "bio_inspired_nanochat/synaptic.py:1350",
+        "bio_inspired_nanochat/synaptic.py:1286",
+        "bio_inspired_nanochat/synaptic.py:1361",
         "bio_inspired_nanochat/kernels/presyn_fused.py:405"
       ],
       "rust_read_sites": [
@@ -365,9 +368,9 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:1348",
-        "bio_inspired_nanochat/synaptic.py:2070",
-        "bio_inspired_nanochat/synaptic.py:2239",
+        "bio_inspired_nanochat/synaptic.py:1359",
+        "bio_inspired_nanochat/synaptic.py:2081",
+        "bio_inspired_nanochat/synaptic.py:2250",
         "bio_inspired_nanochat/kernels/presyn_fused.py:337",
         "bio_inspired_nanochat/kernels/presyn_fused.py:339",
         "bio_inspired_nanochat/kernels/presyn_fused.py:341"
@@ -387,13 +390,13 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:2063",
-        "bio_inspired_nanochat/synaptic.py:2226",
-        "bio_inspired_nanochat/synaptic.py:2257"
+        "bio_inspired_nanochat/synaptic.py:2074",
+        "bio_inspired_nanochat/synaptic.py:2237",
+        "bio_inspired_nanochat/synaptic.py:2268"
       ],
       "rust_read_sites": [],
       "script_sites": [
-        "scripts/e2e/stochastic_thermo_uq.py:550"
+        "scripts/e2e/stochastic_thermo_uq.py:560"
       ],
       "test_sites": [],
       "note": ""
@@ -406,9 +409,9 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:2064",
-        "bio_inspired_nanochat/synaptic.py:2228",
-        "bio_inspired_nanochat/synaptic.py:2258"
+        "bio_inspired_nanochat/synaptic.py:2075",
+        "bio_inspired_nanochat/synaptic.py:2239",
+        "bio_inspired_nanochat/synaptic.py:2269"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -423,9 +426,9 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:2065",
-        "bio_inspired_nanochat/synaptic.py:2230",
-        "bio_inspired_nanochat/synaptic.py:2259"
+        "bio_inspired_nanochat/synaptic.py:2076",
+        "bio_inspired_nanochat/synaptic.py:2241",
+        "bio_inspired_nanochat/synaptic.py:2270"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -440,9 +443,9 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:2066",
-        "bio_inspired_nanochat/synaptic.py:2232",
-        "bio_inspired_nanochat/synaptic.py:2260"
+        "bio_inspired_nanochat/synaptic.py:2077",
+        "bio_inspired_nanochat/synaptic.py:2243",
+        "bio_inspired_nanochat/synaptic.py:2271"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -457,9 +460,9 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:2069",
-        "bio_inspired_nanochat/synaptic.py:2236",
-        "bio_inspired_nanochat/synaptic.py:2262"
+        "bio_inspired_nanochat/synaptic.py:2080",
+        "bio_inspired_nanochat/synaptic.py:2247",
+        "bio_inspired_nanochat/synaptic.py:2273"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -474,9 +477,9 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:2067",
-        "bio_inspired_nanochat/synaptic.py:2234",
-        "bio_inspired_nanochat/synaptic.py:2261"
+        "bio_inspired_nanochat/synaptic.py:2078",
+        "bio_inspired_nanochat/synaptic.py:2245",
+        "bio_inspired_nanochat/synaptic.py:2272"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -491,7 +494,8 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:1369",
+        "bio_inspired_nanochat/hf_bio_adapter.py:163",
+        "bio_inspired_nanochat/synaptic.py:1380",
         "bio_inspired_nanochat/kernels/presyn_fused.py:406"
       ],
       "rust_read_sites": [
@@ -509,7 +513,8 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:1370",
+        "bio_inspired_nanochat/hf_bio_adapter.py:166",
+        "bio_inspired_nanochat/synaptic.py:1381",
         "bio_inspired_nanochat/kernels/presyn_fused.py:408"
       ],
       "rust_read_sites": [
@@ -527,8 +532,10 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:1369",
-        "bio_inspired_nanochat/synaptic.py:1371",
+        "bio_inspired_nanochat/hf_bio_adapter.py:164",
+        "bio_inspired_nanochat/hf_bio_adapter.py:167",
+        "bio_inspired_nanochat/synaptic.py:1380",
+        "bio_inspired_nanochat/synaptic.py:1382",
         "bio_inspired_nanochat/kernels/presyn_fused.py:407"
       ],
       "rust_read_sites": [
@@ -549,14 +556,15 @@
       "status": "LIVE",
       "tuned_phase1": true,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:2362",
+        "bio_inspired_nanochat/synaptic.py:2373",
         "bio_inspired_nanochat/kernels/presyn_fused.py:409"
       ],
       "rust_read_sites": [],
       "script_sites": [],
       "test_sites": [
         "tests/test_presyn_golden.py:191",
-        "tests/test_presyn_fused_live.py:177"
+        "tests/test_presyn_fused_live.py:177",
+        "tests/test_cmaes_load_params.py:35"
       ],
       "note": ""
     },
@@ -569,10 +577,10 @@
       "tuned_phase1": false,
       "runtime_read_sites": [
         "bio_inspired_nanochat/tropical_certificate.py:1478",
-        "bio_inspired_nanochat/synaptic.py:1291",
-        "bio_inspired_nanochat/synaptic.py:1298",
-        "bio_inspired_nanochat/synaptic.py:1517",
-        "bio_inspired_nanochat/synaptic.py:2381"
+        "bio_inspired_nanochat/synaptic.py:1302",
+        "bio_inspired_nanochat/synaptic.py:1309",
+        "bio_inspired_nanochat/synaptic.py:1528",
+        "bio_inspired_nanochat/synaptic.py:2392"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -587,10 +595,10 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:1495",
-        "bio_inspired_nanochat/synaptic.py:1516",
-        "bio_inspired_nanochat/synaptic.py:1520",
-        "bio_inspired_nanochat/synaptic.py:2362",
+        "bio_inspired_nanochat/synaptic.py:1506",
+        "bio_inspired_nanochat/synaptic.py:1527",
+        "bio_inspired_nanochat/synaptic.py:1531",
+        "bio_inspired_nanochat/synaptic.py:2373",
         "bio_inspired_nanochat/kernels/presyn_fused.py:410"
       ],
       "rust_read_sites": [],
@@ -609,7 +617,7 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:2367",
+        "bio_inspired_nanochat/synaptic.py:2378",
         "bio_inspired_nanochat/kernels/presyn_fused.py:411",
         "bio_inspired_nanochat/kernels/presyn_fused.py:421"
       ],
@@ -632,9 +640,9 @@
       "runtime_read_sites": [
         "bio_inspired_nanochat/cusp_certificate.py:114",
         "bio_inspired_nanochat/cusp_certificate.py:415",
-        "bio_inspired_nanochat/synaptic.py:831",
-        "bio_inspired_nanochat/synaptic.py:1191",
-        "bio_inspired_nanochat/synaptic.py:1430",
+        "bio_inspired_nanochat/synaptic.py:842",
+        "bio_inspired_nanochat/synaptic.py:1202",
+        "bio_inspired_nanochat/synaptic.py:1441",
         "bio_inspired_nanochat/separation_gauge.py:45",
         "bio_inspired_nanochat/kernels/presyn_fused.py:392"
       ],
@@ -656,7 +664,7 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:1431"
+        "bio_inspired_nanochat/synaptic.py:1442"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -671,12 +679,14 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:1432",
+        "bio_inspired_nanochat/synaptic.py:1443",
         "bio_inspired_nanochat/separation_gauge.py:68"
       ],
       "rust_read_sites": [],
       "script_sites": [],
-      "test_sites": [],
+      "test_sites": [
+        "tests/test_cmaes_load_params.py:34"
+      ],
       "note": ""
     },
     {
@@ -687,7 +697,7 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:1433"
+        "bio_inspired_nanochat/synaptic.py:1444"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -702,13 +712,14 @@
       "status": "LIVE",
       "tuned_phase1": true,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/ablation_registry.py:207",
-        "bio_inspired_nanochat/ablation_registry.py:208",
-        "bio_inspired_nanochat/synaptic.py:834",
-        "bio_inspired_nanochat/synaptic.py:1192",
-        "bio_inspired_nanochat/synaptic.py:1454",
-        "bio_inspired_nanochat/synaptic.py:2457",
-        "bio_inspired_nanochat/synaptic.py:2540",
+        "bio_inspired_nanochat/ablation_registry.py:229",
+        "bio_inspired_nanochat/ablation_registry.py:230",
+        "bio_inspired_nanochat/hf_bio_adapter.py:160",
+        "bio_inspired_nanochat/synaptic.py:845",
+        "bio_inspired_nanochat/synaptic.py:1203",
+        "bio_inspired_nanochat/synaptic.py:1465",
+        "bio_inspired_nanochat/synaptic.py:2468",
+        "bio_inspired_nanochat/synaptic.py:2551",
         "bio_inspired_nanochat/kernels/presyn_fused.py:393"
       ],
       "rust_read_sites": [
@@ -728,12 +739,13 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
+        "bio_inspired_nanochat/certificate_bundle.py:2431",
         "bio_inspired_nanochat/cusp_certificate.py:115",
         "bio_inspired_nanochat/cusp_certificate.py:416",
-        "bio_inspired_nanochat/synaptic.py:835",
-        "bio_inspired_nanochat/synaptic.py:1193",
-        "bio_inspired_nanochat/synaptic.py:1455",
-        "bio_inspired_nanochat/synaptic.py:1460",
+        "bio_inspired_nanochat/synaptic.py:846",
+        "bio_inspired_nanochat/synaptic.py:1204",
+        "bio_inspired_nanochat/synaptic.py:1466",
+        "bio_inspired_nanochat/synaptic.py:1471",
         "bio_inspired_nanochat/separation_gauge.py:46",
         "bio_inspired_nanochat/kernels/presyn_fused.py:394"
       ],
@@ -756,12 +768,13 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
+        "bio_inspired_nanochat/certificate_bundle.py:2433",
         "bio_inspired_nanochat/cusp_certificate.py:116",
         "bio_inspired_nanochat/cusp_certificate.py:416",
-        "bio_inspired_nanochat/synaptic.py:836",
-        "bio_inspired_nanochat/synaptic.py:1193",
-        "bio_inspired_nanochat/synaptic.py:1456",
-        "bio_inspired_nanochat/synaptic.py:1461",
+        "bio_inspired_nanochat/synaptic.py:847",
+        "bio_inspired_nanochat/synaptic.py:1204",
+        "bio_inspired_nanochat/synaptic.py:1467",
+        "bio_inspired_nanochat/synaptic.py:1472",
         "bio_inspired_nanochat/separation_gauge.py:47",
         "bio_inspired_nanochat/kernels/presyn_fused.py:395"
       ],
@@ -783,7 +796,7 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:1470"
+        "bio_inspired_nanochat/synaptic.py:1481"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -798,7 +811,7 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:1504"
+        "bio_inspired_nanochat/synaptic.py:1515"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -813,8 +826,8 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:1471",
-        "bio_inspired_nanochat/synaptic.py:1472"
+        "bio_inspired_nanochat/synaptic.py:1482",
+        "bio_inspired_nanochat/synaptic.py:1483"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -829,7 +842,7 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:1473"
+        "bio_inspired_nanochat/synaptic.py:1484"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -844,7 +857,7 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:1507"
+        "bio_inspired_nanochat/synaptic.py:1518"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -859,7 +872,7 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:1508"
+        "bio_inspired_nanochat/synaptic.py:1519"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -875,8 +888,8 @@
       "tuned_phase1": true,
       "runtime_read_sites": [
         "bio_inspired_nanochat/flex_synaptic.py:50",
-        "bio_inspired_nanochat/synaptic.py:1049",
-        "bio_inspired_nanochat/synaptic.py:1476",
+        "bio_inspired_nanochat/synaptic.py:1060",
+        "bio_inspired_nanochat/synaptic.py:1487",
         "bio_inspired_nanochat/kernels/presyn_fused.py:396"
       ],
       "rust_read_sites": [
@@ -895,8 +908,8 @@
       "tuned_phase1": true,
       "runtime_read_sites": [
         "bio_inspired_nanochat/flex_synaptic.py:51",
-        "bio_inspired_nanochat/synaptic.py:1050",
-        "bio_inspired_nanochat/synaptic.py:1477",
+        "bio_inspired_nanochat/synaptic.py:1061",
+        "bio_inspired_nanochat/synaptic.py:1488",
         "bio_inspired_nanochat/kernels/presyn_fused.py:397"
       ],
       "rust_read_sites": [
@@ -915,8 +928,8 @@
       "tuned_phase1": true,
       "runtime_read_sites": [
         "bio_inspired_nanochat/flex_synaptic.py:54",
-        "bio_inspired_nanochat/synaptic.py:1056",
-        "bio_inspired_nanochat/synaptic.py:1482",
+        "bio_inspired_nanochat/synaptic.py:1067",
+        "bio_inspired_nanochat/synaptic.py:1493",
         "bio_inspired_nanochat/kernels/presyn_fused.py:399"
       ],
       "rust_read_sites": [
@@ -935,8 +948,8 @@
       "tuned_phase1": false,
       "runtime_read_sites": [
         "bio_inspired_nanochat/flex_synaptic.py:57",
-        "bio_inspired_nanochat/synaptic.py:1282",
-        "bio_inspired_nanochat/synaptic.py:1511",
+        "bio_inspired_nanochat/synaptic.py:1293",
+        "bio_inspired_nanochat/synaptic.py:1522",
         "bio_inspired_nanochat/kernels/presyn_fused.py:401"
       ],
       "rust_read_sites": [
@@ -944,7 +957,7 @@
       ],
       "script_sites": [],
       "test_sites": [
-        "tests/test_flex_canonical.py:48"
+        "tests/test_flex_canonical.py:121"
       ],
       "note": ""
     },
@@ -957,8 +970,8 @@
       "tuned_phase1": false,
       "runtime_read_sites": [
         "bio_inspired_nanochat/flex_synaptic.py:57",
-        "bio_inspired_nanochat/synaptic.py:1282",
-        "bio_inspired_nanochat/synaptic.py:1511",
+        "bio_inspired_nanochat/synaptic.py:1293",
+        "bio_inspired_nanochat/synaptic.py:1522",
         "bio_inspired_nanochat/kernels/presyn_fused.py:400"
       ],
       "rust_read_sites": [
@@ -966,7 +979,7 @@
       ],
       "script_sites": [],
       "test_sites": [
-        "tests/test_flex_canonical.py:48"
+        "tests/test_flex_canonical.py:121"
       ],
       "note": ""
     },
@@ -978,9 +991,9 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:1735",
-        "bio_inspired_nanochat/synaptic.py:1900",
-        "bio_inspired_nanochat/synaptic.py:1910"
+        "bio_inspired_nanochat/synaptic.py:1746",
+        "bio_inspired_nanochat/synaptic.py:1911",
+        "bio_inspired_nanochat/synaptic.py:1921"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -995,11 +1008,13 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:1735",
-        "bio_inspired_nanochat/synaptic.py:1910"
+        "bio_inspired_nanochat/synaptic.py:1746",
+        "bio_inspired_nanochat/synaptic.py:1921"
       ],
       "rust_read_sites": [],
-      "script_sites": [],
+      "script_sites": [
+        "scripts/e2e/wake_sleep_consolidation.py:103"
+      ],
       "test_sites": [],
       "note": ""
     },
@@ -1011,13 +1026,15 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:1723",
-        "bio_inspired_nanochat/synaptic.py:1908",
-        "bio_inspired_nanochat/synaptic.py:1911",
+        "bio_inspired_nanochat/synaptic.py:1734",
+        "bio_inspired_nanochat/synaptic.py:1919",
+        "bio_inspired_nanochat/synaptic.py:1922",
         "bio_inspired_nanochat/separation_gauge.py:70"
       ],
       "rust_read_sites": [],
-      "script_sites": [],
+      "script_sites": [
+        "scripts/e2e/wake_sleep_consolidation.py:104"
+      ],
       "test_sites": [
         "tests/test_hebbian_training_plasticity.py:139"
       ],
@@ -1031,8 +1048,9 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:1855",
-        "bio_inspired_nanochat/synaptic.py:1858",
+        "bio_inspired_nanochat/certificate_bundle.py:2427",
+        "bio_inspired_nanochat/synaptic.py:1866",
+        "bio_inspired_nanochat/synaptic.py:1869",
         "bio_inspired_nanochat/separation_gauge.py:69"
       ],
       "rust_read_sites": [],
@@ -1048,12 +1066,12 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:1889"
+        "bio_inspired_nanochat/synaptic.py:1900"
       ],
       "rust_read_sites": [],
       "script_sites": [],
       "test_sites": [
-        "tests/test_neuromod.py:238",
+        "tests/test_neuromod.py:237",
         "tests/test_online_fast_adaptation.py:174"
       ],
       "note": ""
@@ -1066,7 +1084,7 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:1901"
+        "bio_inspired_nanochat/synaptic.py:1912"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -1081,10 +1099,12 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:1903"
+        "bio_inspired_nanochat/synaptic.py:1914"
       ],
       "rust_read_sites": [],
-      "script_sites": [],
+      "script_sites": [
+        "scripts/e2e/wake_sleep_consolidation.py:105"
+      ],
       "test_sites": [],
       "note": ""
     },
@@ -1096,11 +1116,13 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:1635"
+        "bio_inspired_nanochat/synaptic.py:1646"
       ],
       "rust_read_sites": [],
       "script_sites": [],
-      "test_sites": [],
+      "test_sites": [
+        "tests/test_cmaes_load_params.py:37"
+      ],
       "note": ""
     },
     {
@@ -1111,7 +1133,7 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:1636"
+        "bio_inspired_nanochat/synaptic.py:1647"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -1126,16 +1148,17 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/ablation_registry.py:216",
-        "bio_inspired_nanochat/ablation_registry.py:219",
+        "bio_inspired_nanochat/ablation_registry.py:238",
+        "bio_inspired_nanochat/ablation_registry.py:241",
         "bio_inspired_nanochat/cusp_certificate.py:58",
         "bio_inspired_nanochat/cusp_certificate.py:88",
         "bio_inspired_nanochat/cusp_certificate.py:209",
         "bio_inspired_nanochat/cusp_certificate.py:260",
         "bio_inspired_nanochat/cusp_certificate.py:351",
         "bio_inspired_nanochat/cusp_certificate.py:388",
-        "bio_inspired_nanochat/synaptic.py:1612",
-        "bio_inspired_nanochat/synaptic.py:1632"
+        "bio_inspired_nanochat/neuroviz.py:1035",
+        "bio_inspired_nanochat/synaptic.py:1623",
+        "bio_inspired_nanochat/synaptic.py:1643"
       ],
       "rust_read_sites": [],
       "script_sites": [
@@ -1156,7 +1179,7 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:1633"
+        "bio_inspired_nanochat/synaptic.py:1644"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -1171,12 +1194,12 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:1650",
-        "bio_inspired_nanochat/synaptic.py:1651",
-        "bio_inspired_nanochat/synaptic.py:1659",
-        "bio_inspired_nanochat/synaptic.py:1660",
-        "bio_inspired_nanochat/synaptic.py:1691",
-        "bio_inspired_nanochat/synaptic.py:1692"
+        "bio_inspired_nanochat/synaptic.py:1661",
+        "bio_inspired_nanochat/synaptic.py:1662",
+        "bio_inspired_nanochat/synaptic.py:1670",
+        "bio_inspired_nanochat/synaptic.py:1671",
+        "bio_inspired_nanochat/synaptic.py:1702",
+        "bio_inspired_nanochat/synaptic.py:1703"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -1191,7 +1214,7 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:1715"
+        "bio_inspired_nanochat/synaptic.py:1726"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -1208,7 +1231,7 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:1715"
+        "bio_inspired_nanochat/synaptic.py:1726"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -1223,8 +1246,8 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:1647",
-        "bio_inspired_nanochat/synaptic.py:1688"
+        "bio_inspired_nanochat/synaptic.py:1658",
+        "bio_inspired_nanochat/synaptic.py:1699"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -1239,9 +1262,9 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:1656",
-        "bio_inspired_nanochat/synaptic.py:1663",
-        "bio_inspired_nanochat/synaptic.py:1699"
+        "bio_inspired_nanochat/synaptic.py:1667",
+        "bio_inspired_nanochat/synaptic.py:1674",
+        "bio_inspired_nanochat/synaptic.py:1710"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -1261,11 +1284,12 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/ablation_registry.py:209",
-        "bio_inspired_nanochat/synaptic.py:1573",
-        "bio_inspired_nanochat/synaptic.py:1593",
-        "bio_inspired_nanochat/synaptic.py:1607",
-        "bio_inspired_nanochat/synaptic.py:1704"
+        "bio_inspired_nanochat/ablation_registry.py:231",
+        "bio_inspired_nanochat/certificate_bundle.py:2616",
+        "bio_inspired_nanochat/synaptic.py:1584",
+        "bio_inspired_nanochat/synaptic.py:1604",
+        "bio_inspired_nanochat/synaptic.py:1618",
+        "bio_inspired_nanochat/synaptic.py:1715"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -1280,13 +1304,13 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/ablation_registry.py:216",
-        "bio_inspired_nanochat/ablation_registry.py:218",
+        "bio_inspired_nanochat/ablation_registry.py:238",
+        "bio_inspired_nanochat/ablation_registry.py:240",
         "bio_inspired_nanochat/cusp_certificate.py:88",
         "bio_inspired_nanochat/cusp_certificate.py:209",
         "bio_inspired_nanochat/cusp_certificate.py:264",
         "bio_inspired_nanochat/cusp_certificate.py:388",
-        "bio_inspired_nanochat/synaptic.py:1613"
+        "bio_inspired_nanochat/synaptic.py:1624"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -1305,11 +1329,12 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
+        "bio_inspired_nanochat/certificate_bundle.py:2439",
         "bio_inspired_nanochat/cusp_certificate.py:58",
         "bio_inspired_nanochat/cusp_certificate.py:260",
         "bio_inspired_nanochat/cusp_certificate.py:264",
         "bio_inspired_nanochat/cusp_certificate.py:351",
-        "bio_inspired_nanochat/synaptic.py:1611"
+        "bio_inspired_nanochat/synaptic.py:1622"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -1326,7 +1351,7 @@
       "runtime_read_sites": [
         "bio_inspired_nanochat/cusp_certificate.py:50",
         "bio_inspired_nanochat/cusp_certificate.py:293",
-        "bio_inspired_nanochat/synaptic.py:1624"
+        "bio_inspired_nanochat/synaptic.py:1635"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -1343,7 +1368,7 @@
       "runtime_read_sites": [
         "bio_inspired_nanochat/cusp_certificate.py:51",
         "bio_inspired_nanochat/cusp_certificate.py:291",
-        "bio_inspired_nanochat/synaptic.py:1615"
+        "bio_inspired_nanochat/synaptic.py:1626"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -1360,7 +1385,7 @@
       "runtime_read_sites": [
         "bio_inspired_nanochat/cusp_certificate.py:52",
         "bio_inspired_nanochat/cusp_certificate.py:290",
-        "bio_inspired_nanochat/synaptic.py:1614"
+        "bio_inspired_nanochat/synaptic.py:1625"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -1375,13 +1400,14 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/ablation_registry.py:210",
-        "bio_inspired_nanochat/ablation_registry.py:211",
+        "bio_inspired_nanochat/ablation_registry.py:232",
+        "bio_inspired_nanochat/ablation_registry.py:233",
+        "bio_inspired_nanochat/certificate_bundle.py:2435",
         "bio_inspired_nanochat/cusp_certificate.py:52",
         "bio_inspired_nanochat/cusp_certificate.py:91",
         "bio_inspired_nanochat/cusp_certificate.py:188",
         "bio_inspired_nanochat/cusp_certificate.py:189",
-        "bio_inspired_nanochat/synaptic.py:1620"
+        "bio_inspired_nanochat/synaptic.py:1631"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -1396,13 +1422,14 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/ablation_registry.py:212",
-        "bio_inspired_nanochat/ablation_registry.py:213",
+        "bio_inspired_nanochat/ablation_registry.py:234",
+        "bio_inspired_nanochat/ablation_registry.py:235",
+        "bio_inspired_nanochat/certificate_bundle.py:2437",
         "bio_inspired_nanochat/cusp_certificate.py:52",
         "bio_inspired_nanochat/cusp_certificate.py:91",
         "bio_inspired_nanochat/cusp_certificate.py:188",
         "bio_inspired_nanochat/cusp_certificate.py:189",
-        "bio_inspired_nanochat/synaptic.py:1620"
+        "bio_inspired_nanochat/synaptic.py:1631"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -1418,7 +1445,7 @@
       "tuned_phase1": false,
       "runtime_read_sites": [
         "bio_inspired_nanochat/cusp_certificate.py:274",
-        "bio_inspired_nanochat/synaptic.py:1627"
+        "bio_inspired_nanochat/synaptic.py:1638"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -1434,7 +1461,7 @@
       "tuned_phase1": false,
       "runtime_read_sites": [
         "bio_inspired_nanochat/cusp_certificate.py:275",
-        "bio_inspired_nanochat/synaptic.py:1627"
+        "bio_inspired_nanochat/synaptic.py:1638"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -1449,13 +1476,13 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/ablation_registry.py:214",
-        "bio_inspired_nanochat/ablation_registry.py:215",
+        "bio_inspired_nanochat/ablation_registry.py:236",
+        "bio_inspired_nanochat/ablation_registry.py:237",
         "bio_inspired_nanochat/cusp_certificate.py:90",
         "bio_inspired_nanochat/cusp_certificate.py:211",
         "bio_inspired_nanochat/cusp_certificate.py:276",
         "bio_inspired_nanochat/cusp_certificate.py:289",
-        "bio_inspired_nanochat/synaptic.py:1628"
+        "bio_inspired_nanochat/synaptic.py:1639"
       ],
       "rust_read_sites": [],
       "script_sites": [
@@ -1474,7 +1501,7 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:1705"
+        "bio_inspired_nanochat/synaptic.py:1716"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -1489,9 +1516,10 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/ablation_registry.py:221",
+        "bio_inspired_nanochat/ablation_registry.py:243",
+        "bio_inspired_nanochat/certificate_bundle.py:2617",
         "bio_inspired_nanochat/cusp_certificate.py:245",
-        "bio_inspired_nanochat/synaptic.py:1573"
+        "bio_inspired_nanochat/synaptic.py:1584"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -1506,8 +1534,9 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/ablation_registry.py:221",
-        "bio_inspired_nanochat/ablation_registry.py:224",
+        "bio_inspired_nanochat/ablation_registry.py:243",
+        "bio_inspired_nanochat/ablation_registry.py:246",
+        "bio_inspired_nanochat/certificate_bundle.py:2447",
         "bio_inspired_nanochat/cusp_certificate.py:147",
         "bio_inspired_nanochat/cusp_certificate.py:152",
         "bio_inspired_nanochat/cusp_certificate.py:158",
@@ -1515,7 +1544,9 @@
         "bio_inspired_nanochat/cusp_certificate.py:523"
       ],
       "rust_read_sites": [],
-      "script_sites": [],
+      "script_sites": [
+        "scripts/e2e/theory_artifacts_suite.py:202"
+      ],
       "test_sites": [
         "tests/test_cusp_certificate.py:108"
       ],
@@ -1529,10 +1560,11 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:936",
-        "bio_inspired_nanochat/synaptic.py:2072",
-        "bio_inspired_nanochat/synaptic.py:2223",
-        "bio_inspired_nanochat/synaptic.py:2253"
+        "bio_inspired_nanochat/certificate_bundle.py:2549",
+        "bio_inspired_nanochat/synaptic.py:947",
+        "bio_inspired_nanochat/synaptic.py:2083",
+        "bio_inspired_nanochat/synaptic.py:2234",
+        "bio_inspired_nanochat/synaptic.py:2264"
       ],
       "rust_read_sites": [
         "rust_src/src/presyn.rs:47"
@@ -1549,7 +1581,7 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:2018"
+        "bio_inspired_nanochat/synaptic.py:2029"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -1564,8 +1596,9 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:2811",
-        "bio_inspired_nanochat/synaptic.py:2819",
+        "bio_inspired_nanochat/certificate_bundle.py:2429",
+        "bio_inspired_nanochat/synaptic.py:2848",
+        "bio_inspired_nanochat/synaptic.py:2856",
         "bio_inspired_nanochat/separation_gauge.py:71"
       ],
       "rust_read_sites": [],
@@ -1581,8 +1614,8 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:2800",
-        "bio_inspired_nanochat/synaptic.py:2801"
+        "bio_inspired_nanochat/synaptic.py:2837",
+        "bio_inspired_nanochat/synaptic.py:2838"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -1597,7 +1630,7 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:2810"
+        "bio_inspired_nanochat/synaptic.py:2847"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -1612,9 +1645,9 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:2608",
-        "bio_inspired_nanochat/synaptic.py:2619",
-        "bio_inspired_nanochat/gpt_synaptic.py:533"
+        "bio_inspired_nanochat/synaptic.py:2620",
+        "bio_inspired_nanochat/synaptic.py:2643",
+        "bio_inspired_nanochat/gpt_synaptic.py:535"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -1631,7 +1664,7 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:2768"
+        "bio_inspired_nanochat/synaptic.py:2805"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -1646,7 +1679,109 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:2768"
+        "bio_inspired_nanochat/synaptic.py:2805"
+      ],
+      "rust_read_sites": [],
+      "script_sites": [],
+      "test_sites": [],
+      "note": ""
+    },
+    {
+      "name": "glial_homeostasis",
+      "subsystem": "glial_homeostasis",
+      "type": "bool",
+      "default": false,
+      "status": "LIVE",
+      "tuned_phase1": false,
+      "runtime_read_sites": [
+        "bio_inspired_nanochat/ablation_registry.py:209",
+        "bio_inspired_nanochat/ablation_registry.py:211",
+        "bio_inspired_nanochat/synaptic.py:2639"
+      ],
+      "rust_read_sites": [],
+      "script_sites": [],
+      "test_sites": [],
+      "note": ""
+    },
+    {
+      "name": "glial_group_size",
+      "subsystem": "glial_homeostasis",
+      "type": "int",
+      "default": 4,
+      "status": "LIVE",
+      "tuned_phase1": false,
+      "runtime_read_sites": [
+        "bio_inspired_nanochat/ablation_registry.py:213",
+        "bio_inspired_nanochat/ablation_registry.py:214",
+        "bio_inspired_nanochat/synaptic.py:2633"
+      ],
+      "rust_read_sites": [],
+      "script_sites": [],
+      "test_sites": [],
+      "note": ""
+    },
+    {
+      "name": "glial_ema_rate",
+      "subsystem": "glial_homeostasis",
+      "type": "float",
+      "default": 0.05,
+      "status": "LIVE",
+      "tuned_phase1": false,
+      "runtime_read_sites": [
+        "bio_inspired_nanochat/ablation_registry.py:215",
+        "bio_inspired_nanochat/ablation_registry.py:216",
+        "bio_inspired_nanochat/synaptic.py:2634"
+      ],
+      "rust_read_sites": [],
+      "script_sites": [],
+      "test_sites": [],
+      "note": ""
+    },
+    {
+      "name": "glial_feedback_rate",
+      "subsystem": "glial_homeostasis",
+      "type": "float",
+      "default": 0.05,
+      "status": "LIVE",
+      "tuned_phase1": false,
+      "runtime_read_sites": [
+        "bio_inspired_nanochat/ablation_registry.py:217",
+        "bio_inspired_nanochat/ablation_registry.py:219",
+        "bio_inspired_nanochat/synaptic.py:2635"
+      ],
+      "rust_read_sites": [],
+      "script_sites": [],
+      "test_sites": [],
+      "note": ""
+    },
+    {
+      "name": "glial_energy_weight",
+      "subsystem": "glial_homeostasis",
+      "type": "float",
+      "default": 0.25,
+      "status": "LIVE",
+      "tuned_phase1": false,
+      "runtime_read_sites": [
+        "bio_inspired_nanochat/ablation_registry.py:221",
+        "bio_inspired_nanochat/ablation_registry.py:223",
+        "bio_inspired_nanochat/synaptic.py:2636"
+      ],
+      "rust_read_sites": [],
+      "script_sites": [],
+      "test_sites": [],
+      "note": ""
+    },
+    {
+      "name": "glial_bias_cap",
+      "subsystem": "glial_homeostasis",
+      "type": "float",
+      "default": 4.0,
+      "status": "LIVE",
+      "tuned_phase1": false,
+      "runtime_read_sites": [
+        "bio_inspired_nanochat/ablation_registry.py:225",
+        "bio_inspired_nanochat/ablation_registry.py:226",
+        "bio_inspired_nanochat/synaptic.py:2637"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -1665,7 +1800,7 @@
       ],
       "rust_read_sites": [],
       "script_sites": [
-        "scripts/base_train.py:389"
+        "scripts/base_train.py:395"
       ],
       "test_sites": [],
       "note": ""
@@ -1678,11 +1813,11 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/ablation_registry.py:199",
-        "bio_inspired_nanochat/ablation_registry.py:200",
-        "bio_inspired_nanochat/synaptic.py:2632",
-        "bio_inspired_nanochat/synaptic.py:2633",
-        "bio_inspired_nanochat/synaptic.py:2634"
+        "bio_inspired_nanochat/ablation_registry.py:203",
+        "bio_inspired_nanochat/ablation_registry.py:204",
+        "bio_inspired_nanochat/synaptic.py:2656",
+        "bio_inspired_nanochat/synaptic.py:2657",
+        "bio_inspired_nanochat/synaptic.py:2658"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -1700,9 +1835,12 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:582",
-        "bio_inspired_nanochat/synaptic.py:1078",
-        "bio_inspired_nanochat/synaptic.py:1135"
+        "bio_inspired_nanochat/certificate_bundle.py:2547",
+        "bio_inspired_nanochat/certificate_bundle.py:2761",
+        "bio_inspired_nanochat/hf_bio_adapter.py:158",
+        "bio_inspired_nanochat/synaptic.py:593",
+        "bio_inspired_nanochat/synaptic.py:1089",
+        "bio_inspired_nanochat/synaptic.py:1146"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -1719,16 +1857,19 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:1792",
-        "bio_inspired_nanochat/synaptic.py:1965",
-        "bio_inspired_nanochat/synaptic.py:1972",
-        "bio_inspired_nanochat/synaptic.py:2005"
+        "bio_inspired_nanochat/certificate_bundle.py:2615",
+        "bio_inspired_nanochat/synaptic.py:1803",
+        "bio_inspired_nanochat/synaptic.py:1976",
+        "bio_inspired_nanochat/synaptic.py:1983",
+        "bio_inspired_nanochat/synaptic.py:2016"
       ],
       "rust_read_sites": [],
       "script_sites": [],
       "test_sites": [
-        "tests/test_neuromod.py:237",
-        "tests/test_scaleup_config.py:65"
+        "tests/test_neuromod.py:236",
+        "tests/test_scaleup_config.py:65",
+        "tests/test_probing.py:88",
+        "tests/test_probing.py:93"
       ],
       "note": ""
     },
@@ -1740,7 +1881,8 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:2687"
+        "bio_inspired_nanochat/hf_bio_adapter.py:162",
+        "bio_inspired_nanochat/synaptic.py:2714"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -1757,13 +1899,13 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/ablation_registry.py:251",
-        "bio_inspired_nanochat/ablation_registry.py:258",
-        "bio_inspired_nanochat/ablation_registry.py:264",
-        "bio_inspired_nanochat/ablation_registry.py:269",
-        "bio_inspired_nanochat/synaptic.py:592",
-        "bio_inspired_nanochat/synaptic.py:1089",
-        "bio_inspired_nanochat/synaptic.py:2116"
+        "bio_inspired_nanochat/ablation_registry.py:273",
+        "bio_inspired_nanochat/ablation_registry.py:280",
+        "bio_inspired_nanochat/ablation_registry.py:286",
+        "bio_inspired_nanochat/ablation_registry.py:291",
+        "bio_inspired_nanochat/synaptic.py:603",
+        "bio_inspired_nanochat/synaptic.py:1100",
+        "bio_inspired_nanochat/synaptic.py:2127"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -1778,8 +1920,9 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/ablation_registry.py:201",
-        "bio_inspired_nanochat/ablation_registry.py:203",
+        "bio_inspired_nanochat/ablation_registry.py:205",
+        "bio_inspired_nanochat/ablation_registry.py:207",
+        "bio_inspired_nanochat/certificate_bundle.py:3490",
         "bio_inspired_nanochat/tropical_certificate.py:1474",
         "bio_inspired_nanochat/tropical_certificate.py:1476"
       ],
@@ -1796,8 +1939,8 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/ablation_registry.py:269",
-        "bio_inspired_nanochat/synaptic.py:1079"
+        "bio_inspired_nanochat/ablation_registry.py:291",
+        "bio_inspired_nanochat/synaptic.py:1090"
       ],
       "rust_read_sites": [],
       "script_sites": [],
@@ -1815,7 +1958,7 @@
       "status": "LIVE",
       "tuned_phase1": false,
       "runtime_read_sites": [
-        "bio_inspired_nanochat/synaptic.py:2698"
+        "bio_inspired_nanochat/synaptic.py:2725"
       ],
       "rust_read_sites": [],
       "script_sites": [

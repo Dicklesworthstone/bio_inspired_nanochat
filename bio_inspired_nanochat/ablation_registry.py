@@ -53,6 +53,10 @@ MECHANISMS: tuple[MechanismFlag, ...] = (
         "MoE expert fatigue/energy metabolism bias.",
     ),
     MechanismFlag(
+        "glial_homeostasis", "glial_homeostasis", False, False, False, (),
+        "Slow group-pooled activity/energy feedback that prevents MoE routing collapse.",
+    ),
+    MechanismFlag(
         "genome", "xi_dim", 4, 0, True, (),
         "Low-dimensional per-expert Xi decoded to bounded kinetics; xi_dim=0 shares kinetics.",
     ),
@@ -202,6 +206,24 @@ def validate_config(cfg: SynapticConfig) -> tuple[list[str], list[str]]:
         errors.append(
             f"tropical_skeleton must be a bool, got {cfg.tropical_skeleton!r}"
         )
+    if not isinstance(cfg.glial_homeostasis, bool):
+        errors.append(
+            f"glial_homeostasis must be a bool, got {cfg.glial_homeostasis!r}"
+        )
+    if cfg.glial_group_size < 1:
+        errors.append(f"glial_group_size must be >= 1, got {cfg.glial_group_size}")
+    if not 0.0 < cfg.glial_ema_rate <= 1.0:
+        errors.append(f"glial_ema_rate must be in (0,1], got {cfg.glial_ema_rate}")
+    if not 0.0 < cfg.glial_feedback_rate <= 1.0:
+        errors.append(
+            f"glial_feedback_rate must be in (0,1], got {cfg.glial_feedback_rate}"
+        )
+    if cfg.glial_energy_weight < 0.0:
+        errors.append(
+            f"glial_energy_weight must be >= 0, got {cfg.glial_energy_weight}"
+        )
+    if cfg.glial_bias_cap <= 0.0:
+        errors.append(f"glial_bias_cap must be > 0, got {cfg.glial_bias_cap}")
     if cfg.tau_c <= 0.0:
         errors.append(f"tau_c must be > 0, got {cfg.tau_c}")
     if cfg.alpha_ca < 0.0:

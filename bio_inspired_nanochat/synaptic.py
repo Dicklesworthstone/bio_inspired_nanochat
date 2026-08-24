@@ -25,6 +25,7 @@ from typing import Optional, Tuple, List, Dict, Literal, cast, Any
 
 from bio_inspired_nanochat.torch_imports import torch, nn, F, Tensor
 from bio_inspired_nanochat.common import decouple_config
+from bio_inspired_nanochat.glial_homeostasis import GlialHomeostasis
 from bio_inspired_nanochat.metriplectic_integrator import TorchStepRecord, torch_guarded_step
 
 try:
@@ -316,6 +317,16 @@ class SynapticConfig:
     router_embed_dim: int = 24
     router_contrastive_lr: float = 1e-4
     router_contrastive_push: float = 0.1
+    # hy8.4: slow tripartite-synapse feedback over expert activity and pooled
+    # energy. Default-off preserves the existing router exactly. When enabled,
+    # the controller integrates a bounded, zero-sum logit correction that
+    # suppresses persistent winners and recruits underused experts.
+    glial_homeostasis: bool = False
+    glial_group_size: int = 4
+    glial_ema_rate: float = 0.05
+    glial_feedback_rate: float = 0.05
+    glial_energy_weight: float = 0.25
+    glial_bias_cap: float = 4.0
     # 0642.5.2.2: replace utilization/health lifecycle decisions with bounded
     # spectral, H0-persistence, and optimal-transport certificates. Default-off;
     # SplitMergeController falls back to the UTA health-threshold path whenever
@@ -2581,6 +2592,7 @@ class SynapticMoE(nn.Module):
     last_aux_loss: Optional[Tensor]
     last_ctx: Dict[str, Tensor]
     last_neuroscore: Optional[Tensor]
+    glial: Optional[GlialHomeostasis]
     """Top-k sparse Synaptic MoE with router embeddings, expert fatigue/energy,
     contrastive router-embedding updates, and split/merge structural hooks."""
 
@@ -2615,6 +2627,18 @@ class SynapticMoE(nn.Module):
         # dense regime instead of a discontinuous noisy-clone jump. It is the same per-expert
         # logit bias used by auxiliary-loss-free load balancing, so it is reusable for that.
         self.register_buffer("router_logit_bias", torch.zeros(num_experts))
+        self.glial = (
+            GlialHomeostasis(
+                num_experts,
+                group_size=cfg.glial_group_size,
+                ema_rate=cfg.glial_ema_rate,
+                feedback_rate=cfg.glial_feedback_rate,
+                energy_weight=cfg.glial_energy_weight,
+                bias_cap=cfg.glial_bias_cap,
+            )
+            if cfg.glial_homeostasis
+            else None
+        )
         # Router embeddings (biological identity) with unit-norm constraint
         emb = torch.randn(num_experts, cfg.router_embed_dim)
         emb = emb / (emb.norm(dim=-1, keepdim=True) + 1e-8)
@@ -2684,6 +2708,9 @@ class SynapticMoE(nn.Module):
         # gate split (-ln2 on a twin pair) so lifecycle events don't perturb the output.
         logits = logits + self.router_logit_bias.view(1, 1, E)
 
+        if self.glial is not None:
+            logits = logits + self.glial.routing_bias.view(1, 1, E)
+
         if self.cfg.enable_metabolism:
             logits = logits + 0.1 * energy_buf.view(1, 1, E) - 0.1 * fatigue_buf.view(1, 1, E)
 
@@ -2746,11 +2773,21 @@ class SynapticMoE(nn.Module):
                     fatigue_buf.mul_(1.0 - alpha_fatigue).add_(alpha_fatigue * util)
                     energy_buf.mul_(1.0 - alpha_energy).add_(alpha_energy * (1.0 - util))
 
-            object.__setattr__(self, "last_ctx", {
+            if update_mem and self.glial is not None:
+                selection_counts = torch.bincount(
+                    idx.detach().reshape(-1), minlength=E
+                ).to(energy_buf)
+                self.glial.observe(selection_counts, energy_buf)
+
+            last_ctx = {
                 "x": x.detach(),
                 "indices": idx.detach(),
                 "gates": gates.detach()
-            })
+            }
+            if self.glial is not None:
+                last_ctx["glial_bias"] = self.glial.routing_bias.detach().clone()
+                last_ctx["glial_activity"] = self.glial.activity_ema.detach().clone()
+            object.__setattr__(self, "last_ctx", last_ctx)
 
         me = me / float(B * T)
         pe = pe / float(B * T)

@@ -528,6 +528,8 @@ class GPTSynaptic(nn.Module):
             if isinstance(module, SynapticMoE):
                 module.fatigue.zero_()
                 module.energy.fill_(1.0)
+                if module.glial is not None:
+                    module.glial.reset_()
                 emb = torch.randn(
                     module.num_experts,
                     module.cfg.router_embed_dim,
