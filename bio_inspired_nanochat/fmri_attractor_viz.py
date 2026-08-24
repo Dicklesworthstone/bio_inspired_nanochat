@@ -89,10 +89,14 @@ class FreeEnergyLandscapeProjector:
 
         t_len, d_dim = h.shape
 
-        # Use 2 fixed orthogonal projections (or top PCs)
+        # Use 2 exact orthonormal projections across representation dimensions
         proj_matrix = torch.zeros(d_dim, 2)
-        proj_matrix[: min(d_dim, 16), 0] = 1.0 / np.sqrt(min(d_dim, 16))
-        proj_matrix[min(d_dim // 2, 16) : min(d_dim, 32), 1] = 1.0 / np.sqrt(16)
+        if d_dim == 1:
+            proj_matrix[0, 0] = 1.0
+        else:
+            half = max(1, d_dim // 2)
+            proj_matrix[:half, 0] = 1.0 / np.sqrt(half)
+            proj_matrix[half:, 1] = 1.0 / np.sqrt(d_dim - half)
 
         coords_2d = (h @ proj_matrix).numpy()
 
