@@ -106,8 +106,8 @@ def test_verdict_table_renders_all_presets(dryrun):
 
 def test_module_enumerates_the_full_matrix():
     # The reduced test runs a slice; assert the module still defines the full screening matrix.
-    # 15 = 3 anchors + 7 leave-one-out + 5 add-one-in (the add-one-in set grew with the
-    # default-off cusp_latch and metriplectic_integrator mechanisms).
+    # 15 = 3 anchors + 7 leave-one-out + 5 add-one-in. Controller-driven
+    # topological_nas is intentionally excluded from this config-only matrix.
     expected = len(am.anchors()) + len(am.leave_one_out()) + len(am.add_one_in())
     assert len(am.screening_columns()) == expected == 15
 

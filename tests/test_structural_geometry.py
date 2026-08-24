@@ -17,12 +17,21 @@ from __future__ import annotations
 
 import io
 import json
+from typing import Any
 
 import numpy as np
 import pytest
+import torch
 from rich.console import Console
 
 from bio_inspired_nanochat import structural_geometry as sg
+from bio_inspired_nanochat.ablation_registry import MECHANISMS
+from bio_inspired_nanochat.run_logging import RunLogger
+from bio_inspired_nanochat.synaptic import SynapticConfig, SynapticMoE
+from bio_inspired_nanochat.synaptic_splitmerge import (
+    SplitMergeConfig,
+    SplitMergeController,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -157,6 +166,18 @@ def test_ot_merge_preserves_spread_and_is_min_cost():
     assert cert.transport_optimal, "the quantile transport plan must beat the naive merge"
     assert cert.barycenter_std > cert.naive_std + 0.1, "naive averaging must collapse the variance"
     assert cert.transport_cost < cert.naive_cost, "the barycenter must be the lower-cost merge"
+
+
+def test_ot_certificate_uses_every_rank_for_equal_empirical_measures():
+    a = np.zeros(2048)
+    b = np.zeros(2048)
+    b[1] = 10.0
+
+    cert = sg.ot_merge_certificate(a, b)
+
+    expected_transport = float(np.mean((np.sort(a) - np.sort(b)) ** 2)) / 4.0
+    assert cert.transport_cost == pytest.approx(expected_transport, rel=1e-12)
+    assert cert.comparator_available and cert.transport_optimal
 
 
 # --------------------------------------------------------------------------- #
@@ -312,3 +333,454 @@ def test_runtime_monitor_rejects_inputs_that_cannot_form_standard_json(case, err
             merge_a=merge_a,
             merge_b=merge_b,
         )
+
+
+# --------------------------------------------------------------------------- #
+# 0642.5.2.2 — geometry-driven lifecycle + deterministic UTA fallback
+# --------------------------------------------------------------------------- #
+def _geometry_moe(seed: int = 21, *, topological: bool = True) -> SynapticMoE:
+    torch.manual_seed(seed)
+    cfg = SynapticConfig(
+        enable_hebbian=False,
+        enable_metabolism=True,
+        router_contrastive_push=0.0,
+        router_contrastive_lr=0.0,
+        topological_nas=topological,
+    )
+    moe = SynapticMoE(
+        n_embd=4,
+        num_experts=4,
+        top_k=2,
+        hidden_mult=1,
+        cfg=cfg,
+        dropout=0.0,
+    ).eval()
+    with torch.no_grad():
+        for index, expert in enumerate(moe.experts):
+            scale = 1.0 + index
+            expert.fc1.w_slow.copy_(torch.diag(torch.linspace(scale, scale + 0.3, 4)))
+            expert.fc2.w_slow.copy_(torch.diag(torch.linspace(scale, scale + 0.3, 4)))
+        # Experts 0 and 1 have identical empirical weight laws, making them the
+        # unique zero-cost OT pair while retaining a well-conditioned split source.
+        moe.experts[1].fc1.w_slow.copy_(moe.experts[0].fc1.w_slow)
+        moe.experts[1].fc2.w_slow.copy_(moe.experts[0].fc2.w_slow)
+        moe.experts[1].fc1.bias.copy_(moe.experts[0].fc1.bias)
+        moe.experts[1].fc2.bias.copy_(moe.experts[0].fc2.bias)
+        moe.router.weight[1].copy_(moe.router.weight[0])
+        moe.Xi[1].copy_(moe.Xi[0])
+        moe.router_embeddings[1].copy_(moe.router_embeddings[0])
+    return moe
+
+
+def _topological_cfg(**overrides: Any) -> SplitMergeConfig:
+    values: dict[str, Any] = dict(
+        enabled=True,
+        warmup_steps=0,
+        min_step_interval=0,
+        merges_per_call=1,
+        splits_per_call=1,
+        resets_per_call=0,
+        ddp_broadcast=False,
+        function_preserving=True,
+        fp_divergence_noise=0.05,
+        topological_kappa_target=10.0,
+        topological_merge_cost_ratio_max=0.01,
+        topological_persistence_ratio_threshold=2.0,
+    )
+    values.update(overrides)
+    return SplitMergeConfig(**values)
+
+
+def _prime_routing(moe: SynapticMoE, *, with_gap: bool) -> None:
+    dtype = moe.router.weight.dtype
+    device = moe.router.weight.device
+    if with_gap:
+        points = torch.cat(
+            [
+                torch.zeros(4, 4, dtype=dtype, device=device),
+                torch.full((4, 4), 8.0, dtype=dtype, device=device),
+            ],
+            dim=0,
+        )
+    else:
+        points = torch.zeros(8, 4, dtype=dtype, device=device)
+        points[:, 0] = torch.arange(8, dtype=dtype, device=device)
+    with torch.no_grad():
+        moe(points.unsqueeze(0), update_mem=False)
+
+
+def test_topological_split_prediction_bounds_measured_child_spectrum(tmp_path):
+    moe = _geometry_moe()
+    _prime_routing(moe, with_gap=True)
+    originals = [expert.fc1.w_slow.detach().clone() for expert in moe.experts]
+    logger = RunLogger(tmp_path, name="topological_split", console=False)
+    controller = SplitMergeController(moe, _topological_cfg(), event_logger=logger)
+    redundant_before = controller._expert_weight_samples(moe, 0).copy()
+
+    controller.step(global_step=7)
+
+    decision = controller.topological_decisions[-1]
+    assert decision.mode == "topological" and decision.action == "merge_split"
+    assert decision.split_source is not None and decision.split_destination is not None
+    assert decision.merge_pair is not None
+    assert decision.split_destination in decision.merge_pair
+    assert decision.kappa_bound is not None and decision.split_noise_norm is not None
+    parent = moe.experts[decision.split_source].fc1.w_slow.detach()
+    child = moe.experts[decision.split_destination].fc1.w_slow.detach()
+    assert torch.allclose(0.5 * (parent + child), originals[decision.split_source])
+    measured_noise = float(torch.linalg.matrix_norm(0.5 * (child - parent), ord=2))
+    assert measured_noise <= decision.split_noise_norm + 1e-6
+    assert sg.condition_number(parent.numpy()) <= decision.kappa_bound + 1e-6
+    assert sg.condition_number(child.numpy()) <= decision.kappa_bound + 1e-6
+    assert np.allclose(controller._expert_weight_samples(moe, 0), redundant_before)
+    events = [event for event in logger.read_events() if event["event"] == "topological_nas"]
+    assert events[-1]["decision"]["reason"] == "persistent_uncovered_h0_gap"
+    assert events[-1]["certificates"]["persistence_significant"]
+    logger.close()
+
+
+def test_topological_ot_signal_selects_lowest_cost_merge_pair():
+    moe = _geometry_moe()
+    with torch.no_grad():
+        moe.experts[1].fc1.w_slow.add_(0.01 * torch.eye(4))
+    _prime_routing(moe, with_gap=False)
+    controller = SplitMergeController(moe, _topological_cfg())
+    a = controller._expert_weight_samples(moe, 0)
+    b = controller._expert_weight_samples(moe, 1)
+    expected_barycenter = 0.5 * (np.sort(a) + np.sort(b))
+
+    controller.step(global_step=8)
+
+    decision = controller.topological_decisions[-1]
+    assert decision.mode == "topological" and decision.action == "merge"
+    assert decision.merge_pair == (0, 1)
+    assert decision.merge_cost_ratio is not None
+    assert decision.merge_cost_ratio <= controller.cfg.topological_merge_cost_ratio_max
+    assert decision.persistence_ratio == pytest.approx(1.0, abs=1e-6)
+    actual_barycenter = np.sort(controller._expert_weight_samples(moe, 0))
+    assert np.allclose(actual_barycenter, expected_barycenter, atol=1e-7)
+    assert np.allclose(
+        controller._expert_weight_samples(moe, 1),
+        controller._expert_weight_samples(moe, 0),
+    )
+
+
+def test_topological_ot_rejects_marginally_equal_but_functionally_permuted_experts():
+    moe = _geometry_moe()
+    with torch.no_grad():
+        moe.experts[1].fc1.w_slow.copy_(torch.flip(moe.experts[0].fc1.w_slow, (0, 1)))
+        moe.experts[1].fc2.w_slow.copy_(torch.flip(moe.experts[0].fc2.w_slow, (0, 1)))
+    controller = SplitMergeController(
+        moe,
+        _topological_cfg(topological_functional_distance_max=0.05),
+    )
+    a = controller._expert_weight_samples(moe, 0)
+    b = controller._expert_weight_samples(moe, 1)
+
+    assert sg.ot_merge_certificate(a, b).transport_cost == pytest.approx(0.0, abs=1e-12)
+    candidate_pairs = {(candidate[2], candidate[3]) for candidate in controller._ot_merge_candidates(moe)}
+    assert (0, 1) not in candidate_pairs
+
+
+def test_topological_ot_guard_includes_live_postsynaptic_state():
+    torch.manual_seed(29)
+    cfg = SynapticConfig(
+        enable_hebbian=True,
+        enable_metabolism=True,
+        topological_nas=True,
+    )
+    moe = SynapticMoE(4, 3, 2, 1, cfg, 0.0).eval()
+    with torch.no_grad():
+        moe.experts[1].load_state_dict(moe.experts[0].state_dict())
+        moe.router.weight[1].copy_(moe.router.weight[0])
+        moe.Xi[1].copy_(moe.Xi[0])
+        moe.router_embeddings[1].copy_(moe.router_embeddings[0])
+    controller = SplitMergeController(
+        moe,
+        _topological_cfg(topological_functional_distance_max=0.05),
+    )
+    assert (0, 1) in {
+        (candidate[2], candidate[3]) for candidate in controller._ot_merge_candidates(moe)
+    }
+
+    with torch.no_grad():
+        assert moe.experts[1].fc1.post is not None
+        moe.experts[1].fc1.post.fast.add_(1.0)
+
+    assert (0, 1) not in {
+        (candidate[2], candidate[3]) for candidate in controller._ot_merge_candidates(moe)
+    }
+
+
+@pytest.mark.parametrize("state_name", ["bdnf_hebb_accum", "_last_hebb_delta_mag"])
+def test_topological_exact_guard_includes_plasticity_accumulators(state_name):
+    torch.manual_seed(30)
+    cfg = SynapticConfig(
+        enable_hebbian=True,
+        enable_metabolism=True,
+        topological_nas=True,
+    )
+    moe = SynapticMoE(4, 3, 2, 1, cfg, 0.0).eval()
+    with torch.no_grad():
+        moe.experts[1].load_state_dict(moe.experts[0].state_dict())
+        moe.router.weight[1].copy_(moe.router.weight[0])
+        moe.Xi[1].copy_(moe.Xi[0])
+        moe.router_embeddings[1].copy_(moe.router_embeddings[0])
+    controller = SplitMergeController(
+        moe,
+        _topological_cfg(topological_functional_distance_max=0.05),
+    )
+    assert controller._exact_ot_merge_candidate(moe, 0, 1) is not None
+
+    with torch.no_grad():
+        post = moe.experts[1].fc1.post
+        assert post is not None
+        getattr(post, state_name).add_(1.0)
+
+    assert controller._exact_ot_merge_candidate(moe, 0, 1) is None
+
+
+def test_topological_persistence_signal_can_birth_under_budget():
+    moe = _geometry_moe().to(dtype=torch.float64)
+    _prime_routing(moe, with_gap=True)
+    optimizer = torch.optim.AdamW(moe.parameters(), lr=1e-3)
+    for parameter in moe.parameters():
+        if parameter.requires_grad:
+            parameter.grad = torch.ones_like(parameter)
+    optimizer.step()
+    untouched = moe.experts[2].fc1.w_slow
+    assert untouched in optimizer.state
+    controller = SplitMergeController(
+        moe,
+        _topological_cfg(
+            variable_expert_count=True,
+            min_experts=2,
+            max_experts=5,
+            growth_budget_pct=0.5,
+        ),
+    )
+
+    controller.step(global_step=9, optimizer=optimizer)
+
+    decision = controller.topological_decisions[-1]
+    assert decision.action == "birth" and decision.split_destination == 4
+    assert moe.num_experts == 5 and len(moe.experts) == 5
+    grouped = [parameter for group in optimizer.param_groups for parameter in group["params"]]
+    assert {id(parameter) for parameter in grouped} == {
+        id(parameter) for parameter in moe.parameters()
+    }
+    assert untouched in optimizer.state
+    assert all(
+        parameter.device == moe.router.weight.device
+        and parameter.dtype == moe.router.weight.dtype
+        for parameter in moe.experts[-1].parameters()
+    )
+
+
+def test_topological_birth_does_not_require_an_ot_merge_candidate():
+    moe = _geometry_moe()
+    with torch.no_grad():
+        moe.router_logit_bias[1] = 1.0
+    _prime_routing(moe, with_gap=True)
+    controller = SplitMergeController(
+        moe,
+        _topological_cfg(
+            variable_expert_count=True,
+            min_experts=2,
+            max_experts=5,
+            growth_budget_pct=0.5,
+            topological_functional_distance_max=0.0,
+        ),
+    )
+    assert controller._ot_merge_candidates(moe) == []
+
+    controller.step(global_step=10)
+
+    decision = controller.topological_decisions[-1]
+    assert decision.mode == "topological" and decision.action == "birth"
+    assert decision.merge_pair is None and moe.num_experts == 5
+
+
+def test_topological_merge_split_respects_ot_cost_ceiling():
+    moe = _geometry_moe()
+    with torch.no_grad():
+        moe.experts[1].fc1.w_slow.add_(0.01 * torch.eye(4))
+    _prime_routing(moe, with_gap=True)
+    controller = SplitMergeController(
+        moe,
+        _topological_cfg(topological_merge_cost_ratio_max=0.0),
+    )
+
+    controller.step(global_step=11)
+
+    decision = controller.topological_decisions[-1]
+    assert decision.mode == "uta_fallback"
+    assert decision.reason == "ot_pair_above_merge_split_cost_ceiling"
+
+
+def test_topological_persistence_requires_uncovered_capacity():
+    moe = _geometry_moe()
+    _prime_routing(moe, with_gap=True)
+    controller = SplitMergeController(
+        moe,
+        _topological_cfg(
+            variable_expert_count=True,
+            max_experts=5,
+            growth_budget_pct=0.5,
+            topological_coverage_distance_threshold=2.0,
+        ),
+    )
+
+    controller.step(global_step=12)
+
+    decision = controller.topological_decisions[-1]
+    assert decision.action != "birth"
+    assert decision.coverage_distance is not None and decision.coverage_distance < 2.0
+
+
+def test_topological_monitor_samples_are_bounded_per_tensor():
+    moe = _geometry_moe()
+    controller = SplitMergeController(
+        moe,
+        _topological_cfg(topological_max_samples_per_tensor=3),
+    )
+
+    assert controller._expert_weight_samples(moe, 0).size == 6
+    assert all(
+        component.size <= 3
+        for component in controller._expert_function_components(moe, 0).values()
+    )
+
+
+def test_topological_spectral_work_is_bounded_and_not_repeated(monkeypatch):
+    moe = _geometry_moe()
+    _prime_routing(moe, with_gap=True)
+    controller = SplitMergeController(
+        moe,
+        _topological_cfg(topological_max_spectral_candidates=1),
+    )
+    calls = 0
+    real_svdvals = torch.linalg.svdvals
+
+    def counted_svdvals(matrix):
+        nonlocal calls
+        calls += 1
+        return real_svdvals(matrix)
+
+    monkeypatch.setattr(torch.linalg, "svdvals", counted_svdvals)
+
+    decision, record = controller._plan_topological_lifecycle(
+        moe, step=13, layer_index=0
+    )
+
+    assert calls == 1
+    assert decision.kappa_bound is not None
+    assert record is not None and record.kappa_bound == decision.kappa_bound
+
+
+def test_topological_exact_merge_rejects_unsampled_functional_difference():
+    torch.manual_seed(31)
+    cfg = SynapticConfig(
+        enable_hebbian=False,
+        enable_metabolism=True,
+        topological_nas=True,
+    )
+    moe = SynapticMoE(16, 3, 2, 2, cfg, 0.0).eval()
+    with torch.no_grad():
+        moe.experts[1].load_state_dict(moe.experts[0].state_dict())
+        moe.router.weight[1].copy_(moe.router.weight[0])
+        moe.Xi[1].copy_(moe.Xi[0])
+        moe.router_embeddings[1].copy_(moe.router_embeddings[0])
+        # With a two-point linspace sample, index 1 is deliberately invisible
+        # to the shortlist but must be caught by exact verification.
+        moe.experts[1].fc1.w_slow.reshape(-1)[1].add_(100.0)
+    routing_input = torch.zeros(1, 8, 16)
+    routing_input[0, :, 0] = torch.arange(8)
+    with torch.no_grad():
+        moe(routing_input, update_mem=False)
+    controller = SplitMergeController(
+        moe,
+        _topological_cfg(
+            topological_max_samples_per_tensor=2,
+            topological_max_exact_merge_candidates=1,
+            topological_functional_distance_max=0.01,
+        ),
+    )
+
+    shortlist = controller._ot_merge_candidates(moe)
+    assert shortlist[0][2:4] == (0, 1)
+    assert controller._exact_ot_merge_candidate(moe, 0, 1) is None
+
+    decision, _ = controller._plan_topological_lifecycle(
+        moe, step=14, layer_index=0
+    )
+    assert decision.merge_pair != (0, 1)
+
+
+def test_splitmerge_controller_state_roundtrips_and_validates_growth_budget():
+    moe = _geometry_moe()
+    controller = SplitMergeController(moe, _topological_cfg(min_step_interval=7))
+    controller._last_step = 123
+    state = controller.state_dict()
+
+    restored = SplitMergeController(moe, _topological_cfg(min_step_interval=7))
+    restored.load_state_dict(state)
+
+    assert restored.state_dict() == state
+    with pytest.raises(ValueError, match="inconsistent"):
+        restored.load_state_dict({**state, "net_added_experts": 1})
+    with pytest.raises(ValueError, match="must be an integer"):
+        restored.load_state_dict({**state, "last_step": True})
+
+
+def test_topological_missing_evidence_falls_back_to_uta_deterministically():
+    first = _geometry_moe()
+    second = _geometry_moe(seed=22, topological=False)
+    second.load_state_dict(first.state_dict())
+    for moe in (first, second):
+        with torch.no_grad():
+            moe.fatigue.copy_(torch.tensor([1.0, 0.1, 0.2, 0.3]))
+            moe.energy.fill_(1.0)
+    cfg = _topological_cfg(merges_per_call=0, fp_divergence_noise=0.05)
+
+    controllers = [SplitMergeController(moe, cfg) for moe in (first, second)]
+    rng_state = torch.random.get_rng_state()
+    for controller in controllers:
+        torch.random.set_rng_state(rng_state)
+        controller.step(global_step=10)
+
+    decision = controllers[0].topological_decisions[-1]
+    assert decision.mode == "uta_fallback" and decision.action == "uta"
+    assert decision.reason == "missing_routing_points"
+    assert controllers[1].topological_decisions == []
+    assert all(
+        torch.equal(left, right)
+        for left, right in zip(first.state_dict().values(), second.state_dict().values())
+    )
+
+
+def test_topological_nas_toggle_is_default_off_and_registered():
+    assert not SynapticConfig().topological_nas
+    flag = next(mechanism for mechanism in MECHANISMS if mechanism.field == "topological_nas")
+    assert not flag.default and not flag.off_value and not flag.default_on
+    assert SplitMergeController(_geometry_moe(), SplitMergeConfig()).topological_nas
+    assert not SplitMergeController(
+        _geometry_moe(topological=False), SplitMergeConfig()
+    ).topological_nas
+    with pytest.raises(ValueError, match="consistently"):
+        SplitMergeController(
+            torch.nn.ModuleList(
+                [_geometry_moe(topological=True), _geometry_moe(topological=False)]
+            ),
+            SplitMergeConfig(),
+        )
+    with pytest.raises(ValueError, match="function_preserving"):
+        SplitMergeController(_geometry_moe(), SplitMergeConfig(function_preserving=False))
+    with pytest.raises(ValueError, match="functional_distance"):
+        SplitMergeConfig(topological_functional_distance_max=-1.0)
+    with pytest.raises(ValueError, match="coverage_distance"):
+        SplitMergeConfig(topological_coverage_distance_threshold=2.1)
+    with pytest.raises(ValueError, match="spectral_candidates"):
+        SplitMergeConfig(topological_max_spectral_candidates=0)
+    with pytest.raises(ValueError, match="exact_merge_candidates"):
+        SplitMergeConfig(topological_max_exact_merge_candidates=0)

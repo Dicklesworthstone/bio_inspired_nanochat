@@ -101,6 +101,11 @@ MECHANISMS: tuple[MechanismFlag, ...] = (
         "Structure-preserving discrete-gradient integrator for the calcium/buffer subsystem "
         "(0642.1.2.4); exact discrete energy conservation + free-energy Lyapunov.",
     ),
+    MechanismFlag(
+        "topological_nas", "topological_nas", False, False, False, (),
+        "Certificate-driven MoE split/merge/birth using spectral conditioning, H0 persistence, "
+        "and optimal transport (0642.5.2.2); deterministically falls back to UTA.",
+    ),
 )
 
 _BY_FIELD: dict[str, MechanismFlag] = {m.field: m for m in MECHANISMS}

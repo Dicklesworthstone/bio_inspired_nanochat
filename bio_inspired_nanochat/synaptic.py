@@ -311,6 +311,11 @@ class SynapticConfig:
     router_embed_dim: int = 24
     router_contrastive_lr: float = 1e-4
     router_contrastive_push: float = 0.1
+    # 0642.5.2.2: replace utilization/health lifecycle decisions with bounded
+    # spectral, H0-persistence, and optimal-transport certificates. Default-off;
+    # SplitMergeController falls back to the UTA health-threshold path whenever
+    # the live routing/weight evidence is absent or uncertified.
+    topological_nas: bool = False
 
     # Genetics
     # Per-expert genome embedding (Xi). A decoder maps Xi -> phenotype scalars that

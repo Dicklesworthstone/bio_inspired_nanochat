@@ -53,6 +53,12 @@ from bio_inspired_nanochat.synaptic import SynapticConfig
 
 # Mechanisms that are infrastructure/perf toggles, not biology — excluded from the science matrix.
 INFRA_MECHANISMS: frozenset[str] = frozenset({"flex_attention", "native_genetics"})
+# The generic matrix only changes SynapticConfig; it does not construct an MoE
+# lifecycle controller. Keep topology out until its equal-FLOP structural runner
+# can activate MoE + scheduling, otherwise ``add_topological_nas`` is a silent no-op.
+MATRIX_EXCLUDED_MECHANISMS: frozenset[str] = (
+    INFRA_MECHANISMS | {"topological_nas"}
+)
 
 # Reproducible seeds. >=3 for research-grade statistical significance (matches eval_benchmark_matrix).
 SCREENING_SEEDS: tuple[int, ...] = (1337, 1338)
@@ -175,7 +181,7 @@ def leave_one_out() -> list[AblationConfig]:
     """``bio_all`` minus each DEFAULT-ON biological mechanism (marginal contribution)."""
     out: list[AblationConfig] = []
     for m in MECHANISMS:
-        if not m.default_on or m.mechanism in INFRA_MECHANISMS:
+        if not m.default_on or m.mechanism in MATRIX_EXCLUDED_MECHANISMS:
             continue
         out.append(AblationConfig(
             f"bio_no_{m.mechanism}", Base.BIO_ALL, {m.field: m.off_value}, "leave_one_out",
@@ -189,7 +195,7 @@ def add_one_in() -> list[AblationConfig]:
     """``synaptic_off`` plus each OPT-IN biological mechanism (+ its prerequisites): standalone effect."""
     out: list[AblationConfig] = []
     for m in MECHANISMS:
-        if m.default_on or m.mechanism in INFRA_MECHANISMS:
+        if m.default_on or m.mechanism in MATRIX_EXCLUDED_MECHANISMS:
             continue
         overrides: dict[str, Any] = {}
         # Turn the mechanism's prerequisites back ON (they were neutralized by synaptic_off).

@@ -155,6 +155,7 @@ SUBSYSTEM: dict[str, str] = {
     "router_embed_dim": "structural",
     "router_contrastive_lr": "structural",
     "router_contrastive_push": "structural",
+    "topological_nas": "structural",
     "xi_dim": "genetics",
     "enable_presyn": "toggle",
     "enable_hebbian": "toggle",

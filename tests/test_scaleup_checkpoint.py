@@ -17,14 +17,17 @@ import os
 
 import pytest
 
+from bio_inspired_nanochat import checkpoint_manager as cm
 from bio_inspired_nanochat.torch_imports import torch
 from bio_inspired_nanochat.checkpoint_manager import (
     capture_rng_state,
+    checkpoint_model_config,
     list_checkpoint_steps,
     load_checkpoint,
     prune_checkpoints,
     restore_rng_state,
     save_checkpoint,
+    synaptic_config_to_meta,
 )
 
 # tests/ is on sys.path (conftest), so this resolves.
@@ -55,6 +58,68 @@ def test_rng_capture_restore_is_reproducible():
     restore_rng_state(state)
     b = torch.randn(5)
     assert torch.equal(a, b), "restored RNG must reproduce the same draws"
+
+
+def test_heterogeneous_moe_topology_roundtrips_strictly(tmp_path, monkeypatch):
+    from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
+    from bio_inspired_nanochat.synaptic import SynapticConfig, SynapticMoE
+
+    syn_cfg = SynapticConfig(enable_hebbian=False)
+    config = GPTSynapticConfig(
+        sequence_len=16,
+        vocab_size=97,
+        n_layer=2,
+        n_head=2,
+        n_kv_head=2,
+        n_embd=8,
+        syn_cfg=syn_cfg,
+        use_moe=True,
+        num_experts=2,
+        moe_experts_per_layer=(2, 3),
+        moe_top_k=1,
+        moe_hidden_mult=1,
+    )
+    model = GPTSynaptic(config)
+    model.init_weights()
+    architecture = checkpoint_model_config(
+        model,
+        {
+            "sequence_len": 16,
+            "vocab_size": 97,
+            "n_layer": 2,
+            "n_head": 2,
+            "n_kv_head": 2,
+            "n_embd": 8,
+        },
+    )
+    assert architecture["use_moe"] is True
+    assert architecture["moe_experts_per_layer"] == [2, 3]
+    save_checkpoint(
+        str(tmp_path),
+        4,
+        model.state_dict(),
+        None,
+        {
+            "model_config": architecture,
+            "synapses": True,
+            "synaptic_config": synaptic_config_to_meta(syn_cfg),
+        },
+    )
+
+    class _Tokenizer:
+        @staticmethod
+        def get_vocab_size():
+            return 97
+
+    monkeypatch.setattr(cm, "get_tokenizer", lambda: _Tokenizer())
+    loaded, _, _ = cm.build_model(str(tmp_path), 4, torch.device("cpu"), "eval")
+    counts = [
+        block.mlp.num_experts
+        for block in loaded.h
+        if isinstance(block.mlp, SynapticMoE)
+    ]
+    assert counts == [2, 3]
+    assert loaded.state_dict().keys() == model.state_dict().keys()
 
 
 def test_prune_keeps_last_k_and_best(tmp_path):

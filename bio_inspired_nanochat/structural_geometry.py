@@ -224,9 +224,37 @@ def ot_merge_certificate(a: np.ndarray, b: np.ndarray) -> MergeCertificate:
     """
     a = np.asarray(a, dtype=np.float64).ravel()
     b = np.asarray(b, dtype=np.float64).ravel()
+    if a.size == b.size and a.size > 0:
+        # Equal-cardinality empirical measures have an exact monotone coupling:
+        # pair every order statistic. This is also the operation installed by
+        # the runtime merge, so its threshold and audit record are literal.
+        sorted_a = np.sort(a, kind="stable")
+        sorted_b = np.sort(b, kind="stable")
+        bary = 0.5 * (sorted_a + sorted_b)
+        naive_vals = 0.5 * (a + b)
+        sorted_naive = np.sort(naive_vals, kind="stable")
+        transport = 0.5 * (
+            float(np.mean((bary - sorted_a) ** 2))
+            + float(np.mean((bary - sorted_b) ** 2))
+        )
+        naive_cost = 0.5 * (
+            float(np.mean((sorted_naive - sorted_a) ** 2))
+            + float(np.mean((sorted_naive - sorted_b) ** 2))
+        )
+        return MergeCertificate(
+            transport_cost=transport,
+            naive_cost=naive_cost,
+            barycenter_std=float(np.std(bary)),
+            naive_std=float(np.std(naive_vals)),
+            comparator_available=True,
+            transport_optimal=bool(transport <= naive_cost + 1e-12),
+            ot_preserves_spread=bool(
+                np.std(bary) >= np.std(naive_vals) - 1e-12
+            ),
+        )
     bary = wasserstein_barycenter_1d(a, b, t=0.5)
-    comparator_available = a.size == b.size
-    naive_vals = 0.5 * (a + b) if comparator_available else bary
+    comparator_available = False
+    naive_vals = bary
     transport = 0.5 * (wasserstein_1d(bary, a) ** 2 + wasserstein_1d(bary, b) ** 2)
     naive_cost = 0.5 * (wasserstein_1d(naive_vals, a) ** 2 + wasserstein_1d(naive_vals, b) ** 2)
     return MergeCertificate(
@@ -345,29 +373,56 @@ class StructuralGeometryMonitor:
         self,
         *,
         step: int,
-        parent_weight: np.ndarray,
+        parent_weight: np.ndarray | None,
         split_noise_norm: float,
         routing_points: np.ndarray,
         merge_a: np.ndarray,
         merge_b: np.ndarray,
+        split_certificate: SpectralCertificate | None = None,
+        merge_certificate: MergeCertificate | None = None,
     ) -> StructuralGeometryRecord:
         """Compute and store all three certificates for one lifecycle decision."""
         bounded, n_input, d_input = self._bounded_routing_points(routing_points)
-        parent = np.asarray(parent_weight, dtype=np.float64)
-        if parent.ndim != 2 or min(parent.shape, default=0) < 1:
-            raise ValueError(f"parent_weight must be a non-empty 2D array, got shape {parent.shape}")
-        if not np.isfinite(parent).all():
-            raise ValueError("parent_weight must contain only finite values")
         if not math.isfinite(split_noise_norm):
             raise ValueError("split_noise_norm must be finite")
+        if split_certificate is None:
+            if parent_weight is None:
+                raise ValueError(
+                    "parent_weight is required when split_certificate is not supplied"
+                )
+            parent = np.asarray(parent_weight, dtype=np.float64)
+            if parent.ndim != 2 or min(parent.shape, default=0) < 1:
+                raise ValueError(
+                    "parent_weight must be a non-empty 2D array, "
+                    f"got shape {parent.shape}"
+                )
+            if not np.isfinite(parent).all():
+                raise ValueError("parent_weight must contain only finite values")
+            split = spectral_conditioning_certificate(parent, split_noise_norm)
+        else:
+            split = split_certificate
+            if not all(
+                math.isfinite(value)
+                for value in (split.sigma_max, split.sigma_min, split.noise_norm)
+            ):
+                raise ValueError("split_certificate spectrum and noise must be finite")
+            if split.sigma_max < 0.0 or split.sigma_min < 0.0 or split.noise_norm < 0.0:
+                raise ValueError("split_certificate spectrum and noise must be non-negative")
+            if not math.isclose(
+                split.noise_norm,
+                split_noise_norm,
+                rel_tol=1e-9,
+                abs_tol=1e-12,
+            ):
+                raise ValueError(
+                    "split_certificate noise does not match split_noise_norm"
+                )
         merge_a_array = np.asarray(merge_a, dtype=np.float64)
         merge_b_array = np.asarray(merge_b, dtype=np.float64)
         if merge_a_array.size == 0 or merge_b_array.size == 0:
             raise ValueError("merge samples must be non-empty")
         if not np.isfinite(merge_a_array).all() or not np.isfinite(merge_b_array).all():
             raise ValueError("merge samples must contain only finite values")
-
-        split = spectral_conditioning_certificate(parent, split_noise_norm)
 
         edges = mst_edge_lengths(bounded)
         max_gap = float(edges[-1]) if edges.size else 0.0
@@ -376,7 +431,11 @@ class StructuralGeometryMonitor:
         significant = bool(ratio >= self.cfg.persistence_ratio_threshold)
         top = tuple(float(x) for x in edges[::-1][: self.cfg.max_persistence_features])
 
-        merge = ot_merge_certificate(merge_a_array, merge_b_array)
+        merge = (
+            merge_certificate
+            if merge_certificate is not None
+            else ot_merge_certificate(merge_a_array, merge_b_array)
+        )
         rec = StructuralGeometryRecord(
             step=int(step),
             routing_points_input=n_input,

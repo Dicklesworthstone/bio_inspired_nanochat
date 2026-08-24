@@ -16,6 +16,7 @@ import os
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 import time
 from contextlib import nullcontext
+from dataclasses import asdict
 
 from typing import Any, cast
 
@@ -23,11 +24,14 @@ import torch.distributed as torch_dist
 import wandb
 
 from bio_inspired_nanochat.checkpoint_manager import (
+    checkpoint_model_config,
     config_provenance,
     capture_rng_state,
     load_checkpoint,
+    load_checkpoint_metadata,
     restore_rng_state,
     save_checkpoint,
+    synaptic_config_from_meta,
     synaptic_config_to_meta,
 )
 from bio_inspired_nanochat.dataloader import (
@@ -74,6 +78,10 @@ init_type = "baseline"  # baseline | ca_rule30 | ca_rule116
 init_seed = 42
 tie_embeddings = 0  # hwxb.2.9: tie wte/lm_head into one shared matrix (1=on; recommended for small scale-up models)
 # Split/merge controller (for MoE)
+use_moe = 0  # enable SynapticMoE blocks (structural lifecycle enables this automatically)
+num_experts = 8
+moe_top_k = 2
+moe_hidden_mult = 4
 splitmerge_every = 0  # apply split/merge every N steps (0=off)
 merge_cosine = 0.85  # merge cosine similarity threshold
 merge_health_max = 0.25  # merge health threshold
@@ -85,6 +93,7 @@ sm_neuroscore_weight = 0.5  # blend weight in [0,1] when sm_use_neuroscore=1
 sm_function_preserving = 1  # Net2Net/firefly: make split/merge output-preserving (uta.3); 0=legacy noisy clone
 sm_fp_divergence_noise = 0.02  # relative (to weight RMS) antisymmetric fc1 noise for function-preserving split
 sm_verbose = 0  # verbose split/merge logging
+topological_nas = 0  # 0642.5: certificate-driven lifecycle; default-off, falls back to UTA
 uta4_variable_experts = 0  # uta.4: allow REAL expert-count growth/shrink under a budget
 uta4_min_experts = 2  # hard floor on per-layer expert count
 uta4_max_experts = 64  # hard cap on per-layer expert count
@@ -166,17 +175,123 @@ token_bytes = get_token_bytes(device=device)
 vocab_size = tokenizer.get_vocab_size()
 print0(f"Vocab size: {vocab_size:,}")
 
-# Model kwargs are derived from the desired depth of the model
-num_layers = depth
-model_dim = (
-    depth * 64
-)  # aspect ratio 64 (usually this is varied from 64 -> 128 as model size increases)
-num_heads = max(
-    1, (model_dim + 127) // 128
-)  # head dim 128 (the division here is ceil div)
-num_kv_heads = (
-    num_heads  # default is 1:1 GQA (Group Query Attention) ratio (i.e. GQA is disabled)
+# Resolve checkpoint metadata before deriving model dimensions or batch geometry.
+# A resumed run must use the architecture and sequence length that produced the
+# checkpoint, even when a model_tag lets the caller reach it with different CLI defaults.
+base_dir = get_base_dir()
+output_dirname = model_tag if model_tag else f"d{depth}"  # e.g. d12
+checkpoint_dir = os.path.join(base_dir, "base_checkpoints", output_dirname)
+resuming = resume_from_step != -1
+resume_meta = (
+    load_checkpoint_metadata(checkpoint_dir, resume_from_step) if resuming else None
 )
+resume_model_config = (resume_meta or {}).get("model_config", {})
+if not isinstance(resume_model_config, dict):
+    raise ValueError("checkpoint model_config metadata must be a mapping")
+resume_splitmerge = (resume_meta or {}).get("splitmerge")
+if resume_splitmerge is not None:
+    if not isinstance(resume_splitmerge, dict):
+        raise ValueError("checkpoint splitmerge metadata must be a mapping")
+    saved_every = resume_splitmerge.get("every")
+    saved_config = resume_splitmerge.get("config")
+    if isinstance(saved_every, bool) or not isinstance(saved_every, int):
+        raise ValueError("checkpoint splitmerge.every must be an integer")
+    if saved_every <= 0 or not isinstance(saved_config, dict):
+        raise ValueError("checkpoint splitmerge metadata is incomplete or disabled")
+    splitmerge_every = saved_every
+
+if resuming:
+    core_fields = (
+        "sequence_len",
+        "vocab_size",
+        "n_layer",
+        "n_head",
+        "n_embd",
+    )
+    missing_core = [name for name in core_fields if name not in resume_model_config]
+    if missing_core:
+        raise ValueError(
+            f"checkpoint model_config is missing core fields: {missing_core}"
+        )
+    for name in core_fields:
+        value = resume_model_config[name]
+        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+            raise ValueError(
+                f"checkpoint model_config field {name!r} must be a positive integer"
+            )
+    saved_vocab_size = int(resume_model_config["vocab_size"])
+    if saved_vocab_size != vocab_size:
+        raise ValueError(
+            "checkpoint vocabulary does not match the active tokenizer: "
+            f"{saved_vocab_size} != {vocab_size}"
+        )
+    max_seq_len = int(resume_model_config["sequence_len"])
+    num_layers = int(resume_model_config["n_layer"])
+    num_heads = int(resume_model_config["n_head"])
+    saved_num_kv_heads = resume_model_config.get("n_kv_head", num_heads)
+    if (
+        isinstance(saved_num_kv_heads, bool)
+        or not isinstance(saved_num_kv_heads, int)
+        or saved_num_kv_heads <= 0
+    ):
+        raise ValueError("checkpoint n_kv_head must be a positive integer")
+    num_kv_heads = saved_num_kv_heads
+    model_dim = int(resume_model_config["n_embd"])
+    saved_meta_seq_len = (resume_meta or {}).get("max_seq_len", max_seq_len)
+    if saved_meta_seq_len != max_seq_len:
+        raise ValueError(
+            "checkpoint max_seq_len disagrees with model_config.sequence_len"
+        )
+    saved_device_batch_size = (resume_meta or {}).get("device_batch_size")
+    if (
+        isinstance(saved_device_batch_size, bool)
+        or not isinstance(saved_device_batch_size, int)
+        or saved_device_batch_size <= 0
+    ):
+        raise ValueError("checkpoint device_batch_size must be a positive integer")
+    device_batch_size = saved_device_batch_size
+    saved_user_config = (resume_meta or {}).get("user_config", {})
+    if not isinstance(saved_user_config, dict):
+        raise ValueError("checkpoint user_config metadata must be a mapping")
+    saved_total_batch_size = (resume_meta or {}).get(
+        "total_batch_size",
+        saved_user_config.get("total_batch_size", total_batch_size),
+    )
+    if (
+        isinstance(saved_total_batch_size, bool)
+        or not isinstance(saved_total_batch_size, int)
+        or saved_total_batch_size <= 0
+    ):
+        raise ValueError("checkpoint total_batch_size must be a positive integer")
+    total_batch_size = saved_total_batch_size
+    saved_init_seed = resume_model_config.get("init_seed", init_seed)
+    if isinstance(saved_init_seed, bool) or not isinstance(saved_init_seed, int):
+        raise ValueError("checkpoint init_seed must be an integer")
+    init_seed = saved_init_seed
+    init_type = str(resume_model_config.get("init_type", init_type))
+    saved_tie_embeddings = resume_model_config.get("tie_embeddings", tie_embeddings)
+    if (
+        not isinstance(saved_tie_embeddings, (bool, int))
+        or int(saved_tie_embeddings) not in (0, 1)
+    ):
+        raise ValueError("checkpoint tie_embeddings must be boolean-like")
+    tie_embeddings = int(bool(saved_tie_embeddings))
+    depth = num_layers
+    user_config.update(
+        depth=depth,
+        max_seq_len=max_seq_len,
+        device_batch_size=device_batch_size,
+        total_batch_size=total_batch_size,
+        init_type=init_type,
+        init_seed=init_seed,
+        tie_embeddings=tie_embeddings,
+    )
+else:
+    # Model kwargs are derived from the desired depth for a fresh run.
+    num_layers = depth
+    model_dim = depth * 64
+    num_heads = max(1, (model_dim + 127) // 128)
+    num_kv_heads = num_heads
 print0(f"num_layers: {num_layers}")
 print0(f"model_dim: {model_dim}")
 print0(f"num_heads: {num_heads}")
@@ -212,9 +327,11 @@ model_config_kwargs = dict(
     n_head=num_heads,
     n_kv_head=num_kv_heads,
     n_embd=model_dim,
-    tie_embeddings=bool(tie_embeddings),  # hwxb.2.9: persisted so build_model rebuilds tied (round-trip)
+    tie_embeddings=bool(resume_model_config.get("tie_embeddings", tie_embeddings)),
 )
-use_syn = bool(synapses)
+use_syn = bool((resume_meta or {}).get("synapses", synapses))
+if splitmerge_every > 0 and not use_syn:
+    raise ValueError("splitmerge_every > 0 requires synapses=1")
 if use_syn:
     try:
         from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
@@ -224,7 +341,14 @@ if use_syn:
             "synapses=1 but synaptic model modules failed to import."
         ) from e
 
-    syn_cfg = SynapticConfig(use_flex_attention=bool(use_flex_attention))
+    syn_cfg = (
+        synaptic_config_from_meta(resume_meta)
+        if resume_meta is not None
+        else SynapticConfig(
+            use_flex_attention=bool(use_flex_attention),
+            topological_nas=bool(topological_nas),
+        )
+    )
     # Reject silently-broken configs and surface risky combinations early (hm4.7).
     from bio_inspired_nanochat.ablation_registry import assert_valid_config
 
@@ -239,10 +363,30 @@ if use_syn:
         n_embd=model_dim,
         synapses=True,
         syn_cfg=syn_cfg,
-        init_type=str(init_type),
-        init_seed=int(init_seed),
-        tie_embeddings=bool(tie_embeddings),
+        use_moe=bool(
+            resume_model_config.get("use_moe", use_moe or splitmerge_every > 0)
+        ),
+        num_experts=int(resume_model_config.get("num_experts", num_experts)),
+        moe_experts_per_layer=(
+            tuple(int(value) for value in resume_model_config["moe_experts_per_layer"])
+            if resume_model_config.get("moe_experts_per_layer") is not None
+            else None
+        ),
+        moe_top_k=int(resume_model_config.get("moe_top_k", moe_top_k)),
+        moe_hidden_mult=int(
+            resume_model_config.get("moe_hidden_mult", moe_hidden_mult)
+        ),
+        dropout=float(resume_model_config.get("dropout", 0.0)),
+        moe_balance_loss=float(resume_model_config.get("moe_balance_loss", 0.01)),
+        structural_every=int(resume_model_config.get("structural_every", 0)),
+        init_type=str(resume_model_config.get("init_type", init_type)),
+        init_seed=int(resume_model_config.get("init_seed", init_seed)),
+        tie_embeddings=bool(
+            resume_model_config.get("tie_embeddings", tie_embeddings)
+        ),
     )
+    if syn_cfg.topological_nas and splitmerge_every <= 0:
+        raise ValueError("topological_nas=1 requires splitmerge_every > 0")
     with torch.device("meta"):
         model = GPTSynaptic(model_config)
 else:
@@ -254,18 +398,15 @@ else:
             n_head=num_heads,
             n_kv_head=num_kv_heads,
             n_embd=model_dim,
-            init_type=str(init_type),
-            init_seed=int(init_seed),
-            tie_embeddings=bool(tie_embeddings),
+            init_type=str(resume_model_config.get("init_type", init_type)),
+            init_seed=int(resume_model_config.get("init_seed", init_seed)),
+            tie_embeddings=bool(
+                resume_model_config.get("tie_embeddings", tie_embeddings)
+            ),
         )
         model = GPT(model_config)
 model.to_empty(device=device)
 model.init_weights()
-
-# If we are resuming, overwrite the model parameters with those of the checkpoint
-base_dir = get_base_dir()
-output_dirname = model_tag if model_tag else f"d{depth}"  # e.g. d12
-checkpoint_dir = os.path.join(base_dir, "base_checkpoints", output_dirname)
 
 # hwxb.7.1: unified telemetry — structured JSONL (queryable; consumed by the Phase-4
 # ablation analysis) + TensorBoard scalars, rank-0 only (no-op on other ranks).
@@ -281,7 +422,7 @@ telemetry = TrainingTelemetry(
         "seed": int(init_seed),
     },
 )
-resuming = resume_from_step != -1
+train_state: dict[str, Any] | None = None
 if resuming:
     print0(f"Resuming optimization from step {resume_from_step}")
     model_data, optimizer_data, meta_data, train_state = load_checkpoint(
@@ -367,6 +508,7 @@ if use_syn and master_process:
 
 # Initialize split/merge controller if enabled
 sm_ctrl = None
+sm_cfg = None
 if splitmerge_every > 0:
     try:
         from bio_inspired_nanochat.synaptic_splitmerge import (
@@ -377,26 +519,46 @@ if splitmerge_every > 0:
         raise RuntimeError(
             "splitmerge_every > 0 but synaptic split/merge modules failed to import."
         ) from e
-    sm_cfg = SplitMergeConfig(
-        enabled=True,
-        merge_cosine_threshold=merge_cosine,
-        merge_health_max=merge_health_max,
-        merges_per_call=merges_per_call,
-        split_health_min=split_health_min,
-        splits_per_call=splits_per_call,
-        min_step_interval=splitmerge_every,
-        use_neuroscore=bool(sm_use_neuroscore),
-        neuroscore_weight=float(sm_neuroscore_weight),
-        function_preserving=bool(sm_function_preserving),
-        fp_divergence_noise=float(sm_fp_divergence_noise),
-        variable_expert_count=bool(uta4_variable_experts),
-        min_experts=int(uta4_min_experts),
-        max_experts=int(uta4_max_experts),
-        growth_budget_pct=float(uta4_growth_budget_pct),
-        verbose=bool(sm_verbose),
-        ddp_broadcast=True,
+    if resume_splitmerge is not None:
+        sm_cfg = SplitMergeConfig(**resume_splitmerge["config"])
+        if not sm_cfg.enabled or sm_cfg.min_step_interval != splitmerge_every:
+            raise ValueError(
+                "checkpoint splitmerge schedule disagrees with its controller config"
+            )
+    else:
+        sm_cfg = SplitMergeConfig(
+            enabled=True,
+            merge_cosine_threshold=merge_cosine,
+            merge_health_max=merge_health_max,
+            merges_per_call=merges_per_call,
+            split_health_min=split_health_min,
+            splits_per_call=splits_per_call,
+            min_step_interval=splitmerge_every,
+            use_neuroscore=bool(sm_use_neuroscore),
+            neuroscore_weight=float(sm_neuroscore_weight),
+            function_preserving=bool(sm_function_preserving),
+            fp_divergence_noise=float(sm_fp_divergence_noise),
+            variable_expert_count=bool(uta4_variable_experts),
+            min_experts=int(uta4_min_experts),
+            max_experts=int(uta4_max_experts),
+            growth_budget_pct=float(uta4_growth_budget_pct),
+            verbose=bool(sm_verbose),
+            ddp_broadcast=True,
+        )
+    sm_ctrl = SplitMergeController(
+        orig_model,
+        sm_cfg,
+        logger=viz,
+        event_logger=telemetry,
     )
-    sm_ctrl = SplitMergeController(orig_model, sm_cfg, logger=viz)
+    if train_state is not None and train_state.get("splitmerge") is not None:
+        sm_ctrl.load_state_dict(train_state["splitmerge"])
+        print0("[checkpoint] restored split/merge schedule and growth-budget state")
+    elif resuming:
+        print0(
+            "[checkpoint] WARNING: no split/merge controller state; "
+            "lifecycle scheduling resumes from checkpoint step only"
+        )
 
 # Neuromodulatory bus (hy8.1): only for synaptic models, opt-in. Default-neutral when off.
 nm_bus = None
@@ -606,14 +768,20 @@ while True:
             {  # metadata saved as json
                 "step": step,
                 "val_bpb": val_bpb,  # loss at last step
-                "model_config": model_config_kwargs,
+                "model_config": checkpoint_model_config(orig_model, model_config_kwargs),
                 "synapses": use_syn,  # mark if this is a synaptic model
                 # vg9.6: persist the full bio kinetics + provenance so the model round-trips
                 # exactly (build_model used to silently rebuild with SynapticConfig() defaults).
                 "synaptic_config": synaptic_config_to_meta(syn_cfg) if use_syn else None,
+                "splitmerge": (
+                    {"every": int(splitmerge_every), "config": asdict(sm_cfg)}
+                    if sm_ctrl is not None and sm_cfg is not None
+                    else None
+                ),
                 "provenance": config_provenance(syn_cfg) if use_syn else None,
                 "user_config": user_config,  # inputs to the training script
                 "device_batch_size": device_batch_size,
+                "total_batch_size": total_batch_size,
                 "max_seq_len": max_seq_len,
                 "dataloader_state_dict": dataloader_state_dict,
                 "loop_state": {  # all loop state (other than step) so that we can resume training
@@ -625,7 +793,11 @@ while True:
             rank=ddp_rank,
             # hwxb.2.6: per-rank RNG so a resumed run is bit-comparable (the synaptic
             # forward is stochastic during training; without this a resume diverges).
-            train_state={"rng": capture_rng_state(), "step": step},
+            train_state={
+                "rng": capture_rng_state(),
+                "step": step,
+                "splitmerge": sm_ctrl.state_dict() if sm_ctrl is not None else None,
+            },
         )
 
     # termination conditions (TODO: possibly also add loss explosions etc.)

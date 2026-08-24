@@ -18,12 +18,21 @@
 #   ctrl.step(global_step, optimizer=opt)    # call periodically (e.g. every 50k steps)
 
 import math
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from collections import defaultdict
-from typing import List, Tuple, Optional, Iterable, Any, Dict, Set, cast
+from typing import List, Tuple, Optional, Iterable, Any, Dict, Mapping, Set, cast
+import numpy as np
 from bio_inspired_nanochat.torch_imports import torch, nn, Tensor
 import torch.distributed as torch_dist
 
+from .structural_geometry import (
+    MergeCertificate,
+    SpectralCertificate,
+    StructuralGeometryMonitor,
+    StructuralGeometryMonitorConfig,
+    StructuralGeometryRecord,
+    ot_merge_certificate,
+)
 from .synaptic import SynapticMoE, SynapticExpert, SynapticLinear
 
 dist = cast(Any, torch_dist)
@@ -31,7 +40,7 @@ dist = cast(Any, torch_dist)
 # An optimizer, or a collection of them. Synaptic models split parameters across AdamW
 # (1D/embeddings) AND Muon (2D matrices), so lifecycle moment-resets must reach all of
 # them — see _zero_optim_moments_for (vg9.3).
-OptimizersArg = Optional["torch.optim.Optimizer | Iterable[torch.optim.Optimizer]"]
+OptimizersArg = Optional[torch.optim.Optimizer | Iterable[torch.optim.Optimizer]]
 
 # ---------------------------------------------------------------------------
 # Config
@@ -95,6 +104,22 @@ class SplitMergeConfig:
     # pure utilization*energy economy unless an experiment opts in; requires an active
     # NeuroScore (NeuroVizManager) so last_neuroscore is populated, else it no-ops.
     use_neuroscore: bool = False
+    # 0642.5.2.2 thresholds for the certificate-driven structural lifecycle,
+    # gated solely by SynapticConfig.topological_nas. Live routing activations
+    # trigger split/birth through H0 persistence, expert spectra bound split
+    # noise, and OT cost ranks merge pairs. Missing or uncertified evidence
+    # falls back to the unchanged UTA health lifecycle.
+    topological_kappa_target: float = 50.0
+    topological_merge_cost_ratio_max: float = 0.05
+    topological_functional_distance_max: float = 0.1
+    topological_persistence_ratio_threshold: float = 3.0
+    topological_coverage_distance_threshold: float = 0.25
+    topological_max_points: int = 256
+    topological_max_dim: int = 8
+    topological_max_persistence_features: int = 8
+    topological_max_samples_per_tensor: int = 1024
+    topological_max_spectral_candidates: int = 2
+    topological_max_exact_merge_candidates: int = 2
     # VARIABLE EXPERT COUNT (uta.4): real neurogenesis/apoptosis. When enabled the
     # controller may APPEND fresh expert slots under sustained split pressure and
     # REMOVE surplus dead slots (folding their contribution into the healthiest
@@ -107,10 +132,62 @@ class SplitMergeConfig:
     min_experts: int = 2
     max_experts: int = 64
     growth_budget_pct: float = 0.5  # max NET added experts, fraction of initial total
-    allow_variable_under_ddp: bool = False  # uta.5 lifts the DDP guard; off = refuse loudly
     neuroscore_weight: float = 0.5  # blend weight in [0,1]: health=(1-w)*health + w*score
     # Logging
     verbose: bool = False
+
+    def __post_init__(self) -> None:
+        if not math.isfinite(self.topological_kappa_target) or self.topological_kappa_target <= 1.0:
+            raise ValueError("topological_kappa_target must be finite and > 1")
+        if (
+            not math.isfinite(self.topological_merge_cost_ratio_max)
+            or self.topological_merge_cost_ratio_max < 0.0
+        ):
+            raise ValueError("topological_merge_cost_ratio_max must be finite and >= 0")
+        if (
+            not math.isfinite(self.topological_functional_distance_max)
+            or self.topological_functional_distance_max < 0.0
+        ):
+            raise ValueError("topological_functional_distance_max must be finite and >= 0")
+        if (
+            not math.isfinite(self.topological_coverage_distance_threshold)
+            or not 0.0 <= self.topological_coverage_distance_threshold <= 2.0
+        ):
+            raise ValueError(
+                "topological_coverage_distance_threshold must be finite and in [0, 2]"
+            )
+        if self.topological_max_samples_per_tensor < 2:
+            raise ValueError("topological_max_samples_per_tensor must be >= 2")
+        if self.topological_max_spectral_candidates < 1:
+            raise ValueError("topological_max_spectral_candidates must be >= 1")
+        if self.topological_max_exact_merge_candidates < 1:
+            raise ValueError("topological_max_exact_merge_candidates must be >= 1")
+        StructuralGeometryMonitorConfig(
+            persistence_ratio_threshold=self.topological_persistence_ratio_threshold,
+            max_points=self.topological_max_points,
+            max_dim=self.topological_max_dim,
+            max_persistence_features=self.topological_max_persistence_features,
+        )
+
+
+@dataclass(frozen=True)
+class TopologicalLifecycleDecision:
+    """JSON-safe audit record for one geometry-driven lifecycle decision."""
+
+    step: int
+    layer_index: int
+    mode: str
+    action: str
+    reason: str
+    split_source: int | None = None
+    split_destination: int | None = None
+    merge_pair: tuple[int, int] | None = None
+    split_noise_norm: float | None = None
+    kappa_bound: float | None = None
+    persistence_ratio: float | None = None
+    merge_cost_ratio: float | None = None
+    functional_distance: float | None = None
+    coverage_distance: float | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -383,7 +460,12 @@ def _avg_linear_into_(winner: SynapticLinear, loser: SynapticLinear, alpha: floa
 
 
 @torch.no_grad()
-def _antisym_perturb_fc1_(parent_lin: SynapticLinear, child_lin: SynapticLinear, scale: float):
+def _antisym_perturb_fc1_(
+    parent_lin: SynapticLinear,
+    child_lin: SynapticLinear,
+    scale: float,
+    spectral_norm_cap: float | None = None,
+):
     """Antisymmetric perturbation: parent -= δ, child += δ on fc1 weights.
 
     Assumes the child currently equals the parent (an exact clone). The pair then straddles
@@ -397,15 +479,30 @@ def _antisym_perturb_fc1_(parent_lin: SynapticLinear, child_lin: SynapticLinear,
     """
     if scale <= 0:
         return
+    if spectral_norm_cap is not None and spectral_norm_cap <= 0.0:
+        return
 
     def _rms(t: Tensor) -> float:
         return float(t.detach().pow(2).mean().clamp_min(1e-24).sqrt().item())
 
-    d = torch.randn_like(parent_lin.w_slow) * (scale * _rms(parent_lin.w_slow))
+    def _cap_spectral_norm(delta: Tensor) -> Tensor:
+        if spectral_norm_cap is None:
+            return delta
+        cap = max(0.0, float(spectral_norm_cap))
+        norm = float(torch.linalg.matrix_norm(delta.float(), ord=2).item())
+        if norm <= 0.0 or norm <= cap:
+            return delta
+        return delta * (cap / norm)
+
+    d = _cap_spectral_norm(
+        torch.randn_like(parent_lin.w_slow) * (scale * _rms(parent_lin.w_slow))
+    )
     parent_lin.w_slow.sub_(d)
     child_lin.w_slow.add_(d)
     if (parent_lin.w_fast is not None) and (child_lin.w_fast is not None):
-        df = torch.randn_like(parent_lin.w_fast) * (scale * _rms(parent_lin.w_fast))
+        df = _cap_spectral_norm(
+            torch.randn_like(parent_lin.w_fast) * (scale * _rms(parent_lin.w_fast))
+        )
         parent_lin.w_fast.sub_(df)
         child_lin.w_fast.add_(df)
 
@@ -433,7 +530,11 @@ def _copy_expert_full_(layer: SynapticMoE, dst_idx: int, src_idx: int):
 
 @torch.no_grad()
 def _function_preserving_split_(
-    layer: SynapticMoE, parent_idx: int, dst_idx: int, cfg: SplitMergeConfig
+    layer: SynapticMoE,
+    parent_idx: int,
+    dst_idx: int,
+    cfg: SplitMergeConfig,
+    spectral_noise_norm: float | None = None,
 ):
     """Split parent into (parent, child@dst_idx) without changing the model output.
 
@@ -448,25 +549,64 @@ def _function_preserving_split_(
     rb[parent_idx] = rb[parent_idx] - cfg.gate_split_bias
     rb[dst_idx] = rb[parent_idx]
     _antisym_perturb_fc1_(
-        layer.experts[parent_idx].fc1, layer.experts[dst_idx].fc1, cfg.fp_divergence_noise
+        layer.experts[parent_idx].fc1,
+        layer.experts[dst_idx].fc1,
+        cfg.fp_divergence_noise,
+        spectral_noise_norm,
     )
 
 
 @torch.no_grad()
-def _function_preserving_merge_(
-    layer: SynapticMoE, winner_idx: int, loser_idx: int, alpha: float, cfg: SplitMergeConfig
-):
-    """Merge loser into winner without changing the model output.
+def _ot_barycenter_slow_weight_targets(
+    winner: SynapticExpert, loser: SynapticExpert
+) -> Tuple[Tensor, Tensor]:
+    """Return the exact empirical 1-D W2 midpoint for both slow-weight tensors.
 
-    The loser is weight-averaged into the winner (routing identity included); the winner takes
-    +ln2 routing bias to absorb the loser's probability mass; then the freed loser slot is
-    re-seeded as a function-preserving split of the merged winner. The +ln2 (absorb) and the
-    split's -ln2 cancel, so both slots end at the winner's pre-merge bias and the combined
-    contribution of the pair equals the pre-merge winner+loser contribution (exact for similar
-    experts — which the merge criteria already require via high embedding cosine similarity).
+    The monotone OT coupling pairs equal-rank entries. The midpoint values are
+    restored in the winner's stable rank order, so the installed *joint marginal*
+    over ``fc1+fc2`` is precisely the certified 50/50 Wasserstein barycenter while
+    retaining a deterministic matrix layout.
     """
-    _avg_linear_into_(layer.experts[winner_idx].fc1, layer.experts[loser_idx].fc1, alpha)
-    _avg_linear_into_(layer.experts[winner_idx].fc2, layer.experts[loser_idx].fc2, alpha)
+    winner_parts = (winner.fc1.w_slow, winner.fc2.w_slow)
+    loser_parts = (loser.fc1.w_slow, loser.fc2.w_slow)
+    a = torch.cat([part.reshape(-1) for part in winner_parts])
+    b = torch.cat([part.reshape(-1) for part in loser_parts])
+    if a.numel() != b.numel():
+        raise ValueError("OT merge requires equal-sized expert slow weights")
+    order_a = torch.argsort(a, stable=True)
+    sorted_a = a[order_a]
+    sorted_b = torch.sort(b, stable=True).values
+    target = torch.empty_like(a)
+    target[order_a] = 0.5 * (sorted_a + sorted_b)
+    fc1_n = winner.fc1.w_slow.numel()
+    return (
+        target[:fc1_n].reshape_as(winner.fc1.w_slow),
+        target[fc1_n:].reshape_as(winner.fc2.w_slow),
+    )
+
+
+@torch.no_grad()
+def _consolidate_expert_pair_(
+    layer: SynapticMoE,
+    winner_idx: int,
+    loser_idx: int,
+    alpha: float,
+    cfg: SplitMergeConfig,
+    ot_barycenter: bool = False,
+) -> None:
+    """Consolidate ``loser`` into ``winner`` and transfer its routing mass."""
+    winner_expert = layer.experts[winner_idx]
+    loser_expert = layer.experts[loser_idx]
+    ot_targets = (
+        _ot_barycenter_slow_weight_targets(winner_expert, loser_expert)
+        if ot_barycenter
+        else None
+    )
+    _avg_linear_into_(winner_expert.fc1, loser_expert.fc1, alpha)
+    _avg_linear_into_(winner_expert.fc2, loser_expert.fc2, alpha)
+    if ot_targets is not None:
+        winner_expert.fc1.w_slow.copy_(ot_targets[0])
+        winner_expert.fc2.w_slow.copy_(ot_targets[1])
     W = layer.router.weight
     W[winner_idx].mul_(alpha).add_((1.0 - alpha) * W[loser_idx])
     Xi = cast(Tensor, layer.Xi)
@@ -475,12 +615,42 @@ def _function_preserving_merge_(
     emb[winner_idx].mul_(alpha).add_((1.0 - alpha) * emb[loser_idx])
     # Router embeddings are maintained unit-norm everywhere (init + the contrastive EMA update in
     # SynapticMoE.forward), and the forward uses ‖emb‖ as a routing gain. Averaging two unit vectors
-    # yields norm < 1, so renormalize to keep the merge function-preserving (and so the clone below,
-    # which copies emb[winner] into emb[loser], inherits the unit-norm embedding too).
+    # yields norm < 1, so renormalize to preserve that routing-gain invariant.
     emb[winner_idx].div_(emb[winner_idx].norm() + 1e-8)
     rb = cast(Tensor, layer.router_logit_bias)
     rb[winner_idx] = rb[winner_idx] + cfg.gate_split_bias
-    _function_preserving_split_(layer, winner_idx, loser_idx, cfg)
+
+
+@torch.no_grad()
+def _function_preserving_merge_(
+    layer: SynapticMoE,
+    winner_idx: int,
+    loser_idx: int,
+    alpha: float,
+    cfg: SplitMergeConfig,
+    ot_barycenter: bool = False,
+):
+    """Merge loser into winner, then refill its slot with a twin of the winner.
+
+    The balanced topological path installs the certified empirical W2 midpoint;
+    UTA retains its utilization-weighted elementwise merge. The slot refill keeps
+    expert count stable and shares the consolidated routing mass across the twins.
+    """
+    _consolidate_expert_pair_(
+        layer,
+        winner_idx,
+        loser_idx,
+        alpha,
+        cfg,
+        ot_barycenter=ot_barycenter,
+    )
+    _function_preserving_split_(
+        layer,
+        winner_idx,
+        loser_idx,
+        cfg,
+        spectral_noise_norm=0.0 if ot_barycenter else None,
+    )
 
 
 @torch.no_grad()
@@ -574,9 +744,9 @@ def _norm_param_name(name: str) -> str:
 def _as_opt_list(optimizers: OptimizersArg) -> List[torch.optim.Optimizer]:
     if optimizers is None:
         return []
-    if isinstance(optimizers, (list, tuple)):
-        return list(optimizers)
-    return [optimizers]
+    if isinstance(optimizers, torch.optim.Optimizer):
+        return [optimizers]
+    return list(optimizers)
 
 
 @torch.no_grad()
@@ -598,7 +768,7 @@ def snapshot_optimizer_state(optimizers: OptimizersArg) -> Dict[int, Any]:
 
 def capture_optimizer_layout(
     optimizers: OptimizersArg, model: nn.Module
-) -> Dict[str, Tuple[int, Dict[str, Any]]]:
+) -> Dict[str, Tuple[int, int, Dict[str, Any]]]:
     """Record which optimizer group each parameter NAME (index-normalized) belongs to.
 
     uta.4 replaces router/genome Parameter objects under the SAME attribute paths,
@@ -606,7 +776,7 @@ def capture_optimizer_layout(
     normalized — so this layout stays valid across resize events.
     """
     id2name = {id(p): n for n, p in model.named_parameters()}
-    layout: Dict[str, Tuple[int, Dict[str, Any]]] = {}
+    layout: Dict[str, Tuple[int, int, Dict[str, Any]]] = {}
     for oi, opt in enumerate(_as_opt_list(optimizers)):
         for gi, group in enumerate(opt.param_groups):
             hypers = {k: v for k, v in group.items() if k != "params"}
@@ -615,7 +785,7 @@ def capture_optimizer_layout(
                 if name is None:
                     continue
                 key = f"{oi}:{_norm_param_name(name)}"
-                layout[key] = (gi, hypers)
+                layout[key] = (oi, gi, hypers)
                 layout.setdefault(f"norm:{_norm_param_name(name)}", (oi, gi, hypers))
     return layout
 
@@ -623,7 +793,7 @@ def capture_optimizer_layout(
 def synchronize_optimizers_with_model(
     optimizers: OptimizersArg,
     model: nn.Module,
-    layout: Dict[str, Tuple[int, Dict[str, Any]]],
+    layout: Dict[str, Tuple[int, int, Dict[str, Any]]],
     state_snapshot: Dict[int, Any],
 ) -> None:
     """Re-point optimizer param_groups at the post-surgery parameter set.
@@ -706,7 +876,8 @@ def _resize_layer_experts_(
     if target_E > E_old:
         n_new = target_E - E_old
         new_experts = [
-            SynapticExpert(n_embd, hidden, layer.cfg) for _ in range(n_new)
+            SynapticExpert(n_embd, hidden, layer.cfg).to(device=dev, dtype=dtype)
+            for _ in range(n_new)
         ]
         layer.experts.extend(new_experts)
         W_new = torch.cat(
@@ -784,18 +955,79 @@ def _fold_expert_into_(layer: SynapticMoE, victim_idx: int, keeper_idx: int, alp
 
 class SplitMergeController:
     def __init__(
-        self, model: nn.Module, cfg: SplitMergeConfig, logger: Optional[Any] = None
+        self,
+        model: nn.Module,
+        cfg: SplitMergeConfig,
+        logger: Optional[Any] = None,
+        event_logger: Optional[Any] = None,
     ):
         self.model = model
         self.cfg = cfg
         self._last_step = -(10**12)  # ensure first call can run if warmup permits
         self._moe_layers: List[SynapticMoE] = self._find_moe_layers(model)
+        topology_flags = {bool(layer.cfg.topological_nas) for layer in self._moe_layers}
+        if len(topology_flags) > 1:
+            raise ValueError("topological_nas must be configured consistently across MoE layers")
+        self.topological_nas = next(iter(topology_flags), False)
+        if self.topological_nas and not cfg.function_preserving:
+            raise ValueError("topological_nas requires function_preserving=True")
+        if (
+            dist.is_available()
+            and dist.is_initialized()
+            and _world_size() > 1
+            and not cfg.ddp_broadcast
+        ):
+            raise ValueError("DDP lifecycle requires ddp_broadcast=True")
         self.logger = logger
+        self.event_logger = event_logger or (logger if hasattr(logger, "event") else None)
+        self.geometry_monitor = StructuralGeometryMonitor(
+            StructuralGeometryMonitorConfig(
+                persistence_ratio_threshold=cfg.topological_persistence_ratio_threshold,
+                max_points=cfg.topological_max_points,
+                max_dim=cfg.topological_max_dim,
+                max_persistence_features=cfg.topological_max_persistence_features,
+            )
+        )
+        self.topological_decisions: List[TopologicalLifecycleDecision] = []
         # uta.4 bookkeeping: MoE FLOPs scale linearly with expert count, so a cap on
         # NET added experts (fraction of the initial total) is the compute budget.
         self._initial_total_experts = sum(m.num_experts for m in self._moe_layers)
         self._net_added_experts = 0
         self._warned_ddp_variable = False
+
+    def state_dict(self) -> Dict[str, int]:
+        """Return scheduling and growth-budget state needed for exact resume."""
+        return {
+            "last_step": int(self._last_step),
+            "initial_total_experts": int(self._initial_total_experts),
+            "net_added_experts": int(self._net_added_experts),
+        }
+
+    def load_state_dict(self, state: Mapping[str, Any]) -> None:
+        """Restore lifecycle state, rejecting inconsistent growth accounting."""
+        required = {"last_step", "initial_total_experts", "net_added_experts"}
+        missing = sorted(required - state.keys())
+        if missing:
+            raise ValueError(f"split/merge state is missing fields: {missing}")
+        values: Dict[str, int] = {}
+        for name in required:
+            value = state[name]
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise ValueError(f"split/merge state field {name!r} must be an integer")
+            values[name] = value
+        initial = values["initial_total_experts"]
+        net_added = values["net_added_experts"]
+        current_total = sum(layer.num_experts for layer in self._moe_layers)
+        if initial <= 0:
+            raise ValueError("initial_total_experts must be positive")
+        if initial + net_added != current_total:
+            raise ValueError(
+                "split/merge growth state is inconsistent with the restored model: "
+                f"{initial} + {net_added} != {current_total}"
+            )
+        self._last_step = values["last_step"]
+        self._initial_total_experts = initial
+        self._net_added_experts = net_added
 
     def _find_moe_layers(self, module: nn.Module) -> List[SynapticMoE]:
         moes: List[SynapticMoE] = []
@@ -919,15 +1151,29 @@ class SplitMergeController:
         slots: List[int],
         optimizer: OptimizersArg,
         step: int,
-    ):
+        spectral_noise_norms: Optional[List[float]] = None,
+    ) -> bool:
         W = layer.router.weight
-        for src, dst in zip(sources, slots):
+        changed_any = False
+        for split_idx, (src, dst) in enumerate(zip(sources, slots)):
             if src == dst:
                 continue
+            changed_any = True
             if self.cfg.function_preserving:
                 # Net2Net / firefly: dst becomes a -ln2-gated twin of the parent so the model
                 # output does not jump; antisymmetric fc1 noise lets the pair diverge.
-                _function_preserving_split_(layer, src, dst, self.cfg)
+                noise_norm = (
+                    spectral_noise_norms[split_idx]
+                    if spectral_noise_norms is not None
+                    else None
+                )
+                _function_preserving_split_(
+                    layer,
+                    src,
+                    dst,
+                    self.cfg,
+                    spectral_noise_norm=noise_norm,
+                )
             else:
                 # Legacy: clone src → dst with noise & embedding tweak (discontinuous).
                 _clone_linear_from_(
@@ -986,24 +1232,60 @@ class SplitMergeController:
                     param for param in changed if isinstance(param, nn.Parameter)
                 ]
                 _zero_optim_moments_for(optimizer, changed_params)
+        return changed_any
 
     @torch.no_grad()
     def _do_merges(
         self, layer: SynapticMoE, optimizer: OptimizersArg, step: int
-    ):
+    ) -> bool:
         pairs = self._pick_merge_pairs(layer)
         if self.cfg.verbose and len(pairs) > 0:
             print(f"[SplitMerge] Merging pairs: {pairs}")
+        return self._merge_pairs(layer, pairs, optimizer, step)
+
+    @torch.no_grad()
+    def _merge_pairs(
+        self,
+        layer: SynapticMoE,
+        pairs: List[Tuple[int, int]],
+        optimizer: OptimizersArg,
+        step: int,
+        balanced: bool = False,
+        reuse_loser: bool = False,
+    ) -> bool:
         for i, j in pairs:
-            # winner = healthier of the two
-            health = self._health(layer)
-            if health[i] >= health[j]:
+            # UTA keeps the healthier expert and weights by utilization. The
+            # geometry path uses a deterministic 50/50 midpoint to match the OT
+            # barycenter certificate rather than leaking health into the ablation.
+            if balanced:
                 winner, loser = i, j
+                alpha = 0.5
             else:
-                winner, loser = j, i
-            alpha = self._util_weight(layer, winner, loser)
+                health = self._health(layer)
+                if health[i] >= health[j]:
+                    winner, loser = i, j
+                else:
+                    winner, loser = j, i
+                alpha = self._util_weight(layer, winner, loser)
             if self.cfg.function_preserving:
-                _function_preserving_merge_(layer, winner, loser, alpha, self.cfg)
+                if reuse_loser:
+                    _consolidate_expert_pair_(
+                        layer,
+                        winner,
+                        loser,
+                        alpha,
+                        self.cfg,
+                        ot_barycenter=balanced,
+                    )
+                else:
+                    _function_preserving_merge_(
+                        layer,
+                        winner,
+                        loser,
+                        alpha,
+                        self.cfg,
+                        ot_barycenter=balanced,
+                    )
             else:
                 _merge_expert_into_and_clone_(layer, winner, loser, alpha, self.cfg)
             # emit lineage event: merge parents (winner,loser) -> child lives at index loser (clone slot reused)
@@ -1013,7 +1295,7 @@ class SplitMergeController:
                         layer,
                         parent_i=int(winner),
                         parent_j=int(loser),
-                        child_idx=int(loser),
+                        child_idx=int(winner if reuse_loser else loser),
                         step=step,
                     )
                 except Exception as _e:
@@ -1045,6 +1327,529 @@ class SplitMergeController:
                     param for param in changed if isinstance(param, nn.Parameter)
                 ]
                 _zero_optim_moments_for(optimizer, changed_params)
+        return bool(pairs)
+
+    @staticmethod
+    def _weight_array(tensor: Tensor) -> np.ndarray:
+        return tensor.detach().float().cpu().numpy().astype(np.float64, copy=False)
+
+    def _bounded_tensor_array(self, tensor: Tensor) -> np.ndarray:
+        """Deterministically sample one tensor without materializing it on CPU in full."""
+        flat = tensor.detach().reshape(-1)
+        limit = self.cfg.topological_max_samples_per_tensor
+        if flat.numel() > limit:
+            indices = torch.linspace(0, flat.numel() - 1, limit, device=flat.device).long()
+            flat = flat.index_select(0, indices)
+        return self._weight_array(flat)
+
+    def _full_tensor_array(self, tensor: Tensor) -> np.ndarray:
+        """Materialize a full tensor only after a bounded shortlist selects it."""
+        return self._weight_array(tensor.detach().reshape(-1))
+
+    def _expert_weight_samples(self, layer: SynapticMoE, index: int) -> np.ndarray:
+        expert = layer.experts[index]
+        return np.concatenate(
+            [
+                self._bounded_tensor_array(expert.fc1.w_slow),
+                self._bounded_tensor_array(expert.fc2.w_slow),
+            ]
+        )
+
+    def _expert_full_weight_samples(self, layer: SynapticMoE, index: int) -> np.ndarray:
+        expert = layer.experts[index]
+        return np.concatenate(
+            [
+                self._full_tensor_array(expert.fc1.w_slow),
+                self._full_tensor_array(expert.fc2.w_slow),
+            ]
+        )
+
+    def _expert_function_components(
+        self, layer: SynapticMoE, index: int, *, bounded: bool = True
+    ) -> Dict[str, np.ndarray]:
+        """Sample every inference-relevant parameter/state component independently.
+
+        Per-component comparison prevents a large slow matrix from diluting a
+        router, genome, bias, metabolic, or postsynaptic mismatch in one global RMS.
+        """
+        expert = layer.experts[index]
+        components: Dict[str, np.ndarray] = {}
+        tensor_array = self._bounded_tensor_array if bounded else self._full_tensor_array
+        for prefix, linear in (("fc1", expert.fc1), ("fc2", expert.fc2)):
+            components[f"{prefix}.w_slow"] = tensor_array(linear.w_slow)
+            if linear.w_fast is not None:
+                components[f"{prefix}.w_fast"] = tensor_array(linear.w_fast)
+            if linear.bias is not None:
+                components[f"{prefix}.bias"] = tensor_array(cast(Tensor, linear.bias))
+            for state_name in ("u_buf", "v_buf"):
+                state = getattr(linear, state_name, None)
+                if torch.is_tensor(state):
+                    components[f"{prefix}.{state_name}"] = tensor_array(state)
+            if linear.post is not None:
+                for state_name in (
+                    "slow",
+                    "fast",
+                    "U",
+                    "V",
+                    "camkii",
+                    "pp1",
+                    "bdnf",
+                    "bdnf_hebb_accum",
+                    "_last_hebb_delta_mag",
+                ):
+                    state = getattr(linear.post, state_name, None)
+                    if torch.is_tensor(state):
+                        components[f"{prefix}.post.{state_name}"] = tensor_array(state)
+        for name, tensor in (
+            ("router.weight", layer.router.weight[index]),
+            ("Xi", layer.Xi[index]),
+            ("router_embeddings", layer.router_embeddings[index]),
+            ("router_logit_bias", layer.router_logit_bias[index : index + 1]),
+            ("fatigue", layer.fatigue[index : index + 1]),
+            ("energy", layer.energy[index : index + 1]),
+        ):
+            components[name] = tensor_array(tensor)
+        return components
+
+    @staticmethod
+    def _max_component_distance(
+        left: Dict[str, np.ndarray], right: Dict[str, np.ndarray]
+    ) -> float:
+        if left.keys() != right.keys():
+            return math.inf
+        distances: List[float] = []
+        for name in left:
+            a, b = left[name], right[name]
+            if a.shape != b.shape or not np.isfinite(a).all() or not np.isfinite(b).all():
+                return math.inf
+            power = 0.5 * (float(np.mean(a * a)) + float(np.mean(b * b)))
+            distance = float(np.sqrt(np.mean((a - b) ** 2))) / math.sqrt(
+                max(power, 1e-12)
+            )
+            distances.append(distance)
+        return max(distances, default=math.inf)
+
+    def _routing_points(self, layer: SynapticMoE) -> np.ndarray:
+        x = layer.last_ctx.get("x")
+        if x is None or x.ndim < 2 or x.shape[-1] != layer.router.in_features:
+            raise ValueError("missing_routing_points")
+        flat = x.reshape(-1, x.shape[-1])
+        if flat.shape[0] > self.cfg.topological_max_points:
+            rows = torch.linspace(
+                0,
+                flat.shape[0] - 1,
+                self.cfg.topological_max_points,
+                device=flat.device,
+            ).long()
+            flat = flat[rows]
+        points = layer.router_probe(flat)
+        return self._weight_array(points)
+
+    def _coverage_ordered_split_indices(
+        self, layer: SynapticMoE, routing_points: np.ndarray
+    ) -> Tuple[List[int], float]:
+        """Rank experts by proximity to the least-covered routing point."""
+        points = routing_points / np.maximum(
+            np.linalg.norm(routing_points, axis=1, keepdims=True), 1e-12
+        )
+        embeddings = self._weight_array(layer.router_embeddings)
+        embeddings = embeddings / np.maximum(
+            np.linalg.norm(embeddings, axis=1, keepdims=True), 1e-12
+        )
+        distances = np.linalg.norm(points[:, None, :] - embeddings[None, :, :], axis=-1)
+        nearest = distances.min(axis=1)
+        target_index = int(np.argmax(nearest))
+        target = points[target_index]
+        ordered = sorted(
+            range(layer.num_experts),
+            key=lambda index: (float(np.linalg.norm(embeddings[index] - target)), index),
+        )
+        return ordered, float(nearest[target_index])
+
+    def _safe_split_candidates(
+        self, layer: SynapticMoE, ordered_indices: Iterable[int]
+    ) -> List[Tuple[float, int, float, SpectralCertificate]]:
+        """Certify a bounded coverage-ranked subset without copying matrices to CPU."""
+        candidates: List[Tuple[float, int, float, SpectralCertificate]] = []
+        for index in list(ordered_indices)[: self.cfg.topological_max_spectral_candidates]:
+            parent = layer.experts[index].fc1.w_slow.detach().float()
+            try:
+                singular_values = torch.linalg.svdvals(parent)
+            except RuntimeError as exc:
+                raise ValueError(f"split_spectrum_failed:{index}") from exc
+            if singular_values.numel() == 0:
+                continue
+            sigma_max = float(singular_values[0].item())
+            sigma_min = float(singular_values[-1].item())
+            requested_noise = max(0.0, float(self.cfg.fp_divergence_noise)) * sigma_max
+            well_conditioned = requested_noise < sigma_min
+            kappa_parent = sigma_max / sigma_min if sigma_min > 0.0 else math.inf
+            kappa_bound = (
+                (sigma_max + requested_noise) / (sigma_min - requested_noise)
+                if well_conditioned
+                else math.inf
+            )
+            cert = SpectralCertificate(
+                sigma_max=sigma_max,
+                sigma_min=sigma_min,
+                noise_norm=requested_noise,
+                kappa_parent=kappa_parent,
+                kappa_bound=kappa_bound,
+                well_conditioned=well_conditioned,
+            )
+            if cert.well_conditioned and cert.kappa_bound <= self.cfg.topological_kappa_target:
+                candidates.append((cert.kappa_bound, index, requested_noise, cert))
+        return sorted(candidates, key=lambda item: (item[0], item[1]))
+
+    def _ot_merge_candidates(
+        self, layer: SynapticMoE
+    ) -> List[Tuple[float, float, int, int]]:
+        """Return a bounded-sample shortlist; actions require exact re-certification."""
+        samples = [self._expert_weight_samples(layer, i) for i in range(layer.num_experts)]
+        function_components = [
+            self._expert_function_components(layer, i) for i in range(layer.num_experts)
+        ]
+        candidates: List[Tuple[float, float, int, int]] = []
+        for i in range(layer.num_experts):
+            for j in range(i + 1, layer.num_experts):
+                a, b = samples[i], samples[j]
+                cert = ot_merge_certificate(a, b)
+                if not (cert.comparator_available and cert.transport_optimal):
+                    continue
+                reference_power = 0.5 * (float(np.mean(a * a)) + float(np.mean(b * b)))
+                cost_ratio = cert.transport_cost / max(reference_power, 1e-12)
+                functional_distance = self._max_component_distance(
+                    function_components[i], function_components[j]
+                )
+                if functional_distance > self.cfg.topological_functional_distance_max:
+                    continue
+                candidates.append((cost_ratio, functional_distance, i, j))
+        return sorted(candidates, key=lambda item: (item[0], item[1], item[2], item[3]))
+
+    def _exact_ot_merge_candidate(
+        self, layer: SynapticMoE, i: int, j: int
+    ) -> Optional[
+        Tuple[float, float, int, int, np.ndarray, np.ndarray, MergeCertificate]
+    ]:
+        """Certify one shortlisted pair over every value that a merge will mutate."""
+        a = self._expert_full_weight_samples(layer, i)
+        b = self._expert_full_weight_samples(layer, j)
+        cert = ot_merge_certificate(a, b)
+        if not (cert.comparator_available and cert.transport_optimal):
+            return None
+        reference_power = 0.5 * (float(np.mean(a * a)) + float(np.mean(b * b)))
+        cost_ratio = cert.transport_cost / max(reference_power, 1e-12)
+        functional_distance = self._max_component_distance(
+            self._expert_function_components(layer, i, bounded=False),
+            self._expert_function_components(layer, j, bounded=False),
+        )
+        if functional_distance > self.cfg.topological_functional_distance_max:
+            return None
+        return cost_ratio, functional_distance, i, j, a, b, cert
+
+    def _fallback_decision(
+        self, *, step: int, layer_index: int, reason: str
+    ) -> TopologicalLifecycleDecision:
+        return TopologicalLifecycleDecision(
+            step=step,
+            layer_index=layer_index,
+            mode="uta_fallback",
+            action="uta",
+            reason=reason,
+        )
+
+    def _plan_topological_lifecycle(
+        self, layer: SynapticMoE, *, step: int, layer_index: int
+    ) -> Tuple[TopologicalLifecycleDecision, Optional[StructuralGeometryRecord]]:
+        try:
+            routing_points = self._routing_points(layer)
+            if layer.num_experts < 2:
+                return self._fallback_decision(
+                    step=step,
+                    layer_index=layer_index,
+                    reason="topological_lifecycle_requires_two_experts",
+                ), None
+            coverage_order, coverage_distance = self._coverage_ordered_split_indices(
+                layer, routing_points
+            )
+            merge_candidates = self._ot_merge_candidates(layer)
+
+            merge_cost_ratio: float | None = None
+            functional_distance: float | None = None
+            pair: tuple[int, int] | None = None
+            exact_merge = None
+            for sampled_candidate in merge_candidates[
+                : self.cfg.topological_max_exact_merge_candidates
+            ]:
+                exact_merge = self._exact_ot_merge_candidate(
+                    layer, sampled_candidate[2], sampled_candidate[3]
+                )
+                if exact_merge is not None:
+                    break
+            if exact_merge is not None:
+                (
+                    merge_cost_ratio,
+                    functional_distance,
+                    merge_i,
+                    merge_j,
+                    merge_a,
+                    merge_b,
+                    merge_certificate,
+                ) = exact_merge
+                pair = (merge_i, merge_j)
+            else:
+                # H0+spectrum can justify a true birth without any merge candidate.
+                # Supply a bounded diagnostic pair to the combined monitor, but do
+                # not represent it as a certified/actionable merge in the decision.
+                merge_a = self._expert_weight_samples(layer, 0)
+                merge_b = self._expert_weight_samples(layer, 1)
+                merge_certificate = None
+
+            # A merge+split needs a source outside the merge pair. Preserve the
+            # coverage ranking within each partition, but spend the bounded SVD
+            # budget on independent experts first when an exact pair is known.
+            spectral_order = (
+                [index for index in coverage_order if index not in pair]
+                + [index for index in coverage_order if index in pair]
+                if pair is not None
+                else coverage_order
+            )
+            split_candidates = self._safe_split_candidates(layer, spectral_order)
+            if not split_candidates:
+                return self._fallback_decision(
+                    step=step,
+                    layer_index=layer_index,
+                    reason="no_spectrally_certified_split",
+                ), None
+            kappa_bound, source, noise_norm, split_certificate = (
+                split_candidates[0]
+            )
+            record = self.geometry_monitor.record(
+                step=step,
+                parent_weight=None,
+                split_noise_norm=noise_norm,
+                routing_points=routing_points,
+                merge_a=merge_a,
+                merge_b=merge_b,
+                split_certificate=split_certificate,
+                merge_certificate=merge_certificate,
+            )
+            if not record.split_well_conditioned or record.kappa_bound is None:
+                return self._fallback_decision(
+                    step=step,
+                    layer_index=layer_index,
+                    reason="split_certificate_failed_closed",
+                ), record
+            if not (
+                record.merge_comparator_available
+                and record.merge_transport_optimal
+            ):
+                return self._fallback_decision(
+                    step=step,
+                    layer_index=layer_index,
+                    reason="ot_certificate_failed_closed",
+                ), record
+
+            persistence_ratio = record.persistence_ratio
+            destination: int | None = None
+            persistence_gap = (
+                record.persistence_significant
+                and coverage_distance >= self.cfg.topological_coverage_distance_threshold
+            )
+            if persistence_gap:
+                can_birth = (
+                    self.cfg.variable_expert_count
+                    and layer.num_experts < self.cfg.max_experts
+                    and self._growth_budget_remaining() > 0
+                    and not (dist.is_available() and dist.is_initialized())
+                )
+                action = "birth" if can_birth else "merge_split"
+                reason = "persistent_uncovered_h0_gap"
+                if self.cfg.splits_per_call < 1:
+                    action = "noop"
+                    reason = "persistent_gap_but_split_disabled"
+                elif action == "merge_split":
+                    if self.cfg.merges_per_call < 1:
+                        action = "noop"
+                        reason = "persistent_gap_but_merge_disabled"
+                    elif pair is None or merge_cost_ratio is None:
+                        return self._fallback_decision(
+                            step=step,
+                            layer_index=layer_index,
+                            reason="no_ot_certified_pair_for_merge_split",
+                        ), record
+                    elif merge_cost_ratio > self.cfg.topological_merge_cost_ratio_max:
+                        return self._fallback_decision(
+                            step=step,
+                            layer_index=layer_index,
+                            reason="ot_pair_above_merge_split_cost_ceiling",
+                        ), record
+                    elif source in pair:
+                        return self._fallback_decision(
+                            step=step,
+                            layer_index=layer_index,
+                            reason="no_independent_source_for_merge_split",
+                        ), record
+                    else:
+                        destination = pair[1]
+            elif (
+                pair is not None
+                and merge_cost_ratio is not None
+                and
+                self.cfg.merges_per_call > 0
+                and merge_cost_ratio <= self.cfg.topological_merge_cost_ratio_max
+            ):
+                action = "merge"
+                reason = "ot_nearest_pair_below_cost_threshold"
+            else:
+                action = "noop"
+                reason = (
+                    "persistent_h0_gap_already_covered"
+                    if record.persistence_significant
+                    else "no_significant_gap_or_low_cost_merge"
+                )
+
+            return TopologicalLifecycleDecision(
+                step=step,
+                layer_index=layer_index,
+                mode="topological",
+                action=action,
+                reason=reason,
+                split_source=(source if action in ("birth", "merge_split") else None),
+                split_destination=(layer.num_experts if action == "birth" else destination),
+                merge_pair=(pair if action in ("merge", "merge_split") else None),
+                split_noise_norm=(
+                    noise_norm if action in ("birth", "merge_split") else None
+                ),
+                kappa_bound=kappa_bound,
+                persistence_ratio=persistence_ratio,
+                merge_cost_ratio=merge_cost_ratio,
+                functional_distance=functional_distance,
+                coverage_distance=coverage_distance,
+            ), record
+        except (ValueError, np.linalg.LinAlgError) as exc:
+            return self._fallback_decision(
+                step=step,
+                layer_index=layer_index,
+                reason=str(exc) or type(exc).__name__,
+            ), None
+
+    def _log_topological_decision(
+        self,
+        decision: TopologicalLifecycleDecision,
+        record: Optional[StructuralGeometryRecord],
+    ) -> None:
+        self.topological_decisions.append(decision)
+        if self.event_logger is None or not hasattr(self.event_logger, "event"):
+            return
+        fields: Dict[str, Any] = {"decision": asdict(decision)}
+        if record is not None:
+            fields["certificates"] = asdict(record)
+        try:
+            self.event_logger.event("topological_nas", step=decision.step, **fields)
+        except Exception as exc:
+            if self.cfg.verbose:
+                print(f"[SplitMerge] topological event logging failed: {exc}")
+
+    @torch.no_grad()
+    def _run_topological_layer(
+        self,
+        layer: SynapticMoE,
+        decision: TopologicalLifecycleDecision,
+        optimizer: OptimizersArg,
+    ) -> bool:
+        if decision.action == "merge" and decision.merge_pair is not None:
+            return self._merge_pairs(
+                layer,
+                [decision.merge_pair],
+                optimizer,
+                decision.step,
+                balanced=True,
+            )
+        if decision.action not in ("merge_split", "birth"):
+            return False
+        if decision.split_source is None or decision.split_noise_norm is None:
+            raise RuntimeError("topological split decision lacks a source or noise certificate")
+
+        destination = decision.split_destination
+        if decision.action == "merge_split":
+            if decision.merge_pair is None:
+                raise RuntimeError("topological merge_split decision lacks an OT pair")
+            self._merge_pairs(
+                layer,
+                [decision.merge_pair],
+                optimizer,
+                decision.step,
+                balanced=True,
+                reuse_loser=True,
+            )
+        if decision.action == "birth":
+            touched = _resize_layer_experts_(
+                layer,
+                target_E=layer.num_experts + 1,
+                seed_idx=decision.split_source,
+                cfg=self.cfg,
+            )
+            if not touched:
+                raise RuntimeError("topological birth did not create an expert slot")
+            destination = touched[0]
+            if decision.split_destination != destination:
+                raise RuntimeError("topological birth destination drifted from its decision record")
+            self._net_added_experts += 1
+        if destination is None:
+            raise RuntimeError("topological split decision lacks a destination")
+        changed = self._split_into_slots(
+            layer,
+            [decision.split_source],
+            [destination],
+            optimizer,
+            decision.step,
+            spectral_noise_norms=[decision.split_noise_norm],
+        )
+        if decision.action == "birth" and self.logger is not None and hasattr(self.logger, "on_spawn"):
+            try:
+                self.logger.on_spawn(
+                    layer,
+                    parent_idx=int(decision.split_source),
+                    children=[int(destination)],
+                    step=decision.step,
+                )
+            except Exception as exc:
+                if self.cfg.verbose:
+                    print(f"[SplitMerge] logger.on_spawn failed: {exc}")
+        return changed
+
+    def _run_uta_layer(
+        self, layer: SynapticMoE, optimizer: OptimizersArg, step: int
+    ) -> bool:
+        changed = self._do_merges(layer, optimizer, step)
+        sources = self._pick_split_sources(layer)
+        if sources and self.cfg.splits_per_call > 0:
+            slots = self._weakest_slots(
+                layer, min(len(sources), self.cfg.splits_per_call)
+            )
+            if self.cfg.verbose:
+                print(f"[SplitMerge] Splitting {list(zip(sources, slots))}")
+            changed |= self._split_into_slots(layer, sources, slots, optimizer, step)
+        dead_slots = self._pick_dead_slots(layer)
+        if dead_slots:
+            sources = self._pick_reset_sources(layer, max(len(dead_slots), 1))
+            reset_pairs = [
+                (src, slot)
+                for slot in dead_slots
+                if (src := next((candidate for candidate in sources if candidate != slot), None))
+                is not None
+            ]
+            if reset_pairs:
+                reset_sources, reset_slots = map(list, zip(*reset_pairs))
+                if self.cfg.verbose:
+                    print(f"[SplitMerge] Resetting {reset_pairs}")
+                changed |= self._split_into_slots(
+                    layer, reset_sources, reset_slots, optimizer, step
+                )
+        if self.cfg.variable_expert_count:
+            changed |= self._maybe_resize_layer(layer, optimizer, step)
+        return changed
 
     # ------------------------------------------------------------------
     # uta.4: variable expert count
@@ -1057,7 +1862,7 @@ class SplitMergeController:
     @torch.no_grad()
     def _maybe_resize_layer(
         self, layer: SynapticMoE, optimizer: OptimizersArg, step: int
-    ) -> None:
+    ) -> bool:
         """Grow/shrink this layer's expert count under pressure + budget (uta.4).
 
         GROW when strong-expert count exceeds what splits_per_call can serve — i.e.
@@ -1070,19 +1875,15 @@ class SplitMergeController:
         doomed experts are folded into the healthiest survivor (+ln2 routing mass) and
         their rows removed everywhere.
         """
-        if (
-            dist.is_available()
-            and dist.is_initialized()
-            and not self.cfg.allow_variable_under_ddp
-        ):
+        if dist.is_available() and dist.is_initialized():
             if not self._warned_ddp_variable:
                 print(
                     "[SplitMerge] variable_expert_count skipped under DDP; "
-                    "set SplitMergeConfig.allow_variable_under_ddp after wiring "
-                    "all-rank deterministic surgery (uta.5)."
+                    "variable-shape surgery is unsupported until all ranks resize "
+                    "before tensor and optimizer-state synchronization."
                 )
                 self._warned_ddp_variable = True
-            return
+            return False
 
         E = int(layer.num_experts)
         health = self._health(layer)
@@ -1118,7 +1919,7 @@ class SplitMergeController:
                             print(f"[SplitMerge] logger.on_spawn failed: {_e}")
                 if self.cfg.verbose:
                     print(f"[SplitMerge] grew layer to {newE} experts (spawned {touched})")
-                return  # one resize per call keeps surgery auditable
+                return True  # one resize per call keeps surgery auditable
 
         # --- SHRINK ---
         removable = len(dead) - self.cfg.resets_per_call
@@ -1152,6 +1953,8 @@ class SplitMergeController:
                     f"[SplitMerge] shrank layer {E}->{int(layer.num_experts)} "
                     f"(folded {victims} into {keeper})"
                 )
+            return True
+        return False
 
     @torch.no_grad()
     def step(self, global_step: int, optimizer: OptimizersArg = None):
@@ -1162,54 +1965,75 @@ class SplitMergeController:
         if global_step - self._last_step < self.cfg.min_step_interval:
             return
 
-        if not _is_rank0():
-            # Non-zero ranks just wait for broadcast after rank 0 modifies params
-            if self.cfg.ddp_broadcast:  # ensure we hit the barrier roughly in sync
-                if dist.is_available() and dist.is_initialized():
-                    dist.barrier()
-            return
-
-        if self.cfg.verbose:
+        rank0 = _is_rank0()
+        if rank0 and self.cfg.verbose:
             print(f"[SplitMerge] step @ {global_step}")
 
-        # Perform operations layer-by-layer on rank 0
-        for layer in self._moe_layers:
-            # 1) merges
-            self._do_merges(layer, optimizer, global_step)
-            # 2) splits
-            sources = self._pick_split_sources(layer)
-            if len(sources) > 0 and self.cfg.splits_per_call > 0:
-                slots = self._weakest_slots(
-                    layer, min(len(sources), self.cfg.splits_per_call)
+        # Perform operations layer-by-layer on rank 0. The default-off topological
+        # path is all-or-nothing per layer: incomplete evidence runs the exact UTA
+        # lifecycle, never a half-geometric hybrid that would confound ablations.
+        changed_layers = [False] * len(self._moe_layers)
+        for layer_index, layer in enumerate(self._moe_layers if rank0 else []):
+            experts_before = int(layer.num_experts)
+            layout = (
+                capture_optimizer_layout(optimizer, self.model)
+                if optimizer is not None and self.cfg.variable_expert_count
+                else None
+            )
+            optimizer_snapshot = (
+                snapshot_optimizer_state(optimizer)
+                if optimizer is not None and self.cfg.variable_expert_count
+                else None
+            )
+            if not self.topological_nas:
+                changed = self._run_uta_layer(layer, optimizer, global_step)
+            else:
+                decision, record = self._plan_topological_lifecycle(
+                    layer,
+                    step=global_step,
+                    layer_index=layer_index,
                 )
-                if self.cfg.verbose:
-                    print(f"[SplitMerge] Splitting {list(zip(sources, slots))}")
-                self._split_into_slots(layer, sources, slots, optimizer, global_step)
-            # 3) resets for dead experts (clone from healthiest)
-            dead_slots = self._pick_dead_slots(layer)
-            if dead_slots:
-                sources = self._pick_reset_sources(layer, max(len(dead_slots), 1))
-                reset_sources: List[int] = []
-                reset_slots: List[int] = []
-                for slot in dead_slots:
-                    src = next((s for s in sources if s != slot), None)
-                    if src is None:
-                        continue
-                    reset_sources.append(src)
-                    reset_slots.append(slot)
-                if reset_sources:
-                    if self.cfg.verbose:
-                        print(f"[SplitMerge] Resetting {list(zip(reset_sources, reset_slots))}")
-                    self._split_into_slots(layer, reset_sources, reset_slots, optimizer, global_step)
-            # 4) variable expert count (uta.4) — after merges/splits/resets so
-            # pressure reflects this round's outcomes; one resize event max per call.
-            if self.cfg.variable_expert_count:
-                self._maybe_resize_layer(layer, optimizer, global_step)
+                if decision.mode == "uta_fallback":
+                    changed = self._run_uta_layer(layer, optimizer, global_step)
+                else:
+                    changed = self._run_topological_layer(layer, decision, optimizer)
+                self._log_topological_decision(decision, record)
+            changed_layers[layer_index] = changed
+            if (
+                int(layer.num_experts) != experts_before
+                and optimizer is not None
+                and layout is not None
+                and optimizer_snapshot is not None
+            ):
+                synchronize_optimizers_with_model(
+                    optimizer,
+                    self.model,
+                    layout,
+                    optimizer_snapshot,
+                )
 
-        # Broadcast updated params to all ranks (DDP)
+        # Every rank must participate in the same broadcast sequence. Previously
+        # non-zero ranks entered the final barrier and returned before rank 0's
+        # broadcasts, mismatching collectives and deadlocking DDP lifecycle steps.
         if self.cfg.ddp_broadcast and dist.is_available() and dist.is_initialized():
+            if self._moe_layers:
+                flag_device = self._moe_layers[0].router.weight.device
+                change_flags = torch.tensor(
+                    changed_layers,
+                    dtype=torch.int64,
+                    device=flag_device,
+                )
+                dist.broadcast(change_flags, src=0)
+                changed_layers = [bool(value) for value in change_flags.tolist()]
             for layer in self._moe_layers:
                 _broadcast_module_params(layer)
+            # Rank 0 resets touched moments during surgery. Other ranks did not
+            # execute the surgery, so reset every parameter in each changed MoE on
+            # every rank to keep distributed optimizer state semantically aligned.
+            if optimizer is not None:
+                for changed, layer in zip(changed_layers, self._moe_layers):
+                    if changed:
+                        _zero_optim_moments_for(optimizer, list(layer.parameters()))
             dist.barrier()
 
         self._last_step = global_step

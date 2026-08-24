@@ -61,7 +61,7 @@ def test_every_column_validates_clean():
 def test_leave_one_out_covers_exactly_the_default_on_science_mechanisms():
     expected = {
         m.mechanism for m in MECHANISMS
-        if m.default_on and m.mechanism not in am.INFRA_MECHANISMS
+        if m.default_on and m.mechanism not in am.MATRIX_EXCLUDED_MECHANISMS
     }
     got = {c.config_id.removeprefix("bio_no_") for c in am.leave_one_out()}
     assert got == expected
@@ -81,7 +81,7 @@ def test_leave_one_out_actually_turns_the_mechanism_off():
 def test_add_one_in_covers_exactly_the_optin_science_mechanisms():
     expected = {
         m.mechanism for m in MECHANISMS
-        if not m.default_on and m.mechanism not in am.INFRA_MECHANISMS
+        if not m.default_on and m.mechanism not in am.MATRIX_EXCLUDED_MECHANISMS
     }
     got = {c.config_id.removeprefix("add_") for c in am.add_one_in()}
     assert got == expected
@@ -102,6 +102,11 @@ def test_infra_mechanisms_are_excluded_from_the_science_matrix():
     all_ids = {c.config_id for c in am.screening_columns()}
     for infra in am.INFRA_MECHANISMS:
         assert f"bio_no_{infra}" not in all_ids and f"add_{infra}" not in all_ids
+
+
+def test_controller_driven_topology_is_excluded_from_config_only_matrix():
+    all_ids = {c.config_id for c in am.screening_columns()}
+    assert "add_topological_nas" not in all_ids
 
 
 def test_screening_is_anchors_plus_both_directions():

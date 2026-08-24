@@ -68,6 +68,51 @@ def synaptic_config_from_meta(meta_data) -> "SynapticConfig":
     return SynapticConfig(**{k: v for k, v in saved.items() if k in known})
 
 
+def checkpoint_model_config(model, base_config: dict[str, Any]) -> dict[str, Any]:
+    """Return JSON-safe architecture metadata, including live per-layer MoE counts.
+
+    Structural birth/death can make expert counts heterogeneous after construction;
+    persisting only the initial uniform count reconstructs the wrong module graph and
+    makes strict state loading fail.
+    """
+    out = dict(base_config)
+    config = getattr(model, "config", None)
+    for name in (
+        "dropout",
+        "use_moe",
+        "num_experts",
+        "moe_top_k",
+        "moe_hidden_mult",
+        "moe_balance_loss",
+        "structural_every",
+        "init_type",
+        "init_seed",
+        "tie_embeddings",
+    ):
+        if config is not None and hasattr(config, name):
+            out[name] = getattr(config, name)
+    if out.get("use_moe"):
+        from bio_inspired_nanochat.synaptic import SynapticMoE
+
+        counts: list[int] = []
+        for block in getattr(model, "h", ()):
+            mlp = getattr(block, "mlp", None)
+            if not isinstance(mlp, SynapticMoE):
+                raise ValueError("use_moe checkpoint contains a non-MoE model layer")
+            counts.append(int(mlp.num_experts))
+        if not counts:
+            raise ValueError("use_moe checkpoint contains no MoE layers")
+        out["moe_experts_per_layer"] = counts
+    return out
+
+
+def load_checkpoint_metadata(checkpoint_dir: str, step: int) -> dict[str, Any]:
+    """Load only JSON metadata, so training can rebuild topology before tensor load."""
+    meta_path = os.path.join(checkpoint_dir, f"meta_{step:06d}.json")
+    with open(meta_path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
 def config_hash(cfg_dict: dict) -> str:
     """Stable short hash of a config dict (order-independent)."""
     blob = json.dumps(cfg_dict, sort_keys=True, default=str).encode()
@@ -227,9 +272,7 @@ def load_checkpoint(checkpoint_dir, step, device, load_optimizer=False, rank=0, 
         optimizer_path = os.path.join(checkpoint_dir, f"optim_{step:06d}_rank{rank:d}.pt")
         optimizer_data = torch.load(optimizer_path, map_location=device, weights_only=True)
     # Load the metadata
-    meta_path = os.path.join(checkpoint_dir, f"meta_{step:06d}.json")
-    with open(meta_path, "r", encoding="utf-8") as f:
-        meta_data = json.load(f)
+    meta_data = load_checkpoint_metadata(checkpoint_dir, step)
     if load_train_state:
         train_path = os.path.join(checkpoint_dir, f"train_{step:06d}_rank{rank:d}.pt")
         # ALWAYS load RNG state onto CPU, regardless of the compute device: torch's RNG
@@ -337,6 +380,11 @@ def build_model(checkpoint_dir, step, device, phase):
             dropout=model_config_kwargs.get("dropout", 0.0),
             use_moe=model_config_kwargs.get("use_moe", False),
             num_experts=model_config_kwargs.get("num_experts", 8),
+            moe_experts_per_layer=(
+                tuple(model_config_kwargs["moe_experts_per_layer"])
+                if model_config_kwargs.get("moe_experts_per_layer") is not None
+                else None
+            ),
             moe_top_k=model_config_kwargs.get("moe_top_k", 2),
             moe_hidden_mult=model_config_kwargs.get("moe_hidden_mult", 4),
             moe_balance_loss=model_config_kwargs.get("moe_balance_loss", 0.01),

@@ -48,6 +48,9 @@ class GPTSynapticConfig:
     # MoE & structural options
     use_moe: bool = False
     num_experts: int = 8
+    # Checkpointed post-lifecycle topology. ``None`` uses ``num_experts`` for
+    # every layer; a tuple preserves heterogeneous counts after true births/deaths.
+    moe_experts_per_layer: Optional[tuple[int, ...]] = None
     moe_top_k: int = 2
     moe_hidden_mult: int = 4
     moe_balance_loss: float = 0.01
@@ -166,6 +169,14 @@ class GPTSynaptic(nn.Module):
     def __init__(self, config: GPTSynapticConfig):
         super().__init__()
         c = config
+        expert_counts = c.moe_experts_per_layer
+        if expert_counts is not None:
+            if not c.use_moe:
+                raise ValueError("moe_experts_per_layer requires use_moe=True")
+            if len(expert_counts) != c.n_layer or any(count < 1 for count in expert_counts):
+                raise ValueError(
+                    "moe_experts_per_layer must contain one positive count per model layer"
+                )
         self.config: GPTSynapticConfig = c
         self.wte: nn.Embedding = nn.Embedding(c.vocab_size, c.n_embd)
         self.h: nn.ModuleList[Block] = nn.ModuleList()
@@ -202,7 +213,11 @@ class GPTSynaptic(nn.Module):
                     c.syn_cfg,
                     dropout=c.dropout,
                     use_moe=c.use_moe,
-                    num_experts=c.num_experts,
+                    num_experts=(
+                        expert_counts[layer_idx]
+                        if expert_counts is not None
+                        else c.num_experts
+                    ),
                     top_k=c.moe_top_k,
                     hidden_mult=c.moe_hidden_mult,
                     balance_loss=c.moe_balance_loss,
