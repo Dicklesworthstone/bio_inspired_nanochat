@@ -85,6 +85,10 @@ sm_neuroscore_weight = 0.5  # blend weight in [0,1] when sm_use_neuroscore=1
 sm_function_preserving = 1  # Net2Net/firefly: make split/merge output-preserving (uta.3); 0=legacy noisy clone
 sm_fp_divergence_noise = 0.02  # relative (to weight RMS) antisymmetric fc1 noise for function-preserving split
 sm_verbose = 0  # verbose split/merge logging
+uta4_variable_experts = 0  # uta.4: allow REAL expert-count growth/shrink under a budget
+uta4_min_experts = 2  # hard floor on per-layer expert count
+uta4_max_experts = 64  # hard cap on per-layer expert count
+uta4_growth_budget_pct = 0.5  # max NET added experts, fraction of initial total (FLOP budget)
 # Neuromodulatory bus (hy8.1): global DA/ACh/NE scalars gating plasticity/exploration/gain.
 neuromod_enabled = 0  # 1=compute DA/ACh/NE from loss+entropy each step and broadcast to synapses
 neuromod_log_every = 100  # print neuromodulator telemetry every N steps (0=never)
@@ -385,6 +389,10 @@ if splitmerge_every > 0:
         neuroscore_weight=float(sm_neuroscore_weight),
         function_preserving=bool(sm_function_preserving),
         fp_divergence_noise=float(sm_fp_divergence_noise),
+        variable_expert_count=bool(uta4_variable_experts),
+        min_experts=int(uta4_min_experts),
+        max_experts=int(uta4_max_experts),
+        growth_budget_pct=float(uta4_growth_budget_pct),
         verbose=bool(sm_verbose),
         ddp_broadcast=True,
     )
