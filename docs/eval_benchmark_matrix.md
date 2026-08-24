@@ -41,6 +41,34 @@ canonical results registry, and four structured records (uncertainty, continual,
 the run-local `capability_metrics.jsonl`. Missing capability evidence is explicit
 (`not_applicable`/`error` plus a reason); optional probes are never converted to zero.
 
+#### `uta.7` controlled equal-compute verdict
+
+Protocol `a2307f21b18f` exercised the live variable-count UTA controller on eight held-out seeds.
+Measured routing assignment shares were published as lifecycle health credit, driving a
+`4 → 3 → 5 → 4` apoptosis/neurogenesis schedule. The fixed comparator stayed at four experts.
+Equal phase lengths made both arms exactly match on 20 training forwards, six diagnostic forwards,
+average expert count (`4.0`), top-k dispatches, cumulative router-width work, and the project's
+dominant MoE matmul FLOP budget (`190,080` per seed). Controller/surgery overhead was not counted as
+model FLOPs and is reported separately: mean CPU wall time was `114.4 ms` for NAS versus `102.2 ms`
+for fixed in this tiny run.
+
+| Outcome (NAS − fixed) | NAS mean | Fixed mean | Paired bootstrap 95% CI | Paired t / Wilcoxon |
+|---|---:|---:|---:|---:|
+| Final MSE | 0.15375 | 0.15032 | `[+0.00200, +0.00492]` | `p=0.0036` / `p=0.0078` |
+| Dead-expert fraction | 0.00 | 0.25 | `[-0.25, -0.25]` | `p<machine precision` / `p=0.0078` |
+| Maximum event-loss spike | 0.00201 | 0.00 placebo | `[+0.00152, +0.00285]` | `p=0.0016` / `p=0.0078` |
+
+All exact compute, schedule, optimizer-synchronization, finiteness, and predeclared stability-gate
+checks passed. The written verdict is nevertheless **regression** (`registry_verdict=invalidated`):
+NAS eliminated the dormant expert on every seed and made routing more balanced (Gini `0.250` versus
+`0.384`), but final loss was worse on every matched seed. The result is deliberately not rescued by
+the favorable health metric. Full strict-JSON evidence is committed at
+`results/structural_nas_evaluation_a2307f21b18f.json`; registry rows are in
+`results/registry.jsonl` with `eligible_for_best=false`.
+
+This CPU synthetic task isolates lifecycle behavior; it is not language-model-scale evidence. Any
+future scale run must be preregistered as a fresh hypothesis rather than reinterpreting this result.
+
 ### Performance
 
 - **Training throughput**: `train/tok_per_sec` logged by `scripts/base_train.py`.
