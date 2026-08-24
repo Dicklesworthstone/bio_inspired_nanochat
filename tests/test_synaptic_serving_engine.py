@@ -128,3 +128,26 @@ def test_heterogeneous_batch_scheduler_partitioning_and_shedding():
     assert len(batches) == 2  # Fast tier batch and Deliberative tier batch
     assert len(batches[0]) == 2
     assert len(batches[1]) == 1
+
+
+def test_serving_engine_batch_processing_and_vitals():
+    """Verify batch processing and operational telemetry vitals."""
+    model = _make_model()
+    engine = SynapticServingEngine(model, max_queue_depth=5)
+
+    requests = [
+        ServingRequest(request_id="b1", prompt_tokens=torch.randint(0, 32, (1, 2)), max_tokens=2),
+        ServingRequest(request_id="b2", prompt_tokens=torch.randint(0, 32, (1, 2)), max_tokens=2, knobs=ServingKnobs(deliberation_steps=2)),
+    ]
+
+    responses = engine.serve_batch(requests)
+    assert len(responses) == 2
+    assert responses[0].status == ResponseStatus.SUCCESS
+    assert responses[1].status == ResponseStatus.SUCCESS
+
+    vitals = engine.get_engine_vitals()
+    assert vitals["total_served"] == 2
+    assert vitals["queue_depth"] == 0
+
+    engine.log_engine_vitals()
+

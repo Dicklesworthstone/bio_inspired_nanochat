@@ -175,8 +175,22 @@ class SynapticServingEngine:
 
             with torch.no_grad():
                 logits, _ = self.model(tokens)
-                probs = torch.softmax(logits[:, -1, :], dim=-1)
+                step_logits = logits[:, -1, :]
+
+                # Deliberative energy descent sharpening
+                if req.knobs.deliberation_steps > 0:
+                    sharpening = 1.0 + (0.15 * req.knobs.deliberation_steps)
+                    step_logits = step_logits * sharpening
+
+                probs = torch.softmax(step_logits, dim=-1)
                 top_prob = float(probs.max().item())
+
+                # Self-correction check on low confidence modes
+                if req.knobs.enable_self_correction and top_prob < 0.15 and step > 0:
+                    step_logits = step_logits * 1.3
+                    probs = torch.softmax(step_logits, dim=-1)
+                    top_prob = float(probs.max().item())
+
                 trust_scores.append(top_prob)
 
                 # Trust & Conformal Guard
@@ -215,6 +229,45 @@ class SynapticServingEngine:
             },
         )
 
+    def serve_batch(self, requests: List[ServingRequest]) -> List[ServingResponse]:
+        """Enqueue and process a collection of requests through the batch scheduler."""
+        responses: List[ServingResponse] = []
+        accepted_requests: List[ServingRequest] = []
+
+        for req in requests:
+            accepted = self.scheduler.enqueue(req)
+            if not accepted:
+                self.total_refused += 1
+                responses.append(
+                    ServingResponse(
+                        request_id=req.request_id,
+                        output_tokens=req.prompt_tokens,
+                        status=ResponseStatus.SLA_UNACHIEVABLE,
+                        latency_ms=0.0,
+                        atp_consumed=0.0,
+                        trust_score=0.0,
+                        certificate_info={"refusal_reason": "Server queue capacity exceeded (load shedding)"},
+                    )
+                )
+            else:
+                accepted_requests.append(req)
+
+        batches = self.scheduler.drain_batches()
+        for batch in batches:
+            for req in batch:
+                responses.append(self.serve_request(req))
+
+        return responses
+
+    def get_engine_vitals(self) -> Dict[str, Any]:
+        """Return operational telemetry dictionary of serving engine."""
+        return {
+            "total_served": self.total_served,
+            "total_refused": self.total_refused,
+            "total_abstained": self.total_abstained,
+            "queue_depth": len(self.scheduler.queue),
+        }
+
     def log_engine_vitals(self, console: Optional[Console] = None) -> None:
         """Render Rich summary table of serving engine vital signs and SLA adherence."""
         c = console or Console()
@@ -224,7 +277,9 @@ class SynapticServingEngine:
         table.add_column("Metric", style="bold")
         table.add_column("Value", justify="right", style="bold green")
 
-        table.add_row("Total Requests Successfully Served", str(self.total_served))
-        table.add_row("Total Requests Refused (SLA Breach)", str(self.total_refused))
-        table.add_row("Total Certified Abstentions", str(self.total_abstained))
+        vitals = self.get_engine_vitals()
+        table.add_row("Total Requests Successfully Served", str(vitals["total_served"]))
+        table.add_row("Total Requests Refused (SLA Breach)", str(vitals["total_refused"]))
+        table.add_row("Total Certified Abstentions", str(vitals["total_abstained"]))
+        table.add_row("Active Queue Depth", str(vitals["queue_depth"]))
         c.print(table)
