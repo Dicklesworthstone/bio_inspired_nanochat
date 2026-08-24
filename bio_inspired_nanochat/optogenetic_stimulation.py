@@ -48,9 +48,20 @@ class OptogeneticStimulator:
         """Apply a set of synaptic clamps, returning saved state for rollbacks."""
         saved_states: List[Tuple[SynapticLinear, str, Tensor]] = []
 
-        for mod in self.model.modules():
+        for name, mod in self.model.named_modules():
             if isinstance(mod, SynapticLinear):
+                # Extract layer index from module path (e.g. "h.0.mlp.fc")
+                mod_layer = None
+                parts = name.split(".")
+                for i, p in enumerate(parts):
+                    if p == "h" and i + 1 < len(parts) and parts[i + 1].isdigit():
+                        mod_layer = int(parts[i + 1])
+                        break
+
                 for clamp in clamps:
+                    if clamp.layer_idx is not None and mod_layer is not None and clamp.layer_idx != mod_layer:
+                        continue
+
                     if clamp.variable_name == "w_fast" and mod.w_fast is not None:
                         saved_states.append((mod, "w_fast", mod.w_fast.data.clone()))
                         if clamp.mode == ClampMode.PIN_VALUE:
