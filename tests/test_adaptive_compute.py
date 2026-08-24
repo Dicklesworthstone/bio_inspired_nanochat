@@ -8,13 +8,16 @@ from _bio_testkit import make_tiny_synaptic, make_tiny_vanilla, random_tokens
 from bio_inspired_nanochat.adaptive_compute import (
     AdaptiveComputeConfig,
     AdaptiveComputeController,
+    QualityFloorConfig,
     InsufficientATPError,
     adaptive_forward,
     adaptive_mc_predict,
+    quality_guarded_predict,
     temporary_expert_top_k,
 )
 from bio_inspired_nanochat.deliberation import ATPBudget, DifficultyRouter, DifficultyRouterConfig
 from bio_inspired_nanochat.engine import KVCache
+from bio_inspired_nanochat.run_logging import RunLogger
 from bio_inspired_nanochat.synaptic import SynapticConfig, SynapticMoE
 from bio_inspired_nanochat.torch_imports import torch
 
@@ -311,3 +314,184 @@ def test_config_and_capacity_validation_reject_invalid_compute_ranges():
             max_depth_layers=0,
             max_experts=1,
         )
+
+
+@pytest.mark.unit
+def test_quality_floor_config_rejects_invalid_confidence_thresholds():
+    for value in (-0.01, 1.01, float("inf"), float("nan")):
+        with pytest.raises(ValueError, match="min_predictive_confidence"):
+            QualityFloorConfig(min_predictive_confidence=value)
+
+
+@pytest.mark.unit
+def test_quality_guard_accepts_confident_path_without_spending_fallback_atp():
+    model = make_tiny_vanilla(n_layer=3)
+    inputs = random_tokens(batch=1, seq=4)
+    budget = ATPBudget(7)
+    result = quality_guarded_predict(
+        model,
+        inputs,
+        torch.tensor([20.0, 0.0, 0.0]),
+        budget,
+        controller=_controller(),
+        token_index=2,
+        quality=QualityFloorConfig(min_predictive_confidence=0.0),
+    )
+
+    assert result.quality_floor_passed and not result.fallback_used
+    assert result.executed_plan == result.proposed_plan
+    assert result.saved_compute_units > 0
+    assert result.token_spent_atp == budget.spent_atp < 7
+    assert budget.spent_atp + budget.remaining_atp == budget.total_atp
+
+
+@pytest.mark.unit
+def test_quality_guard_falls_back_to_fixed_compute_and_charges_exact_delta():
+    model = make_tiny_vanilla(n_layer=3)
+    inputs = random_tokens(batch=1, seq=4)
+    budget = ATPBudget(7)
+    result = quality_guarded_predict(
+        model,
+        inputs,
+        torch.tensor([20.0, 0.0, 0.0]),
+        budget,
+        controller=_controller(),
+        token_index=0,
+        quality=QualityFloorConfig(min_predictive_confidence=1.0),
+    )
+
+    assert not result.quality_floor_passed and result.fallback_used
+    assert result.fallback_reason == "predictive_confidence_below_floor"
+    assert result.executed_plan.compute_units == result.executed_plan.maximum_compute_units == 7
+    assert result.saved_compute_units == 0
+    assert result.token_spent_atp == budget.spent_atp == budget.total_atp == 7
+    assert [record.action for record in result.executed_plan.debit_records] == [
+        "depth_layer",
+        "mc_sample",
+        "quality_fallback_depth_layer",
+        "quality_fallback_mc_sample",
+    ]
+
+    fixed = _controller(enabled=False).plan_for_model(
+        torch.tensor([20.0, 0.0, 0.0]),
+        ATPBudget(0),
+        model=model,
+        token_index=0,
+    )
+    fixed_prediction = adaptive_mc_predict(model, inputs, fixed)
+    torch.testing.assert_close(
+        result.prediction.mean_probs,
+        fixed_prediction.mean_probs,
+        rtol=0.0,
+        atol=0.0,
+    )
+
+
+@pytest.mark.unit
+def test_quality_fallback_covers_moe_experts_and_replays_fixed_rng_stream():
+    model = make_tiny_synaptic(n_layer=2, use_moe=True, num_experts=3, moe_top_k=2)
+    inputs = random_tokens(batch=1, seq=3)
+    routing_logits = torch.tensor([20.0, 0.0, 0.0])
+    budget = ATPBudget(9)  # 2 layers + 3 experts + 4 MC samples
+    torch.manual_seed(77)
+    result = quality_guarded_predict(
+        model,
+        inputs,
+        routing_logits,
+        budget,
+        controller=_controller(),
+        token_index=0,
+        quality=QualityFloorConfig(min_predictive_confidence=1.0),
+    )
+    assert result.fallback_used
+    assert result.executed_plan.expert_top_k == result.executed_plan.max_experts == 3
+    assert "quality_fallback_expert" in {
+        record.action for record in result.executed_plan.debit_records
+    }
+
+    fixed = _controller(enabled=False).plan_for_model(
+        routing_logits,
+        ATPBudget(0),
+        model=model,
+        token_index=0,
+    )
+    torch.manual_seed(77)
+    fixed_prediction = adaptive_mc_predict(model, inputs, fixed)
+    torch.testing.assert_close(
+        result.prediction.mean_probs,
+        fixed_prediction.mean_probs,
+        rtol=0.0,
+        atol=0.0,
+    )
+
+
+@pytest.mark.unit
+def test_quality_guard_reserves_fallback_before_any_atp_debit():
+    model = make_tiny_vanilla(n_layer=3)
+    budget = ATPBudget(6)
+    with pytest.raises(InsufficientATPError, match="reserve 7 ATP"):
+        quality_guarded_predict(
+            model,
+            random_tokens(batch=1, seq=3),
+            torch.tensor([20.0, 0.0, 0.0]),
+            budget,
+            controller=_controller(),
+            token_index=0,
+        )
+    assert budget.spent_atp == 0
+    assert budget.records == []
+
+
+@pytest.mark.unit
+def test_disabled_guarded_runner_is_fixed_compute_identity_without_debits():
+    model = make_tiny_vanilla(n_layer=2)
+    budget = ATPBudget(0)
+    result = quality_guarded_predict(
+        model,
+        random_tokens(batch=1, seq=3),
+        torch.tensor([0.0, 0.0]),
+        budget,
+        controller=_controller(enabled=False),
+        token_index=0,
+        quality=QualityFloorConfig(min_predictive_confidence=1.0),
+    )
+    assert result.quality_floor_passed
+    assert not result.fallback_used
+    assert result.executed_plan.compute_units == result.executed_plan.maximum_compute_units
+    assert budget.records == []
+
+
+@pytest.mark.e2e
+def test_quality_guard_logs_detailed_per_token_compute_and_fallback(tmp_path):
+    model = make_tiny_vanilla(n_layer=3)
+    budget = ATPBudget(14)
+    with RunLogger(tmp_path, name="adaptive_quality_guard", console=False) as logger:
+        result = quality_guarded_predict(
+            model,
+            random_tokens(batch=1, seq=5),
+            torch.tensor([20.0, 0.0, 0.0]),
+            budget,
+            controller=_controller(),
+            token_index=4,
+            quality=QualityFloorConfig(min_predictive_confidence=1.0),
+            free_energy_value=0.25,
+            run_logger=logger,
+        )
+
+    events = logger.read_events()
+    records = [event for event in events if event["event"] == "adaptive_compute_token"]
+    assert len(records) == 1
+    record = records[0]
+    assert record["step"] == record["token_index"] == 4
+    assert record["fallback_used"] == result.fallback_used
+    assert record["fallback_used"]
+    assert record["fallback_reason"] == "predictive_confidence_below_floor"
+    assert record["quality_floor"] == 1.0
+    assert not record["quality_floor_passed"]
+    assert record["executed"] == record["maximum"]
+    assert record["proposed"]["compute_units"] < record["executed"]["compute_units"]
+    assert record["token_spent_atp"] == 7
+    assert record["sequence_spent_atp"] == 7
+    assert record["sequence_remaining_atp"] == 7
+    assert record["difficulty"]["free_energy"] == pytest.approx(0.25)
+    assert len(record["debit_records"]) == 4

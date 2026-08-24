@@ -10,9 +10,11 @@ turns their abstract compute units into three concrete runtime controls:
 The minimum path is always valid and is charged first.  If the remaining sequence budget cannot fund
 that floor, planning fails before mutating the account; it never returns zero layers, zero experts, or
 zero predictive samples.  The feature is default-off: a disabled controller returns the fixed
-maximum-compute plan and does not touch the ATP account.  Quality-floor verification and engine-level
-fallback/logging belong to downstream bead ``r00r.3.3``; this module supplies the honest, executable
-levers it will guard.  Cached decoding may use an early-exit prefix when the cache itself is allocated
+maximum-compute plan and does not touch the ATP account.  The
+:func:`quality_guarded_predict` inference primitive adds the downstream ``r00r.3.3`` safety contract:
+reserve enough ATP for a same-token fixed-compute fallback, serve the adaptive prediction only when
+its predictive confidence meets a configured quality floor, and emit one detailed JSONL audit event
+per token.  Cached decoding may use an early-exit prefix when the cache itself is allocated
 for that fixed prefix depth; changing depth inside one existing cache would create missing-layer
 history and is deliberately rejected by the model forward.
 """
@@ -20,9 +22,10 @@ history and is deliberately rejected by the model forward.
 from __future__ import annotations
 
 import inspect
+import math
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, replace
 from typing import Any
 
 from bio_inspired_nanochat.deliberation import (
@@ -32,7 +35,9 @@ from bio_inspired_nanochat.deliberation import (
     TokenDifficulty,
 )
 from bio_inspired_nanochat.mc_ensemble import MCPrediction, mc_predict
+from bio_inspired_nanochat.run_logging import RunLogger
 from bio_inspired_nanochat.synaptic import SynapticMoE
+from bio_inspired_nanochat.torch_imports import torch
 
 
 @dataclass(frozen=True)
@@ -93,6 +98,50 @@ class AdaptiveComputePlan:
     @property
     def maximum_compute_units(self) -> int:
         return self.max_depth_layers + self.max_experts + self.max_mc_samples
+
+
+@dataclass(frozen=True)
+class QualityFloorConfig:
+    """Inference-time acceptance threshold for an adaptive next-token prediction.
+
+    ``min_predictive_confidence`` is the minimum probability assigned to the adaptive
+    distribution's top token.  It is a calibrated quality proxy, not a proof that the token is
+    correct.  A prediction below the floor is never served from the adaptive path: the runner
+    deterministically executes and returns the configured fixed-compute baseline instead.
+    """
+
+    min_predictive_confidence: float = 0.5
+
+    def __post_init__(self) -> None:
+        if (
+            not math.isfinite(self.min_predictive_confidence)
+            or not 0.0 <= self.min_predictive_confidence <= 1.0
+        ):
+            raise ValueError(
+                "min_predictive_confidence must be finite and in [0, 1], got "
+                f"{self.min_predictive_confidence!r}"
+            )
+
+
+@dataclass(frozen=True)
+class GuardedAdaptivePrediction:
+    """Auditable result of one quality-guarded adaptive next-token inference."""
+
+    prediction: MCPrediction
+    proposed_plan: AdaptiveComputePlan
+    executed_plan: AdaptiveComputePlan
+    adaptive_confidence: float
+    served_confidence: float
+    quality_floor: float
+    quality_floor_passed: bool
+    fallback_used: bool
+    fallback_reason: str | None
+    token_spent_atp: int
+
+    @property
+    def saved_compute_units(self) -> int:
+        """Lever units saved against fixed compute for the prediction that was served."""
+        return self.executed_plan.maximum_compute_units - self.executed_plan.compute_units
 
 
 class InsufficientATPError(RuntimeError):
@@ -344,3 +393,216 @@ def adaptive_mc_predict(
             temperature=temperature,
             forward_kwargs=forward_kwargs,
         )
+
+
+def _prediction_confidence(prediction: MCPrediction) -> float:
+    """Return the single sequence's last-position top-token probability."""
+    probabilities = prediction.mean_probs
+    if probabilities.ndim != 3 or probabilities.shape[0] != 1 or probabilities.shape[1] < 1:
+        raise ValueError(
+            "quality-guarded inference requires one non-empty sequence, got predictive shape "
+            f"{tuple(probabilities.shape)}"
+        )
+    return float(probabilities[0, -1].max().item())
+
+
+def _fixed_compute_cost(
+    controller: AdaptiveComputeController,
+    *,
+    max_depth_layers: int,
+    max_experts: int,
+) -> int:
+    cfg = controller.config
+    return (
+        max_depth_layers * cfg.layer_cost_atp
+        + max_experts * cfg.expert_cost_atp
+        + cfg.max_mc_samples * cfg.mc_sample_cost_atp
+    )
+
+
+def _fallback_plan(
+    proposed: AdaptiveComputePlan,
+    budget: ATPBudget,
+    controller: AdaptiveComputeController,
+) -> AdaptiveComputePlan:
+    """Buy the proposed-to-fixed delta; the caller has already reserved enough ATP."""
+    cfg = controller.config
+    records = list(proposed.debit_records)
+    for action, current, maximum, unit_cost in (
+        ("quality_fallback_depth_layer", proposed.depth_layers, proposed.max_depth_layers, cfg.layer_cost_atp),
+        ("quality_fallback_expert", proposed.expert_top_k, proposed.max_experts, cfg.expert_cost_atp),
+        ("quality_fallback_mc_sample", proposed.mc_samples, proposed.max_mc_samples, cfg.mc_sample_cost_atp),
+    ):
+        delta = maximum - current
+        if delta == 0:
+            continue
+        debit = budget.debit(
+            token_index=proposed.token_index,
+            action=action,
+            difficulty_score=proposed.difficulty.score,
+            requested_units=delta,
+            unit_cost_atp=unit_cost,
+        )
+        if debit.granted_units != delta:
+            raise RuntimeError("reserved fixed-compute fallback ATP was unexpectedly unavailable")
+        records.append(debit)
+    return replace(
+        proposed,
+        depth_layers=proposed.max_depth_layers,
+        expert_top_k=proposed.max_experts,
+        mc_samples=proposed.max_mc_samples,
+        debit_records=tuple(records),
+    )
+
+
+def _log_guarded_prediction(
+    logger: RunLogger | None,
+    result: GuardedAdaptivePrediction,
+    budget: ATPBudget,
+) -> None:
+    if logger is None:
+        return
+    plan = result.executed_plan
+    logger.event(
+        "adaptive_compute_token",
+        step=plan.token_index,
+        token_index=plan.token_index,
+        difficulty=asdict(plan.difficulty),
+        proposed={
+            "depth_layers": result.proposed_plan.depth_layers,
+            "expert_top_k": result.proposed_plan.expert_top_k,
+            "mc_samples": result.proposed_plan.mc_samples,
+            "compute_units": result.proposed_plan.compute_units,
+        },
+        executed={
+            "depth_layers": plan.depth_layers,
+            "expert_top_k": plan.expert_top_k,
+            "mc_samples": plan.mc_samples,
+            "compute_units": plan.compute_units,
+        },
+        maximum={
+            "depth_layers": plan.max_depth_layers,
+            "expert_top_k": plan.max_experts,
+            "mc_samples": plan.max_mc_samples,
+            "compute_units": plan.maximum_compute_units,
+        },
+        adaptive_confidence=result.adaptive_confidence,
+        served_confidence=result.served_confidence,
+        quality_floor=result.quality_floor,
+        quality_floor_passed=result.quality_floor_passed,
+        fallback_used=result.fallback_used,
+        fallback_reason=result.fallback_reason,
+        saved_compute_units=result.saved_compute_units,
+        token_spent_atp=result.token_spent_atp,
+        sequence_spent_atp=budget.spent_atp,
+        sequence_remaining_atp=budget.remaining_atp,
+        debit_records=[asdict(record) for record in plan.debit_records],
+    )
+
+
+def quality_guarded_predict(
+    model,
+    input_ids,
+    routing_logits,
+    budget: ATPBudget,
+    *,
+    controller: AdaptiveComputeController,
+    token_index: int,
+    quality: QualityFloorConfig | None = None,
+    free_energy_value: float | None = None,
+    temperature: float = 1.0,
+    run_logger: RunLogger | None = None,
+) -> GuardedAdaptivePrediction:
+    """Run one adaptive prediction and fail closed to fixed compute below its quality floor.
+
+    One ATP account maps to one sequence, so batched inputs are rejected rather than silently sharing
+    a budget across rows.  Before any debit, an enabled controller verifies that the current token's
+    entire fixed path is affordable.  The cheap path may then spend less; if its confidence is below
+    the floor (or non-finite), the remaining delta is debited and the fixed path is executed.  Thus a
+    fallback can never overdraw the hard sequence budget or leave it partially charged.
+
+    When adaptive compute is disabled, this is the exact fixed-compute path and retains the existing
+    no-debit behavior.  The confidence floor is a calibration contract, not a correctness proof; the
+    downstream Pareto evaluation must establish whether a chosen threshold preserves task quality.
+    """
+    if getattr(input_ids, "ndim", None) != 2 or int(input_ids.shape[0]) != 1:
+        shape = tuple(getattr(input_ids, "shape", ()))
+        raise ValueError(f"quality-guarded inference requires input shape (1, T), got {shape}")
+    quality = quality or QualityFloorConfig()
+    max_depth_layers, max_experts = controller.model_capacity(model)
+    if controller.config.enabled:
+        fixed_cost = _fixed_compute_cost(
+            controller,
+            max_depth_layers=max_depth_layers,
+            max_experts=max_experts,
+        )
+        if budget.remaining_atp < fixed_cost:
+            raise InsufficientATPError(
+                f"quality guard must reserve {fixed_cost} ATP for the fixed-compute fallback but only "
+                f"{budget.remaining_atp} ATP remains"
+            )
+
+    spent_before = budget.spent_atp
+    proposed = controller.plan(
+        routing_logits,
+        budget,
+        token_index=token_index,
+        max_depth_layers=max_depth_layers,
+        max_experts=max_experts,
+        free_energy_value=free_energy_value,
+    )
+    cpu_rng_state = torch.random.get_rng_state()
+    cuda_rng_states = torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None
+    adaptive_prediction = adaptive_mc_predict(
+        model,
+        input_ids,
+        proposed,
+        temperature=temperature,
+    )
+    adaptive_confidence = _prediction_confidence(adaptive_prediction)
+
+    guard_active = controller.config.enabled
+    quality_passed = (
+        not guard_active
+        or (
+            math.isfinite(adaptive_confidence)
+            and adaptive_confidence >= quality.min_predictive_confidence
+        )
+    )
+    if quality_passed:
+        prediction = adaptive_prediction
+        executed = proposed
+        fallback_used = False
+        fallback_reason = None
+    else:
+        fallback_used = True
+        fallback_reason = (
+            "non_finite_predictive_confidence"
+            if not math.isfinite(adaptive_confidence)
+            else "predictive_confidence_below_floor"
+        )
+        executed = _fallback_plan(proposed, budget, controller)
+        if executed.compute_units == proposed.compute_units:
+            prediction = adaptive_prediction
+        else:
+            # The failed cheap attempt is observational: a fallback must see the exact RNG stream a
+            # fixed-compute call would have seen, not the stream after speculative MC draws.
+            torch.random.set_rng_state(cpu_rng_state)
+            if cuda_rng_states is not None:
+                torch.cuda.set_rng_state_all(cuda_rng_states)
+            prediction = adaptive_mc_predict(model, input_ids, executed, temperature=temperature)
+
+    result = GuardedAdaptivePrediction(
+        prediction=prediction,
+        proposed_plan=proposed,
+        executed_plan=executed,
+        adaptive_confidence=adaptive_confidence,
+        served_confidence=_prediction_confidence(prediction),
+        quality_floor=quality.min_predictive_confidence,
+        quality_floor_passed=quality_passed,
+        fallback_used=fallback_used,
+        fallback_reason=fallback_reason,
+        token_spent_atp=budget.spent_atp - spent_before,
+    )
+    _log_guarded_prediction(run_logger, result, budget)
+    return result
