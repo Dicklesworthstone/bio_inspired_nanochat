@@ -1,9 +1,10 @@
-"""Stats-backed falsification curve for free-energy deliberation (beads ``r00r.1.4/1.6``).
+"""Stats-backed falsification curve for free-energy deliberation (beads ``r00r.1.4/1.6/1.7``).
 
 The live controller branches a bounded model-top-k candidate set, advances each continuation on an
-isolated KV/presynaptic cache, relaxes its state, and adds the resulting physical free energy to the
-candidate's model energy. This experiment asks a narrow, falsifiable question: after training a tiny
-synaptic model on a copy-consistency task, does increasing that deliberation budget improve held-out
+isolated KV/presynaptic cache and relaxes its state. A frozen pairwise-rank readout is fitted on a
+dedicated calibration split, then combines model energy with branch-local synaptic statistics. This
+experiment asks a narrow, falsifiable question: after training a tiny synaptic model on a
+copy-consistency task, does increasing that calibrated deliberation budget improve held-out
 continuation accuracy at controlled extra effort?
 
 Every budget is evaluated on the same model weights, prompts, and sampling seeds.  The report carries
@@ -30,9 +31,19 @@ from rich.console import Console
 from rich.table import Table
 
 from bio_inspired_nanochat.common import logger
-from bio_inspired_nanochat.deliberation import DeliberationConfig, DeliberationController
+from bio_inspired_nanochat.deliberation import (
+    CandidateEnergyBatch,
+    CandidateEnergyReadout,
+    DeliberationConfig,
+    DeliberationController,
+)
 from bio_inspired_nanochat.engine import Engine
-from bio_inspired_nanochat.eval_stats import Aggregate, PairedResult, aggregate, paired_comparison
+from bio_inspired_nanochat.eval_stats import (
+    Aggregate,
+    PairedResult,
+    aggregate,
+    paired_comparison,
+)
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
 from bio_inspired_nanochat.synthetic_tasks import copy_task
 from bio_inspired_nanochat.torch_imports import torch
@@ -49,6 +60,7 @@ class ExperimentConfig:
     copy_length: int = 4
     train_batch_size: int = 8
     train_steps: int = 128
+    calibration_sequences: int = 24
     eval_sequences: int = 8
     learning_rate: float = 3e-3
     temperature: float = 0.8
@@ -58,6 +70,9 @@ class ExperimentConfig:
     eps: float = 1e-4
     candidate_top_k: int = 8
     candidate_energy_weight: float = 1.0
+    readout_l2: float = 1.0
+    calibration_seed_offset: int = 8_888
+    evaluation_seed_offset: int = 9_999
     alpha: float = 0.05
     bootstrap_samples: int = 10_000
     min_skill_over_chance: float = 0.10
@@ -71,7 +86,12 @@ class ExperimentConfig:
             raise ValueError("budgets must be unique and strictly increasing")
         if self.vocab_size < 8 or self.copy_length < 2:
             raise ValueError("vocab_size must be >= 8 and copy_length must be >= 2")
-        if self.train_batch_size < 1 or self.eval_sequences < 1 or self.train_steps < 0:
+        if (
+            self.train_batch_size < 1
+            or self.calibration_sequences < 1
+            or self.eval_sequences < 1
+            or self.train_steps < 0
+        ):
             raise ValueError("batch/eval sizes must be positive and train_steps must be non-negative")
         if self.learning_rate <= 0.0 or not np.isfinite(self.learning_rate):
             raise ValueError("learning_rate must be finite and positive")
@@ -87,6 +107,12 @@ class ExperimentConfig:
             raise ValueError("candidate_top_k must be positive")
         if not np.isfinite(self.candidate_energy_weight) or self.candidate_energy_weight < 0.0:
             raise ValueError("candidate_energy_weight must be finite and non-negative")
+        if not np.isfinite(self.readout_l2) or self.readout_l2 <= 0.0:
+            raise ValueError("readout_l2 must be finite and positive")
+        if self.calibration_seed_offset == self.evaluation_seed_offset:
+            raise ValueError("calibration and evaluation seed offsets must differ")
+        if min(self.calibration_seed_offset, self.evaluation_seed_offset) < self.train_steps:
+            raise ValueError("calibration/evaluation seed offsets must not overlap training-step seeds")
         if not 0.0 < self.alpha < 1.0:
             raise ValueError("alpha must be in (0, 1)")
         if self.bootstrap_samples < 1:
@@ -104,6 +130,42 @@ class SeedMetrics:
     deliberation_coverage: float
     generated_tokens: int
     pondered_tokens: int
+
+
+@dataclass(frozen=True)
+class RankingSeedMetrics:
+    """Candidate-ranking accuracy on one seed's fixed, held-out candidate sets."""
+
+    seed: int
+    total_groups: int
+    eligible_groups: int
+    candidate_recall: float
+    raw_physical_accuracy: float
+    raw_total_accuracy: float
+    model_only_accuracy: float
+    calibrated_accuracy: float
+
+
+@dataclass(frozen=True)
+class RankingReport:
+    per_seed: list[RankingSeedMetrics]
+    raw_physical_accuracy: Aggregate
+    raw_total_accuracy: Aggregate
+    model_only_accuracy: Aggregate
+    calibrated_accuracy: Aggregate
+    calibrated_vs_raw_physical: PairedResult
+    calibrated_vs_raw_total: PairedResult
+
+
+@dataclass(frozen=True)
+class CalibrationSummary:
+    seed: int
+    calibration_seed: int
+    evaluation_seed: int
+    calibration_sequences: int
+    evaluation_sequences: int
+    split_overlap: int
+    readouts_by_budget: dict[int, dict[str, Any]]
 
 
 @dataclass(frozen=True)
@@ -136,6 +198,8 @@ class ExperimentReport:
     mechanism_scope: str
     config: ExperimentConfig
     training_loss_by_seed: dict[int, list[float]]
+    calibration: list[CalibrationSummary]
+    ranking: RankingReport
     curve: list[CurvePoint]
     verdict: Verdict
 
@@ -182,6 +246,135 @@ class _NoToolTokenizer:
         return ""
 
 
+@dataclass(frozen=True)
+class _CandidateObservation:
+    model_logits: np.ndarray
+    scores: CandidateEnergyBatch
+    correct_mask: np.ndarray
+
+
+class _CandidateCollector(DeliberationController):
+    """Record candidate grids against known calibration/evaluation targets."""
+
+    def __init__(
+        self,
+        cfg: DeliberationConfig,
+        *,
+        gold_tokens: Sequence[int],
+        candidate_readout: CandidateEnergyReadout | None = None,
+    ) -> None:
+        super().__init__(cfg, candidate_readout=candidate_readout)
+        self._gold_tokens = tuple(int(token) for token in gold_tokens)
+        self._candidate_index = 0
+        self.observations: list[_CandidateObservation] = []
+
+    def candidate_energy_logits(self, logits, candidate_ids, scores: CandidateEnergyBatch):
+        if self._candidate_index >= len(self._gold_tokens):
+            raise RuntimeError("candidate observation count exceeded the gold continuation length")
+        values = torch.as_tensor(logits)
+        ids = torch.as_tensor(candidate_ids, device=values.device)
+        selected = values.gather(1, ids).detach().to(dtype=torch.float64).cpu().numpy()
+        correct = np.equal(
+            ids.detach().cpu().numpy(),
+            self._gold_tokens[self._candidate_index],
+        )
+        self.observations.append(
+            _CandidateObservation(
+                model_logits=selected,
+                scores=scores,
+                correct_mask=correct,
+            )
+        )
+        self._candidate_index += 1
+        return super().candidate_energy_logits(logits, candidate_ids, scores)
+
+
+def _split_seed(config: ExperimentConfig, seed: int, *, calibration: bool) -> int:
+    offset = config.calibration_seed_offset if calibration else config.evaluation_seed_offset
+    return seed * 10_000 + offset
+
+
+def _split_rows(batch, copy_length: int) -> set[tuple[int, ...]]:
+    return {
+        tuple(int(token) for token in row)
+        for row in batch.inputs[:, :copy_length].tolist()
+    }
+
+
+def _collect_candidate_observations(
+    model: GPTSynaptic,
+    config: ExperimentConfig,
+    *,
+    seed: int,
+    split_seed: int,
+    sequences: int,
+    max_iters: int,
+) -> tuple[list[_CandidateObservation], set[tuple[int, ...]]]:
+    """Collect a fixed model-top-k candidate corpus without applying an energy correction."""
+    batch = copy_task(
+        batch=sequences,
+        length=config.copy_length,
+        vocab_size=config.vocab_size,
+        seed=split_seed,
+    )
+    expected = batch.inputs[:, : config.copy_length]
+    prompts = batch.inputs[:, : config.copy_length + 1]
+    engine = Engine(model, _NoToolTokenizer(config.vocab_size))
+    observations: list[_CandidateObservation] = []
+    for row in range(sequences):
+        controller = _CandidateCollector(
+            DeliberationConfig(
+                enabled=True,
+                eps=config.eps,
+                max_iters=max_iters,
+                candidate_top_k=config.candidate_top_k,
+                # Candidate sets/contexts are model-only, so raw and calibrated ranks are compared
+                # on the exact same observations rather than on policy-induced distributions.
+                candidate_energy_weight=0.0,
+            ),
+            gold_tokens=expected[row].tolist(),
+        )
+        list(engine.generate(
+            prompts[row].tolist(),
+            max_tokens=config.copy_length,
+            temperature=0.0,
+            seed=seed * 100_000 + row,
+            deliberation=controller,
+        ))
+        if len(controller.observations) != config.copy_length:
+            raise RuntimeError("candidate collector did not observe every continuation token")
+        observations.extend(controller.observations)
+    return observations, _split_rows(batch, config.copy_length)
+
+
+def _fit_candidate_readout(
+    observations: Sequence[_CandidateObservation],
+    *,
+    l2: float,
+) -> CandidateEnergyReadout:
+    if not observations:
+        raise ValueError("candidate calibration set is empty")
+    first_features = observations[0].scores.features
+    if first_features is None:
+        raise ValueError("candidate calibration scores do not contain synaptic features")
+    feature_names = observations[0].scores.feature_names
+    for observation in observations:
+        if observation.scores.features is None:
+            raise ValueError("candidate calibration scores do not contain synaptic features")
+        if observation.scores.feature_names != feature_names:
+            raise ValueError("candidate calibration feature schemas differ")
+    return CandidateEnergyReadout.fit(
+        model_logits=np.concatenate([item.model_logits for item in observations], axis=0),
+        synaptic_features=np.concatenate(
+            [item.scores.features for item in observations if item.scores.features is not None],
+            axis=0,
+        ),
+        correct_mask=np.concatenate([item.correct_mask for item in observations], axis=0),
+        feature_names=feature_names,
+        l2=l2,
+    )
+
+
 def _make_model(config: ExperimentConfig, seed: int) -> GPTSynaptic:
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -224,6 +417,19 @@ def _train_model(model: GPTSynaptic, config: ExperimentConfig, seed: int) -> lis
     return losses
 
 
+def _snapshot_model_state(model: GPTSynaptic) -> dict[str, torch.Tensor]:
+    return {
+        name: value.detach().clone()
+        for name, value in model.state_dict().items()
+    }
+
+
+def _restore_model_state(model: GPTSynaptic, frozen_state: dict[str, torch.Tensor]) -> None:
+    model.load_state_dict(frozen_state, strict=True)
+    model.train(False)
+    model.reset_sequence_state(reset_fast_weights=False, reset_consolidation=True)
+
+
 def _mode_label(max_iters: int) -> str:
     return "single_step" if max_iters == 0 else f"deliberation_{max_iters}"
 
@@ -234,6 +440,7 @@ def _evaluate_mode(
     *,
     seed: int,
     max_iters: int,
+    candidate_readout: CandidateEnergyReadout | None = None,
 ) -> SeedMetrics:
     """Evaluate one matched seed/budget on held-out copy continuations."""
     batch = copy_task(
@@ -260,7 +467,8 @@ def _evaluate_mode(
                     max_iters=max_iters,
                     candidate_top_k=config.candidate_top_k,
                     candidate_energy_weight=config.candidate_energy_weight,
-                )
+                ),
+                candidate_readout=candidate_readout,
             )
         generated: list[int] = []
         stream = engine.generate(
@@ -293,6 +501,79 @@ def _evaluate_mode(
         deliberation_coverage=pondered_tokens / generated_tokens,
         generated_tokens=generated_tokens,
         pondered_tokens=pondered_tokens,
+    )
+
+
+def _ranking_metrics(
+    *,
+    seed: int,
+    observations: Sequence[_CandidateObservation],
+    readout: CandidateEnergyReadout,
+    raw_weight: float,
+) -> RankingSeedMetrics:
+    correct_raw_physical = 0
+    correct_raw_total = 0
+    correct_model_only = 0
+    correct_calibrated = 0
+    eligible = 0
+    for observation in observations:
+        correct = observation.correct_mask.reshape(-1)
+        if int(correct.sum()) != 1:
+            continue
+        eligible += 1
+        logits = observation.model_logits.reshape(-1)
+        raw_physical = observation.scores.F_final.reshape(-1)
+        raw_total = -logits + raw_weight * raw_physical
+        calibrated = readout.energy(observation.model_logits, observation.scores).reshape(-1)
+        correct_raw_physical += int(correct[int(np.argmin(raw_physical))])
+        correct_raw_total += int(correct[int(np.argmin(raw_total))])
+        correct_model_only += int(correct[int(np.argmax(logits))])
+        correct_calibrated += int(correct[int(np.argmin(calibrated))])
+    if eligible == 0:
+        raise RuntimeError(f"no held-out gold continuations were present in top-k for seed={seed}")
+    return RankingSeedMetrics(
+        seed=seed,
+        total_groups=len(observations),
+        eligible_groups=eligible,
+        candidate_recall=eligible / len(observations),
+        raw_physical_accuracy=correct_raw_physical / eligible,
+        raw_total_accuracy=correct_raw_total / eligible,
+        model_only_accuracy=correct_model_only / eligible,
+        calibrated_accuracy=correct_calibrated / eligible,
+    )
+
+
+def _ranking_report(
+    per_seed: list[RankingSeedMetrics],
+    config: ExperimentConfig,
+) -> RankingReport:
+    calibrated = {item.seed: item.calibrated_accuracy for item in per_seed}
+    raw_physical = {item.seed: item.raw_physical_accuracy for item in per_seed}
+    raw_total = {item.seed: item.raw_total_accuracy for item in per_seed}
+    calibrated_vs_raw_physical = paired_comparison(
+        calibrated,
+        raw_physical,
+        lower_is_better=False,
+        n_boot=config.bootstrap_samples,
+        seed=config.seeds[0] + 20_001,
+    )
+    calibrated_vs_raw_total = paired_comparison(
+        calibrated,
+        raw_total,
+        lower_is_better=False,
+        n_boot=config.bootstrap_samples,
+        seed=config.seeds[0] + 20_002,
+    )
+    if calibrated_vs_raw_physical is None or calibrated_vs_raw_total is None:
+        raise RuntimeError("candidate-ranking report requires at least two matched seeds")
+    return RankingReport(
+        per_seed=per_seed,
+        raw_physical_accuracy=aggregate(list(raw_physical.values())),
+        raw_total_accuracy=aggregate(list(raw_total.values())),
+        model_only_accuracy=aggregate([item.model_only_accuracy for item in per_seed]),
+        calibrated_accuracy=aggregate(list(calibrated.values())),
+        calibrated_vs_raw_physical=calibrated_vs_raw_physical,
+        calibrated_vs_raw_total=calibrated_vs_raw_total,
     )
 
 
@@ -394,12 +675,77 @@ def run_experiment(config: ExperimentConfig | None = None) -> ExperimentReport:
     modes = (0, *config.budgets)
     by_mode: dict[int, list[SeedMetrics]] = {mode: [] for mode in modes}
     training_loss_by_seed: dict[int, list[float]] = {}
+    calibration_summaries: list[CalibrationSummary] = []
+    ranking_by_seed: list[RankingSeedMetrics] = []
     for seed in config.seeds:
         model = _make_model(config, seed)
         training_loss_by_seed[seed] = _train_model(model, config, seed)
+        frozen_state = _snapshot_model_state(model)
+
+        calibration_seed = _split_seed(config, seed, calibration=True)
+        evaluation_seed = _split_seed(config, seed, calibration=False)
+        readouts_by_mode: dict[int, CandidateEnergyReadout] = {}
+        calibration_rows: set[tuple[int, ...]] | None = None
+        for max_iters in config.budgets:
+            _restore_model_state(model, frozen_state)
+            calibration_observations, rows = _collect_candidate_observations(
+                model,
+                config,
+                seed=seed,
+                split_seed=calibration_seed,
+                sequences=config.calibration_sequences,
+                max_iters=max_iters,
+            )
+            calibration_rows = rows
+            readouts_by_mode[max_iters] = _fit_candidate_readout(
+                calibration_observations,
+                l2=config.readout_l2,
+            )
+
+        _restore_model_state(model, frozen_state)
+        ranking_observations, evaluation_rows = _collect_candidate_observations(
+            model,
+            config,
+            seed=seed,
+            split_seed=evaluation_seed,
+            sequences=config.eval_sequences,
+            max_iters=config.budgets[-1],
+        )
+        if calibration_rows is None:
+            raise RuntimeError("no calibration rows were collected")
+        split_overlap = len(calibration_rows & evaluation_rows)
+        if split_overlap:
+            raise RuntimeError(
+                f"calibration/evaluation leakage for seed={seed}: {split_overlap} duplicate rows"
+            )
+        ranking_by_seed.append(_ranking_metrics(
+            seed=seed,
+            observations=ranking_observations,
+            readout=readouts_by_mode[config.budgets[-1]],
+            raw_weight=config.candidate_energy_weight,
+        ))
+        calibration_summaries.append(CalibrationSummary(
+            seed=seed,
+            calibration_seed=calibration_seed,
+            evaluation_seed=evaluation_seed,
+            calibration_sequences=config.calibration_sequences,
+            evaluation_sequences=config.eval_sequences,
+            split_overlap=split_overlap,
+            readouts_by_budget={
+                budget: readout.to_dict()
+                for budget, readout in readouts_by_mode.items()
+            },
+        ))
         for max_iters in modes:
+            _restore_model_state(model, frozen_state)
             by_mode[max_iters].append(
-                _evaluate_mode(model, config, seed=seed, max_iters=max_iters)
+                _evaluate_mode(
+                    model,
+                    config,
+                    seed=seed,
+                    max_iters=max_iters,
+                    candidate_readout=readouts_by_mode.get(max_iters),
+                )
             )
     baseline = by_mode[0]
     curve = [
@@ -416,20 +762,56 @@ def run_experiment(config: ExperimentConfig | None = None) -> ExperimentReport:
         min_skill_over_chance=config.min_skill_over_chance,
     )
     return ExperimentReport(
-        bead="bio_inspired_nanochat-r00r.1.6",
+        bead="bio_inspired_nanochat-r00r.1.7",
         task="held-out copy-continuation consistency",
         mechanism_scope=(
             "bounded model-top-k candidate continuations are advanced on isolated cache branches; "
-            "their relaxed free energy is added to the actual decode logits on every generated token"
+            "a frozen pairwise-rank readout calibrated on disjoint sequences maps model energy plus "
+            "branch-local synaptic statistics into the actual decode logits on every generated token"
         ),
         config=config,
         training_loss_by_seed=training_loss_by_seed,
+        calibration=calibration_summaries,
+        ranking=_ranking_report(ranking_by_seed, config),
         curve=curve,
         verdict=verdict,
     )
 
 
 def render_report(report: ExperimentReport, console: Console) -> None:
+    ranking_table = Table(title="Held-out candidate-energy ranking")
+    ranking_table.add_column("Seed")
+    ranking_table.add_column("Gold in top-k", justify="right")
+    ranking_table.add_column("Raw F", justify="right")
+    ranking_table.add_column("Raw total", justify="right")
+    ranking_table.add_column("Model only", justify="right")
+    ranking_table.add_column("Calibrated", justify="right")
+    for item in report.ranking.per_seed:
+        ranking_table.add_row(
+            str(item.seed),
+            f"{item.candidate_recall:.1%}",
+            f"{item.raw_physical_accuracy:.4f}",
+            f"{item.raw_total_accuracy:.4f}",
+            f"{item.model_only_accuracy:.4f}",
+            f"{item.calibrated_accuracy:.4f}",
+        )
+    ranking_table.add_row(
+        "mean",
+        "—",
+        f"{report.ranking.raw_physical_accuracy.mean:.4f}",
+        f"{report.ranking.raw_total_accuracy.mean:.4f}",
+        f"{report.ranking.model_only_accuracy.mean:.4f}",
+        f"{report.ranking.calibrated_accuracy.mean:.4f}",
+    )
+    console.print(ranking_table)
+    comparison = report.ranking.calibrated_vs_raw_physical
+    console.print(
+        "[dim]Calibrated − raw F: "
+        f"{comparison.mean_delta:+.4f} "
+        f"[{comparison.delta_ci_low:+.4f}, {comparison.delta_ci_high:+.4f}], "
+        f"paired t p={comparison.t_p_value:.4g}[/dim]"
+    )
+
     table = Table(title="Free-energy deliberation compute/quality curve")
     table.add_column("Mode")
     table.add_column("Effort/token", justify="right")
@@ -494,7 +876,13 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--budgets", type=_parse_int_tuple, default=ExperimentConfig.budgets)
     parser.add_argument("--device", default=ExperimentConfig.device)
     parser.add_argument("--train-steps", type=int, default=ExperimentConfig.train_steps)
+    parser.add_argument(
+        "--calibration-sequences",
+        type=int,
+        default=ExperimentConfig.calibration_sequences,
+    )
     parser.add_argument("--eval-sequences", type=int, default=ExperimentConfig.eval_sequences)
+    parser.add_argument("--readout-l2", type=float, default=ExperimentConfig.readout_l2)
     parser.add_argument("--output", type=Path, help="Optional strict-JSON report path")
     return parser.parse_args(argv)
 
@@ -506,14 +894,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         budgets=args.budgets,
         device=args.device,
         train_steps=args.train_steps,
+        calibration_sequences=args.calibration_sequences,
         eval_sequences=args.eval_sequences,
+        readout_l2=args.readout_l2,
     )
     logger.info(
-        "Starting deliberation falsification seeds=%s budgets=%s device=%s train_steps=%d",
+        "Starting deliberation falsification seeds=%s budgets=%s device=%s train_steps=%d calibration=%d",
         config.seeds,
         config.budgets,
         config.device,
         config.train_steps,
+        config.calibration_sequences,
     )
     report = run_experiment(config)
     console = Console()

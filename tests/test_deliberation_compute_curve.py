@@ -72,10 +72,12 @@ def test_tiny_compute_quality_curve_is_complete_stats_backed_and_strict_json():
         copy_length=2,
         train_batch_size=2,
         train_steps=1,
+        calibration_sequences=2,
         eval_sequences=2,
         n_layer=1,
         n_head=2,
         n_embd=16,
+        candidate_top_k=16,
         bootstrap_samples=100,
     )
     report = run_experiment(config)
@@ -99,12 +101,20 @@ def test_tiny_compute_quality_curve_is_complete_stats_backed_and_strict_json():
         assert all(item.generated_tokens in {expected_generated} for item in point.per_seed)
         assert all(item.pondered_tokens == item.generated_tokens for item in point.per_seed)
     assert report.verdict.outcome in {"improved", "null", "worse", "inconclusive"}
-    assert "added to the actual decode logits" in report.mechanism_scope
+    assert len(report.calibration) == len(config.seeds)
+    assert all(item.split_overlap == 0 for item in report.calibration)
+    assert all(set(item.readouts_by_budget) == set(config.budgets) for item in report.calibration)
+    assert all(item.candidate_recall == 1.0 for item in report.ranking.per_seed)
+    assert 0.0 <= report.ranking.calibrated_accuracy.mean <= 1.0
+    assert report.ranking.calibrated_vs_raw_physical.n_pairs == len(config.seeds)
+    assert "calibrated on disjoint sequences" in report.mechanism_scope
+    assert "actual decode logits" in report.mechanism_scope
     assert "every generated token" in report.mechanism_scope
     json.dumps(report.to_dict(), allow_nan=False)
 
     console = Console(record=True, width=140)
     render_report(report, console)
     rendered = console.export_text()
+    assert "candidate-energy ranking" in rendered
     assert "compute/quality curve" in rendered
     assert "Verdict" in rendered

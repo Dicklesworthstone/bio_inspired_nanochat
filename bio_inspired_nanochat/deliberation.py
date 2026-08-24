@@ -6,8 +6,10 @@ Implements the live per-token wiring of the design note `docs/theory/free_energy
 `z = (C, B, h)`, relaxed by extra free-energy-minimization steps ("ponder") until it self-consistently
 halts (`|ΔF| < eps`) or a compute budget (`max_iters`, the latency bound) is hit. For each token, the
 engine also advances a bounded model-top-k set on isolated KV/presynaptic cache branches and relaxes
-each continuation. Its `F_final` is added to the model energy (`-logit + lambda*F_final`), so the
-relaxed state affects the actual candidate logits. Effort/confidence still modulate temperature.
+each continuation. By default its `F_final` is added to model energy
+(`-logit + lambda*F_final`). A separately calibrated, leakage-safe candidate readout may instead map
+the model-energy prior plus branch-local synaptic statistics to a task energy; it is fitted outside
+the decode path and remains an explicit opt-in. Effort/confidence still modulate temperature.
 
 Convergence is guaranteed by Thrust A (the structure-preserving step makes `F` monotonically
 non-increasing and bounded below — `docs/theory/metriplectic.md` §5), so the ponder always halts in a
@@ -16,17 +18,20 @@ whole mechanism is **default-off**: with no `DeliberationController` the engine 
 before (single-step). Nothing here mutates the model — deliberation only runs the existing descent
 longer and reads the result.
 
-**Scope, stated honestly.** The candidate path (`r00r.1.6`) is one-step energy-guided decoding, not a
-learned hidden-state recurrent ponder: it branches only the model's top-k candidates, scores the
-low-dimensional aggregate `z = (mean C, mean B, 0)`, and leaves the committed cache untouched until a
-token is selected normally. The additive coefficient `lambda` controls the physical energy term.
-The work per sequence/token is bounded by `(candidate_top_k + 1) * max_iters`; `max_iters=0` bypasses
-both branching and pondering exactly. Deeper tree search remains downstream `re4e.3` work.
+**Scope, stated honestly.** The candidate path (`r00r.1.6/1.7`) is one-step energy-guided decoding,
+not a learned hidden-state recurrent ponder: it branches only the model's top-k candidates and leaves
+the committed cache untouched until a token is selected normally. The raw path scores the
+low-dimensional aggregate `z = (mean C, mean B, 0)`. The calibrated path is a linear pairwise-rank
+readout over the existing model-energy prior, relaxed-energy trajectory, and branch-local state
+moments; it does not alter or train the language model. The work per sequence/token is bounded by
+`(candidate_top_k + 1) * max_iters`; `max_iters=0` bypasses both branching and pondering exactly.
+Deeper tree search remains downstream `re4e.3` work.
 """
 
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 
 import numpy as np
@@ -291,6 +296,11 @@ class CandidateEnergyBatch:
     F_final: np.ndarray
     effort: np.ndarray
     halted_converged: np.ndarray
+    # Last axis is a stable, named feature vector. The first five columns describe the relaxation;
+    # the remaining columns are per-row moments of the live branch-local synaptic state. Keeping the
+    # raw arrays alongside the features preserves the original physical-energy path exactly.
+    features: np.ndarray | None = None
+    feature_names: tuple[str, ...] = ()
 
     @property
     def shape(self) -> tuple[int, ...]:
@@ -303,6 +313,170 @@ class CandidateEnergyBatch:
     @property
     def max_effort_per_row(self) -> int:
         return int(np.max(np.sum(self.effort, axis=-1)))
+
+
+@dataclass(frozen=True)
+class CandidateEnergyReadout:
+    """Leakage-safe linear rank readout fitted on an explicit calibration split.
+
+    The readout predicts a *total* candidate energy from the model-energy prior (`-logit`) and
+    branch-local synaptic features. Fitting uses within-candidate-set pairwise differences, so the
+    learned direction directly asks for the correct continuation to have lower energy than every
+    incorrect continuation. A ridge prior keeps the first coefficient pointed along model energy;
+    the synaptic terms must earn any residual correction from calibration data.
+
+    This object is deliberately immutable and has no optimizer/model reference. Consequently it
+    cannot update during evaluation: callers must fit it on a disjoint calibration split and pass
+    the frozen result to :class:`DeliberationController`.
+    """
+
+    feature_names: tuple[str, ...]
+    center: tuple[float, ...]
+    scale: tuple[float, ...]
+    weights: tuple[float, ...]
+    output_scale: float
+    output_offset: float
+    blend_weight: float
+    l2: float
+    calibration_groups: int
+    calibration_pairs: int
+
+    @classmethod
+    def fit(
+        cls,
+        *,
+        model_logits: np.ndarray,
+        synaptic_features: np.ndarray,
+        correct_mask: np.ndarray,
+        feature_names: Sequence[str],
+        l2: float = 1.0,
+    ) -> CandidateEnergyReadout:
+        """Fit on grouped candidates; groups without exactly one gold candidate are excluded."""
+        logits = np.asarray(model_logits, dtype=np.float64)
+        features = np.asarray(synaptic_features, dtype=np.float64)
+        correct = np.asarray(correct_mask, dtype=np.bool_)
+        names = tuple(feature_names)
+        if logits.ndim != 2:
+            raise ValueError("model_logits must have shape (groups, candidates)")
+        if correct.shape != logits.shape:
+            raise ValueError("correct_mask must match model_logits")
+        if features.shape[:2] != logits.shape or features.ndim != 3:
+            raise ValueError("synaptic_features must have shape (groups, candidates, features)")
+        if features.shape[-1] != len(names):
+            raise ValueError("feature_names must name every synaptic feature")
+        if len(set(names)) != len(names):
+            raise ValueError("feature_names must be unique")
+        if not np.isfinite(logits).all() or not np.isfinite(features).all():
+            raise ValueError("calibration inputs must be finite")
+        if not np.isfinite(l2) or l2 <= 0.0:
+            raise ValueError("l2 must be finite and positive")
+
+        valid_groups = np.flatnonzero(correct.sum(axis=1) == 1)
+        if valid_groups.size < 2:
+            raise ValueError("at least two calibration groups must contain exactly one gold candidate")
+        design = np.concatenate((-logits[..., None], features), axis=-1)
+        flat = design[valid_groups].reshape(-1, design.shape[-1])
+        center = flat.mean(axis=0)
+        scale = flat.std(axis=0)
+        scale = np.where(scale > 1e-8, scale, 1.0)
+        standardized = (design - center) / scale
+
+        differences: list[np.ndarray] = []
+        for group_idx in valid_groups:
+            group = standardized[group_idx]
+            gold = group[correct[group_idx]][0]
+            differences.extend(group[~correct[group_idx]] - gold)
+        pairwise = np.asarray(differences, dtype=np.float64)
+        if pairwise.ndim != 2 or pairwise.shape[0] < 2:
+            raise ValueError("calibration must contain at least two correct/incorrect candidate pairs")
+
+        # Target a unit energy margin for each incorrect-minus-correct pair. The prior says model
+        # energy is useful while all residual synaptic weights start at zero.
+        prior = np.zeros(pairwise.shape[1], dtype=np.float64)
+        prior[0] = 1.0
+        gram = pairwise.T @ pairwise + l2 * np.eye(pairwise.shape[1], dtype=np.float64)
+        rhs = pairwise.T @ np.ones(pairwise.shape[0], dtype=np.float64) + l2 * prior
+        weights = np.linalg.solve(gram, rhs)
+        if not np.isfinite(weights).all():
+            raise ValueError("calibration produced non-finite readout weights")
+        # Pairwise ranking determines ordering but not absolute scale. Sampling consumes logits, so
+        # an arbitrary energy scale would silently change effective temperature. Match the frozen
+        # readout's mean/std to model energy on calibration data; this affine map preserves ranking.
+        predicted_energy = standardized[valid_groups] @ weights
+        calibration_model_energy = design[valid_groups, :, 0]
+        predicted_std = float(predicted_energy.std())
+        model_energy_std = float(calibration_model_energy.std())
+        output_scale = model_energy_std / predicted_std if predicted_std > 1e-8 else 1.0
+        output_offset = float(
+            calibration_model_energy.mean() - output_scale * predicted_energy.mean()
+        )
+        full_calibrated_energy = output_scale * predicted_energy + output_offset
+        # Ranking fit alone does not identify probability margins. Select a conservative blend by
+        # calibration cross-entropy; ties resolve toward model-only energy, preventing a noisy
+        # synaptic residual from flattening a well-calibrated language-model distribution.
+        calibration_correct = correct[valid_groups]
+        blend_weight = 0.0
+        best_nll = float("inf")
+        for blend in np.linspace(0.0, 1.0, 17):
+            blended = calibration_model_energy + blend * (
+                full_calibrated_energy - calibration_model_energy
+            )
+            row_min = blended.min(axis=1, keepdims=True)
+            log_normalizer = (
+                -row_min[:, 0]
+                + np.log(np.exp(-(blended - row_min)).sum(axis=1))
+            )
+            gold_energy = blended[calibration_correct]
+            nll = float(np.mean(gold_energy + log_normalizer))
+            if nll < best_nll - 1e-12:
+                best_nll = nll
+                blend_weight = float(blend)
+        return cls(
+            feature_names=("model_energy", *names),
+            center=tuple(float(value) for value in center),
+            scale=tuple(float(value) for value in scale),
+            weights=tuple(float(value) for value in weights),
+            output_scale=output_scale,
+            output_offset=output_offset,
+            blend_weight=blend_weight,
+            l2=float(l2),
+            calibration_groups=int(valid_groups.size),
+            calibration_pairs=int(pairwise.shape[0]),
+        )
+
+    def energy(
+        self,
+        model_logits: np.ndarray,
+        scores: CandidateEnergyBatch,
+    ) -> np.ndarray:
+        """Return calibrated total energies with the same candidate-grid shape as the logits."""
+        if scores.features is None:
+            raise ValueError("candidate scores do not contain calibrated-readout features")
+        expected_names = self.feature_names[1:]
+        if scores.feature_names != expected_names:
+            raise ValueError(
+                "candidate feature schema does not match calibrated readout: "
+                f"expected {expected_names}, got {scores.feature_names}"
+            )
+        logits = np.asarray(model_logits, dtype=np.float64)
+        if logits.shape != scores.shape:
+            raise ValueError("model_logits must match the candidate energy grid")
+        design = np.concatenate((-logits[..., None], scores.features), axis=-1)
+        center = np.asarray(self.center, dtype=np.float64)
+        scale = np.asarray(self.scale, dtype=np.float64)
+        weights = np.asarray(self.weights, dtype=np.float64)
+        model_energy = design[..., 0]
+        full_calibrated = (
+            self.output_scale * (((design - center) / scale) @ weights) + self.output_offset
+        )
+        energies = model_energy + self.blend_weight * (full_calibrated - model_energy)
+        if not np.isfinite(energies).all():
+            raise ValueError("calibrated candidate energies must be finite")
+        return energies
+
+    def to_dict(self) -> dict:
+        """Strict-JSON-ready calibration artifact."""
+        return asdict(self)
 
 
 @dataclass
@@ -339,8 +513,16 @@ class DeliberationController:
     deterministic fallback to single-step decode.
     """
 
-    def __init__(self, cfg: DeliberationConfig | None = None) -> None:
+    _STATE_FEATURE_KEYS = ("C", "BUF", "RRP", "RES", "PR", "CL", "E", "AMP")
+
+    def __init__(
+        self,
+        cfg: DeliberationConfig | None = None,
+        *,
+        candidate_readout: CandidateEnergyReadout | None = None,
+    ) -> None:
         self.cfg = cfg or DeliberationConfig()
+        self.candidate_readout = candidate_readout
         self.records: list[DeliberationRecord] = []
 
     # -- synaptic-state readout ---------------------------------------------- #
@@ -446,6 +628,48 @@ class DeliberationController:
         )
         return np.column_stack((calcium_rows, buffer_rows, np.zeros(batch_size)))
 
+    @classmethod
+    def candidate_state_features(
+        cls,
+        presyn_state,
+        *,
+        expected_rows: int,
+    ) -> tuple[np.ndarray, tuple[str, ...]]:
+        """Extract stable per-row state moments without mixing candidate branches.
+
+        Each state key contributes its within-row mean and standard deviation, averaged across
+        layers. Missing optional state is represented by zero, which keeps the feature schema stable
+        across configurations. The physical raw-energy path never consumes these columns.
+        """
+        layers = presyn_state if isinstance(presyn_state, list) else [presyn_state]
+        columns: list[np.ndarray] = []
+        names: list[str] = []
+        for key in cls._STATE_FEATURE_KEYS:
+            layer_means: list[np.ndarray] = []
+            layer_stds: list[np.ndarray] = []
+            for state in layers:
+                if not isinstance(state, dict):
+                    continue
+                value = state.get(key)
+                if value is None or not torch.is_tensor(value):
+                    continue
+                tensor = value.detach().to(dtype=torch.float64)
+                if tensor.ndim == 0 or tensor.shape[0] != expected_rows:
+                    continue
+                rows = tensor.reshape(expected_rows, -1)
+                layer_means.append(
+                    np.nan_to_num(rows.mean(dim=1).cpu().numpy(), copy=False)
+                )
+                layer_stds.append(
+                    np.nan_to_num(rows.std(dim=1, unbiased=False).cpu().numpy(), copy=False)
+                )
+            if layer_means:
+                columns.extend((np.mean(layer_means, axis=0), np.mean(layer_stds, axis=0)))
+            else:
+                columns.extend((np.zeros(expected_rows), np.zeros(expected_rows)))
+            names.extend((f"{key}_mean", f"{key}_std"))
+        return np.column_stack(columns), tuple(names)
+
     # -- the ponder ----------------------------------------------------------- #
     def ponder(self, z: np.ndarray) -> DeliberationResult:
         """Run the bounded free-energy-minimization loop on `z` (the design §1 deliberation loop)."""
@@ -484,19 +708,44 @@ class DeliberationController:
                 f"got {rows.shape[0]} rows for shape {candidate_shape}"
             )
         results = [self.ponder(row) for row in rows]
+        F_initial = np.asarray(
+            [free_energy(row, self.cfg.T) for row in rows], dtype=np.float64
+        ).reshape(candidate_shape)
+        F_final = np.asarray(
+            [result.F_final for result in results], dtype=np.float64
+        ).reshape(candidate_shape)
+        effort = np.asarray(
+            [result.iters for result in results], dtype=np.int64
+        ).reshape(candidate_shape)
+        halted_converged = np.asarray(
+            [result.halted_converged for result in results], dtype=np.bool_
+        ).reshape(candidate_shape)
+        state_features, state_feature_names = self.candidate_state_features(
+            presyn_state,
+            expected_rows=expected_rows,
+        )
+        relaxation_features = np.column_stack((
+            F_initial.reshape(-1),
+            F_final.reshape(-1),
+            (F_initial - F_final).reshape(-1),
+            effort.reshape(-1) / max(1, self.cfg.max_iters),
+            halted_converged.reshape(-1).astype(np.float64),
+            state_features,
+        )).reshape(*candidate_shape, -1)
         return CandidateEnergyBatch(
-            F_initial=np.asarray(
-                [free_energy(row, self.cfg.T) for row in rows], dtype=np.float64
-            ).reshape(candidate_shape),
-            F_final=np.asarray([result.F_final for result in results], dtype=np.float64).reshape(
-                candidate_shape
+            F_initial=F_initial,
+            F_final=F_final,
+            effort=effort,
+            halted_converged=halted_converged,
+            features=relaxation_features,
+            feature_names=(
+                "F_initial",
+                "F_final",
+                "F_drop",
+                "effort_fraction",
+                "halted_converged",
+                *state_feature_names,
             ),
-            effort=np.asarray([result.iters for result in results], dtype=np.int64).reshape(
-                candidate_shape
-            ),
-            halted_converged=np.asarray(
-                [result.halted_converged for result in results], dtype=np.bool_
-            ).reshape(candidate_shape),
         )
 
     def candidate_energy_logits(
@@ -519,7 +768,16 @@ class DeliberationController:
             raise ValueError(
                 f"candidate energy shape {scores.shape} does not match ids shape {tuple(ids.shape)}"
             )
-        energies = torch.as_tensor(scores.F_final, dtype=values.dtype, device=values.device)
+        if self.candidate_readout is None:
+            candidate_energies = scores.F_final
+        else:
+            selected_model_logits = values.gather(1, ids).detach().to(dtype=torch.float64).cpu().numpy()
+            calibrated_total = self.candidate_readout.energy(selected_model_logits, scores)
+            # Interpolate from the original model energy to the calibrated total energy. This keeps
+            # weight=0 an exact identity on selected candidates and weight=1 equal to `-E_cal`.
+            model_energy = -selected_model_logits
+            candidate_energies = calibrated_total - model_energy
+        energies = torch.as_tensor(candidate_energies, dtype=values.dtype, device=values.device)
         if not bool(torch.isfinite(energies).all()):
             raise ValueError("candidate free energies must be finite")
         selected_logits = values.gather(1, ids)

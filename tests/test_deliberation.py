@@ -26,6 +26,7 @@ from bio_inspired_nanochat import engine as engine_module
 from bio_inspired_nanochat.deliberation import (
     ATPBudget,
     CandidateEnergyBatch,
+    CandidateEnergyReadout,
     DeliberationConfig,
     DeliberationController,
     DifficultyRouter,
@@ -275,6 +276,50 @@ def test_candidate_energy_feedback_is_shape_safe_and_changes_selected_logits():
 
 
 @pytest.mark.unit
+def test_candidate_readout_fits_pairwise_energy_on_frozen_calibration_data():
+    model_logits = np.zeros((4, 2), dtype=np.float64)
+    features = np.array(
+        [[[-1.0], [1.0]], [[1.0], [-1.0]], [[-2.0], [2.0]], [[2.0], [-2.0]]],
+        dtype=np.float64,
+    )
+    correct = np.array(
+        [[True, False], [False, True], [True, False], [False, True]],
+        dtype=np.bool_,
+    )
+    readout = CandidateEnergyReadout.fit(
+        model_logits=model_logits,
+        synaptic_features=features,
+        correct_mask=correct,
+        feature_names=("task_signal",),
+    )
+    held_out = CandidateEnergyBatch(
+        F_initial=np.array([[0.0, 0.0]]),
+        # The old aggregate ranks candidate 1 first; the calibrated feature ranks candidate 0.
+        F_final=np.array([[2.0, 0.0]]),
+        effort=np.ones((1, 2), dtype=np.int64),
+        halted_converged=np.ones((1, 2), dtype=np.bool_),
+        features=np.array([[[-1.5], [1.5]]]),
+        feature_names=("task_signal",),
+    )
+    energies = readout.energy(np.zeros((1, 2)), held_out)
+    assert int(np.argmin(held_out.F_final, axis=1)[0]) == 1
+    assert int(np.argmin(energies, axis=1)[0]) == 0
+    assert readout.calibration_groups == 4
+    assert readout.calibration_pairs == 4
+
+    controller = DeliberationController(
+        DeliberationConfig(enabled=True, candidate_top_k=2, candidate_energy_weight=1.0),
+        candidate_readout=readout,
+    )
+    adjusted = controller.candidate_energy_logits(
+        torch.zeros((1, 3)),
+        torch.tensor([[0, 1]]),
+        held_out,
+    )
+    assert int(adjusted.argmax(dim=-1)) == 0
+
+
+@pytest.mark.unit
 def test_candidate_relaxation_preserves_branch_rows_and_is_bounded():
     controller = DeliberationController(
         DeliberationConfig(enabled=True, max_iters=3, candidate_top_k=2)
@@ -286,6 +331,16 @@ def test_candidate_relaxation_preserves_branch_rows_and_is_bounded():
     scores = controller.relax_candidate_states(state, candidate_shape=(2, 2))
     assert scores is not None
     assert scores.shape == (2, 2)
+    assert scores.features is not None
+    assert scores.features.shape[:2] == scores.shape
+    assert scores.features.shape[-1] == len(scores.feature_names)
+    assert scores.feature_names[:5] == (
+        "F_initial",
+        "F_final",
+        "F_drop",
+        "effort_fraction",
+        "halted_converged",
+    )
     assert np.unique(scores.F_final).size > 1
     assert bool(np.all((1 <= scores.effort) & (scores.effort <= 3)))
     assert scores.max_effort_per_row <= 2 * 3

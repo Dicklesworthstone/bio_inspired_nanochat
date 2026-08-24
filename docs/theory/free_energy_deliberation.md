@@ -98,6 +98,40 @@ controllable generation, `re4e.8`): forbidden configurations get high energy and
 probability. The weights are numerically stabilized (subtract the max-logit). The Boltzmann decoder
 composes with the per-token deliberation: relax each candidate, then sample by relaxed `F`.
 
+### 4.1 Task-calibrated candidate energy (`r00r.1.7`)
+
+The raw `F(mean C, mean B, 0)` readout is parameter-free but throws away almost all branch-local
+structure. The optional `CandidateEnergyReadout` instead uses a frozen linear energy over the model
+energy prior, the relaxation trajectory (`F_initial`, `F_final`, drop, effort, convergence), and
+per-candidate moments of C/BUF/RRP/RES/PR/CL/E/AMP. It is trained by pairwise ranking: within each
+model-top-k group, the gold continuation must have lower energy than every incorrect candidate.
+
+The fit is deliberately leakage-safe:
+
+1. the language model is trained first and its state is frozen;
+2. each seed fits a readout only on its deterministic calibration sequences;
+3. calibration and evaluation content rows are checked for zero overlap;
+4. the immutable readout cannot update in the evaluation decode path;
+5. ranking is compared on one fixed model-only candidate corpus, so policies cannot manufacture an
+   easier candidate distribution;
+6. an affine scale match preserves model-energy temperature, then a calibration-only cross-entropy
+   grid chooses a conservative residual blend (ties choose model-only energy).
+
+The five-seed copy-continuation falsification (`seeds=11,23,37,53,71`; 24 calibration and 8 held-out
+sequences per seed) found:
+
+- calibrated rank accuracy `0.8017` versus raw physical `F` `0.2412`; paired delta `+0.5605`, bootstrap
+  95% interval `[+0.4845,+0.6283]`, paired-t `p=0.000182`;
+- calibrated rank accuracy versus the already-strong raw total/model energy was a null: delta
+  `+0.0067`, interval `[0.0000,+0.0200]`, `p=0.3739`;
+- at `max_iters=32`, token accuracy **regressed** from `0.76875` to `0.70000` while effort rose to
+  `279.82` relaxations/token; paired delta `-0.06875`, interval `[-0.10625,-0.03125]`, `p=0.0402`.
+
+So `r00r.1.7` establishes a valid disjoint-split readout and decisively repairs ranking relative to
+the raw aggregate, but does **not** establish a useful capability improvement. The result is a
+predeclared regression, not a success relabel: `r00r.1` remains open. The default-off path is still
+the recommended runtime behavior.
+
 ---
 
 ## 5. The compute-vs-quality control knob
@@ -106,13 +140,14 @@ Two scalars set the trade-off:
 
 | knob | meaning | smaller / larger |
 |---|---|---|
-| `eps` | halting threshold on `\|ΔF\|` | smaller ⟹ deliberate longer (higher quality, more compute) |
+| `eps` | halting threshold on `\|ΔF\|` | smaller ⟹ deliberate longer (more compute; quality is empirical) |
 | `max_iters` | per-token compute budget | larger ⟹ allow harder tokens more thinking |
 | `kT` | decode temperature | smaller ⟹ greedier on self-consistency |
 
-Because effort is *self-allocating* (easy tokens halt early), the **average** compute is far below
-`max_iters` — the budget bounds the worst case, the dynamics spend it only where needed. This is the
-"compute scales with difficulty" property, the whole point of metabolic System-2.
+Because effort is *self-allocating* (easy tokens may halt early), the **average** compute is bounded
+by `max_iters`; the budget bounds the worst case and the dynamics decide how much is spent. That is
+the intended "compute scales with difficulty" mechanism. The `r00r.1.7` regression above shows that
+self-allocation alone is not evidence of a favorable compute/quality trade-off.
 
 ---
 
