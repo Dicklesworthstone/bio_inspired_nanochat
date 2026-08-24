@@ -26,6 +26,7 @@ from __future__ import annotations
 import json
 import math
 from dataclasses import asdict, dataclass
+from typing import Any
 
 import numpy as np
 
@@ -346,6 +347,500 @@ def rates_from_release(p_release: float, rec_rate: float, pool: float) -> Releas
     the high-calcium / metabolically-driven regime where the release dissipates and `Σ > 0`.
     """
     return ReleaseRates(a=max(p_release * pool, 1e-12), b=max(rec_rate * pool, 1e-12))
+
+
+# =========================================================================== #
+# Predictive-ensemble evidence bridge (bead 0642.3.4)
+# =========================================================================== #
+@dataclass(frozen=True)
+class PredictiveEvidenceProvenance:
+    """Immutable identity binding for one predictive-distribution evidence stream."""
+
+    run_id: str
+    checkpoint_id: str
+    config_hash: str
+    rng_seed: int
+
+    def __post_init__(self) -> None:
+        if not self.run_id or not self.checkpoint_id or not self.config_hash:
+            raise ValueError("run, checkpoint, and config identities must be non-empty")
+        if self.rng_seed < 0:
+            raise ValueError("rng_seed must be nonnegative")
+
+
+@dataclass(frozen=True)
+class PredictiveEvidencePolicy:
+    """Predeclared local calibration gates for layer/head release evidence."""
+
+    min_samples: int = 8
+    min_tested_fraction: float = 0.75
+    min_symmetric_bins: int = 2
+    crooks_bins: int = 21
+    crooks_min_count: int = 5
+    crooks_tolerance: float = 0.35
+    min_tur_bound_ratio: float = 0.95
+    max_events_per_head: int = 100_000
+
+    def __post_init__(self) -> None:
+        if self.min_samples < 2:
+            raise ValueError("min_samples must be at least two")
+        if not 0.0 < self.min_tested_fraction <= 1.0:
+            raise ValueError("min_tested_fraction must lie in (0, 1]")
+        if self.min_symmetric_bins < 1 or self.crooks_bins < 3:
+            raise ValueError("Crooks evidence needs positive support and at least three bins")
+        if self.min_symmetric_bins > self.crooks_bins // 2:
+            raise ValueError("min_symmetric_bins exceeds the positive half of crooks_bins")
+        if self.crooks_min_count < 1 or self.crooks_tolerance < 0.0:
+            raise ValueError("Crooks count must be positive and tolerance nonnegative")
+        if self.min_tur_bound_ratio <= 0.0:
+            raise ValueError("min_tur_bound_ratio must be positive")
+        if self.max_events_per_head < 2:
+            raise ValueError("max_events_per_head must be at least two")
+
+
+@dataclass(frozen=True)
+class HeadPredictiveThermoEvidence:
+    """One named presynaptic layer/head's tested predictive-ensemble evidence."""
+
+    layer_address: str
+    head_index: int
+    sampling_modes: tuple[str, ...]
+    sample_count: int
+    observed_events: int
+    tested_events: int
+    retained_events: int
+    degenerate_events: int
+    tested_fraction: float
+    symmetric_bins: int
+    crooks_residual: float | None
+    tur_relative_variance: float | None
+    tur_entropy_bound: float | None
+    tur_bound_ratio: float | None
+    finite: bool
+    passed: bool
+    refusal_reasons: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class PredictiveThermoEvidence:
+    """Seed-local, provenance-bound evidence and its fail-closed claim state."""
+
+    provenance: PredictiveEvidenceProvenance
+    policy: PredictiveEvidencePolicy
+    heads: tuple[HeadPredictiveThermoEvidence, ...]
+    observed_events: int
+    tested_events: int
+    retained_events: int
+    degenerate_events: int
+    tested_fraction: float
+    fresh: bool
+    local_gates_passed: bool
+    multi_seed_statistics_passed: bool
+    predictive_distribution_claim: bool
+    calibration_mode: str
+    refusal_reasons: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    def to_jsonl(self) -> list[str]:
+        """Emit one summary and one record per layer/head without NaN/Inf sentinels."""
+        summary = self.to_dict()
+        summary.pop("heads")
+        lines = [json.dumps({"record_type": "predictive_thermo_summary", **summary})]
+        lines.extend(
+            json.dumps(
+                {
+                    "record_type": "predictive_thermo_head",
+                    "run_id": self.provenance.run_id,
+                    **asdict(head),
+                }
+            )
+            for head in self.heads
+        )
+        return lines
+
+    def render(self, console=None) -> None:
+        """Render compact Rich evidence; the structured JSONL remains the audit source."""
+        from rich.console import Console
+        from rich.table import Table
+
+        console = console or Console()
+        table = Table(title="Predictive thermodynamic evidence by layer/head")
+        table.add_column("Layer/head")
+        table.add_column("Samples", justify="right")
+        table.add_column("Tested/retained/observed", justify="right")
+        table.add_column("Symmetric bins", justify="right")
+        table.add_column("Crooks residual", justify="right")
+        table.add_column("TUR ratio", justify="right")
+        table.add_column("Gate")
+        for head in self.heads:
+            table.add_row(
+                f"{head.layer_address}/h{head.head_index}",
+                str(head.sample_count),
+                f"{head.tested_events}/{head.retained_events}/{head.observed_events}",
+                str(head.symmetric_bins),
+                "untested" if head.crooks_residual is None else f"{head.crooks_residual:.4f}",
+                "untested" if head.tur_bound_ratio is None else f"{head.tur_bound_ratio:.4f}",
+                "PASS" if head.passed else ", ".join(head.refusal_reasons),
+            )
+        console.print(table)
+        console.print(
+            f"Predictive-distribution claim={self.predictive_distribution_claim}; "
+            f"mode={self.calibration_mode}; fresh={self.fresh}; "
+            f"reasons={list(self.refusal_reasons)}"
+        )
+
+
+@dataclass(frozen=True)
+class MultiSeedPredictiveThermoVerdict:
+    """Group claim: local release evidence AND matched-seed prediction statistics."""
+
+    seed_count: int
+    local_seed_pass_rate: float
+    multi_seed_statistics_passed: bool
+    predictive_distribution_claim: bool
+    calibration_mode: str
+    refusal_reasons: tuple[str, ...]
+
+
+def predictive_distribution_verdict(
+    evidences: list[PredictiveThermoEvidence] | tuple[PredictiveThermoEvidence, ...],
+    *,
+    multi_seed_statistics_passed: bool,
+) -> MultiSeedPredictiveThermoVerdict:
+    """Join seed-local evidence to the predeclared matched-seed statistical obligation."""
+    reasons: list[str] = []
+    if len(evidences) < 2:
+        reasons.append("insufficient_seed_coverage")
+    if not evidences:
+        local_pass_rate = 0.0
+        reasons.append("empty_evidence")
+    else:
+        local_pass_rate = sum(
+            evidence.fresh and evidence.local_gates_passed for evidence in evidences
+        ) / len(evidences)
+        if any(not evidence.fresh for evidence in evidences):
+            reasons.append("stale_evidence")
+        run_ids = {evidence.provenance.run_id for evidence in evidences}
+        rng_seeds = {evidence.provenance.rng_seed for evidence in evidences}
+        if len(run_ids) != len(evidences) or len(rng_seeds) != len(evidences):
+            reasons.append("duplicate_seed_evidence")
+        if local_pass_rate < 1.0:
+            reasons.append("local_layer_head_gates_failed")
+    if not multi_seed_statistics_passed:
+        reasons.append("multi_seed_statistics_failed")
+    claim = not reasons
+    return MultiSeedPredictiveThermoVerdict(
+        seed_count=len(evidences),
+        local_seed_pass_rate=local_pass_rate,
+        multi_seed_statistics_passed=multi_seed_statistics_passed,
+        predictive_distribution_claim=claim,
+        calibration_mode=(
+            "predictive_thermodynamic_calibration"
+            if claim
+            else "empirical_ece_fallback"
+        ),
+        refusal_reasons=tuple(reasons),
+    )
+
+
+class PredictiveThermoCollector:
+    """Collect exact-binomial MC release events without perturbing the model RNG.
+
+    The forward counts are the counts that actually shaped each predictive draw. A private NumPy
+    generator supplies the matched reverse-protocol counts after capture; it is seeded by the
+    provenance record and is isolated from PyTorch's inference generator. Each event uses the exact
+    paired-binomial affinity ``log(p(1-q)/(q(1-p)))``. Approximate/non-integral release modes are
+    recorded as degenerate rather than silently promoted to thermodynamic evidence.
+    """
+
+    def __init__(
+        self,
+        provenance: PredictiveEvidenceProvenance,
+        policy: PredictiveEvidencePolicy | None = None,
+    ) -> None:
+        self.provenance = provenance
+        self.policy = policy or PredictiveEvidencePolicy()
+        self._rng = np.random.default_rng(provenance.rng_seed)
+        self._current_sample: int | None = None
+        self._observed: dict[tuple[str, int], int] = {}
+        self._tested: dict[tuple[str, int], int] = {}
+        self._degenerate: dict[tuple[str, int], int] = {}
+        self._sample_ids: dict[tuple[str, int], set[int]] = {}
+        self._sampling_modes: dict[tuple[str, int], set[str]] = {}
+        self._currents: dict[tuple[str, int], list[np.ndarray]] = {}
+        self._sigmas: dict[tuple[str, int], list[np.ndarray]] = {}
+        self._priorities: dict[tuple[str, int], list[np.ndarray]] = {}
+
+    def begin_sample(self, sample_index: int) -> None:
+        if sample_index < 0:
+            raise ValueError("sample_index must be nonnegative")
+        self._current_sample = sample_index
+
+    def record(
+        self,
+        *,
+        layer_address: str,
+        probabilities,
+        pool_sizes,
+        forward_counts,
+        reverse_probability: float,
+        sampling_mode: str,
+        valid=None,
+        sampled=None,
+    ) -> None:
+        """Record one live release call; inputs may be Torch tensors or NumPy arrays."""
+        if self._current_sample is None:
+            raise RuntimeError("begin_sample() must be called before recording release evidence")
+        if not layer_address:
+            raise ValueError("layer_address must be non-empty")
+        if not 0.0 < reverse_probability < 1.0:
+            raise ValueError("reverse_probability must lie strictly between zero and one")
+        p = np.asarray(_to_numpy(probabilities), dtype=np.float64)
+        n_raw = np.asarray(_to_numpy(pool_sizes), dtype=np.float64)
+        forward = np.asarray(_to_numpy(forward_counts), dtype=np.float64)
+        if p.shape != n_raw.shape or p.shape != forward.shape or p.ndim != 4:
+            raise ValueError("release evidence tensors must share shape (B,H,T,K)")
+        mask = (
+            np.ones(p.shape, dtype=bool)
+            if valid is None
+            else np.asarray(_to_numpy(valid), dtype=bool)
+        )
+        if mask.shape != p.shape:
+            raise ValueError("valid mask must match release evidence tensors")
+        sampled_mask = (
+            np.ones(p.shape, dtype=bool)
+            if sampled is None
+            else np.asarray(_to_numpy(sampled), dtype=bool)
+        )
+        if sampled_mask.shape != p.shape:
+            raise ValueError("sampled mask must match release evidence tensors")
+
+        exact_mode = sampling_mode in {"straight_through", "gumbel_sigmoid_ste"}
+        for head in range(p.shape[1]):
+            key = (layer_address, head)
+            observed_mask = mask[:, head].reshape(-1)
+            observed = int(observed_mask.sum())
+            self._observed[key] = self._observed.get(key, 0) + observed
+            self._sample_ids.setdefault(key, set()).add(self._current_sample)
+            self._sampling_modes.setdefault(key, set()).add(sampling_mode)
+            if observed == 0:
+                continue
+            p_head = p[:, head].reshape(-1)[observed_mask]
+            n_head = n_raw[:, head].reshape(-1)[observed_mask]
+            f_head = forward[:, head].reshape(-1)[observed_mask]
+            sampled_head = sampled_mask[:, head].reshape(-1)[observed_mask]
+            n_round = np.rint(n_head)
+            f_round = np.rint(f_head)
+            eligible = (
+                sampled_head
+                & exact_mode
+                & np.isfinite(p_head)
+                & np.isfinite(n_head)
+                & np.isfinite(f_head)
+                & (p_head > 0.0)
+                & (p_head < 1.0)
+                & (n_round >= 1.0)
+                & np.isclose(n_head, n_round, atol=1e-5)
+                & np.isclose(f_head, f_round, atol=1e-5)
+                & (f_round >= 0.0)
+                & (f_round <= n_round)
+            )
+            tested = int(np.sum(eligible))
+            self._tested[key] = self._tested.get(key, 0) + tested
+            self._degenerate[key] = self._degenerate.get(key, 0) + observed - tested
+            if tested == 0:
+                continue
+            p_test = p_head[eligible]
+            n_test = n_round[eligible].astype(np.int64)
+            forward_test = f_round[eligible].astype(np.int64)
+            reverse = self._rng.binomial(n_test, reverse_probability)
+            current = (forward_test - reverse).astype(np.float64)
+            local_affinity = np.log(
+                p_test * (1.0 - reverse_probability)
+                / (reverse_probability * (1.0 - p_test))
+            )
+            sigma = current * local_affinity
+            priority = self._rng.random(current.size)
+            old_currents = self._currents.get(key, [])
+            old_sigmas = self._sigmas.get(key, [])
+            old_priorities = self._priorities.get(key, [])
+            combined_currents = np.concatenate([*old_currents, current])
+            combined_sigmas = np.concatenate([*old_sigmas, sigma])
+            combined_priorities = np.concatenate([*old_priorities, priority])
+            if combined_currents.size > self.policy.max_events_per_head:
+                keep = np.argpartition(
+                    combined_priorities, -self.policy.max_events_per_head
+                )[-self.policy.max_events_per_head :]
+                combined_currents = combined_currents[keep]
+                combined_sigmas = combined_sigmas[keep]
+                combined_priorities = combined_priorities[keep]
+            self._currents[key] = [combined_currents]
+            self._sigmas[key] = [combined_sigmas]
+            self._priorities[key] = [combined_priorities]
+
+    def finalize(
+        self,
+        *,
+        current_checkpoint_id: str,
+        current_config_hash: str,
+        current_rng_seed: int,
+        multi_seed_statistics_passed: bool = False,
+    ) -> PredictiveThermoEvidence:
+        """Freeze evidence, refusing empty, stale, sparse, non-finite, or failed streams."""
+        fresh = bool(
+            current_checkpoint_id == self.provenance.checkpoint_id
+            and current_config_hash == self.provenance.config_hash
+            and current_rng_seed == self.provenance.rng_seed
+        )
+        heads = tuple(
+            self._finalize_head(key)
+            for key in sorted(self._observed, key=lambda item: (item[0], item[1]))
+        )
+        observed = sum(head.observed_events for head in heads)
+        tested = sum(head.tested_events for head in heads)
+        retained = sum(head.retained_events for head in heads)
+        degenerate = sum(head.degenerate_events for head in heads)
+        tested_fraction = tested / observed if observed else 0.0
+        local_gates_passed = bool(heads and all(head.passed for head in heads))
+        reasons: list[str] = []
+        if not heads:
+            reasons.append("empty_evidence")
+        if not fresh:
+            reasons.append("stale_evidence")
+        if heads and not local_gates_passed:
+            reasons.append("local_layer_head_gates_failed")
+        if not multi_seed_statistics_passed:
+            reasons.append("multi_seed_statistics_pending_or_failed")
+        claim = not reasons
+        return PredictiveThermoEvidence(
+            provenance=self.provenance,
+            policy=self.policy,
+            heads=heads,
+            observed_events=observed,
+            tested_events=tested,
+            retained_events=retained,
+            degenerate_events=degenerate,
+            tested_fraction=tested_fraction,
+            fresh=fresh,
+            local_gates_passed=local_gates_passed,
+            multi_seed_statistics_passed=multi_seed_statistics_passed,
+            predictive_distribution_claim=claim,
+            calibration_mode=(
+                "predictive_thermodynamic_calibration"
+                if claim
+                else "empirical_ece_fallback"
+            ),
+            refusal_reasons=tuple(reasons),
+        )
+
+    def _finalize_head(self, key: tuple[str, int]) -> HeadPredictiveThermoEvidence:
+        observed = self._observed[key]
+        degenerate = self._degenerate.get(key, observed)
+        currents = np.concatenate(self._currents.get(key, [])) if key in self._currents else np.array([])
+        sigmas = np.concatenate(self._sigmas.get(key, [])) if key in self._sigmas else np.array([])
+        tested = self._tested.get(key, 0)
+        retained = int(currents.size)
+        tested_fraction = tested / observed if observed else 0.0
+        crooks = (
+            crooks_calibration(
+                sigmas,
+                n_bins=self.policy.crooks_bins,
+                tol=self.policy.crooks_tolerance,
+                min_count=self.policy.crooks_min_count,
+            )
+            if retained
+            else None
+        )
+        crooks_residual = (
+            crooks.max_abs_residual
+            if crooks is not None and math.isfinite(crooks.max_abs_residual)
+            else None
+        )
+        tur_relative_variance: float | None = None
+        tur_entropy_bound: float | None = None
+        tur_bound_ratio: float | None = None
+        if retained >= 2:
+            mean_current_value = float(np.mean(currents))
+            mean_sigma = float(np.mean(sigmas))
+            if mean_current_value != 0.0 and mean_sigma > 0.0:
+                tur_relative_variance = float(np.var(currents)) / (
+                    mean_current_value * mean_current_value
+                )
+                tur_entropy_bound = 2.0 / mean_sigma
+                tur_bound_ratio = tur_relative_variance / tur_entropy_bound
+        finite_values = [
+            tested_fraction,
+            crooks_residual,
+            tur_relative_variance,
+            tur_entropy_bound,
+            tur_bound_ratio,
+        ]
+        finite = all(value is not None and math.isfinite(value) for value in finite_values)
+        reasons: list[str] = []
+        sample_count = len(self._sample_ids.get(key, set()))
+        if sample_count < self.policy.min_samples:
+            reasons.append("under_sampled")
+        if tested == 0:
+            reasons.append("no_tested_events")
+        if not self._sampling_modes.get(key, set()) <= {
+            "straight_through",
+            "gumbel_sigmoid_ste",
+        }:
+            reasons.append("unsupported_sampling_mode")
+        if tested_fraction < self.policy.min_tested_fraction:
+            reasons.append("under_covered")
+        symmetric_bins = 0 if crooks is None else int(crooks.bins.size)
+        if symmetric_bins < self.policy.min_symmetric_bins:
+            reasons.append("insufficient_symmetric_support")
+        if crooks_residual is None or crooks_residual > self.policy.crooks_tolerance:
+            reasons.append("crooks_gate_failed")
+        if tur_bound_ratio is None or tur_bound_ratio < self.policy.min_tur_bound_ratio:
+            reasons.append("tur_gate_failed")
+        if not finite:
+            reasons.append("non_finite_evidence")
+        return HeadPredictiveThermoEvidence(
+            layer_address=key[0],
+            head_index=key[1],
+            sampling_modes=tuple(sorted(self._sampling_modes.get(key, set()))),
+            sample_count=sample_count,
+            observed_events=observed,
+            tested_events=tested,
+            retained_events=retained,
+            degenerate_events=degenerate,
+            tested_fraction=tested_fraction,
+            symmetric_bins=symmetric_bins,
+            crooks_residual=crooks_residual,
+            tur_relative_variance=tur_relative_variance,
+            tur_entropy_bound=tur_entropy_bound,
+            tur_bound_ratio=tur_bound_ratio,
+            finite=finite,
+            passed=not reasons,
+            refusal_reasons=tuple(reasons),
+        )
+
+
+def _to_numpy(value):
+    """Detach Torch-like tensors while keeping this reference module Torch-optional."""
+    detach = getattr(value, "detach", None)
+    if callable(detach):
+        value = detach()
+    cpu = getattr(value, "cpu", None)
+    if callable(cpu):
+        value = cpu()
+    numpy = getattr(value, "numpy", None)
+    if not callable(numpy):
+        return value
+    try:
+        return numpy()
+    except TypeError:
+        # NumPy has no native bfloat16 dtype. Evidence is statistical float64 downstream, so an
+        # explicit float32 bridge preserves all representable bfloat16 values without ambiguity.
+        to_float = getattr(value, "float", None)
+        if not callable(to_float):
+            raise
+        return to_float().numpy()
 
 
 # =========================================================================== #

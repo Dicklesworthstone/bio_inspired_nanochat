@@ -24,6 +24,7 @@ Crooks calibration monitor (`0642.3.2.1`) is built to certify. Default-off: with
 from __future__ import annotations
 
 import inspect
+import math
 from collections.abc import Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -49,17 +50,59 @@ def set_mc_sampling(model, enabled: bool, *, frac: float = 1.0) -> int:
 
 
 @contextmanager
-def mc_sampling(model, *, frac: float = 1.0):
-    """Context manager: enable stochastic-release sampling on entry, restore the prior state on exit."""
-    prior = [(m, getattr(m, "_mc_sampling", False), getattr(m, "_mc_frac", 1.0))
-             for m in model.modules() if isinstance(m, SynapticPresyn)]
+def mc_sampling(model, *, frac: float = 1.0, evidence_collector: Any | None = None):
+    """Enable stochastic release and optionally attach a named predictive-evidence collector.
+
+    The collector is duck-typed to keep ordinary MC inference independent of the thermodynamics
+    module. ``SynapticPresyn.release_canonical`` calls its ``record`` method only on the active MC
+    path. Module names are installed here because this is the layer-addressed orchestration seam.
+    Every transient attribute is restored exactly on exit, including exceptional exits.
+    """
+    prior = [
+        (
+            name,
+            module,
+            getattr(module, "_mc_sampling", False),
+            getattr(module, "_mc_frac", 1.0),
+            hasattr(module, "_mc_evidence_sink"),
+            getattr(module, "_mc_evidence_sink", None),
+            hasattr(module, "_mc_evidence_address"),
+            getattr(module, "_mc_evidence_address", None),
+        )
+        for name, module in model.named_modules()
+        if isinstance(module, SynapticPresyn)
+    ]
+    if evidence_collector is not None and not callable(
+        getattr(evidence_collector, "record", None)
+    ):
+        raise TypeError("evidence_collector must provide a callable record() method")
     set_mc_sampling(model, True, frac=frac)
+    for name, module, *_ in prior:
+        module._mc_evidence_sink = evidence_collector
+        module._mc_evidence_address = name
     try:
         yield model
     finally:
-        for m, was_on, was_frac in prior:
-            m._mc_sampling = was_on
-            m._mc_frac = was_frac
+        for (
+            _,
+            module,
+            was_on,
+            was_frac,
+            had_sink,
+            prior_sink,
+            had_address,
+            prior_address,
+        ) in prior:
+            module._mc_sampling = was_on
+            module._mc_frac = was_frac
+            if had_sink:
+                module._mc_evidence_sink = prior_sink
+            else:
+                delattr(module, "_mc_evidence_sink")
+            if had_address:
+                module._mc_evidence_address = prior_address
+            else:
+                delattr(module, "_mc_evidence_address")
 
 
 def _reset_sequence_state(model) -> None:
@@ -126,6 +169,7 @@ def mc_predict(
     n_samples: int = 16,
     temperature: float = 1.0,
     forward_kwargs: Mapping[str, Any] | None = None,
+    evidence_collector: Any | None = None,
 ) -> MCPrediction:
     """Run `n_samples` stochastic-release forward passes and aggregate the predictive distribution.
 
@@ -137,6 +181,8 @@ def mc_predict(
     """
     if n_samples < 1:
         raise ValueError(f"n_samples must be >= 1, got {n_samples}")
+    if not math.isfinite(temperature) or temperature <= 0.0:
+        raise ValueError(f"temperature must be finite and > 0, got {temperature}")
     was_training = model.training
     model.eval()
     probs_sum = None
@@ -144,8 +190,15 @@ def mc_predict(
     logit_sum = None
     logit_sq_sum = None
     try:
-        with mc_sampling(model):
-            for _ in range(n_samples):
+        with mc_sampling(model, evidence_collector=evidence_collector):
+            for sample_index in range(n_samples):
+                if evidence_collector is not None:
+                    begin_sample = getattr(evidence_collector, "begin_sample", None)
+                    if not callable(begin_sample):
+                        raise TypeError(
+                            "evidence_collector must provide a callable begin_sample() method"
+                        )
+                    begin_sample(sample_index)
                 _reset_sequence_state(model)  # i.i.d. draw from a clean per-sequence baseline
                 logits = _forward_logits(model, input_ids, forward_kwargs=forward_kwargs).float()
                 probs = torch.softmax(logits / temperature, dim=-1)

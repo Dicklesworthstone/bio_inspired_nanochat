@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import math
+from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -359,6 +360,194 @@ def test_crooks_calibration_handles_min_count_zero():
 
 
 # =========================================================================== #
+# 0642.3.4 — predictive-distribution evidence integration
+# =========================================================================== #
+def _passing_predictive_evidence() -> st.PredictiveThermoEvidence:
+    provenance = st.PredictiveEvidenceProvenance(
+        run_id="uq-seed-17",
+        checkpoint_id="checkpoint-a",
+        config_hash="config-a",
+        rng_seed=1701,
+    )
+    policy = st.PredictiveEvidencePolicy(
+        min_samples=8,
+        min_tested_fraction=1.0,
+        min_symmetric_bins=2,
+        crooks_bins=13,
+        crooks_min_count=20,
+        crooks_tolerance=0.35,
+        min_tur_bound_ratio=0.95,
+    )
+    collector = st.PredictiveThermoCollector(provenance, policy)
+    rng = np.random.default_rng(923)
+    shape = (2_500, 1, 1, 1)
+    probabilities = np.full(shape, 0.32)
+    pools = np.full(shape, 6.0)
+    for sample_index in range(8):
+        collector.begin_sample(sample_index)
+        collector.record(
+            layer_address="transformer.h.0.attn.pre",
+            probabilities=probabilities,
+            pool_sizes=pools,
+            forward_counts=rng.binomial(6, 0.32, size=shape),
+            reverse_probability=0.24,
+            sampling_mode="straight_through",
+        )
+    return collector.finalize(
+        current_checkpoint_id="checkpoint-a",
+        current_config_hash="config-a",
+        current_rng_seed=1701,
+    )
+
+
+def test_predictive_evidence_is_layer_head_addressed_and_structured():
+    evidence = _passing_predictive_evidence()
+    assert evidence.fresh and evidence.local_gates_passed
+    assert not evidence.predictive_distribution_claim
+    assert evidence.calibration_mode == "empirical_ece_fallback"
+    assert evidence.tested_events == evidence.observed_events
+    assert len(evidence.heads) == 1
+    head = evidence.heads[0]
+    assert head.layer_address == "transformer.h.0.attn.pre"
+    assert head.head_index == 0
+    assert head.sample_count == 8
+    assert head.passed and head.symmetric_bins >= 2
+    assert head.crooks_residual is not None and math.isfinite(head.crooks_residual)
+    assert head.tur_bound_ratio is not None and math.isfinite(head.tur_bound_ratio)
+    lines = [json.loads(line) for line in evidence.to_jsonl()]
+    assert [line["record_type"] for line in lines] == [
+        "predictive_thermo_summary",
+        "predictive_thermo_head",
+    ]
+    json.dumps(evidence.to_dict(), allow_nan=False)
+
+
+def test_predictive_evidence_refuses_degenerate_and_stale_streams():
+    provenance = st.PredictiveEvidenceProvenance("run", "checkpoint", "config", 9)
+    collector = st.PredictiveThermoCollector(
+        provenance,
+        st.PredictiveEvidencePolicy(min_samples=2, crooks_min_count=1),
+    )
+    for sample_index in range(2):
+        collector.begin_sample(sample_index)
+        collector.record(
+            layer_address="layer.0.pre",
+            probabilities=np.full((1, 1, 1, 2), 0.3),
+            pool_sizes=np.full((1, 1, 1, 2), 6.0),
+            forward_counts=np.full((1, 1, 1, 2), 1.25),
+            reverse_probability=0.2,
+            sampling_mode="normal_reparam",
+        )
+    evidence = collector.finalize(
+        current_checkpoint_id="different-checkpoint",
+        current_config_hash="config",
+        current_rng_seed=9,
+    )
+    assert not evidence.fresh and not evidence.local_gates_passed
+    assert not evidence.predictive_distribution_claim
+    assert evidence.tested_events == 0 and evidence.degenerate_events == 4
+    assert "stale_evidence" in evidence.refusal_reasons
+    assert "no_tested_events" in evidence.heads[0].refusal_reasons
+    assert "unsupported_sampling_mode" in evidence.heads[0].refusal_reasons
+    assert evidence.heads[0].sampling_modes == ("normal_reparam",)
+
+
+def test_predictive_evidence_refuses_an_empty_stream():
+    provenance = st.PredictiveEvidenceProvenance("empty", "checkpoint", "config", 3)
+    evidence = st.PredictiveThermoCollector(provenance).finalize(
+        current_checkpoint_id="checkpoint",
+        current_config_hash="config",
+        current_rng_seed=3,
+    )
+    assert not evidence.predictive_distribution_claim
+    assert evidence.calibration_mode == "empirical_ece_fallback"
+    assert evidence.heads == () and evidence.tested_fraction == 0.0
+    assert "empty_evidence" in evidence.refusal_reasons
+
+
+def test_predictive_evidence_uses_a_bounded_per_head_reservoir():
+    provenance = st.PredictiveEvidenceProvenance("bounded", "checkpoint", "config", 4)
+    collector = st.PredictiveThermoCollector(
+        provenance,
+        st.PredictiveEvidencePolicy(
+            min_samples=2,
+            crooks_min_count=1,
+            max_events_per_head=16,
+        ),
+    )
+    rng = np.random.default_rng(44)
+    for sample_index in range(2):
+        collector.begin_sample(sample_index)
+        collector.record(
+            layer_address="layer.0.pre",
+            probabilities=np.full((100, 1, 1, 1), 0.32),
+            pool_sizes=np.full((100, 1, 1, 1), 6.0),
+            forward_counts=rng.binomial(6, 0.32, size=(100, 1, 1, 1)),
+            reverse_probability=0.24,
+            sampling_mode="straight_through",
+        )
+    evidence = collector.finalize(
+        current_checkpoint_id="checkpoint",
+        current_config_hash="config",
+        current_rng_seed=4,
+    )
+    assert evidence.tested_events == 200
+    assert evidence.retained_events == 16
+    assert evidence.heads[0].retained_events == 16
+
+
+def test_predictive_evidence_counts_unsampled_valid_edges_as_uncovered():
+    provenance = st.PredictiveEvidenceProvenance("partial", "checkpoint", "config", 5)
+    collector = st.PredictiveThermoCollector(
+        provenance,
+        st.PredictiveEvidencePolicy(min_samples=2, crooks_min_count=1),
+    )
+    for sample_index in range(2):
+        collector.begin_sample(sample_index)
+        collector.record(
+            layer_address="layer.0.pre",
+            probabilities=np.full((1, 1, 1, 4), 0.32),
+            pool_sizes=np.full((1, 1, 1, 4), 6.0),
+            forward_counts=np.ones((1, 1, 1, 4)),
+            reverse_probability=0.24,
+            sampling_mode="straight_through",
+            sampled=np.array([[[[True, True, False, False]]]]),
+        )
+    evidence = collector.finalize(
+        current_checkpoint_id="checkpoint",
+        current_config_hash="config",
+        current_rng_seed=5,
+    )
+    head = evidence.heads[0]
+    assert head.observed_events == 8 and head.tested_events == 4
+    assert head.degenerate_events == 4 and head.tested_fraction == 0.5
+    assert "under_covered" in head.refusal_reasons
+
+
+def test_predictive_claim_requires_local_evidence_and_multi_seed_statistics():
+    evidence = _passing_predictive_evidence()
+    second_seed = replace(
+        evidence,
+        provenance=replace(evidence.provenance, run_id="uq-seed-23", rng_seed=2301),
+    )
+    pending = st.predictive_distribution_verdict(
+        [evidence, second_seed], multi_seed_statistics_passed=False
+    )
+    duplicate = st.predictive_distribution_verdict(
+        [evidence, evidence], multi_seed_statistics_passed=True
+    )
+    passed = st.predictive_distribution_verdict(
+        [evidence, second_seed], multi_seed_statistics_passed=True
+    )
+    assert not pending.predictive_distribution_claim
+    assert pending.calibration_mode == "empirical_ece_fallback"
+    assert not duplicate.predictive_distribution_claim
+    assert "duplicate_seed_evidence" in duplicate.refusal_reasons
+    assert passed.predictive_distribution_claim
+    assert passed.calibration_mode == "predictive_thermodynamic_calibration"
+
+
+# =========================================================================== #
 # 0642.3.3.1 — live-release FT + ECE/OOD-AUROC falsification
 # =========================================================================== #
 def test_falsification_metrics_have_exact_known_values():
@@ -482,7 +671,7 @@ def test_thermo_uq_e2e_reports_both_baselines_without_assuming_a_win():
         n_head=1,
         n_embd=16,
         dropout=0.15,
-        mc_samples=2,
+        mc_samples=8,
         ece_bins=4,
         ft_trajectories=30_000,
         ft_min_count=40,
@@ -511,6 +700,12 @@ def test_thermo_uq_e2e_reports_both_baselines_without_assuming_a_win():
         )
     json.dumps(report.to_dict(), allow_nan=False)
     assert "does not assert an advantage" in report.comparison_policy
+    evidence = report.predictive_thermo_evidence
+    assert evidence.fresh and not evidence.predictive_distribution_claim
+    assert evidence.calibration_mode == "empirical_ece_fallback"
+    assert len(evidence.heads) == config.n_layer * config.n_head
+    assert evidence.observed_events == evidence.tested_events > 0
+    assert all(head.finite for head in evidence.heads)
 
 
 def test_live_binomial_tur_is_nonvacuous_but_exposes_poisson_limit_failure():
@@ -543,6 +738,8 @@ def test_multi_seed_report_uses_paired_stats_and_emits_honest_null(multi_seed_re
     assert report.live_tur.nonvacuous and not report.live_tur.satisfied
     assert report.verdict == "null"
     assert "TUR bound" in report.verdict_reason
+    assert not report.predictive_distribution.predictive_distribution_claim
+    assert report.predictive_distribution.calibration_mode == "empirical_ece_fallback"
     assert set(report.method_aggregates) == {
         "mc_dropout",
         "softmax_entropy",

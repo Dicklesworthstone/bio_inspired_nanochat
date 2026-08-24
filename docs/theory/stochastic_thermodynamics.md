@@ -185,6 +185,7 @@ hand-set gain. (`landauer_optimal_temperature`, `ach_coupled_temperature`.)
 | E2 | **Stationary drive**: `a, b` (hence `A`) ≈ constant over the measurement window. | `⟨Σ⟩ = ⟨J⟩·A`; the TUR `Var(J)/⟨J⟩² ≥ 2/⟨Σ⟩`. | A fast-ramping release-probability protocol makes `A` time-dependent; the steady-state TUR no longer applies verbatim. | Use the finite-time/transient TUR (generalized bound) or restrict to windows where `p` is quasi-stationary. |
 | E3 | **Local detailed balance**: the reverse rate of a release is the recovery rate (`b`), i.e. no hidden third state. | The medium entropy `ln(a/b)` is the correct trajectory affinity; Crooks/Jarzynski close. | A hidden facilitation/priming state (`Doc2`/`SNARE`) adds cycles ⟹ the 1-cycle affinity is incomplete. | Extend to the multi-state network affinity (Schnakenberg); until then, treat the 2-state `Σ` as a lower bound on the true entropy production. |
 | R | **Trajectory-consistency claim**: the empirical `Σ` histogram obeys `ln(P(+Σ)/P(−Σ)) = Σ` within tolerance. | The sampled release process is fluctuation-theorem-consistent for the tested counter-protocol; predictive calibration remains empirical. | The histogram fails the relation (E1/E3 broken). | Drop the release-process claim; report predictive ECE/AUROC empirically; flag. |
+| P | **Predictive-distribution claim** (`0642.3.4`): every named layer/head has fresh, finite, sufficiently covered paired-binomial evidence; its predeclared Crooks and TUR gates pass; and distinct matched seeds pass the held-out ECE/AUROC statistical rule. | The exact MC release draws that produced the token distribution are joined to their local thermodynamic evidence and empirical predictive-calibration result. | Empty, approximate-count, sparse, asymmetric, stale, duplicate-seed, FT/TUR-failed, or statistically null evidence breaks the join. | Set `predictive_distribution_claim=false`, remove the analytic label, and report plain empirical ECE. |
 
 **Composition note** (`0642.10`/`0642.11.1`): the FT consistency check composes with the other thrusts only
 while E1–E3 hold jointly with the presyn recurrence active (the release `p` and pool `N` are produced
@@ -281,6 +282,38 @@ limitation instead of rounding it into a pass.
 
 Evidence: `results/stochastic_thermo_uq_548ebe9f791d.json`; 30 schema-validated per-seed/method rows
 in `results/registry.jsonl`, all provenance-stamped to implementation commit `55df5f5`.
+
+### 7.3 Predictive-distribution integration gate (`0642.3.4`)
+
+The predictive claim now has a concrete, fail-closed evidence path instead of inheriting the
+one-step result. During MC inference, the orchestration layer assigns every `SynapticPresyn` its
+stable module address. The canonical stochastic-release call supplies the exact probability, prior
+RRP, validity mask, and sampled count that actually shaped each predictive draw. A private seeded
+generator draws the matched recovery counter-protocol, so collecting evidence cannot advance or
+otherwise perturb the model's PyTorch RNG stream. Evidence is then reduced separately for every
+layer/head.
+
+The local gate records the number of predictive samples, observed/tested/retained/degenerate events,
+tested fraction, populated symmetric Crooks bins and residual, and the finite-binomial TUR bound
+ratio. A deterministic random-priority reservoir bounds retained evidence at 100,000 events per head
+without biasing capture toward early tokens or samples.
+Approximate `normal_reparam` counts are explicitly degenerate; they are never rounded into exact
+binomial evidence. Every stream is bound to the run ID, exact in-memory checkpoint fingerprint,
+model-config hash, and predictive RNG seed. Reusing evidence after any binding changes marks it
+stale.
+
+The group claim is the conjunction of all of the following:
+
+1. at least two distinct seed/run identities;
+2. fresh, finite evidence for every observed layer/head;
+3. the predeclared coverage, symmetric-support, Crooks-residual, and TUR-ratio gates for every head;
+4. the matched-seed ECE/AUROC rule in §7.1, plus the live FT/TUR obligations in §7.2.
+
+No partial pass is promoted. Structured reports use `null` for unavailable diagnostics rather than
+JSON `NaN`/`Infinity`, retain the refusal reasons, and deterministically select
+`empirical_ece_fallback` whenever the conjunction fails. This closes the software observability gap
+while preserving the scientific limitation: a local FT pass is necessary evidence, not an automatic
+token-calibration theorem.
 
 ---
 

@@ -44,6 +44,14 @@ from bio_inspired_nanochat.eval_stats import Aggregate, PairedResult, aggregate,
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
 from bio_inspired_nanochat.mc_ensemble import mc_sampling
 from bio_inspired_nanochat.results_registry import RunRecord, append_record, make_record, read_records
+from bio_inspired_nanochat.stochastic_thermo import (
+    MultiSeedPredictiveThermoVerdict,
+    PredictiveEvidencePolicy,
+    PredictiveEvidenceProvenance,
+    PredictiveThermoCollector,
+    PredictiveThermoEvidence,
+    predictive_distribution_verdict,
+)
 from bio_inspired_nanochat.synaptic import SynapticConfig, SynapticPresyn, build_presyn_state
 from bio_inspired_nanochat.torch_imports import Tensor, nn, torch
 
@@ -73,6 +81,24 @@ class ExperimentConfig:
     ft_tolerance: float = 0.25
     ft_integral_tolerance: float = 0.04
     ft_min_count: int = 100
+    predictive_min_samples: int = 8
+    predictive_min_tested_fraction: float = 0.75
+    predictive_min_symmetric_bins: int = 2
+    predictive_crooks_min_count: int = 5
+    predictive_crooks_tolerance: float = 0.35
+    predictive_min_tur_bound_ratio: float = 0.95
+    predictive_max_events_per_head: int = 100_000
+
+    def predictive_policy(self) -> PredictiveEvidencePolicy:
+        return PredictiveEvidencePolicy(
+            min_samples=self.predictive_min_samples,
+            min_tested_fraction=self.predictive_min_tested_fraction,
+            min_symmetric_bins=self.predictive_min_symmetric_bins,
+            crooks_min_count=self.predictive_crooks_min_count,
+            crooks_tolerance=self.predictive_crooks_tolerance,
+            min_tur_bound_ratio=self.predictive_min_tur_bound_ratio,
+            max_events_per_head=self.predictive_max_events_per_head,
+        )
 
     def validate(self) -> None:
         if self.vocab_size < 4:
@@ -92,6 +118,7 @@ class ExperimentConfig:
             raise ValueError("n_embd must be divisible by n_head")
         if self.ft_trajectories < 2 or self.ft_min_count < 1:
             raise ValueError("FT needs at least two trajectories and a positive minimum count")
+        self.predictive_policy()
         if not 0.0 < self.ft_reverse_probability < self.ft_forward_probability < 1.0:
             raise ValueError("FT probabilities must satisfy 0 < reverse < forward < 1")
         id_band_size = self.vocab_size // 2
@@ -186,6 +213,7 @@ class ExperimentReport:
     methods: dict[str, MethodMetrics]
     thermo_deltas: dict[str, dict[str, float]]
     training_loss: list[float]
+    predictive_thermo_evidence: PredictiveThermoEvidence
     comparison_policy: str = field(
         default=(
             "Negative ECE delta and positive OOD-AUROC delta favor thermo-UQ; "
@@ -207,6 +235,7 @@ class MultiSeedReport:
     reports: list[ExperimentReport]
     method_aggregates: dict[str, dict[str, Aggregate]]
     paired_comparisons: dict[str, dict[str, PairedResult]]
+    predictive_distribution: MultiSeedPredictiveThermoVerdict
     ft_pass_rate: float
     ft_aggregates: dict[str, Aggregate | None]
     live_tur: LiveTURDiagnostic
@@ -618,6 +647,27 @@ def _reset_sequence(model: GPTSynaptic) -> None:
     model.reset_sequence_state(reset_fast_weights=False, reset_consolidation=False)
 
 
+def _experiment_config_hash(model: GPTSynaptic, config: ExperimentConfig) -> str:
+    payload = json.dumps(
+        {"experiment": asdict(config), "model": asdict(model.config)},
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _model_checkpoint_id(model: GPTSynaptic) -> str:
+    """Hash the exact in-memory state that produced the predictive ensemble."""
+    digest = hashlib.sha256()
+    for name, tensor in sorted(model.state_dict().items()):
+        value = tensor.detach().cpu().contiguous()
+        digest.update(name.encode("utf-8"))
+        digest.update(str(value.dtype).encode("ascii"))
+        digest.update(str(tuple(value.shape)).encode("ascii"))
+        digest.update(value.reshape(-1).view(torch.uint8).numpy().tobytes())
+    return digest.hexdigest()
+
+
 @torch.no_grad()
 def _softmax_prediction(model: GPTSynaptic, inputs: Tensor) -> _Prediction:
     model.eval()
@@ -668,11 +718,14 @@ def _thermo_prediction(
     inputs: Tensor,
     *,
     n_samples: int,
+    evidence_collector: PredictiveThermoCollector | None = None,
 ) -> _Prediction:
     probability_sum = None
     model.eval()
-    with torch.no_grad(), mc_sampling(model):
-        for _ in range(n_samples):
+    with torch.no_grad(), mc_sampling(model, evidence_collector=evidence_collector):
+        for sample_index in range(n_samples):
+            if evidence_collector is not None:
+                evidence_collector.begin_sample(sample_index)
             _reset_sequence(model)
             logits, _ = model(inputs, train_mode=False)
             probabilities = torch.softmax(logits.float(), dim=-1)
@@ -753,6 +806,8 @@ def run_experiment(config: ExperimentConfig = ExperimentConfig()) -> ExperimentR
         starts=ood_starts,
     )
     training_loss = _train_model(model, training_pool, config)
+    checkpoint_id = _model_checkpoint_id(model)
+    config_hash = _experiment_config_hash(model, config)
     id_inputs = torch.cat([batch[0] for batch in id_pool])
     id_targets = torch.cat([batch[1] for batch in id_pool])
     ood_inputs = torch.cat([batch[0] for batch in ood_pool])
@@ -764,7 +819,26 @@ def run_experiment(config: ExperimentConfig = ExperimentConfig()) -> ExperimentR
     torch.manual_seed(config.seed + 202)
     dropout_ood = _mc_dropout_prediction(model, ood_inputs, n_samples=config.mc_samples)
     torch.manual_seed(config.seed + 301)
-    thermo_id = _thermo_prediction(model, id_inputs, n_samples=config.mc_samples)
+    evidence_collector = PredictiveThermoCollector(
+        PredictiveEvidenceProvenance(
+            run_id=f"stochastic-thermo-predictive-{config_hash[:12]}-s{config.seed}",
+            checkpoint_id=checkpoint_id,
+            config_hash=config_hash,
+            rng_seed=config.seed + 301,
+        ),
+        config.predictive_policy(),
+    )
+    thermo_id = _thermo_prediction(
+        model,
+        id_inputs,
+        n_samples=config.mc_samples,
+        evidence_collector=evidence_collector,
+    )
+    predictive_evidence = evidence_collector.finalize(
+        current_checkpoint_id=_model_checkpoint_id(model),
+        current_config_hash=_experiment_config_hash(model, config),
+        current_rng_seed=config.seed + 301,
+    )
     torch.manual_seed(config.seed + 302)
     thermo_ood = _thermo_prediction(model, ood_inputs, n_samples=config.mc_samples)
     methods = {
@@ -793,6 +867,7 @@ def run_experiment(config: ExperimentConfig = ExperimentConfig()) -> ExperimentR
         methods=methods,
         thermo_deltas=deltas,
         training_loss=training_loss,
+        predictive_thermo_evidence=predictive_evidence,
     )
 
 
@@ -907,13 +982,22 @@ def summarize_multi_seed(
         and _supports_improvement(metrics["ood_auroc"], lower_is_better=False, alpha=alpha)
         for metrics in paired.values()
     )
+    predictive_statistics_gate = bool(
+        all_calibration_gates
+        and all(report.live_release_ft.passed for report in reports)
+        and live_tur.satisfied
+    )
+    predictive_verdict = predictive_distribution_verdict(
+        [report.predictive_thermo_evidence for report in reports],
+        multi_seed_statistics_passed=predictive_statistics_gate,
+    )
     if ft_pass_rate < 1.0:
         verdict = "invalidated"
         verdict_reason = (
             f"Only {ft_pass_rate:.1%} of live one-step FT checks passed; the analytic "
             "local-detailed-balance claim is falsified for this protocol."
         )
-    elif all_calibration_gates and live_tur.satisfied:
+    elif predictive_verdict.predictive_distribution_claim:
         verdict = "positive"
         verdict_reason = (
             "Thermo-UQ passed the strict matched-seed ECE/AUROC gate against both baselines, "
@@ -929,6 +1013,12 @@ def summarize_multi_seed(
                 "the finite-binomial live current had a non-vacuous but slightly violated "
                 "classic continuous-time TUR bound"
             )
+        if (
+            all_calibration_gates
+            and live_tur.satisfied
+            and not predictive_verdict.predictive_distribution_claim
+        ):
+            limitations.append("the per-layer/head predictive evidence gate was not met")
         verdict_reason = (
             "All live one-step FT checks passed, but " + " and ".join(limitations) + "."
         )
@@ -940,6 +1030,7 @@ def summarize_multi_seed(
         reports=list(reports),
         method_aggregates=method_aggregates,
         paired_comparisons=paired,
+        predictive_distribution=predictive_verdict,
         ft_pass_rate=ft_pass_rate,
         ft_aggregates=ft_aggregates,
         live_tur=live_tur,
@@ -1122,6 +1213,7 @@ def render_report(report: ExperimentReport, console: Console) -> None:
     console.print(calibration_table)
     console.print("[dim]Deltas are measurements, not a predeclared win:[/dim]")
     console.print_json(data=report.thermo_deltas)
+    report.predictive_thermo_evidence.render(console)
 
 
 def render_multi_seed_report(report: MultiSeedReport, console: Console) -> None:
@@ -1165,6 +1257,13 @@ def render_multi_seed_report(report: MultiSeedReport, console: Console) -> None:
         f"[bold]Live FT pass rate:[/bold] {report.ft_pass_rate:.1%}; "
         f"[bold]classic live TUR:[/bold] non-vacuous={report.live_tur.nonvacuous}, "
         f"satisfied={report.live_tur.satisfied}, ratio={report.live_tur.bound_ratio:.6f}"
+    )
+    predictive = report.predictive_distribution
+    console.print(
+        f"[bold]Predictive-distribution claim:[/bold] "
+        f"{predictive.predictive_distribution_claim}; mode={predictive.calibration_mode}; "
+        f"local seed pass rate={predictive.local_seed_pass_rate:.1%}; "
+        f"reasons={list(predictive.refusal_reasons)}"
     )
     verdict_style = "green" if report.verdict == "positive" else (
         "red" if report.verdict == "invalidated" else "yellow"

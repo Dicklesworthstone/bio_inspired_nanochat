@@ -23,7 +23,8 @@ import pytest
 
 from _bio_testkit import make_tiny_synaptic, make_tiny_vanilla
 from bio_inspired_nanochat import mc_ensemble as mc
-from bio_inspired_nanochat.synaptic import SynapticPresyn
+from bio_inspired_nanochat import stochastic_thermo as st
+from bio_inspired_nanochat.synaptic import SynapticConfig, SynapticPresyn
 from bio_inspired_nanochat.torch_imports import torch
 
 pytestmark = pytest.mark.unit
@@ -52,8 +53,11 @@ def test_mc_sampling_context_restores_state_even_on_error():
     with pytest.raises(RuntimeError):
         with mc.mc_sampling(model):
             assert all(m._mc_sampling for m in _presyn(model))
+            assert all(hasattr(m, "_mc_evidence_address") for m in _presyn(model))
             raise RuntimeError("boom")
     assert all(not m._mc_sampling for m in _presyn(model)), "must restore prior state on exception"
+    assert all(not hasattr(m, "_mc_evidence_sink") for m in _presyn(model))
+    assert all(not hasattr(m, "_mc_evidence_address") for m in _presyn(model))
 
 
 def test_mc_predict_produces_a_valid_predictive_distribution():
@@ -118,10 +122,53 @@ def test_mc_predict_is_reproducible_under_a_fixed_seed():
     assert torch.allclose(p1.mean_probs, p2.mean_probs, atol=0.0), "same seed ⟹ identical ensemble"
 
 
+def test_predictive_evidence_observes_live_counts_without_perturbing_model_rng():
+    model = make_tiny_synaptic(
+        seed=1234,
+        n_layer=1,
+        n_head=2,
+        n_kv_head=2,
+        n_embd=32,
+        syn_cfg=SynapticConfig(stochastic_mode="straight_through"),
+    )
+    x = _ids(b=1, t=8)
+    torch.manual_seed(71)
+    plain = mc.mc_predict(model, x, n_samples=4)
+    collector = st.PredictiveThermoCollector(
+        st.PredictiveEvidenceProvenance("mc-live", "checkpoint", "config", 71),
+        st.PredictiveEvidencePolicy(
+            min_samples=4,
+            min_tested_fraction=1.0,
+            min_symmetric_bins=1,
+            crooks_bins=7,
+            crooks_min_count=1,
+            crooks_tolerance=10.0,
+            min_tur_bound_ratio=0.001,
+        ),
+    )
+    torch.manual_seed(71)
+    observed = mc.mc_predict(model, x, n_samples=4, evidence_collector=collector)
+    evidence = collector.finalize(
+        current_checkpoint_id="checkpoint",
+        current_config_hash="config",
+        current_rng_seed=71,
+    )
+    assert torch.equal(plain.mean_probs, observed.mean_probs)
+    assert torch.equal(plain.logit_variance, observed.logit_variance)
+    assert evidence.fresh and not evidence.predictive_distribution_claim
+    assert len(evidence.heads) == 2
+    assert all(head.layer_address.endswith(".pre") for head in evidence.heads)
+    assert all(head.sample_count == 4 for head in evidence.heads)
+    assert evidence.observed_events == evidence.tested_events > 0
+
+
 def test_mc_predict_validates_n_samples_and_supports_single_draw():
     model = make_tiny_synaptic(seed=1234)
     with pytest.raises(ValueError):
         mc.mc_predict(model, _ids(), n_samples=0)
+    for temperature in (0.0, -1.0, float("nan"), float("inf")):
+        with pytest.raises(ValueError, match="temperature"):
+            mc.mc_predict(model, _ids(), temperature=temperature)
     single = mc.mc_predict(model, _ids(), n_samples=1)
     assert single.n_samples == 1 and single.mean_probs.shape[0] == 2
     # n_samples=1: expected entropy equals predictive entropy (one sample), epistemic ≈ 0.

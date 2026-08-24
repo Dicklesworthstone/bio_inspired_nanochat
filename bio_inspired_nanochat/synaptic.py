@@ -982,11 +982,17 @@ class SynapticPresyn(nn.Module):
         mc_sampling = bool(getattr(self, "_mc_sampling", False))
         if mc_sampling:
             ach_frac = min(1.0, max(0.0, float(getattr(self, "_mc_frac", 1.0))))
+        evidence_sink = getattr(self, "_mc_evidence_sink", None) if mc_sampling else None
+        sampled_mask = (
+            torch.zeros_like(p, dtype=torch.bool) if evidence_sink is not None else None
+        )
         if (train or mc_sampling) and ach_frac > 0:
             do_stoch = torch.rand_like(p[..., 0].to(torch.float32)) < float(ach_frac)
             rel_det = p * rrp_edge
             if do_stoch.any():
                 stoch_mask = do_stoch.unsqueeze(-1).expand_as(p)
+                if sampled_mask is not None:
+                    sampled_mask = stoch_mask
                 k_rel = _sample_binomial_counts(
                     probs=p[stoch_mask],
                     total_count=torch.clamp(
@@ -1004,6 +1010,19 @@ class SynapticPresyn(nn.Module):
             rel = p * rrp_edge
         if valid is not None:
             rel = rel * valid.to(rel.dtype)
+        if evidence_sink is not None:
+            evidence_sink.record(
+                layer_address=str(getattr(self, "_mc_evidence_address", "")),
+                probabilities=p,
+                pool_sizes=torch.clamp(
+                    rrp_edge, 0.0, float(cfg.stochastic_count_cap)
+                ),
+                forward_counts=rel,
+                reverse_probability=float(cfg.rec_rate),
+                sampling_mode=cfg.stochastic_mode,
+                valid=valid,
+                sampled=sampled_mask,
+            )
 
         # --- energy-derived AMPA amplitude (faithful) ---
         qamp = torch.sigmoid(cfg.q_beta * (e_energy - 0.5)) * cfg.qmax
