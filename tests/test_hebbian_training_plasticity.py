@@ -124,7 +124,9 @@ def test_grads_flow_to_slow_weights():
 # --------------------------------------------------------------------------- #
 @pytest.mark.unit
 def test_no_double_counting_deferred_write_applied_once():
-    lin = _make_lin().train()
+    # This assertion derives the exact raw Hebbian delta. Keep that update rule explicit now
+    # that the bounded, direction-normalized write is the production default (jpqc).
+    lin = _make_lin(fast_weight_normalized=False).train()
     ca, en = _signals()
 
     # After step 1: traces set, write deferred (0 applications). Backward between forwards
