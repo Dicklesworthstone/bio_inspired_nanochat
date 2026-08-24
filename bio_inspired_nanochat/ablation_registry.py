@@ -110,6 +110,12 @@ MECHANISMS: tuple[MechanismFlag, ...] = (
         "(0642.1.2.4); exact discrete energy conservation + free-energy Lyapunov.",
     ),
     MechanismFlag(
+        "recurrence_checkpoint", "recurrence_checkpoint_len", 0, 0, False,
+        ("differentiable_recurrence", "metriplectic_integrator"),
+        "Exact-gradient windowed checkpoint/replay for the deterministic CPU metriplectic "
+        "presynaptic recurrence (0642.1.2.6).",
+    ),
+    MechanismFlag(
         "topological_nas", "topological_nas", False, False, False, (),
         "Certificate-driven MoE split/merge/birth using spectral conditioning, H0 persistence, "
         "and optimal transport (0642.5.2.2); deterministically falls back to UTA.",
@@ -225,6 +231,27 @@ def validate_config(cfg: SynapticConfig) -> tuple[list[str], list[str]]:
         if cfg.recurrence_chunk_len < 0:
             errors.append(
                 f"recurrence_chunk_len must be >= 0 (0 = full BPTT), got {cfg.recurrence_chunk_len}"
+            )
+    if cfg.recurrence_checkpoint_len < 0:
+        errors.append(
+            "recurrence_checkpoint_len must be >= 0 (0 = eager full BPTT), got "
+            f"{cfg.recurrence_checkpoint_len}"
+        )
+    if cfg.recurrence_checkpoint_len > 0:
+        if cfg.recurrence_chunk_len > 0:
+            errors.append(
+                "recurrence_chunk_len and recurrence_checkpoint_len are mutually exclusive: "
+                "truncation drops cross-window gradients while checkpointing preserves them"
+            )
+        if cfg.stochastic_train_frac != 0.0:
+            errors.append(
+                "recurrence_checkpoint_len currently requires stochastic_train_frac=0 "
+                "for deterministic replay"
+            )
+        if cfg.use_flex_attention:
+            errors.append(
+                "recurrence_checkpoint_len is supported only by the standard attention path; "
+                "disable use_flex_attention"
             )
 
     # 3. Risky-but-legal combinations -> warnings.

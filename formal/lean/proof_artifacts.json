@@ -367,6 +367,100 @@
       "mathlib_revision": "a3a10db0e9d66acbebf76c5e6a135066525ac900",
       "build_command": "rch exec -- lake build",
       "build_result": "not-rerun-proof-source-unchanged"
+    },
+    {
+      "cycle_id": "lfl-0642.1.2.6-live-checkpoint-foundation-2026-08-24",
+      "frog_id": "bio_inspired_nanochat-0642.1.2.6",
+      "theorem_ids": [
+        "BioInspiredNanochat.Metriplectic.poisson_entropy_degeneracy",
+        "BioInspiredNanochat.Metriplectic.friction_energy_degeneracy",
+        "BioInspiredNanochat.Metriplectic.energyRate_zero",
+        "BioInspiredNanochat.Metriplectic.entropyRate_nonnegative",
+        "BioInspiredNanochat.Metriplectic.freeEnergyRate_nonpositive",
+        "BioInspiredNanochat.Metriplectic.freeEnergy_nonincreasing",
+        "BioInspiredNanochat.Metriplectic.trajectory_energy_constant",
+        "BioInspiredNanochat.Metriplectic.trajectory_entropy_from_start",
+        "BioInspiredNanochat.Metriplectic.trajectory_freeEnergy_nonincreasing",
+        "BioInspiredNanochat.Metriplectic.trajectory_component_bounds"
+      ],
+      "route": "runtime-first-proof-preserving",
+      "proof_friction_class": "functional-checkpoint-replay",
+      "runtime_defect_found": true,
+      "artifact_hash": "sha256:831498bc2853d86701250ea89024ab5f5f6190d2e3a5a9ae66f93a7d5d42d963",
+      "hash_scope": "formal/lean/BioInspiredNanochat.lean",
+      "sorry_or_admit_present": false,
+      "axioms": [
+        "propext",
+        "Classical.choice",
+        "Quot.sound"
+      ],
+      "assurance": {
+        "exact_real_algebra": "E",
+        "live_torch_regressions": "B",
+        "floating_point_refinement": "cpu-fp64-fp32-exact-replay-low-precision-rejected"
+      },
+      "conformance": {
+        "statement_parity": "pass-live-full-state-checkpoint-contract",
+        "state_parity": "pass-all-recurrent-state-ema-and-guard-ledger",
+        "transition_parity": "pass-eager-vs-replay-with-mixed-fallback",
+        "concurrency_parity": "not-applicable-cpu-foundation",
+        "cancel_drain_parity": "not-applicable",
+        "runtime_evidence": "partial-cpu-live-model",
+        "drift_gate": "pass-fp64-fp32"
+      },
+      "change_scope": "Adds a default-off deterministic CPU fp32/fp64 full-state checkpoint/replay path around the complete live release_canonical recurrence. Recurrent state, EMA, and the guard ledger are explicit functional checkpoint inputs/outputs, so backward cannot duplicate persistent side effects and no custom checkpoint context is needed. Exact recurrence and tiny full-model tests cover forward/state parity, mixed fallback, cross-window and all-parameter gradients, runtime buffers, and an eightfold saved-storage gate. The registry classifies checkpointing as execution infrastructure so the scientific ablation matrix does not treat a storage policy as a biological mechanism. Review found and this cycle removed an initial custom context that would fail inside torch.compile. PyTorch 2.9.1 rejects torch.compile on the required Python 3.14 before tracing; CUDA parity, peak VRAM, supported compiled execution, and a longer-context run remain open acceptance gates, so the bead stays in progress.",
+      "runtime_mapping": [
+        {
+          "path": "bio_inspired_nanochat/synaptic.py",
+          "sha256": "085f85f5e66cfb911646cd4a0cd44d378cbe236613aa6ce117524f7a95daafd1"
+        },
+        {
+          "path": "bio_inspired_nanochat/ablation_registry.py",
+          "sha256": "6ce6c4e4635244b4d777c0733a6dce533a8598200a2e61bff468ea4e40ad2315"
+        },
+        {
+          "path": "bio_inspired_nanochat/ablation_matrix.py",
+          "sha256": "339ca44ed51c866ead00c9f3fe392eda606169f92e10c58a12e9ea98bfbbae56"
+        },
+        {
+          "path": "tests/test_chunked_tbptt.py",
+          "sha256": "220a40f90d5747ecef71635ac4e25f2e759d16f3bb14301e545074441f0da013"
+        },
+        {
+          "path": "tests/test_diff_recurrence_wiring.py",
+          "sha256": "3d8b4f08b95e24032c24e4b27234f636bc6cf9fe3c0b1145a9b3f540cd43c1db"
+        },
+        {
+          "path": "tests/test_metriplectic_runtime.py",
+          "sha256": "073bc5f635dea75a686ff11a51eaef81daa02a012eea1ab344cf5ef55aa261da"
+        },
+        {
+          "path": "tests/test_ablation_registry.py",
+          "sha256": "986063054ab7c6a8adc8e907fc308a9127c379c141a0fdcca271ed74671cb325"
+        },
+        {
+          "path": "tests/test_param_census.py",
+          "sha256": "11e97a7ec532083bd0e09563a5d4d57a2fda595e7357ebfa18c5863abb4f8220"
+        },
+        {
+          "path": "tests/test_ablation_matrix.py",
+          "sha256": "da8bfa2e9c653879bed8d415d54b08d3cbf478f254856b8ae915c18cb1ef5bbc"
+        },
+        {
+          "path": "tests/test_scaleup_ablation_e2e.py",
+          "sha256": "a81b4841a14befff0b392af76c71f4167d588fe4b7cb46bf93080ad56fcb3209"
+        },
+        {
+          "path": "docs/theory/metriplectic.md",
+          "sha256": "1453020ce0308dc3333b01bf798d6f62e70b12ac2d9d9659e2b4330e6f6395a1"
+        }
+      ],
+      "regression_command": "uv run --no-sync python -m pytest tests/test_chunked_tbptt.py tests/test_diff_recurrence_wiring.py tests/test_metriplectic_runtime.py tests/test_ablation_registry.py tests/test_param_census.py tests/test_ablation_matrix.py tests/test_scaleup_ablation_e2e.py -q",
+      "regression_result": "126 passed, 1 skipped (torch.compile unsupported by installed PyTorch on Python 3.14)",
+      "lean_toolchain": "leanprover/lean4:v4.27.0",
+      "mathlib_revision": "a3a10db0e9d66acbebf76c5e6a135066525ac900",
+      "build_command": "rch exec -- lake build",
+      "build_result": "not-rerun-proof-source-unchanged"
     }
   ]
 }

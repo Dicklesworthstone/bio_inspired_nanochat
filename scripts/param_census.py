@@ -80,6 +80,7 @@ SUBSYSTEM: dict[str, str] = {
     "differentiable_recurrence": "presynaptic",
     "recurrence_block_size": "presynaptic",
     "recurrence_chunk_len": "presynaptic",
+    "recurrence_checkpoint_len": "presynaptic",
     "doc2_gain": "presynaptic",
     "prime_rate": "presynaptic",
     "unprime_per_release": "presynaptic",

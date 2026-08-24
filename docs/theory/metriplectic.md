@@ -359,9 +359,9 @@ deterministic replay from a higher-precision checkpoint or an explicitly stored 
 
 ### 10.4 Where reversibility stops
 
-The current live path does **not** yet implement reversible backprop or an operator-split `L` step.
-It solves a combined `L+M` 2×2 midpoint system, converts the proposal to the live dtype, evaluates
-guards, and may select a clamped-Euler fallback. Thermodynamic irreversibility of `M` does not by
+The current live path does **not** implement inverse-based reversible backprop or an operator-split
+`L` step. It solves a combined `L+M` 2×2 midpoint system, converts the proposal to the live dtype,
+evaluates guards, and may select a clamped-Euler fallback. Thermodynamic irreversibility of `M` does not by
 itself imply non-bijectivity: the fallback-free combined linear map is algebraically invertible when
 its reverse solve is nonsingular. Its inverse is nevertheless poorly conditioned under damping. In
 the scalar case, reverse error is amplified by `(1+aγ)/(1−aγ)` per step for `a = Δt/2`, so a safe
@@ -399,6 +399,24 @@ same full-BPTT gradient as the uncheckpointed control. In particular, bf16 inver
 reconstruction cannot recover information lost at the forward cast; it needs deterministic segment
 replay from an exact live checkpoint or an explicitly budgeted higher-precision rounding residual.
 
+The live standard-attention path now provides that conservative replay foundation through the
+default-off integer `recurrence_checkpoint_len`. A checkpoint window encloses the entire
+`release_canonical` transition—not only calcium/buffer—because release, duplicate-index scatter,
+RRP/RES/DELAY, PR/CL/E, and normalization together form the smallest closed Markov boundary. Every
+serialized recurrent tensor, per-window drive/index/valid input, the EMA, and the five-scalar guard
+ledger cross the non-reentrant checkpoint as explicit tensors. The replay closure therefore has no
+module-buffer mutation or custom checkpoint context: the caller commits the terminal EMA/ledger
+once per original forward window, while backward recomputation is functional.
+
+This first live contract deliberately requires `enable_presyn=True`,
+`differentiable_recurrence=True`, `metriplectic_integrator=True`, standard attention,
+`stochastic_train_frac=0`, no MC sampling, and CPU fp32/fp64 tensors. It rejects truncated-BPTT composition,
+FlexAttention, stochastic/MC release, and non-CPU execution. Those gates avoid claiming replay
+parity before CUDA duplicate-index scatter, stochastic evidence, and compiled execution are
+measured. In this environment PyTorch 2.9.1 itself rejects `torch.compile` on the project-mandated
+Python 3.14, so the compile smoke is retained but skipped with that explicit upstream reason; no
+compiled-training claim is made here.
+
 ### 10.5 Memory budget
 
 Let `N` be the number of recurrent substeps, `n` the number of scalar sites in one core invocation,
@@ -413,7 +431,7 @@ and persistent synaptic state are additional.
 | standard BPTT lower bound (`C`, `BUF`, `HEAT` at every boundary) | `≥ 3Nns` | `Θ(Nn)` |
 | fallback-free `L` reconstruction (terminal state only) | `3ns + O(parameters)` | `Θ(n)`, or `O(1)` only in `N` |
 | dense two-plane `M` correction at every step (`HEAT` from the energy shell) | `(3+2N)ns` | `Θ(Nn)` |
-| uniform full-core checkpoint/replay windows of length `K` | approximately `(3N/K+3K+3)ns` | minimized at `Θ(ns√N)` |
+| uniform full-state checkpoint/replay windows of length `K` | approximately `P(N/K+K)ns`, `P=9+endo_delay` serialized planes | minimized at `Θ(Pns√N)` |
 
 The CPU saved-tensor-hook test measures unique backing storage for a 32-site fp64 case. In the
 current environment, eager autograd grows from roughly 2.1 KiB at depth 1 to roughly 104 KiB at
@@ -421,6 +439,13 @@ depth 64, while the reversible sequence remains below 1 KiB at both depths. The 
 scaling and ratio rather than allocator-specific byte totals. This is structural evidence about
 tensors retained for backward, not a CUDA peak-VRAM result: it excludes allocator overhead, replay
 workspace, the rest of the model, and the non-`L` live recurrence.
+
+The live full-state CPU test separately compares 16 recurrence steps with `K=4`. Saved-tensor hooks
+require both nominal saved bytes and unique backing-storage bytes to fall below one eighth of eager
+BPTT. That is evidence for the declared recurrence-core checkpoint budget, including terminal state
+and functional runtime buffers; it is not a whole-model or CUDA allocator measurement. Drives,
+indices, validity masks, per-step output biases consumed by attention, and ordinary transformer
+activations remain `Θ(N)` storage outside this reduced-core accounting.
 
 Thus “O(1)-memory” means a constant number of **`L`-core activation snapshots in `L`-step depth at
 fixed tensor shape**. It does not mean constant memory in context length, constant whole-model VRAM,
@@ -458,12 +483,13 @@ The implementation bead must meet all of these gates before making a runtime mem
 
 The isolated CPU foundation now evaluates the algebraic Cayley inverse in live precision and
 implements a first-order custom backward, with fp64 gradcheck/VJP parity, bounded fp32 gradient
-drift, round trips through depth
-4,096, and constant saved-tensor storage in `L`-step depth. The live runtime still uses ordinary
-autograd through the combined guarded `L+M` midpoint proposal. Functional full-state
-checkpoint/replay, a default-off live integration toggle, CUDA scatter/fallback parity,
-reconstruction-error tuning, peak-VRAM measurement, and a demonstrated longer-context run remain
-acceptance gates for `0642.1.2.6`; the isolated result alone does not close the bead.
+drift, round trips through depth 4,096, and constant saved-tensor storage in `L`-step depth. The live
+runtime additionally has default-off functional full-state checkpoint/replay for the deterministic
+CPU contract above. Tests establish exact forward/state/EMA/ledger parity, mixed-fallback replay,
+cross-window gradients, all learnable-kinetics and full-model parameter-gradient parity, and an
+eightfold saved-storage gate. CUDA scatter/fallback parity, stochastic and MC replay, supported
+compiled execution, peak-VRAM measurement, and a demonstrated longer-context run remain acceptance
+gates for `0642.1.2.6`; these CPU results do not close the bead.
 
 ---
 

@@ -30,12 +30,13 @@ Design (honoring the bead's pinned review comments):
    confirmation pass — never burn days of 4090 time blindly.
 
 The mechanism set is the authoritative ``ablation_registry.MECHANISMS`` list. ``flex_attention``,
-``native_genetics``, and ``tropical_skeleton`` are EXCLUDED from the science matrix: they are
-performance/runtime toggles, not standalone biological mechanisms (flex is prefill-only and
-incompatible with KV-cache decode eval; native needs CUDA; tropical routing needs a certified
-exact-affine score adapter). Global neuromodulation (hy8.1) and NeuroScore are NOT yet registered
-ablation mechanisms, so they are not in this matrix; registering them is a documented prerequisite
-for including them (see ``docs/ablation_matrix.md`` §"Known gaps").
+``native_genetics``, ``tropical_skeleton``, and ``recurrence_checkpoint`` are EXCLUDED from the
+science matrix: they are performance/runtime toggles, not standalone biological mechanisms (flex
+is prefill-only and incompatible with KV-cache decode eval; native needs CUDA; tropical routing
+needs a certified exact-affine score adapter; checkpointing changes activation storage rather than
+the forward dynamics). Global neuromodulation (hy8.1) and NeuroScore are NOT yet registered ablation
+mechanisms, so they are not in this matrix; registering them is a documented prerequisite for
+including them (see ``docs/ablation_matrix.md`` §"Known gaps").
 """
 
 from __future__ import annotations
@@ -54,7 +55,12 @@ from bio_inspired_nanochat.synaptic import SynapticConfig
 
 # Mechanisms that are infrastructure/perf toggles, not biology — excluded from the science matrix.
 INFRA_MECHANISMS: frozenset[str] = frozenset(
-    {"flex_attention", "native_genetics", "tropical_skeleton"}
+    {
+        "flex_attention",
+        "native_genetics",
+        "recurrence_checkpoint",
+        "tropical_skeleton",
+    }
 )
 # The generic matrix only changes SynapticConfig; it does not construct an MoE
 # lifecycle controller. Keep topology out until its equal-FLOP structural runner

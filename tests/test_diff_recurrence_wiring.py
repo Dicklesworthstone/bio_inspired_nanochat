@@ -33,7 +33,7 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _bio_testkit import make_tiny_synaptic, random_tokens  # noqa: E402
 
-from bio_inspired_nanochat.ablation_registry import validate_config  # noqa: E402
+from bio_inspired_nanochat.ablation_registry import _BY_FIELD, validate_config  # noqa: E402
 from bio_inspired_nanochat.synaptic import SynapticConfig  # noqa: E402
 
 pytestmark = pytest.mark.unit
@@ -41,13 +41,26 @@ pytestmark = pytest.mark.unit
 KIN = "h.0.attn.attn.pre.kinetics.theta_"  # prefix of the layer-0 learnable kinetic Parameters
 
 
-def _model(*, diff_rec: bool, block: int = 8, chunk_len: int = 0, seq: int = 48, seed: int = 3,
-           train: bool = False, learnable: bool = True):
+def _model(
+    *,
+    diff_rec: bool,
+    block: int = 8,
+    chunk_len: int = 0,
+    checkpoint_len: int = 0,
+    seq: int = 48,
+    seed: int = 3,
+    train: bool = False,
+    learnable: bool = True,
+    metriplectic: bool = False,
+):
     syn = SynapticConfig(
         learnable_kinetics=learnable,
         differentiable_recurrence=diff_rec,
         recurrence_block_size=block,
         recurrence_chunk_len=chunk_len,
+        recurrence_checkpoint_len=checkpoint_len,
+        metriplectic_integrator=metriplectic,
+        stochastic_train_frac=0.0 if metriplectic or checkpoint_len > 0 else 0.12,
     )
     return make_tiny_synaptic(seed=seed, train=train, sequence_len=seq, syn_cfg=syn)
 
@@ -204,7 +217,97 @@ def test_calcium_decay_gradient_matches_finite_difference():
 
 
 # --------------------------------------------------------------------------- #
-# 7. The validator catches the foot-gun configs.
+# 7. The live full-model path preserves values, gradients, and runtime effects.
+# --------------------------------------------------------------------------- #
+def test_live_model_checkpoint_matches_eager_forward_backward_and_runtime_buffers():
+    eager = _model(diff_rec=True, block=4, seq=16, train=True, metriplectic=True)
+    replayed = _model(
+        diff_rec=True,
+        block=4,
+        checkpoint_len=2,
+        seq=16,
+        train=True,
+        metriplectic=True,
+    )
+    x = random_tokens(1, 16, 97, seed=11)
+    y = random_tokens(1, 16, 97, seed=12)
+
+    eager_logits, eager_loss = eager(x, y, train_mode=True)
+    replayed_logits, replayed_loss = replayed(x, y, train_mode=True)
+    assert torch.equal(eager_logits, replayed_logits)
+    assert torch.equal(eager_loss, replayed_loss)
+
+    runtime_after_forward = []
+    for block in replayed.h:
+        pre = block.attn.attn.pre
+        runtime_after_forward.append(
+            tuple(
+                tensor.clone()
+                for tensor in (
+                    pre.ema_e,
+                    pre.metriplectic_steps,
+                    pre.metriplectic_fallbacks,
+                    pre.metriplectic_last_energy_drift,
+                    pre.metriplectic_last_entropy_production,
+                    pre.metriplectic_last_free_energy_delta,
+                )
+            )
+        )
+
+    eager_loss.backward()
+    replayed_loss.backward()
+    for (eager_name, eager_param), (replayed_name, replayed_param) in zip(
+        eager.named_parameters(), replayed.named_parameters()
+    ):
+        assert eager_name == replayed_name
+        if eager_param.grad is None or replayed_param.grad is None:
+            assert eager_param.grad is None and replayed_param.grad is None
+        else:
+            assert torch.equal(eager_param.grad, replayed_param.grad), eager_name
+
+    for block, forward_runtime in zip(replayed.h, runtime_after_forward):
+        pre = block.attn.attn.pre
+        runtime_after_backward = (
+            pre.ema_e,
+            pre.metriplectic_steps,
+            pre.metriplectic_fallbacks,
+            pre.metriplectic_last_energy_drift,
+            pre.metriplectic_last_entropy_production,
+            pre.metriplectic_last_free_energy_delta,
+        )
+        for before, after in zip(forward_runtime, runtime_after_backward):
+            assert torch.equal(before, after)
+
+
+def test_live_model_checkpoint_runs_under_torch_compile():
+    model = _model(
+        diff_rec=True,
+        block=2,
+        checkpoint_len=2,
+        seq=8,
+        train=True,
+        metriplectic=True,
+    )
+    try:
+        compiled = torch.compile(model, backend="eager", dynamic=False)
+    except RuntimeError as exc:
+        if "torch.compile is not supported on Python 3.14+" in str(exc):
+            pytest.skip("installed PyTorch does not support torch.compile on Python 3.14")
+        raise
+    x = random_tokens(1, 8, 97, seed=13)
+    y = random_tokens(1, 8, 97, seed=14)
+    logits, loss = compiled(x, y, train_mode=True)
+    assert torch.isfinite(logits).all()
+    assert torch.isfinite(loss)
+    loss.backward()
+    assert all(
+        parameter.grad is None or torch.isfinite(parameter.grad).all()
+        for parameter in model.parameters()
+    )
+
+
+# --------------------------------------------------------------------------- #
+# 8. The validator catches the foot-gun configs.
 # --------------------------------------------------------------------------- #
 def test_validator_flags_differentiable_recurrence_without_kinetics():
     errors, _ = validate_config(
@@ -222,10 +325,48 @@ def test_validator_range_checks_block_and_chunk():
         SynapticConfig(learnable_kinetics=True, differentiable_recurrence=True,
                        recurrence_chunk_len=-1)
     )[0]
+    assert validate_config(
+        SynapticConfig(learnable_kinetics=True, differentiable_recurrence=True,
+                       recurrence_checkpoint_len=-1)
+    )[0]
+
+
+def test_validator_rejects_checkpoint_without_full_differentiable_bptt():
+    errors, _ = validate_config(SynapticConfig(recurrence_checkpoint_len=2))
+    assert any("differentiable_recurrence" in error for error in errors)
+    assert any("metriplectic_integrator" in error for error in errors)
+    assert any("stochastic_train_frac=0" in error for error in errors)
+
+    errors, _ = validate_config(
+        SynapticConfig(
+            learnable_kinetics=True,
+            differentiable_recurrence=True,
+            recurrence_chunk_len=2,
+            recurrence_checkpoint_len=2,
+        )
+    )
+    assert any("mutually exclusive" in error for error in errors)
+
+    errors, _ = validate_config(
+        SynapticConfig(
+            learnable_kinetics=True,
+            differentiable_recurrence=True,
+            metriplectic_integrator=True,
+            recurrence_checkpoint_len=2,
+            stochastic_train_frac=0.0,
+            use_flex_attention=True,
+        )
+    )
+    assert any("standard attention path" in error for error in errors)
 
 
 def test_default_config_does_not_engage_the_recurrence():
     cfg = SynapticConfig()
     assert cfg.differentiable_recurrence is False
+    assert cfg.recurrence_checkpoint_len == 0
+    assert _BY_FIELD["recurrence_checkpoint_len"].requires == (
+        "differentiable_recurrence",
+        "metriplectic_integrator",
+    )
     errors, warnings = validate_config(cfg)
     assert errors == [] and warnings == []

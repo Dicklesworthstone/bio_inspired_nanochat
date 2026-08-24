@@ -180,6 +180,11 @@ class SynapticConfig:
     # recurrence. Bounds activation memory to ~chunk_len blocks regardless of sequence length.
     # 0 => full BPTT across the whole sequence (no truncation).
     recurrence_chunk_len: int = 0
+    # Full-BPTT activation-checkpoint window, in recurrence STEPS. Unlike recurrence_chunk_len,
+    # this preserves gradients across every window boundary by replaying each window in backward.
+    # 0 => ordinary eager full BPTT. Mutually exclusive with recurrence_chunk_len because one is
+    # exact-gradient recomputation while the other deliberately truncates the graph.
+    recurrence_checkpoint_len: int = 0
     # (or4t: alpha_c / syt1_slope / syt7_slope / cpx_thresh were the LEGACY sigmoid release-prob
     #  params; removed as dead after the canonical migration. The canonical uses alpha_ca for the
     #  calcium influx and Hill syt_fast_kd/syt_slow_kd + complexin_bias for the release prob.)
@@ -494,6 +499,201 @@ def _detach_presyn_state(state: Dict[str, Any]) -> None:
             state[k] = [x.detach() if torch.is_tensor(x) else x for x in v]
 
 
+_PRESYN_STATE_KEYS = ("C", "BUF", "RRP", "RES", "PR", "CL", "E", "AMP")
+_PRESYN_RUNTIME_BUFFER_NAMES = (
+    "ema_e",
+    "metriplectic_steps",
+    "metriplectic_fallbacks",
+    "metriplectic_last_energy_drift",
+    "metriplectic_last_entropy_production",
+    "metriplectic_last_free_energy_delta",
+)
+
+
+def _runtime_buffer(presyn: "SynapticPresyn", name: str) -> Tensor:
+    value = getattr(presyn, name)
+    if not torch.is_tensor(value):
+        raise TypeError(f"presyn runtime buffer {name!r} must be a tensor")
+    return value
+
+
+def _flatten_presyn_state(state: Dict[str, Any]) -> tuple[tuple[Tensor, ...], int, bool]:
+    """Flatten tensor/list state for a non-reentrant checkpoint boundary."""
+    delay = state["DELAY"]
+    if not isinstance(delay, list) or not all(torch.is_tensor(item) for item in delay):
+        raise TypeError("presyn state DELAY must be a list of tensors")
+    has_heat = "HEAT" in state
+    tensors = [state[key] for key in _PRESYN_STATE_KEYS]
+    if not all(torch.is_tensor(item) for item in tensors):
+        raise TypeError("presyn recurrent state values must be tensors")
+    tensors.extend(delay)
+    if has_heat:
+        heat = state["HEAT"]
+        if not torch.is_tensor(heat):
+            raise TypeError("presyn state HEAT must be a tensor")
+        tensors.append(heat)
+    return tuple(tensors), len(delay), has_heat
+
+
+def _unflatten_presyn_state(
+    tensors: tuple[Tensor, ...], *, delay_len: int, has_heat: bool
+) -> Dict[str, Any]:
+    """Rebuild the canonical state shape without mutating the caller's dictionary."""
+    base_count = len(_PRESYN_STATE_KEYS)
+    expected = base_count + delay_len + int(has_heat)
+    if len(tensors) != expected:
+        raise ValueError(f"expected {expected} flattened state tensors, got {len(tensors)}")
+    state: Dict[str, Any] = dict(zip(_PRESYN_STATE_KEYS, tensors[:base_count]))
+    state["DELAY"] = list(tensors[base_count : base_count + delay_len])
+    if has_heat:
+        state["HEAT"] = tensors[-1]
+    return state
+
+
+def _runtime_buffer_snapshot(presyn: "SynapticPresyn") -> tuple[Tensor, ...]:
+    return tuple(
+        _runtime_buffer(presyn, name).detach().clone()
+        for name in _PRESYN_RUNTIME_BUFFER_NAMES
+    )
+
+
+def _runtime_buffer_mapping(tensors: tuple[Tensor, ...]) -> Dict[str, Tensor]:
+    if len(tensors) != len(_PRESYN_RUNTIME_BUFFER_NAMES):
+        raise ValueError(
+            f"expected {len(_PRESYN_RUNTIME_BUFFER_NAMES)} runtime buffers, got {len(tensors)}"
+        )
+    return dict(zip(_PRESYN_RUNTIME_BUFFER_NAMES, tensors))
+
+
+def _checkpoint_recurrence_segment(
+    presyn: "SynapticPresyn",
+    state: Dict[str, Any],
+    drives: List[Tensor],
+    idxs: List[Tensor],
+    valids: List[Optional[Tensor]],
+    *,
+    train: bool,
+) -> List[Tensor]:
+    """Checkpoint one full-BPTT window with explicit functional runtime state."""
+    from torch.utils.checkpoint import checkpoint
+
+    cfg = presyn.cfg
+    if (
+        not cfg.enable_presyn
+        or not cfg.learnable_kinetics
+        or not cfg.differentiable_recurrence
+        or not presyn.use_metriplectic_integrator()
+        or presyn.kinetics is None
+    ):
+        raise ValueError(
+            "recurrence checkpointing requires enable_presyn=True, learnable_kinetics=True, "
+            "differentiable_recurrence=True, and metriplectic_integrator=True"
+        )
+    if cfg.use_flex_attention:
+        raise ValueError("recurrence checkpointing does not yet support FlexAttention")
+    if cfg.stochastic_train_frac != 0.0:
+        raise ValueError("recurrence checkpointing requires stochastic_train_frac=0")
+    if bool(getattr(presyn, "_mc_sampling", False)):
+        raise ValueError("recurrence checkpointing does not support MC release sampling")
+    if any(tensor.device.type != "cpu" for tensor in (*drives, *idxs)) or any(
+        valid is not None and valid.device.type != "cpu" for valid in valids
+    ):
+        raise ValueError("recurrence checkpointing is currently supported on CPU only")
+    drive_dtype = drives[0].dtype
+    if drive_dtype not in {torch.float32, torch.float64} or any(
+        drive.dtype != drive_dtype for drive in drives
+    ):
+        raise TypeError("recurrence checkpointing currently requires float32 or float64 drives")
+    if any(idx.dtype != torch.long for idx in idxs):
+        raise TypeError("recurrence checkpointing requires int64 index tensors")
+
+    if "HEAT" not in state:
+        state["HEAT"] = torch.zeros_like(state["C"])
+
+    flat_state, delay_len, has_heat = _flatten_presyn_state(state)
+    if any(tensor.device.type != "cpu" for tensor in flat_state):
+        raise ValueError("checkpointed recurrent state must be on CPU")
+    if any(tensor.dtype != drive_dtype for tensor in flat_state):
+        raise TypeError("checkpointed recurrent state dtype must match the drive dtype")
+    state_count = len(flat_state)
+    step_count = len(drives)
+    runtime_initial = _runtime_buffer_snapshot(presyn)
+    if any(tensor.device.type != "cpu" for tensor in runtime_initial):
+        raise ValueError("checkpointed runtime buffers must be on CPU")
+    if runtime_initial[0].dtype != drive_dtype:
+        raise TypeError("checkpointed EMA dtype must match the drive dtype")
+    if any(
+        parameter.device.type != "cpu" or parameter.dtype != drive_dtype
+        for parameter in presyn.kinetics.parameters()
+    ):
+        raise TypeError("checkpointed kinetics must match the CPU drive dtype")
+    runtime_count = len(runtime_initial)
+    explicit_valids = tuple(
+        torch.ones_like(drive, dtype=torch.bool) if valid is None else valid
+        for drive, valid in zip(drives, valids)
+    )
+    has_valid = tuple(valid is not None for valid in valids)
+
+    def run_segment(*inputs: Tensor) -> tuple[Tensor, ...]:
+        local_state = _unflatten_presyn_state(
+            tuple(inputs[:state_count]), delay_len=delay_len, has_heat=has_heat
+        )
+        runtime_start = state_count
+        drive_start = runtime_start + runtime_count
+        idx_start = drive_start + step_count
+        valid_start = idx_start + step_count
+        local_runtime = _runtime_buffer_mapping(
+            tuple(inputs[runtime_start:drive_start])
+        )
+        segment_drives = inputs[drive_start:idx_start]
+        segment_idxs = inputs[idx_start:valid_start]
+        segment_valids = inputs[valid_start:]
+        outputs = [
+            presyn.release_canonical(
+                local_state,
+                drive,
+                idx,
+                train=train,
+                valid=valid if valid_is_present else None,
+                differentiable=True,
+                runtime_buffers=local_runtime,
+            )
+            for drive, idx, valid, valid_is_present in zip(
+                segment_drives, segment_idxs, segment_valids, has_valid
+            )
+        ]
+        next_state, next_delay_len, next_has_heat = _flatten_presyn_state(local_state)
+        if next_delay_len != delay_len or next_has_heat != has_heat:
+            raise RuntimeError("checkpointed presyn recurrence changed its state schema")
+        next_runtime = tuple(local_runtime[name] for name in _PRESYN_RUNTIME_BUFFER_NAMES)
+        return (*outputs, *next_state, *next_runtime)
+
+    result = checkpoint(
+        run_segment,
+        *flat_state,
+        *runtime_initial,
+        *drives,
+        *idxs,
+        *explicit_valids,
+        use_reentrant=False,
+        preserve_rng_state=False,
+        determinism_check="default",
+        early_stop=False,
+    )
+    outputs = list(result[:step_count])
+    final_state_end = step_count + state_count
+    final_state = _unflatten_presyn_state(
+        tuple(result[step_count:final_state_end]), delay_len=delay_len, has_heat=has_heat
+    )
+    state.update(final_state)
+    with torch.no_grad():
+        for name, value in zip(
+            _PRESYN_RUNTIME_BUFFER_NAMES, result[final_state_end:]
+        ):
+            _runtime_buffer(presyn, name).copy_(value)
+    return outputs
+
+
 def chunked_recurrence(
     presyn: "SynapticPresyn",
     state: Dict[str, Any],
@@ -501,12 +701,13 @@ def chunked_recurrence(
     idxs: List[Tensor],
     *,
     chunk_len: int,
+    checkpoint_len: int = 0,
     train: bool = False,
     valids: Optional[List[Optional[Tensor]]] = None,
     differentiable: bool = True,
 ) -> List[Tensor]:
     """Run the DIFFERENTIABLE presynaptic recurrence over a sequence of steps with truncated
-    BPTT (yw9.2.3).
+    BPTT (yw9.2.3) or exact-gradient checkpoint/replay (0642.1.2.6).
 
     ``drives``/``idxs`` are per-step ``(B,H,T,K)`` tensors. The carried ``state`` is advanced with
     ``release_canonical(differentiable=True)`` so gradients flow through it; every ``chunk_len``
@@ -520,12 +721,46 @@ def chunked_recurrence(
     ``differentiable`` toggles the autograd state recurrence: ``True`` (default) carries gradient
     through the state for BPTT; ``False`` runs the same causal schedule under no_grad (the live eval
     path — identical forward values, no graph). hwxb.4.6 wires this into the model attention forward.
+
+    ``checkpoint_len > 0`` groups that many recurrence steps behind one non-reentrant PyTorch
+    checkpoint. It preserves full-BPTT gradients while retaining recurrent state only at window
+    boundaries. EMA and metriplectic telemetry cross the boundary as explicit functional tensors,
+    so backward replay cannot apply persistent side effects twice. It is mutually exclusive with
+    truncated-BPTT ``chunk_len``.
     """
+    if len(drives) != len(idxs):
+        raise ValueError("drives and idxs must have the same number of recurrence steps")
+    if valids is not None and len(valids) != len(drives):
+        raise ValueError("valids must match the number of recurrence steps")
+    if checkpoint_len < 0:
+        raise ValueError(f"checkpoint_len must be >= 0, got {checkpoint_len}")
+    if checkpoint_len > 0 and chunk_len > 0:
+        raise ValueError("checkpoint_len and truncated-BPTT chunk_len are mutually exclusive")
+
+    normalized_valids = (
+        [None] * len(drives) if valids is None else valids
+    )
+    if checkpoint_len > 0 and differentiable and torch.is_grad_enabled():
+        checkpointed_outputs: List[Tensor] = []
+        for start in range(0, len(drives), checkpoint_len):
+            stop = start + checkpoint_len
+            checkpointed_outputs.extend(
+                _checkpoint_recurrence_segment(
+                    presyn,
+                    state,
+                    drives[start:stop],
+                    idxs[start:stop],
+                    normalized_valids[start:stop],
+                    train=train,
+                )
+            )
+        return checkpointed_outputs
+
     outs: List[Tensor] = []
     for t, (drive, idx) in enumerate(zip(drives, idxs)):
         if chunk_len > 0 and t > 0 and (t % chunk_len == 0):
             _detach_presyn_state(state)
-        valid = None if valids is None else valids[t]
+        valid = normalized_valids[t]
         outs.append(
             presyn.release_canonical(
                 state, drive, idx, train=train, valid=valid, differentiable=differentiable
@@ -741,6 +976,7 @@ class SynapticPresyn(nn.Module):
         alpha_buf_on: float | Tensor,
         alpha_buf_off: float | Tensor,
         record_metrics: bool = False,
+        runtime_buffers: Optional[Dict[str, Tensor]] = None,
     ) -> tuple[Tensor, Tensor, Tensor]:
         """Advance the live calcium/buffer subsystem or its exact guarded fallback.
 
@@ -775,7 +1011,24 @@ class SynapticPresyn(nn.Module):
             fallback=(baseline_c, baseline_b, heat),
         )
         if record_metrics:
-            self._record_metriplectic_step(record)
+            if runtime_buffers is None:
+                self._record_metriplectic_step(record)
+            else:
+                runtime_buffers["metriplectic_steps"] = runtime_buffers[
+                    "metriplectic_steps"
+                ] + record.fallback_mask.numel()
+                runtime_buffers["metriplectic_fallbacks"] = runtime_buffers[
+                    "metriplectic_fallbacks"
+                ] + record.fallback_mask.sum().to(torch.int64)
+                runtime_buffers["metriplectic_last_energy_drift"] = (
+                    record.energy_drift.detach().abs().max().to(torch.float32)
+                )
+                runtime_buffers["metriplectic_last_entropy_production"] = (
+                    record.entropy_production.detach().min().to(torch.float32)
+                )
+                runtime_buffers["metriplectic_last_free_energy_delta"] = (
+                    record.free_energy_delta.detach().max().to(torch.float32)
+                )
         return c_next, b_next, h_next
 
     # The legacy sigmoid release() + _mix_prob were removed here (qcj7). The faithful canonical
@@ -853,6 +1106,7 @@ class SynapticPresyn(nn.Module):
         apply_barrier: bool = False,
         differentiable: bool = False,
         logits: Optional[Tensor] = None,
+        runtime_buffers: Optional[Dict[str, Tensor]] = None,
     ) -> Tensor:
         """CANONICAL unified presynaptic release — the single, faithful, differentiable
         source of truth (8j9.2).
@@ -1086,6 +1340,7 @@ class SynapticPresyn(nn.Module):
                 alpha_buf_on=alpha_buf_on,
                 alpha_buf_off=alpha_buf_off,
                 record_metrics=True,
+                runtime_buffers=runtime_buffers,
             )
 
             # RRP depletion + endocytosis delay queue + priming refill
@@ -1129,10 +1384,18 @@ class SynapticPresyn(nn.Module):
             # (train=True). Eval forwards (train=False) must not mutate any persistent
             # state, or val_bpb is neither idempotent nor contamination-free.
             s = e.detach().abs().mean().clamp_min(1e-3)
-            if train:
+            if runtime_buffers is not None:
+                ema_e = runtime_buffers["ema_e"]
+                if train:
+                    ema_e = ema_e.clone()
+                    ema_e.mul_(0.99).add_(0.01 * s)
+                    runtime_buffers["ema_e"] = ema_e
+            else:
+                ema_e = self.ema_e
+            if train and runtime_buffers is None:
                 self.ema_e.mul_(0.99).add_(0.01 * s)
 
-        return e / (self.ema_e + 1e-6)
+        return e / (ema_e + 1e-6)
 
     @torch.no_grad()
     def forward(
@@ -1900,6 +2163,7 @@ class SynapticCausalSelfAttention(nn.Module):
             drives,
             idxs,
             chunk_len=int(self.cfg.recurrence_chunk_len),
+            checkpoint_len=int(self.cfg.recurrence_checkpoint_len),
             train=train_mode,
             valids=valids,
             differentiable=torch.is_grad_enabled(),
