@@ -27,7 +27,7 @@ On a tiny untrained `GPTSynaptic` (CPU), feeding a fixed token pattern repeatedl
 
 | Condition | Observation |
 |---|---|
-| Default config, `|Δw_fast|` over 8 passes | **~1e-7** — the raw rank-R Hebbian delta is `O(trace²)` and numerically negligible. |
+| Legacy control (`fast_weight_normalized=False`), `|Δw_fast|` over 8 passes | **~1e-7** — the raw rank-R Hebbian delta is `O(trace²)` and numerically negligible. |
 | `y_fast` contribution to the output | **≈ 0** — gated, and added mid-network where the pre-`lm_head` norm suppresses it. Forcing `‖w_fast‖→1.0` still moves logits by only `~4e-3`. |
 | Naive `post_fast_lr` boost (×3–×5) | **NaN** — positive feedback (`w_fast`→`y_fast`→activations→traces→`w_fast`), worsened by the un-decayed `w_slow` online drift. |
 | Adapt on pattern P, then loss on P vs novel Q | `ΔlossP ≈ −0.0017` (slightly **worse**), `ΔlossQ ≈ +0.0003`. **No predictive specificity.** |
@@ -39,13 +39,15 @@ reachable by hyperparameter tuning alone.
 
 ## What this bead delivered (the foundational fix)
 
-`SynapticConfig.fast_weight_normalized` (default **off** — legacy write byte-for-byte unchanged).
-When on, both online Hebbian writes step along the **unit-norm** Hebbian direction
+`SynapticConfig.fast_weight_normalized` defaults **on** after the raw write caused the reproducible
+all-bio Synaptic-MoE divergence tracked by **jpqc**. Both online Hebbian writes step along the **unit-norm** Hebbian direction
 (`fast_weight_eta` for `w_fast`, `post_slow_lr` for `w_slow`) and `‖w_fast‖` is capped by
 `fast_weight_max_norm`. This makes the update **impactful** (`|Δw_fast| ~ O(eta)`, not 1e-7) **and
 stable** (finite & bounded over 200 repeated passes — where the naive boost NaNs). It is the
 prerequisite for any consolidation signal to actually move the fast weights; it does **not** on its
-own make the adaptation predictive. Tests: `tests/test_online_fast_adaptation.py`.
+own make the adaptation predictive. Setting the flag false retains the historical raw path only as
+a negative-control ablation. Tests: `tests/test_online_fast_adaptation.py` and the multi-seed MoE
+stability regression in `tests/test_e2e_train_bio.py`.
 
 ## What's needed for the behavioral claim (downstream)
 

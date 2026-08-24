@@ -13,6 +13,8 @@ What this test locks:
      plus the presynaptic calcium/RRP/energy curve — the artifact for human inspection.
   3. The battery is NOT vacuous: a no-learning run (a fully frozen model — lr=0 with plasticity off)
      is CAUGHT (loss does not decrease), so the PASS in (1) is meaningful.
+  4. The default Synaptic-MoE path stays finite on the exact seed/LR/length that previously drove
+     raw Hebbian fast weights into positive-feedback overflow (bead ``jpqc``).
 
 Run:  pytest tests/test_e2e_train_bio.py -v
 """
@@ -91,3 +93,18 @@ def test_bio_e2e_battery_catches_no_learning(tmp_path):
     assert not names["loss_decreases"].passed, "a fully-frozen model must not decrease the loss"
     with pytest.raises(AssertionError):
         report.assert_passed()
+
+
+def test_bio_e2e_moe_default_stays_finite(tmp_path):
+    cfg = BioE2EConfig(
+        steps=80,
+        seed=42,
+        lr=1.5e-3,
+        use_moe=True,
+        num_experts=8,
+        moe_top_k=2,
+    )
+    report = run_bio_e2e(cfg, run_dir=tmp_path, verbose=False)
+
+    report.assert_passed()
+    assert report.summary["final_loss"] < report.summary["initial_loss"]

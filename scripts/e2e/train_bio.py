@@ -79,7 +79,8 @@ class BioE2EConfig:
     # The structural Synaptic-MoE lifecycle (energy/fatigue metabolism, split/merge) is exercised
     # end-to-end by its OWN safety net (bead eqyk.8 / tests/test_e2e_structural_lifecycle.py); this
     # script targets the per-synapse bio stack (presyn kinetics + postsynaptic plasticity), whose
-    # five buffers the bead names. MoE stays opt-in (and is less stable at this tiny scale).
+    # five buffers the bead names. MoE stays opt-in here to keep that default check focused; its
+    # bounded-fast-weight stability regression is tests/test_e2e_train_bio.py (jpqc).
     use_moe: bool = False
     num_experts: int = 8
     moe_top_k: int = 2

@@ -240,16 +240,15 @@ class SynapticConfig:
     post_fast_lr: float = 1.5e-3
     post_slow_lr: float = 5e-4
     post_trace_decay: float = 0.96
-    # sax.1 — online fast-weight ("fast-weight programmer") adaptation magnitude/stability.
-    # DEFAULT-OFF (preserves the exact legacy write). The raw rank-R Hebbian delta is
-    # O(trace²) and numerically negligible (|Δw_fast| ~ 1e-7 over many passes), so online
-    # fast-adaptation has effectively no effect; naively raising post_fast_lr diverges
-    # (positive feedback through y_fast). When enabled, the w_fast write is normalized to a
-    # unit-norm direction, stepped by fast_weight_eta, and ||w_fast|| is bounded by
-    # fast_weight_max_norm — making the update both impactful AND stable. (w_slow consolidation
-    # is unchanged.) This is the prerequisite for any consolidation signal (e.g. three-factor
-    # reward-modulated Hebbian, hy8.2) to actually move the fast weights.
-    fast_weight_normalized: bool = False
+    # sax.1/jpqc — online fast-weight ("fast-weight programmer") magnitude/stability. The raw
+    # rank-R Hebbian delta is O(trace²): normally negligible, but it can enter positive feedback
+    # through y_fast and explode on sparse MoE trajectories. The default normalized path steps
+    # w_fast/w_slow along a unit-norm direction and caps ||w_fast||, making the update impactful
+    # and stable. Set False only for the documented legacy/negative-control ablation; the raw path
+    # is intentionally not the production default after it diverged across all four jpqc seeds.
+    # This remains the substrate for a predictive consolidation signal (e.g. three-factor
+    # reward-modulated Hebbian, hy8.2); normalization alone does not make the write task-aware.
+    fast_weight_normalized: bool = True
     fast_weight_eta: float = 0.5       # O(1) step size on the normalized fast-weight direction
     fast_weight_max_norm: float = 1.0  # Frobenius-norm cap on w_fast (<=0 disables the cap)
     camkii_up: float = 0.05

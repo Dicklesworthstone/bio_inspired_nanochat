@@ -5,18 +5,20 @@ Context. vg9.2 made online Hebbian plasticity RUN during training (autograd-safe
 writes); vg9.9 restored genuine rank-R eligibility traces; vg9.4 added per-sequence reset.
 sax.1 assembles those pieces into the online-learning inner loop and characterizes it honestly.
 
-Two facts these tests lock:
+Three facts these tests lock:
 
-1. THE GAP. With the default config the raw rank-R Hebbian fast-weight write is O(trace²) and
-   numerically negligible — `|Δw_fast|` stays ~1e-6 across many adaptation passes, so the fast
-   pathway has essentially no effect on the output. (And naively raising `post_fast_lr` diverges
-   via positive feedback.) So "online learning" does not, by itself, move the fast weights.
+1. THE HISTORICAL GAP. With `fast_weight_normalized=False`, the raw rank-R Hebbian fast-weight
+   write is O(trace²) and normally negligible — but on sparse MoE trajectories it can enter
+   positive feedback and diverge. This unsafe legacy path remains only as a negative control.
 
-2. THE FOUNDATIONAL FIX (`fast_weight_normalized=True`, opt-in). The write is taken along the
+2. THE FOUNDATIONAL FIX (`fast_weight_normalized=True`, now the default). The write is taken along the
    unit-norm Hebbian direction with an O(1) `fast_weight_eta` and `||w_fast||` is bounded by
    `fast_weight_max_norm`, so the update is BOTH impactful (|Δw_fast| ~ O(eta)) AND stable
    (bounded, finite over many passes). This is the prerequisite for any downstream consolidation
    signal (e.g. three-factor reward-modulated Hebbian, hy8.2) to actually write fast memory.
+
+3. THE PRODUCTION DEFAULT is the normalized path. The raw control caused the all-bio Synaptic-MoE
+   training divergence tracked by jpqc; the bounded path is stable on that exact multi-seed repro.
 
 What these tests do NOT claim: that unsupervised adaptation IMPROVES next-token prediction on an
 untrained model. It does not — see docs/online_learning_status.md for the measured specificity
@@ -57,18 +59,18 @@ def _adapt_passes(lin: SynapticLinear, x: torch.Tensor, ca, en, n: int) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# 1. THE GAP: the default fast-weight write is numerically negligible
+# 1. THE GAP: the legacy raw fast-weight write is numerically negligible
 # --------------------------------------------------------------------------- #
 @pytest.mark.unit
-def test_default_fast_weight_write_is_negligible():
-    lin = _make_lin()  # fast_weight_normalized defaults False
+def test_legacy_fast_weight_write_is_negligible():
+    lin = _make_lin(fast_weight_normalized=False)
     lin.reset_sequence_state(reset_fast_weights=True)  # w_fast := 0
     x = torch.randn(B, IN)
     ca, en = _signals()
     _adapt_passes(lin, x, ca, en, 8)
     # The raw rank-R write barely moves w_fast off zero — this is the documented limitation.
     assert lin.w_fast.norm().item() < 1e-3, (
-        "default (un-normalized) online write is expected to be numerically negligible; "
+        "legacy un-normalized online write is expected to be numerically negligible; "
         f"got ||w_fast||={lin.w_fast.norm().item():.3e}"
     )
 
@@ -100,14 +102,19 @@ def test_normalized_write_is_bounded_and_finite_over_many_passes():
 
 
 # --------------------------------------------------------------------------- #
-# 3. DEFAULT-OFF preserves the exact legacy write (byte-for-byte)
+# 3. THE STABLE NORMALIZED WRITE IS THE DEFAULT
 # --------------------------------------------------------------------------- #
 @pytest.mark.unit
-def test_flag_off_matches_legacy_write_exactly():
+def test_normalized_write_is_the_default():
+    assert SynapticConfig().fast_weight_normalized is True
+
+
+@pytest.mark.unit
+def test_flag_off_preserves_deterministic_legacy_write():
     x = torch.randn(B, IN)
     ca, en = _signals()
 
-    lin_legacy = _make_lin()  # normalized False
+    lin_legacy = _make_lin(fast_weight_normalized=False)
     lin_legacy.reset_sequence_state(reset_fast_weights=True)
     _adapt_passes(lin_legacy, x, ca, en, 4)
 

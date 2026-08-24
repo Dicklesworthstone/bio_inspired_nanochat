@@ -108,7 +108,7 @@ None — every `SynapticConfig` field is read on some runtime path (invariant en
 | `post_fast_lr` | `0.0015` | LIVE |  | bio_inspired_nanochat/synaptic.py:1388 |
 | `post_slow_lr` | `0.0005` | LIVE |  | bio_inspired_nanochat/synaptic.py:1376 |
 | `post_trace_decay` | `0.96` | LIVE |  | bio_inspired_nanochat/synaptic.py:1508 |
-| `fast_weight_normalized` | `False` | LIVE |  | bio_inspired_nanochat/synaptic.py:1542 |
+| `fast_weight_normalized` | `True` | LIVE |  | bio_inspired_nanochat/synaptic.py:1542 |
 | `fast_weight_eta` | `0.5` | LIVE |  | bio_inspired_nanochat/synaptic.py:1554 |
 | `fast_weight_max_norm` | `1.0` | LIVE |  | bio_inspired_nanochat/synaptic.py:1556 |
 | `camkii_up` | `0.05` | LIVE |  | bio_inspired_nanochat/synaptic.py:1288 |
