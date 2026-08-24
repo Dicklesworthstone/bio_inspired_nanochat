@@ -27,6 +27,7 @@ Status legend: ✅ shipping (on the live model path, tested) · 🚧 partial/lan
 - 🚧 **Triton GPU & Rust CPU kernels** — Triton has a default-off FP32 `Tq=1` decode dispatch at the configured top-k width, with CUDA performance acceptance still pending; Rust has a golden-driven canonical CPU decode kernel but remains outside live dispatch (`jyb.*`).
 - 🚧 **Systematic Optimization** — CMA-ES Phase 1 (the 10 most influential params) is wired; the broader ~48-param two-phase search is planned.
 - 🚧 **Rigorous Evaluation** — the statistical layer (paired t / Wilcoxon, bootstrap + Student-t 95% CIs, multi-seed aggregation) ships in `bio_inspired_nanochat/eval_stats.py`; the full benchmark-matrix *run* is still pending.
+- ✅ **Fail-closed certificate-policy model cards** — `certificate_bundle.py` strictly composes declared-identity stability, retention, predictive-calibration, tropical-radius, and configured-timescale evidence into a bounded same-process authorization; serialized manifests are audit/report inputs only and cannot recreate live runtime attestation. Well-formed failed, stale, fallback-covered, or out-of-scope evidence is rendered transparently and refused; malformed input is rejected before artifacts are created. No passing production-model card is bundled. See [`docs/certified_model_card.md`](docs/certified_model_card.md).
 
 ---
 

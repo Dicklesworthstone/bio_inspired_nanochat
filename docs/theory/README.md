@@ -54,6 +54,7 @@ that the strata are decoupled enough for the thrusts to compose without interfer
 |---|---|---|
 | Free-energy deliberation + energy-based decoding (`r00r.1`) | Thrust A | [free_energy_deliberation.md](free_energy_deliberation.md) · `deliberation.py` |
 | Bayesian MC ensembling (`u2t.1`) | Thrust E | `mc_ensemble.py` |
+| Fail-closed bounded certificate-policy model card (`r00r.7`) | Thrusts A/F/E/H + composition keystone | [certified_model_card.md](../certified_model_card.md) · `certificate_bundle.py` |
 
 ## The capstone (`0642.11`)
 
