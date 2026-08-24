@@ -5,7 +5,7 @@ from __future__ import annotations
 # GPT with Synaptic Attention/MLP and optional Synaptic MoE + structural hooks
 
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from bio_inspired_nanochat.torch_imports import torch, nn, F, Tensor
 
@@ -178,6 +178,10 @@ class GPTSynaptic(nn.Module):
                     "moe_experts_per_layer must contain one positive count per model layer"
                 )
         self.config: GPTSynapticConfig = c
+        # Detached last-step presynaptic state retained for the public
+        # ``bio_telemetry()`` read API. Keeping only the final time position
+        # avoids holding a training graph or an entire sequence after forward.
+        self._last_presyn_state: list[dict[str, Any] | None] | None = None
         self.wte: nn.Embedding = nn.Embedding(c.vocab_size, c.n_embd)
         self.h: nn.ModuleList[Block] = nn.ModuleList()
         self.transformer = nn.ModuleDict(dict(wte=self.wte, h=self.h))
@@ -312,6 +316,21 @@ class GPTSynaptic(nn.Module):
             # We attach it dynamically if it doesn't exist in __init__ yet (though we should add it there too)
             kv_cache.presyn_state = presyn_states
 
+        # Make a normal ``model(tokens); model.bio_telemetry()`` sequence useful
+        # without requiring callers to own a KV cache. Only the scalar telemetry
+        # channels and final token position are retained, detached from autograd.
+        telemetry_keys = ("C", "BUF", "RRP", "RES", "PR", "CL", "E", "AMP")
+        self._last_presyn_state = [
+            None
+            if state is None
+            else {
+                key: value[..., -1:].detach().clone()
+                for key in telemetry_keys
+                if torch.is_tensor(value := state.get(key)) and value.ndim == 3
+            }
+            for state in presyn_states
+        ]
+
         logits = self.lm_head(x.to(dtype=self.lm_head.weight.dtype))
         # Logit softcap (parity with vanilla GPT) — bound logits on BOTH the inference
         # return and the loss path. See vg9.1. We match GPT exactly: the inference
@@ -362,7 +381,30 @@ class GPTSynaptic(nn.Module):
                     reset_fast_weights=reset_fast_weights, reset_consolidation=reset_consolidation
                 )
                 n += 1
+        self._last_presyn_state = None
         return n
+
+    def bio_telemetry(
+        self,
+        *,
+        presyn_state: Optional[Any] = None,
+        include_routing: bool = False,
+    ) -> Dict[str, Any]:
+        """Collect the latest bio-state snapshot as a schema-valid dictionary.
+
+        When ``presyn_state`` is omitted, attention telemetry comes from the
+        detached final-token snapshot retained by the most recent forward. A
+        caller-owned cache state may still be supplied explicitly.
+        """
+        from bio_inspired_nanochat.telemetry import collect_bio_telemetry
+
+        return collect_bio_telemetry(
+            self,
+            presyn_state=(
+                self._last_presyn_state if presyn_state is None else presyn_state
+            ),
+            include_routing=include_routing,
+        )
 
     def setup_optimizers(
         self,
