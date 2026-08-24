@@ -491,6 +491,16 @@ def _uncertainty_exceeded(value: float, policy: UncertaintyDecodingConfig) -> bo
     )
 
 
+def uncertainty_decode_action(
+    predictive_entropy_nats: float,
+    policy: UncertaintyDecodingConfig,
+) -> Literal["emit", "abstain", "clarify"]:
+    """Apply the production uncertainty threshold to one served prediction."""
+    if _uncertainty_exceeded(predictive_entropy_nats, policy):
+        return policy.terminal_action
+    return "emit"
+
+
 def _predictive_distribution_summary(prediction: MCPrediction) -> dict[str, Any]:
     """Return a bounded top-k view of the served last-position distribution."""
     probabilities = prediction.mean_probs[0, -1].detach().float().cpu()
@@ -808,8 +818,9 @@ def quality_guarded_predict(
         served_predictive_entropy,
         uncertainty,
     )
-    decode_action: Literal["emit", "abstain", "clarify"] = (
-        uncertainty.terminal_action if served_uncertainty_exceeded else "emit"
+    decode_action = uncertainty_decode_action(
+        served_predictive_entropy,
+        uncertainty,
     )
     action_trace = (
         (("route_compute",) if fallback_reexecuted else ()) + (decode_action,)

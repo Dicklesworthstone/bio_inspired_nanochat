@@ -35,7 +35,7 @@ import math
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
-from typing import Any, Iterator, Sequence
+from typing import Any, Callable, Iterator, Sequence
 
 import numpy as np
 from rich.console import Console
@@ -287,6 +287,10 @@ class MultiSeedReport:
 class _Prediction:
     probabilities: Tensor
     uncertainty: Tensor
+    predictive_variance: Tensor
+
+
+PredictionObserver = Callable[[str, _Prediction, _Prediction], None]
 
 
 def expected_calibration_error(
@@ -786,7 +790,11 @@ def _softmax_prediction(model: GPTSynaptic, inputs: Tensor) -> _Prediction:
     _reset_sequence(model)
     logits, _ = model(inputs, train_mode=False)
     probabilities = torch.softmax(logits.float(), dim=-1)
-    return _Prediction(probabilities, _entropy(probabilities))
+    return _Prediction(
+        probabilities,
+        _entropy(probabilities),
+        torch.zeros_like(probabilities),
+    )
 
 
 @contextmanager
@@ -811,6 +819,7 @@ def _mc_dropout_prediction(
     n_samples: int,
 ) -> _Prediction:
     probability_sum = None
+    probability_sq_sum = None
     with _dropout_sampling(model):
         for _ in range(n_samples):
             _reset_sequence(model)
@@ -819,10 +828,22 @@ def _mc_dropout_prediction(
             probability_sum = (
                 probabilities if probability_sum is None else probability_sum + probabilities
             )
-    if probability_sum is None:
+            probability_sq_sum = (
+                probabilities.square()
+                if probability_sq_sum is None
+                else probability_sq_sum + probabilities.square()
+            )
+    if probability_sum is None or probability_sq_sum is None:
         raise AssertionError("n_samples validation should make the MC loop non-empty")
     mean_probabilities = probability_sum / n_samples
-    return _Prediction(mean_probabilities, _entropy(mean_probabilities))
+    predictive_variance = (
+        probability_sq_sum / n_samples - mean_probabilities.square()
+    ).clamp_min(0.0)
+    return _Prediction(
+        mean_probabilities,
+        _entropy(mean_probabilities),
+        predictive_variance,
+    )
 
 
 def _thermo_prediction(
@@ -833,6 +854,7 @@ def _thermo_prediction(
     evidence_collector: PredictiveThermoCollector | None = None,
 ) -> _Prediction:
     probability_sum = None
+    probability_sq_sum = None
     model.eval()
     with torch.no_grad(), mc_sampling(model, evidence_collector=evidence_collector):
         for sample_index in range(n_samples):
@@ -844,10 +866,22 @@ def _thermo_prediction(
             probability_sum = (
                 probabilities if probability_sum is None else probability_sum + probabilities
             )
-    if probability_sum is None:
+            probability_sq_sum = (
+                probabilities.square()
+                if probability_sq_sum is None
+                else probability_sq_sum + probabilities.square()
+            )
+    if probability_sum is None or probability_sq_sum is None:
         raise AssertionError("n_samples validation should make the MC loop non-empty")
     mean_probabilities = probability_sum / n_samples
-    return _Prediction(mean_probabilities, _entropy(mean_probabilities))
+    predictive_variance = (
+        probability_sq_sum / n_samples - mean_probabilities.square()
+    ).clamp_min(0.0)
+    return _Prediction(
+        mean_probabilities,
+        _entropy(mean_probabilities),
+        predictive_variance,
+    )
 
 
 def _method_metrics(
@@ -883,8 +917,12 @@ def _method_metrics(
     )
 
 
-def run_experiment(config: ExperimentConfig = ExperimentConfig()) -> ExperimentReport:
-    """Run the FT check and all three uncertainty methods on identical model weights."""
+def run_experiment(
+    config: ExperimentConfig = ExperimentConfig(),
+    *,
+    prediction_observer: PredictionObserver | None = None,
+) -> ExperimentReport:
+    """Run all uncertainty methods and optionally expose their raw predictions for logging."""
     config.validate()
     torch.manual_seed(config.seed)
     np.random.seed(config.seed)
@@ -962,6 +1000,14 @@ def run_experiment(config: ExperimentConfig = ExperimentConfig()) -> ExperimentR
     )
     torch.manual_seed(config.seed + 302)
     thermo_ood = _thermo_prediction(model, ood_inputs, n_samples=config.mc_samples)
+    predictions = {
+        "softmax_entropy": (softmax_id, softmax_ood),
+        "mc_dropout": (dropout_id, dropout_ood),
+        "thermo_uq": (thermo_id, thermo_ood),
+    }
+    if prediction_observer is not None:
+        for method_name, (id_prediction, ood_prediction) in predictions.items():
+            prediction_observer(method_name, id_prediction, ood_prediction)
     methods = {
         "softmax_entropy": _method_metrics(
             softmax_id, softmax_ood, id_targets, ece_bins=config.ece_bins

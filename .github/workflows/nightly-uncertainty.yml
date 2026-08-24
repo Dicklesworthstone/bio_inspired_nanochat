@@ -1,0 +1,51 @@
+name: Nightly Uncertainty E2E
+
+on:
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-uncertainty-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  uncertainty-calibration:
+    name: Uncertainty calibration and selective prediction
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      UV_PYTHON: "3.14.2"
+      PYTHONPATH: "."
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Install Python 3.14
+        run: uv python install 3.14.2
+
+      - name: Sync CPU test dependencies
+        run: uv sync --no-install-project --extra cpu --dev
+
+      - name: Run uncertainty/calibration E2E
+        run: >-
+          uv run --no-sync python -m pytest
+          tests/test_e2e_uncertainty.py
+          -v
+          --tb=short
+          --basetemp=runs/e2e/uncertainty_calibration/nightly
+
+      - name: Upload detailed uncertainty evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: uncertainty-calibration-${{ github.run_id }}-${{ github.run_attempt }}
+          path: runs/e2e/uncertainty_calibration/**
+          if-no-files-found: error
+          retention-days: 14
