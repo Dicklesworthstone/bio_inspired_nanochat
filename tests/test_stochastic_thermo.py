@@ -24,6 +24,7 @@ import pytest
 import torch
 
 from bio_inspired_nanochat import stochastic_thermo as st
+from bio_inspired_nanochat.results_registry import read_records
 from scripts.e2e.stochastic_thermo_uq import (
     ExperimentConfig,
     _make_model,
@@ -31,17 +32,42 @@ from scripts.e2e.stochastic_thermo_uq import (
     _reset_sequence,
     _softmax_prediction,
     _thermo_prediction,
+    append_registry_records,
     binary_auroc,
     binomial_crooks_curve,
+    binomial_tur_diagnostic,
     expected_calibration_error,
     run_experiment,
     run_live_release_ft,
+    run_multi_seed,
 )
 
 pytestmark = pytest.mark.unit
 
 # A near-equilibrium regime where the MC fluctuation-theorem estimators converge.
 _NEAR_EQ = st.ReleaseRates(a=0.6, b=0.4)
+
+
+@pytest.fixture(scope="module")
+def multi_seed_report():
+    config = ExperimentConfig(
+        vocab_size=16,
+        seq_len=6,
+        batch_size=2,
+        pool_size=2,
+        eval_pool_size=2,
+        train_steps=2,
+        n_head=1,
+        n_embd=16,
+        dropout=0.15,
+        mc_samples=2,
+        ece_bins=4,
+        ft_trajectories=30_000,
+        ft_min_count=40,
+        ft_tolerance=0.35,
+        ft_integral_tolerance=0.07,
+    )
+    return run_multi_seed(config, [11, 23, 37], bootstrap_samples=250)
 
 
 # =========================================================================== #
@@ -485,3 +511,82 @@ def test_thermo_uq_e2e_reports_both_baselines_without_assuming_a_win():
         )
     json.dumps(report.to_dict(), allow_nan=False)
     assert "does not assert an advantage" in report.comparison_policy
+
+
+def test_live_binomial_tur_is_nonvacuous_but_exposes_poisson_limit_failure():
+    forward_probability = 0.32
+    reverse_probability = 0.24
+    affinity = math.log(
+        forward_probability
+        * (1.0 - reverse_probability)
+        / (reverse_probability * (1.0 - forward_probability))
+    )
+    diagnostic = binomial_tur_diagnostic(
+        pool_size=6,
+        forward_probability=forward_probability,
+        reverse_probability=reverse_probability,
+        affinity=affinity,
+    )
+    assert diagnostic.nonvacuous
+    assert diagnostic.entropy_bound > 0.0
+    assert diagnostic.relative_variance == pytest.approx(10.4166666667)
+    assert diagnostic.bound_ratio == pytest.approx(0.9972692702)
+    assert diagnostic.slack < 0.0
+    assert not diagnostic.satisfied
+    assert "continuous_time_tur" in diagnostic.scope
+
+
+def test_multi_seed_report_uses_paired_stats_and_emits_honest_null(multi_seed_report):
+    report = multi_seed_report
+    assert report.seeds == [11, 23, 37]
+    assert report.ft_pass_rate == 1.0
+    assert report.live_tur.nonvacuous and not report.live_tur.satisfied
+    assert report.verdict == "null"
+    assert "TUR bound" in report.verdict_reason
+    assert set(report.method_aggregates) == {
+        "mc_dropout",
+        "softmax_entropy",
+        "thermo_uq",
+    }
+    for metrics in report.method_aggregates.values():
+        assert set(metrics) == {"ece", "ood_auroc", "id_accuracy"}
+        assert all(stats.n == 3 for stats in metrics.values())
+    for comparison in report.paired_comparisons.values():
+        assert comparison["ece"].n_pairs == 3
+        assert comparison["ood_auroc"].n_pairs == 3
+    json.dumps(report.to_dict(), allow_nan=False)
+
+
+def test_multi_seed_registry_records_are_schema_valid_and_duplicate_safe(
+    tmp_path, multi_seed_report
+):
+    path = tmp_path / "registry.jsonl"
+    count = append_registry_records(
+        multi_seed_report,
+        path,
+        artifact="results/stochastic_thermo_uq_test.json",
+    )
+    assert count == len(multi_seed_report.seeds) * 3
+    records = read_records(str(path))
+    assert len(records) == count
+    assert len({record.run_id for record in records}) == count
+    for record in records:
+        assert {
+            "id_ece",
+            "ood_auroc",
+            "eval_accuracy",
+            "live_ft_max_crooks_residual",
+            "live_ft_integral_residual",
+            "live_tur_relative_variance",
+            "live_tur_entropy_bound",
+            "live_tur_slack",
+            "live_tur_bound_ratio",
+        } == set(record.metrics)
+        if "-thermo_uq-" in record.run_id:
+            assert record.verdict == multi_seed_report.verdict
+        else:
+            assert record.verdict is None
+        assert not record.eligible_for_best
+    with pytest.raises(ValueError, match="registry already contains run IDs"):
+        append_registry_records(multi_seed_report, path)
+    assert len(read_records(str(path))) == count

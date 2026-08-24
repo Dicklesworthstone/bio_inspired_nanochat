@@ -27,10 +27,11 @@ Run with:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 from contextlib import contextmanager
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any, Iterator, Sequence
 
@@ -39,8 +40,10 @@ from rich.console import Console
 from rich.table import Table
 
 from bio_inspired_nanochat.common import logger
+from bio_inspired_nanochat.eval_stats import Aggregate, PairedResult, aggregate, paired_comparison
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
 from bio_inspired_nanochat.mc_ensemble import mc_sampling
+from bio_inspired_nanochat.results_registry import RunRecord, append_record, make_record, read_records
 from bio_inspired_nanochat.synaptic import SynapticConfig, SynapticPresyn, build_presyn_state
 from bio_inspired_nanochat.torch_imports import Tensor, nn, torch
 
@@ -114,6 +117,25 @@ class CrooksPoint:
 
 
 @dataclass(frozen=True)
+class LiveTURDiagnostic:
+    """Exact classic-TUR diagnostic for the finite one-step paired-binomial current.
+
+    The runtime TUR theorem in :mod:`stochastic_thermo` assumes the continuous-time Poisson/Skellam
+    limit.  The live falsification harness instead samples two finite binomials.  Reporting both
+    sides of the classic bound here makes that assumption testable rather than silently transferring
+    the continuous-time certificate to a different process.
+    """
+
+    scope: str
+    relative_variance: float
+    entropy_bound: float
+    slack: float
+    bound_ratio: float
+    nonvacuous: bool
+    satisfied: bool
+
+
+@dataclass(frozen=True)
 class LiveReleaseFTResult:
     scope: str
     reverse_transition: str
@@ -132,6 +154,7 @@ class LiveReleaseFTResult:
     tolerance: float
     integral_tolerance: float
     curve: list[CrooksPoint]
+    tur: LiveTURDiagnostic
 
 
 @dataclass(frozen=True)
@@ -169,6 +192,29 @@ class ExperimentReport:
             "the harness reports measurements and does not assert an advantage."
         )
     )
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class MultiSeedReport:
+    """Matched-seed statistical verdict for the thermo-UQ falsification experiment."""
+
+    bead: str
+    report_id: str
+    seeds: list[int]
+    reports: list[ExperimentReport]
+    method_aggregates: dict[str, dict[str, Aggregate]]
+    paired_comparisons: dict[str, dict[str, PairedResult]]
+    ft_pass_rate: float
+    ft_aggregates: dict[str, Aggregate | None]
+    live_tur: LiveTURDiagnostic
+    alpha: float
+    bootstrap_samples: int
+    verdict: str
+    verdict_reason: str
+    comparison_policy: str
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -294,6 +340,44 @@ def binomial_crooks_curve(
             )
         )
     return points
+
+
+def binomial_tur_diagnostic(
+    *,
+    pool_size: int,
+    forward_probability: float,
+    reverse_probability: float,
+    affinity: float,
+) -> LiveTURDiagnostic:
+    """Evaluate the classic continuous-time TUR on the exact paired-binomial moments.
+
+    This is intentionally a diagnostic, not a corrected discrete-time bound.  A finite positive
+    ``entropy_bound`` proves non-vacuity; ``satisfied`` separately records whether the classic
+    Poisson/Skellam inequality actually transfers to the live one-step process.
+    """
+    if pool_size < 1:
+        raise ValueError("pool_size must be positive")
+    if not 0.0 < reverse_probability < forward_probability < 1.0:
+        raise ValueError("probabilities must satisfy 0 < reverse < forward < 1")
+    mean_current = pool_size * (forward_probability - reverse_probability)
+    current_variance = pool_size * (
+        forward_probability * (1.0 - forward_probability)
+        + reverse_probability * (1.0 - reverse_probability)
+    )
+    mean_entropy = mean_current * affinity
+    relative_variance = current_variance / (mean_current * mean_current)
+    entropy_bound = 2.0 / mean_entropy
+    slack = relative_variance - entropy_bound
+    nonvacuous = bool(math.isfinite(entropy_bound) and entropy_bound > 0.0)
+    return LiveTURDiagnostic(
+        scope="classic_continuous_time_tur_on_exact_one_step_paired_binomial_moments",
+        relative_variance=relative_variance,
+        entropy_bound=entropy_bound,
+        slack=slack,
+        bound_ratio=relative_variance / entropy_bound,
+        nonvacuous=nonvacuous,
+        satisfied=bool(nonvacuous and slack >= 0.0),
+    )
 
 
 def _fresh_release_state(n_trajectories: int, cfg: SynapticConfig) -> dict[str, Any]:
@@ -423,6 +507,12 @@ def run_live_release_ft(config: ExperimentConfig) -> LiveReleaseFTResult:
         min_count=config.ft_min_count,
     )
     max_residual = max((abs(point.residual) for point in curve), default=None)
+    tur = binomial_tur_diagnostic(
+        pool_size=pool_size,
+        forward_probability=forward_probability,
+        reverse_probability=reverse_probability,
+        affinity=affinity,
+    )
     passed = bool(
         curve
         and max_residual is not None
@@ -450,6 +540,7 @@ def run_live_release_ft(config: ExperimentConfig) -> LiveReleaseFTResult:
         tolerance=config.ft_tolerance,
         integral_tolerance=config.ft_integral_tolerance,
         curve=curve,
+        tur=tur,
     )
 
 
@@ -705,6 +796,254 @@ def run_experiment(config: ExperimentConfig = ExperimentConfig()) -> ExperimentR
     )
 
 
+def _report_id(base_config: ExperimentConfig, seeds: Sequence[int]) -> str:
+    config_payload = asdict(base_config)
+    config_payload.pop("seed")
+    payload = {"config": config_payload, "seeds": list(seeds)}
+    digest = hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()[:12]
+    return f"stochastic-thermo-uq-{digest}"
+
+
+def _supports_improvement(
+    comparison: PairedResult,
+    *,
+    lower_is_better: bool,
+    alpha: float,
+) -> bool:
+    ci_favorable = (
+        comparison.delta_ci_high < 0.0
+        if lower_is_better
+        else comparison.delta_ci_low > 0.0
+    )
+    return bool(
+        ci_favorable
+        and comparison.t_p_value <= alpha
+        and comparison.wilcoxon_p_value <= alpha
+    )
+
+
+def summarize_multi_seed(
+    reports: Sequence[ExperimentReport],
+    *,
+    bootstrap_samples: int = 10_000,
+    alpha: float = 0.05,
+    bootstrap_seed: int = 20260824,
+) -> MultiSeedReport:
+    """Aggregate already-computed matched-seed reports using the shared ``74f.3`` layer."""
+    if len(reports) < 2:
+        raise ValueError("multi-seed statistics need at least two reports")
+    if bootstrap_samples < 1:
+        raise ValueError("bootstrap_samples must be positive")
+    if not 0.0 < alpha < 1.0:
+        raise ValueError("alpha must lie strictly between zero and one")
+    seeds = [report.config.seed for report in reports]
+    if len(set(seeds)) != len(seeds):
+        raise ValueError("multi-seed reports must have unique seeds")
+    method_names = set(reports[0].methods)
+    if any(set(report.methods) != method_names for report in reports[1:]):
+        raise ValueError("all reports must contain the same uncertainty methods")
+
+    method_aggregates: dict[str, dict[str, Aggregate]] = {}
+    for method in sorted(method_names):
+        method_aggregates[method] = {
+            metric: aggregate(
+                [float(getattr(report.methods[method], metric)) for report in reports]
+            )
+            for metric in ("ece", "ood_auroc", "id_accuracy")
+        }
+
+    paired: dict[str, dict[str, PairedResult]] = {}
+    for baseline in ("softmax_entropy", "mc_dropout"):
+        per_metric: dict[str, PairedResult] = {}
+        for metric, lower_is_better in (("ece", True), ("ood_auroc", False)):
+            treatment = {
+                report.config.seed: float(getattr(report.methods["thermo_uq"], metric))
+                for report in reports
+            }
+            reference = {
+                report.config.seed: float(getattr(report.methods[baseline], metric))
+                for report in reports
+            }
+            comparison = paired_comparison(
+                treatment,
+                reference,
+                lower_is_better=lower_is_better,
+                n_boot=bootstrap_samples,
+                seed=bootstrap_seed,
+            )
+            if comparison is None:
+                raise AssertionError("validated matched-seed reports produced no paired comparison")
+            per_metric[metric] = comparison
+        paired[f"vs_{baseline}"] = per_metric
+
+    max_crooks = [
+        report.live_release_ft.max_crooks_residual for report in reports
+    ]
+    ft_aggregates: dict[str, Aggregate | None] = {
+        "max_crooks_residual": (
+            aggregate([float(value) for value in max_crooks if value is not None])
+            if all(value is not None for value in max_crooks)
+            else None
+        ),
+        "integral_ft_residual": aggregate(
+            [report.live_release_ft.integral_ft_residual for report in reports]
+        ),
+    }
+    ft_pass_rate = sum(report.live_release_ft.passed for report in reports) / len(reports)
+    live_tur = reports[0].live_release_ft.tur
+    if any(report.live_release_ft.tur != live_tur for report in reports[1:]):
+        raise ValueError("live TUR diagnostics differ across matched protocol configurations")
+
+    comparison_policy = (
+        "Positive requires the paired-bootstrap 95% interval to exclude zero in the favorable "
+        "direction and both paired t and Wilcoxon p-values <= alpha for ECE and OOD AUROC "
+        "against both softmax entropy and MC-dropout; every live FT seed must pass and the "
+        "classic TUR must transfer to the live finite-binomial process."
+    )
+    all_calibration_gates = all(
+        _supports_improvement(metrics["ece"], lower_is_better=True, alpha=alpha)
+        and _supports_improvement(metrics["ood_auroc"], lower_is_better=False, alpha=alpha)
+        for metrics in paired.values()
+    )
+    if ft_pass_rate < 1.0:
+        verdict = "invalidated"
+        verdict_reason = (
+            f"Only {ft_pass_rate:.1%} of live one-step FT checks passed; the analytic "
+            "local-detailed-balance claim is falsified for this protocol."
+        )
+    elif all_calibration_gates and live_tur.satisfied:
+        verdict = "positive"
+        verdict_reason = (
+            "Thermo-UQ passed the strict matched-seed ECE/AUROC gate against both baselines, "
+            "all live FT checks passed, and the classic TUR held on the live process."
+        )
+    else:
+        verdict = "null"
+        limitations: list[str] = []
+        if not all_calibration_gates:
+            limitations.append("the strict paired ECE/AUROC improvement gate was not met")
+        if not live_tur.satisfied:
+            limitations.append(
+                "the finite-binomial live current had a non-vacuous but slightly violated "
+                "classic continuous-time TUR bound"
+            )
+        verdict_reason = (
+            "All live one-step FT checks passed, but " + " and ".join(limitations) + "."
+        )
+
+    return MultiSeedReport(
+        bead="bio_inspired_nanochat-0642.3.3.2",
+        report_id=_report_id(reports[0].config, seeds),
+        seeds=seeds,
+        reports=list(reports),
+        method_aggregates=method_aggregates,
+        paired_comparisons=paired,
+        ft_pass_rate=ft_pass_rate,
+        ft_aggregates=ft_aggregates,
+        live_tur=live_tur,
+        alpha=alpha,
+        bootstrap_samples=bootstrap_samples,
+        verdict=verdict,
+        verdict_reason=verdict_reason,
+        comparison_policy=comparison_policy,
+    )
+
+
+def run_multi_seed(
+    base_config: ExperimentConfig,
+    seeds: Sequence[int],
+    *,
+    bootstrap_samples: int = 10_000,
+    alpha: float = 0.05,
+) -> MultiSeedReport:
+    """Run the complete experiment on unique matched seeds and return its statistical verdict."""
+    ordered_seeds = [int(seed) for seed in seeds]
+    if any(seed < 0 for seed in ordered_seeds):
+        raise ValueError("seeds must be nonnegative")
+    reports = [run_experiment(replace(base_config, seed=seed)) for seed in ordered_seeds]
+    return summarize_multi_seed(
+        reports,
+        bootstrap_samples=bootstrap_samples,
+        alpha=alpha,
+    )
+
+
+def registry_records(
+    report: MultiSeedReport,
+    *,
+    artifact: str | None = None,
+) -> list[RunRecord]:
+    """Build one schema-valid registry record per method and seed."""
+    ece_softmax = report.paired_comparisons["vs_softmax_entropy"]["ece"]
+    auroc_softmax = report.paired_comparisons["vs_softmax_entropy"]["ood_auroc"]
+    artifact_note = f"; artifact={artifact}" if artifact else ""
+    shared_notes = (
+        f"experiment=stochastic_thermo_uq; group_verdict={report.verdict}; "
+        f"thermo_vs_softmax_ece_delta={ece_softmax.mean_delta:.17g}; "
+        f"thermo_vs_softmax_ece_ci=[{ece_softmax.delta_ci_low:.17g},"
+        f"{ece_softmax.delta_ci_high:.17g}]; "
+        f"thermo_vs_softmax_auroc_delta={auroc_softmax.mean_delta:.17g}; "
+        f"thermo_vs_softmax_auroc_ci=[{auroc_softmax.delta_ci_low:.17g},"
+        f"{auroc_softmax.delta_ci_high:.17g}]; "
+        f"live_tur_bound_ratio={report.live_tur.bound_ratio:.17g}{artifact_note}"
+    )
+    records: list[RunRecord] = []
+    for seed_report in report.reports:
+        ft = seed_report.live_release_ft
+        if ft.max_crooks_residual is None:
+            raise ValueError("registry records require a populated Crooks residual")
+        for method, metrics in seed_report.methods.items():
+            is_treatment = method == "thermo_uq"
+            records.append(
+                make_record(
+                    "eval",
+                    {
+                        "id_ece": metrics.ece,
+                        "ood_auroc": metrics.ood_auroc,
+                        "eval_accuracy": metrics.id_accuracy,
+                        "live_ft_max_crooks_residual": ft.max_crooks_residual,
+                        "live_ft_integral_residual": ft.integral_ft_residual,
+                        "live_tur_relative_variance": ft.tur.relative_variance,
+                        "live_tur_entropy_bound": ft.tur.entropy_bound,
+                        "live_tur_slack": ft.tur.slack,
+                        "live_tur_bound_ratio": ft.tur.bound_ratio,
+                    },
+                    run_id=(
+                        f"{report.report_id}-{method}-s{seed_report.config.seed}"
+                    ),
+                    config={
+                        "experiment": asdict(seed_report.config),
+                        "method": method,
+                        "group_seeds": report.seeds,
+                    },
+                    seed=seed_report.config.seed,
+                    notes=f"method={method}; {shared_notes}",
+                    verdict=report.verdict if is_treatment else None,
+                    eligible_for_best=bool(is_treatment and report.verdict == "positive"),
+                )
+            )
+    return records
+
+
+def append_registry_records(
+    report: MultiSeedReport,
+    path: Path,
+    *,
+    artifact: str | None = None,
+) -> int:
+    """Append the multi-seed records once, refusing duplicate run identifiers."""
+    records = registry_records(report, artifact=artifact)
+    existing = {record.run_id for record in read_records(str(path))}
+    duplicates = sorted(record.run_id for record in records if record.run_id in existing)
+    if duplicates:
+        raise ValueError(f"registry already contains run IDs: {duplicates}")
+    for record in records:
+        append_record(record, str(path))
+    return len(records)
+
+
 def render_report(report: ExperimentReport, console: Console) -> None:
     ft = report.live_release_ft
     residual = (
@@ -721,6 +1060,15 @@ def render_report(report: ExperimentReport, console: Console) -> None:
     console.print(
         f"[dim]Scope={ft.scope}; reverse={ft.reverse_transition}; "
         f"predictive-distribution certificate={ft.predictive_distribution_claim}[/dim]"
+    )
+    tur_status = "PASS" if ft.tur.satisfied else "LIMITATION"
+    tur_style = "green" if ft.tur.satisfied else "yellow"
+    console.print(
+        f"[bold]Classic TUR on exact live finite-binomial moments:[/bold] "
+        f"[{tur_style}]{tur_status}[/{tur_style}] "
+        f"relative variance={ft.tur.relative_variance:.6f}, "
+        f"bound={ft.tur.entropy_bound:.6f}, ratio={ft.tur.bound_ratio:.6f}, "
+        f"non-vacuous={ft.tur.nonvacuous}"
     )
     ft_table = Table(title="Live-release Crooks calibration curve")
     ft_table.add_column("Current J", justify="right")
@@ -776,16 +1124,94 @@ def render_report(report: ExperimentReport, console: Console) -> None:
     console.print_json(data=report.thermo_deltas)
 
 
+def render_multi_seed_report(report: MultiSeedReport, console: Console) -> None:
+    """Render aggregate estimates, paired tests, theory diagnostics, and the verdict."""
+    aggregate_table = Table(title=f"Thermo-UQ matched-seed aggregates (n={len(report.seeds)})")
+    aggregate_table.add_column("Method")
+    aggregate_table.add_column("Metric")
+    aggregate_table.add_column("Mean", justify="right")
+    aggregate_table.add_column("Student-t 95% CI", justify="right")
+    for method, metrics in report.method_aggregates.items():
+        for metric, stats in metrics.items():
+            aggregate_table.add_row(
+                method,
+                metric,
+                f"{stats.mean:.6f}",
+                f"[{stats.ci_low:.6f}, {stats.ci_high:.6f}]",
+            )
+    console.print(aggregate_table)
+
+    paired_table = Table(title="Thermo-UQ paired deltas (treatment - baseline)")
+    paired_table.add_column("Baseline")
+    paired_table.add_column("Metric")
+    paired_table.add_column("Mean delta", justify="right")
+    paired_table.add_column("Bootstrap 95% CI", justify="right")
+    paired_table.add_column("paired-t p", justify="right")
+    paired_table.add_column("Wilcoxon p", justify="right")
+    paired_table.add_column("Favorable", justify="right")
+    for baseline, metrics in report.paired_comparisons.items():
+        for metric, comparison in metrics.items():
+            paired_table.add_row(
+                baseline.removeprefix("vs_"),
+                metric,
+                f"{comparison.mean_delta:+.6f}",
+                f"[{comparison.delta_ci_low:+.6f}, {comparison.delta_ci_high:+.6f}]",
+                f"{comparison.t_p_value:.4g}",
+                f"{comparison.wilcoxon_p_value:.4g}",
+                f"{comparison.n_favorable}/{comparison.n_pairs}",
+            )
+    console.print(paired_table)
+    console.print(
+        f"[bold]Live FT pass rate:[/bold] {report.ft_pass_rate:.1%}; "
+        f"[bold]classic live TUR:[/bold] non-vacuous={report.live_tur.nonvacuous}, "
+        f"satisfied={report.live_tur.satisfied}, ratio={report.live_tur.bound_ratio:.6f}"
+    )
+    verdict_style = "green" if report.verdict == "positive" else (
+        "red" if report.verdict == "invalidated" else "yellow"
+    )
+    console.print(
+        f"[bold]Verdict:[/bold] [{verdict_style}]{report.verdict.upper()}[/{verdict_style}] — "
+        f"{report.verdict_reason}"
+    )
+    console.print(f"[dim]Policy: {report.comparison_policy}[/dim]")
+
+
+def _parse_seed_list(value: str) -> list[int]:
+    try:
+        seeds = [int(item.strip()) for item in value.split(",") if item.strip()]
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("--seeds must be comma-separated integers") from exc
+    if len(seeds) < 2:
+        raise argparse.ArgumentTypeError("--seeds needs at least two integers")
+    if len(set(seeds)) != len(seeds):
+        raise argparse.ArgumentTypeError("--seeds must not contain duplicates")
+    if any(seed < 0 for seed in seeds):
+        raise argparse.ArgumentTypeError("--seeds must be nonnegative")
+    return seeds
+
+
 def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--seed", type=int, default=ExperimentConfig.seed)
+    parser.add_argument(
+        "--seeds",
+        type=_parse_seed_list,
+        help="Comma-separated matched seeds; enables the 74f.3 statistical verdict path",
+    )
     parser.add_argument("--device", default=ExperimentConfig.device)
     parser.add_argument("--train-steps", type=int, default=ExperimentConfig.train_steps)
     parser.add_argument("--mc-samples", type=int, default=ExperimentConfig.mc_samples)
     parser.add_argument(
         "--ft-trajectories", type=int, default=ExperimentConfig.ft_trajectories
     )
+    parser.add_argument("--bootstrap-samples", type=int, default=10_000)
+    parser.add_argument("--alpha", type=float, default=0.05)
     parser.add_argument("--output", type=Path, help="Optional JSON report path")
+    parser.add_argument(
+        "--registry",
+        type=Path,
+        help="Optional results-registry JSONL path; only valid with --seeds",
+    )
     return parser.parse_args(argv)
 
 
@@ -798,15 +1224,38 @@ def main(argv: Sequence[str] | None = None) -> int:
         mc_samples=args.mc_samples,
         ft_trajectories=args.ft_trajectories,
     )
-    logger.info(
-        "Starting stochastic-thermo falsification seed=%d device=%s train_steps=%d",
-        config.seed,
-        config.device,
-        config.train_steps,
-    )
-    report = run_experiment(config)
     console = Console()
-    render_report(report, console)
+    multi_report: MultiSeedReport | None = None
+    if args.seeds is None:
+        if args.registry is not None:
+            raise ValueError("--registry requires --seeds so the verdict is statistics-backed")
+        logger.info(
+            "Starting stochastic-thermo falsification seed=%d device=%s train_steps=%d",
+            config.seed,
+            config.device,
+            config.train_steps,
+        )
+        report: ExperimentReport | MultiSeedReport = run_experiment(config)
+        render_report(report, console)
+        exit_code = 0 if report.live_release_ft.passed else 1
+    else:
+        logger.info(
+            "Starting stochastic-thermo multi-seed falsification seeds=%s device=%s train_steps=%d",
+            args.seeds,
+            config.device,
+            config.train_steps,
+        )
+        multi_report = run_multi_seed(
+            config,
+            args.seeds,
+            bootstrap_samples=args.bootstrap_samples,
+            alpha=args.alpha,
+        )
+        report = multi_report
+        render_multi_seed_report(report, console)
+        exit_code = 0 if all(
+            seed_report.live_release_ft.passed for seed_report in report.reports
+        ) else 1
     if args.output is not None:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(
@@ -814,7 +1263,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             encoding="utf-8",
         )
         console.print(f"Structured report: [cyan]{args.output}[/cyan]")
-    return 0 if report.live_release_ft.passed else 1
+    if args.registry is not None:
+        if multi_report is None:
+            raise AssertionError("--registry validation did not select the multi-seed path")
+        count = append_registry_records(
+            multi_report,
+            args.registry,
+            artifact=str(args.output) if args.output is not None else None,
+        )
+        console.print(f"Registry records appended: [cyan]{count}[/cyan] -> {args.registry}")
+    return exit_code
 
 
 if __name__ == "__main__":

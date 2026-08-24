@@ -41,6 +41,12 @@ def test_each_harness_area_is_represented():
     names = set(all_metrics())
     assert {"train_loss", "val_bpb", "grad_norm"} <= names           # training
     assert {"eval_bpb", "eval_accuracy"} <= names                    # eval
+    assert {
+        "id_ece",
+        "ood_auroc",
+        "live_ft_max_crooks_residual",
+        "live_tur_bound_ratio",
+    } <= names  # stochastic-thermodynamic UQ falsification
     assert {"neuroscore_efficiency", "neuroscore_resilience"} <= names  # neuroscore
     assert {"tune_objective", "tune_generation"} <= names            # tuning
     assert {

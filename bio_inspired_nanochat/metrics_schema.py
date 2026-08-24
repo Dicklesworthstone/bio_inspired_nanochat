@@ -78,6 +78,44 @@ _M("rrp_mean", "vesicles", Direction.NEUTRAL, "mean readily-releasable vesicle p
 _M("eval_bpb", "bits/byte", Direction.LOWER_BETTER, "evaluation bits-per-byte")
 _M("eval_accuracy", "fraction", Direction.HIGHER_BETTER, "evaluation accuracy")
 _M("niah_accuracy", "fraction", Direction.HIGHER_BETTER, "needle-in-haystack retrieval accuracy")
+_M("id_ece", "fraction", Direction.LOWER_BETTER, "in-distribution expected calibration error")
+_M("ood_auroc", "fraction", Direction.HIGHER_BETTER, "out-of-distribution detection AUROC")
+_M(
+    "live_ft_max_crooks_residual",
+    "log-probability ratio",
+    Direction.LOWER_BETTER,
+    "maximum absolute detailed fluctuation-theorem residual on live release counts",
+)
+_M(
+    "live_ft_integral_residual",
+    "absolute error",
+    Direction.LOWER_BETTER,
+    "absolute residual of the live integral fluctuation theorem",
+)
+_M(
+    "live_tur_relative_variance",
+    "ratio",
+    Direction.NEUTRAL,
+    "exact relative current variance for the live paired-binomial protocol",
+)
+_M(
+    "live_tur_entropy_bound",
+    "ratio",
+    Direction.NEUTRAL,
+    "classic continuous-time TUR entropy lower bound evaluated on the live protocol",
+)
+_M(
+    "live_tur_slack",
+    "ratio",
+    Direction.NEUTRAL,
+    "live relative current variance minus the classic continuous-time TUR bound",
+)
+_M(
+    "live_tur_bound_ratio",
+    "ratio",
+    Direction.NEUTRAL,
+    "live relative current variance divided by the classic continuous-time TUR bound",
+)
 _M(
     "integrator_endpoint_loss",
     "mean_squared_error",
