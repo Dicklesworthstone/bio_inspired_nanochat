@@ -15,8 +15,12 @@ Run:  pytest tests/test_structural_geometry.py -v
 
 from __future__ import annotations
 
+import io
+import json
+
 import numpy as np
 import pytest
+from rich.console import Console
 
 from bio_inspired_nanochat import structural_geometry as sg
 
@@ -149,5 +153,162 @@ def test_ot_merge_preserves_spread_and_is_min_cost():
     a, b = rng.normal(0, 1, 3000), rng.normal(0, 1, 3000)  # same law, random order
     cert = sg.ot_merge_certificate(a, b)
     assert cert.ot_preserves_spread, "the OT barycenter must keep the marginal spread"
+    assert cert.comparator_available
+    assert cert.transport_optimal, "the quantile transport plan must beat the naive merge"
     assert cert.barycenter_std > cert.naive_std + 0.1, "naive averaging must collapse the variance"
     assert cert.transport_cost < cert.naive_cost, "the barycenter must be the lower-cost merge"
+
+
+# --------------------------------------------------------------------------- #
+# 0642.5.2.1 — bounded runtime certificates + Rich/JSONL logging
+# --------------------------------------------------------------------------- #
+def test_runtime_monitor_emits_all_certificates_and_caps_homology_work():
+    rng = np.random.default_rng(11)
+    w = _well_conditioned(12, s_min=1.0, s_max=3.0, rng=rng)
+    # More rows/dimensions than the monitor budget, with a real inter-cluster H0 gap.
+    points = np.vstack([
+        rng.normal(0.0, 0.2, (100, 12)),
+        rng.normal(np.r_[8.0, np.zeros(11)], 0.2, (100, 12)),
+    ])
+    a, b = rng.normal(0, 1, 3000), rng.normal(0, 1, 3000)
+    monitor = sg.StructuralGeometryMonitor(sg.StructuralGeometryMonitorConfig(
+        max_points=32, max_dim=4, max_persistence_features=3,
+    ))
+
+    rec = monitor.record(
+        step=7,
+        parent_weight=w,
+        split_noise_norm=0.2,
+        routing_points=points,
+        merge_a=a,
+        merge_b=b,
+    )
+
+    assert (rec.routing_points_input, rec.routing_dim_input) == (200, 12)
+    assert (rec.routing_points_used, rec.routing_dim_used) == (32, 4)
+    assert rec.routing_was_capped
+    assert rec.homology_dimension == 0  # H0-only is the explicit homology-dimension cap
+    assert rec.split_well_conditioned and rec.kappa_bound is not None
+    assert rec.persistence_significant and 1 <= len(rec.top_persistence_features) <= 3
+    assert list(rec.top_persistence_features) == sorted(rec.top_persistence_features, reverse=True)
+    assert rec.merge_transport_optimal and rec.merge_cost_saving >= -1e-12
+    monitor.assert_certificates()
+
+    payload = json.loads(monitor.to_jsonl()[0])
+    assert payload["step"] == 7
+    assert payload["routing_points_used"] == 32
+    assert payload["top_persistence_features"]
+    assert payload["merge_transport_cost"] <= payload["merge_naive_cost"] + 1e-12
+
+    output = io.StringIO()
+    monitor.render(Console(file=output, force_terminal=False, width=100))
+    rendered = output.getvalue()
+    assert "Structural geometry certificates" in rendered
+    assert "homology_dimension" in rendered and "routing_point_cap" in rendered
+    assert "max_persistence" in rendered and "mean_merge_cost" in rendered
+
+
+def test_runtime_monitor_fails_closed_for_uncertified_split_and_logs_standard_json():
+    rng = np.random.default_rng(12)
+    w = _well_conditioned(8, s_min=1.0, s_max=2.0, rng=rng)
+    points = np.vstack([np.zeros((10, 2)), np.array([[10.0, 0.0]])])
+    a, b = rng.normal(size=1000), rng.normal(size=1000)
+    monitor = sg.StructuralGeometryMonitor()
+
+    rec = monitor.record(
+        step=0,
+        parent_weight=w,
+        split_noise_norm=1.5,
+        routing_points=points,
+        merge_a=a,
+        merge_b=b,
+    )
+
+    assert not rec.split_well_conditioned and rec.kappa_bound is None
+    assert rec.persistence_ratio is None  # unbounded ratio is serialized as JSON null, not Infinity
+    with pytest.raises(AssertionError, match="split conditioning failed"):
+        monitor.assert_certificates()
+    line = monitor.to_jsonl()[0]
+    assert "Infinity" not in line and json.loads(line)["kappa_bound"] is None
+
+
+def test_runtime_monitor_fails_closed_without_records_or_a_naive_merge_comparator():
+    monitor = sg.StructuralGeometryMonitor()
+    with pytest.raises(AssertionError, match="no structural geometry records"):
+        monitor.assert_certificates()
+
+    rec = monitor.record(
+        step=0,
+        parent_weight=np.eye(2),
+        split_noise_norm=0.1,
+        routing_points=np.array([[0.0], [1.0]]),
+        merge_a=np.array([0.0, 1.0]),
+        merge_b=np.array([0.0, 1.0, 2.0]),
+    )
+    assert not rec.merge_comparator_available and not rec.merge_transport_optimal
+    with pytest.raises(AssertionError, match="OT merge certificate failed"):
+        monitor.assert_certificates()
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"persistence_ratio_threshold": 0.0},
+        {"persistence_ratio_threshold": np.nan},
+        {"max_points": 1},
+        {"max_dim": 0},
+        {"max_persistence_features": 0},
+    ],
+)
+def test_runtime_monitor_rejects_invalid_cost_bounds(kwargs):
+    with pytest.raises(ValueError):
+        sg.StructuralGeometryMonitorConfig(**kwargs)
+
+
+def test_runtime_monitor_rejects_malformed_or_nonfinite_routing_points():
+    monitor = sg.StructuralGeometryMonitor()
+    w = np.eye(2)
+    merge = np.array([0.0, 1.0])
+    with pytest.raises(ValueError, match="2D"):
+        monitor.record(
+            step=0,
+            parent_weight=w,
+            split_noise_norm=0.1,
+            routing_points=np.arange(4.0),
+            merge_a=merge,
+            merge_b=merge,
+        )
+    with pytest.raises(ValueError, match="finite"):
+        monitor.record(
+            step=0,
+            parent_weight=w,
+            split_noise_norm=0.1,
+            routing_points=np.array([[0.0], [np.nan]]),
+            merge_a=merge,
+            merge_b=merge,
+        )
+
+
+@pytest.mark.parametrize(
+    ("case", "error"),
+    [
+        ("parent", "parent_weight.*finite"),
+        ("noise", "split_noise_norm.*finite"),
+        ("merge_empty", "merge samples.*non-empty"),
+        ("merge_nonfinite", "merge samples.*finite"),
+    ],
+)
+def test_runtime_monitor_rejects_inputs_that_cannot_form_standard_json(case, error):
+    parent = np.array([[np.nan]]) if case == "parent" else np.eye(2)
+    noise = np.inf if case == "noise" else 0.1
+    merge_a = np.array([]) if case == "merge_empty" else np.array([0.0, 1.0])
+    merge_b = np.array([np.nan]) if case == "merge_nonfinite" else np.array([1.0, 2.0])
+    with pytest.raises(ValueError, match=error):
+        sg.StructuralGeometryMonitor().record(
+            step=0,
+            parent_weight=parent,
+            split_noise_norm=noise,
+            routing_points=np.array([[0.0], [1.0]]),
+            merge_a=merge_a,
+            merge_b=merge_b,
+        )

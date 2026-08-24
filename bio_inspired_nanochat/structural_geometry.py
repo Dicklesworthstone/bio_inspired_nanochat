@@ -23,8 +23,9 @@ runtime certificates/monitors (`0642.5.2.1`) and the falsification vs the `uta` 
 
 from __future__ import annotations
 
+import json
 import math
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 
 import numpy as np
 
@@ -202,6 +203,8 @@ class MergeCertificate:
     naive_cost: float           # the same cost for the naive value-average merge
     barycenter_std: float       # spread of the OT-merged distribution: (1−t)σ_a + tσ_b
     naive_std: float            # spread of the naive average (≈ ½√(σ_a²+σ_b²); collapses when experts differ)
+    comparator_available: bool  # equal-sized samples make the elementwise naive comparator well-defined
+    transport_optimal: bool     # the quantile plan costs no more than the naive elementwise merge
     ot_preserves_spread: bool   # barycenter_std ≥ naive_std — holds in the population limit (see note)
 
 
@@ -215,16 +218,250 @@ def ot_merge_certificate(a: np.ndarray, b: np.ndarray) -> MergeCertificate:
     the population limit; on small finite samples it can occasionally flip (sampling noise in the
     elementwise pairing), so read it as the typical, not a guaranteed, behavior. The naive baseline is
     elementwise (order-dependent); when the two experts have different sizes it is undefined here and
-    falls back to the barycenter itself (so `naive_cost == transport_cost`, a no-contrast degenerate case).
+    falls back to the barycenter itself for cost accounting. In that no-contrast case
+    ``comparator_available`` and ``transport_optimal`` are both false, so the runtime monitor fails
+    closed rather than treating equality-by-construction as evidence.
     """
     a = np.asarray(a, dtype=np.float64).ravel()
     b = np.asarray(b, dtype=np.float64).ravel()
     bary = wasserstein_barycenter_1d(a, b, t=0.5)
-    naive_vals = 0.5 * (a + b) if a.size == b.size else bary  # naive elementwise value average
+    comparator_available = a.size == b.size
+    naive_vals = 0.5 * (a + b) if comparator_available else bary
     transport = 0.5 * (wasserstein_1d(bary, a) ** 2 + wasserstein_1d(bary, b) ** 2)
     naive_cost = 0.5 * (wasserstein_1d(naive_vals, a) ** 2 + wasserstein_1d(naive_vals, b) ** 2)
     return MergeCertificate(
         transport_cost=transport, naive_cost=naive_cost,
         barycenter_std=float(np.std(bary)), naive_std=float(np.std(naive_vals)),
+        comparator_available=comparator_available,
+        transport_optimal=bool(comparator_available and transport <= naive_cost + 1e-12),
         ot_preserves_spread=bool(np.std(bary) >= np.std(naive_vals) - 1e-12),
     )
+
+
+# =========================================================================== #
+# Runtime certificates + bounded routing-manifold monitor (bead 0642.5.2.1)
+# =========================================================================== #
+
+
+@dataclass(frozen=True)
+class StructuralGeometryMonitorConfig:
+    """Cost and significance bounds for :class:`StructuralGeometryMonitor`.
+
+    H0 persistence uses an ``O(n² d)`` minimum-spanning-tree calculation. ``max_points`` and
+    ``max_dim`` therefore cap the only data-dependent quadratic work. Rows are sampled at evenly
+    spaced indices and dimensions are selected by variance, both deterministically.
+    """
+
+    persistence_ratio_threshold: float = 3.0
+    max_points: int = 256
+    max_dim: int = 8
+    max_persistence_features: int = 8
+
+    def __post_init__(self) -> None:
+        if not math.isfinite(self.persistence_ratio_threshold) or self.persistence_ratio_threshold <= 0.0:
+            raise ValueError("persistence_ratio_threshold must be finite and positive")
+        if self.max_points < 2:
+            raise ValueError("max_points must be >= 2")
+        if self.max_dim < 1:
+            raise ValueError("max_dim must be >= 1")
+        if self.max_persistence_features < 1:
+            raise ValueError("max_persistence_features must be >= 1")
+
+
+@dataclass(frozen=True)
+class StructuralGeometryRecord:
+    """One JSON-safe structural decision record.
+
+    ``None`` denotes an unbounded quantity (for example a singular parent's ``kappa``), avoiding
+    non-standard JSON ``Infinity`` values while the boolean certificate fields retain the verdict.
+    """
+
+    step: int
+    routing_points_input: int
+    routing_dim_input: int
+    routing_points_used: int
+    routing_dim_used: int
+    routing_was_capped: bool
+    homology_dimension: int
+    kappa_parent: float | None
+    kappa_bound: float | None
+    split_noise_norm: float
+    split_well_conditioned: bool
+    max_persistence: float
+    typical_persistence: float
+    persistence_ratio: float | None
+    persistence_significant: bool
+    top_persistence_features: tuple[float, ...]
+    merge_transport_cost: float
+    merge_naive_cost: float
+    merge_cost_saving: float
+    merge_comparator_available: bool
+    merge_transport_optimal: bool
+    merge_preserves_spread: bool
+
+
+class StructuralGeometryMonitor:
+    """Bounded runtime monitor for split conditioning, routing coverage, and OT merges.
+
+    The three signals are recorded together because they gate one structural-lifecycle decision:
+    the proposed child must have a finite Weyl condition-number bound, the routing manifold may
+    request growth only for a thresholded persistent H0 gap, and a proposed merge must use a
+    no-more-expensive quantile transport plan. Records are directly consumable by
+    ``run_logging.RunLogger`` or emitted as standalone JSONL.
+    """
+
+    def __init__(self, cfg: StructuralGeometryMonitorConfig | None = None) -> None:
+        self.cfg = cfg or StructuralGeometryMonitorConfig()
+        self.records: list[StructuralGeometryRecord] = []
+
+    def _bounded_routing_points(self, points: np.ndarray) -> tuple[np.ndarray, int, int]:
+        pts = np.asarray(points, dtype=np.float64)
+        if pts.ndim != 2:
+            raise ValueError(f"routing_points must be a 2D array, got shape {pts.shape}")
+        n_input, d_input = (int(pts.shape[0]), int(pts.shape[1]))
+        if n_input < 2 or d_input < 1:
+            raise ValueError(
+                f"routing_points need >=2 rows and >=1 dimension, got shape {pts.shape}"
+            )
+        if not np.isfinite(pts).all():
+            raise ValueError("routing_points must contain only finite values")
+
+        if d_input > self.cfg.max_dim:
+            # Stable sort makes tied-variance dimensions deterministic. Sorting the selected indices
+            # restores source-column order after choosing the most informative dimensions.
+            variances = np.var(pts, axis=0)
+            dims = np.sort(np.argsort(-variances, kind="stable")[: self.cfg.max_dim])
+            pts = pts[:, dims]
+        if n_input > self.cfg.max_points:
+            rows = np.linspace(0, n_input - 1, self.cfg.max_points, dtype=np.int64)
+            pts = pts[rows]
+        return pts, n_input, d_input
+
+    @staticmethod
+    def _finite_or_none(value: float) -> float | None:
+        return float(value) if math.isfinite(value) else None
+
+    def record(
+        self,
+        *,
+        step: int,
+        parent_weight: np.ndarray,
+        split_noise_norm: float,
+        routing_points: np.ndarray,
+        merge_a: np.ndarray,
+        merge_b: np.ndarray,
+    ) -> StructuralGeometryRecord:
+        """Compute and store all three certificates for one lifecycle decision."""
+        bounded, n_input, d_input = self._bounded_routing_points(routing_points)
+        parent = np.asarray(parent_weight, dtype=np.float64)
+        if parent.ndim != 2 or min(parent.shape, default=0) < 1:
+            raise ValueError(f"parent_weight must be a non-empty 2D array, got shape {parent.shape}")
+        if not np.isfinite(parent).all():
+            raise ValueError("parent_weight must contain only finite values")
+        if not math.isfinite(split_noise_norm):
+            raise ValueError("split_noise_norm must be finite")
+        merge_a_array = np.asarray(merge_a, dtype=np.float64)
+        merge_b_array = np.asarray(merge_b, dtype=np.float64)
+        if merge_a_array.size == 0 or merge_b_array.size == 0:
+            raise ValueError("merge samples must be non-empty")
+        if not np.isfinite(merge_a_array).all() or not np.isfinite(merge_b_array).all():
+            raise ValueError("merge samples must contain only finite values")
+
+        split = spectral_conditioning_certificate(parent, split_noise_norm)
+
+        edges = mst_edge_lengths(bounded)
+        max_gap = float(edges[-1]) if edges.size else 0.0
+        typical = float(np.median(edges)) if edges.size else 0.0
+        ratio = max_gap / typical if typical > 0.0 else (math.inf if max_gap > 0.0 else 0.0)
+        significant = bool(ratio >= self.cfg.persistence_ratio_threshold)
+        top = tuple(float(x) for x in edges[::-1][: self.cfg.max_persistence_features])
+
+        merge = ot_merge_certificate(merge_a_array, merge_b_array)
+        rec = StructuralGeometryRecord(
+            step=int(step),
+            routing_points_input=n_input,
+            routing_dim_input=d_input,
+            routing_points_used=int(bounded.shape[0]),
+            routing_dim_used=int(bounded.shape[1]),
+            routing_was_capped=(bounded.shape != (n_input, d_input)),
+            homology_dimension=0,
+            kappa_parent=self._finite_or_none(split.kappa_parent),
+            kappa_bound=self._finite_or_none(split.kappa_bound),
+            split_noise_norm=float(split.noise_norm),
+            split_well_conditioned=split.well_conditioned,
+            max_persistence=max_gap,
+            typical_persistence=typical,
+            persistence_ratio=self._finite_or_none(ratio),
+            persistence_significant=significant,
+            top_persistence_features=top,
+            merge_transport_cost=merge.transport_cost,
+            merge_naive_cost=merge.naive_cost,
+            merge_cost_saving=merge.naive_cost - merge.transport_cost,
+            merge_comparator_available=merge.comparator_available,
+            merge_transport_optimal=merge.transport_optimal,
+            merge_preserves_spread=merge.ot_preserves_spread,
+        )
+        self.records.append(rec)
+        return rec
+
+    def all_births_well_conditioned(self) -> bool:
+        return all(r.split_well_conditioned for r in self.records)
+
+    def all_merge_plans_optimal(self) -> bool:
+        return all(r.merge_transport_optimal for r in self.records)
+
+    def assert_certificates(self) -> None:
+        """Fail closed when a proposed split or merge lacks its required certificate."""
+        if not self.records:
+            raise AssertionError("no structural geometry records were observed")
+        if not self.all_births_well_conditioned():
+            bad = next(r for r in self.records if not r.split_well_conditioned)
+            raise AssertionError(
+                f"split conditioning failed at step {bad.step}: noise={bad.split_noise_norm:g}, "
+                f"kappa_bound={bad.kappa_bound}"
+            )
+        if not self.all_merge_plans_optimal():
+            bad = next(r for r in self.records if not r.merge_transport_optimal)
+            raise AssertionError(
+                f"OT merge certificate failed at step {bad.step}: "
+                f"transport_cost={bad.merge_transport_cost:g} > naive_cost={bad.merge_naive_cost:g}"
+            )
+
+    def summary(self) -> dict:
+        bounded_work = {
+            "homology_dimension": 0,
+            "routing_point_cap": self.cfg.max_points,
+            "routing_dimension_cap": self.cfg.max_dim,
+            "persistence_feature_cap": self.cfg.max_persistence_features,
+        }
+        if not self.records:
+            return {"steps": 0, **bounded_work}
+        finite_kappa = [r.kappa_bound for r in self.records if r.kappa_bound is not None]
+        return {
+            "steps": len(self.records),
+            **bounded_work,
+            "births_well_conditioned": self.all_births_well_conditioned(),
+            "merge_plans_optimal": self.all_merge_plans_optimal(),
+            "max_kappa_bound": max(finite_kappa) if finite_kappa else None,
+            "max_persistence": max(r.max_persistence for r in self.records),
+            "significant_persistence_steps": sum(r.persistence_significant for r in self.records),
+            "mean_merge_cost": float(np.mean([r.merge_transport_cost for r in self.records])),
+            "capped_steps": sum(r.routing_was_capped for r in self.records),
+        }
+
+    def to_jsonl(self) -> list[str]:
+        """Return standard-compliant JSONL records for the structured run log."""
+        return [json.dumps(asdict(r), ensure_ascii=False, allow_nan=False) for r in self.records]
+
+    def render(self, console=None) -> None:
+        """Render the current certificate summary with Rich."""
+        from rich.console import Console
+        from rich.table import Table
+
+        console = console or Console()
+        table = Table(title="Structural geometry certificates (spectral / H0 / OT)")
+        table.add_column("metric")
+        table.add_column("value", justify="right")
+        for key, value in self.summary().items():
+            table.add_row(key, f"{value:.5g}" if isinstance(value, float) else str(value))
+        console.print(table)
