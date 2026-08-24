@@ -6,17 +6,22 @@ activation/synaptic terms are rough estimates, so we only assert sign + scaling 
 """
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from bio_inspired_nanochat.torch_imports import torch
 from _bio_testkit import TINY, make_tiny_synaptic, make_tiny_vanilla
 from scripts.scale_memory import (
+    BenchmarkResult,
+    _parse_int_list,
     buffer_bytes,
     estimate,
     measure_throughput,
     optimizer_moment_bytes,
     param_bytes,
     synaptic_state_bytes_est,
+    write_benchmark_jsonl,
 )
 
 
@@ -104,3 +109,58 @@ def test_measure_throughput_returns_positive_tokps():
     m = _vanilla()
     tp = measure_throughput(m, m.config, batch=2, seq=32, steps=3, warmup=1, device="cpu")
     assert tp["tok_per_sec"] > 0 and tp["step_ms"] > 0
+
+
+@pytest.mark.e2e
+def test_inference_throughput_and_profiler_trace_are_recorded(tmp_path):
+    m = _vanilla()
+    trace = tmp_path / "trace.json"
+    tp = measure_throughput(
+        m,
+        m.config,
+        batch=1,
+        seq=16,
+        steps=2,
+        warmup=1,
+        device="cpu",
+        mode="infer",
+        seed=17,
+        profile_path=trace,
+    )
+    assert tp["tok_per_sec"] > 0 and tp["step_ms"] > 0
+    assert tp["peak_allocated_gb"] is None and tp["gpu_utilization_pct"] is None
+    assert tp["profile_path"] == str(trace)
+    assert trace.exists() and trace.stat().st_size > 0
+
+
+@pytest.mark.unit
+def test_benchmark_jsonl_schema_and_matrix_list_validation(tmp_path):
+    row = BenchmarkResult(
+        variant="vanilla",
+        mode="train",
+        batch=2,
+        seq=32,
+        steps=3,
+        warmup=1,
+        seed=17,
+        device="cpu",
+        world_size=1,
+        tok_per_sec=123.0,
+        step_ms=4.0,
+        peak_allocated_gb=None,
+        peak_reserved_gb=None,
+        gpu_utilization_pct=None,
+        profile_path=None,
+        provenance={"seed": 17, "git_sha": "abc"},
+    )
+    path = write_benchmark_jsonl([row], tmp_path / "bench.jsonl")
+    try:
+        payload = json.JSONDecoder().decode(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        pytest.fail(f"benchmark writer emitted invalid JSON: {exc}")
+    assert payload["variant"] == "vanilla" and payload["seed"] == 17
+    assert payload["tok_per_sec"] == pytest.approx(123.0)
+    assert payload["provenance"]["git_sha"] == "abc"
+    assert _parse_int_list("1, 4,8", name="batches") == [1, 4, 8]
+    with pytest.raises(ValueError, match="positive"):
+        _parse_int_list("1,0", name="batches")

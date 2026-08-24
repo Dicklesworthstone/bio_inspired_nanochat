@@ -152,3 +152,61 @@ does not implement; NCCL behavior is unchanged.)
 effective batch, with no NCCL hangs and finite loss. Run the launch recipe above on the
 hardware and diff the `train/loss` curves; they should agree within bf16 tolerance. This is the
 one piece that cannot be exercised without the GPUs and is tracked as the residual manual check.
+
+## 8. Reproducible profiling matrix (`j9i`)
+
+The memory helper is also the canonical fixed-seed train/inference performance harness. It sweeps
+vanilla vs bio, batch size, and sequence length; synchronizes every CUDA timing window; records
+aggregate tok/s, slowest-rank latency, rank-0 peak allocated/reserved VRAM, best-effort GPU
+utilization, and optional per-rank Chrome traces as schema-stable JSONL.
+
+Single 4090:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 uv run python -m scripts.scale_memory --matrix \
+  --device cuda --depth 10 --tie-embeddings \
+  --variants vanilla,bio --modes train,infer \
+  --batches 1,2,4,8,16 --seqs 512,1024,2048 \
+  --warmup 20 --steps 100 --seed 1337 \
+  --output-jsonl runs/perf_4090/single.jsonl \
+  --profile-dir runs/perf_4090/profiles_single
+```
+
+Dual 4090 uses the same matrix under `torchrun`; each JSONL row records `WORLD_SIZE`, and tok/s is
+reported as aggregate device throughput. Keep the PCIe environment from §5:
+
+```bash
+CUDA_VISIBLE_DEVICES=0,1 NCCL_P2P_LEVEL=PXB OMP_NUM_THREADS=8 \
+  uv run torchrun --standalone --nproc_per_node=2 -m scripts.scale_memory --matrix \
+  --device cuda --depth 10 --tie-embeddings \
+  --variants vanilla,bio --modes train,infer \
+  --batches 1,2,4,8,16 --seqs 512,1024,2048 \
+  --warmup 20 --steps 100 --seed 1337 \
+  --output-jsonl runs/perf_4090/dual_rank.jsonl \
+  --profile-dir runs/perf_4090/profiles_dual
+```
+
+For SM occupancy and kernel-level PCIe/NCCL analysis, wrap one representative case with Nsight
+Systems and inspect the emitted Torch Chrome trace alongside it:
+
+```bash
+nsys profile --trace=cuda,nvtx,osrt,cudnn,cublas --stats=true \
+  -o runs/perf_4090/nsys_bio_train_b8_t2048 \
+  uv run python -m scripts.scale_memory --matrix --device cuda --variants bio \
+  --modes train --batches 8 --seqs 2048 --warmup 20 --steps 100 \
+  --profile-dir runs/perf_4090/profiles_nsys
+```
+
+Use Nsight Compute for achieved occupancy on that same representative shape (Systems establishes
+the timeline; Compute supplies SM-level counters):
+
+```bash
+ncu --set full --target-processes all \
+  -o runs/perf_4090/ncu_bio_train_b8_t2048 \
+  uv run python -m scripts.scale_memory --matrix --device cuda --variants bio \
+  --modes train --batches 8 --seqs 2048 --warmup 2 --steps 1
+```
+
+Do not copy CPU measurements or estimates into the 4090 baseline table. The committed harness is
+CPU-smoke-tested, but this checkout reports zero CUDA devices; real single/dual-4090 JSONL and Nsight
+artifacts must be collected on the rig before `j9i` is closed.
