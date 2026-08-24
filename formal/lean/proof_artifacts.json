@@ -461,6 +461,58 @@
       "mathlib_revision": "a3a10db0e9d66acbebf76c5e6a135066525ac900",
       "build_command": "rch exec -- lake build",
       "build_result": "not-rerun-proof-source-unchanged"
+    },
+    {
+      "cycle_id": "lfl-r00r.7-predictive-provenance-2026-08-24",
+      "frog_id": "bio_inspired_nanochat-r00r.7",
+      "theorem_ids": [
+        "BioInspiredNanochat.StochasticThermodynamics.logMeanGap_nonnegative",
+        "BioInspiredNanochat.StochasticThermodynamics.log_rate_tur_core",
+        "BioInspiredNanochat.StochasticThermodynamics.tur_calibration_inequality",
+        "BioInspiredNanochat.StochasticThermodynamics.crooks_log_calibration"
+      ],
+      "route": "harness-first-proof-preserving",
+      "proof_friction_class": "predictive-evidence-provenance-only",
+      "runtime_defect_found": true,
+      "artifact_hash": "sha256:831498bc2853d86701250ea89024ab5f5f6190d2e3a5a9ae66f93a7d5d42d963",
+      "hash_scope": "formal/lean/BioInspiredNanochat.lean",
+      "sorry_or_admit_present": false,
+      "axioms": [
+        "propext",
+        "Classical.choice",
+        "Quot.sound"
+      ],
+      "assurance": {
+        "exact_real_algebra": "E-unchanged",
+        "predictive_provenance_regressions": "B",
+        "floating_point_refinement": "unchanged"
+      },
+      "conformance": {
+        "statement_parity": "pass-theorem-covered-analytic-functions-unchanged",
+        "state_parity": "pass-population-moments-unchanged",
+        "transition_parity": "pass-tur-and-crooks-functions-unchanged",
+        "concurrency_parity": "not-applicable-pure-functions",
+        "cancel_drain_parity": "not-applicable",
+        "runtime_evidence": "pass-58-targeted-stochastic-and-mc-tests",
+        "drift_gate": "pass-provenance-schema-refresh"
+      },
+      "change_scope": "Adds normalized SynapticConfig identity to predictive evidence provenance and freshness checks. The analytic driven-model TUR, empirical TUR, and Crooks implementations mapped to Lean are unchanged. Runtime regressions cover fresh/stale provenance, bounded evidence collection, and the MC observer path; the proof source and theorem statements are byte-identical.",
+      "runtime_mapping": [
+        {
+          "path": "bio_inspired_nanochat/stochastic_thermo.py",
+          "sha256": "9bf065e80ba614ad9fdc1b30923af91ca2cc06a08660b9f8c1a55550c98f2698"
+        },
+        {
+          "path": "tests/test_stochastic_thermo.py",
+          "sha256": "2cbe1a21a7a0e2a05a6fbe223947d9a3a74586d1899087d615bfd4c03810a0be"
+        }
+      ],
+      "regression_command": "uv run --no-sync python -m pytest tests/test_stochastic_thermo.py tests/test_mc_ensemble.py -q",
+      "regression_result": "58 passed (2026-08-24)",
+      "lean_toolchain": "leanprover/lean4:v4.27.0",
+      "mathlib_revision": "a3a10db0e9d66acbebf76c5e6a135066525ac900",
+      "build_command": "rch exec -- lake build",
+      "build_result": "rch-refused-non-compilation-command-no-workers; proof-source-unchanged"
     }
   ]
 }

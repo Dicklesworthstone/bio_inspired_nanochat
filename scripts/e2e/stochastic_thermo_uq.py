@@ -42,6 +42,7 @@ from rich.console import Console
 from rich.table import Table
 
 from bio_inspired_nanochat.common import logger
+from bio_inspired_nanochat.checkpoint_manager import config_hash as normalized_config_hash
 from bio_inspired_nanochat.eval_stats import Aggregate, PairedResult, aggregate, paired_comparison
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
 from bio_inspired_nanochat.mc_ensemble import mc_sampling
@@ -170,16 +171,24 @@ class LiveReleaseFTResult:
     reverse_transition: str
     predictive_distribution_claim: bool
     passed: bool
+    experiment_seed: int
+    forward_rng_seed: int
+    reverse_rng_seed: int
+    release_protocol_config_hash: str
     n_trajectories: int
     pool_size: int
+    configured_forward_probability: float
+    configured_reverse_probability: float
     forward_drive: float
     reverse_drive: float
     forward_probability: float
     reverse_probability: float
     affinity: float
+    current_counts: tuple[int, ...]
     integral_ft: float
     integral_ft_residual: float
     max_crooks_residual: float | None
+    crooks_min_count: int
     tolerance: float
     integral_tolerance: float
     curve: list[CrooksPoint]
@@ -275,6 +284,7 @@ class MultiSeedReport:
     live_tur: LiveTURDiagnostic
     alpha: float
     bootstrap_samples: int
+    bootstrap_seed: int
     verdict: str
     verdict_reason: str
     comparison_policy: str
@@ -621,19 +631,21 @@ def run_live_release_ft(config: ExperimentConfig) -> LiveReleaseFTResult:
     )
     forward_probability = _release_probability(presyn, release_cfg, forward_drive)
     reverse_probability = _release_probability(presyn, release_cfg, reverse_drive)
+    forward_rng_seed = config.seed + 101
+    reverse_rng_seed = config.seed + 102
     forward = _sample_live_counts(
         presyn,
         release_cfg,
         drive=forward_drive,
         n_trajectories=config.ft_trajectories,
-        seed=config.seed + 101,
+        seed=forward_rng_seed,
     )
     reverse = _sample_live_counts(
         presyn,
         release_cfg,
         drive=reverse_drive,
         n_trajectories=config.ft_trajectories,
-        seed=config.seed + 102,
+        seed=reverse_rng_seed,
     )
     currents = forward - reverse
     affinity = math.log(
@@ -642,9 +654,16 @@ def run_live_release_ft(config: ExperimentConfig) -> LiveReleaseFTResult:
         / (reverse_probability * (1.0 - forward_probability))
     )
     sigma = currents.astype(np.float64) * affinity
+    pool_size = int(round(release_cfg.init_rrp))
+    current_counts = tuple(
+        int(count)
+        for count in np.bincount(
+            currents + pool_size,
+            minlength=2 * pool_size + 1,
+        )
+    )
     integral_ft = float(np.mean(np.exp(-sigma)))
     integral_residual = abs(integral_ft - 1.0)
-    pool_size = int(round(release_cfg.init_rrp))
     curve = binomial_crooks_curve(
         currents,
         affinity,
@@ -672,16 +691,24 @@ def run_live_release_ft(config: ExperimentConfig) -> LiveReleaseFTResult:
         ),
         predictive_distribution_claim=False,
         passed=passed,
+        experiment_seed=config.seed,
+        forward_rng_seed=forward_rng_seed,
+        reverse_rng_seed=reverse_rng_seed,
+        release_protocol_config_hash=normalized_config_hash(asdict(release_cfg)),
         n_trajectories=config.ft_trajectories,
         pool_size=pool_size,
+        configured_forward_probability=config.ft_forward_probability,
+        configured_reverse_probability=config.ft_reverse_probability,
         forward_drive=forward_drive,
         reverse_drive=reverse_drive,
         forward_probability=forward_probability,
         reverse_probability=reverse_probability,
         affinity=affinity,
+        current_counts=current_counts,
         integral_ft=integral_ft,
         integral_ft_residual=integral_residual,
         max_crooks_residual=max_residual,
+        crooks_min_count=config.ft_min_count,
         tolerance=config.ft_tolerance,
         integral_tolerance=config.ft_integral_tolerance,
         curve=curve,
@@ -764,8 +791,10 @@ def _reset_sequence(model: GPTSynaptic) -> None:
 
 
 def _experiment_config_hash(model: GPTSynaptic, config: ExperimentConfig) -> str:
+    experiment = asdict(config)
+    experiment.pop("seed")
     payload = json.dumps(
-        {"experiment": asdict(config), "model": asdict(model.config)},
+        {"experiment": experiment, "model": asdict(model.config)},
         sort_keys=True,
         separators=(",", ":"),
     )
@@ -967,6 +996,7 @@ def run_experiment(
     training_loss = _train_model(model, training_pool, config)
     checkpoint_id = _model_checkpoint_id(model)
     config_hash = _experiment_config_hash(model, config)
+    synaptic_config_hash = normalized_config_hash(asdict(model.config.syn_cfg))
     id_inputs = torch.cat([batch[0] for batch in id_pool])
     id_targets = torch.cat([batch[1] for batch in id_pool])
     ood_inputs = torch.cat([batch[0] for batch in ood_pool])
@@ -982,6 +1012,7 @@ def run_experiment(
         PredictiveEvidenceProvenance(
             run_id=f"stochastic-thermo-predictive-{config_hash[:12]}-s{config.seed}",
             checkpoint_id=checkpoint_id,
+            synaptic_config_hash=synaptic_config_hash,
             config_hash=config_hash,
             rng_seed=config.seed + 301,
         ),
@@ -995,6 +1026,9 @@ def run_experiment(
     )
     predictive_evidence = evidence_collector.finalize(
         current_checkpoint_id=_model_checkpoint_id(model),
+        current_synaptic_config_hash=normalized_config_hash(
+            asdict(model.config.syn_cfg)
+        ),
         current_config_hash=_experiment_config_hash(model, config),
         current_rng_seed=config.seed + 301,
     )
@@ -1157,6 +1191,7 @@ def summarize_multi_seed(
     bootstrap_seed: int = 20260824,
 ) -> MultiSeedReport:
     """Aggregate already-computed matched-seed reports using the shared ``74f.3`` layer."""
+    reports = tuple(sorted(reports, key=lambda item: item.config.seed))
     if len(reports) < 2:
         raise ValueError("multi-seed statistics need at least two reports")
     if bootstrap_samples < 1:
@@ -1305,6 +1340,7 @@ def summarize_multi_seed(
         live_tur=live_tur,
         alpha=alpha,
         bootstrap_samples=bootstrap_samples,
+        bootstrap_seed=bootstrap_seed,
         verdict=verdict,
         verdict_reason=verdict_reason,
         comparison_policy=comparison_policy,

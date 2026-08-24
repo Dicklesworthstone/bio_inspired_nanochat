@@ -358,11 +358,17 @@ class PredictiveEvidenceProvenance:
 
     run_id: str
     checkpoint_id: str
+    synaptic_config_hash: str
     config_hash: str
     rng_seed: int
 
     def __post_init__(self) -> None:
-        if not self.run_id or not self.checkpoint_id or not self.config_hash:
+        if (
+            not self.run_id
+            or not self.checkpoint_id
+            or not self.synaptic_config_hash
+            or not self.config_hash
+        ):
             raise ValueError("run, checkpoint, and config identities must be non-empty")
         if self.rng_seed < 0:
             raise ValueError("rng_seed must be nonnegative")
@@ -684,6 +690,7 @@ class PredictiveThermoCollector:
         self,
         *,
         current_checkpoint_id: str,
+        current_synaptic_config_hash: str,
         current_config_hash: str,
         current_rng_seed: int,
         multi_seed_statistics_passed: bool = False,
@@ -691,6 +698,8 @@ class PredictiveThermoCollector:
         """Freeze evidence, refusing empty, stale, sparse, non-finite, or failed streams."""
         fresh = bool(
             current_checkpoint_id == self.provenance.checkpoint_id
+            and current_synaptic_config_hash
+            == self.provenance.synaptic_config_hash
             and current_config_hash == self.provenance.config_hash
             and current_rng_seed == self.provenance.rng_seed
         )

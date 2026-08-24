@@ -135,7 +135,9 @@ def test_predictive_evidence_observes_live_counts_without_perturbing_model_rng()
     torch.manual_seed(71)
     plain = mc.mc_predict(model, x, n_samples=4)
     collector = st.PredictiveThermoCollector(
-        st.PredictiveEvidenceProvenance("mc-live", "checkpoint", "config", 71),
+        st.PredictiveEvidenceProvenance(
+            "mc-live", "checkpoint", "synaptic", "config", 71
+        ),
         st.PredictiveEvidencePolicy(
             min_samples=4,
             min_tested_fraction=1.0,
@@ -150,6 +152,7 @@ def test_predictive_evidence_observes_live_counts_without_perturbing_model_rng()
     observed = mc.mc_predict(model, x, n_samples=4, evidence_collector=collector)
     evidence = collector.finalize(
         current_checkpoint_id="checkpoint",
+        current_synaptic_config_hash="synaptic",
         current_config_hash="config",
         current_rng_seed=71,
     )

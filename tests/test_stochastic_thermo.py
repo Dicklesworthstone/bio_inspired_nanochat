@@ -368,6 +368,7 @@ def _passing_predictive_evidence() -> st.PredictiveThermoEvidence:
     provenance = st.PredictiveEvidenceProvenance(
         run_id="uq-seed-17",
         checkpoint_id="checkpoint-a",
+        synaptic_config_hash="synaptic-a",
         config_hash="config-a",
         rng_seed=1701,
     )
@@ -397,6 +398,7 @@ def _passing_predictive_evidence() -> st.PredictiveThermoEvidence:
         )
     return collector.finalize(
         current_checkpoint_id="checkpoint-a",
+        current_synaptic_config_hash="synaptic-a",
         current_config_hash="config-a",
         current_rng_seed=1701,
     )
@@ -425,7 +427,9 @@ def test_predictive_evidence_is_layer_head_addressed_and_structured():
 
 
 def test_predictive_evidence_refuses_degenerate_and_stale_streams():
-    provenance = st.PredictiveEvidenceProvenance("run", "checkpoint", "config", 9)
+    provenance = st.PredictiveEvidenceProvenance(
+        "run", "checkpoint", "synaptic", "config", 9
+    )
     collector = st.PredictiveThermoCollector(
         provenance,
         st.PredictiveEvidencePolicy(min_samples=2, crooks_min_count=1),
@@ -442,6 +446,7 @@ def test_predictive_evidence_refuses_degenerate_and_stale_streams():
         )
     evidence = collector.finalize(
         current_checkpoint_id="different-checkpoint",
+        current_synaptic_config_hash="synaptic",
         current_config_hash="config",
         current_rng_seed=9,
     )
@@ -455,9 +460,12 @@ def test_predictive_evidence_refuses_degenerate_and_stale_streams():
 
 
 def test_predictive_evidence_refuses_an_empty_stream():
-    provenance = st.PredictiveEvidenceProvenance("empty", "checkpoint", "config", 3)
+    provenance = st.PredictiveEvidenceProvenance(
+        "empty", "checkpoint", "synaptic", "config", 3
+    )
     evidence = st.PredictiveThermoCollector(provenance).finalize(
         current_checkpoint_id="checkpoint",
+        current_synaptic_config_hash="synaptic",
         current_config_hash="config",
         current_rng_seed=3,
     )
@@ -468,7 +476,9 @@ def test_predictive_evidence_refuses_an_empty_stream():
 
 
 def test_predictive_evidence_uses_a_bounded_per_head_reservoir():
-    provenance = st.PredictiveEvidenceProvenance("bounded", "checkpoint", "config", 4)
+    provenance = st.PredictiveEvidenceProvenance(
+        "bounded", "checkpoint", "synaptic", "config", 4
+    )
     collector = st.PredictiveThermoCollector(
         provenance,
         st.PredictiveEvidencePolicy(
@@ -490,6 +500,7 @@ def test_predictive_evidence_uses_a_bounded_per_head_reservoir():
         )
     evidence = collector.finalize(
         current_checkpoint_id="checkpoint",
+        current_synaptic_config_hash="synaptic",
         current_config_hash="config",
         current_rng_seed=4,
     )
@@ -499,7 +510,9 @@ def test_predictive_evidence_uses_a_bounded_per_head_reservoir():
 
 
 def test_predictive_evidence_counts_unsampled_valid_edges_as_uncovered():
-    provenance = st.PredictiveEvidenceProvenance("partial", "checkpoint", "config", 5)
+    provenance = st.PredictiveEvidenceProvenance(
+        "partial", "checkpoint", "synaptic", "config", 5
+    )
     collector = st.PredictiveThermoCollector(
         provenance,
         st.PredictiveEvidencePolicy(min_samples=2, crooks_min_count=1),
@@ -517,6 +530,7 @@ def test_predictive_evidence_counts_unsampled_valid_edges_as_uncovered():
         )
     evidence = collector.finalize(
         current_checkpoint_id="checkpoint",
+        current_synaptic_config_hash="synaptic",
         current_config_hash="config",
         current_rng_seed=5,
     )
