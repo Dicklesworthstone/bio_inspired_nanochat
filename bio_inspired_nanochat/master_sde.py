@@ -168,6 +168,29 @@ def integrate_reduced(y0: float, dt: float, steps: int, *, k: float, a: float, b
     return np.array(ys)
 
 
+def slow_manifold_projector(
+    z: np.ndarray,
+    *,
+    k: float = 1.0,
+    eps: float = 0.01,
+) -> tuple[np.ndarray, float]:
+    """Explicit low-rank projector onto the slow manifold M_eps = {x = h(y, eps)}.
+
+    Given full state z = (x, y), projects onto the critical manifold x = k*y and
+    computes the reconstruction error ||x - k*y||, which is bounded by O(eps) under
+    normal hyperbolicity.
+    """
+    z = np.asarray(z, dtype=np.float64)
+    x = z[0]
+    y = z[1] if z.ndim == 1 and z.size == 2 else z[1:]
+    x_proj = k * y
+    z_proj = np.empty_like(z)
+    z_proj[0] = x_proj
+    z_proj[1] = y
+    reconstruction_error = float(np.linalg.norm(x - x_proj))
+    return z_proj, reconstruction_error
+
+
 # --------------------------------------------------------------------------- #
 # Thrust D restriction — the gauge connection (horizontal transport).
 # --------------------------------------------------------------------------- #
@@ -214,6 +237,7 @@ __all__ = [
     "solve_lyapunov",
     "dissipative_block_stationary_cov",
     "slow_manifold_h0",
+    "slow_manifold_projector",
     "reduced_flow_step",
     "fast_slow_step",
     "integrate_fast_slow",

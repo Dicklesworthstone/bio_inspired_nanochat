@@ -81,6 +81,10 @@ MECHANISMS: tuple[MechanismFlag, ...] = (
         "Bistable CaMKII/PP1 consolidation latch (sax.2).",
     ),
     MechanismFlag(
+        "stdp", "enable_stdp", False, False, False, ("enable_hebbian",),
+        "Spike-timing-dependent plasticity over sequence/time axis (sax.3).",
+    ),
+    MechanismFlag(
         "flex_attention", "use_flex_attention", False, False, False, ("enable_presyn",),
         "FlexAttention O(N) presyn path. PREFILL-ONLY: incompatible with KV-cache decode.",
     ),

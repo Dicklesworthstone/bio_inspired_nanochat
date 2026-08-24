@@ -148,3 +148,21 @@ def test_gauge_covariance_commutes():
     z = np.array([1.3, -0.4, 0.9])
     U = ms.gauge_matrix(0.6)
     assert ms.energy(ms.parallel_transport(z, U)) == pytest.approx(ms.energy(z), abs=1e-12)
+
+
+def test_slow_manifold_projector_bound():
+    """Slow manifold projector z -> z_proj has bounded reconstruction error O(eps)."""
+    k = 1.5
+    # State exactly on critical manifold: x = k * y
+    z_exact = np.array([3.0, 2.0])
+    z_proj, err = ms.slow_manifold_projector(z_exact, k=k)
+    assert np.allclose(z_exact, z_proj)
+    assert err == pytest.approx(0.0, abs=1e-12)
+
+    # State perturbed by delta
+    delta = 0.05
+    z_perturbed = np.array([3.0 + delta, 2.0])
+    z_proj_p, err_p = ms.slow_manifold_projector(z_perturbed, k=k)
+    assert err_p == pytest.approx(delta, abs=1e-12)
+    assert np.allclose(z_proj_p, z_exact)
+

@@ -307,26 +307,26 @@ def _copy_synaptic_linear_(dst: SynapticLinear, src: SynapticLinear):
     if (dst.w_fast is not None) and (src.w_fast is not None):
         dst.w_fast.copy_(src.w_fast)
     if (dst.bias is not None) and (src.bias is not None):
-        cast(Tensor, dst.bias).copy_(cast(Tensor, src.bias))
+        dst.bias.copy_(src.bias)
     # postsyn state
     if (dst.post is not None) and (src.post is not None):
-        cast(Tensor, dst.post.U).copy_(cast(Tensor, src.post.U))
-        cast(Tensor, dst.post.V).copy_(cast(Tensor, src.post.V))
-        cast(Tensor, dst.post.fast).copy_(cast(Tensor, src.post.fast))
-        cast(Tensor, dst.post.slow).copy_(cast(Tensor, src.post.slow))
+        dst.post.U.copy_(src.post.U)
+        dst.post.V.copy_(src.post.V)
+        dst.post.fast.copy_(src.post.fast)
+        dst.post.slow.copy_(src.post.slow)
         # buffers
-        cast(Tensor, dst.post.camkii).copy_(cast(Tensor, src.post.camkii))
-        cast(Tensor, dst.post.pp1).copy_(cast(Tensor, src.post.pp1))
-        cast(Tensor, dst.post.bdnf).copy_(cast(Tensor, src.post.bdnf))
+        dst.post.camkii.copy_(src.post.camkii)
+        dst.post.pp1.copy_(src.post.pp1)
+        dst.post.bdnf.copy_(src.post.bdnf)
         if hasattr(dst.post, "bdnf_hebb_accum") and hasattr(src.post, "bdnf_hebb_accum"):
-            cast(Tensor, dst.post.bdnf_hebb_accum).copy_(cast(Tensor, src.post.bdnf_hebb_accum))
+            dst.post.bdnf_hebb_accum.copy_(src.post.bdnf_hebb_accum)
         if hasattr(dst.post, "_last_hebb_delta_mag") and hasattr(src.post, "_last_hebb_delta_mag"):
-            cast(Tensor, dst.post._last_hebb_delta_mag).copy_(cast(Tensor, src.post._last_hebb_delta_mag))
+            dst.post._last_hebb_delta_mag.copy_(src.post._last_hebb_delta_mag)
     # Linear buffers
     if (dst.u_buf is not None) and (src.u_buf is not None):
-        cast(Tensor, dst.u_buf).copy_(cast(Tensor, src.u_buf))
+        dst.u_buf.copy_(src.u_buf)
     if (dst.v_buf is not None) and (src.v_buf is not None):
-        cast(Tensor, dst.v_buf).copy_(cast(Tensor, src.v_buf))
+        dst.v_buf.copy_(src.v_buf)
 
 
 @torch.no_grad()
@@ -340,7 +340,7 @@ def _merge_linear_into_(winner: SynapticLinear, loser: SynapticLinear, alpha: fl
             if (winner.w_fast is not None) and (loser.w_fast is not None):
                 mix_and_shift_tensors(winner.w_fast, loser.w_fast, alpha, cfg.clone_noise_linear)
             if (winner.bias is not None) and (loser.bias is not None):
-                mix_and_shift_tensors(cast(Tensor, winner.bias), cast(Tensor, loser.bias), alpha, cfg.clone_noise_linear)
+                mix_and_shift_tensors(winner.bias, loser.bias, alpha, cfg.clone_noise_linear)
             
             # Postsynaptic state
             # For state, we might want less noise or different logic?
@@ -361,46 +361,46 @@ def _merge_linear_into_(winner: SynapticLinear, loser: SynapticLinear, alpha: fl
             
             if (winner.post is not None) and (loser.post is not None):
                 # Manual state update (same as before)
-                cast(Tensor, winner.post.U).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, loser.post.U))
-                cast(Tensor, winner.post.V).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, loser.post.V))
-                cast(Tensor, winner.post.fast).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, loser.post.fast))
-                cast(Tensor, winner.post.slow).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, loser.post.slow))
+                winner.post.U.mul_(alpha).add_((1.0 - alpha) * loser.post.U)
+                winner.post.V.mul_(alpha).add_((1.0 - alpha) * loser.post.V)
+                winner.post.fast.mul_(alpha).add_((1.0 - alpha) * loser.post.fast)
+                winner.post.slow.mul_(alpha).add_((1.0 - alpha) * loser.post.slow)
                 
-                cast(Tensor, winner.post.camkii).mul_(0.9).add_(0.1 * cast(Tensor, loser.post.camkii))
-                cast(Tensor, winner.post.pp1).mul_(0.9).add_(0.1 * cast(Tensor, loser.post.pp1))
-                cast(Tensor, winner.post.bdnf).mul_(0.9).add_(0.1 * cast(Tensor, loser.post.bdnf))
+                winner.post.camkii.mul_(0.9).add_(0.1 * loser.post.camkii)
+                winner.post.pp1.mul_(0.9).add_(0.1 * loser.post.pp1)
+                winner.post.bdnf.mul_(0.9).add_(0.1 * loser.post.bdnf)
                 if hasattr(winner.post, "bdnf_hebb_accum") and hasattr(loser.post, "bdnf_hebb_accum"):
-                    cast(Tensor, winner.post.bdnf_hebb_accum).mul_(0.9).add_(
-                        0.1 * cast(Tensor, loser.post.bdnf_hebb_accum)
+                    winner.post.bdnf_hebb_accum.mul_(0.9).add_(
+                        0.1 * loser.post.bdnf_hebb_accum
                     )
                 if hasattr(winner.post, "_last_hebb_delta_mag") and hasattr(loser.post, "_last_hebb_delta_mag"):
-                    cast(Tensor, winner.post._last_hebb_delta_mag).copy_(
-                        cast(Tensor, loser.post._last_hebb_delta_mag)
+                    winner.post._last_hebb_delta_mag.copy_(
+                        loser.post._last_hebb_delta_mag
                     )
                 
                 # Clone state to loser (with reset logic)
-                cast(Tensor, loser.post.U).copy_(cast(Tensor, winner.post.U)).mul_(0.5)
-                cast(Tensor, loser.post.V).copy_(cast(Tensor, winner.post.V)).mul_(0.5)
-                cast(Tensor, loser.post.fast).zero_() # Reset fast weights
-                cast(Tensor, loser.post.slow).copy_(cast(Tensor, winner.post.slow)) # Keep slow weights? Or reset? Usually keep base knowledge.
+                loser.post.U.copy_(winner.post.U).mul_(0.5)
+                loser.post.V.copy_(winner.post.V).mul_(0.5)
+                loser.post.fast.zero_() # Reset fast weights
+                loser.post.slow.copy_(winner.post.slow) # Keep slow weights? Or reset? Usually keep base knowledge.
                 
-                cast(Tensor, loser.post.camkii).copy_(cast(Tensor, winner.post.camkii))
-                cast(Tensor, loser.post.pp1).copy_(cast(Tensor, winner.post.pp1))
-                cast(Tensor, loser.post.bdnf).copy_(cast(Tensor, winner.post.bdnf))
+                loser.post.camkii.copy_(winner.post.camkii)
+                loser.post.pp1.copy_(winner.post.pp1)
+                loser.post.bdnf.copy_(winner.post.bdnf)
                 if hasattr(loser.post, "bdnf_hebb_accum") and hasattr(winner.post, "bdnf_hebb_accum"):
-                    cast(Tensor, loser.post.bdnf_hebb_accum).copy_(
-                        cast(Tensor, winner.post.bdnf_hebb_accum)
+                    loser.post.bdnf_hebb_accum.copy_(
+                        winner.post.bdnf_hebb_accum
                     )
                 if hasattr(loser.post, "_last_hebb_delta_mag") and hasattr(winner.post, "_last_hebb_delta_mag"):
-                    cast(Tensor, loser.post._last_hebb_delta_mag).copy_(
-                        cast(Tensor, winner.post._last_hebb_delta_mag)
+                    loser.post._last_hebb_delta_mag.copy_(
+                        winner.post._last_hebb_delta_mag
                     )
             
             # Reset eligibility buffers in Linear
             if loser.u_buf is not None:
-                cast(Tensor, loser.u_buf).zero_()
+                loser.u_buf.zero_()
             if loser.v_buf is not None:
-                cast(Tensor, loser.v_buf).zero_()
+                loser.v_buf.zero_()
             
             return
         except ImportError:
@@ -412,17 +412,17 @@ def _merge_linear_into_(winner: SynapticLinear, loser: SynapticLinear, alpha: fl
     if (winner.w_fast is not None) and (loser.w_fast is not None):
         winner.w_fast.mul_(alpha).add_((1.0 - alpha) * loser.w_fast)
     if (winner.bias is not None) and (loser.bias is not None):
-        cast(Tensor, winner.bias).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, loser.bias))
+        winner.bias.mul_(alpha).add_((1.0 - alpha) * loser.bias)
     if (winner.post is not None) and (loser.post is not None):
-        cast(Tensor, winner.post.U).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, loser.post.U))
-        cast(Tensor, winner.post.V).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, loser.post.V))
-        cast(Tensor, winner.post.fast).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, loser.post.fast))
-        cast(Tensor, winner.post.slow).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, loser.post.slow))
+        winner.post.U.mul_(alpha).add_((1.0 - alpha) * loser.post.U)
+        winner.post.V.mul_(alpha).add_((1.0 - alpha) * loser.post.V)
+        winner.post.fast.mul_(alpha).add_((1.0 - alpha) * loser.post.fast)
+        winner.post.slow.mul_(alpha).add_((1.0 - alpha) * loser.post.slow)
         
         # gate and enzymes: bias toward winner (more stable)
-        cast(Tensor, winner.post.camkii).mul_(0.9).add_(0.1 * cast(Tensor, loser.post.camkii))
-        cast(Tensor, winner.post.pp1).mul_(0.9).add_(0.1 * cast(Tensor, loser.post.pp1))
-        cast(Tensor, winner.post.bdnf).mul_(0.9).add_(0.1 * cast(Tensor, loser.post.bdnf))
+        winner.post.camkii.mul_(0.9).add_(0.1 * loser.post.camkii)
+        winner.post.pp1.mul_(0.9).add_(0.1 * loser.post.pp1)
+        winner.post.bdnf.mul_(0.9).add_(0.1 * loser.post.bdnf)
     
     # Clone back into loser (to keep count constant)
     _clone_linear_from_(loser, winner, cfg.clone_noise_linear)
@@ -439,18 +439,18 @@ def _clone_linear_from_(
     if dst.w_fast is not None:
         _add_noise_(dst.w_fast, noise_scale, generator=generator)
     if dst.bias is not None:
-        _add_noise_(cast(Tensor, dst.bias), noise_scale, generator=generator)
+        _add_noise_(dst.bias, noise_scale, generator=generator)
     # reset fast Hebbian traces for cloned expert
     if dst.post is not None:
-        cast(Tensor, dst.post.fast).zero_()
-        cast(Tensor, dst.post.U).mul_(0.5)
-        cast(Tensor, dst.post.V).mul_(0.5)  # keep some eligibility but dampen
+        dst.post.fast.zero_()
+        dst.post.U.mul_(0.5)
+        dst.post.V.mul_(0.5)  # keep some eligibility but dampen
     
     # Reset buffers
     if dst.u_buf is not None:
-        cast(Tensor, dst.u_buf).zero_()
+        dst.u_buf.zero_()
     if dst.v_buf is not None:
-        cast(Tensor, dst.v_buf).zero_()
+        dst.v_buf.zero_()
 
 
 # ---------------------------------------------------------------------------
@@ -465,17 +465,19 @@ def _avg_linear_into_(winner: SynapticLinear, loser: SynapticLinear, alpha: floa
     if (winner.w_fast is not None) and (loser.w_fast is not None):
         winner.w_fast.mul_(alpha).add_((1.0 - alpha) * loser.w_fast)
     if (winner.bias is not None) and (loser.bias is not None):
-        cast(Tensor, winner.bias).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, loser.bias))
+        winner.bias.mul_(alpha).add_((1.0 - alpha) * loser.bias)
     if (winner.post is not None) and (loser.post is not None):
-        for name in ("U", "V", "fast", "slow", "camkii", "pp1", "bdnf"):
-            wt = getattr(winner.post, name, None)
-            lt = getattr(loser.post, name, None)
-            if wt is not None and lt is not None:
-                cast(Tensor, wt).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, lt))
+        winner.post.U.mul_(alpha).add_((1.0 - alpha) * loser.post.U)
+        winner.post.V.mul_(alpha).add_((1.0 - alpha) * loser.post.V)
+        winner.post.fast.mul_(alpha).add_((1.0 - alpha) * loser.post.fast)
+        winner.post.slow.mul_(alpha).add_((1.0 - alpha) * loser.post.slow)
+        winner.post.camkii.mul_(alpha).add_((1.0 - alpha) * loser.post.camkii)
+        winner.post.pp1.mul_(alpha).add_((1.0 - alpha) * loser.post.pp1)
+        winner.post.bdnf.mul_(alpha).add_((1.0 - alpha) * loser.post.bdnf)
     if (winner.u_buf is not None) and (loser.u_buf is not None):
-        cast(Tensor, winner.u_buf).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, loser.u_buf))
+        winner.u_buf.mul_(alpha).add_((1.0 - alpha) * loser.u_buf)
     if (winner.v_buf is not None) and (loser.v_buf is not None):
-        cast(Tensor, winner.v_buf).mul_(alpha).add_((1.0 - alpha) * cast(Tensor, loser.v_buf))
+        winner.v_buf.mul_(alpha).add_((1.0 - alpha) * loser.v_buf)
 
 
 @torch.no_grad()
@@ -538,16 +540,13 @@ def _copy_expert_full_(layer: SynapticMoE, dst_idx: int, src_idx: int):
     _copy_synaptic_linear_(layer.experts[dst_idx].fc2, layer.experts[src_idx].fc2)
     W = layer.router.weight
     W[dst_idx].copy_(W[src_idx])
-    Xi = cast(Tensor, layer.Xi)
-    Xi[dst_idx].copy_(Xi[src_idx])
+    if layer.Xi is not None:
+        layer.Xi[dst_idx].copy_(layer.Xi[src_idx])
     emb = layer.router_embeddings
     emb[dst_idx].copy_(emb[src_idx])
-    fatigue = cast(Tensor, layer.fatigue)
-    energy = cast(Tensor, layer.energy)
-    fatigue[dst_idx] = fatigue[src_idx]
-    energy[dst_idx] = energy[src_idx]
-    rb = cast(Tensor, layer.router_logit_bias)
-    rb[dst_idx] = rb[src_idx]
+    layer.fatigue[dst_idx] = layer.fatigue[src_idx]
+    layer.energy[dst_idx] = layer.energy[src_idx]
+    layer.router_logit_bias[dst_idx] = layer.router_logit_bias[src_idx]
 
 
 @torch.no_grad()
@@ -568,9 +567,8 @@ def _function_preserving_split_(
     (but does not zero) the discontinuity vs. the legacy noisy clone.
     """
     _copy_expert_full_(layer, dst_idx, parent_idx)
-    rb = cast(Tensor, layer.router_logit_bias)
-    rb[parent_idx] = rb[parent_idx] - cfg.gate_split_bias
-    rb[dst_idx] = rb[parent_idx]
+    layer.router_logit_bias[parent_idx] = layer.router_logit_bias[parent_idx] - cfg.gate_split_bias
+    layer.router_logit_bias[dst_idx] = layer.router_logit_bias[parent_idx]
     _antisym_perturb_fc1_(
         layer.experts[parent_idx].fc1,
         layer.experts[dst_idx].fc1,
@@ -633,16 +631,15 @@ def _consolidate_expert_pair_(
         winner_expert.fc2.w_slow.copy_(ot_targets[1])
     W = layer.router.weight
     W[winner_idx].mul_(alpha).add_((1.0 - alpha) * W[loser_idx])
-    Xi = cast(Tensor, layer.Xi)
-    Xi[winner_idx].mul_(alpha).add_((1.0 - alpha) * Xi[loser_idx])
+    if layer.Xi is not None:
+        layer.Xi[winner_idx].mul_(alpha).add_((1.0 - alpha) * layer.Xi[loser_idx])
     emb = layer.router_embeddings
     emb[winner_idx].mul_(alpha).add_((1.0 - alpha) * emb[loser_idx])
     # Router embeddings are maintained unit-norm everywhere (init + the contrastive EMA update in
     # SynapticMoE.forward), and the forward uses ‖emb‖ as a routing gain. Averaging two unit vectors
     # yields norm < 1, so renormalize to preserve that routing-gain invariant.
     emb[winner_idx].div_(emb[winner_idx].norm() + 1e-8)
-    rb = cast(Tensor, layer.router_logit_bias)
-    rb[winner_idx] = rb[winner_idx] + cfg.gate_split_bias
+    layer.router_logit_bias[winner_idx] = layer.router_logit_bias[winner_idx] + cfg.gate_split_bias
 
 
 @torch.no_grad()
@@ -729,16 +726,13 @@ def _merge_expert_into_and_clone_(
     # adopt the winner's presynaptic genome Xi and routing-logit bias. Otherwise the reborn expert
     # carries the dead loser's stale genome/bias — a phenotype mismatch (the function-preserving
     # path and _copy_expert_full_ both clone these).
-    Xi = cast(Tensor, layer.Xi)
-    Xi[loser_idx].copy_(Xi[winner_idx])
-    rb = cast(Tensor, layer.router_logit_bias)
-    rb[loser_idx] = rb[winner_idx]
+    if layer.Xi is not None:
+        layer.Xi[loser_idx].copy_(layer.Xi[winner_idx])
+    layer.router_logit_bias[loser_idx] = layer.router_logit_bias[winner_idx]
 
     # 5) Reset stats
-    fatigue = cast(Tensor, layer.fatigue)
-    energy = cast(Tensor, layer.energy)
-    fatigue[loser_idx] = 0.0
-    energy[loser_idx] = 1.0
+    layer.fatigue[loser_idx] = 0.0
+    layer.energy[loser_idx] = 1.0
 
 
 # ---------------------------------------------------------------------------
@@ -754,7 +748,7 @@ def _expert_hidden_mult(layer: SynapticMoE) -> int:
     ``SynapticLinear`` weights is an implementation detail, so derive the
     multiplier from the parameter VOLUME instead of any single axis.
     """
-    numel = int(cast(Tensor, layer.experts[0].fc1.w_slow).numel())
+    numel = int(layer.experts[0].fc1.w_slow.numel())
     n_embd = int(layer.router.in_features)
     return max(1, numel // (n_embd * n_embd))
 
@@ -893,11 +887,11 @@ def _resize_layer_experts_(
     hidden = _expert_hidden_mult(layer)
 
     old_W = layer.router.weight.detach().clone()
-    old_Xi = cast(Tensor, layer.Xi).detach().clone()
+    old_Xi = layer.Xi.detach().clone() if layer.Xi is not None else None
     old_emb = layer.router_embeddings.detach().clone()
     old_rb = layer.router_logit_bias.detach().clone()
-    old_fat = cast(Tensor, layer.fatigue).detach().clone()
-    old_eng = cast(Tensor, layer.energy).detach().clone()
+    old_fat = layer.fatigue.detach().clone()
+    old_eng = layer.energy.detach().clone()
 
     touched: List[int] = []
     if target_E > E_old:
@@ -910,7 +904,6 @@ def _resize_layer_experts_(
         W_new = torch.cat(
             [old_W, old_W[seed_idx].repeat(n_new, 1)]
         )
-        Xi_new = torch.cat([old_Xi, old_Xi[seed_idx].repeat(n_new, 1)])
         emb_new = torch.cat([old_emb, old_emb[seed_idx].repeat(n_new, 1)])
         rb_new = torch.cat(
             [old_rb, torch.full((n_new,), -cfg.gate_split_bias, device=dev, dtype=dtype)]
@@ -921,7 +914,9 @@ def _resize_layer_experts_(
         with torch.no_grad():
             new_router.weight.copy_(W_new)
         layer.router = new_router
-        cast(Any, layer).Xi = nn.Parameter(Xi_new)
+        if old_Xi is not None:
+            Xi_new = torch.cat([old_Xi, old_Xi[seed_idx].repeat(n_new, 1)])
+            layer.Xi = nn.Parameter(Xi_new)
         layer.router_embeddings = nn.Parameter(emb_new, requires_grad=False)
         layer.register_buffer("router_logit_bias", rb_new)
         layer.register_buffer("fatigue", fat_new)
@@ -930,15 +925,13 @@ def _resize_layer_experts_(
             _copy_expert_full_(layer, dst_idx=dst, src_idx=seed_idx)
             # the full copy clones the seed's routing bias too; a fresh twin must
             # still start at LOW mass, so (re)apply the -ln2 gate afterwards.
-            cast(Tensor, layer.router_logit_bias)[dst] = -cfg.gate_split_bias
+            layer.router_logit_bias[dst] = -cfg.gate_split_bias
             e = layer.experts[dst]
             _add_noise_(
-                cast(Tensor, e.fc1.w_slow), cfg.clone_noise_linear * 0.5, generator=generator
+                e.fc1.w_slow, cfg.clone_noise_linear * 0.5, generator=generator
             )
-            fatigue = cast(Tensor, layer.fatigue)
-            energy = cast(Tensor, layer.energy)
-            fatigue[dst] = 0.0
-            energy[dst] = 1.0
+            layer.fatigue[dst] = 0.0
+            layer.energy[dst] = 1.0
             touched.append(dst)
         # appended experts must not inherit any stale hook markers
         object.__setattr__(layer, "last_ctx", {})
@@ -951,7 +944,8 @@ def _resize_layer_experts_(
         with torch.no_grad():
             new_router.weight.copy_(old_W[keep])
         layer.router = new_router
-        cast(Any, layer).Xi = nn.Parameter(old_Xi[keep])
+        if old_Xi is not None:
+            layer.Xi = nn.Parameter(old_Xi[keep])
         layer.router_embeddings = nn.Parameter(old_emb[keep], requires_grad=False)
         layer.register_buffer("router_logit_bias", old_rb[keep])
         layer.register_buffer("fatigue", old_fat[keep])
@@ -973,8 +967,7 @@ def _fold_expert_into_(layer: SynapticMoE, victim_idx: int, keeper_idx: int, alp
     _avg_linear_into_(keeper.fc1, victim.fc1, alpha)
     _avg_linear_into_(keeper.fc2, victim.fc2, alpha)
     # absorb routing mass: +ln2 lets the survivor cover the removed row's gate share
-    rb = cast(Tensor, layer.router_logit_bias)
-    rb[keeper_idx] += math.log(2.0)
+    layer.router_logit_bias[keeper_idx] += math.log(2.0)
 
 
 # ---------------------------------------------------------------------------
@@ -1067,8 +1060,8 @@ class SplitMergeController:
     @torch.no_grad()
     def _health(self, layer: SynapticMoE) -> Tensor:
         # Higher is better: H = utilization * energy
-        util = cast(Tensor, layer.fatigue).clamp(0, 1)  # fatigue tracks EMA of utilization
-        eng = cast(Tensor, layer.energy).clamp(0, 1)
+        util = layer.fatigue.clamp(0, 1)  # fatigue tracks EMA of utilization
+        eng = layer.energy.clamp(0, 1)
         health = util * eng  # [0,1]
         # NeuroScore credit assignment (de5l): blend the per-expert fitness published by
         # NeuroScore.step into health, so Efficiency/Specialization/Resilience — not just
@@ -1078,7 +1071,7 @@ class SplitMergeController:
             score = getattr(layer, "last_neuroscore", None)
             if score is not None and tuple(score.shape) == tuple(health.shape):
                 w = min(max(float(self.cfg.neuroscore_weight), 0.0), 1.0)
-                score = cast(Tensor, score).to(health.device, health.dtype).clamp(0, 1)
+                score = score.to(health.device, health.dtype).clamp(0, 1)
                 health = (1.0 - w) * health + w * score
         return health
 
@@ -1087,7 +1080,7 @@ class SplitMergeController:
         if not self.cfg.use_util_weighting:
             return 0.6  # mild bias toward first arg
         # fatigue is utilization proxy
-        fat = cast(Tensor, layer.fatigue)
+        fat = layer.fatigue
         u_i = fat[i].clamp(0, 1)
         u_j = fat[j].clamp(0, 1)
         s = u_i + u_j
@@ -1230,10 +1223,8 @@ class SplitMergeController:
                     )
                 )
                 # reset stats
-                fatigue = cast(Tensor, layer.fatigue)
-                energy = cast(Tensor, layer.energy)
-                fatigue[dst] = 0.0
-                energy[dst] = 1.0
+                layer.fatigue[dst] = 0.0
+                layer.energy[dst] = 1.0
             # emit lineage event: split parent src -> child dst
             if self.logger is not None and hasattr(self.logger, "on_split"):
                 try:
@@ -1415,7 +1406,7 @@ class SplitMergeController:
             if linear.w_fast is not None:
                 components[f"{prefix}.w_fast"] = tensor_array(linear.w_fast)
             if linear.bias is not None:
-                components[f"{prefix}.bias"] = tensor_array(cast(Tensor, linear.bias))
+                components[f"{prefix}.bias"] = tensor_array(linear.bias)
             for state_name in ("u_buf", "v_buf"):
                 state = getattr(linear, state_name, None)
                 if torch.is_tensor(state):
@@ -1435,14 +1426,16 @@ class SplitMergeController:
                     state = getattr(linear.post, state_name, None)
                     if torch.is_tensor(state):
                         components[f"{prefix}.post.{state_name}"] = tensor_array(state)
-        for name, tensor in (
+        items: List[Tuple[str, Tensor]] = [
             ("router.weight", layer.router.weight[index]),
-            ("Xi", layer.Xi[index]),
             ("router_embeddings", layer.router_embeddings[index]),
             ("router_logit_bias", layer.router_logit_bias[index : index + 1]),
             ("fatigue", layer.fatigue[index : index + 1]),
             ("energy", layer.energy[index : index + 1]),
-        ):
+        ]
+        if layer.Xi is not None:
+            items.append(("Xi", layer.Xi[index]))
+        for name, tensor in items:
             components[name] = tensor_array(tensor)
         return components
 

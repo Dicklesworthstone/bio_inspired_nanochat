@@ -14,7 +14,7 @@ synapse has a hierarchy of strata, each evolving on its own timescale:
 ```
 
 Each **thrust** applies the *right* piece of esoteric mathematics to *one* stratum, and the
-**composition keystone** (`0642.10`) certifies — at runtime, from the measured timescale separation —
+**composition keystone** (`0642.10`) certifies — at runtime, from the configured timescale proxy —
 that the strata are decoupled enough for the thrusts to compose without interfering.
 
 ## The discipline (every thrust obeys it)

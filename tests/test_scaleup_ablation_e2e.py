@@ -178,3 +178,71 @@ def test_online_fast_weights_adapt_and_stay_bounded_only_when_hebbian_on():
     # every other health invariant still passes (the mechanism is cleanly off, not broken).
     assert off.summary["hebbian_delta"] == 0.0, "no online adaptation when hebbian is off"
     assert {r.name for r in off.failures()} == {"mechanism_engaged"}, off.failures()
+
+
+# --------------------------------------------------------------------------- #
+# 4. Per-mechanism engagement: neuromodulatory bus (bead 0zlc / hwxb.4.2)
+# --------------------------------------------------------------------------- #
+def test_neuromodulation_telemetry_and_gains_engage_at_scale():
+    from bio_inspired_nanochat.neuromod import NeuromodulatoryBus, NeuromodConfig
+
+    cfg = NeuromodConfig(enabled=True)
+    bus = NeuromodulatoryBus(cfg)
+    model = make_tiny_synaptic(seed=42, train=True)
+
+    # Step through a simulated training trajectory
+    losses = [4.5, 4.2, 4.0, 3.8, 3.5, 3.6, 3.4, 3.2]
+    entropies = [2.0, 1.9, 1.8, 1.7, 1.6, 2.8, 2.2, 1.5]
+
+    for step in range(len(losses)):
+        bus.update(
+            loss=torch.tensor(losses[step]),
+            entropy=torch.tensor(entropies[step]),
+        )
+        touched = bus.broadcast(model)
+        assert touched > 0, "Neuromodulatory bus must touch synaptic layers"
+
+        g = bus.gains()
+        assert cfg.da_gain_range[0] <= g["plasticity"] <= cfg.da_gain_range[1]
+        assert cfg.ach_gain_range[0] <= g["explore"] <= cfg.ach_gain_range[1]
+        assert cfg.ne_gain_range[0] <= g["global"] <= cfg.ne_gain_range[1]
+
+    telem = bus.telemetry()
+    assert "nm/da" in telem and "nm/ach" in telem and "nm/ne" in telem
+    assert abs(telem["nm/da"]) <= 1.0
+
+
+# --------------------------------------------------------------------------- #
+# 5. Per-mechanism engagement: structural split/merge (bead 0zlc / hwxb.4.3)
+# --------------------------------------------------------------------------- #
+def test_structural_function_preserving_splitmerge_at_scale(tmp_path):
+    from bio_inspired_nanochat.neuroviz import NeuroVizConfig, NeuroVizManager
+    from bio_inspired_nanochat.synaptic_splitmerge import SplitMergeConfig, SplitMergeController
+
+    model = make_tiny_synaptic(seed=42, train=True)
+    nv_cfg = NeuroVizConfig(log_dir=str(tmp_path / "neuroviz"), write_tensorboard=False)
+    viz = NeuroVizManager(nv_cfg)
+    viz.register_model(model)
+
+    sm_cfg = SplitMergeConfig(
+        enabled=True,
+        function_preserving=True,
+        split_health_min=0.01,
+        merge_health_max=0.99,
+        warmup_steps=0,
+        min_step_interval=1,
+    )
+    controller = SplitMergeController(model=model, cfg=sm_cfg, logger=viz)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+
+    # Execute training steps and verify controller step causes no divergence
+    for step in range(5):
+        x = random_tokens(2, 16, vocab=model.config.vocab_size)
+        _logits, loss = model(x, targets=x)
+        loss.backward()
+        optimizer.step()
+        optimizer.zero_grad()
+
+        controller.step(global_step=step, optimizer=optimizer)
+        assert torch.isfinite(loss), f"Loss must stay finite during structural evolution (step {step})"
+

@@ -281,6 +281,9 @@ def _build_attention(config: GPTConfig, layer_idx: int) -> nn.Module:
         return CausalSelfAttention(config, layer_idx)
     if attn_type == "ultrametric":
         return UltrametricCausalSelfAttention(config, layer_idx)
+    if attn_type == "simplicial":
+        from bio_inspired_nanochat.mgr_variants import SimplicialCausalSelfAttention
+        return SimplicialCausalSelfAttention(config, layer_idx)
     raise ValueError(f"Unknown attention_type={attn_type!r}")
 
 
@@ -559,7 +562,8 @@ class GPT(nn.Module):
         - batch size is 1
         - ids and the yielded tokens are simple Python lists and ints
         """
-        assert isinstance(tokens, list)
+        if not isinstance(tokens, list):
+            raise TypeError("tokens must be a list of token ids")
         device = self.get_device()
         rng = None
         if temperature > 0:

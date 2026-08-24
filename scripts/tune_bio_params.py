@@ -122,6 +122,37 @@ TOP10_PARAM_SPECS: tuple[ParamSpec, ...] = (
     ParamSpec("lambda_loge", 1.0, 0.00, 5.00, False),
 )
 
+POSTSYN_PARAM_SPECS: tuple[ParamSpec, ...] = (
+    ParamSpec("post_fast_decay", 0.95, 0.80, 0.999, False),
+    ParamSpec("post_fast_lr", 0.0015, 0.0001, 0.05, True),
+    ParamSpec("post_slow_lr", 0.0005, 0.00005, 0.01, True),
+    ParamSpec("post_trace_decay", 0.96, 0.80, 0.999, False),
+    ParamSpec("fast_weight_eta", 0.5, 0.05, 2.0, True),
+    ParamSpec("camkii_up", 0.05, 0.005, 0.5, True),
+    ParamSpec("pp1_tau", 0.985, 0.80, 0.999, False),
+    ParamSpec("bdnf_tau", 0.985, 0.80, 0.999, False),
+    ParamSpec("bdnf_scale", 1.0, 0.1, 5.0, True),
+)
+
+STRUCTURAL_PARAM_SPECS: tuple[ParamSpec, ...] = (
+    ParamSpec("energy_fill", 0.02, 0.001, 0.10, True),
+    ParamSpec("energy_use", 0.02, 0.001, 0.10, True),
+    ParamSpec("energy_cost_rel", 0.015, 0.001, 0.10, True),
+    ParamSpec("structural_tau_util", 0.2, 0.05, 1.0, True),
+)
+
+FULL_LIVE_PARAM_SPECS: tuple[ParamSpec, ...] = (
+    TOP10_PARAM_SPECS + POSTSYN_PARAM_SPECS + STRUCTURAL_PARAM_SPECS
+)
+
+PARAM_SPACES: dict[str, tuple[ParamSpec, ...]] = {
+    "top10": TOP10_PARAM_SPECS,
+    "presyn": TOP10_PARAM_SPECS,
+    "postsyn": POSTSYN_PARAM_SPECS,
+    "structural": STRUCTURAL_PARAM_SPECS,
+    "full": FULL_LIVE_PARAM_SPECS,
+}
+
 
 def _validate_param_specs(specs: Sequence[ParamSpec]) -> None:
     if len({s.name for s in specs}) != len(specs):
@@ -1626,11 +1657,18 @@ def _cmd_optimize(args: argparse.Namespace, *, console: Console, specs: Sequence
     return 0
 
 
-def main() -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     _validate_param_specs(TOP10_PARAM_SPECS)
     console = Console()
 
     parser = argparse.ArgumentParser(description="Tune synaptic bio parameters with CMA-ES")
+    parser.add_argument(
+        "--search-space",
+        type=str,
+        choices=list(PARAM_SPACES.keys()),
+        default="top10",
+        help="Subsystem search space: top10 (presyn), postsyn, structural, full",
+    )
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     eval_p = sub.add_parser("eval", help="Run a single deterministic candidate evaluation")
@@ -1803,15 +1841,18 @@ def main() -> int:
     )
     opt_p.add_argument("--save-best", type=str, default=None, help="Optional path to save best config python")
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
+    specs = PARAM_SPACES.get(getattr(args, "search_space", "top10"), TOP10_PARAM_SPECS)
+    _validate_param_specs(specs)
+
     if args.cmd == "eval":
-        return _cmd_eval(args, console=console, specs=TOP10_PARAM_SPECS)
+        return _cmd_eval(args, console=console, specs=specs)
     if args.cmd == "sanity":
-        return _cmd_sanity(args, console=console, specs=TOP10_PARAM_SPECS)
+        return _cmd_sanity(args, console=console, specs=specs)
     if args.cmd == "proxy":
-        return _cmd_proxy(args, console=console, specs=TOP10_PARAM_SPECS)
+        return _cmd_proxy(args, console=console, specs=specs)
     if args.cmd == "optimize":
-        return _cmd_optimize(args, console=console, specs=TOP10_PARAM_SPECS)
+        return _cmd_optimize(args, console=console, specs=specs)
     raise AssertionError("unreachable")
 
 

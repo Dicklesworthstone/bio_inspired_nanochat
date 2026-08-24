@@ -267,6 +267,13 @@ class SynapticConfig:
     bdnf_hebb_accumulate: bool = True  # Use Hebbian delta magnitude for BDNF (vs CaMKII)
     bdnf_max: float = 10.0  # Upper clamp on BDNF to prevent unbounded growth
 
+    # Spike-Timing-Dependent Plasticity (STDP) over sequence/time axis (sax.3)
+    enable_stdp: bool = False
+    stdp_a_plus: float = 0.01        # LTP amplitude (pre before post)
+    stdp_a_minus: float = 0.012      # LTD amplitude (post before pre)
+    stdp_tau_plus: float = 20.0      # LTP time constant
+    stdp_tau_minus: float = 20.0     # LTD time constant
+
     # Bistable CaMKII/PP1 consolidation latch (sax.2). DEFAULT-OFF. When enabled, the
     # CaMKII/PP1 update becomes a Lisman-style bistable switch — CaMKII self-excitation
     # (Hill autophosphorylation) + mutual cross-inhibition with PP1, over a basal
@@ -582,6 +589,7 @@ def _checkpoint_recurrence_segment(
     drives: List[Tensor],
     idxs: List[Tensor],
     valids: List[Optional[Tensor]],
+    active_key_counts: List[Optional[int]],
     *,
     train: bool,
 ) -> List[Tensor]:
@@ -668,9 +676,14 @@ def _checkpoint_recurrence_segment(
                 valid=valid if valid_is_present else None,
                 differentiable=True,
                 runtime_buffers=local_runtime,
+                active_key_count=active_key_count,
             )
-            for drive, idx, valid, valid_is_present in zip(
-                segment_drives, segment_idxs, segment_valids, has_valid
+            for drive, idx, valid, valid_is_present, active_key_count in zip(
+                segment_drives,
+                segment_idxs,
+                segment_valids,
+                has_valid,
+                active_key_counts,
             )
         ]
         next_state, next_delay_len, next_has_heat = _flatten_presyn_state(local_state)
@@ -715,6 +728,7 @@ def chunked_recurrence(
     checkpoint_len: int = 0,
     train: bool = False,
     valids: Optional[List[Optional[Tensor]]] = None,
+    active_key_counts: Optional[List[Optional[int]]] = None,
     differentiable: bool = True,
 ) -> List[Tensor]:
     """Run the DIFFERENTIABLE presynaptic recurrence over a sequence of steps with truncated
@@ -743,6 +757,8 @@ def chunked_recurrence(
         raise ValueError("drives and idxs must have the same number of recurrence steps")
     if valids is not None and len(valids) != len(drives):
         raise ValueError("valids must match the number of recurrence steps")
+    if active_key_counts is not None and len(active_key_counts) != len(drives):
+        raise ValueError("active_key_counts must match the number of recurrence steps")
     if checkpoint_len < 0:
         raise ValueError(f"checkpoint_len must be >= 0, got {checkpoint_len}")
     if checkpoint_len > 0 and chunk_len > 0:
@@ -750,6 +766,9 @@ def chunked_recurrence(
 
     normalized_valids = (
         [None] * len(drives) if valids is None else valids
+    )
+    normalized_active_key_counts = (
+        [None] * len(drives) if active_key_counts is None else active_key_counts
     )
     if checkpoint_len > 0 and differentiable and torch.is_grad_enabled():
         checkpointed_outputs: List[Tensor] = []
@@ -762,19 +781,28 @@ def chunked_recurrence(
                     drives[start:stop],
                     idxs[start:stop],
                     normalized_valids[start:stop],
+                    normalized_active_key_counts[start:stop],
                     train=train,
                 )
             )
         return checkpointed_outputs
 
     outs: List[Tensor] = []
-    for t, (drive, idx) in enumerate(zip(drives, idxs)):
+    for t, (drive, idx, active_key_count) in enumerate(
+        zip(drives, idxs, normalized_active_key_counts)
+    ):
         if chunk_len > 0 and t > 0 and (t % chunk_len == 0):
             _detach_presyn_state(state)
         valid = normalized_valids[t]
         outs.append(
             presyn.release_canonical(
-                state, drive, idx, train=train, valid=valid, differentiable=differentiable
+                state,
+                drive,
+                idx,
+                train=train,
+                valid=valid,
+                differentiable=differentiable,
+                active_key_count=active_key_count,
             )
         )
     return outs
@@ -1118,6 +1146,7 @@ class SynapticPresyn(nn.Module):
         differentiable: bool = False,
         logits: Optional[Tensor] = None,
         runtime_buffers: Optional[Dict[str, Tensor]] = None,
+        active_key_count: Optional[int] = None,
     ) -> Tensor:
         """CANONICAL unified presynaptic release — the single, faithful, differentiable
         source of truth (8j9.2).
@@ -1137,6 +1166,9 @@ class SynapticPresyn(nn.Module):
         dynamics are removed in the param-unify step.
 
         drive: (B,H,T,K) top-k attention logits; idx: (B,H,T,K) selected key indices.
+        active_key_count: optional number of key positions that exist at this causal step. State
+        slots at or beyond this position remain exactly unchanged; this prevents a contiguous
+        forward from passively ageing preallocated future-token state.
         apply_barrier: fold the septin distance barrier into e (default False; the live attention
         path applies its own exact logit-level barrier, so it must stay False there to avoid
         double-counting). q_pos: optional (T,) absolute query positions for that barrier; defaults
@@ -1181,6 +1213,20 @@ class SynapticPresyn(nn.Module):
                 f"valid mask must match drive shape {drive.shape}, got {valid.shape}"
             )
         dtype = state["C"].dtype
+        state_key_count = int(state["C"].shape[2])
+        if active_key_count is not None:
+            if active_key_count < 1 or active_key_count > state_key_count:
+                raise ValueError(
+                    "active_key_count must be between 1 and the state key extent "
+                    f"({state_key_count}), got {active_key_count}"
+                )
+            active_keys = (
+                torch.arange(state_key_count, device=state["C"].device)
+                .view(1, 1, state_key_count)
+                .lt(active_key_count)
+            )
+        else:
+            active_keys = None
         heat_state = state.get("HEAT")
         if self.use_metriplectic_integrator() and heat_state is None:
             # Compatibility for caches created before 0642.1.2. Heat is a default-off state and
@@ -1298,14 +1344,17 @@ class SynapticPresyn(nn.Module):
         # exact logit-level barrier with global query/key positions (and the correct prefix
         # offset), so it leaves apply_barrier=False here to avoid DOUBLE-counting. Standalone /
         # golden use (where there is no outer barrier) can set apply_barrier=True for a
-        # self-contained faithful output. Normalize distance by the full key extent (T_key). ---
+        # self-contained faithful output. Normalize each query by the key extent causally
+        # available at that query, so appending future keys cannot rescale an earlier bias. ---
         if apply_barrier and cfg.barrier_strength > 0.0:
-            t_key = state["C"].shape[2]
             if q_pos is None:
                 qpos = torch.arange(T, device=drive.device, dtype=torch.float32)
             else:
                 qpos = q_pos.to(device=drive.device, dtype=torch.float32)
-            dist = (qpos.reshape(1, 1, T, 1) - idx.to(torch.float32)).abs() / float(max(1, t_key))
+            causal_extent = (qpos + 1.0).clamp_min(1.0).reshape(1, 1, T, 1)
+            dist = (
+                qpos.reshape(1, 1, T, 1) - idx.to(torch.float32)
+            ).abs() / causal_extent
             e = e * torch.exp(-cfg.barrier_strength * dist).to(e.dtype)
 
         # === scatter faithful state updates back to key positions ===
@@ -1382,6 +1431,21 @@ class SynapticPresyn(nn.Module):
                 0, cfg.energy_max,
             )
 
+            if active_keys is not None:
+                c_up = torch.where(active_keys, c_up, c_k)
+                buf_up = torch.where(active_keys, buf_up, buf_k)
+                rrp_up = torch.where(active_keys, rrp_up, state["RRP"])
+                res_up = torch.where(active_keys, res_up, state["RES"])
+                sn_up = torch.where(active_keys, sn_up, state["PR"])
+                cl_up = torch.where(active_keys, cl_up, state["CL"])
+                en_up = torch.where(active_keys, en_up, state["E"])
+                new_delay = [
+                    torch.where(active_keys, candidate, previous)
+                    for candidate, previous in zip(new_delay, state["DELAY"])
+                ]
+                if self.use_metriplectic_integrator():
+                    heat_up = torch.where(active_keys, heat_up, state["HEAT"])
+
             next_state = {
                 "C": c_up, "BUF": buf_up, "RRP": rrp_up, "RES": res_up, "DELAY": new_delay,
                 "PR": sn_up, "CL": cl_up, "AMP": state["AMP"], "E": en_up,
@@ -1394,7 +1458,12 @@ class SynapticPresyn(nn.Module):
             # PERSISTENT module state, so only adapt it when adaptation is allowed
             # (train=True). Eval forwards (train=False) must not mutate any persistent
             # state, or val_bpb is neither idempotent nor contamination-free.
-            s = e.detach().abs().mean().clamp_min(1e-3)
+            if valid is None:
+                s = e.detach().abs().mean()
+            else:
+                valid_weight = valid.to(e.dtype)
+                s = (e.detach().abs() * valid_weight).sum() / valid_weight.sum().clamp_min(1)
+            s = s.clamp_min(1e-3)
             if runtime_buffers is not None:
                 ema_e = runtime_buffers["ema_e"]
                 if train:
@@ -1549,6 +1618,15 @@ class SynapticPresyn(nn.Module):
 
 class PostsynapticHebb(nn.Module):
     cfg: SynapticConfig
+    fast: nn.Parameter
+    slow: nn.Parameter
+    U: nn.Parameter
+    V: nn.Parameter
+    camkii: Tensor
+    pp1: Tensor
+    bdnf: Tensor
+    bdnf_hebb_accum: Tensor
+    _last_hebb_delta_mag: Tensor
     """Low-rank eligibility + CaMKII/PP1/BDNF gate controlling consolidation.
 
     BDNF Metaplasticity (bio_inspired_nanochat-711):
@@ -1784,6 +1862,13 @@ class SynapticLinear(nn.Module):
     use_input_ln: bool
     bias: Optional[nn.Parameter]
     input_ln: Optional[nn.LayerNorm]
+    w_slow: nn.Parameter
+    w_fast: Optional[nn.Parameter]
+    post: Optional[PostsynapticHebb]
+    u_buf: Optional[Tensor]
+    v_buf: Optional[Tensor]
+    proj_in: Optional[Tensor]
+    proj_out: Optional[Tensor]
 
     def __init__(
         self,
@@ -1854,7 +1939,12 @@ class SynapticLinear(nn.Module):
         Touches ONLY buffers (never a Parameter used in the live forward graph), so it is
         autograd-safe even inside a grad-enabled forward. Call inside ``torch.no_grad()``.
         """
-        if self.u_buf is not None and self.v_buf is not None:
+        if (
+            self.u_buf is not None
+            and self.v_buf is not None
+            and self.proj_out is not None
+            and self.proj_in is not None
+        ):
             # vg9.9: genuine rank-R eligibility. Project the post-activity y onto R random modes
             # and accumulate its correlation with the pre-activity x into u_buf (in, R); project
             # x onto R modes and accumulate its correlation with y into v_buf (R, out). The R
@@ -1863,15 +1953,38 @@ class SynapticLinear(nn.Module):
             batch = max(1, x.shape[0])
             y_proj = y @ self.proj_out.to(y.dtype)   # (B, R) post-activity in R modes
             x_proj = x @ self.proj_in.to(x.dtype)    # (B, R) pre-activity in R modes
-            self.u_buf.mul_(self.cfg.post_trace_decay).add_(
-                0.05 * (x.transpose(0, 1) @ y_proj) / batch   # (in, R)
-            )
-            self.v_buf.mul_(self.cfg.post_trace_decay).add_(
-                0.05 * (x_proj.transpose(0, 1) @ y) / batch   # (R, out)
-            )
+            if self.cfg.enable_stdp and x.shape[0] > 1:
+                # Temporal sequence STDP: pre at t-1 -> post at t (LTP), pre at t -> post at t-1 (LTD)
+                x_pre = x[:-1]
+                x_post = x[1:]
+                y_pre = y[:-1]
+                y_post = y[1:]
+                y_proj_post = y_proj[1:]
+                y_proj_pre = y_proj[:-1]
+                x_proj_pre = x_proj[:-1]
+                x_proj_post = x_proj[1:]
+
+                ltp_u = (x_pre.transpose(0, 1) @ y_proj_post) / (batch - 1)
+                ltd_u = (x_post.transpose(0, 1) @ y_proj_pre) / (batch - 1)
+                ltp_v = (x_proj_pre.transpose(0, 1) @ y_post) / (batch - 1)
+                ltd_v = (x_proj_post.transpose(0, 1) @ y_pre) / (batch - 1)
+
+                stdp_delta_u = self.cfg.stdp_a_plus * ltp_u - self.cfg.stdp_a_minus * ltd_u
+                stdp_delta_v = self.cfg.stdp_a_plus * ltp_v - self.cfg.stdp_a_minus * ltd_v
+
+                self.u_buf.mul_(self.cfg.post_trace_decay).add_(stdp_delta_u)
+                self.v_buf.mul_(self.cfg.post_trace_decay).add_(stdp_delta_v)
+            else:
+                self.u_buf.mul_(self.cfg.post_trace_decay).add_(
+                    0.05 * (x.transpose(0, 1) @ y_proj) / batch   # (in, R)
+                )
+                self.v_buf.mul_(self.cfg.post_trace_decay).add_(
+                    0.05 * (x_proj.transpose(0, 1) @ y) / batch   # (R, out)
+                )
         # Per-neuron calcium proxy for the CaMKII/PP1 gate.
-        ca_vec = y.abs().mean(0).clamp(0, 10.0)
-        self.post.update(y, ca_vec, genes=genes)
+        if self.post is not None:
+            ca_vec = y.abs().mean(0).clamp(0, 10.0)
+            self.post.update(y, ca_vec, genes=genes)
 
     def _apply_hebb_weight_writes(self, gate_scale: Optional[Tensor]) -> None:
         """Apply the Hebbian Parameter writes (w_fast/w_slow + post.fast/post.slow) from the
@@ -1920,8 +2033,9 @@ class SynapticLinear(nn.Module):
             else:
                 self.w_fast.mul_(self.cfg.post_fast_decay).add_((self.cfg.post_fast_lr * da) * delta)
                 self.w_slow.add_((self.cfg.post_slow_lr * da) * delta)
-        self.post.hebb_fast(self.u_buf, self.v_buf)
-        self.post.consolidate(self.u_buf, self.v_buf)
+        if self.post is not None:
+            self.post.hebb_fast(self.u_buf, self.v_buf)
+            self.post.consolidate(self.u_buf, self.v_buf)
 
     @torch.no_grad()
     def reset_sequence_state(
@@ -2150,24 +2264,34 @@ class SynapticCausalSelfAttention(nn.Module):
         idx: Tensor,
         valid: Tensor,
         train_mode: bool,
+        prefix_len: int,
     ) -> Tensor:
-        """Causal, chunked-TBPTT presynaptic release bias (hwxb.4.6).
+        """Causal presynaptic release bias, optionally grouped for differentiable BPTT.
 
-        Replaces the single non-causal ``release_canonical`` snapshot with a recurrence over query
-        CHUNKS: the presyn state is advanced ``recurrence_block_size`` query positions at a time so
-        query chunk ``b`` sees the state left by chunks ``0..b-1`` (faithful vesicle fatigue), and
-        ``release_canonical(differentiable=…)`` carries gradient through that state so the learnable
-        kinetics get a real training signal (a single fresh-state call only trains ``alpha_ca``;
-        the decays need accumulation across steps). Backprop is truncated every
+        Ordinary forwards advance one query at a time, matching token-by-token decoding exactly.
+        When differentiable recurrence is explicitly enabled, ``recurrence_block_size`` may group
+        queries into an approximate chunk recurrence for training throughput. Every step receives
+        its causal active-key extent, so preallocated future state is never passively aged.
+        ``release_canonical(differentiable=…)`` carries gradient through state so the learnable
+        kinetics receive a real training signal. Backprop is truncated every
         ``recurrence_chunk_len`` chunks to bound activation memory. The per-chunk biases are
         concatenated back along the query dimension; the attention matmul/mask/softmax/barrier path
         is unchanged and still spans the full sequence. The state-recurrence autograd is requested
-        only when grad is enabled, so eval runs the identical causal schedule with no graph.
+        only when both configured and grad is enabled.
         """
-        block = max(1, int(self.cfg.recurrence_block_size))
+        block = (
+            max(1, int(self.cfg.recurrence_block_size))
+            if self.cfg.differentiable_recurrence
+            else 1
+        )
         drives = list(vals.split(block, dim=2))
         idxs = list(idx.split(block, dim=2))
         valids = list(valid.split(block, dim=2))
+        active_key_counts: List[Optional[int]] = []
+        active_key_count = int(prefix_len)
+        for drive in drives:
+            active_key_count += int(drive.size(2))
+            active_key_counts.append(active_key_count)
         outs = chunked_recurrence(
             self.pre,
             presyn_state,
@@ -2177,7 +2301,8 @@ class SynapticCausalSelfAttention(nn.Module):
             checkpoint_len=int(self.cfg.recurrence_checkpoint_len),
             train=train_mode,
             valids=valids,
-            differentiable=torch.is_grad_enabled(),
+            active_key_counts=active_key_counts,
+            differentiable=self.cfg.differentiable_recurrence and torch.is_grad_enabled(),
         )
         return torch.cat(outs, dim=2)
 
@@ -2333,20 +2458,29 @@ class SynapticCausalSelfAttention(nn.Module):
 
         # Run presynaptic physics on only the valid edges (8j9.2/ukxt: canonical faithful
         # release; the septin barrier is applied at the logit level below, not folded into e).
-        # hwxb.4.6: when differentiable_recurrence is on, advance the presyn state CAUSALLY over
-        # query chunks (autograd) so the learnable kinetics get gradient; the single non-causal
-        # snapshot is the default. Gated to the full-sequence training/prefill path (prefix_len<=0);
-        # decode is already per-step causal and uses the single call.
+        # Multi-query forwards advance presynaptic physics causally. The ordinary path uses exact
+        # one-query steps; differentiable recurrence may explicitly group queries for training.
+        # Single-token decode already has exactly one materialized query/key frontier.
+        differentiable_recurrence = (
+            self.cfg.differentiable_recurrence and torch.is_grad_enabled()
+        )
         native_decode = self.pre._can_use_native_presyn_decode(
             presyn_state,
             vals,
             train=train_mode,
-            differentiable=False,
+            differentiable=differentiable_recurrence,
             apply_barrier=False,
             q_pos=None,
         )
-        if self.cfg.differentiable_recurrence and prefix_len <= 0:
-            e = self._chunked_release_bias(presyn_state, vals, idx, valid, train_mode)
+        if Tq > 1:
+            e = self._chunked_release_bias(
+                presyn_state,
+                vals,
+                idx,
+                valid,
+                train_mode,
+                prefix_len,
+            )
         elif native_decode:
             e = self.pre.release_canonical(
                 presyn_state,
@@ -2363,6 +2497,7 @@ class SynapticCausalSelfAttention(nn.Module):
                 idx,
                 train_mode,
                 valid=valid,
+                differentiable=differentiable_recurrence,
             )
 
         # Scatter biological log-bias back into the logits, preserving masking.
@@ -2387,7 +2522,8 @@ class SynapticCausalSelfAttention(nn.Module):
             prefix_len, prefix_len + Tq, device=device, dtype=torch.float32
         )
         k_pos = torch.arange(0, Tk, device=device, dtype=torch.float32)
-        dist = (q_pos[:, None] - k_pos[None, :]).abs() / float(max(1, Tk))
+        causal_extent = (q_pos + 1.0).clamp_min(1.0)[:, None]
+        dist = (q_pos[:, None] - k_pos[None, :]).abs() / causal_extent
         logits = augmented_dots - (
             self.cfg.barrier_strength * dist.to(dots.dtype)
         ).view(1, 1, Tq, Tk)
@@ -2432,6 +2568,11 @@ class SynapticMLP(nn.Module):
 
 
 class SynapticExpert(nn.Module):
+    cfg: SynapticConfig
+    fc1: SynapticLinear
+    fc2: SynapticLinear
+    drop: nn.Dropout
+
     def __init__(
         self, n_embd: int, hidden_mult: int, cfg: SynapticConfig, dropout: float = 0.0
     ):
@@ -2593,6 +2734,14 @@ class SynapticMoE(nn.Module):
     last_ctx: Dict[str, Tensor]
     last_neuroscore: Optional[Tensor]
     glial: Optional[GlialHomeostasis]
+    router: nn.Linear
+    experts: nn.ModuleList
+    router_embeddings: nn.Parameter
+    router_logit_bias: Tensor
+    fatigue: Tensor
+    energy: Tensor
+    Xi: Optional[nn.Parameter]
+    kinetics_decoder: Optional[nn.Module]
     """Top-k sparse Synaptic MoE with router embeddings, expert fatigue/energy,
     contrastive router-embedding updates, and split/merge structural hooks."""
 

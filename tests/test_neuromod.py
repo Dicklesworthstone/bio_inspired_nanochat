@@ -27,7 +27,7 @@ IN, OUT, B = 16, 16, 4
 
 def _make_lin(**over) -> SynapticLinear:
     set_seed(0)
-    cfg = SynapticConfig(enable_hebbian=True, enable_metabolism=True, **over)
+    cfg = SynapticConfig(enable_hebbian=True, enable_metabolism=True, fast_weight_max_norm=0.0, **over)
     return SynapticLinear(IN, OUT, cfg)
 
 
@@ -149,20 +149,19 @@ def test_acetylcholine_gain_gates_stochastic_exploration():
     seq = torch.randint(0, V, (1, 16))
 
     def two_forwards(ach_gain):
-        model = make_tiny_synaptic(seed=0, train=True)
-        if ach_gain is not None:
-            for m in model.modules():
-                if isinstance(m, SynapticPresyn):
-                    m._nm_ach_gain = ach_gain
-        with torch.no_grad():
-            # Reset plasticity state before each forward so the ONLY source of divergence is
-            # the stochastic vesicle release (the thing ACh gates), not state carryover.
-            model.reset_sequence_state(reset_fast_weights=True)
-            set_seed(123)
-            a, _ = model(seq)
-            model.reset_sequence_state(reset_fast_weights=True)
-            set_seed(456)
-            b, _ = model(seq)
+        def _one_fwd(s):
+            m = make_tiny_synaptic(seed=0, train=True)
+            if ach_gain is not None:
+                for mod in m.modules():
+                    if isinstance(mod, SynapticPresyn):
+                        mod._nm_ach_gain = ach_gain
+            with torch.no_grad():
+                set_seed(s)
+                out, _ = m(seq)
+                return out
+
+        a = _one_fwd(123)
+        b = _one_fwd(456)
         return (a - b).abs().max().item()
 
     explore_off = two_forwards(0.0)   # ACh=0 -> no stochastic release
