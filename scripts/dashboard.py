@@ -991,7 +991,10 @@ elif page == "In-Silico Neuroscience Lab":
             try:
                 import torch
 
-                from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
+                from bio_inspired_nanochat.gpt_synaptic import (
+                    GPTSynaptic,
+                    GPTSynapticConfig,
+                )
                 from bio_inspired_nanochat.patch_clamp import PatchClampElectrode
                 from bio_inspired_nanochat.synaptic import SynapticConfig
 
@@ -1041,6 +1044,56 @@ elif page == "In-Silico Neuroscience Lab":
 
         st.info(f"Intervention: Pin `{clamp_var}` to `{clamp_val}` across all synaptic layers during forward execution.")
 
+        if st.button("Run Causal Comparison (Control vs Stimulated)", type="primary"):
+            try:
+                import torch
+
+                from bio_inspired_nanochat.gpt_synaptic import (
+                    GPTSynaptic,
+                    GPTSynapticConfig,
+                )
+                from bio_inspired_nanochat.optogenetic_stimulation import (
+                    ClampMode,
+                    OptogeneticStimulator,
+                    SynapticClamp,
+                )
+                from bio_inspired_nanochat.synaptic import SynapticConfig
+
+                cfg = GPTSynapticConfig(
+                    sequence_len=16,
+                    vocab_size=64,
+                    n_layer=2,
+                    n_head=2,
+                    n_kv_head=2,
+                    n_embd=32,
+                    synapses=True,
+                    syn_cfg=SynapticConfig(enable_presyn=True, enable_hebbian=True),
+                )
+                model = GPTSynaptic(cfg)
+                stimulator = OptogeneticStimulator(model)
+
+                test_input = torch.randint(0, 64, (1, 6))
+                with torch.no_grad():
+                    control_logits, _ = model(test_input)
+
+                clamp = SynapticClamp(
+                    variable_name=clamp_var,
+                    mode=ClampMode.PIN_VALUE,
+                    value=clamp_val,
+                )
+
+                with stimulator.stimulate([clamp]), torch.no_grad():
+                    stim_logits, _ = model(test_input)
+
+                logit_delta = (stim_logits - control_logits).abs().mean().item()
+                col_m1, col_m2 = st.columns(2)
+                col_m1.metric("Mean |Δ Logit| Effect", f"{logit_delta:.4f}")
+                col_m2.metric("Max |Δ Logit| Effect", f"{(stim_logits - control_logits).abs().max().item():.4f}")
+
+                st.success(f"Causal perturbation verified: Clamping `{clamp_var}={clamp_val}` shifted output logits by {logit_delta:.4f}.")
+            except (RuntimeError, ValueError, TypeError, KeyError) as e:
+                st.error(f"Error during optogenetic intervention: {e}")
+
     with tab_sleep:
         st.subheader("Trigger Offline Memory Consolidation (NREM / Dreaming)")
         col_sl1, col_sl2 = st.columns(2)
@@ -1048,5 +1101,43 @@ elif page == "In-Silico Neuroscience Lab":
         use_dreams = col_sl2.checkbox("Use Privacy-Friendly Generative Dreaming", value=True)
 
         if st.button("Trigger Sleep Phase", type="secondary"):
-            st.success(f"Sleep Phase Complete: Consolidated {sleep_steps} replay steps via {'Generative Dreams' if use_dreams else 'Episodic Buffer'}.")
+            try:
+                from bio_inspired_nanochat.gpt_synaptic import (
+                    GPTSynaptic,
+                    GPTSynapticConfig,
+                )
+                from bio_inspired_nanochat.sleep_consolidation import (
+                    PrioritizedReplayBuffer,
+                    SleepConsolidationController,
+                )
+                from bio_inspired_nanochat.synaptic import SynapticConfig
+
+                cfg = GPTSynapticConfig(
+                    sequence_len=16,
+                    vocab_size=64,
+                    n_layer=2,
+                    n_head=2,
+                    n_kv_head=2,
+                    n_embd=32,
+                    synapses=True,
+                    syn_cfg=SynapticConfig(enable_presyn=True, enable_hebbian=True),
+                )
+                model = GPTSynaptic(cfg)
+                controller = SleepConsolidationController()
+                buf = PrioritizedReplayBuffer()
+
+                report = controller.run_sleep_phase(
+                    model=model,
+                    replay_buffer=buf,
+                    sleep_steps=sleep_steps,
+                    use_dream_replay=use_dreams,
+                )
+
+                st.success(
+                    f"Sleep Phase Complete ({report['status']}): "
+                    f"{report['steps_run']} steps consolidated across {report.get('layers_consolidated', 0)} layers "
+                    f"in {report.get('wall_time_ms', 0.0):.2f}ms."
+                )
+            except (RuntimeError, ValueError, TypeError, KeyError) as e:
+                st.error(f"Error during sleep phase: {e}")
 
