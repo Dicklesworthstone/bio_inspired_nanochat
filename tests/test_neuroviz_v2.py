@@ -15,6 +15,7 @@ Run:  pytest tests/test_neuroviz_v2.py -v
 
 from __future__ import annotations
 
+import csv
 import json
 from pathlib import Path
 
@@ -27,10 +28,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _bio_testkit import make_tiny_synaptic, random_tokens, set_seed
 
 from bio_inspired_nanochat.neuroviz import (
+    NeuroVizConfig,
+    NeuroVizManager,
     collect_bio_panels,
     render_html_dashboard,
     write_bio_dashboard,
 )
+from bio_inspired_nanochat.synaptic import SynapticConfig, SynapticMoE
 
 pytestmark = pytest.mark.unit
 
@@ -107,8 +111,47 @@ def test_lineage_book_persists_events(tmp_path):
     lb = LineageBook(str(tmp_path / "lineage"))
     lb.log_split("moe_L0", step=10, parent_idx=2, child_idx=5)
     lb.log_merge("moe_L0", step=20, parent_i=0, parent_j=3, child_idx=7)
+    lb.log_reset("moe_L0", step=30, source_idx=4, reset_idx=1)
     f = tmp_path / "lineage" / "moe_L0_lineage.json"
     assert f.exists()
     events = json.loads(f.read_text())
     assert events[0] == [10, "split", [2, 5]]
     assert events[1] == [20, "merge", [0, 3, 7]]
+    assert events[2] == [30, "reset", [4, 1]]
+
+
+def test_neuroviz_manager_logs_reset_and_dead_expert_fraction(tmp_path):
+    moe = SynapticMoE(
+        n_embd=8,
+        num_experts=3,
+        top_k=3,
+        hidden_mult=1,
+        cfg=SynapticConfig(enable_hebbian=False, enable_metabolism=False),
+    )
+    with torch.no_grad():
+        moe.energy.fill_(1.0)
+        moe.fatigue.copy_(torch.tensor([0.0, 0.4, 0.9]))
+
+    manager = NeuroVizManager(
+        NeuroVizConfig(
+            log_dir=str(tmp_path),
+            tb_every=1,
+            save_pngs=False,
+            write_interactive_html=False,
+        )
+    )
+    try:
+        manager.register_model(moe)
+        manager.on_reset(moe, source_idx=2, reset_idx=0, step=30)
+        manager.step(moe, step=30, loss=torch.tensor(1.25))
+    finally:
+        manager.close()
+
+    lineage_path = tmp_path / "lineage" / "moe_L0_lineage.json"
+    assert json.loads(lineage_path.read_text(encoding="utf-8")) == [
+        [30, "reset", [2, 0]]
+    ]
+    with (tmp_path / "vitals.csv").open(newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    assert len(rows) == 1
+    assert 0.0 <= float(rows[0]["dead_expert_frac"]) <= 1.0

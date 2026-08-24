@@ -2,7 +2,7 @@
 # ---------------------------------------------------------------------
 # Visualization & logging for Synaptic-MoE:
 #  - NeuroVizManager: orchestrates TensorBoard + static figures + lineage
-#  - LineageBook: split/merge event ledger + timeline renders
+#  - LineageBook: split/merge/reset event ledger + timeline renders
 #  - Expert plotting: UMAP/PCA map, radar of top experts, histograms
 #
 # Dependencies:
@@ -168,7 +168,7 @@ def _fit_2d(emb: np.ndarray) -> np.ndarray:
 
 class LineageBook:
     """
-    Keeps a per-layer log of events (split/merge). Provides:
+    Keeps a per-layer log of events (split/merge/reset). Provides:
       - timeline PNG render
       - optional interactive HTML (plotly)
     """
@@ -176,7 +176,7 @@ class LineageBook:
     def __init__(self, save_dir: str):
         self.save_dir = save_dir
         _ensure_dir(save_dir)
-        # layer_id -> list of events [(step, "merge", w,l,child), (step, "split", parent, child)]
+        # layer_id -> [(step, operation, affected expert IDs)]
         self.events: Dict[str, List[Tuple[int, str, List[int]]]] = {}
 
     def log_merge(
@@ -190,6 +190,13 @@ class LineageBook:
     def log_split(self, layer_name: str, step: int, parent_idx: int, child_idx: int):
         self.events.setdefault(layer_name, []).append(
             (step, "split", [parent_idx, child_idx])
+        )
+        self._persist(layer_name)
+
+    def log_reset(self, layer_name: str, step: int, source_idx: int, reset_idx: int):
+        """Record a healthy source reseeding a dead expert slot."""
+        self.events.setdefault(layer_name, []).append(
+            (step, "reset", [source_idx, reset_idx])
         )
         self._persist(layer_name)
 
@@ -223,6 +230,18 @@ class LineageBook:
                         y_next += 1
                 ax.plot([s, s], [ys[p], ys[c]], color="green", lw=2, alpha=0.7)
                 ax.scatter([s], [ys[c]], color="green", s=24, marker="^", zorder=5)
+            elif et == "reset":
+                source, reset = ids
+                for eid in (source, reset):
+                    if eid not in ys:
+                        ys[eid] = y_next
+                        y_next += 1
+                ax.plot(
+                    [s, s], [ys[source], ys[reset]], color="orange", lw=2, alpha=0.7
+                )
+                ax.scatter(
+                    [s], [ys[reset]], color="orange", s=24, marker="s", zorder=5
+                )
         ax.set_title(f"Lineage — {layer_name} @ step {step:,}")
         ax.set_xlabel("step")
         ax.set_ylabel("expert ID (track)")
@@ -288,6 +307,24 @@ class LineageBook:
                     x=[s], y=[ymap[c]],
                     mode="markers", marker=dict(color="green", size=8, symbol="triangle-up"),
                     text=f"Split {p}->{c}", hoverinfo="text"
+                ))
+
+            elif et == "reset":
+                source, reset = ids
+                for eid in (source, reset):
+                    if eid not in ymap:
+                        ymap[eid] = y_next
+                        y_next += 1
+
+                fig.add_trace(go.Scatter(
+                    x=[s, s], y=[ymap[source], ymap[reset]],
+                    mode="lines", line=dict(color="orange", width=1),
+                    hoverinfo="none"
+                ))
+                fig.add_trace(go.Scatter(
+                    x=[s], y=[ymap[reset]],
+                    mode="markers", marker=dict(color="orange", size=8, symbol="square"),
+                    text=f"Reset {source}->{reset}", hoverinfo="text"
                 ))
 
         fig.update_layout(
@@ -384,6 +421,18 @@ class NeuroVizManager:
         if name:
             step = step if step is not None else int(time.time())
             self.lineage.log_split(name, step, parent_idx, child_idx)
+
+    def on_reset(
+        self,
+        moe: SynapticMoE,
+        source_idx: int,
+        reset_idx: int,
+        step: Optional[int] = None,
+    ):
+        name = self._name_of(moe)
+        if name:
+            step = step if step is not None else int(time.time())
+            self.lineage.log_reset(name, step, source_idx, reset_idx)
 
     def _name_of(self, moe: SynapticMoE) -> Optional[str]:
         for nm, m in self.layers:
