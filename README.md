@@ -129,6 +129,16 @@ graph TD
 
 Default-neutral (gains 1.0) when off, so it's a no-op unless enabled; telemetry exposes all three levels and gains per step.
 
+### 5. Calibrated Uncertainty and Selective Decoding
+
+*The mechanism of "Know When to Think More—or Not Answer"*
+
+`mc_predict` can sample inference-time stochastic vesicle release and return a predictive distribution with entropy, aleatoric/epistemic decomposition, and logit variance. The mode is opt-in and restores model/synaptic state after sampling. In the canonical 10-seed calibration run, synaptic MC improved ECE by 34.74% versus MC-dropout and its OOD-AUROC lower 95% confidence bound was 0.9895; it did **not** significantly outperform the stronger softmax-entropy baseline.
+
+The default-off `UncertaintyDecodingConfig` turns that measured entropy into an action. `quality_guarded_predict` first routes an uncertain cheap prediction to the reserved full-compute path; if the served distribution remains above a threshold calibrated in nats, it returns an auditable `abstain` or `clarify` directive instead of a token. Every decision logs the adaptive/served entropy, threshold crossings, action trace, bounded predictive-distribution summary, compute plan, and exact ATP debits. On the tiny canonical selective-prediction artifact, the first ≥80%-coverage point per seed retained 770/960 predictions while reducing served errors from two to zero; this is a deterministic demo, not a portable production threshold.
+
+See `docs/theory/stochastic_thermodynamics.md` §§7.4–7.5 and `results/calibration-selective-prediction-86aad7037a51.json` for the full statistical and risk-coverage evidence.
+
 ---
 
 ## 🚀 Advanced Bio-Inspired Features (Roadmap)

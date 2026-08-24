@@ -364,6 +364,39 @@ record `id_ece`, `ood_auroc`, `selective_aurc`, and `selective_risk_at_80_covera
 existing live-process diagnostics. The artifact replayed exactly under implementation commit
 `40535bc`.
 
+### 7.5 Uncertainty-aware decoding (`u2t.3`)
+
+`quality_guarded_predict` now consumes the same synaptic MC predictive entropy as an explicit,
+default-off decode policy (`UncertaintyDecodingConfig`). Its threshold is in nats so an operating
+point can be frozen from a held-out risk-coverage curve rather than guessed from a vocabulary-normalized
+proxy. The runtime sequence is:
+
+1. execute the difficulty-selected depth, expert-k, and MC-sample plan;
+2. if its predictive entropy exceeds the configured threshold, debit and execute the already-reserved
+   fixed-compute fallback (more depth, experts, and MC samples);
+3. if the served full-compute distribution remains above the threshold, return `abstain` or `clarify`
+   and expose no selected token; otherwise return `emit`.
+
+The result carries both entropy measurements, threshold crossings, the final action, and an auditable
+action trace such as `("route_compute", "abstain")`. The JSONL token event additionally records a
+bounded top-8 view of the served predictive distribution (including residual mass) and a
+logit-variance summary. With the policy omitted or
+`enabled=False`, existing quality-guarded decoding is unchanged. A disabled adaptive-compute
+controller still permits a separately enabled terminal abstain/clarify decision after its single
+fixed-compute prediction, with no fictitious ATP debit.
+
+The canonical `u2t.2` artifact supplies a deterministic selective-error demo. Across its 10 synaptic
+MC reports, full coverage contained 960 predictions and two errors (`99.7917%` accuracy). Taking the
+first attainable point at or above 80% coverage in each report retained 770 predictions and zero
+errors (`100%` selective accuracy): the two errors were removed from the confidently served set.
+`tests/test_adaptive_compute.py` locks this evidence contract and exercises real route-compute,
+abstain, clarify, emit, and structured-logging paths.
+
+This is an in-sample operating-point demonstration on the deliberately tiny cyclic benchmark, not a
+claim that 80% is a portable production threshold or that synaptic MC beats softmax entropy. A real
+deployment must choose the entropy threshold on disjoint calibration data, freeze it before testing,
+and report coverage alongside selective accuracy.
+
 ---
 
 ## References

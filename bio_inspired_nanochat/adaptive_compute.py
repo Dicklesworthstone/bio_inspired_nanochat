@@ -14,7 +14,10 @@ maximum-compute plan and does not touch the ATP account.  The
 :func:`quality_guarded_predict` inference primitive adds the downstream ``r00r.3.3`` safety contract:
 atomically reserve enough ATP for both the adaptive attempt and a possible same-token fixed-compute
 fallback, serve the adaptive prediction only when its predictive confidence meets a configured
-quality floor, and emit one detailed JSONL audit event per token.  Cached decoding may use an
+quality floor, and emit one detailed JSONL audit event per token.  The default-off ``u2t.3``
+uncertainty policy additionally routes high-entropy synaptic MC predictions to fixed compute, then
+abstains or requests clarification if the served distribution remains above its calibrated
+threshold.  Cached decoding may use an
 early-exit prefix when the cache itself is allocated
 for that fixed prefix depth; changing depth inside one existing cache would create missing-layer
 history and is deliberately rejected by the model forward.
@@ -27,7 +30,7 @@ import math
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, replace
-from typing import Any
+from typing import Any, Literal
 
 from bio_inspired_nanochat.deliberation import (
     ATPBudget,
@@ -125,6 +128,41 @@ class QualityFloorConfig:
 
 
 @dataclass(frozen=True)
+class UncertaintyDecodingConfig:
+    """Default-off policy for acting on synaptic MC predictive entropy.
+
+    The threshold is expressed in nats so it can be selected directly from a calibration
+    risk-coverage curve.  An uncertain cheap prediction first routes to the already-reserved fixed
+    compute path.  If the served prediction remains above the threshold, ``terminal_action`` tells
+    the caller to abstain or request clarification instead of emitting its top token.
+    """
+
+    enabled: bool = False
+    max_predictive_entropy_nats: float = 1.0
+    terminal_action: Literal["abstain", "clarify"] = "abstain"
+    clarification_prompt: str = "Could you clarify your request before I answer?"
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.enabled, bool):
+            raise ValueError(f"enabled must be a bool, got {self.enabled!r}")
+        if (
+            not math.isfinite(self.max_predictive_entropy_nats)
+            or self.max_predictive_entropy_nats < 0.0
+        ):
+            raise ValueError(
+                "max_predictive_entropy_nats must be finite and nonnegative, got "
+                f"{self.max_predictive_entropy_nats!r}"
+            )
+        if self.terminal_action not in {"abstain", "clarify"}:
+            raise ValueError(
+                "terminal_action must be 'abstain' or 'clarify', got "
+                f"{self.terminal_action!r}"
+            )
+        if not self.clarification_prompt.strip():
+            raise ValueError("clarification_prompt must be non-empty")
+
+
+@dataclass(frozen=True)
 class GuardedAdaptivePrediction:
     """Auditable result of one quality-guarded adaptive next-token inference."""
 
@@ -139,6 +177,14 @@ class GuardedAdaptivePrediction:
     fallback_reexecuted: bool
     fallback_reason: str | None
     token_spent_atp: int
+    adaptive_predictive_entropy: float
+    served_predictive_entropy: float
+    uncertainty_threshold: float | None
+    adaptive_uncertainty_exceeded: bool
+    served_uncertainty_exceeded: bool
+    action_trace: tuple[str, ...]
+    decode_action: Literal["emit", "abstain", "clarify"]
+    clarification_prompt: str | None
 
     @property
     def attempted_compute_units(self) -> int:
@@ -152,6 +198,18 @@ class GuardedAdaptivePrediction:
     def saved_compute_units(self) -> int:
         """Lever-unit savings against one fixed pass; negative means fallback overhead."""
         return self.executed_plan.maximum_compute_units - self.attempted_compute_units
+
+    @property
+    def should_emit_token(self) -> bool:
+        """Whether the caller may emit the predictive distribution's top token."""
+        return self.decode_action == "emit"
+
+    @property
+    def selected_token_id(self) -> int | None:
+        """Return the selected token only when the policy authorizes emission."""
+        if not self.should_emit_token:
+            return None
+        return int(self.prediction.mean_probs[0, -1].argmax().item())
 
 
 class InsufficientATPError(RuntimeError):
@@ -416,6 +474,37 @@ def _prediction_confidence(prediction: MCPrediction) -> float:
     return float(probabilities[0, -1].max().item())
 
 
+def _prediction_entropy(prediction: MCPrediction) -> float:
+    """Return the single sequence's last-position synaptic MC predictive entropy in nats."""
+    entropy = prediction.predictive_entropy
+    if entropy.ndim != 2 or entropy.shape[0] != 1 or entropy.shape[1] < 1:
+        raise ValueError(
+            "uncertainty-aware inference requires one non-empty entropy sequence, got shape "
+            f"{tuple(entropy.shape)}"
+        )
+    return float(entropy[0, -1].item())
+
+
+def _uncertainty_exceeded(value: float, policy: UncertaintyDecodingConfig) -> bool:
+    return policy.enabled and (
+        not math.isfinite(value) or value > policy.max_predictive_entropy_nats
+    )
+
+
+def _predictive_distribution_summary(prediction: MCPrediction) -> dict[str, Any]:
+    """Return a bounded top-k view of the served last-position distribution."""
+    probabilities = prediction.mean_probs[0, -1].detach().float().cpu()
+    top_count = min(8, int(probabilities.numel()))
+    top_probabilities, top_token_ids = torch.topk(probabilities, k=top_count)
+    retained_mass = float(top_probabilities.sum().item())
+    return {
+        "vocab_size": int(probabilities.numel()),
+        "top_token_ids": [int(value) for value in top_token_ids.tolist()],
+        "top_probabilities": [float(value) for value in top_probabilities.tolist()],
+        "residual_probability_mass": max(0.0, 1.0 - retained_mass),
+    }
+
+
 def _fixed_compute_cost(
     controller: AdaptiveComputeController,
     *,
@@ -519,6 +608,18 @@ def _log_guarded_prediction(
         },
         adaptive_confidence=result.adaptive_confidence,
         served_confidence=result.served_confidence,
+        adaptive_predictive_entropy=result.adaptive_predictive_entropy,
+        served_predictive_entropy=result.served_predictive_entropy,
+        uncertainty_threshold=result.uncertainty_threshold,
+        adaptive_uncertainty_exceeded=result.adaptive_uncertainty_exceeded,
+        served_uncertainty_exceeded=result.served_uncertainty_exceeded,
+        action_trace=result.action_trace,
+        decode_action=result.decode_action,
+        should_emit_token=result.should_emit_token,
+        selected_token_id=result.selected_token_id,
+        clarification_prompt=result.clarification_prompt,
+        served_predictive_distribution=_predictive_distribution_summary(result.prediction),
+        served_logit_variance=result.prediction.logit_variance[0, -1],
         quality_floor=result.quality_floor,
         quality_floor_passed=result.quality_floor_passed,
         fallback_used=result.fallback_used,
@@ -542,28 +643,33 @@ def quality_guarded_predict(
     controller: AdaptiveComputeController,
     token_index: int,
     quality: QualityFloorConfig | None = None,
+    uncertainty: UncertaintyDecodingConfig | None = None,
     free_energy_value: float | None = None,
     temperature: float = 1.0,
     run_logger: RunLogger | None = None,
 ) -> GuardedAdaptivePrediction:
-    """Run one adaptive prediction and fail closed to fixed compute below its quality floor.
+    """Run one adaptive prediction and apply quality plus uncertainty decode guards.
 
     One ATP account maps to one sequence, so batched inputs are rejected rather than silently sharing
     a budget across rows.  Before any debit, an enabled controller verifies that the current token's
     adaptive attempt plus a complete fixed fallback are affordable.  If the cheap path's confidence
-    is below the floor (or non-finite), the complete fallback is additionally debited and executed;
-    the discarded attempt remains charged because it consumed physical work.  Thus a fallback can
-    never overdraw the hard sequence budget, leave it partially charged, or manufacture savings by
-    hiding its failed attempt.
+    is below the floor, or its synaptic MC predictive entropy exceeds an enabled uncertainty policy,
+    the complete fallback is additionally debited and executed.  The discarded attempt remains
+    charged because it consumed physical work.  If the served full-compute prediction remains too
+    uncertain, the result instructs the caller to abstain or clarify instead of emitting a token.
+    Thus a fallback can never overdraw the hard sequence budget, leave it partially charged, or
+    manufacture savings by hiding its failed attempt.
 
     When adaptive compute is disabled, this is the exact fixed-compute path and retains the existing
-    no-debit behavior.  The confidence floor is a calibration contract, not a correctness proof; the
-    downstream Pareto evaluation must establish whether a chosen threshold preserves task quality.
+    no-debit behavior, although an explicitly enabled uncertainty policy may still abstain or clarify
+    after that fixed prediction.  Confidence and entropy thresholds are calibration contracts, not
+    correctness proofs; downstream evaluation must establish each task's operating point.
     """
     if getattr(input_ids, "ndim", None) != 2 or int(input_ids.shape[0]) != 1:
         shape = tuple(getattr(input_ids, "shape", ()))
         raise ValueError(f"quality-guarded inference requires input shape (1, T), got {shape}")
     quality = quality or QualityFloorConfig()
+    uncertainty = uncertainty or UncertaintyDecodingConfig()
     max_depth_layers, max_experts = controller.model_capacity(model)
     if controller.config.enabled:
         fixed_cost = _fixed_compute_cost(
@@ -645,6 +751,11 @@ def quality_guarded_predict(
         temperature=temperature,
     )
     adaptive_confidence = _prediction_confidence(adaptive_prediction)
+    adaptive_predictive_entropy = _prediction_entropy(adaptive_prediction)
+    adaptive_uncertainty_exceeded = _uncertainty_exceeded(
+        adaptive_predictive_entropy,
+        uncertainty,
+    )
 
     guard_active = controller.config.enabled
     quality_passed = (
@@ -654,7 +765,10 @@ def quality_guarded_predict(
             and adaptive_confidence >= quality.min_predictive_confidence
         )
     )
-    if quality_passed:
+    fallback_required = guard_active and (
+        not quality_passed or adaptive_uncertainty_exceeded
+    )
+    if not fallback_required:
         prediction = adaptive_prediction
         executed = proposed
         fallback_used = False
@@ -662,11 +776,14 @@ def quality_guarded_predict(
         fallback_reason = None
     else:
         fallback_used = True
-        fallback_reason = (
-            "non_finite_predictive_confidence"
-            if not math.isfinite(adaptive_confidence)
-            else "predictive_confidence_below_floor"
-        )
+        if not math.isfinite(adaptive_confidence):
+            fallback_reason = "non_finite_predictive_confidence"
+        elif adaptive_confidence < quality.min_predictive_confidence:
+            fallback_reason = "predictive_confidence_below_floor"
+        elif not math.isfinite(adaptive_predictive_entropy):
+            fallback_reason = "non_finite_predictive_entropy"
+        else:
+            fallback_reason = "predictive_entropy_above_threshold"
         proposed_is_fixed = (
             proposed.depth_layers == proposed.max_depth_layers
             and proposed.expert_top_k == proposed.max_experts
@@ -686,6 +803,17 @@ def quality_guarded_predict(
             prediction = adaptive_mc_predict(model, input_ids, executed, temperature=temperature)
             fallback_reexecuted = True
 
+    served_predictive_entropy = _prediction_entropy(prediction)
+    served_uncertainty_exceeded = _uncertainty_exceeded(
+        served_predictive_entropy,
+        uncertainty,
+    )
+    decode_action: Literal["emit", "abstain", "clarify"] = (
+        uncertainty.terminal_action if served_uncertainty_exceeded else "emit"
+    )
+    action_trace = (
+        (("route_compute",) if fallback_reexecuted else ()) + (decode_action,)
+    )
     result = GuardedAdaptivePrediction(
         prediction=prediction,
         proposed_plan=proposed,
@@ -698,6 +826,18 @@ def quality_guarded_predict(
         fallback_reexecuted=fallback_reexecuted,
         fallback_reason=fallback_reason,
         token_spent_atp=budget.spent_atp - spent_before,
+        adaptive_predictive_entropy=adaptive_predictive_entropy,
+        served_predictive_entropy=served_predictive_entropy,
+        uncertainty_threshold=(
+            uncertainty.max_predictive_entropy_nats if uncertainty.enabled else None
+        ),
+        adaptive_uncertainty_exceeded=adaptive_uncertainty_exceeded,
+        served_uncertainty_exceeded=served_uncertainty_exceeded,
+        action_trace=action_trace,
+        decode_action=decode_action,
+        clarification_prompt=(
+            uncertainty.clarification_prompt if decode_action == "clarify" else None
+        ),
     )
     _log_guarded_prediction(run_logger, result, budget)
     return result

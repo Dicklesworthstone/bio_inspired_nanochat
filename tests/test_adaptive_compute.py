@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pytest
 
 from _bio_testkit import make_tiny_synaptic, make_tiny_vanilla, random_tokens
 from bio_inspired_nanochat.adaptive_compute import (
     AdaptiveComputeConfig,
     AdaptiveComputeController,
-    QualityFloorConfig,
     InsufficientATPError,
+    QualityFloorConfig,
+    UncertaintyDecodingConfig,
     adaptive_forward,
     adaptive_mc_predict,
     quality_guarded_predict,
@@ -324,6 +328,106 @@ def test_quality_floor_config_rejects_invalid_confidence_thresholds():
 
 
 @pytest.mark.unit
+def test_uncertainty_policy_config_is_default_off_and_rejects_invalid_controls():
+    assert not UncertaintyDecodingConfig().enabled
+    with pytest.raises(ValueError, match="enabled must be a bool"):
+        UncertaintyDecodingConfig(enabled=1)  # type: ignore[arg-type]
+    for value in (-0.01, float("inf"), float("nan")):
+        with pytest.raises(ValueError, match="max_predictive_entropy_nats"):
+            UncertaintyDecodingConfig(max_predictive_entropy_nats=value)
+    with pytest.raises(ValueError, match="terminal_action"):
+        UncertaintyDecodingConfig(terminal_action="guess")  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="clarification_prompt"):
+        UncertaintyDecodingConfig(clarification_prompt="  ")
+
+
+@pytest.mark.unit
+def test_uncertain_cheap_prediction_routes_to_full_compute_then_abstains():
+    model = make_tiny_vanilla(n_layer=3)
+    result = quality_guarded_predict(
+        model,
+        random_tokens(batch=1, seq=4),
+        torch.tensor([20.0, 0.0, 0.0]),
+        ATPBudget(9),
+        controller=_controller(),
+        token_index=0,
+        quality=QualityFloorConfig(min_predictive_confidence=0.0),
+        uncertainty=UncertaintyDecodingConfig(
+            enabled=True,
+            max_predictive_entropy_nats=0.0,
+            terminal_action="abstain",
+        ),
+    )
+
+    assert result.quality_floor_passed
+    assert result.adaptive_uncertainty_exceeded
+    assert result.served_uncertainty_exceeded
+    assert result.fallback_used and result.fallback_reexecuted
+    assert result.fallback_reason == "predictive_entropy_above_threshold"
+    assert result.action_trace == ("route_compute", "abstain")
+    assert result.decode_action == "abstain"
+    assert not result.should_emit_token
+    assert result.selected_token_id is None
+    assert result.clarification_prompt is None
+    assert result.token_spent_atp == 9
+
+
+@pytest.mark.unit
+def test_full_compute_uncertainty_policy_can_request_clarification_without_debits():
+    model = make_tiny_vanilla(n_layer=2)
+    prompt = "Which dataset and operating point should I use?"
+    budget = ATPBudget(0)
+    result = quality_guarded_predict(
+        model,
+        random_tokens(batch=1, seq=3),
+        torch.zeros(2),
+        budget,
+        controller=_controller(enabled=False),
+        token_index=0,
+        uncertainty=UncertaintyDecodingConfig(
+            enabled=True,
+            max_predictive_entropy_nats=0.0,
+            terminal_action="clarify",
+            clarification_prompt=prompt,
+        ),
+    )
+
+    assert not result.fallback_used
+    assert result.action_trace == ("clarify",)
+    assert result.decode_action == "clarify"
+    assert result.clarification_prompt == prompt
+    assert not result.should_emit_token
+    assert result.selected_token_id is None
+    assert budget.records == []
+
+
+@pytest.mark.unit
+def test_uncertainty_below_threshold_emits_the_selected_token():
+    model = make_tiny_vanilla(n_layer=3)
+    result = quality_guarded_predict(
+        model,
+        random_tokens(batch=1, seq=4),
+        torch.tensor([20.0, 0.0, 0.0]),
+        ATPBudget(9),
+        controller=_controller(),
+        token_index=0,
+        quality=QualityFloorConfig(min_predictive_confidence=0.0),
+        uncertainty=UncertaintyDecodingConfig(
+            enabled=True,
+            max_predictive_entropy_nats=100.0,
+        ),
+    )
+
+    expected = int(result.prediction.mean_probs[0, -1].argmax().item())
+    assert not result.adaptive_uncertainty_exceeded
+    assert not result.served_uncertainty_exceeded
+    assert not result.fallback_used
+    assert result.action_trace == ("emit",)
+    assert result.should_emit_token
+    assert result.selected_token_id == expected
+
+
+@pytest.mark.unit
 def test_quality_guard_accepts_confident_path_without_spending_fallback_atp():
     model = make_tiny_vanilla(n_layer=3)
     inputs = random_tokens(batch=1, seq=4)
@@ -521,6 +625,11 @@ def test_disabled_guarded_runner_is_fixed_compute_identity_without_debits():
     assert not result.fallback_reexecuted
     assert result.executed_plan.compute_units == result.executed_plan.maximum_compute_units
     assert result.attempted_compute_units == result.executed_plan.maximum_compute_units
+    assert result.uncertainty_threshold is None
+    assert not result.adaptive_uncertainty_exceeded
+    assert not result.served_uncertainty_exceeded
+    assert result.action_trace == ("emit",)
+    assert result.should_emit_token
     assert budget.records == []
 
 
@@ -537,6 +646,12 @@ def test_quality_guard_logs_detailed_per_token_compute_and_fallback(tmp_path):
             controller=_controller(),
             token_index=4,
             quality=QualityFloorConfig(min_predictive_confidence=1.0),
+            uncertainty=UncertaintyDecodingConfig(
+                enabled=True,
+                max_predictive_entropy_nats=0.0,
+                terminal_action="clarify",
+                clarification_prompt="Please clarify the ambiguous request.",
+            ),
             free_energy_value=0.25,
             run_logger=logger,
         )
@@ -550,6 +665,26 @@ def test_quality_guard_logs_detailed_per_token_compute_and_fallback(tmp_path):
     assert record["fallback_used"]
     assert record["fallback_reexecuted"]
     assert record["fallback_reason"] == "predictive_confidence_below_floor"
+    assert record["adaptive_predictive_entropy"] > 0.0
+    assert record["served_predictive_entropy"] > 0.0
+    assert record["uncertainty_threshold"] == 0.0
+    assert record["adaptive_uncertainty_exceeded"]
+    assert record["served_uncertainty_exceeded"]
+    assert record["action_trace"] == ["route_compute", "clarify"]
+    assert record["decode_action"] == "clarify"
+    assert not record["should_emit_token"]
+    assert record["selected_token_id"] is None
+    assert record["clarification_prompt"] == "Please clarify the ambiguous request."
+    distribution = record["served_predictive_distribution"]
+    assert distribution["vocab_size"] == model.config.vocab_size
+    assert len(distribution["top_token_ids"]) == 8
+    assert len(distribution["top_probabilities"]) == 8
+    assert (
+        sum(distribution["top_probabilities"])
+        + distribution["residual_probability_mass"]
+        == pytest.approx(1.0)
+    )
+    assert record["served_logit_variance"]["numel"] == model.config.vocab_size
     assert record["quality_floor"] == 1.0
     assert not record["quality_floor_passed"]
     assert record["executed"] == record["maximum"]
@@ -561,3 +696,36 @@ def test_quality_guard_logs_detailed_per_token_compute_and_fallback(tmp_path):
     assert record["sequence_remaining_atp"] == 9
     assert record["difficulty"]["free_energy"] == pytest.approx(0.25)
     assert len(record["debit_records"]) == 4
+
+
+@pytest.mark.e2e
+def test_canonical_synaptic_mc_curve_demonstrates_reduced_confident_errors():
+    artifact_path = (
+        Path(__file__).parents[1]
+        / "results"
+        / "calibration-selective-prediction-86aad7037a51.json"
+    )
+    payload = json.loads(artifact_path.read_text(encoding="utf-8"))
+    assert payload["report_id"] == "stochastic-thermo-uq-86aad7037a51"
+
+    full_predictions = 0
+    full_errors = 0
+    selected_predictions = 0
+    selected_errors = 0
+    for report in payload["reports"]:
+        method = report["methods"]["thermo_uq"]
+        curve = method["risk_coverage_curve"]
+        full_point = curve[-1]
+        selected_point = next(point for point in curve if point["coverage"] >= 0.8)
+        full_predictions += full_point["accepted"]
+        full_errors += full_point["errors"]
+        selected_predictions += selected_point["accepted"]
+        selected_errors += selected_point["errors"]
+        assert method["selective_risk_at_80_coverage"] == 0.0
+
+    full_accuracy = 1.0 - full_errors / full_predictions
+    selective_accuracy = 1.0 - selected_errors / selected_predictions
+    assert (full_predictions, full_errors) == (960, 2)
+    assert selected_predictions >= 0.8 * full_predictions
+    assert selected_errors == 0
+    assert selective_accuracy == 1.0 > full_accuracy
