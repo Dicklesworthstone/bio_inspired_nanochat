@@ -93,7 +93,7 @@ def test_tiny_compute_quality_curve_is_complete_stats_backed_and_strict_json():
         assert point.deliberation_coverage.mean == 1.0
         assert 0.0 < point.mean_effort_per_token.mean <= point.max_iters
         assert all(item.generated_tokens in {expected_generated} for item in point.per_seed)
-        assert all(item.pondered_tokens in {item.generated_tokens} for item in point.per_seed)
+        assert all(item.pondered_tokens == item.generated_tokens for item in point.per_seed)
     assert report.verdict.outcome in {"improved", "null", "worse", "inconclusive"}
     assert "not fed back into logits" in report.mechanism_scope
     assert "every generated token" in report.mechanism_scope

@@ -359,7 +359,7 @@ def test_generate_with_deliberation_runs_and_produces_trajectory():
     assert len(toks) > 0, "generation must produce tokens"
     assert len(controller.records) > 0
     summary = controller.summary()
-    assert summary["tokens"] in {len(controller.records)}
+    assert summary["tokens"] == len(controller.records)
     assert 1 <= summary["max_effort"] <= 32, "effort must respect the compute budget"
 
 
