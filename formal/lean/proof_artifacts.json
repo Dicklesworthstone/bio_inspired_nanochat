@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "artifacts": [
+    {
+      "cycle_id": "lfl-r00r.4.1-2026-08-24",
+      "frog_id": "bio_inspired_nanochat-r00r.4.1",
+      "theorem_ids": [
+        "poisson_entropy_degeneracy",
+        "friction_energy_degeneracy",
+        "energyRate_zero",
+        "entropyRate_nonnegative",
+        "freeEnergyRate_nonpositive",
+        "freeEnergy_nonincreasing",
+        "trajectory_energy_constant",
+        "trajectory_entropy_from_start",
+        "trajectory_freeEnergy_nonincreasing",
+        "trajectory_component_bounds"
+      ],
+      "route": "theorem-first",
+      "proof_friction_class": "tactic_debt",
+      "runtime_defect_found": false,
+      "artifact_hash": "sha256:bdb0393688c516db055de922802216e621d30a8b1ccd3d5accb042779d42f3d9",
+      "hash_scope": "formal/lean/BioInspiredNanochat.lean",
+      "sorry_or_admit_present": false,
+      "axioms": [
+        "propext",
+        "Classical.choice",
+        "Quot.sound"
+      ],
+      "assurance": {
+        "exact_real_algebra": "E",
+        "runtime_regressions": "B",
+        "floating_point_refinement": "guarded-runtime-gap"
+      },
+      "conformance": {
+        "statement_parity": "pass-reduced-core",
+        "state_parity": "pass-reduced-core",
+        "transition_parity": "pass-continuous-field-discrete-contract",
+        "concurrency_parity": "not-applicable-pure-transform",
+        "cancel_drain_parity": "not-applicable",
+        "runtime_evidence": "pass",
+        "drift_gate": "pass"
+      },
+      "runtime_mapping": [
+        {
+          "path": "bio_inspired_nanochat/metriplectic_integrator.py",
+          "sha256": "52fdd81f46339aa2f7bb0bde440fd22feac4ec14d61da66e1dad35081f8bd091"
+        },
+        {
+          "path": "tests/test_metriplectic_theory.py",
+          "sha256": "ee549239d15d63bbc260388a99d4f010e0a1a03509773b65c3194db3d5d442da"
+        },
+        {
+          "path": "tests/test_metriplectic_integrator.py",
+          "sha256": "9d7c9e8728c28ca62f570a3e378e1428744a0d6722f3fd665bdf5e9510902c6a"
+        },
+        {
+          "path": "tests/test_metriplectic_runtime.py",
+          "sha256": "ec985bd14522a75e41e3aec2fa6837f5b8a6feaf0aa880733fbe6705b1adba28"
+        }
+      ],
+      "regression_command": "uv run --no-sync python -m pytest tests/test_metriplectic_theory.py tests/test_metriplectic_integrator.py tests/test_metriplectic_runtime.py -v --tb=short",
+      "regression_result": "29 passed",
+      "lean_toolchain": "leanprover/lean4:v4.27.0",
+      "mathlib_revision": "a3a10db0e9d66acbebf76c5e6a135066525ac900",
+      "build_command": "rch exec -- lake build",
+      "build_result": "passed-locally-rch-had-no-workers"
+    }
+  ]
+}

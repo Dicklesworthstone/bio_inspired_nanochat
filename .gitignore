@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 rustbpe/target/
 rust_src/target/
+formal/lean/.lake/
 dev-ignore/
 report.md
 eval_bundle/
