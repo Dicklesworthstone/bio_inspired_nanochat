@@ -47,6 +47,219 @@ from bio_inspired_nanochat.torch_imports import torch
 
 
 @dataclass(frozen=True)
+class DifficultyRouterConfig:
+    """Calibration knobs for the bounded per-token difficulty signal.
+
+    Entropy is already normalized by ``log(vocab_size)``.  Positive free energy is mapped to
+    ``[0, 1)`` by a saturating exponential so an unusually large state cannot produce an unbounded
+    compute request.  When free energy is unavailable, the router uses entropy alone rather than
+    treating the missing measurement as false confidence.
+    """
+
+    entropy_weight: float = 0.75
+    free_energy_scale: float = 1.0
+
+    def __post_init__(self) -> None:
+        if not 0.0 <= self.entropy_weight <= 1.0:
+            raise ValueError(f"entropy_weight must be in [0, 1], got {self.entropy_weight}")
+        if not np.isfinite(self.free_energy_scale) or self.free_energy_scale <= 0.0:
+            raise ValueError(f"free_energy_scale must be finite and positive, got {self.free_energy_scale}")
+
+
+@dataclass(frozen=True)
+class TokenDifficulty:
+    """One token's auditable uncertainty/free-energy difficulty measurement."""
+
+    entropy_nats: float
+    normalized_entropy: float
+    free_energy: float | None
+    normalized_free_energy: float | None
+    score: float
+
+
+@dataclass(frozen=True)
+class ATPDebitRecord:
+    """One exact integer debit from a sequence-local ATP account."""
+
+    token_index: int
+    action: str
+    difficulty_score: float
+    requested_units: int
+    granted_units: int
+    unit_cost_atp: int
+    spent_atp: int
+    remaining_atp: int
+
+
+class ATPBudget:
+    """Hard per-sequence compute budget in exact, integer ATP accounting units.
+
+    A caller requests some number of homogeneous compute units (layers, experts, deliberation steps,
+    or Monte-Carlo samples) and supplies that action's integer unit cost.  The account grants as many
+    complete units as it can afford and never goes negative.  Integers are deliberate here: the
+    invariant ``spent_atp + remaining_atp == total_atp`` is exact, with no floating-point tolerance.
+
+    Instantiate one account per generated sequence.  The downstream adaptive-compute bead assigns
+    concrete costs to its compute levers; this class owns only allocation and accounting.
+    """
+
+    def __init__(self, total_atp: int) -> None:
+        self.total_atp = self._nonnegative_int("total_atp", total_atp)
+        self.remaining_atp = self.total_atp
+        self._spent_atp = 0
+        self.records: list[ATPDebitRecord] = []
+
+    @staticmethod
+    def _nonnegative_int(name: str, value: int) -> int:
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise ValueError(f"{name} must be a non-negative integer, got {value!r}")
+        return value
+
+    @property
+    def spent_atp(self) -> int:
+        return self._spent_atp
+
+    @property
+    def exhausted(self) -> bool:
+        return self.remaining_atp == 0
+
+    def debit(
+        self,
+        *,
+        token_index: int,
+        action: str,
+        difficulty_score: float,
+        requested_units: int,
+        unit_cost_atp: int,
+    ) -> ATPDebitRecord:
+        """Grant affordable whole units and debit their exact ATP cost in one account operation."""
+        token_index = self._nonnegative_int("token_index", token_index)
+        requested_units = self._nonnegative_int("requested_units", requested_units)
+        unit_cost_atp = self._nonnegative_int("unit_cost_atp", unit_cost_atp)
+        if unit_cost_atp == 0:
+            raise ValueError("unit_cost_atp must be positive")
+        action = action.strip()
+        if not action:
+            raise ValueError("action must be non-empty")
+        if not np.isfinite(difficulty_score) or not 0.0 <= difficulty_score <= 1.0:
+            raise ValueError(f"difficulty_score must be finite and in [0, 1], got {difficulty_score}")
+
+        affordable_units = self.remaining_atp // unit_cost_atp
+        granted_units = min(requested_units, affordable_units)
+        spent_atp = granted_units * unit_cost_atp
+        self.remaining_atp -= spent_atp
+        self._spent_atp += spent_atp
+        record = ATPDebitRecord(
+            token_index=token_index,
+            action=action,
+            difficulty_score=float(difficulty_score),
+            requested_units=requested_units,
+            granted_units=granted_units,
+            unit_cost_atp=unit_cost_atp,
+            spent_atp=spent_atp,
+            remaining_atp=self.remaining_atp,
+        )
+        self.records.append(record)
+        if self.spent_atp + self.remaining_atp != self.total_atp:
+            raise RuntimeError("ATP accounting invariant violated")
+        return record
+
+    def to_jsonl(self) -> list[str]:
+        """Return strict JSONL records for per-token/action energy telemetry."""
+        return [json.dumps(asdict(record), ensure_ascii=False, allow_nan=False) for record in self.records]
+
+    def summary(self) -> dict:
+        return {
+            "total_atp": self.total_atp,
+            "spent_atp": self.spent_atp,
+            "remaining_atp": self.remaining_atp,
+            "exhausted": self.exhausted,
+            "debits": len(self.records),
+        }
+
+
+class DifficultyRouter:
+    """Measure token difficulty and convert it to a bounded compute-unit request."""
+
+    def __init__(self, cfg: DifficultyRouterConfig | None = None) -> None:
+        self.cfg = cfg or DifficultyRouterConfig()
+
+    def measure(self, logits, *, free_energy_value: float | None = None) -> TokenDifficulty:
+        """Combine predictive entropy and optional free energy into a score in ``[0, 1]``.
+
+        ``logits`` must describe exactly one token distribution.  Rejecting batches here avoids
+        silently averaging together easy and hard rows; callers route each generated sequence with
+        its own ATP account.
+        """
+        values = torch.as_tensor(logits, dtype=torch.float64)
+        if values.ndim != 1 or values.numel() < 2:
+            raise ValueError(
+                "logits must describe exactly one token distribution with at least two entries, "
+                f"got shape {tuple(values.shape)}"
+            )
+        if not bool(torch.isfinite(values).all()):
+            raise ValueError("logits must be finite")
+
+        probabilities = torch.softmax(values, dim=-1)
+        entropy = float(-(probabilities * probabilities.clamp_min(torch.finfo(values.dtype).tiny).log()).sum())
+        normalized_entropy = min(1.0, max(0.0, entropy / float(np.log(values.numel()))))
+
+        normalized_free_energy: float | None = None
+        measured_free_energy: float | None = None
+        if free_energy_value is not None:
+            measured_free_energy = float(free_energy_value)
+            if not np.isfinite(measured_free_energy):
+                raise ValueError(f"free_energy_value must be finite, got {free_energy_value}")
+            positive_free_energy = max(0.0, measured_free_energy)
+            normalized_free_energy = float(-np.expm1(-positive_free_energy / self.cfg.free_energy_scale))
+
+        if normalized_free_energy is None:
+            score = normalized_entropy
+        else:
+            entropy_weight = self.cfg.entropy_weight
+            score = entropy_weight * normalized_entropy + (1.0 - entropy_weight) * normalized_free_energy
+        score = min(1.0, max(0.0, float(score)))
+        return TokenDifficulty(
+            entropy_nats=entropy,
+            normalized_entropy=normalized_entropy,
+            free_energy=measured_free_energy,
+            normalized_free_energy=normalized_free_energy,
+            score=score,
+        )
+
+    @staticmethod
+    def requested_units(difficulty: TokenDifficulty, *, min_units: int, max_units: int) -> int:
+        """Interpolate difficulty into an inclusive integer compute range, deterministically."""
+        min_units = ATPBudget._nonnegative_int("min_units", min_units)
+        max_units = ATPBudget._nonnegative_int("max_units", max_units)
+        if min_units > max_units:
+            raise ValueError(f"min_units must not exceed max_units, got {min_units} > {max_units}")
+        span = max_units - min_units
+        return min_units + int(np.floor(difficulty.score * span + 0.5))
+
+    def route(
+        self,
+        budget: ATPBudget,
+        *,
+        token_index: int,
+        action: str,
+        difficulty: TokenDifficulty,
+        min_units: int,
+        max_units: int,
+        unit_cost_atp: int,
+    ) -> ATPDebitRecord:
+        """Request difficulty-proportional compute, capped by the sequence's remaining ATP."""
+        requested_units = self.requested_units(difficulty, min_units=min_units, max_units=max_units)
+        return budget.debit(
+            token_index=token_index,
+            action=action,
+            difficulty_score=difficulty.score,
+            requested_units=requested_units,
+            unit_cost_atp=unit_cost_atp,
+        )
+
+
+@dataclass(frozen=True)
 class DeliberationConfig:
     """The compute-vs-quality knobs for per-token deliberation (default-off; see design §5)."""
 

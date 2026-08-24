@@ -23,8 +23,11 @@ import pytest
 
 from _bio_testkit import make_tiny_synaptic
 from bio_inspired_nanochat.deliberation import (
+    ATPBudget,
     DeliberationConfig,
     DeliberationController,
+    DifficultyRouter,
+    DifficultyRouterConfig,
     make_controller,
 )
 from bio_inspired_nanochat.engine import Engine
@@ -35,6 +38,110 @@ from bio_inspired_nanochat.torch_imports import torch
 # --------------------------------------------------------------------------- #
 # Controller unit tests
 # --------------------------------------------------------------------------- #
+@pytest.mark.unit
+def test_difficulty_signal_correlates_with_token_loss():
+    """As a calibrated correct-token margin shrinks, entropy difficulty tracks cross-entropy loss."""
+    router = DifficultyRouter()
+    margins = (5.0, 4.0, 3.0, 2.0, 1.0, 0.0)
+    difficulties = []
+    token_losses = []
+    for margin in margins:
+        logits = torch.tensor([margin, 0.0, 0.0, 0.0], dtype=torch.float64)
+        difficulties.append(router.measure(logits).score)
+        token_losses.append(float(-torch.log_softmax(logits, dim=-1)[0]))
+
+    correlation = float(np.corrcoef(difficulties, token_losses)[0, 1])
+    assert correlation > 0.9, f"difficulty must correlate strongly with token loss, got r={correlation:.4f}"
+    assert all(a < b for a, b in zip(difficulties, difficulties[1:]))
+
+
+@pytest.mark.unit
+def test_difficulty_combines_entropy_and_bounded_free_energy():
+    router = DifficultyRouter(DifficultyRouterConfig(entropy_weight=0.5, free_energy_scale=2.0))
+    logits = torch.tensor([2.0, 0.0, -1.0])
+    low_energy = router.measure(logits, free_energy_value=0.0)
+    high_energy = router.measure(logits, free_energy_value=20.0)
+    assert 0.0 <= low_energy.score < high_energy.score <= 1.0
+    assert low_energy.normalized_entropy == pytest.approx(high_energy.normalized_entropy)
+    assert low_energy.normalized_free_energy == 0.0
+    assert high_energy.normalized_free_energy == pytest.approx(1.0, abs=1e-4)
+    with pytest.raises(ValueError, match="finite"):
+        router.measure(torch.tensor([0.0, float("nan")]))
+    with pytest.raises(ValueError, match="exactly one token distribution"):
+        router.measure(torch.zeros(2, 3))
+
+
+@pytest.mark.unit
+def test_atp_budget_respects_exact_hard_limit():
+    budget = ATPBudget(total_atp=10)
+    first = budget.debit(
+        token_index=0,
+        action="deliberation_step",
+        difficulty_score=0.75,
+        requested_units=4,
+        unit_cost_atp=3,
+    )
+    second = budget.debit(
+        token_index=1,
+        action="mc_sample",
+        difficulty_score=1.0,
+        requested_units=1,
+        unit_cost_atp=2,
+    )
+    assert (first.granted_units, first.spent_atp, first.remaining_atp) == (3, 9, 1)
+    assert (second.granted_units, second.spent_atp, second.remaining_atp) == (0, 0, 1)
+    assert budget.spent_atp + budget.remaining_atp == budget.total_atp == 10
+    assert budget.spent_atp == sum(record.spent_atp for record in budget.records)
+    assert budget.summary() == {
+        "total_atp": 10,
+        "spent_atp": 9,
+        "remaining_atp": 1,
+        "exhausted": False,
+        "debits": 2,
+    }
+    payload = json.loads(budget.to_jsonl()[0])
+    assert payload["spent_atp"] == 9 and payload["remaining_atp"] == 1
+    with pytest.raises(ValueError, match="non-negative integer"):
+        ATPBudget(total_atp=-1)
+    with pytest.raises(ValueError, match="positive"):
+        budget.debit(
+            token_index=2,
+            action="layer",
+            difficulty_score=0.5,
+            requested_units=1,
+            unit_cost_atp=0,
+        )
+
+
+@pytest.mark.unit
+def test_energy_router_allocates_more_to_hard_tokens_without_overspending():
+    router = DifficultyRouter()
+    easy = router.measure(torch.tensor([6.0, 0.0, 0.0, 0.0]))
+    hard = router.measure(torch.zeros(4))
+    budget = ATPBudget(total_atp=6)
+    easy_debit = router.route(
+        budget,
+        token_index=0,
+        action="expert",
+        difficulty=easy,
+        min_units=1,
+        max_units=5,
+        unit_cost_atp=1,
+    )
+    hard_debit = router.route(
+        budget,
+        token_index=1,
+        action="expert",
+        difficulty=hard,
+        min_units=1,
+        max_units=5,
+        unit_cost_atp=1,
+    )
+    assert hard_debit.requested_units > easy_debit.requested_units
+    assert easy_debit.granted_units + hard_debit.granted_units == 6
+    assert budget.exhausted and budget.spent_atp == budget.total_atp
+
+
 @pytest.mark.unit
 def test_make_controller_is_none_unless_enabled():
     assert make_controller(None) is None
