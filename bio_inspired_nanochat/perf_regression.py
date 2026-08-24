@@ -18,6 +18,7 @@ import torch.nn as nn
 
 from bio_inspired_nanochat.gpt import GPT, GPTConfig
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
+from bio_inspired_nanochat.engine import Engine, KVCache
 from bio_inspired_nanochat.results_registry import RunRecord, append_record
 from bio_inspired_nanochat.synaptic import SynapticConfig
 
@@ -27,10 +28,10 @@ DEFAULT_BASELINES_PATH = Path("results") / "perf_baselines.json"
 @dataclass
 class PerfBenchmarkConfig:
     name: str
-    mode: str = "train"  # "train" | "decode"
+    mode: str = "train"  # "train" | cached one-token "decode"
     synaptic: bool = False
     batch_size: int = 2
-    seq_len: int = 32
+    seq_len: int = 32  # training length, or the untimed decode prompt length
     vocab_size: int = 128
     n_layer: int = 2
     n_head: int = 4
@@ -52,6 +53,7 @@ class BenchmarkResult:
     batch_size: int
     seq_len: int
     device: str
+    benchmark_config: dict[str, bool | int | str]
     timestamp: float = field(default_factory=time.time)
 
 
@@ -61,6 +63,8 @@ class BaselineEntry:
     mode: str
     tok_per_sec: float
     peak_memory_mb: float
+    device: str
+    benchmark_config: dict[str, bool | int | str]
     tolerance: float = 0.25  # Allowable degradation (e.g. 25% tolerance for CPU/CI variance)
 
 
@@ -97,7 +101,7 @@ STANDARD_BENCHMARK_CONFIGS = (
         n_embd=64,
     ),
     PerfBenchmarkConfig(
-        name="standard_transformer_decode",
+        name="standard_transformer_cached_tq1_decode",
         mode="decode",
         synaptic=False,
         batch_size=1,
@@ -105,9 +109,11 @@ STANDARD_BENCHMARK_CONFIGS = (
         n_layer=2,
         n_head=4,
         n_embd=64,
+        warmup_steps=20,
+        measure_steps=200,
     ),
     PerfBenchmarkConfig(
-        name="synaptic_transformer_decode",
+        name="synaptic_transformer_cached_tq1_decode",
         mode="decode",
         synaptic=True,
         batch_size=1,
@@ -115,8 +121,31 @@ STANDARD_BENCHMARK_CONFIGS = (
         n_layer=2,
         n_head=4,
         n_embd=64,
+        warmup_steps=20,
+        measure_steps=200,
     ),
 )
+
+
+def _synchronize_for_timing(device: torch.device) -> None:
+    if device.type == "cuda":
+        torch.cuda.synchronize(device)
+
+
+def _resolve_device(requested: str) -> torch.device:
+    device = torch.device(requested)
+    if device.type == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError(f"CUDA benchmark requested on a host without CUDA: {requested}")
+    return device
+
+
+def _config_snapshot(
+    cfg: PerfBenchmarkConfig,
+    device: torch.device,
+) -> dict[str, bool | int | str]:
+    snapshot = asdict(cfg)
+    snapshot["device"] = str(device)
+    return snapshot
 
 
 class PerfRegressionHarness:
@@ -126,10 +155,14 @@ class PerfRegressionHarness:
         self.baselines_path = Path(baselines_path or DEFAULT_BASELINES_PATH)
 
     def run_benchmark(self, cfg: PerfBenchmarkConfig) -> BenchmarkResult:
-        device = torch.device(cfg.device if torch.cuda.is_available() and cfg.device == "cuda" else "cpu")
+        device = _resolve_device(cfg.device)
+        model_sequence_len = cfg.seq_len + (
+            cfg.warmup_steps + cfg.measure_steps if cfg.mode == "decode" else 0
+        )
 
         if cfg.synaptic:
             gpt_cfg = GPTSynapticConfig(
+                sequence_len=model_sequence_len,
                 vocab_size=cfg.vocab_size,
                 n_layer=cfg.n_layer,
                 n_head=cfg.n_head,
@@ -141,6 +174,7 @@ class PerfRegressionHarness:
             model: nn.Module = GPTSynaptic(gpt_cfg).to(device)
         else:
             gpt_cfg_std = GPTConfig(
+                sequence_len=model_sequence_len,
                 vocab_size=cfg.vocab_size,
                 n_layer=cfg.n_layer,
                 n_head=cfg.n_head,
@@ -174,17 +208,46 @@ class PerfRegressionHarness:
 
         else:  # decode mode
             model.eval()
-            with torch.no_grad():
-                # Warmup
-                for _ in range(cfg.warmup_steps):
-                    _ = model(inputs)
-
+            reset_sequence_state = getattr(model, "reset_sequence_state", None)
+            if callable(reset_sequence_state):
+                reset_sequence_state()
+            engine = Engine(model, tokenizer=None)
+            model_cfg = model.config
+            continuation = torch.randint(
+                0,
+                cfg.vocab_size,
+                (cfg.batch_size, cfg.warmup_steps + cfg.measure_steps),
+                device=device,
+            )
+            cache = KVCache(
+                batch_size=cfg.batch_size,
+                num_heads=model_cfg.n_kv_head,
+                seq_len=cfg.seq_len + cfg.warmup_steps + cfg.measure_steps,
+                head_dim=model_cfg.n_embd // model_cfg.n_head,
+                num_layers=model_cfg.n_layer,
+            )
+            with torch.inference_mode():
+                # Prompt prefill establishes the representative cache length but is deliberately
+                # outside the timed window and token count. Every later call is true Tq=1 decode
+                # through the same serving seam as Engine.generate.
+                engine._forward(inputs, cache)
+                for step in range(cfg.warmup_steps):
+                    engine._forward(continuation[:, step : step + 1], cache)
+                _synchronize_for_timing(device)
                 t0 = time.perf_counter()
-                for _ in range(cfg.measure_steps):
-                    _ = model(inputs)
+                for step in range(cfg.warmup_steps, continuation.size(1)):
+                    engine._forward(continuation[:, step : step + 1], cache)
+                _synchronize_for_timing(device)
                 elapsed = time.perf_counter() - t0
+            expected_cache_pos = cfg.seq_len + cfg.warmup_steps + cfg.measure_steps
+            if cache.get_pos() != expected_cache_pos:
+                raise RuntimeError(
+                    "cached decode benchmark did not advance exactly one position per token; "
+                    f"got pos={cache.get_pos()}, expected={expected_cache_pos}"
+                )
 
-        total_tokens = cfg.batch_size * cfg.seq_len * cfg.measure_steps
+        tokens_per_step = cfg.batch_size * (cfg.seq_len if cfg.mode == "train" else 1)
+        total_tokens = tokens_per_step * cfg.measure_steps
         tok_per_sec = total_tokens / max(1e-6, elapsed)
         latency_ms = (elapsed / cfg.measure_steps) * 1000.0
 
@@ -203,6 +266,7 @@ class PerfRegressionHarness:
             batch_size=cfg.batch_size,
             seq_len=cfg.seq_len,
             device=str(device),
+            benchmark_config=_config_snapshot(cfg, device),
         )
 
     def run_all(self, configs: Sequence[PerfBenchmarkConfig] | None = None) -> list[BenchmarkResult]:
@@ -228,6 +292,8 @@ class PerfRegressionHarness:
                     mode=r.mode,
                     tok_per_sec=r.tok_per_sec,
                     peak_memory_mb=r.peak_memory_mb,
+                    device=r.device,
+                    benchmark_config=r.benchmark_config,
                     tolerance=tolerance,
                 )
             )
@@ -250,10 +316,31 @@ class PerfRegressionHarness:
                         name=res.name,
                         mode=res.mode,
                         observed_tok_per_sec=res.tok_per_sec,
-                        baseline_tok_per_sec=res.tok_per_sec,
-                        speed_ratio=1.0,
-                        passed=True,
-                        detail="No baseline found; auto-admitted as baseline reference",
+                        baseline_tok_per_sec=0.0,
+                        speed_ratio=0.0,
+                        passed=False,
+                        detail="No valid baseline found; update baselines explicitly before checking",
+                    )
+                )
+                continue
+
+            provenance_mismatches = []
+            if res.mode != base.mode:
+                provenance_mismatches.append(f"mode {res.mode!r} != {base.mode!r}")
+            if res.device != base.device:
+                provenance_mismatches.append(f"device {res.device!r} != {base.device!r}")
+            if res.benchmark_config != base.benchmark_config:
+                provenance_mismatches.append("benchmark configuration differs")
+            if provenance_mismatches:
+                comparisons.append(
+                    GateComparison(
+                        name=res.name,
+                        mode=res.mode,
+                        observed_tok_per_sec=res.tok_per_sec,
+                        baseline_tok_per_sec=base.tok_per_sec,
+                        speed_ratio=res.tok_per_sec / max(1e-6, base.tok_per_sec),
+                        passed=False,
+                        detail="Baseline provenance mismatch: " + "; ".join(provenance_mismatches),
                     )
                 )
                 continue

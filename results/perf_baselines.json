@@ -4,6 +4,21 @@
     "mode": "train",
     "tok_per_sec": 3000.0,
     "peak_memory_mb": 0.4375,
+    "device": "cpu",
+    "benchmark_config": {
+      "name": "standard_transformer_train",
+      "mode": "train",
+      "synaptic": false,
+      "batch_size": 2,
+      "seq_len": 32,
+      "vocab_size": 128,
+      "n_layer": 2,
+      "n_head": 4,
+      "n_embd": 64,
+      "warmup_steps": 2,
+      "measure_steps": 5,
+      "device": "cpu"
+    },
     "tolerance": 0.50
   },
   "synaptic_transformer_train": {
@@ -11,20 +26,65 @@
     "mode": "train",
     "tok_per_sec": 1500.0,
     "peak_memory_mb": 0.7368,
+    "device": "cpu",
+    "benchmark_config": {
+      "name": "synaptic_transformer_train",
+      "mode": "train",
+      "synaptic": true,
+      "batch_size": 2,
+      "seq_len": 32,
+      "vocab_size": 128,
+      "n_layer": 2,
+      "n_head": 4,
+      "n_embd": 64,
+      "warmup_steps": 2,
+      "measure_steps": 5,
+      "device": "cpu"
+    },
     "tolerance": 0.50
   },
-  "standard_transformer_decode": {
-    "name": "standard_transformer_decode",
+  "standard_transformer_cached_tq1_decode": {
+    "name": "standard_transformer_cached_tq1_decode",
     "mode": "decode",
-    "tok_per_sec": 3000.0,
+    "tok_per_sec": 1170.0,
     "peak_memory_mb": 0.4375,
+    "device": "cpu",
+    "benchmark_config": {
+      "name": "standard_transformer_cached_tq1_decode",
+      "mode": "decode",
+      "synaptic": false,
+      "batch_size": 1,
+      "seq_len": 16,
+      "vocab_size": 128,
+      "n_layer": 2,
+      "n_head": 4,
+      "n_embd": 64,
+      "warmup_steps": 20,
+      "measure_steps": 200,
+      "device": "cpu"
+    },
     "tolerance": 0.50
   },
-  "synaptic_transformer_decode": {
-    "name": "synaptic_transformer_decode",
+  "synaptic_transformer_cached_tq1_decode": {
+    "name": "synaptic_transformer_cached_tq1_decode",
     "mode": "decode",
-    "tok_per_sec": 1000.0,
+    "tok_per_sec": 296.0,
     "peak_memory_mb": 0.7368,
+    "device": "cpu",
+    "benchmark_config": {
+      "name": "synaptic_transformer_cached_tq1_decode",
+      "mode": "decode",
+      "synaptic": true,
+      "batch_size": 1,
+      "seq_len": 16,
+      "vocab_size": 128,
+      "n_layer": 2,
+      "n_head": 4,
+      "n_embd": 64,
+      "warmup_steps": 20,
+      "measure_steps": 200,
+      "device": "cpu"
+    },
     "tolerance": 0.50
   }
 }
