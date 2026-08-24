@@ -20,19 +20,35 @@ Examples:
 from __future__ import annotations
 
 import csv
+import json
 import os
+import platform
+import runpy
 import time
+from contextlib import nullcontext
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 
 import matplotlib.pyplot as plt
 import torch
 from rich.console import Console
-from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeElapsedColumn,
+)
 from rich.table import Table
+from torch.nn.attention import SDPBackend, sdpa_kernel
 
-from bio_inspired_nanochat.common import autodetect_device_type, compute_cleanup, compute_init
+from bio_inspired_nanochat.common import (
+    autodetect_device_type,
+    compute_cleanup,
+    compute_init,
+)
 from bio_inspired_nanochat.gpt import GPT, GPTConfig
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
 from bio_inspired_nanochat.synaptic import SynapticConfig
@@ -51,6 +67,17 @@ seq_len = 2048
 n_layer = 12
 n_head = 12
 n_embd = 768
+attention_cases = (
+    "vanilla_sdpa_auto,vanilla_sdpa_flash,vanilla_sdpa_math,"
+    "synaptic_dense,synaptic_flex"
+)
+attention_warmup_steps = 5
+attention_benchmark_steps = 20
+attention_compile = True
+attention_require_4090 = True
+attention_seed = 42
+attention_dtype = "bfloat16"
+attention_out_dir = "runs/attention_backends"
 
 # CA init micro-benchmark settings
 synapses = 0  # 0=GPT, 1=GPTSynaptic
@@ -77,8 +104,13 @@ dtype = "float32"  # float32|bfloat16|float16 (used for ca_init mode)
 config_keys = [
     k for k, v in globals().items() if not k.startswith("_") and isinstance(v, (int, float, bool, str))
 ]
-with open(os.path.join("bio_inspired_nanochat", "configurator.py")) as f:
-    exec(f.read())  # nosec B102 # CLI overrides
+_configured = runpy.run_path(
+    os.path.join("bio_inspired_nanochat", "configurator.py"),
+    init_globals=globals(),
+    run_name="_benchmark_configurator",
+)
+for _config_key in config_keys:
+    globals()[_config_key] = _configured[_config_key]
 
 
 def _parse_dtype(name: str) -> torch.dtype:
@@ -136,7 +168,7 @@ class _RunResult:
 def _bench_ca_init() -> list[_RunResult]:
     dtp = _parse_dtype(dtype)
     dty = autodetect_device_type() if device_type == "" else device_type
-    ddp, ddp_rank, _, _, device = compute_init(dty)
+    ddp, _ddp_rank, _, _, device = compute_init(dty)
     if ddp:
         raise RuntimeError("ca_init benchmark is intended for single-process runs (no torchrun/DDP).")
 
@@ -144,7 +176,7 @@ def _bench_ca_init() -> list[_RunResult]:
         torch.cuda.empty_cache()
         torch.cuda.reset_peak_memory_stats()
 
-    run_dir = Path(out_dir) / datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_dir = Path(out_dir) / datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     run_dir.mkdir(parents=True, exist_ok=True)
     console.print(f"[bold]CA init micro-benchmark[/bold] → {run_dir}")
 
@@ -389,22 +421,75 @@ def _bench_ca_init() -> list[_RunResult]:
     return results
 
 
-def _bench_flex() -> None:
-    def benchmark(use_flex: bool) -> tuple[float, float]:
-        print(f"\n--- Benchmarking with use_flex_attention={use_flex} ---")
+@dataclass(frozen=True)
+class _AttentionCase:
+    name: str
+    model_path: str
+    sdpa_backend: str | None = None
+    use_flex: bool = False
 
-        # Reset memory
-        torch.cuda.empty_cache()
-        torch.cuda.reset_peak_memory_stats()
 
-        # Config
+_ATTENTION_CASES = {
+    "vanilla_sdpa_auto": _AttentionCase("vanilla_sdpa_auto", "vanilla", "auto"),
+    "vanilla_sdpa_flash": _AttentionCase("vanilla_sdpa_flash", "vanilla", "flash"),
+    "vanilla_sdpa_math": _AttentionCase("vanilla_sdpa_math", "vanilla", "math"),
+    # The canonical synaptic path materializes its biological logit bias, so it cannot use
+    # stock SDPA/FlashAttention without changing the function being measured.
+    "synaptic_dense": _AttentionCase("synaptic_dense", "synaptic"),
+    "synaptic_flex": _AttentionCase("synaptic_flex", "synaptic", use_flex=True),
+}
+
+
+def _parse_attention_cases(spec: str) -> list[_AttentionCase]:
+    names = [name.strip() for name in spec.split(",") if name.strip()]
+    if not names:
+        raise ValueError("attention_cases must contain at least one case")
+    unknown = sorted(set(names) - set(_ATTENTION_CASES))
+    if unknown:
+        allowed = ", ".join(sorted(_ATTENTION_CASES))
+        raise ValueError(f"Unknown attention case(s) {unknown}; allowed: {allowed}")
+    if len(names) != len(set(names)):
+        raise ValueError("attention_cases must not contain duplicates")
+    return [_ATTENTION_CASES[name] for name in names]
+
+
+def _attention_preflight(
+    *, cuda_available: bool, device_name: str | None, require_4090: bool
+) -> str | None:
+    if not cuda_available:
+        return "CUDA is unavailable; attention performance evidence requires a CUDA GPU."
+    if require_4090 and (device_name is None or "4090" not in device_name.casefold()):
+        return (
+            "This run requires an RTX 4090 so its results satisfy bead zsi; "
+            f"detected {device_name or 'an unknown CUDA device'}."
+        )
+    return None
+
+
+def _sdpa_context(backend: str | None):
+    if backend in (None, "auto"):
+        return nullcontext()
+    if backend == "flash":
+        # A single backend makes this a strict measurement: PyTorch must fail instead of silently
+        # falling through to math or memory-efficient attention.
+        return sdpa_kernel(SDPBackend.FLASH_ATTENTION)
+    if backend == "math":
+        return sdpa_kernel(SDPBackend.MATH)
+    raise ValueError(f"Unsupported SDPA backend {backend!r}")
+
+
+def _build_attention_model(
+    case: _AttentionCase, *, device: torch.device, dtp: torch.dtype
+) -> torch.nn.Module:
+    torch.manual_seed(int(attention_seed))
+    torch.cuda.manual_seed_all(int(attention_seed))
+    if case.model_path == "synaptic":
         syn_cfg = SynapticConfig(
             enable_presyn=True,
             enable_hebbian=True,
             enable_metabolism=True,
-            use_flex_attention=use_flex,
+            use_flex_attention=case.use_flex,
         )
-
         config = GPTSynapticConfig(
             sequence_len=int(seq_len),
             vocab_size=50257,
@@ -415,96 +500,242 @@ def _bench_flex() -> None:
             synapses=True,
             syn_cfg=syn_cfg,
         )
-
-        device = torch.device("cuda")
-        # Use float16 to avoid Triton atomic_add bf16 issues
-        dtp = torch.float16
-
-        print("Initializing model...")
-        # Avoid meta device for benchmark to prevent buffer init issues
-        model = GPTSynaptic(config).to(device).to(dtp)
-        model.train()
-
-        # Compile is REQUIRED for FlexAttention
-        print("Compiling model...")
-        compiled_model = torch.compile(model)
-
-        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
-
-        # Dummy Data
-        x = torch.randint(0, 50257, (int(batch_size), int(seq_len)), device=device)
-        y = torch.randint(0, 50257, (int(batch_size), int(seq_len)), device=device)
-
-        # Warmup
-        print("Warmup steps...")
-        for _ in range(5):
-            optimizer.zero_grad()
-            with torch.amp.autocast(device_type="cuda", dtype=dtp):
-                _, loss = compiled_model(x, y)
-            loss.backward()
-            optimizer.step()
-
-        torch.cuda.synchronize()
-
-        # Benchmark
-        print("Benchmarking steps...")
-        t0 = time.time()
-        bench_steps = 20
-        for _ in range(bench_steps):
-            optimizer.zero_grad()
-            with torch.amp.autocast(device_type="cuda", dtype=dtp):
-                _, loss = compiled_model(x, y)
-            loss.backward()
-            optimizer.step()
-        torch.cuda.synchronize()
-        t1 = time.time()
-
-        dt = t1 - t0
-        tokens_per_sec = (bench_steps * int(batch_size) * int(seq_len)) / dt
-        max_mem = torch.cuda.max_memory_allocated() / 1024**3
-
-        print(f"Time: {dt:.4f}s")
-        print(f"Throughput: {tokens_per_sec:.2f} tokens/sec")
-        print(f"Peak VRAM: {max_mem:.2f} GB")
-
-        return tokens_per_sec, max_mem
-
-    # Standard Baseline
-    try:
-        perf_std, mem_std = benchmark(use_flex=False)
-        res_std = f"{perf_std:.2f} t/s | {mem_std:.2f} GB"
-    except torch.OutOfMemoryError:
-        print("Standard: OOM")
-        res_std = "OOM"
-        perf_std = 0
-        mem_std = float("inf")
-    except Exception as e:  # noqa: BLE001
-        print(f"Standard Failed: {e}")
-        res_std = "Failed"
-        perf_std = 0
-        mem_std = float("inf")
-
-    # Flex Attention
-    try:
-        perf_flex, mem_flex = benchmark(use_flex=True)
-        res_flex = f"{perf_flex:.2f} t/s | {mem_flex:.2f} GB"
-    except Exception as e:  # noqa: BLE001
-        print(f"Flex Failed: {e}")
-        import traceback
-
-        traceback.print_exc()
-        res_flex = "Failed"
-        perf_flex = 0
-        mem_flex = 0
-
-    print("\n=== Results Summary ===")
-    print(f"Standard: {res_std}")
-    print(f"Flex:     {res_flex}")
-    if perf_std > 0:
-        print(f"Speedup:  {perf_flex / perf_std:.2f}x")
-        print(f"Mem Red:  {mem_flex / mem_std:.2f}x (Lower is better)")
+        model: torch.nn.Module = GPTSynaptic(config)
     else:
-        print("Speedup:  Infinite (Standard OOM)")
+        config = GPTConfig(
+            sequence_len=int(seq_len),
+            vocab_size=50257,
+            n_layer=int(n_layer),
+            n_head=int(n_head),
+            n_kv_head=int(n_head),
+            n_embd=int(n_embd),
+        )
+        model = GPT(config)
+
+    model.to(device=device, dtype=dtp)
+    if isinstance(model, GPT):
+        # GPT intentionally keeps RoPE caches in bf16 regardless of the activation dtype.
+        model.cos = model.cos.to(dtype=torch.bfloat16)
+        model.sin = model.sin.to(dtype=torch.bfloat16)
+    model.train()
+    if bool(attention_compile):
+        model = cast(torch.nn.Module, torch.compile(model, dynamic=False))
+    return model
+
+
+def _attention_loss(
+    model: torch.nn.Module,
+    case: _AttentionCase,
+    tokens: torch.Tensor,
+    targets: torch.Tensor,
+    dtp: torch.dtype,
+) -> torch.Tensor:
+    with (
+        _sdpa_context(case.sdpa_backend),
+        torch.amp.autocast(device_type="cuda", dtype=dtp),
+    ):
+        output = model(tokens, targets)
+    if case.model_path == "synaptic":
+        _logits, loss = output
+    else:
+        loss = output
+    if loss is None or not isinstance(loss, torch.Tensor):
+        raise RuntimeError(f"{case.name} returned no loss tensor")
+    return loss
+
+
+def _benchmark_attention_case(
+    case: _AttentionCase,
+    *,
+    device: torch.device,
+    tokens: torch.Tensor,
+    targets: torch.Tensor,
+    dtp: torch.dtype,
+) -> dict[str, object]:
+    row: dict[str, object] = {
+        "case": case.name,
+        "model_path": case.model_path,
+        "sdpa_backend": case.sdpa_backend,
+        "use_flex_attention": case.use_flex,
+        "status": "failed",
+        "reason": None,
+        "latency_ms": None,
+        "tokens_per_second": None,
+        "peak_allocated_gib": None,
+        "peak_reserved_gib": None,
+    }
+    model: torch.nn.Module | None = None
+    try:
+        console.print(f"[bold cyan]Benchmarking {case.name}[/bold cyan]")
+        model = _build_attention_model(case, device=device, dtp=dtp)
+
+        for _ in range(int(attention_warmup_steps)):
+            model.zero_grad(set_to_none=True)
+            _attention_loss(model, case, tokens, targets, dtp).backward()
+        torch.cuda.synchronize(device)
+        torch.cuda.reset_peak_memory_stats(device)
+
+        start = time.perf_counter()
+        for _ in range(int(attention_benchmark_steps)):
+            model.zero_grad(set_to_none=True)
+            _attention_loss(model, case, tokens, targets, dtp).backward()
+        torch.cuda.synchronize(device)
+        elapsed = time.perf_counter() - start
+
+        measured_steps = int(attention_benchmark_steps)
+        measured_tokens = measured_steps * int(batch_size) * int(seq_len)
+        row.update(
+            status="passed",
+            latency_ms=1000.0 * elapsed / measured_steps,
+            tokens_per_second=measured_tokens / elapsed,
+            peak_allocated_gib=torch.cuda.max_memory_allocated(device) / 1024**3,
+            peak_reserved_gib=torch.cuda.max_memory_reserved(device) / 1024**3,
+        )
+    except torch.OutOfMemoryError as exc:
+        row.update(status="oom", reason=str(exc))
+    except Exception as exc:  # noqa: BLE001 - one unsupported backend must not erase the matrix
+        row.update(status="failed", reason=f"{type(exc).__name__}: {exc}")
+    finally:
+        del model
+        torch.cuda.empty_cache()
+    return row
+
+
+def _recommend_backend(
+    rows: list[dict[str, object]], *, model_path: str, baseline: str
+) -> dict[str, object] | None:
+    successful = [
+        row
+        for row in rows
+        if row["model_path"] == model_path
+        and row["status"] == "passed"
+        and isinstance(row["tokens_per_second"], float)
+    ]
+    if not successful:
+        return None
+    best = max(successful, key=lambda row: float(row["tokens_per_second"]))
+    baseline_row = next((row for row in successful if row["case"] == baseline), None)
+    delta_pct = None
+    if baseline_row is not None:
+        baseline_rate = float(baseline_row["tokens_per_second"])
+        delta_pct = 100.0 * (float(best["tokens_per_second"]) / baseline_rate - 1.0)
+    return {
+        "model_path": model_path,
+        "recommended_case": best["case"],
+        "baseline_case": baseline if baseline_row is not None else None,
+        "throughput_delta_percent": delta_pct,
+    }
+
+
+def _format_metric(value: object, format_spec: str) -> str:
+    if isinstance(value, (int, float)):
+        return format(float(value), format_spec)
+    return "—"
+
+
+def _bench_flex() -> Path:
+    device_name = torch.cuda.get_device_name(0) if torch.cuda.is_available() else None
+    blocker = _attention_preflight(
+        cuda_available=torch.cuda.is_available(),
+        device_name=device_name,
+        require_4090=bool(attention_require_4090),
+    )
+    if blocker is not None:
+        raise RuntimeError(blocker)
+    if int(attention_warmup_steps) < 1 or int(attention_benchmark_steps) < 1:
+        raise ValueError("attention_warmup_steps and attention_benchmark_steps must be positive")
+
+    cases = _parse_attention_cases(str(attention_cases))
+    device = torch.device("cuda", 0)
+    dtp = _parse_dtype(str(attention_dtype))
+    if dtp not in (torch.float16, torch.bfloat16):
+        raise ValueError("attention_dtype must be float16 or bfloat16 for CUDA benchmarking")
+    torch.manual_seed(int(attention_seed))
+    torch.cuda.manual_seed_all(int(attention_seed))
+    tokens = torch.randint(0, 50257, (int(batch_size), int(seq_len)), device=device)
+    targets = torch.randint(0, 50257, (int(batch_size), int(seq_len)), device=device)
+
+    rows = [
+        _benchmark_attention_case(
+            case,
+            device=device,
+            tokens=tokens,
+            targets=targets,
+            dtp=dtp,
+        )
+        for case in cases
+    ]
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S_%fZ")
+    run_dir = Path(str(attention_out_dir)) / timestamp
+    run_dir.mkdir(parents=True, exist_ok=False)
+    metadata = {
+        "schema_version": 1,
+        "created_at": datetime.now(UTC).isoformat(),
+        "host": platform.node(),
+        "torch_version": torch.__version__,
+        "cuda_version": torch.version.cuda,
+        "device_name": device_name,
+        "compute_capability": list(torch.cuda.get_device_capability(device)),
+        "batch_size": int(batch_size),
+        "sequence_length": int(seq_len),
+        "n_layer": int(n_layer),
+        "n_head": int(n_head),
+        "n_embd": int(n_embd),
+        "warmup_steps": int(attention_warmup_steps),
+        "benchmark_steps": int(attention_benchmark_steps),
+        "compiled": bool(attention_compile),
+        "dtype": str(attention_dtype),
+        "seed": int(attention_seed),
+        "flash_note": (
+            "vanilla_sdpa_flash strictly forces PyTorch's FLASH_ATTENTION SDPA backend. "
+            "PyTorch does not expose a FlashAttention-2/3 generation label here; do not infer "
+            "one from this artifact. The synaptic dense path needs an additive biological score "
+            "bias, so stock SDPA is not functionally equivalent; synaptic_flex is its fused case."
+        ),
+    }
+    artifact = {
+        "metadata": metadata,
+        "results": rows,
+        "recommendations": [
+            recommendation
+            for recommendation in (
+                _recommend_backend(rows, model_path="vanilla", baseline="vanilla_sdpa_auto"),
+                _recommend_backend(rows, model_path="synaptic", baseline="synaptic_dense"),
+            )
+            if recommendation is not None
+        ],
+    }
+    json_path = run_dir / "attention_backends.json"
+    with json_path.open("x", encoding="utf-8") as handle:
+        json.dump(artifact, handle, indent=2, sort_keys=True)
+        handle.write("\n")
+
+    csv_path = run_dir / "attention_backends.csv"
+    with csv_path.open("x", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+
+    table = Table(title=f"Attention backend benchmark — {device_name}")
+    table.add_column("Case")
+    table.add_column("Status")
+    table.add_column("ms/step", justify="right")
+    table.add_column("tokens/s", justify="right")
+    table.add_column("peak GiB", justify="right")
+    for row in rows:
+        latency = row["latency_ms"]
+        rate = row["tokens_per_second"]
+        peak = row["peak_allocated_gib"]
+        table.add_row(
+            str(row["case"]),
+            str(row["status"]),
+            _format_metric(latency, ".2f"),
+            _format_metric(rate, ",.0f"),
+            _format_metric(peak, ".2f"),
+        )
+    console.print(table)
+    console.print(f"[green]Wrote immutable benchmark artifacts to {run_dir}[/green]")
+    return run_dir
 
 
 if __name__ == "__main__":
@@ -513,6 +744,9 @@ if __name__ == "__main__":
             _bench_ca_init()
         else:
             _bench_flex()
+    except (RuntimeError, ValueError) as exc:
+        console.print(f"[bold red]Benchmark aborted:[/bold red] {exc}")
+        raise SystemExit(2) from exc
     finally:
         # Ensure we don't leave process groups around in case compute_init detected DDP env vars.
         compute_cleanup()
