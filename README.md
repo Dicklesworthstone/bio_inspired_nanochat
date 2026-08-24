@@ -227,7 +227,7 @@ Our parameter space includes:
 - **12 Vesicle Trafficking Parameters** (RRP refill, priming, endocytosis rates)
 - **8 Postsynaptic Plasticity Parameters** (Hebbian gains, CaMKII/PP1, BDNF)
 - **6 Structural Plasticity Parameters** (energy costs, split/merge thresholds)
-- **12 Rust Kernel Compatibility Parameters** (tau_buf, tau_prime, etc.)
+- **12 Full-Sequence Reference Parameters** (tau_buf, tau_prime, etc.)
 
 These parameters interact non-linearly across:
 - Multiple timescales (ms to seconds)
@@ -573,7 +573,7 @@ uv run scripts/base_eval.py
 *   **`rust_src/src/presyn.rs`** 🦀 **CPU Kernel**: PyO3-native Rust implementation
 *   **`rust_src/src/moe.rs`** 🦀 **MoE Kernel**: Expert routing and metabolism
 *   **`tests/test_presyn_backend_parity.py`** ✅ **Parity**: one frozen trajectory across Python, Triton, and Rust
-*   **`tests/test_rust_kernels.py`** ✅ **Reference**: legacy dense-kernel and MoE validation
+*   **`tests/test_rust_kernels.py`** ✅ **Native Utilities**: Rust MoE/metabolism validation
 
 ### Visualization & Analysis
 *   **`bio_inspired_nanochat/neuroviz.py`** 📸 **The MRI**: Visualizations of brain internal state

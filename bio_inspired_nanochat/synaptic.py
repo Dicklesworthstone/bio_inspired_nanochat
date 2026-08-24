@@ -215,7 +215,7 @@ class SynapticConfig:
     # attention. 10.0 keeps the mechanism intact while bounding it; 0 disables (vg9.5).
     loge_bias_clamp: float = 10.0
 
-    # Rust Kernel Compat
+    # Full-sequence visualization/reference dynamics
     tau_buf: float = 4.0
     tau_prime: float = 5.0
     tau_rrp: float = 40.0
@@ -1147,9 +1147,9 @@ class SynapticPresyn(nn.Module):
         """
         Full (B, H, T, T) presynaptic dynamics reference (sequential, causal).
 
-        This is used for kernel correctness tests and visualization utilities.
-        It implements the same governing equations as the Rust/Triton reference paths
-        (i.e., it uses the "Rust Kernel Compat" parameters in SynapticConfig).
+        This is used for visualization and full-sequence reference tests. The canonical
+        Rust/Triton backend contract is the sparse Tq=1 `release_canonical` path; this
+        method intentionally retains a distinct sequential execution model.
         """
         B, H, T, D = q.shape
         cfg = self.cfg

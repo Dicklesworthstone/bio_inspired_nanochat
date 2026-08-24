@@ -505,7 +505,6 @@ fn dummy_function() -> PyResult<String> {
 fn rustbpe(m: &Bound<'_, PyModule>) -> PyResult<()> {
     pyo3_log::init(); // forwards Rust `log` to Python's `logging`
     m.add_class::<Tokenizer>()?;
-    m.add_function(wrap_pyfunction!(presyn::presyn_step_cpu, m)?)?;
     m.add_function(wrap_pyfunction!(presyn::presyn_release_canonical_cpu, m)?)?;
     m.add_function(wrap_pyfunction!(moe::accumulate_router_stats_cpu, m)?)?;
     m.add_function(wrap_pyfunction!(moe::update_metabolism_cpu, m)?)?;
@@ -513,7 +512,6 @@ fn rustbpe(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     let __all__ = vec![
         "Tokenizer".to_string(),
-        "presyn_step_cpu".to_string(),
         "presyn_release_canonical_cpu".to_string(),
         "accumulate_router_stats_cpu".to_string(),
         "update_metabolism_cpu".to_string(),
