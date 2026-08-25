@@ -22,7 +22,7 @@ from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterator, Literal, Optional, Sequence, cast
+from typing import Any, Iterator, Literal, Optional, Sequence, TypeVar, cast
 
 from rich.console import Console
 from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
@@ -174,6 +174,18 @@ class ContinualMetricSummary:
 
 
 ComputeRuntime = tuple[bool, int, int, int, torch.device]
+_ListEntry = TypeVar("_ListEntry", int, str)
+
+
+def _require_unique(values: Sequence[_ListEntry], *, name: str) -> None:
+    seen: set[_ListEntry] = set()
+    duplicates: list[_ListEntry] = []
+    for value in values:
+        if value in seen and value not in duplicates:
+            duplicates.append(value)
+        seen.add(value)
+    if duplicates:
+        raise ValueError(f"{name} must not contain duplicates: {duplicates}")
 
 
 def _parse_int_list(csv_str: str) -> list[int]:
@@ -185,6 +197,7 @@ def _parse_int_list(csv_str: str) -> list[int]:
         out.append(int(p))
     if not out:
         raise ValueError("Expected a non-empty comma-separated list of ints")
+    _require_unique(out, name="integer list")
     return out
 
 
@@ -197,7 +210,20 @@ def _parse_str_list(csv_str: str) -> list[str]:
         out.append(p)
     if not out:
         raise ValueError("Expected a non-empty comma-separated list of strings")
+    _require_unique(out, name="string list")
     return out
+
+
+def _batch_output_dir(out_dir: Path, batch_id: str) -> Path:
+    """Return one safe batch child without allowing the ID to escape its root."""
+    if not isinstance(batch_id, str) or not batch_id or Path(batch_id).is_absolute():
+        raise ValueError("batch_id must be a non-empty relative subdirectory name")
+    if "\\" in batch_id:
+        raise ValueError("batch_id must not contain path separators")
+    candidate = out_dir / batch_id
+    if candidate.resolve().parent != out_dir.resolve():
+        raise ValueError("batch_id must name one direct child beneath out_dir")
+    return candidate
 
 
 def _set_seed(seed: int, *, device_type: str) -> torch.Generator:
@@ -1621,13 +1647,22 @@ def _run_batch(
     seeds: list[int],
     args: argparse.Namespace,
 ) -> int:
+    explicit_out_dir = (
+        _batch_output_dir(Path(args.out_dir), args.batch_id)
+        if args.batch_id is not None
+        else None
+    )
     runtime = compute_init(args.device_type)
     ddp, ddp_rank, _, _, device = runtime
     stamp_payload = [_utc_stamp() if ddp_rank == 0 else ""]
     if ddp and torch.distributed.is_initialized():
         torch.distributed.broadcast_object_list(stamp_payload, src=0, device=device)
     batch_id = args.batch_id or f"{batch_kind}_{stamp_payload[0]}"
-    batch_out_dir = Path(args.out_dir) / batch_id
+    batch_out_dir = (
+        explicit_out_dir
+        if explicit_out_dir is not None
+        else _batch_output_dir(Path(args.out_dir), batch_id)
+    )
     if ddp_rank == 0:
         batch_out_dir.mkdir(parents=True, exist_ok=True)
     if ddp and torch.distributed.is_initialized():
@@ -1642,6 +1677,7 @@ def _run_batch(
                 tbl.add_row(preset, str(seed))
         console.print(tbl)
 
+    had_failure = False
     try:
         for preset in presets:
             for seed in seeds:
@@ -1683,6 +1719,7 @@ def _run_batch(
                         runtime=runtime,
                     )
                 except Exception as e:
+                    had_failure = True
                     err_id = f"ERR-{preset}-t{args.train_tokens}-s{seed}-{_utc_stamp()}"
                     resolved_checkpoint = (
                         str(_resolve_checkpoint_dir(args.checkpoint_dir, preset=preset, seed=seed))
@@ -1733,12 +1770,18 @@ def _run_batch(
                         )
                     if args.fail_fast:
                         raise
+        if ddp and torch.distributed.is_initialized():
+            failure_flag = torch.tensor(
+                int(had_failure), dtype=torch.int32, device=device
+            )
+            torch.distributed.all_reduce(failure_flag, op=torch.distributed.ReduceOp.SUM)
+            had_failure = int(failure_flag.item()) > 0
     finally:
         compute_cleanup()
 
     if ddp_rank == 0:
         console.print(f"Batch outputs: {batch_out_dir}")
-    return 0
+    return int(had_failure)
 
 
 def _cmd_matrix(args: argparse.Namespace) -> int:

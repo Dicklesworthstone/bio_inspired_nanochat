@@ -42,12 +42,15 @@ from bio_inspired_nanochat.results_registry import read_records
 from bio_inspired_nanochat.synaptic import SynapticConfig
 from scripts.eval_matrix import (
     SUMMARY_FIELDS,
+    _batch_output_dir,
     _binary_auroc,
     _deterministic_ood_tokens,
     _forgetting_rate_from_accuracy_matrix,
     _get_logits,
     _gini_coefficient,
     _load_base_train_checkpoint,
+    _parse_int_list,
+    _parse_str_list,
     _summarize_routing_counts,
     _val_loss_ppl_ece,
 )
@@ -435,6 +438,147 @@ def test_eval_matrix_rejects_invalid_capability_metric_policy(flag, value, messa
         sys.argv = old_argv
     assert exc_info.value.code == 2
     assert message in capsys.readouterr().err
+
+
+def test_eval_matrix_batch_returns_nonzero_for_any_failed_cell(monkeypatch, tmp_path):
+    import scripts.eval_matrix as eval_matrix_module
+    import torch
+
+    monkeypatch.setattr(
+        eval_matrix_module,
+        "compute_init",
+        lambda _device_type: (False, 0, 0, 1, torch.device("cpu")),
+    )
+    monkeypatch.setattr(eval_matrix_module, "compute_cleanup", lambda: None)
+
+    old_argv = sys.argv
+    try:
+        for failed_seeds, expected_status, batch_id in (
+            (set(), 0, "all_success"),
+            ({1}, 1, "partial_failure"),
+            ({1, 2}, 1, "all_failed"),
+        ):
+            def fake_run_one(*, seed, **_kwargs):
+                if seed in failed_seeds:
+                    raise RuntimeError(f"planted failure for seed {seed}")
+
+            monkeypatch.setattr(eval_matrix_module, "_run_one", fake_run_one)
+            sys.argv = [
+                "eval_matrix",
+                "matrix",
+                "--presets",
+                "vanilla",
+                "--seeds",
+                "1,2",
+                "--inline-smoke-training",
+                "--device-type",
+                "cpu",
+                "--out-dir",
+                str(tmp_path),
+                "--batch-id",
+                batch_id,
+            ]
+            assert eval_matrix_module.main() == expected_status
+    finally:
+        sys.argv = old_argv
+
+
+def test_eval_matrix_batch_propagates_remote_rank_failure(monkeypatch, tmp_path):
+    import scripts.eval_matrix as eval_matrix_module
+    import torch
+
+    monkeypatch.setattr(
+        eval_matrix_module,
+        "compute_init",
+        lambda _device_type: (True, 0, 0, 2, torch.device("cpu")),
+    )
+    monkeypatch.setattr(eval_matrix_module, "compute_cleanup", lambda: None)
+    monkeypatch.setattr(eval_matrix_module, "_run_one", lambda **_kwargs: None)
+    monkeypatch.setattr(torch.distributed, "is_initialized", lambda: True)
+    monkeypatch.setattr(
+        torch.distributed,
+        "broadcast_object_list",
+        lambda _values, *, src, device: None,
+    )
+    monkeypatch.setattr(torch.distributed, "barrier", lambda: None)
+    monkeypatch.setattr(
+        torch.distributed,
+        "all_reduce",
+        lambda tensor, *, op: tensor.fill_(1),
+    )
+
+    old_argv = sys.argv
+    sys.argv = [
+        "eval_matrix",
+        "matrix",
+        "--presets",
+        "vanilla",
+        "--seeds",
+        "1",
+        "--inline-smoke-training",
+        "--device-type",
+        "cpu",
+        "--out-dir",
+        str(tmp_path),
+        "--batch-id",
+        "remote_failure",
+    ]
+    try:
+        assert eval_matrix_module.main() == 1
+    finally:
+        sys.argv = old_argv
+
+
+def test_eval_matrix_rejects_duplicate_batch_cells():
+    with pytest.raises(ValueError, match="must not contain duplicates"):
+        _parse_str_list("vanilla,vanilla")
+    with pytest.raises(ValueError, match="must not contain duplicates"):
+        _parse_int_list("7,8,7")
+
+    assert _parse_str_list("vanilla,bio_all") == ["vanilla", "bio_all"]
+    assert _parse_int_list("7,8") == [7, 8]
+
+
+@pytest.mark.parametrize("batch_id", ["", "../escape", "nested/escape", "..\\escape"])
+def test_eval_matrix_rejects_escaping_batch_id_before_compute_init(
+    monkeypatch,
+    tmp_path,
+    batch_id,
+):
+    import scripts.eval_matrix as eval_matrix_module
+
+    def unexpected_compute_init(_device_type):
+        pytest.fail("invalid batch_id reached compute initialization")
+
+    monkeypatch.setattr(eval_matrix_module, "compute_init", unexpected_compute_init)
+    old_argv = sys.argv
+    sys.argv = [
+        "eval_matrix",
+        "matrix",
+        "--presets",
+        "vanilla",
+        "--seeds",
+        "1",
+        "--inline-smoke-training",
+        "--device-type",
+        "cpu",
+        "--out-dir",
+        str(tmp_path),
+        "--batch-id",
+        batch_id,
+    ]
+    try:
+        with pytest.raises(ValueError, match="batch_id"):
+            eval_matrix_module.main()
+    finally:
+        sys.argv = old_argv
+
+
+def test_batch_output_dir_rejects_absolute_path_and_accepts_direct_child(tmp_path):
+    with pytest.raises(ValueError, match="batch_id"):
+        _batch_output_dir(tmp_path, str(tmp_path / "escaped"))
+
+    assert _batch_output_dir(tmp_path, "batch_1") == tmp_path / "batch_1"
 
 
 def test_eval_logits_forces_synaptic_inference_mode():
