@@ -18,16 +18,32 @@ torchrun --standalone --nproc_per_node=8 -m scripts.chat_rl -- --run=default
 
 import os
 import itertools
+from typing import Protocol, cast
+
 import wandb
 import torch
 import torch.nn.functional as F
-import torch.distributed as dist
+import torch.distributed as torch_dist
 
 from bio_inspired_nanochat.common import compute_init, compute_cleanup, print0, get_base_dir, DummyWandb
 from bio_inspired_nanochat.checkpoint_manager import save_checkpoint, load_model
 from bio_inspired_nanochat.engine import Engine
 from bio_inspired_nanochat.report import get_report
 from tasks.gsm8k import GSM8K
+
+
+class _ReduceOpApi(Protocol):
+    SUM: object
+    AVG: object
+
+
+class _DistributedApi(Protocol):
+    ReduceOp: _ReduceOpApi
+
+    def all_reduce(self, tensor: torch.Tensor, *, op: object) -> None: ...
+
+
+dist = cast(_DistributedApi, torch_dist)
 
 # RL hyperparameters
 run = "dummy" # wandb run name

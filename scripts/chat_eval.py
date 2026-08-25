@@ -11,9 +11,10 @@ torchrun --nproc_per_node=8 -m scripts.chat_eval -- -a ARC-Easy
 import argparse
 from functools import partial
 from contextlib import nullcontext
+from typing import Protocol, cast
 
 import torch
-import torch.distributed as dist
+import torch.distributed as torch_dist
 
 from bio_inspired_nanochat.common import compute_init, compute_cleanup, get_dist_info, print0, autodetect_device_type
 from bio_inspired_nanochat.checkpoint_manager import load_model
@@ -24,6 +25,19 @@ from tasks.mmlu import MMLU
 from tasks.arc import ARC
 from tasks.gsm8k import GSM8K
 from tasks.spellingbee import SpellingBee
+
+
+class _ReduceOpApi(Protocol):
+    SUM: object
+
+
+class _DistributedApi(Protocol):
+    ReduceOp: _ReduceOpApi
+
+    def all_reduce(self, tensor: torch.Tensor, *, op: object) -> None: ...
+
+
+dist = cast(_DistributedApi, torch_dist)
 
 # -----------------------------------------------------------------------------
 # Generative evaluation loop (we go one problem at a time, sample, evaluate)
