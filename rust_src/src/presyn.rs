@@ -43,10 +43,17 @@ impl CanonicalConfig {
     fn from_py(cfg: &Bound<'_, PyAny>) -> PyResult<Self> {
         let tau_c: f32 = cfg.getattr("tau_c")?.extract()?;
         let tau_buf: f32 = cfg.getattr("tau_buf")?.extract()?;
-        let stochastic_train_frac: f32 = cfg.getattr("stochastic_train_frac")?.extract()?;
+        let _stochastic_train_frac: f32 = cfg.getattr("stochastic_train_frac")?.extract()?;
         let metriplectic_integrator: bool = cfg.getattr("metriplectic_integrator")?.extract()?;
         let learnable_kinetics: bool = cfg.getattr("learnable_kinetics")?.extract()?;
-        if stochastic_train_frac != 0.0 || metriplectic_integrator || learnable_kinetics {
+        // metriplectic/learnable genuinely change the dynamics — still rejected.
+        // stochastic_train_frac does NOT: the Python canonical gates the
+        // stochastic branch on `(train or mc_sampling) and frac > 0`, and this
+        // kernel only serves eval (train=False, enforced by
+        // _can_use_native_presyn_decode) — so eval is deterministic regardless
+        // of the fraction. Refusing it forced operators to flip a global config
+        // just to run CPU evaluation.
+        if metriplectic_integrator || learnable_kinetics {
             return Err(pyo3::exceptions::PyValueError::new_err(
                 "canonical Rust decode supports deterministic fixed-kinetics mode only",
             ));
