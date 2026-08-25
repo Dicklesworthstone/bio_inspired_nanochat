@@ -115,8 +115,17 @@ pub fn presyn_release_canonical_cpu<'py>(
     valid: PyReadonlyArrayDyn<'py, bool>,
     state: Bound<'py, PyDict>,
     cfg_obj: Bound<'py, PyAny>,
-    ema_e: f32,
+    ema_e: &Bound<'py, PyAny>,
 ) -> PyResult<(Bound<'py, PyArrayDyn<f32>>, Bound<'py, PyDict>)> {
+    // Accept a Python float OR a 1-element tensor/array (the live caller holds
+    // `self.ema_e` as an nn buffer). `.item()` covers both without forcing the
+    // caller to remember `.item()` — which would add a device sync per step.
+    let ema_e = match ema_e.extract::<f64>() {
+        Ok(value) => value as f32,
+        Err(_) => ema_e
+            .call_method0("item")?
+            .extract::<f64>()? as f32,
+    };
     if !ema_e.is_finite() || ema_e < 0.0 {
         return Err(pyo3::exceptions::PyValueError::new_err(
             "ema_e must be finite and non-negative",
