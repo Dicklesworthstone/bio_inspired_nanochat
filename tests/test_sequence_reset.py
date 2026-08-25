@@ -39,29 +39,34 @@ def _driven_linear(*, R=4, steps=3, seed=0) -> SynapticLinear:
 @pytest.mark.unit
 def test_reset_clears_eligibility_and_gate_but_keeps_slow():
     lin = _driven_linear()
-    assert lin.u_buf.abs().sum() > 0, "eligibility should have accumulated before reset"
-    assert not torch.allclose(lin.post.pp1, torch.full_like(lin.post.pp1, 0.5)), "PP1 should have drifted"
+    u_buf, v_buf, proj_in, post = lin.u_buf, lin.v_buf, lin.proj_in, lin.post
+    assert u_buf is not None
+    assert v_buf is not None
+    assert proj_in is not None
+    assert post is not None
+    assert u_buf.abs().sum() > 0, "eligibility should have accumulated before reset"
+    assert not torch.allclose(post.pp1, torch.full_like(post.pp1, 0.5)), "PP1 should have drifted"
 
     # snapshot the PERSISTENT state
     w_slow0 = lin.w_slow.clone()
-    proj0 = lin.proj_in.clone()
-    slow0 = lin.post.slow.clone()
-    u_lowrank0 = lin.post.U.clone()
+    proj0 = proj_in.clone()
+    slow0 = post.slow.clone()
+    u_lowrank0 = post.U.clone()
 
     lin.reset_sequence_state()
 
     # PER-SEQUENCE state cleared
-    assert lin.u_buf.abs().sum() == 0 and lin.v_buf.abs().sum() == 0
-    assert lin.post.camkii.abs().sum() == 0
-    assert torch.allclose(lin.post.pp1, torch.full_like(lin.post.pp1, 0.5))
-    assert lin.post.bdnf.abs().sum() == 0
-    assert lin._plasticity_pending is False and lin._last_gate_scale is None
+    assert u_buf.abs().sum() == 0 and v_buf.abs().sum() == 0
+    assert post.camkii.abs().sum() == 0
+    assert torch.allclose(post.pp1, torch.full_like(post.pp1, 0.5))
+    assert post.bdnf.abs().sum() == 0
+    assert not lin._plasticity_pending and lin._last_gate_scale is None
 
     # PERSISTENT state untouched
     assert torch.equal(lin.w_slow, w_slow0), "slow weight must persist"
-    assert torch.equal(lin.proj_in, proj0), "fixed projection must persist"
-    assert torch.equal(lin.post.slow, slow0), "consolidated diagonal must persist"
-    assert torch.equal(lin.post.U, u_lowrank0), "low-rank U must persist"
+    assert torch.equal(proj_in, proj0), "fixed projection must persist"
+    assert torch.equal(post.slow, slow0), "consolidated diagonal must persist"
+    assert torch.equal(post.U, u_lowrank0), "low-rank U must persist"
 
 
 # --------------------------------------------------------------------------- #
@@ -70,24 +75,30 @@ def test_reset_clears_eligibility_and_gate_but_keeps_slow():
 @pytest.mark.unit
 def test_default_does_not_touch_fast_weights_but_optin_zeros_them():
     lin = _driven_linear()
-    wf_before = lin.w_fast.clone()
+    w_fast, post = lin.w_fast, lin.post
+    assert w_fast is not None
+    assert post is not None
+    wf_before = w_fast.clone()
     lin.reset_sequence_state(reset_fast_weights=False)
-    assert torch.equal(lin.w_fast, wf_before), "default reset must NOT zero the trained fast weight"
+    assert torch.equal(w_fast, wf_before), "default reset must NOT zero the trained fast weight"
 
     lin.reset_sequence_state(reset_fast_weights=True)
-    assert lin.w_fast.abs().sum() == 0, "strict mode must zero w_fast"
-    assert lin.post.fast.abs().sum() == 0, "strict mode must zero post.fast"
+    assert w_fast.abs().sum() == 0, "strict mode must zero w_fast"
+    assert post.fast.abs().sum() == 0, "strict mode must zero post.fast"
 
 
 @pytest.mark.unit
 def test_consolidation_can_be_carried_across_sequences():
     lin = _driven_linear()
-    pp1_before = lin.post.pp1.clone()
-    bdnf_before = lin.post.bdnf.clone()
+    u_buf, post = lin.u_buf, lin.post
+    assert u_buf is not None
+    assert post is not None
+    pp1_before = post.pp1.clone()
+    bdnf_before = post.bdnf.clone()
     lin.reset_sequence_state(reset_consolidation=False)  # cel mode: keep the gate state
-    assert torch.equal(lin.post.pp1, pp1_before), "consolidation state must persist when opted in"
-    assert torch.equal(lin.post.bdnf, bdnf_before)
-    assert lin.u_buf.abs().sum() == 0, "but eligibility still resets every sequence"
+    assert torch.equal(post.pp1, pp1_before), "consolidation state must persist when opted in"
+    assert torch.equal(post.bdnf, bdnf_before)
+    assert u_buf.abs().sum() == 0, "but eligibility still resets every sequence"
 
 
 # --------------------------------------------------------------------------- #
@@ -111,7 +122,10 @@ def test_model_reset_clears_all_layers_and_reports_count():
 @pytest.mark.unit
 def test_reset_is_idempotent_and_finite():
     lin = _driven_linear()
+    u_buf, post = lin.u_buf, lin.post
+    assert u_buf is not None
+    assert post is not None
     lin.reset_sequence_state()
     lin.reset_sequence_state()  # second reset is a safe no-op
-    assert lin.u_buf.abs().sum() == 0
-    assert torch.isfinite(lin.w_slow).all() and torch.isfinite(lin.post.slow).all()
+    assert u_buf.abs().sum() == 0
+    assert torch.isfinite(lin.w_slow).all() and torch.isfinite(post.slow).all()
