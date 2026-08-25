@@ -355,6 +355,14 @@ class GPT(nn.Module):
         head_dim = self.config.n_embd // self.config.n_head
         cos, sin = self._precompute_rotary_embeddings(self.rotary_seq_len, head_dim)
         self.cos, self.sin = cos, sin
+        # ``to_empty`` materializes non-persistent buffers with undefined contents, and these
+        # scalars are intentionally absent from checkpoints. Rebuild them from config alongside
+        # RoPE so meta-device construction and checkpoint resume cannot inherit garbage/NaNs.
+        for block in self.blocks:
+            if isinstance(block.attn, UltrametricCausalSelfAttention):
+                block.attn._ultra_p_minus_1.fill_(float(self.config.ultrametric_p - 1))
+                block.attn._ultra_lcp_beta.fill_(float(self.config.ultrametric_lcp_beta))
+                block.attn._ultra_log_alpha.fill_(math.log(float(self.config.ultrametric_alpha)))
         # Cast the embeddings from fp32 to bf16: optim can tolerate it and it saves memory: both in the model and the activations
         if self.wte.weight.device.type == "cuda":
             self.wte.to(dtype=torch.bfloat16)

@@ -4,6 +4,7 @@ Test Engine class. Example run:
 python -m pytest tests/test_engine.py -v
 """
 
+import math
 import torch
 import os
 import tempfile
@@ -203,6 +204,54 @@ def test_ultrametric_attention_kv_cache_decode_is_finite():
     logits2 = model.forward(next_tok, kv_cache=kv_cache)
     assert logits2.shape == (B, 1, cfg.vocab_size)
     assert torch.isfinite(logits2).all()
+
+
+def test_ultrametric_attention_init_weights_restores_to_empty_buffers():
+    """Meta-device checkpoint reconstruction must restore non-persistent kernel scalars."""
+    from bio_inspired_nanochat.gpt import GPT, GPTConfig, UltrametricCausalSelfAttention
+
+    cfg = GPTConfig(
+        sequence_len=16,
+        vocab_size=97,
+        n_layer=1,
+        n_head=2,
+        n_kv_head=1,
+        n_embd=32,
+        attention_type="ultrametric",
+        ultrametric_k=3,
+        ultrametric_p=5,
+        ultrametric_alpha=3.25,
+        ultrametric_lcp_beta=7.5,
+        ultrametric_query_chunk_size=4,
+    )
+    with torch.device("meta"):
+        model = GPT(cfg)
+    model.to_empty(device=torch.device("cpu"))
+
+    attentions = [
+        module
+        for module in model.modules()
+        if isinstance(module, UltrametricCausalSelfAttention)
+    ]
+    assert len(attentions) == cfg.n_layer
+    for attention in attentions:
+        attention._ultra_p_minus_1.fill_(float("nan"))
+        attention._ultra_lcp_beta.fill_(float("nan"))
+        attention._ultra_log_alpha.fill_(float("nan"))
+
+    model.init_weights()
+
+    for attention in attentions:
+        assert attention._ultra_p_minus_1.item() == pytest.approx(cfg.ultrametric_p - 1)
+        assert attention._ultra_lcp_beta.item() == pytest.approx(cfg.ultrametric_lcp_beta)
+        assert attention._ultra_log_alpha.item() == pytest.approx(math.log(cfg.ultrametric_alpha))
+
+    tokens = torch.randint(0, cfg.vocab_size, (2, 8), dtype=torch.long)
+    model.eval()
+    with torch.no_grad():
+        logits = model(tokens)
+    assert logits.shape == (2, 8, cfg.vocab_size)
+    assert torch.isfinite(logits).all()
     assert kv_cache.get_pos() == 9
 
 
