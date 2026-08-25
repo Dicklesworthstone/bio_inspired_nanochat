@@ -420,7 +420,8 @@ def _val_loss_ppl_ece(
     id_uncertainty: list[float] = []
     ood_uncertainty: list[float] = []
 
-    losses: list[Tensor] = []
+    loss_sum = torch.zeros((), dtype=torch.float64, device=accumulator_device)
+    valid_token_count = torch.zeros((), dtype=torch.int64, device=accumulator_device)
     for _ in range(steps):
         x, y = next(batches)
         with torch.no_grad(), autocast_ctx:
@@ -436,10 +437,10 @@ def _val_loss_ppl_ece(
             )
             valid = targets_flat >= 0
             if valid.any():
-                losses.append(loss_flat[valid].mean())
+                loss_sum += loss_flat[valid].sum(dtype=torch.float64)
+                valid_token_count += valid.sum()
             # All-masked batch (every target is ignore_index): contribute NOTHING
-            # rather than a NaN — one degenerate batch used to poison the entire
-            # run's val_loss/val_ppl via the later stack().mean().
+            # rather than a NaN or an artificial zero-weight observation.
 
             # ECE (optional): use max prob and correctness per token.
             probs = torch.softmax(logits_flat, dim=-1)
@@ -473,13 +474,19 @@ def _val_loss_ppl_ece(
                 for value in (-(ood_probs * ood_log_probs).sum(dim=-1).mean(dim=-1)).cpu().tolist()
             )
 
-    val_loss = torch.stack(losses).mean()
     if ddp and torch.distributed.is_initialized():
-        torch.distributed.all_reduce(val_loss, op=torch.distributed.ReduceOp.AVG)
+        # Pool the numerator and denominator across ranks. Averaging rank-local
+        # means biases the result whenever ranks observe different valid-token
+        # counts (for example, masked or uneven final batches).
+        torch.distributed.all_reduce(loss_sum, op=torch.distributed.ReduceOp.SUM)
+        torch.distributed.all_reduce(valid_token_count, op=torch.distributed.ReduceOp.SUM)
         for accumulator in (conf_sum, acc_sum, count):
             torch.distributed.all_reduce(accumulator, op=torch.distributed.ReduceOp.SUM)
         for layer_counts in routing_counts.values():
             torch.distributed.all_reduce(layer_counts, op=torch.distributed.ReduceOp.SUM)
+    if int(valid_token_count.item()) == 0:
+        raise ValueError("validation produced no valid target tokens")
+    val_loss = loss_sum / valid_token_count
     val_loss_f = float(val_loss.item())
     val_ppl = float(math.exp(val_loss_f)) if math.isfinite(val_loss_f) else float("inf")
 

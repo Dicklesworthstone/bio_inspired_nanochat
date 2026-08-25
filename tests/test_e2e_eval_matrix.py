@@ -49,6 +49,7 @@ from scripts.eval_matrix import (
     _gini_coefficient,
     _load_base_train_checkpoint,
     _summarize_routing_counts,
+    _val_loss_ppl_ece,
 )
 
 pytestmark = pytest.mark.e2e
@@ -446,6 +447,128 @@ def test_eval_logits_forces_synaptic_inference_mode():
 
     tokens = torch.zeros((1, 4), dtype=torch.long)
     assert _get_logits(Probe(), tokens).shape == (1, 4, 8)
+
+
+def test_validation_loss_is_pooled_over_valid_tokens_not_batches():
+    import torch
+
+    class LookupLogits(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.anchor = torch.nn.Parameter(torch.zeros(()), requires_grad=False)
+
+        def forward(self, idx):
+            hard = idx.eq(1).to(torch.float32)
+            return torch.stack((torch.zeros_like(hard), 2.0 * hard), dim=-1)
+
+    model = LookupLogits()
+    uneven_batches = iter(
+        [
+            (torch.tensor([[0]]), torch.tensor([[0]])),
+            (torch.tensor([[1, 1]]), torch.tensor([[0, 0]])),
+        ]
+    )
+    loss, ppl, *_ = _val_loss_ppl_ece(
+        model,
+        uneven_batches,
+        steps=2,
+        device_type="cpu",
+        ddp=False,
+        ece_bins=2,
+    )
+    easy_loss = math.log(2.0)
+    hard_loss = math.log1p(math.exp(2.0))
+    pooled = (easy_loss + 2.0 * hard_loss) / 3.0
+    batch_mean = (easy_loss + hard_loss) / 2.0
+    assert loss == pytest.approx(pooled)
+    assert loss != pytest.approx(batch_mean)
+    assert ppl == pytest.approx(math.exp(pooled))
+
+    equal_batches = iter(
+        [
+            (torch.tensor([[0]]), torch.tensor([[0]])),
+            (torch.tensor([[1]]), torch.tensor([[0]])),
+        ]
+    )
+    equal_loss, *_ = _val_loss_ppl_ece(
+        model,
+        equal_batches,
+        steps=2,
+        device_type="cpu",
+        ddp=False,
+        ece_bins=2,
+    )
+    assert equal_loss == pytest.approx(batch_mean)
+
+
+def test_validation_loss_pools_ddp_numerator_and_denominator(monkeypatch):
+    import scripts.eval_matrix as eval_matrix_module
+    import torch
+
+    class UniformLogits(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.anchor = torch.nn.Parameter(torch.zeros(()), requires_grad=False)
+
+        def forward(self, idx):
+            return torch.zeros((*idx.shape, 2), dtype=torch.float32)
+
+    remote_loss_sum = 4.0
+    remote_valid_tokens = 2
+    reduce_call = 0
+    sum_op = getattr(torch.distributed, "ReduceOp").SUM
+
+    def fake_all_reduce(tensor, *, op):
+        nonlocal reduce_call
+        assert op == sum_op
+        if reduce_call == 0:
+            tensor.add_(remote_loss_sum)
+        elif reduce_call == 1:
+            tensor.add_(remote_valid_tokens)
+        reduce_call += 1
+
+    monkeypatch.setattr(torch.distributed, "is_initialized", lambda: True)
+    monkeypatch.setattr(torch.distributed, "all_reduce", fake_all_reduce)
+    monkeypatch.setattr(
+        eval_matrix_module,
+        "_distributed_scores",
+        lambda scores, *, ddp: scores,
+    )
+    loss, *_ = _val_loss_ppl_ece(
+        UniformLogits(),
+        iter([(torch.tensor([[0]]), torch.tensor([[0]]))]),
+        steps=1,
+        device_type="cpu",
+        ddp=True,
+        ece_bins=2,
+    )
+
+    expected = (math.log(2.0) + remote_loss_sum) / (1 + remote_valid_tokens)
+    assert loss == pytest.approx(expected)
+    assert reduce_call == 5
+
+
+def test_validation_loss_rejects_all_masked_evidence():
+    import torch
+
+    class UniformLogits(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.anchor = torch.nn.Parameter(torch.zeros(()), requires_grad=False)
+
+        def forward(self, idx):
+            return torch.zeros((*idx.shape, 2), dtype=torch.float32)
+
+    batches = iter([(torch.tensor([[0, 1]]), torch.full((1, 2), -1))])
+    with pytest.raises(ValueError, match="no valid target tokens"):
+        _val_loss_ppl_ece(
+            UniformLogits(),
+            batches,
+            steps=1,
+            device_type="cpu",
+            ddp=False,
+            ece_bins=2,
+        )
 
 
 def test_capability_metric_primitives_are_seeded_and_fail_closed():
