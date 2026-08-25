@@ -127,9 +127,27 @@ def test_step_over_decodes_incrementally_through_kv_cache():
     cache = debugger._kv_cache
     assert cache is not None
     pos_after_first = cache.get_pos()
-    assert pos_after_first == 4  # 3 prompt tokens + 1 generated
+    # 3 prompt tokens forwarded through the cache (positions 0, 1, 2) producing 1 generated token
+    assert pos_after_first == 3
+    assert debugger.current_tokens is not None
+    assert debugger.current_tokens.shape[1] == 4  # 3 prompt + 1 generated
 
     frame = debugger.step_over()
     assert frame is not None
-    assert cache.get_pos() == pos_after_first + 1
-    assert debugger.current_tokens.shape[1] == pos_after_first + 1
+    # 3 prompt + 1 previously generated token now in the cache (positions 0, 1, 2, 3)
+    assert cache.get_pos() == 4
+    assert debugger.current_tokens.shape[1] == 5  # 3 prompt + 2 generated
+
+
+def test_debugger_single_token_prompt_boundary():
+    """Verify single-token prompt initializes empty cache and steps cleanly without duplication."""
+    model = _make_model()
+    debugger = SynapticDebugger(model)
+    prompt = torch.randint(0, 32, (1, 1))
+    debugger.run_until_breakpoint(prompt, max_tokens=1)
+
+    cache = debugger._kv_cache
+    assert cache is not None
+    assert cache.get_pos() == 1  # 1 prompt token forwarded
+    assert debugger.current_tokens is not None
+    assert debugger.current_tokens.shape[1] == 2  # 1 prompt + 1 generated

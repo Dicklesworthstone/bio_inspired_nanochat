@@ -125,7 +125,8 @@ class SynapticDebugger:
         cache is live (so the prefix is not re-forwarded — re-running it used to
         re-apply online plasticity to every prefix token each step, an O(k^2)
         contamination of both runtime and breakpoint semantics)."""
-        assert self.current_tokens is not None
+        if self.current_tokens is None:
+            raise RuntimeError("No prompt or generation initialized. Call run_until_breakpoint first.")
         if self._kv_cache is not None and self.current_tokens.shape[1] > 1:
             return self.current_tokens[:, -1:]
         return self.current_tokens
@@ -209,10 +210,17 @@ class SynapticDebugger:
             head_dim=cfg.n_embd // cfg.n_head,
             num_layers=cfg.n_layer,
         )
-        if tokens.shape[1] > 0:
+        if tokens.shape[1] > 1:
+            # Prefill all but the last prompt token into the KV cache so that the first
+            # step_over() forwards the final prompt token (at its exact sequence index)
+            # without duplicating it in the cache.
             with torch.no_grad():
-                self.model(tokens, kv_cache=cache)
+                self.model(tokens[:, :-1], kv_cache=cache)
             self._kv_cache: Optional[Any] = cache
+        elif tokens.shape[1] == 1:
+            # Single-token prompt: cache is empty initially; the first step_over()
+            # forwards the single prompt token into cache position 0.
+            self._kv_cache = cache
         else:
             self._kv_cache = None
         self.current_tokens = tokens
