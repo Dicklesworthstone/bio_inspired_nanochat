@@ -116,9 +116,12 @@ def test_wrong_constant_model_scores_near_chance():
 
 
 def test_deterministic_given_seed():
-    kw = dict(vocab_size=VOCAB, lengths=(16, 32), batch=8, seed=3)
-    a = niah_accuracy_by_length(_PerfectNeedleModel(), **kw)
-    b = niah_accuracy_by_length(_PerfectNeedleModel(), **kw)
+    a = niah_accuracy_by_length(
+        _PerfectNeedleModel(), vocab_size=VOCAB, lengths=(16, 32), batch=8, seed=3
+    )
+    b = niah_accuracy_by_length(
+        _PerfectNeedleModel(), vocab_size=VOCAB, lengths=(16, 32), batch=8, seed=3
+    )
     assert a == b
 
 

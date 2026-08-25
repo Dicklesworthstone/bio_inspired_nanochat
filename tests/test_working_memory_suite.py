@@ -112,10 +112,22 @@ def test_suite_skips_oversized_points_instead_of_crashing():
 
 @pytest.mark.unit
 def test_suite_is_reproducible():
-    kw = dict(
-        vocab_size=VOCAB, recall_pairs=RECALL_PAIRS, binding_distractors=BINDING_DISTRACTORS,
-        niah_lengths=NIAH_LENGTHS, batch=16, seed=7,
+    a = working_memory_suite(
+        _model(make_tiny_synaptic),
+        vocab_size=VOCAB,
+        recall_pairs=RECALL_PAIRS,
+        binding_distractors=BINDING_DISTRACTORS,
+        niah_lengths=NIAH_LENGTHS,
+        batch=16,
+        seed=7,
     )
-    a = working_memory_suite(_model(make_tiny_synaptic), **kw)
-    b = working_memory_suite(_model(make_tiny_synaptic), **kw)
+    b = working_memory_suite(
+        _model(make_tiny_synaptic),
+        vocab_size=VOCAB,
+        recall_pairs=RECALL_PAIRS,
+        binding_distractors=BINDING_DISTRACTORS,
+        niah_lengths=NIAH_LENGTHS,
+        batch=16,
+        seed=7,
+    )
     assert a["summary"] == b["summary"], "fixed seed + per-batch reset must be deterministic"
