@@ -9,6 +9,7 @@ import os
 import random
 import re
 import subprocess
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict, fields
 from typing import TYPE_CHECKING, Any, Optional, cast
 
@@ -117,6 +118,7 @@ def checkpoint_model_config(model, base_config: dict[str, Any]) -> dict[str, Any
 
 def load_checkpoint_metadata(checkpoint_dir: str, step: int) -> dict[str, Any]:
     """Load only JSON metadata, so training can rebuild topology before tensor load."""
+    _validate_checkpoint_step(step)
     meta_path = os.path.join(checkpoint_dir, f"meta_{step:06d}.json")
     with open(meta_path, "r", encoding="utf-8") as f:
         try:
@@ -162,6 +164,17 @@ def config_provenance(syn_cfg) -> dict:
 # {step:06d} pads to >=6 digits, so allow 6 OR MORE (a run past 1e6 steps must still
 # be seen by rotation, else the disk silently fills — the very thing rotation prevents).
 _CKPT_RE = re.compile(r"^(model|meta|optim|train)_(\d{6,})(?:_rank\d+)?\.(pt|json)$")
+_COMMIT_REGIME_FILE = ".checkpoint_commit_regime_v1.json"
+
+
+def _validate_checkpoint_step(step: int) -> None:
+    if isinstance(step, bool) or not isinstance(step, int) or step < 0:
+        raise ValueError("checkpoint step must be a non-negative integer")
+
+
+def _validate_checkpoint_rank(rank: int) -> None:
+    if isinstance(rank, bool) or not isinstance(rank, int) or rank < 0:
+        raise ValueError("checkpoint rank must be a non-negative integer")
 
 
 def _fsync_parent_dir(path: str) -> None:
@@ -199,6 +212,55 @@ def _atomic_write_json(obj, path: str) -> None:
     _fsync_parent_dir(path)
 
 
+def _legacy_complete_steps(checkpoint_dir: str) -> list[int]:
+    """Return pre-marker steps that already had both rank-0 core artifacts."""
+    steps: list[int] = []
+    for model_path in glob.glob(os.path.join(checkpoint_dir, "model_*.pt")):
+        match = re.match(r"model_(\d{6,})\.pt$", os.path.basename(model_path))
+        if match is None:
+            continue
+        step = int(match.group(1))
+        if os.path.exists(os.path.join(checkpoint_dir, f"meta_{step:06d}.json")):
+            steps.append(step)
+    return sorted(set(steps))
+
+
+def _ensure_commit_marker_regime(checkpoint_dir: str) -> None:
+    """Persist marker-regime activation before publishing any new step artifacts."""
+    regime_path = os.path.join(checkpoint_dir, _COMMIT_REGIME_FILE)
+    if os.path.exists(regime_path):
+        return
+    legacy_steps = [] if glob.glob(os.path.join(checkpoint_dir, "commit_*.json")) else (
+        _legacy_complete_steps(checkpoint_dir)
+    )
+    _atomic_write_json(
+        {"version": 1, "legacy_complete_steps": legacy_steps},
+        regime_path,
+    )
+
+
+def _load_commit_regime(checkpoint_dir: str) -> tuple[bool, frozenset[int]]:
+    regime_path = os.path.join(checkpoint_dir, _COMMIT_REGIME_FILE)
+    if not os.path.exists(regime_path):
+        return bool(glob.glob(os.path.join(checkpoint_dir, "commit_*.json"))), frozenset()
+    try:
+        with open(regime_path, "r", encoding="utf-8") as file:
+            payload = json.load(file)
+        if not isinstance(payload, dict) or payload.get("version") != 1:
+            return True, frozenset()
+        raw_steps = payload.get("legacy_complete_steps", [])
+        if not isinstance(raw_steps, list) or any(
+            isinstance(step, bool) or not isinstance(step, int) or step < 0
+            for step in raw_steps
+        ):
+            return True, frozenset()
+        return True, frozenset(raw_steps)
+    except (OSError, json.JSONDecodeError):
+        # A malformed regime declaration must fail closed, never re-enable
+        # model-file-only discovery for potentially partial checkpoints.
+        return True, frozenset()
+
+
 def capture_rng_state() -> dict:
     """Snapshot every RNG that affects training so a resume is bit-comparable.
 
@@ -211,27 +273,151 @@ def capture_rng_state() -> dict:
     correlated, not independent — the per-rank blobs exist to preserve whatever
     each rank's stream actually was across a save/resume boundary.
     """
-    state: dict = {"torch": torch.get_rng_state(), "python": random.getstate()}
-    try:
-        import numpy as np
+    import numpy as np
 
-        # legacy=True returns the MT19937 tuple; cast because numpy's overload also
-        # types a dict form that ty otherwise infers.
-        nstate = cast("tuple[Any, ...]", np.random.get_state(legacy=True))  # (type, uint32[624], pos, has_gauss, cached)
-        # Tensor-encode the key array so the on-disk blob loads under the safe
-        # weights_only=True default (a raw numpy array would require arbitrary unpickling).
-        state["numpy"] = {
-            "type": str(nstate[0]),
-            "keys": torch.from_numpy(nstate[1].astype("int64")),
-            "pos": int(nstate[2]),
-            "has_gauss": int(nstate[3]),
-            "cached": float(nstate[4]),
-        }
-    except Exception:
-        pass
+    state: dict = {"torch": torch.get_rng_state(), "python": random.getstate()}
+    # NumPy is a required project dependency and its global RNG is part of the exact
+    # resume contract. Failing closed is essential: silently omitting this payload
+    # would produce a valid-looking checkpoint whose resumed trajectory can diverge.
+    # legacy=True returns the MT19937 tuple; cast because numpy's overload also
+    # types a dict form that ty otherwise infers.
+    nstate = cast("tuple[Any, ...]", np.random.get_state(legacy=True))  # (type, uint32[624], pos, has_gauss, cached)
+    # Tensor-encode the key array so the on-disk blob loads under the safe
+    # weights_only=True default (a raw numpy array would require arbitrary unpickling).
+    state["numpy"] = {
+        "type": str(nstate[0]),
+        "keys": torch.from_numpy(nstate[1].astype("int64")),
+        "pos": int(nstate[2]),
+        "has_gauss": int(nstate[3]),
+        "cached": float(nstate[4]),
+    }
     if torch.cuda.is_available():
         state["cuda"] = torch.cuda.get_rng_state_all()
     return state
+
+
+def capture_prefetched_batch(inputs: torch.Tensor, targets: torch.Tensor) -> dict[str, torch.Tensor]:
+    """Copy the next untrained batch into rank-local checkpoint state.
+
+    The streaming loader's cursor describes the position *after* its most recently
+    yielded batch. ``base_train`` deliberately prefetches that batch before the next
+    checkpoint boundary, so preserving only the cursor would skip the prefetched
+    batch on resume.
+    """
+    if not isinstance(inputs, torch.Tensor) or not isinstance(targets, torch.Tensor):
+        raise TypeError("prefetched inputs and targets must be tensors")
+    if inputs.ndim != 2 or targets.shape != inputs.shape:
+        raise ValueError(
+            "prefetched inputs and targets must have the same two-dimensional shape"
+        )
+    if inputs.dtype != torch.long or targets.dtype != torch.long:
+        raise ValueError("prefetched inputs and targets must use torch.long dtype")
+    return {
+        "inputs": inputs.detach().to(device="cpu", copy=True).contiguous(),
+        "targets": targets.detach().to(device="cpu", copy=True).contiguous(),
+    }
+
+
+def restore_prefetched_batch(
+    train_state: Mapping[str, Any] | None,
+    *,
+    device: str | torch.device,
+    expected_shape: tuple[int, int],
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Restore the exact next untrained batch, failing closed if it is unavailable."""
+    if train_state is None:
+        raise ValueError("exact resume requires rank-local training state")
+    payload = train_state.get("prefetched_batch")
+    if not isinstance(payload, Mapping):
+        raise ValueError(
+            "checkpoint lacks the prefetched batch required for exact streaming resume"
+        )
+    inputs = payload.get("inputs")
+    targets = payload.get("targets")
+    if not isinstance(inputs, torch.Tensor) or not isinstance(targets, torch.Tensor):
+        raise ValueError("checkpoint prefetched batch must contain input and target tensors")
+    if inputs.dtype != torch.long or targets.dtype != torch.long:
+        raise ValueError("checkpoint prefetched batch tensors must use torch.long dtype")
+    if tuple(inputs.shape) != expected_shape or tuple(targets.shape) != expected_shape:
+        raise ValueError(
+            "checkpoint prefetched batch shape does not match the resumed batch geometry: "
+            f"inputs={tuple(inputs.shape)}, targets={tuple(targets.shape)}, "
+            f"expected={expected_shape}"
+        )
+    return (
+        inputs.to(device=device, non_blocking=False),
+        targets.to(device=device, non_blocking=False),
+    )
+
+
+def restore_optimizer_states(
+    optimizers: Sequence[Any],
+    saved_states: object,
+) -> None:
+    """Restore every optimizer, rejecting incomplete checkpoint lists before mutation."""
+    if not isinstance(saved_states, Sequence) or isinstance(
+        saved_states, (str, bytes, bytearray)
+    ):
+        raise ValueError("checkpoint optimizer state must be a sequence")
+    if len(saved_states) != len(optimizers):
+        raise ValueError(
+            "checkpoint optimizer count does not match the resumed training configuration: "
+            f"saved={len(saved_states)}, current={len(optimizers)}"
+        )
+    for index, (optimizer, state) in enumerate(zip(optimizers, saved_states, strict=True)):
+        if not callable(getattr(optimizer, "load_state_dict", None)):
+            raise TypeError(f"optimizer {index} does not implement load_state_dict()")
+        if not isinstance(state, Mapping):
+            raise ValueError(f"checkpoint optimizer state {index} must be a mapping")
+    for optimizer, state in zip(optimizers, saved_states, strict=True):
+        optimizer.load_state_dict(state)
+
+
+def restore_rank_model_state(
+    model: Any,
+    train_state: Mapping[str, Any] | None,
+    *,
+    required: bool,
+) -> None:
+    """Overlay rank-local model state needed for exact distributed bio resume."""
+    payload = train_state.get("rank_model_state") if train_state is not None else None
+    if payload is None:
+        if required:
+            raise ValueError(
+                "exact distributed resume requires a rank-local model state snapshot"
+            )
+        return
+    if not isinstance(payload, Mapping):
+        raise ValueError("checkpoint rank-local model state must be a mapping")
+    load_state_dict = getattr(model, "load_state_dict", None)
+    if not callable(load_state_dict):
+        raise TypeError("resumed model does not implement load_state_dict()")
+    # train_state loads on CPU to protect CPU RNG ByteTensors. Copying (assign=False)
+    # preserves the already-materialized model device while overlaying this rank's
+    # potentially divergent synaptic buffers and online-mutated parameters.
+    load_state_dict(payload, strict=True, assign=False)
+
+
+def validate_exact_resume_payload_step(
+    payload: Mapping[str, Any] | None,
+    expected_step: int,
+    *,
+    payload_name: str,
+) -> None:
+    """Require an exact-resume payload to identify the requested checkpoint step."""
+    _validate_checkpoint_step(expected_step)
+    if payload is None:
+        raise ValueError(f"exact resume requires {payload_name}")
+    saved_step = payload.get("step")
+    if (
+        isinstance(saved_step, bool)
+        or not isinstance(saved_step, int)
+        or saved_step != expected_step
+    ):
+        raise ValueError(
+            f"{payload_name} step does not match requested checkpoint: "
+            f"saved={saved_step!r}, requested={expected_step}"
+        )
 
 
 def restore_rng_state(state: Optional[dict]) -> None:
@@ -242,6 +428,17 @@ def restore_rng_state(state: Optional[dict]) -> None:
     python_state = None
     numpy_state = None
     cuda_state = state.get("cuda")
+
+    if cuda_state is not None and not torch.cuda.is_available():
+        raise RuntimeError(
+            "Cannot restore a CUDA RNG checkpoint because CUDA is unavailable; "
+            "no process RNG state was changed"
+        )
+    if cuda_state is None and torch.cuda.is_available():
+        raise RuntimeError(
+            "Cannot exactly restore RNG state on CUDA because the checkpoint has no "
+            "CUDA RNG payload; no process RNG state was changed"
+        )
 
     # Validate all CPU RNG payloads against isolated generators before changing any
     # process-global stream. A corrupt later payload must not leave an earlier RNG restored.
@@ -308,10 +505,35 @@ def save_checkpoint(checkpoint_dir, step, model_data, optimizer_data, meta_data,
     bias, neuromod EMAs, divergence-guard last-good). See docs/scale_up_checkpointing.md
     for the full persistence contract (and what is safely *rebuilt* rather than saved).
     """
+    _validate_checkpoint_step(step)
+    _validate_checkpoint_rank(rank)
     # Every rank ensures the directory exists BEFORE any rank writes: non-zero ranks
     # write their own optim/train files below, and there is no barrier guaranteeing rank 0
     # has created the dir first. makedirs(exist_ok=True) is idempotent and race-safe.
     os.makedirs(checkpoint_dir, exist_ok=True)
+    if rank == 0:
+        # Activate the completion-marker regime and invalidate any prior marker for
+        # this same step *before* replacing an artifact. Otherwise a crash during a
+        # same-step retry leaves the old marker advertising a mixed-generation set.
+        _ensure_commit_marker_regime(checkpoint_dir)
+        marker_payload = {
+            "version": 1,
+            "step": int(step),
+            "complete": False,
+            "world_size": _world_size_or_none(),
+            "optimizer_shards": optimizer_data is not None,
+            "train_shards": train_state is not None,
+        }
+        _atomic_write_json(
+            marker_payload,
+            os.path.join(checkpoint_dir, f"commit_{step:06d}.json"),
+        )
+    # On a distributed same-step retry, no rank may replace an old shard until
+    # rank 0 has durably invalidated the old completion marker. Without this first
+    # barrier, a concurrently loading process could observe an old "complete"
+    # marker alongside a new nonzero-rank shard.
+    if torch.distributed.is_available() and torch.distributed.is_initialized():
+        torch.distributed.barrier()
     if rank == 0:
         # Save the model state parameters (atomic).
         model_path = os.path.join(checkpoint_dir, f"model_{step:06d}.pt")
@@ -357,8 +579,9 @@ def save_checkpoint(checkpoint_dir, step, model_data, optimizer_data, meta_data,
     if torch.distributed.is_available() and torch.distributed.is_initialized():
         torch.distributed.barrier()
     if rank == 0:
+        marker_payload["complete"] = True
         _atomic_write_json(
-            {"step": int(step), "world_size": _world_size_or_none()},
+            marker_payload,
             os.path.join(checkpoint_dir, f"commit_{step:06d}.json"),
         )
 
@@ -370,6 +593,9 @@ def _world_size_or_none() -> Optional[int]:
 
 
 def load_checkpoint(checkpoint_dir, step, device, load_optimizer=False, rank=0, load_train_state=False):
+    _validate_checkpoint_step(step)
+    _validate_checkpoint_rank(rank)
+    require_complete_checkpoint(checkpoint_dir, step)
     # Load the model state. weights_only=True (the safe default) is sufficient: our
     # checkpoints are tensor-only state dicts (and RNG is tensor-encoded), so no
     # arbitrary-pickle deserialization is ever required to resume.
@@ -398,16 +624,18 @@ def load_checkpoint(checkpoint_dir, step, device, load_optimizer=False, rank=0, 
 
 
 def _uses_commit_markers(checkpoint_dir: str) -> bool:
-    """True once ANY step in this directory carries a ``commit_*.json`` marker.
-
-    Regime detection keeps pre-marker checkpoints resumable (legacy directories
-    keep the old model-file-only discovery) while every save that CAN write a
-    marker is required to have one before the step counts as resumable.
-    """
-    return bool(glob.glob(os.path.join(checkpoint_dir, "commit_*.json")))
+    """True once the directory has durably entered commit-marker mode."""
+    markers_in_use, _ = _load_commit_regime(checkpoint_dir)
+    return markers_in_use
 
 
-def _checkpoint_is_complete(checkpoint_dir: str, step: int, *, markers_in_use: bool) -> bool:
+def _checkpoint_is_complete(
+    checkpoint_dir: str,
+    step: int,
+    *,
+    markers_in_use: bool,
+    legacy_complete_steps: frozenset[int] = frozenset(),
+) -> bool:
     """A step is resumable iff its rank-0 model AND metadata exist and — in
     marker-regime directories — the rank-0 commit marker declares every rank's
     shards landed. A crash mid-save used to leave exactly such a partial set,
@@ -419,7 +647,65 @@ def _checkpoint_is_complete(checkpoint_dir: str, step: int, *, markers_in_use: b
         return False
     if not markers_in_use:
         return True  # legacy directory written before commit markers existed
-    return os.path.exists(os.path.join(checkpoint_dir, f"commit_{step:06d}.json"))
+
+    marker_path = os.path.join(checkpoint_dir, f"commit_{step:06d}.json")
+    if not os.path.exists(marker_path):
+        return step in legacy_complete_steps
+    try:
+        with open(marker_path, "r", encoding="utf-8") as file:
+            marker = json.load(file)
+    except (OSError, json.JSONDecodeError):
+        return False
+    if (
+        not isinstance(marker, dict)
+        or marker.get("step") != step
+        or ("version" in marker and marker.get("version") != 1)
+    ):
+        return False
+    # Markers written before schema v1 had no explicit flag and were published
+    # strictly last, so absence means committed. New in-progress markers say False.
+    if marker.get("complete", True) is not True:
+        return False
+    for shard_field in ("optimizer_shards", "train_shards"):
+        if shard_field in marker and not isinstance(marker[shard_field], bool):
+            return False
+
+    saved_world_size = marker.get("world_size")
+    if saved_world_size is None:
+        expected_ranks = range(1)
+    elif (
+        isinstance(saved_world_size, bool)
+        or not isinstance(saved_world_size, int)
+        or saved_world_size < 1
+    ):
+        return False
+    else:
+        expected_ranks = range(saved_world_size)
+    for rank in expected_ranks:
+        if marker.get("optimizer_shards", False) and not os.path.exists(
+            os.path.join(checkpoint_dir, f"optim_{step:06d}_rank{rank}.pt")
+        ):
+            return False
+        if marker.get("train_shards", False) and not os.path.exists(
+            os.path.join(checkpoint_dir, f"train_{step:06d}_rank{rank}.pt")
+        ):
+            return False
+    return True
+
+
+def require_complete_checkpoint(checkpoint_dir: str, step: int) -> None:
+    """Fail before reading any artifact unless the requested step is committed."""
+    _validate_checkpoint_step(step)
+    markers_in_use, legacy_steps = _load_commit_regime(checkpoint_dir)
+    if not _checkpoint_is_complete(
+        checkpoint_dir,
+        step,
+        markers_in_use=markers_in_use,
+        legacy_complete_steps=legacy_steps,
+    ):
+        raise FileNotFoundError(
+            f"Checkpoint step {step} is incomplete or uncommitted in {checkpoint_dir}"
+        )
 
 
 def list_checkpoint_steps(checkpoint_dir: str) -> list[int]:
@@ -430,13 +716,18 @@ def list_checkpoint_steps(checkpoint_dir: str) -> list[int]:
     is what stops auto-resume from selecting a set whose optimizer shards never
     finished writing.
     """
-    markers = _uses_commit_markers(checkpoint_dir)
+    markers, legacy_steps = _load_commit_regime(checkpoint_dir)
     steps = []
     for f in glob.glob(os.path.join(checkpoint_dir, "model_*.pt")):
         m = re.match(r"model_(\d{6,})\.pt$", os.path.basename(f))
         if m:
             step = int(m.group(1))
-            if _checkpoint_is_complete(checkpoint_dir, step, markers_in_use=markers):
+            if _checkpoint_is_complete(
+                checkpoint_dir,
+                step,
+                markers_in_use=markers,
+                legacy_complete_steps=legacy_steps,
+            ):
                 steps.append(step)
     return sorted(steps)
 

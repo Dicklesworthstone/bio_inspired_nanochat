@@ -10,6 +10,10 @@ import pyarrow.parquet as pq
 import pytest
 import torch
 
+from bio_inspired_nanochat.checkpoint_manager import (
+    capture_prefetched_batch,
+    restore_prefetched_batch,
+)
 from bio_inspired_nanochat.dataloader import tokenizing_distributed_data_loader_with_state
 
 
@@ -103,6 +107,55 @@ def test_dataloader_resumes_from_state_dict(sample_parquet_dir: Path) -> None:
         assert inputs_res.shape == (B, T)
         assert targets_res.shape == (B, T)
         assert state_res["pq_idx"] >= state1["pq_idx"]
+
+
+def test_training_checkpoint_restores_prefetched_batch_without_skip(
+    sample_parquet_dir: Path,
+) -> None:
+    """Mirror base_train's prefetch -> checkpoint -> resume ordering exactly."""
+    with (
+        patch("bio_inspired_nanochat.dataset.DATA_DIR", str(sample_parquet_dir)),
+        patch("bio_inspired_nanochat.dataloader.get_tokenizer", return_value=MockTokenizer()),
+    ):
+        loader = tokenizing_distributed_data_loader_with_state(
+            B=2,
+            T=8,
+            split="train",
+            tokenizer_threads=1,
+            tokenizer_batch_size=8,
+            device="cpu",
+        )
+        next(loader)  # batch trained before the checkpoint boundary
+        prefetched_inputs, prefetched_targets, cursor_after_prefetch = next(loader)
+        uninterrupted_next_inputs, uninterrupted_next_targets, _ = next(loader)
+
+        train_state = {
+            "dataloader_state_dict": cursor_after_prefetch,
+            "prefetched_batch": capture_prefetched_batch(
+                prefetched_inputs,
+                prefetched_targets,
+            ),
+        }
+        resumed_inputs, resumed_targets = restore_prefetched_batch(
+            train_state,
+            device="cpu",
+            expected_shape=(2, 8),
+        )
+        resumed_loader = tokenizing_distributed_data_loader_with_state(
+            B=2,
+            T=8,
+            split="train",
+            tokenizer_threads=1,
+            tokenizer_batch_size=8,
+            device="cpu",
+            resume_state_dict=cursor_after_prefetch,
+        )
+        resumed_next_inputs, resumed_next_targets, _ = next(resumed_loader)
+
+    torch.testing.assert_close(resumed_inputs, prefetched_inputs)
+    torch.testing.assert_close(resumed_targets, prefetched_targets)
+    torch.testing.assert_close(resumed_next_inputs, uninterrupted_next_inputs)
+    torch.testing.assert_close(resumed_next_targets, uninterrupted_next_targets)
 
 
 @pytest.mark.parametrize(
@@ -318,6 +371,115 @@ def test_incompatible_world_size_and_rank_fail_closed(sample_parquet_dir: Path) 
             ))
 
 
+@pytest.mark.parametrize(
+    "rank_states, world_size, message",
+    [
+        ([], None, "at least one rank"),
+        ({}, None, "at least one rank"),
+        ({"0": {"pq_idx": 0, "rg_idx": 0}}, 2, "exactly one state"),
+        ({0: {"pq_idx": 0}, "0": {"pq_idx": 0}}, 1, "duplicate"),
+        ([{"pq_idx": 0}], 2, "count"),
+        ({"0": {"rank": 1, "world_size": 1}}, 1, "recorded for rank 1"),
+    ],
+)
+def test_collation_rejects_incomplete_or_misowned_rank_states(
+    rank_states,
+    world_size,
+    message,
+) -> None:
+    from bio_inspired_nanochat.dataloader import collate_dataloader_state_dicts
+
+    with pytest.raises(ValueError, match=message):
+        collate_dataloader_state_dicts(rank_states, world_size=world_size)
+
+
+def test_collated_state_rejects_misowned_inner_rank(sample_parquet_dir: Path) -> None:
+    corrupted = {
+        "version": 2,
+        "world_size": 2,
+        "ranks": {
+            "0": {"version": 2, "pq_idx": 0, "rg_idx": 0, "rank": 1, "world_size": 2},
+            "1": {"version": 2, "pq_idx": 0, "rg_idx": 1, "rank": 1, "world_size": 2},
+        },
+    }
+    with (
+        patch("bio_inspired_nanochat.dataset.DATA_DIR", str(sample_parquet_dir)),
+        patch("bio_inspired_nanochat.dataloader.get_tokenizer", return_value=MockTokenizer()),
+        patch(
+            "bio_inspired_nanochat.dataloader.get_dist_info",
+            return_value=(True, 0, 0, 2),
+        ),
+    ):
+        loader = tokenizing_distributed_data_loader_with_state(
+            B=2,
+            T=8,
+            split="train",
+            tokenizer_threads=1,
+            device="cpu",
+            resume_state_dict=corrupted,
+        )
+        with pytest.raises(ValueError, match="recorded for rank 1"):
+            next(loader)
+
+
+def test_v2_resume_rejects_row_group_owned_by_another_rank(
+    sample_parquet_dir: Path,
+) -> None:
+    with (
+        patch("bio_inspired_nanochat.dataset.DATA_DIR", str(sample_parquet_dir)),
+        patch("bio_inspired_nanochat.dataloader.get_tokenizer", return_value=MockTokenizer()),
+        patch(
+            "bio_inspired_nanochat.dataloader.get_dist_info",
+            return_value=(True, 1, 1, 2),
+        ),
+    ):
+        loader = tokenizing_distributed_data_loader_with_state(
+            B=2,
+            T=8,
+            split="train",
+            tokenizer_threads=1,
+            device="cpu",
+            resume_state_dict={
+                "version": 2,
+                "pq_idx": 0,
+                "rg_idx": 0,
+                "doc_idx": 0,
+                "token_buffer": [],
+                "rank": 1,
+                "world_size": 2,
+            },
+        )
+        with pytest.raises(ValueError, match="not owned"):
+            next(loader)
+
+
+def test_resume_rejects_document_offset_beyond_row_group(
+    sample_parquet_dir: Path,
+) -> None:
+    with (
+        patch("bio_inspired_nanochat.dataset.DATA_DIR", str(sample_parquet_dir)),
+        patch("bio_inspired_nanochat.dataloader.get_tokenizer", return_value=MockTokenizer()),
+    ):
+        loader = tokenizing_distributed_data_loader_with_state(
+            B=2,
+            T=8,
+            split="train",
+            tokenizer_threads=1,
+            device="cpu",
+            resume_state_dict={
+                "version": 2,
+                "pq_idx": 0,
+                "rg_idx": 0,
+                "doc_idx": 11,
+                "token_buffer": [],
+                "rank": 0,
+                "world_size": 1,
+            },
+        )
+        with pytest.raises(ValueError, match="doc_idx.*outside"):
+            next(loader)
+
+
 def test_malformed_resume_state_fails_closed(sample_parquet_dir: Path) -> None:
     """Loader rejects non-conforming or corrupted state dict payloads."""
     with (
@@ -352,3 +514,20 @@ def test_malformed_resume_state_fails_closed(sample_parquet_dir: Path) -> None:
                 resume_state_dict={"pq_idx": 0, "rg_idx": 0, "token_buffer": [1, 2, -5]}
             ))
 
+        with pytest.raises(ValueError, match="version"):
+            next(tokenizing_distributed_data_loader_with_state(
+                B=2, T=8, split="train", device="cpu",
+                resume_state_dict={"version": "2", "pq_idx": 0, "rg_idx": 0}
+            ))
+
+        with pytest.raises(ValueError, match="missing exact-resume fields"):
+            next(tokenizing_distributed_data_loader_with_state(
+                B=2, T=8, split="train", device="cpu",
+                resume_state_dict={"version": 2, "pq_idx": 0, "rg_idx": 0}
+            ))
+
+        with pytest.raises(ValueError, match="requires version 2"):
+            next(tokenizing_distributed_data_loader_with_state(
+                B=2, T=8, split="train", device="cpu",
+                resume_state_dict={"pq_idx": 0, "rg_idx": 0, "doc_idx": 0}
+            ))

@@ -201,6 +201,24 @@ def test_telemetry_exposes_levels_and_gains():
         assert k in tel and isinstance(tel[k], float)
 
 
+@pytest.mark.unit
+def test_checkpoint_state_restores_levels_and_broadcast_gains():
+    original = NeuromodulatoryBus()
+    original.update(loss=2.0, entropy=1.0)
+    original.update(loss=0.5, entropy=3.0)
+
+    restored = NeuromodulatoryBus()
+    restored.load_state_dict(original.state_dict(), strict=True)
+    model = make_tiny_synaptic(seed=0)
+    restored.broadcast(model)
+
+    assert restored.levels() == original.levels()
+    assert restored.gains() == original.gains()
+    linear = next(module for module in model.modules() if isinstance(module, SynapticLinear))
+    assert linear._nm_da_gain == restored.gains()["plasticity"]
+    assert linear._nm_ne_gain == restored.gains()["global"]
+
+
 # --------------------------------------------------------------------------- #
 # 6. ABLATION: the bus measurably changes learning
 # --------------------------------------------------------------------------- #

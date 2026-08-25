@@ -22,7 +22,9 @@ from __future__ import annotations
 
 import copy
 import math
-from dataclasses import dataclass, field
+import numbers
+from collections.abc import Mapping, Sequence
+from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -174,12 +176,94 @@ class DivergenceGuard:
         if self._snapshot is None:
             return False
         msd, osds = self._snapshot
-        model.load_state_dict(msd)
         opts = _as_list(optimizers)
-        for o, osd in zip(opts, osds):
+        if len(opts) != len(osds):
+            raise ValueError(
+                "rollback optimizer count does not match the last-good snapshot: "
+                f"saved={len(osds)}, current={len(opts)}"
+            )
+        for index, (optimizer, optimizer_state) in enumerate(
+            zip(opts, osds, strict=True)
+        ):
+            if not callable(getattr(optimizer, "load_state_dict", None)):
+                raise TypeError(
+                    f"rollback optimizer {index} does not implement load_state_dict()"
+                )
+            if not isinstance(optimizer_state, Mapping):
+                raise ValueError(
+                    f"rollback optimizer snapshot {index} must be a mapping"
+                )
+        # Validate every optimizer snapshot before mutating the model or any optimizer.
+        model.load_state_dict(msd)
+        for o, osd in zip(opts, osds, strict=True):
             o.load_state_dict(osd)
         logger.warning("[divguard] rolled back model + %d optimizer(s) to step %d", len(opts), self._snapshot_step)
         return True
+
+    def state_dict(self) -> Dict[str, Any]:
+        """Serialize decision history and the optional last-good rollback snapshot."""
+        config = asdict(self.cfg)
+        config["on_nonfinite"] = self.cfg.on_nonfinite.value
+        config["on_spike"] = self.cfg.on_spike.value
+        return {
+            "version": 1,
+            "config": config,
+            "loss_ema": self._loss_ema,
+            "snapshot": copy.deepcopy(self._snapshot),
+            "snapshot_step": self._snapshot_step,
+        }
+
+    def load_state_dict(self, state: Mapping[str, Any]) -> None:
+        """Restore guard policy/history, rejecting malformed partial state."""
+        if not isinstance(state, Mapping):
+            raise TypeError("divergence guard state must be a mapping")
+        if state.get("version") != 1:
+            raise ValueError("unsupported divergence guard state version")
+        raw_config = state.get("config")
+        if not isinstance(raw_config, Mapping):
+            raise ValueError("divergence guard state config must be a mapping")
+        try:
+            config_values = dict(raw_config)
+            config_values["on_nonfinite"] = GuardAction(config_values["on_nonfinite"])
+            config_values["on_spike"] = GuardAction(config_values["on_spike"])
+            restored_config = DivergenceGuardConfig(**config_values)
+        except (KeyError, TypeError, ValueError) as error:
+            raise ValueError("invalid divergence guard checkpoint config") from error
+
+        loss_ema = state.get("loss_ema")
+        if loss_ema is not None and (
+            isinstance(loss_ema, bool)
+            or not isinstance(loss_ema, numbers.Real)
+            or not math.isfinite(float(loss_ema))
+        ):
+            raise ValueError("divergence guard loss_ema must be finite or None")
+        snapshot_step = state.get("snapshot_step")
+        if (
+            isinstance(snapshot_step, bool)
+            or not isinstance(snapshot_step, int)
+            or snapshot_step < -1
+        ):
+            raise ValueError("divergence guard snapshot_step must be an integer >= -1")
+        snapshot = state.get("snapshot")
+        if snapshot is not None:
+            if snapshot_step < 0:
+                raise ValueError("divergence guard snapshot requires a non-negative step")
+            if not isinstance(snapshot, Sequence) or len(snapshot) != 2:
+                raise ValueError("divergence guard snapshot must contain model and optimizer state")
+            model_state, optimizer_states = snapshot
+            if not isinstance(model_state, Mapping) or not isinstance(
+                optimizer_states, Sequence
+            ):
+                raise ValueError("divergence guard snapshot payload is malformed")
+            if any(not isinstance(item, Mapping) for item in optimizer_states):
+                raise ValueError("divergence guard optimizer snapshots must be mappings")
+        elif snapshot_step != -1:
+            raise ValueError("divergence guard snapshot_step requires a snapshot")
+
+        self.cfg = restored_config
+        self._loss_ema = None if loss_ema is None else float(loss_ema)
+        self._snapshot = copy.deepcopy(snapshot)
+        self._snapshot_step = snapshot_step
 
     # -- logging ------------------------------------------------------------ #
     def log(self, result: GuardResult, step: int) -> None:

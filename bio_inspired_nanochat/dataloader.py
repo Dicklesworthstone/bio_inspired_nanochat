@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import deque
 from collections.abc import Mapping, Sequence
-from typing import Any
+from typing import Any, cast
 
 from bio_inspired_nanochat.torch_imports import torch
 import pyarrow.parquet as pq
@@ -12,19 +12,89 @@ from bio_inspired_nanochat.dataset import parquet_paths_for_split
 from bio_inspired_nanochat.tokenizer import get_tokenizer
 
 
+def _validate_rank_state_ownership(
+    state: Mapping[str, Any],
+    *,
+    rank: int,
+    world_size: int,
+) -> None:
+    saved_rank = state.get("rank")
+    if saved_rank is not None:
+        if isinstance(saved_rank, bool) or not isinstance(saved_rank, int) or saved_rank < 0:
+            raise ValueError("resume_state_dict['rank'] must be a non-negative integer")
+        if saved_rank != rank:
+            raise ValueError(
+                f"Cannot resume dataloader on rank {rank}: state was recorded for rank {saved_rank}"
+            )
+    saved_world_size = state.get("world_size")
+    if saved_world_size is not None:
+        if (
+            isinstance(saved_world_size, bool)
+            or not isinstance(saved_world_size, int)
+            or saved_world_size <= 0
+        ):
+            raise ValueError("resume_state_dict['world_size'] must be a positive integer")
+        if saved_world_size != world_size:
+            raise ValueError(
+                f"Cannot resume dataloader: checkpoint world_size ({saved_world_size}) "
+                f"does not match current world_size ({world_size})"
+            )
+
+
 def collate_dataloader_state_dicts(
     rank_states: Sequence[Mapping[str, Any]] | Mapping[int | str, Mapping[str, Any]],
     world_size: int | None = None,
 ) -> dict[str, Any]:
     """Collate per-rank dataloader state dicts into a multi-rank checkpoint structure."""
-    if isinstance(rank_states, Sequence):
-        ws = world_size or len(rank_states)
-        ranks_dict = {str(i): dict(st) for i, st in enumerate(rank_states)}
+    if isinstance(world_size, bool) or (
+        world_size is not None and (not isinstance(world_size, int) or world_size <= 0)
+    ):
+        raise ValueError("world_size must be a positive integer")
+    if isinstance(rank_states, Sequence) and not isinstance(
+        rank_states, (str, bytes, bytearray)
+    ):
+        ws = len(rank_states) if world_size is None else world_size
+        if len(rank_states) != ws:
+            raise ValueError(
+                f"rank state count {len(rank_states)} does not match world_size {ws}"
+            )
+        ranks_dict: dict[str, dict[str, Any]] = {}
+        for rank, state in enumerate(rank_states):
+            if not isinstance(state, Mapping):
+                raise ValueError(f"State for rank {rank} must be a mapping")
+            typed_state = cast(Mapping[str, Any], state)
+            _validate_rank_state_ownership(typed_state, rank=rank, world_size=ws)
+            ranks_dict[str(rank)] = dict(typed_state)
     elif isinstance(rank_states, Mapping):
-        ws = world_size or len(rank_states)
-        ranks_dict = {str(k): dict(v) for k, v in rank_states.items()}
+        ws = len(rank_states) if world_size is None else world_size
+        ranks_dict = {}
+        for raw_rank, state in rank_states.items():
+            if isinstance(raw_rank, bool) or not isinstance(raw_rank, (int, str)):
+                raise ValueError("rank state keys must be non-negative integer ranks")
+            try:
+                rank = int(raw_rank)
+            except ValueError as error:
+                raise ValueError(
+                    "rank state keys must be non-negative integer ranks"
+                ) from error
+            if rank < 0 or str(rank) in ranks_dict:
+                raise ValueError(f"duplicate or invalid rank state key: {raw_rank!r}")
+            if not isinstance(state, Mapping):
+                raise ValueError(f"State for rank {rank} must be a mapping")
+            typed_state = cast(Mapping[str, Any], state)
+            _validate_rank_state_ownership(typed_state, rank=rank, world_size=ws)
+            ranks_dict[str(rank)] = dict(typed_state)
     else:
         raise ValueError("rank_states must be a sequence or mapping")
+
+    if ws <= 0:
+        raise ValueError("rank_states must contain at least one rank")
+    expected_ranks = {str(rank) for rank in range(ws)}
+    if set(ranks_dict) != expected_ranks:
+        raise ValueError(
+            "rank states must contain exactly one state for every rank in "
+            f"[0, {ws}); got {sorted(ranks_dict)}"
+        )
 
     return {
         "version": 2,
@@ -49,6 +119,16 @@ def extract_rank_dataloader_state(
     if the rank is missing from a multi-rank container, or if a single-rank state was recorded
     for a different rank.
     """
+    if isinstance(rank, bool) or not isinstance(rank, int) or rank < 0:
+        raise ValueError("rank must be a non-negative integer")
+    if (
+        isinstance(world_size, bool)
+        or not isinstance(world_size, int)
+        or world_size <= 0
+    ):
+        raise ValueError("world_size must be a positive integer")
+    if rank >= world_size:
+        raise ValueError(f"rank {rank} must be smaller than world_size {world_size}")
     if resume_state_dict is None:
         return None
     if not isinstance(resume_state_dict, Mapping):
@@ -60,6 +140,8 @@ def extract_rank_dataloader_state(
         ranks_container = resume_state_dict.get("rank_states")
 
     if ranks_container is not None:
+        if resume_state_dict.get("version") != 2:
+            raise ValueError("multi-rank resume_state_dict['version'] must be 2")
         if not isinstance(ranks_container, (Mapping, Sequence)):
             raise ValueError("resume_state_dict['ranks'] must be a mapping or sequence")
 
@@ -90,28 +172,11 @@ def extract_rank_dataloader_state(
 
         if not isinstance(rank_state, Mapping):
             raise ValueError(f"State for rank {rank} must be a mapping")
+        _validate_rank_state_ownership(rank_state, rank=rank, world_size=world_size)
         return dict(rank_state)
 
     # Single-rank state dict
-    saved_ws = resume_state_dict.get("world_size")
-    if saved_ws is not None:
-        if isinstance(saved_ws, bool) or not isinstance(saved_ws, int) or saved_ws <= 0:
-            raise ValueError("resume_state_dict['world_size'] must be a positive integer")
-        if saved_ws != world_size:
-            raise ValueError(
-                f"Cannot resume dataloader: checkpoint world_size ({saved_ws}) "
-                f"does not match current world_size ({world_size})"
-            )
-
-    saved_rank = resume_state_dict.get("rank")
-    if saved_rank is not None:
-        if isinstance(saved_rank, bool) or not isinstance(saved_rank, int) or saved_rank < 0:
-            raise ValueError("resume_state_dict['rank'] must be a non-negative integer")
-        if saved_rank != rank:
-            raise ValueError(
-                f"Cannot resume dataloader on rank {rank}: state was recorded for rank {saved_rank}"
-            )
-
+    _validate_rank_state_ownership(resume_state_dict, rank=rank, world_size=world_size)
     return dict(resume_state_dict)
 
 
@@ -150,6 +215,30 @@ def tokenizing_distributed_data_loader_with_state(
     rank_state = extract_rank_dataloader_state(resume_state_dict, rank=ddp_rank, world_size=ddp_world_size)
 
     if rank_state is not None:
+        version = rank_state.get("version", 1)
+        if (
+            isinstance(version, bool)
+            or not isinstance(version, int)
+            or version not in {1, 2}
+        ):
+            raise ValueError("resume_state_dict['version'] must be 1 or 2")
+        if version == 2:
+            required_v2_fields = {
+                "pq_idx",
+                "rg_idx",
+                "doc_idx",
+                "token_buffer",
+                "rank",
+                "world_size",
+            }
+            missing_v2_fields = sorted(required_v2_fields - rank_state.keys())
+            if missing_v2_fields:
+                raise ValueError(
+                    "version 2 resume_state_dict is missing exact-resume fields: "
+                    f"{missing_v2_fields}"
+                )
+        elif "doc_idx" in rank_state or "token_buffer" in rank_state:
+            raise ValueError("doc_idx/token_buffer resume state requires version 2")
         for key in ("pq_idx", "rg_idx"):
             value = rank_state.get(key)
             if isinstance(value, bool) or not isinstance(value, int) or value < 0:
@@ -168,14 +257,16 @@ def tokenizing_distributed_data_loader_with_state(
                 if isinstance(tok, bool) or not isinstance(tok, int) or tok < 0:
                     raise ValueError("elements of resume_state_dict['token_buffer'] must be non-negative integers")
 
-    is_v2 = rank_state is not None and (
-        "doc_idx" in rank_state or "token_buffer" in rank_state or rank_state.get("version", 1) >= 2
-    )
+    is_v2 = rank_state is not None and rank_state.get("version", 1) == 2
 
     resume_pq_idx = rank_state.get("pq_idx", 0) if rank_state is not None else 0
     resume_rg_idx = rank_state.get("rg_idx") if rank_state is not None else None
     resume_doc_idx = rank_state.get("doc_idx", 0) if rank_state is not None else 0
     resume_tokens = list(rank_state.get("token_buffer", [])) if rank_state is not None else []
+    if is_v2 and resume_rg_idx is not None and resume_rg_idx % ddp_world_size != ddp_rank:
+        raise ValueError(
+            "resume_state_dict['rg_idx'] is not owned by the saved rank/world_size"
+        )
 
     def document_batches():
         parquet_paths = parquet_paths_for_split(split)
@@ -215,6 +306,10 @@ def tokenizing_distributed_data_loader_with_state(
                     rg = pf.read_row_group(rg_idx)
                     batch = rg.column("text").to_pylist()
                     num_docs = len(batch)
+                    if doc_start > num_docs:
+                        raise ValueError(
+                            "resume_state_dict['doc_idx'] is outside the parquet row-group range"
+                        )
 
                     for i in range(doc_start, num_docs, tokenizer_batch_size):
                         chunk = batch[i : i + tokenizer_batch_size]

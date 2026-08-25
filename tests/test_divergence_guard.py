@@ -150,6 +150,71 @@ def test_rollback_disabled_takes_no_snapshot():
     assert g.rollback(m, None) is False
 
 
+@pytest.mark.unit
+def test_rollback_rejects_optimizer_count_mismatch_before_mutating_model():
+    model = torch.nn.Linear(2, 2)
+    optimizer_a = torch.optim.SGD(model.parameters(), lr=0.1)
+    optimizer_b = torch.optim.AdamW(model.parameters(), lr=0.01)
+    guard = DivergenceGuard(
+        DivergenceGuardConfig(enable_rollback=True, snapshot_every=1)
+    )
+    guard.maybe_snapshot(model, [optimizer_a, optimizer_b], step=0)
+    with torch.no_grad():
+        model.weight.add_(100.0)
+    corrupted_weight = model.weight.detach().clone()
+
+    with pytest.raises(ValueError, match="optimizer count"):
+        guard.rollback(model, [optimizer_a])
+
+    torch.testing.assert_close(model.weight, corrupted_weight)
+
+
+@pytest.mark.unit
+def test_checkpoint_state_restores_ema_policy_and_rollback_snapshot():
+    model = make_tiny_synaptic(seed=0, train=True)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
+    original = DivergenceGuard(
+        DivergenceGuardConfig(
+            enable_rollback=True,
+            snapshot_every=1,
+            warmup_steps=7,
+            on_spike=GuardAction.WARN,
+        )
+    )
+    original.check(torch.tensor(2.0), model, step=0)
+    original.maybe_snapshot(model, optimizer, step=3)
+    state = original.state_dict()
+
+    restored = DivergenceGuard()
+    restored.load_state_dict(state)
+
+    assert restored.cfg.warmup_steps == 7
+    assert restored.cfg.on_spike is GuardAction.WARN
+    assert restored.state_dict()["loss_ema"] == 2.0
+    assert restored.can_rollback()
+    good = next(model.parameters()).detach().clone()
+    with torch.no_grad():
+        next(model.parameters()).add_(100.0)
+    assert restored.rollback(model, optimizer)
+    torch.testing.assert_close(next(model.parameters()), good)
+
+
+@pytest.mark.unit
+def test_checkpoint_state_rejects_snapshot_step_without_snapshot():
+    guard = DivergenceGuard()
+
+    with pytest.raises(ValueError, match="requires a snapshot"):
+        guard.load_state_dict(
+            {
+                "version": 1,
+                "config": guard.state_dict()["config"],
+                "loss_ema": None,
+                "snapshot": None,
+                "snapshot_step": 4,
+            }
+        )
+
+
 # --------------------------------------------------------------------------- #
 # 5. Disabled guard + helpers
 # --------------------------------------------------------------------------- #

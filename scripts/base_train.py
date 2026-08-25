@@ -25,15 +25,21 @@ import torch.distributed as torch_dist
 import wandb
 
 from bio_inspired_nanochat.checkpoint_manager import (
+    capture_prefetched_batch,
     checkpoint_model_config,
     config_provenance,
     capture_rng_state,
     load_checkpoint,
     load_checkpoint_metadata,
+    require_complete_checkpoint,
     restore_rng_state,
+    restore_prefetched_batch,
+    restore_optimizer_states,
+    restore_rank_model_state,
     save_checkpoint,
     synaptic_config_from_meta,
     synaptic_config_to_meta,
+    validate_exact_resume_payload_step,
 )
 from bio_inspired_nanochat.dataloader import (
     collate_dataloader_state_dicts,
@@ -146,7 +152,10 @@ config_keys = [
     for k, v in globals().items()
     if not k.startswith("_") and isinstance(v, (int, float, bool, str))
 ]
-with open(os.path.join("bio_inspired_nanochat", "configurator.py")) as f:
+with open(
+    os.path.join("bio_inspired_nanochat", "configurator.py"),
+    encoding="utf-8",
+) as f:
     exec(f.read())  # nosec B102 # overrides from command line or config file
 user_config = {k: globals()[k] for k in config_keys}  # will be useful for logging
 # -----------------------------------------------------------------------------
@@ -184,9 +193,17 @@ base_dir = get_base_dir()
 output_dirname = model_tag if model_tag else f"d{depth}"  # e.g. d12
 checkpoint_dir = os.path.join(base_dir, "base_checkpoints", output_dirname)
 resuming = resume_from_step != -1
+if resuming:
+    require_complete_checkpoint(checkpoint_dir, resume_from_step)
 resume_meta = (
     load_checkpoint_metadata(checkpoint_dir, resume_from_step) if resuming else None
 )
+if resuming:
+    validate_exact_resume_payload_step(
+        resume_meta,
+        resume_from_step,
+        payload_name="checkpoint metadata",
+    )
 resume_model_config = (resume_meta or {}).get("model_config", {})
 if not isinstance(resume_model_config, dict):
     raise ValueError("checkpoint model_config metadata must be a mapping")
@@ -255,6 +272,65 @@ if resuming:
     saved_user_config = (resume_meta or {}).get("user_config", {})
     if not isinstance(saved_user_config, dict):
         raise ValueError("checkpoint user_config metadata must be a mapping")
+    integer_trajectory_fields = (
+        "num_iterations",
+        "eval_every",
+        "eval_tokens",
+        "core_metric_every",
+        "core_metric_max_per_task",
+        "sample_every",
+        "neuromod_log_every",
+    )
+    real_trajectory_fields = (
+        "target_flops",
+        "target_param_data_ratio",
+        "grad_clip",
+        "warmup_ratio",
+        "warmdown_ratio",
+        "final_lr_frac",
+    )
+    toggle_trajectory_fields = ("neuromod_enabled",)
+    trajectory_config_fields = (
+        *integer_trajectory_fields,
+        *real_trajectory_fields,
+        *toggle_trajectory_fields,
+    )
+    missing_trajectory_config = [
+        name for name in trajectory_config_fields if name not in saved_user_config
+    ]
+    if missing_trajectory_config:
+        raise ValueError(
+            "checkpoint lacks trajectory-defining training config fields required "
+            f"for exact resume: {missing_trajectory_config}"
+        )
+    for name in integer_trajectory_fields:
+        value = saved_user_config[name]
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError(
+                f"checkpoint trajectory config field {name!r} must be an integer"
+            )
+        globals()[name] = value
+        user_config[name] = value
+    for name in real_trajectory_fields:
+        value = saved_user_config[name]
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(float(value))
+        ):
+            raise ValueError(
+                f"checkpoint trajectory config field {name!r} must be numeric"
+            )
+        globals()[name] = value
+        user_config[name] = value
+    for name in toggle_trajectory_fields:
+        value = saved_user_config[name]
+        if not isinstance(value, (bool, int)) or int(value) not in (0, 1):
+            raise ValueError(
+                f"checkpoint trajectory config field {name!r} must be boolean-like"
+            )
+        globals()[name] = int(bool(value))
+        user_config[name] = int(bool(value))
     saved_total_batch_size = (resume_meta or {}).get(
         "total_batch_size",
         saved_user_config.get("total_batch_size", total_batch_size),
@@ -437,16 +513,21 @@ if resuming:
         checkpoint_dir, resume_from_step, device, load_optimizer=True, rank=ddp_rank,
         load_train_state=True,
     )
+    validate_exact_resume_payload_step(
+        train_state,
+        resume_from_step,
+        payload_name="rank-local train state",
+    )
     model.load_state_dict(model_data, strict=True, assign=True)
+    restore_rank_model_state(
+        model,
+        train_state,
+        required=ddp_world_size > 1,
+    )
     del model_data  # free up this memory after the copy
     # hwxb.2.9: load_state_dict(assign=True) replaces the param objects, breaking any
     # wte/lm_head tie — re-establish it so the shared weight trains as one on resume.
     model.tie_weights()
-    # hwxb.2.6: restore per-rank RNG so the resumed trajectory matches the uninterrupted run.
-    if train_state is not None:
-        restore_rng_state(train_state.get("rng"))
-        print0(f"[checkpoint] restored RNG state for bit-comparable resume from step {resume_from_step}")
-
 orig_model = model  # original, uncompiled model, for saving raw model state_dict and for inference/evaluation (because the shapes may change shape)
 model = torch.compile(
     model, dynamic=False
@@ -574,10 +655,16 @@ if neuromod_enabled and use_syn:
     from bio_inspired_nanochat.neuromod import NeuromodulatoryBus
 
     nm_bus = NeuromodulatoryBus()
+    if resuming:
+        nm_state = train_state.get("neuromod") if train_state is not None else None
+        if nm_state is None:
+            raise ValueError("exact resume requires neuromodulator state when enabled")
+        nm_bus.load_state_dict(nm_state, strict=True)
+        nm_bus.broadcast(orig_model)
+        print0("[checkpoint] restored neuromodulator EMA levels and broadcast gains")
 
 if resuming:
-    for opt, dat in zip(optimizers, optimizer_data):
-        opt.load_state_dict(dat)
+    restore_optimizer_states(optimizers, optimizer_data)
     del optimizer_data  # free up the memory
 
 # -----------------------------------------------------------------------------
@@ -609,9 +696,22 @@ def build_val_loader():
     )
 
 
-x, y, dataloader_state_dict = next(
-    train_loader
-)  # kick off load of the very first batch of data
+if resuming:
+    if dataloader_resume_state_dict is None:
+        raise ValueError("exact resume requires a rank-local dataloader state")
+    x, y = restore_prefetched_batch(
+        train_state,
+        device=device,
+        expected_shape=(device_batch_size, max_seq_len),
+    )
+    # The restored batch is the loader's most recently yielded batch, so its saved
+    # cursor already points immediately after x/y. The next loader advance after
+    # backward will therefore produce the following batch without a skip.
+    dataloader_state_dict = dataloader_resume_state_dict
+else:
+    x, y, dataloader_state_dict = next(
+        train_loader
+    )  # kick off load of the very first batch of data
 
 # -----------------------------------------------------------------------------
 # Set up hyperparameter schedulers
@@ -643,10 +743,19 @@ def get_muon_momentum(it):
 if not resuming:
     step = 0
     min_val_bpb = float("inf")
+    val_bpb = float("inf")
     smooth_train_loss = 0  # EMA of training loss
     total_training_time = 0  # total wall-clock time of training
 else:
     step = meta_data["step"]
+    val_bpb = meta_data.get("val_bpb")
+    if (
+        isinstance(val_bpb, bool)
+        or not isinstance(val_bpb, (int, float))
+        or not math.isfinite(float(val_bpb))
+    ):
+        raise ValueError("checkpoint val_bpb must be finite for exact resume")
+    val_bpb = float(val_bpb)
     loop_state = meta_data["loop_state"]
     min_val_bpb = loop_state["min_val_bpb"]
     smooth_train_loss = loop_state["smooth_train_loss"]
@@ -661,6 +770,21 @@ mfu: float = 0.0
 # norms each step for early warning. Especially important with the stateful, positive-feedback
 # bio mechanisms now live on the forward path.
 divguard = build_divergence_guard()
+if resuming:
+    divguard_state = (
+        train_state.get("divergence_guard") if train_state is not None else None
+    )
+    if divguard_state is None:
+        raise ValueError("exact resume requires divergence-guard state")
+    divguard.load_state_dict(divguard_state)
+    print0("[checkpoint] restored divergence-guard EMA and rollback state")
+    # Restore RNG last, after compile wrapping and every runtime/controller object has
+    # been rebuilt. Initialization work must not consume draws from the saved future.
+    restore_rng_state(train_state.get("rng"))
+    print0(
+        f"[checkpoint] restored RNG state for bit-comparable resume from step "
+        f"{resume_from_step}"
+    )
 
 # -----------------------------------------------------------------------------
 # Training loop
@@ -669,9 +793,10 @@ while True:
         step == num_iterations
     )  # loop runs num_iterations+1 times so that we can eval/save at the end
     flops_so_far = num_flops_per_token * total_batch_size * step
+    replaying_checkpoint_boundary = resuming and step == resume_from_step
 
     # once in a while: evaluate the val bpb (all ranks participate)
-    if last_step or step % eval_every == 0:
+    if not replaying_checkpoint_boundary and (last_step or step % eval_every == 0):
         model.eval()
         val_loader = build_val_loader()
         eval_steps = eval_tokens // (device_batch_size * max_seq_len * ddp_world_size)
@@ -727,7 +852,7 @@ while True:
     # once in a while: estimate the CORE metric (all ranks participate)
     # use the original uncompiled model because the inputs keep changing shape
     results = {}
-    if core_metric_every > 0 and (
+    if not replaying_checkpoint_boundary and core_metric_every > 0 and (
         last_step or (step > 0 and step % core_metric_every == 0)
     ):
         model.eval()
@@ -748,7 +873,11 @@ while True:
 
     # once in a while: sample from the model (only on master process)
     # use the original uncompiled model because the inputs keep changing shape
-    if master_process and (last_step or (step > 0 and step % sample_every == 0)):
+    if (
+        not replaying_checkpoint_boundary
+        and master_process
+        and (last_step or (step > 0 and step % sample_every == 0))
+    ):
         model.eval()
         prompts = [
             "The capital of France is",
@@ -770,11 +899,9 @@ while True:
         model.train()
 
     # save checkpoint: at the end of the run, or every save_every steps, except at the first step or the resume step
-    if last_step or (
-        step > 0
-        and step != resume_from_step
-        and save_every > 0
-        and step % save_every == 0
+    if not replaying_checkpoint_boundary and (
+        last_step
+        or (step > 0 and save_every > 0 and step % save_every == 0)
     ):
         if ddp_world_size > 1 and torch.distributed.is_initialized():
             gathered_loaders = [None for _ in range(ddp_world_size)]
@@ -822,8 +949,17 @@ while True:
             train_state={
                 "rng": capture_rng_state(),
                 "step": step,
+                # DDP synchronizes gradients, not rank-local forward mutations. Bio
+                # buffers and online-updated weights may therefore legitimately differ
+                # between ranks and must not all resume from rank 0's model artifact.
+                "rank_model_state": (
+                    orig_model.state_dict() if ddp_world_size > 1 else None
+                ),
                 "splitmerge": sm_ctrl.state_dict() if sm_ctrl is not None else None,
+                "neuromod": nm_bus.state_dict() if nm_bus is not None else None,
+                "divergence_guard": divguard.state_dict(),
                 "dataloader_state_dict": dataloader_state_dict,
+                "prefetched_batch": capture_prefetched_batch(x, y),
             },
         )
 
