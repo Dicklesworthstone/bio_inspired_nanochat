@@ -30,9 +30,9 @@ DEV = torch.device("cpu")
 DT = torch.float32
 
 
-def _setup(*, K=4, T=12, B=2, H=4, dh=16, seed=0, **cfg_kw):
+def _setup(*, K=4, T=12, B=2, H=4, dh=16, seed=0):
     set_seed(seed)
-    cfg = SynapticConfig(**{"enable_presyn": True, **cfg_kw})
+    cfg = SynapticConfig(enable_presyn=True)
     pre = SynapticPresyn(dh, cfg)
     state = build_presyn_state(B, T, H, DEV, DT, cfg)
     idx = torch.zeros(B, H, T, K, dtype=torch.long)

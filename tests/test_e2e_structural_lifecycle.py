@@ -104,12 +104,14 @@ def test_forced_lifecycle_invariants_and_lineage(tmp_path):
     assert _rel_l2(out1, out0) < 1e-5, "dense function-preserving split must not move the output"
 
     # MERGE expert 2 (winner) <- 3 (loser) (known lineage); merging two clones is exact
+    xi = moe.Xi
+    assert xi is not None
     with torch.no_grad():
         # make 2 and 3 an identical, mergeable pair first
         moe.experts[3].fc1.w_slow.copy_(moe.experts[2].fc1.w_slow)
         moe.experts[3].fc2.w_slow.copy_(moe.experts[2].fc2.w_slow)
         moe.router.weight[3].copy_(moe.router.weight[2])
-        moe.Xi[3].copy_(moe.Xi[2])
+        xi[3].copy_(xi[2])
         moe.router_embeddings[3].copy_(moe.router_embeddings[2])
     out_pre_merge = _forward()
     with torch.no_grad():

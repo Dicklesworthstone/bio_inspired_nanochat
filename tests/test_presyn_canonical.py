@@ -32,9 +32,25 @@ DEV = torch.device("cpu")
 DT = torch.float32
 
 
-def _setup(*, K=4, T=8, B=2, H=4, dh=16, seed=0, requires_grad=False, **cfg_kw):
+def _setup(
+    *,
+    K=4,
+    T=8,
+    B=2,
+    H=4,
+    dh=16,
+    seed=0,
+    requires_grad=False,
+    enable_presyn: bool = True,
+    doc2_gain: float = 0.08,
+    stochastic_train_frac: float = 0.12,
+):
     set_seed(seed)
-    cfg = SynapticConfig(**{"enable_presyn": True, **cfg_kw})
+    cfg = SynapticConfig(
+        enable_presyn=enable_presyn,
+        doc2_gain=doc2_gain,
+        stochastic_train_frac=stochastic_train_frac,
+    )
     pre = SynapticPresyn(dh, cfg)
     state = build_presyn_state(B, T, H, DEV, DT, cfg)
     drive = torch.randn(B, H, T, K, dtype=DT, requires_grad=requires_grad)

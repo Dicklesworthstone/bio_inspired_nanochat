@@ -153,7 +153,7 @@ def cuda_available() -> bool:
 def rustbpe_available() -> bool:
     """The compiled Rust extension (tokenizer + CPU kernels) may be unbuilt."""
     try:
-        import rustbpe  # noqa: F401  # ty: ignore[unresolved-import]
+        import rustbpe  # noqa: F401
         return True
     except Exception:
         return False

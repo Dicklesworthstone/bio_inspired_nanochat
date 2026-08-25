@@ -114,7 +114,7 @@ class WriteOnlyStringIO(io.StringIO):
         return False
 
 
-class redirect_stdin(contextlib._RedirectStream):  # type: ignore
+class redirect_stdin(contextlib._RedirectStream):
     _stream = "stdin"
 
 

@@ -232,6 +232,9 @@ def _lifecycle_config() -> SplitMergeConfig:
 
 def _configure_controlled_model(model: SynapticMoE) -> None:
     """Install a reproducible redundant/dead pair and two healthy specialists."""
+    genome = model.Xi
+    if genome is None:
+        raise RuntimeError("Structural falsification requires an enabled Xi genome")
     with torch.no_grad():
         spectral_profiles = (
             (1.0, 0.8, 0.6, 0.5),
@@ -263,7 +266,7 @@ def _configure_controlled_model(model: SynapticMoE) -> None:
         # Experts 0/1 are deliberately redundant and unhealthy: both controllers
         # see the same obvious merge candidate.
         model.experts[1].load_state_dict(model.experts[0].state_dict())
-        model.Xi.zero_()
+        genome.zero_()
         model.router_logit_bias.zero_()
         model.fatigue.copy_(
             torch.tensor((0.1, 0.1, 0.8, 1.0), dtype=model.fatigue.dtype)
