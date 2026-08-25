@@ -94,3 +94,71 @@ def test_base_train_wiring_present():
     assert 'load_cmaes_params = ""' in src, "configurator setting must exist"
     assert "apply_cmaes_params(syn_cfg, load_cmaes_params)" in src, "overlay must be wired"
     assert "cannot be combined with --resume" in src, "resume refusal must be present"
+
+
+def test_bool_toggle_field_rejected_even_with_numeric_value(tmp_path):
+    """3nx5: Overriding a bool toggle (e.g. enable_hebbian: 1.0 or enable_metabolism: 0.0)
+    must fail closed rather than silently misconfiguring syn_cfg."""
+    p1 = _write(tmp_path, {"enable_hebbian": 1.0})
+    with pytest.raises(ValueError) as ei:
+        parse_cmaes_params(p1)
+    assert "boolean toggle" in str(ei.value)
+
+    p2 = _write(tmp_path, {"enable_metabolism": 0.0})
+    with pytest.raises(ValueError) as ei:
+        parse_cmaes_params(p2)
+    assert "boolean toggle" in str(ei.value)
+
+
+def test_string_setting_field_rejected(tmp_path):
+    """3nx5: String settings like stochastic_mode cannot be overridden via numeric CMA-ES params."""
+    p = _write(tmp_path, {"stochastic_mode": 1.0})
+    with pytest.raises(ValueError) as ei:
+        parse_cmaes_params(p)
+    assert "string mode setting" in str(ei.value)
+
+
+def test_integer_fields_cast_and_reject_fractional_floats(tmp_path):
+    """3nx5: Integer fields must convert whole numbers to int and reject fractional floats."""
+    p_valid = _write(tmp_path, {"rank_eligibility": 16.0, "endo_delay": 5})
+    params = parse_cmaes_params(p_valid)
+    assert isinstance(params["rank_eligibility"], int)
+    assert params["rank_eligibility"] == 16
+    assert isinstance(params["endo_delay"], int)
+    assert params["endo_delay"] == 5
+
+    cfg = apply_cmaes_params(SynapticConfig(), p_valid)
+    assert isinstance(cfg.rank_eligibility, int)
+    assert cfg.rank_eligibility == 16
+    assert isinstance(cfg.endo_delay, int)
+    assert cfg.endo_delay == 5
+
+    p_frac = _write(tmp_path, {"rank_eligibility": 8.5})
+    with pytest.raises(ValueError) as ei:
+        parse_cmaes_params(p_frac)
+    assert "must be an integer" in str(ei.value)
+
+
+def test_integer_fields_reject_negative(tmp_path):
+    """3nx5: Integer fields must reject negative values."""
+    p_neg = _write(tmp_path, {"rank_eligibility": -2})
+    with pytest.raises(ValueError) as ei:
+        parse_cmaes_params(p_neg)
+    assert "non-negative integer" in str(ei.value)
+
+
+def test_non_finite_float_rejected(tmp_path):
+    """3nx5: Non-finite float values (NaN, Inf) must fail closed."""
+    p_inf = tmp_path / "inf.json"
+    p_inf.write_text('{"tau_rrp": Infinity}', encoding="utf-8")
+    with pytest.raises(ValueError) as ei:
+        parse_cmaes_params(p_inf)
+    assert "finite number" in str(ei.value)
+
+    p_nan = tmp_path / "nan.json"
+    p_nan.write_text('{"tau_rrp": NaN}', encoding="utf-8")
+    with pytest.raises(ValueError) as ei:
+        parse_cmaes_params(p_nan)
+    assert "finite number" in str(ei.value)
+
+

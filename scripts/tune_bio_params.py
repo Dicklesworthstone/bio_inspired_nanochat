@@ -37,10 +37,12 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
+import hmac
 import json
 import math
 import os
-import pickle
+import pickle  # nosec B403
 import time
 from collections.abc import Callable
 from collections import deque
@@ -420,6 +422,7 @@ class RunArtifacts:
     progress_jsonl: Path
     best_params_json: Path
     es_latest_pkl: Path
+    es_manifest_json: Path
     tb_dir: Path
     tb_writer: SummaryWriter | None
 
@@ -445,6 +448,7 @@ def _prepare_run_artifacts(args: argparse.Namespace) -> RunArtifacts | None:
         progress_jsonl=run_dir / "progress.jsonl",
         best_params_json=run_dir / "best_params.json",
         es_latest_pkl=run_dir / "es_latest.pkl",
+        es_manifest_json=run_dir / "es_manifest.json",
         tb_dir=tb_dir,
         tb_writer=tb_writer,
     )
@@ -453,10 +457,13 @@ def _prepare_run_artifacts(args: argparse.Namespace) -> RunArtifacts | None:
 def _load_best_params(best_params_json: Path) -> tuple[float, dict[str, float]]:
     if not best_params_json.exists():
         return float("inf"), {}
-    data = json.loads(best_params_json.read_text(encoding="utf-8"))
-    best_loss = float(data["best_loss"])
-    best_params = {str(k): float(v) for k, v in data["best_params"].items()}
-    return best_loss, best_params
+    try:
+        data = json.loads(best_params_json.read_text(encoding="utf-8"))
+        best_loss = float(data["best_loss"])
+        best_params = {str(k): float(v) for k, v in data["best_params"].items()}
+        return best_loss, best_params
+    except Exception:
+        return float("inf"), {}
 
 
 def _save_best_params(
@@ -478,6 +485,103 @@ def _save_best_params(
         json.dumps(payload, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+
+
+def _load_verified_cma_checkpoint(
+    artifacts: RunArtifacts,
+    *,
+    specs: Sequence[ParamSpec],
+    allow_unverified: bool = False,
+    console: Console | None = None,
+) -> Any:
+    """Safely resume CMAEvolutionStrategy state with cryptographic integrity verification.
+
+    Refuses to deserialize unverified pickle bytes from untrusted or tampered run directories.
+    Fails closed with clear Rich error diagnostics if the SHA-256 hash does not match the manifest
+    or if the checkpoint dimensions do not match the target search space.
+    """
+    _console = console or Console()
+    if not artifacts.es_latest_pkl.exists():
+        _console.print(f"[bold red]Checkpoint file missing: {artifacts.es_latest_pkl}[/bold red]")
+        raise FileNotFoundError(f"Missing checkpoint: {artifacts.es_latest_pkl}")
+
+    raw_bytes = artifacts.es_latest_pkl.read_bytes()
+    actual_sha256 = hashlib.sha256(raw_bytes).hexdigest()
+
+    if artifacts.es_manifest_json.exists():
+        try:
+            manifest_doc = json.loads(artifacts.es_manifest_json.read_text(encoding="utf-8"))
+        except Exception as exc:
+            _console.print(
+                f"[bold red]Checkpoint manifest at {artifacts.es_manifest_json} is corrupted: {exc}[/bold red]"
+            )
+            raise ValueError(
+                f"Corrupt checkpoint manifest at {artifacts.es_manifest_json}: {exc}"
+            ) from exc
+
+        if not isinstance(manifest_doc, dict) or manifest_doc.get("format") != "cmaes-checkpoint-manifest-v1":
+            _console.print(
+                f"[bold red]Unsupported checkpoint manifest format in {artifacts.es_manifest_json}[/bold red]"
+            )
+            raise ValueError(
+                f"Unsupported checkpoint manifest format in {artifacts.es_manifest_json}: "
+                f"{manifest_doc.get('format') if isinstance(manifest_doc, dict) else type(manifest_doc)}"
+            )
+
+        expected_sha256 = manifest_doc.get("sha256")
+        if not isinstance(expected_sha256, str) or not hmac.compare_digest(actual_sha256, expected_sha256):
+            _console.print(
+                f"[bold red]Security Error: Checkpoint integrity verification failed for {artifacts.es_latest_pkl}! "
+                f"Computed SHA-256 ({actual_sha256[:16]}...) does not match manifest SHA-256 ({str(expected_sha256)[:16]}...). "
+                f"Refusing to deserialize potentially tampered checkpoint.[/bold red]"
+            )
+            raise ValueError(
+                f"Checkpoint integrity verification failed for {artifacts.es_latest_pkl}: "
+                f"SHA-256 digest mismatch against {artifacts.es_manifest_json}"
+            )
+
+        expected_dim = manifest_doc.get("dim")
+        if expected_dim is not None and int(expected_dim) != len(specs):
+            _console.print(
+                f"[bold red]Checkpoint dimension mismatch: manifest recorded dim={expected_dim}, "
+                f"current search space has dim={len(specs)}.[/bold red]"
+            )
+            raise ValueError(
+                f"Checkpoint search space mismatch: manifest has dim={expected_dim}, expected {len(specs)}"
+            )
+    else:
+        if not allow_unverified:
+            _console.print(
+                f"[bold red]Security Error: Checkpoint manifest {artifacts.es_manifest_json} not found. "
+                f"Refusing to deserialize unverified legacy pickle bytes from {artifacts.es_latest_pkl}. "
+                f"Pass --allow-unverified-checkpoint to explicitly authorize loading legacy unverified checkpoints.[/bold red]"
+            )
+            raise ValueError(
+                f"Unverified checkpoint: {artifacts.es_manifest_json} is missing. "
+                f"Refusing to execute unverified pickle bytes from {artifacts.es_latest_pkl}. "
+                f"Pass --allow-unverified-checkpoint to authorize."
+            )
+        _console.print(
+            f"[bold yellow]Warning: Loading unverified legacy checkpoint {artifacts.es_latest_pkl} "
+            f"without cryptographic manifest verification (--allow-unverified-checkpoint enabled).[/bold yellow]"
+        )
+
+    try:
+        es = pickle.loads(raw_bytes)  # nosec B301
+    except Exception as exc:
+        _console.print(f"[bold red]Failed to deserialize verified checkpoint: {exc}[/bold red]")
+        raise ValueError(f"Failed to deserialize checkpoint {artifacts.es_latest_pkl}: {exc}") from exc
+
+    es_dim = getattr(es, "N", None)
+    if es_dim is not None and int(es_dim) != len(specs):
+        _console.print(
+            f"[bold red]Restored CMA-ES dimension mismatch: object has N={es_dim}, expected {len(specs)}.[/bold red]"
+        )
+        raise ValueError(
+            f"Restored CMA-ES dimension mismatch: object has N={es_dim}, expected {len(specs)}"
+        )
+
+    return es
 
 
 def _append_progress(progress_jsonl: Path, payload: dict[str, object]) -> None:
@@ -1296,9 +1400,12 @@ def _cmd_optimize(args: argparse.Namespace, *, console: Console, specs: Sequence
     sigma0 = float(args.sigma0)
 
     if artifacts is not None and args.resume:
-        if not artifacts.es_latest_pkl.exists():
-            raise FileNotFoundError(f"Missing checkpoint: {artifacts.es_latest_pkl}")
-        es = pickle.loads(artifacts.es_latest_pkl.read_bytes())
+        es = _load_verified_cma_checkpoint(
+            artifacts,
+            specs=specs,
+            allow_unverified=bool(getattr(args, "allow_unverified_checkpoint", False)),
+            console=console,
+        )
     else:
         lbs, ubs = _cma_bounds(specs)
         es = cma.CMAEvolutionStrategy(
@@ -1574,8 +1681,24 @@ def _cmd_optimize(args: argparse.Namespace, *, console: Console, specs: Sequence
 
                     if not args.no_checkpoints:
                         es_bytes = es.pickle_dumps()
+                        es_sha256 = hashlib.sha256(es_bytes).hexdigest()
                         artifacts.es_latest_pkl.write_bytes(es_bytes)
                         (artifacts.run_dir / f"es_gen_{gen:04d}.pkl").write_bytes(es_bytes)
+                        manifest = {
+                            "format": "cmaes-checkpoint-manifest-v1",
+                            "run_id": run_id,
+                            "generation": int(gen),
+                            "countiter": int(getattr(es, "countiter", gen)),
+                            "best_loss": float(best_loss),
+                            "dim": len(specs),
+                            "sha256": es_sha256,
+                            "saved_at_unix": time.time(),
+                        }
+                        manifest_raw = json.dumps(manifest, indent=2, sort_keys=True) + "\n"
+                        artifacts.es_manifest_json.write_text(manifest_raw, encoding="utf-8")
+                        (artifacts.run_dir / f"es_manifest_gen_{gen:04d}.json").write_text(
+                            manifest_raw, encoding="utf-8"
+                        )
 
                     if artifacts.tb_writer is not None:
                         _log_tensorboard(
@@ -1855,6 +1978,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--resume",
         action="store_true",
         help="Resume from --run-dir/es_latest.pkl",
+    )
+    opt_p.add_argument(
+        "--allow-unverified-checkpoint",
+        action="store_true",
+        help="Allow resuming from legacy unverified checkpoints lacking a cryptographic manifest (warning: security risk)",
     )
     opt_p.add_argument(
         "--no-checkpoints",
