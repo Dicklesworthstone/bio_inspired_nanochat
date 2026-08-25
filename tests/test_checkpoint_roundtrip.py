@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import json
 
+import torch
+
 import pytest
 
 from bio_inspired_nanochat.checkpoint_manager import (
@@ -79,3 +81,36 @@ def test_provenance_stamp_has_sha_and_config_hash():
     assert len(prov["synaptic_config_hash"]) == 16
     # git_sha is a 40-char hex SHA in a git repo, or None if git is unavailable
     assert prov["git_sha"] is None or len(prov["git_sha"]) == 40
+
+
+def test_crash_debris_step_is_not_discovered_when_markers_in_use(tmp_path):
+    """0qvh regression: a save that crashed between the model/meta writes and the
+    commit marker must NOT be auto-selected by find_last_step — resume should
+    fall back to the previous complete step instead of dying on missing shards."""
+    import os
+
+    from bio_inspired_nanochat.checkpoint_manager import (
+        find_last_step,
+        list_checkpoint_steps,
+        save_checkpoint,
+    )
+
+    # Step 5: a complete (marker-bearing) checkpoint.
+    save_checkpoint(str(tmp_path), 5, model_data={"w": torch.zeros(1)},
+                    optimizer_data={"m": torch.zeros(1)}, meta_data={"step": 5}, rank=0)
+    # Step 10: crash debris — model+meta landed, no optim shard, no commit marker.
+    (tmp_path / "model_000010.pt").write_bytes(b"partial")
+    (tmp_path / "meta_000010.json").write_text("{}")
+
+    assert list_checkpoint_steps(str(tmp_path)) == [5]
+    assert find_last_step(str(tmp_path)) == 5
+    assert os.path.exists(tmp_path / "commit_000005.json")
+
+
+def test_legacy_directory_without_markers_stays_discoverable(tmp_path):
+    """Back-compat: pre-marker directories keep the old discovery semantics."""
+    from bio_inspired_nanochat.checkpoint_manager import list_checkpoint_steps
+
+    (tmp_path / "model_000007.pt").write_bytes(b"x")
+    (tmp_path / "meta_000007.json").write_text("{}")
+    assert list_checkpoint_steps(str(tmp_path)) == [7]

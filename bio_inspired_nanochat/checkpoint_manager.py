@@ -88,6 +88,15 @@ def checkpoint_model_config(model, base_config: dict[str, Any]) -> dict[str, Any
         "init_type",
         "init_seed",
         "tie_embeddings",
+        # Attention-architecture surface: without these, a checkpoint saved
+        # through this metadata path rebuilt as attention_type="standard" and
+        # the strict load failed on the unexpected ultrametric projection keys.
+        "attention_type",
+        "ultrametric_k",
+        "ultrametric_p",
+        "ultrametric_alpha",
+        "ultrametric_lcp_beta",
+        "ultrametric_query_chunk_size",
     ):
         if config is not None and hasattr(config, name):
             out[name] = getattr(config, name)
@@ -155,17 +164,39 @@ def config_provenance(syn_cfg) -> dict:
 _CKPT_RE = re.compile(r"^(model|meta|optim|train)_(\d{6,})(?:_rank\d+)?\.(pt|json)$")
 
 
+def _fsync_parent_dir(path: str) -> None:
+    """fsync the containing directory so the rename itself is durable.
+
+    Without this, a power loss right after ``os.replace`` can persist the new
+    directory entry while the file's data blocks were still in page cache —
+    leaving a zero-length/truncated file under the FINAL checkpoint name, which
+    is exactly the corruption the tmp+rename scheme exists to prevent.
+    """
+    fd = os.open(os.path.dirname(os.path.abspath(path)) or ".", os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
 def _atomic_torch_save(obj, path: str) -> None:
     tmp = path + ".tmp"
-    torch.save(obj, tmp)
+    with open(tmp, "wb") as f:
+        torch.save(obj, f)
+        f.flush()
+        os.fsync(f.fileno())
     os.replace(tmp, path)
+    _fsync_parent_dir(path)
 
 
 def _atomic_write_json(obj, path: str) -> None:
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(obj, f, indent=2)
+        f.flush()
+        os.fsync(f.fileno())
     os.replace(tmp, path)
+    _fsync_parent_dir(path)
 
 
 def capture_rng_state() -> dict:
@@ -288,7 +319,17 @@ def save_checkpoint(checkpoint_dir, step, model_data, optimizer_data, meta_data,
         # This is a fallback; ideally the caller should set synapses=True in meta_data
         if "synapses" not in meta_to_save:
             # Check for synaptic-specific buffer names in state dict
-            synaptic_keys = [k for k in model_data.keys() if any(x in k for x in ["pre.", "post.", "H_fast", "U_buf", "V_buf", "gate_m"])]
+            # Real registered names (synaptic.py): presyn lives under ".pre."
+            # (incl. ema_e/_presyn_train_* buffers), postsyn under ".post.",
+            # eligibility traces are "u_buf"/"v_buf", fast weights are "w_fast".
+            # The previous markers ("H_fast", "U_buf", "V_buf", "gate_m") matched
+            # NOTHING, so a caller that omitted meta["synapses"] got a vanilla-GPT
+            # rebuild that failed the strict load with a confusing key dump.
+            synaptic_keys = [
+                k
+                for k in model_data.keys()
+                if any(x in k for x in ("pre.", "post.", "u_buf", "v_buf", "w_fast"))
+            ]
             if synaptic_keys:
                 meta_to_save["synapses"] = True
         # Save the metadata dict as json (atomic).
@@ -305,6 +346,24 @@ def save_checkpoint(checkpoint_dir, step, model_data, optimizer_data, meta_data,
         train_path = os.path.join(checkpoint_dir, f"train_{step:06d}_rank{rank:d}.pt")
         _atomic_torch_save(train_state, train_path)
         logger.info(f"Saved train state to: {train_path}")
+    # uta-review/0qvh: declare the step complete ONLY after every rank's shards
+    # are durably on disk. The barrier makes all ranks wait for the slowest
+    # writer; rank 0 then writes the commit marker strictly last, so discovery
+    # (list/find) can never auto-select a half-written checkpoint set.
+    if torch.distributed.is_available() and torch.distributed.is_initialized():
+        torch.distributed.barrier()
+    if rank == 0:
+        _atomic_write_json(
+            {"step": int(step), "world_size": _world_size_or_none()},
+            os.path.join(checkpoint_dir, f"commit_{step:06d}.json"),
+        )
+
+
+def _world_size_or_none() -> Optional[int]:
+    if torch.distributed.is_available() and torch.distributed.is_initialized():
+        return int(torch.distributed.get_world_size())
+    return None
+
 
 def load_checkpoint(checkpoint_dir, step, device, load_optimizer=False, rank=0, load_train_state=False):
     # Load the model state. weights_only=True (the safe default) is sufficient: our
@@ -334,13 +393,47 @@ def load_checkpoint(checkpoint_dir, step, device, load_optimizer=False, rank=0, 
     return model_data, optimizer_data, meta_data
 
 
+def _uses_commit_markers(checkpoint_dir: str) -> bool:
+    """True once ANY step in this directory carries a ``commit_*.json`` marker.
+
+    Regime detection keeps pre-marker checkpoints resumable (legacy directories
+    keep the old model-file-only discovery) while every save that CAN write a
+    marker is required to have one before the step counts as resumable.
+    """
+    return bool(glob.glob(os.path.join(checkpoint_dir, "commit_*.json")))
+
+
+def _checkpoint_is_complete(checkpoint_dir: str, step: int, *, markers_in_use: bool) -> bool:
+    """A step is resumable iff its rank-0 model AND metadata exist and — in
+    marker-regime directories — the rank-0 commit marker declares every rank's
+    shards landed. A crash mid-save used to leave exactly such a partial set,
+    which ``find_last_step`` then auto-selected and resume died on."""
+    if not (
+        os.path.exists(os.path.join(checkpoint_dir, f"model_{step:06d}.pt"))
+        and os.path.exists(os.path.join(checkpoint_dir, f"meta_{step:06d}.json"))
+    ):
+        return False
+    if not markers_in_use:
+        return True  # legacy directory written before commit markers existed
+    return os.path.exists(os.path.join(checkpoint_dir, f"commit_{step:06d}.json"))
+
+
 def list_checkpoint_steps(checkpoint_dir: str) -> list[int]:
-    """Sorted ascending list of steps that have a saved ``model_*.pt``."""
+    """Sorted ascending list of COMPLETE, resumable steps.
+
+    In directories that use commit markers, a step with a ``model_*.pt`` but no
+    ``commit_{step}.json`` is debris from a crashed save and is excluded — this
+    is what stops auto-resume from selecting a set whose optimizer shards never
+    finished writing.
+    """
+    markers = _uses_commit_markers(checkpoint_dir)
     steps = []
     for f in glob.glob(os.path.join(checkpoint_dir, "model_*.pt")):
         m = re.match(r"model_(\d{6,})\.pt$", os.path.basename(f))
         if m:
-            steps.append(int(m.group(1)))
+            step = int(m.group(1))
+            if _checkpoint_is_complete(checkpoint_dir, step, markers_in_use=markers):
+                steps.append(step)
     return sorted(steps)
 
 
@@ -366,13 +459,20 @@ def prune_checkpoints(checkpoint_dir: str, keep_last: int, *, best_step: Optiona
         paths = [
             os.path.join(checkpoint_dir, f"model_{s:06d}.pt"),
             os.path.join(checkpoint_dir, f"meta_{s:06d}.json"),
+            # 0qvh: the completion marker is part of the checkpoint set; leaving
+            # it behind would keep the pruned step "complete" if its files were
+            # ever recreated by a retried save.
+            os.path.join(checkpoint_dir, f"commit_{s:06d}.json"),
         ]
         # optim/train are per-rank; remove every rank's shard for this superseded step.
         paths += glob.glob(os.path.join(checkpoint_dir, f"optim_{s:06d}_rank*.pt"))
         paths += glob.glob(os.path.join(checkpoint_dir, f"train_{s:06d}_rank*.pt"))
         for path in paths:
             # Defensive: only ever remove files matching the checkpoint pattern.
-            if os.path.exists(path) and _CKPT_RE.match(os.path.basename(path)):
+            basename = os.path.basename(path)
+            if os.path.exists(path) and (
+                _CKPT_RE.match(basename) or re.match(r"^commit_\d{6,}\.json$", basename)
+            ):
                 os.remove(path)
                 logger.info(f"[checkpoint] pruned superseded checkpoint file: {path}")
     if pruned:
