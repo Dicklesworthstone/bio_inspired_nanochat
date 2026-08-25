@@ -20,6 +20,7 @@ def router_stats_kernel(
     total_tokens,
     T,
     K,
+    num_experts,
     BLOCK_SIZE: tl.constexpr,
 ):
     pid = tl.program_id(0)
@@ -34,7 +35,10 @@ def router_stats_kernel(
     for k in range(K):
         gate = tl.load(base_g + k * stride_g_k, mask=mask, other=0.0)
         idx = tl.load(base_i + k * stride_i_k, mask=mask, other=-1).to(tl.int32)
-        valid = mask & (idx >= 0)
+        # Bound on BOTH sides: an unchecked upper bound let stale indices (e.g.
+        # from a variable-expert resize) atomic-add past the counts/gate_sums
+        # allocation — silent adjacent-memory corruption instead of a clean skip.
+        valid = mask & (idx >= 0) & (idx < num_experts)
         tl.atomic_add(Count_ptr + idx, 1.0, mask=valid)
         tl.atomic_add(GateSum_ptr + idx, gate, mask=valid)
 
@@ -64,6 +68,7 @@ def accumulate_router_stats(indices, gates, num_experts):
         total_tokens,
         T,
         K,
+        num_experts,
         BLOCK_SIZE=cast(Any, BLOCK_SIZE),
     )
 
@@ -98,6 +103,11 @@ def metabolism_kernel(
 
 
 def update_metabolism_fused(fatigue, energy, alpha_fatigue, alpha_energy, util):
+    """In-place metabolism EMA update; returns ``(fatigue, energy)`` so callers
+    can use the uniform ``f, e = dispatch...`` tuple contract. (The launcher
+    previously ended at the kernel launch — returning None crashed any caller
+    that unpacked the result, and made the Triton backend's mutation semantics
+    differ from the Rust/eager out-of-place backends.)"""
     N = fatigue.shape[0]
     BLOCK_SIZE = 256
     grid = (triton.cdiv(N, BLOCK_SIZE),)
@@ -110,4 +120,4 @@ def update_metabolism_fused(fatigue, energy, alpha_fatigue, alpha_energy, util):
         N,
         BLOCK_SIZE=cast(Any, BLOCK_SIZE),
     )
-
+    return fatigue, energy

@@ -20,6 +20,7 @@ def metrics_scatter_add_kernel(
     total_tokens,
     T,
     K,
+    num_experts,
     BLOCK_SIZE: tl.constexpr,
 ):
     pid = tl.program_id(0)
@@ -34,10 +35,11 @@ def metrics_scatter_add_kernel(
     for k in range(K):
         gate = tl.load(base_g + k * stride_g_k, mask=mask, other=0.0)
         idx = tl.load(base_i + k * stride_i_k, mask=mask, other=-1).to(tl.int32)
-        valid = mask & (idx >= 0)
+        # Bound BOTH sides: stale indices (expert-count resize) must skip
+        # instead of atomic-adding into adjacent GPU memory.
+        valid = mask & (idx >= 0) & (idx < num_experts)
         tl.atomic_add(Usage_ptr + idx, 1.0, mask=valid)
         tl.atomic_add(Contrib_ptr + idx, gate, mask=valid)
-
 
 def _ensure_gpu_stat(state, key, device):
     gpu_key = f"{key}_gpu"
@@ -90,6 +92,7 @@ def update_metrics_fused(indices, gates, energy, state, cfg):
         total_tokens,
         T,
         K,
+        loss_contrib.shape[0],
         BLOCK_SIZE=cast(Any, BLOCK_SIZE),
     )
 
@@ -105,7 +108,11 @@ def update_metrics_fused(indices, gates, energy, state, cfg):
     efficiency.copy_(loss_contrib / (energy_gpu + 1e-6))
 
     diff = (loss_contrib - prev_contrib).abs()
-    resilience.mul_(decay).add_((1.0 / (diff + 1e-6)) * (1 - decay))
+    # Mirror neuroscore.py's activity gate: a DEAD expert also has ~constant
+    # (zero) contribution, so an ungated 1/|Δ| scores it as MAXIMALLY resilient
+    # and the lifecycle controller never reclaims it.
+    active = (freq_step > 0).to(loss_contrib.dtype)
+    resilience.mul_(decay).add_((1.0 / (diff + 1e-6)) * active * (1 - decay))
     prev_contrib.copy_(loss_contrib)
 
     _sync_back(state, "loss_contrib")

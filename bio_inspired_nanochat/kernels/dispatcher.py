@@ -129,6 +129,11 @@ def dispatch_update_metabolism(
 
     if resolved_backend == Backend.TRITON and fatigue.is_cuda:
         from bio_inspired_nanochat.kernels.genetics_fused import update_metabolism_fused
+        # update_metabolism_fused mutates IN PLACE; clone first so all three
+        # backends share the same out-of-place contract (callers get fresh
+        # tensors, inputs untouched — matching Rust/eager below).
+        fatigue = fatigue.clone()
+        energy = energy.clone()
         return update_metabolism_fused(fatigue, energy, alpha_fatigue, alpha_energy, util)
 
     elif resolved_backend == Backend.RUST and rustbpe is not None and hasattr(rustbpe, "update_metabolism_cpu"):
