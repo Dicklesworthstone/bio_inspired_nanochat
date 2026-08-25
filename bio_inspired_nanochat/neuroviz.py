@@ -66,8 +66,8 @@ else:
     try:
         from .neuroscore import NeuroScore, NeuroScoreConfig
     except Exception:
-        NeuroScore = None  # type: ignore[assignment]
-        NeuroScoreConfig = None  # type: ignore[assignment]
+        NeuroScore = None
+        NeuroScoreConfig = None
 
 # --------------------------- utilities --------------------------------
 
@@ -93,7 +93,7 @@ def _reduce_camkii(expert: SynapticExpert) -> float:
     vals = []
     for fc in (expert.fc1, expert.fc2):
         if hasattr(fc, "post") and hasattr(fc.post, "camkii"):
-            t = cast(torch.Tensor, fc.post.camkii)
+            t = fc.post.camkii
             vals.append(float(t.mean().item()))
     return float(np.mean(vals)) if vals else 0.0
 
@@ -102,7 +102,7 @@ def _reduce_mgate(expert: SynapticExpert) -> float:
     vals = []
     for fc in (expert.fc1, expert.fc2):
         if hasattr(fc, "post") and hasattr(fc.post, "m_gate"):
-            t = cast(torch.Tensor, fc.post.m_gate)
+            t = fc.post.m_gate
             vals.append(float(t.item()))
     return float(np.mean(vals)) if vals else 0.0
 
@@ -114,13 +114,13 @@ def _reduce_elig_norm(expert: SynapticExpert) -> float:
             post = fc.post
             parts = []
             if hasattr(post, "U"):
-                parts.append(cast(torch.Tensor, post.U).norm())
+                parts.append(post.U.norm())
             if hasattr(post, "V"):
-                parts.append(cast(torch.Tensor, post.V).norm())
+                parts.append(post.V.norm())
             if hasattr(post, "fast"):
-                parts.append(cast(torch.Tensor, post.fast).norm())
+                parts.append(post.fast.norm())
             if hasattr(post, "slow"):
-                parts.append(cast(torch.Tensor, post.slow).norm())
+                parts.append(post.slow.norm())
             if parts:
                 vals.append(float(sum(p.item() for p in parts)))
     return float(np.mean(vals)) if vals else 0.0
@@ -496,9 +496,9 @@ class NeuroVizManager:
 
     @torch.no_grad()
     def _layer_metrics(self, moe: SynapticMoE) -> Dict[str, np.ndarray]:
-        emb = _to_np(cast(torch.Tensor, moe.router_embeddings))  # (E, D)
-        fatigue = _to_np(cast(torch.Tensor, moe.fatigue))  # (E,)
-        energy = _to_np(cast(torch.Tensor, moe.energy))  # (E,)
+        emb = _to_np(moe.router_embeddings)  # (E, D)
+        fatigue = _to_np(moe.fatigue)  # (E,)
+        energy = _to_np(moe.energy)  # (E,)
         
         # fatigue tracks EMA of usage. So it IS the utilization metric.
         utilization = np.clip(fatigue, 0.0, 1.0)
@@ -707,13 +707,13 @@ class NeuroVizManager:
             "energy_refill": pheno_np[:, 1],
             "camkii_gain": pheno_np[:, 2],
             "pp1_gain": pheno_np[:, 3],
-            "utilization": _to_np(cast(Tensor, moe.fatigue)) # Use fatigue as proxy for util history
+            "utilization": _to_np(moe.fatigue) # Use fatigue as proxy for util history
         }
         self._save_json(data, os.path.join(outdir, f"{name}_genetics_{step:09d}.json"))
 
     def _plot_metabolism(self, name: str, moe: SynapticMoE, step: int, outdir: str):
-        energy = _to_np(cast(Tensor, moe.energy))
-        fatigue = _to_np(cast(Tensor, moe.fatigue))
+        energy = _to_np(moe.energy)
+        fatigue = _to_np(moe.fatigue)
         
         # Sort by energy to show inequality
         sorted_idx = np.argsort(energy)
