@@ -17,6 +17,7 @@ bio-inspired transformer models (beads odq.1, odq.2, odq.3, eqyk.12):
 
 from __future__ import annotations
 
+import types
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Iterator
@@ -251,7 +252,12 @@ class PatchClampProbe:
     def __enter__(self) -> PatchClampProbe:
         return self.attach()
 
-    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: types.TracebackType | None,
+    ) -> None:
         self.detach()
 
 
@@ -261,22 +267,28 @@ def lesion_head(model: nn.Module, *, layer_idx: int, head_idx: int) -> Iterator[
     handles: list[RemovableHandle] = []
 
     for module in model.modules():
-        if isinstance(module, SynapticCausalSelfAttention):
-            if module.layer_idx == layer_idx:
-                head_dim = module.head_dim
-                n_head = module.n_head
+        if isinstance(module, SynapticCausalSelfAttention) and module.layer_idx == layer_idx:
+            head_dim = module.head_dim
+            n_head = module.n_head
 
-                def _zero_head_prehook(m: nn.Module, inp: tuple[Any, ...]) -> tuple[Tensor, ...]:
-                    x = inp[0]
-                    if not torch.is_tensor(x):
-                        return inp
-                    x_mod = x.clone()
-                    start_ch = head_idx * head_dim
-                    end_ch = min((head_idx + 1) * head_dim, n_head * head_dim)
-                    x_mod[:, :, start_ch:end_ch] = 0.0
-                    return (x_mod,)
+            def _zero_head_prehook(
+                m: nn.Module,
+                inp: tuple[Any, ...],
+                *,
+                _h_idx: int = head_idx,
+                _h_dim: int = head_dim,
+                _n_h: int = n_head,
+            ) -> tuple[Tensor, ...]:
+                x = inp[0]
+                if not torch.is_tensor(x):
+                    return inp
+                x_mod = x.clone()
+                start_ch = _h_idx * _h_dim
+                end_ch = min((_h_idx + 1) * _h_dim, _n_h * _h_dim)
+                x_mod[:, :, start_ch:end_ch] = 0.0
+                return (x_mod,)
 
-                handles.append(module.o_proj.register_forward_pre_hook(_zero_head_prehook))
+            handles.append(module.o_proj.register_forward_pre_hook(_zero_head_prehook))
 
     try:
         yield

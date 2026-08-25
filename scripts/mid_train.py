@@ -10,7 +10,6 @@ torchrun --standalone --nproc_per_node=8 -m scripts.mid_train -- --device_batch_
 """
 
 import os
-os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 import time
 from collections import deque
 from contextlib import nullcontext
@@ -21,8 +20,8 @@ import torch.distributed as torch_dist
 import torch.nn.functional as F
 import wandb
 
-from bio_inspired_nanochat.common import compute_init, compute_cleanup, print0, DummyWandb, get_base_dir, autodetect_device_type
-from bio_inspired_nanochat.tokenizer import get_token_bytes
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+
 from bio_inspired_nanochat.checkpoint_manager import (
     find_largest_model,
     load_model,
@@ -32,13 +31,21 @@ from bio_inspired_nanochat.checkpoint_manager import (
     save_checkpoint,
     validate_exact_resume_payload_step,
 )
+from bio_inspired_nanochat.common import (
+    DummyWandb,
+    autodetect_device_type,
+    compute_cleanup,
+    compute_init,
+    get_base_dir,
+    print0,
+)
 from bio_inspired_nanochat.loss_eval import evaluate_bpb
-
+from bio_inspired_nanochat.tokenizer import get_token_bytes
 from tasks.common import TaskMixture
+from tasks.customjson import CustomJSON
 from tasks.gsm8k import GSM8K
 from tasks.mmlu import MMLU
 from tasks.smoltalk import SmolTalk
-from tasks.customjson import CustomJSON
 from tasks.spellingbee import SimpleSpelling, SpellingBee
 
 
@@ -98,7 +105,7 @@ wandb_run = DummyWandb() if use_dummy_wandb else wandb.init(project="nanochat-mi
 
 # Load the source model or reconstruct the exact mid-training checkpoint.
 if isinstance(resume_from_step, bool) or not isinstance(resume_from_step, int):
-    raise ValueError("resume_from_step must be an integer")
+    raise TypeError("resume_from_step must be an integer")
 resuming = resume_from_step >= 0
 base_dir = get_base_dir()
 mid_checkpoints_dir = os.path.join(base_dir, "mid_checkpoints")
@@ -328,9 +335,9 @@ while True:
             # Handle GPTSynaptic return signature for evaluate_bpb
             if hasattr(model, 'config') and getattr(model.config, 'synapses', False):
                 orig_forward = model.forward
-                def syn_forward_wrapper(idx, targets=None, kv_cache=None, loss_reduction='mean', **kwargs):
+                def syn_forward_wrapper(idx, targets=None, kv_cache=None, loss_reduction='mean', *, _orig=orig_forward, **kwargs):
                     if targets is not None:
-                        logits, loss = orig_forward(idx, targets, kv_cache, train_mode=False)
+                        logits, loss = _orig(idx, targets, kv_cache, train_mode=False)
                         if loss_reduction == 'none':
                             logits_flat = logits.view(-1, logits.size(-1))
                             targets_flat = targets.view(-1)
@@ -338,15 +345,14 @@ while True:
                             return loss_per_token.view(targets.shape)
                         return loss
                     else:
-                        logits, _ = orig_forward(idx, None, kv_cache, train_mode=False)
+                        logits, _ = _orig(idx, None, kv_cache, train_mode=False)
                         return logits
                 model.forward = syn_forward_wrapper
             val_bpb = evaluate_bpb(model, val_loader, eval_steps, token_bytes)
             if hasattr(model, 'config') and getattr(model.config, 'synapses', False):
                 model.forward = orig_forward
         print0(f"Step {step:05d} | Validation bpb: {val_bpb:.4f}")
-        if val_bpb < min_val_bpb:
-            min_val_bpb = val_bpb
+        min_val_bpb = min(min_val_bpb, val_bpb)
         wandb_run.log({
             "step": step,
             "total_training_flops": flops_so_far,
