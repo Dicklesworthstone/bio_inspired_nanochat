@@ -2,10 +2,12 @@
 
 Performs an executable, apples-to-apples empirical comparison across architectural
 synaptic granularities:
-  1. Fine (L1)   — Per-Connection (`per_connection`): every attention edge & connection
-                   has full-resolution state machines (faithful GPT-5 Pro blueprint).
-  2. Medium (L2) — Per-Neuron (`per_neuron`): intermediate rank-R per-neuron eligibility.
-  3. Coarse (L3) — Per-Expert (`per_expert`): pooled per-expert / per-layer scalar state (Grok blueprint).
+  1. Fine (L1)   — Per-Connection (`per_connection`): per-head/key presynaptic state and
+                   full configured-rank projection eligibility.
+  2. Medium (L2) — Per-Neuron (`per_neuron`): head-pooled presynaptic state and rank<=4
+                   projection eligibility.
+  3. Coarse (L3) — Per-Expert (`per_expert`): layer-pooled presynaptic/molecular state and
+                   rank-1 projection eligibility.
 
 Measures memory allocation, state footprint, token throughput, training loss, and
 validation bpb across matched seeds.
@@ -30,7 +32,12 @@ from rich.console import Console
 from rich.table import Table
 
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
-from bio_inspired_nanochat.synaptic import SynapticConfig, SynapticGranularity
+from bio_inspired_nanochat.synthetic_tasks import associative_recall
+from bio_inspired_nanochat.synaptic import (
+    SynapticConfig,
+    SynapticGranularity,
+    build_presyn_state,
+)
 
 
 @dataclass
@@ -64,10 +71,14 @@ class GranularityArmResult:
     final_train_loss: float
     val_loss: float
     val_bpb: float
+    val_accuracy: float
     total_time_sec: float
     tokens_per_sec: float
-    state_buffers_bytes: int
-    num_state_buffers: int
+    persistent_buffers_bytes: int
+    plastic_parameters_bytes: int
+    presyn_runtime_bytes: int
+    total_state_bytes: int
+    num_state_tensors: int
     peak_memory_bytes: int
     passed: bool
 
@@ -82,6 +93,8 @@ class GranularityAggregateStats:
     std_val_loss: float
     mean_val_bpb: float
     std_val_bpb: float
+    mean_val_accuracy: float
+    std_val_accuracy: float
     mean_throughput: float
     std_throughput: float
     mean_state_bytes: float
@@ -116,6 +129,7 @@ class GranularityBenchReport:
         t.add_column("Throughput (tok/s)", style="green", justify="right")
         t.add_column("Val Loss (mean±std)", style="yellow", justify="right")
         t.add_column("Val BPB (mean±std)", style="bold", justify="right")
+        t.add_column("Recall Acc (mean±std)", style="blue", justify="right")
 
         for agg in self.aggregates:
             state_kb = agg.mean_state_bytes / 1024.0
@@ -125,43 +139,51 @@ class GranularityBenchReport:
                 f"{agg.mean_throughput:.0f} ± {agg.std_throughput:.0f}",
                 f"{agg.mean_val_loss:.4f} ± {agg.std_val_loss:.4f}",
                 f"{agg.mean_val_bpb:.4f} ± {agg.std_val_bpb:.4f}",
+                f"{agg.mean_val_accuracy:.3f} ± {agg.std_val_accuracy:.3f}",
             )
         c.print(t)
 
 
-def _generate_synthetic_tokens(
+def _generate_associative_batches(
     num_batches: int,
     batch_size: int,
     seq_len: int,
     vocab_size: int,
     seed: int,
 ) -> list[tuple[torch.Tensor, torch.Tensor]]:
-    rng = torch.Generator().manual_seed(seed)
-    batches = []
-    for _ in range(num_batches):
-        tokens = torch.randint(
-            0, vocab_size, (batch_size, seq_len + 1), dtype=torch.long, generator=rng
+    if seq_len < 4 or seq_len % 2 != 0:
+        raise ValueError(
+            "sequence_len must be an even integer >= 4 for the associative-recall protocol"
         )
-        x = tokens[:, :-1]
-        y = tokens[:, 1:]
-        batches.append((x, y))
-    return batches
+    num_pairs = (seq_len - 2) // 2
+    return [
+        (
+            batch.inputs,
+            batch.targets,
+        )
+        for offset in range(num_batches)
+        for batch in (
+            associative_recall(
+                batch=batch_size,
+                num_pairs=num_pairs,
+                vocab_size=vocab_size,
+                seed=seed + offset,
+            ),
+        )
+    ]
 
 
-def run_granularity_arm(
-    granularity: str,
-    seed: int,
-    cfg: GranularityBenchConfig,
-) -> GranularityArmResult:
-    """Run a single training & evaluation trajectory for one granularity mode."""
-    torch.manual_seed(seed)
-    syn_cfg = SynapticConfig(
-        granularity=cast_granularity(granularity),
+def _synaptic_config(granularity: SynapticGranularity) -> SynapticConfig:
+    return SynapticConfig(
+        granularity=granularity,
         enable_presyn=True,
         enable_hebbian=True,
         enable_metabolism=True,
     )
-    gpt_cfg = GPTSynapticConfig(
+
+
+def _gpt_config(cfg: GranularityBenchConfig, syn_cfg: SynapticConfig) -> GPTSynapticConfig:
+    return GPTSynapticConfig(
         sequence_len=cfg.sequence_len,
         vocab_size=cfg.vocab_size,
         n_layer=cfg.n_layer,
@@ -171,25 +193,120 @@ def run_granularity_arm(
         synapses=True,
         syn_cfg=syn_cfg,
     )
-    model = GPTSynaptic(gpt_cfg)
+
+
+def _build_matched_model(
+    granularity: SynapticGranularity,
+    seed: int,
+    cfg: GranularityBenchConfig,
+) -> GPTSynaptic:
+    """Build an arm with identical shape-compatible backbone initialization.
+
+    Different state shapes consume different amounts of RNG during construction. Building the
+    per-connection reference first and copying every shape-compatible tensor prevents those RNG
+    offsets from silently changing embeddings/backbone weights between arms.
+    """
+    torch.manual_seed(seed)
+    reference = GPTSynaptic(
+        _gpt_config(cfg, _synaptic_config(SynapticGranularity.PER_CONNECTION))
+    )
+    if granularity is SynapticGranularity.PER_CONNECTION:
+        model = reference
+    else:
+        torch.manual_seed(seed)
+        model = GPTSynaptic(_gpt_config(cfg, _synaptic_config(granularity)))
+        reference_state = reference.state_dict()
+        with torch.no_grad():
+            for name, target in model.state_dict().items():
+                source = reference_state.get(name)
+                if source is not None and source.shape == target.shape:
+                    target.copy_(source)
+    # Training-time stochastic release receives the same lazy seed in every arm.
+    torch.manual_seed(seed + 10_000)
+    return model
+
+
+def _tensor_bytes(tensor: torch.Tensor) -> int:
+    return int(tensor.nelement() * tensor.element_size())
+
+
+def _measure_state_footprint(
+    model: GPTSynaptic,
+    syn_cfg: SynapticConfig,
+    cfg: GranularityBenchConfig,
+) -> tuple[int, int, int, int, int]:
+    persistent_buffers = list(model.buffers())
+    persistent_buffer_bytes = sum(_tensor_bytes(tensor) for tensor in persistent_buffers)
+    plastic_parameters = [
+        parameter
+        for name, parameter in model.named_parameters()
+        if name.endswith("w_fast") or ".post." in name
+    ]
+    plastic_parameter_bytes = sum(_tensor_bytes(tensor) for tensor in plastic_parameters)
+
+    sample_state = build_presyn_state(
+        cfg.batch_size,
+        cfg.sequence_len,
+        cfg.n_head,
+        device="cpu",
+        dtype=torch.float32,
+        cfg=syn_cfg,
+    )
+    runtime_tensors = [
+        tensor
+        for value in sample_state.values()
+        for tensor in (value if isinstance(value, list) else [value])
+        if torch.is_tensor(tensor)
+    ]
+    presyn_runtime_bytes = cfg.n_layer * sum(
+        _tensor_bytes(tensor) for tensor in runtime_tensors
+    )
+    tensor_count = (
+        len(persistent_buffers) + len(plastic_parameters) + cfg.n_layer * len(runtime_tensors)
+    )
+    total_state_bytes = (
+        persistent_buffer_bytes + plastic_parameter_bytes + presyn_runtime_bytes
+    )
+    return (
+        persistent_buffer_bytes,
+        plastic_parameter_bytes,
+        presyn_runtime_bytes,
+        total_state_bytes,
+        tensor_count,
+    )
+
+
+def run_granularity_arm(
+    granularity: str,
+    seed: int,
+    cfg: GranularityBenchConfig,
+) -> GranularityArmResult:
+    """Run a single training & evaluation trajectory for one granularity mode."""
+    resolved_granularity = cast_granularity(granularity)
+    syn_cfg = _synaptic_config(resolved_granularity)
+    model = _build_matched_model(resolved_granularity, seed, cfg)
     model.train()
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.learning_rate)
-    train_data = _generate_synthetic_tokens(
+    train_data = _generate_associative_batches(
         cfg.num_steps, cfg.batch_size, cfg.sequence_len, cfg.vocab_size, seed=seed
     )
-    val_data = _generate_synthetic_tokens(
+    val_data = _generate_associative_batches(
         4, cfg.batch_size, cfg.sequence_len, cfg.vocab_size, seed=seed + 1000
     )
 
-    # State footprint calculation
-    state_bytes = 0
-    buffer_count = 0
-    for buf in model.buffers():
-        state_bytes += buf.nelement() * buf.element_size()
-        buffer_count += 1
+    (
+        persistent_buffer_bytes,
+        plastic_parameter_bytes,
+        presyn_runtime_bytes,
+        total_state_bytes,
+        state_tensor_count,
+    ) = _measure_state_footprint(model, syn_cfg, cfg)
 
     train_losses: list[float] = []
+    model_device = next(model.parameters()).device
+    if model_device.type == "cuda":
+        torch.cuda.reset_peak_memory_stats(model_device)
     t0 = time.perf_counter()
     tokens_processed = 0
 
@@ -213,18 +330,26 @@ def run_granularity_arm(
     # Validation pass
     model.eval()
     val_losses: list[float] = []
+    correct = 0
+    supervised = 0
     with torch.no_grad():
         for vx, vy in val_data:
-            _, vloss = model(vx, targets=vy, train_mode=False)
+            logits, vloss = model(vx, targets=vy, train_mode=False)
             if vloss is None:
                 raise RuntimeError("Model returned None loss during evaluation")
             val_losses.append(float(vloss.item()))
+            mask = vy.ne(-1)
+            correct += int(logits.argmax(dim=-1)[mask].eq(vy[mask]).sum().item())
+            supervised += int(mask.sum().item())
 
     mean_vloss = sum(val_losses) / len(val_losses) if val_losses else 0.0
     val_bpb = mean_vloss / math.log(2.0)
+    val_accuracy = correct / supervised if supervised else 0.0
 
     peak_memory = (
-        torch.cuda.max_memory_allocated() if torch.cuda.is_available() else state_bytes
+        torch.cuda.max_memory_allocated(model_device)
+        if model_device.type == "cuda"
+        else total_state_bytes
     )
 
     return GranularityArmResult(
@@ -234,10 +359,14 @@ def run_granularity_arm(
         final_train_loss=train_losses[-1] if train_losses else 0.0,
         val_loss=mean_vloss,
         val_bpb=val_bpb,
+        val_accuracy=val_accuracy,
         total_time_sec=dt,
         tokens_per_sec=tok_per_sec,
-        state_buffers_bytes=state_bytes,
-        num_state_buffers=buffer_count,
+        persistent_buffers_bytes=persistent_buffer_bytes,
+        plastic_parameters_bytes=plastic_parameter_bytes,
+        presyn_runtime_bytes=presyn_runtime_bytes,
+        total_state_bytes=total_state_bytes,
+        num_state_tensors=state_tensor_count,
         peak_memory_bytes=peak_memory,
         passed=True,
     )
@@ -275,8 +404,9 @@ def run_granularity_benchmark(
 
         losses = [r.val_loss for r in gran_runs]
         bpbs = [r.val_bpb for r in gran_runs]
+        accuracies = [r.val_accuracy for r in gran_runs]
         tps = [r.tokens_per_sec for r in gran_runs]
-        mem = [r.state_buffers_bytes for r in gran_runs]
+        mem = [r.total_state_bytes for r in gran_runs]
         pmem = [r.peak_memory_bytes for r in gran_runs]
 
         m_loss = sum(losses) / n
@@ -284,6 +414,15 @@ def run_granularity_benchmark(
 
         m_bpb = sum(bpbs) / n
         s_bpb = math.sqrt(sum((x - m_bpb) ** 2 for x in bpbs) / max(n - 1, 1)) if n > 1 else 0.0
+
+        m_accuracy = sum(accuracies) / n
+        s_accuracy = (
+            math.sqrt(
+                sum((x - m_accuracy) ** 2 for x in accuracies) / max(n - 1, 1)
+            )
+            if n > 1
+            else 0.0
+        )
 
         m_tp = sum(tps) / n
         s_tp = math.sqrt(sum((x - m_tp) ** 2 for x in tps) / max(n - 1, 1)) if n > 1 else 0.0
@@ -299,6 +438,8 @@ def run_granularity_benchmark(
                 std_val_loss=s_loss,
                 mean_val_bpb=m_bpb,
                 std_val_bpb=s_bpb,
+                mean_val_accuracy=m_accuracy,
+                std_val_accuracy=s_accuracy,
                 mean_throughput=m_tp,
                 std_throughput=s_tp,
                 mean_state_bytes=m_mem,
@@ -316,6 +457,13 @@ def run_granularity_benchmark(
             "total_runs": len(results),
             "granularities_tested": list(config.granularities),
             "seeds_tested": list(config.seeds),
+            "task": "associative_recall",
+            "state_footprint_definition": (
+                "persistent model buffers + plastic parameters + one presynaptic runtime "
+                "state per attention layer"
+            ),
+            "torch_version": torch.__version__,
+            "device": "cpu",
         },
     )
     return report
@@ -338,13 +486,14 @@ def main() -> None:
         cfg.num_steps = 4
 
     report = run_granularity_benchmark(cfg)
-    report.print_summary()
+    console = Console()
+    report.print_summary(console)
 
     out_path = Path(args.output)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w", encoding="utf-8") as f:
         json.dump(report.to_dict(), f, indent=2)
-    print(f"Results archived to {out_path}")
+    console.print(f"[green]Results archived to[/green] {out_path}")
 
 
 if __name__ == "__main__":

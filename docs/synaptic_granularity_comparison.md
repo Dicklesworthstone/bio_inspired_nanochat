@@ -1,47 +1,36 @@
-# Synaptic Granularity Empirical Comparison & Evaluation (bead `vap.2`)
+# Synaptic Granularity Comparison (bead `vap.2`)
 
-This document presents the unified architectural granularity switch and an executable apples-to-apples empirical benchmark comparing quality, state footprint, throughput, and loss across synaptic granularities.
+`SynapticConfig.granularity` now changes the physical biological state, not merely a label or one eligibility-rank constant. The transformer backbone and attention score shapes remain identical across arms.
 
----
+## Implemented state spectrum
 
-## 1. Architectural Granularity Spectrum
-
-The configuration switch `SynapticConfig.granularity` (`SynapticGranularity`) unifies the biological state representations across three architectural granularities:
-
-| Level | Granularity mode | State scaling | Implemented path |
+| Mode | Presynaptic recurrent state | Projection eligibility | Molecular postsynaptic state |
 |:---|:---|:---|:---|
-| **Fine (L1)** | `per_connection` | Full-resolution per-attention-edge & per-connection states | Presynaptic modulation in `SynapticAttention` & full rank-$R$ eligibility in `SynapticLinear` |
-| **Medium (L2)** | `per_neuron` | Intermediate rank-$R$ traces scaled across neurons | Intermediate rank-$R$ projections in `SynapticLinear` |
-| **Coarse (L3)** | `per_expert` | Pooled per-expert / per-layer scalar state machine | Rank-1 state in `SynapticLinear` & MoE metabolic routing state in `SynapticMoE` |
+| `per_connection` | `B × H × Tk`: one state per head/key connection | configured rank `R` | one gate per output neuron |
+| `per_neuron` | `B × H × 1`: keys pooled within each head | `min(R, 4)` | one gate per output neuron |
+| `per_expert` | `B × 1 × 1`: heads and keys pooled for the layer/expert | rank 1 | one scalar gate for the layer/expert |
 
----
+Pooled state is broadcast without allocation when computing edge release. Valid edge activity is averaged back into the representative state machine after each causal query. This keeps state-update scale stable as the number of keys or heads changes. The fine-grained default retains the established Python, Rust, and Triton-compatible state shape; pooled modes use the canonical Python recurrence because the native kernels are shape-specialized for `B × H × Tk`.
 
-## 2. Executable Apples-to-Apples Evaluation Harness
+## Reproducible comparison
 
-The benchmark is implemented in [`scripts/eval_synaptic_granularity.py`](file:///data/projects/bio_inspired_nanochat/scripts/eval_synaptic_granularity.py) and verified by unit tests in [`tests/test_synaptic_granularity.py`](file:///data/projects/bio_inspired_nanochat/tests/test_synaptic_granularity.py).
+Run the checked-in harness with the project toolchain:
 
-### Benchmark Command
 ```bash
-python -m scripts.eval_synaptic_granularity --output results/granularity_comparison.json
+uv run python -m scripts.eval_synaptic_granularity \
+  --output results/granularity_comparison.json
 ```
 
----
+The protocol uses identical architecture, optimizer settings, associative-recall batches, and seeds. Every shape-compatible model tensor is copied from the same per-connection reference initialization, preventing granularity-dependent allocation order from changing ordinary backbone weights. State footprint means persistent model buffers plus plastic parameters plus one runtime presynaptic state per attention layer.
 
-## 3. Empirical Results & Quality/Cost Tradeoffs
+The current checked-in CPU run uses two seeds (`42`, `1337`), 12 training steps, `L=2`, `D=64`, `H=4`, vocabulary 128, sequence length 32, and batch size 4:
 
-Measurements gathered from multi-seed runs (`seeds=(42, 1337)`) with identical model architecture ($L=2, D=64, H=4, \text{vocab}=128, T=32, B=4$) and optimizer settings on CPU:
+| Granularity | State footprint | Reduction vs fine | Throughput (tok/s) | Validation loss | Validation BPB | Recall accuracy |
+|:---|---:|---:|---:|---:|---:|---:|
+| `per_connection` | 443.1 KB | baseline | 652 ± 89 | 4.8489 ± 0.0396 | 6.9955 ± 0.0571 | 0.000 ± 0.000 |
+| `per_neuron` | 340.5 KB | 23.2% | 656 ± 190 | 4.8609 ± 0.0406 | 7.0128 ± 0.0586 | 0.000 ± 0.000 |
+| `per_expert` | 279.5 KB | 36.9% | 759 ± 104 | 4.8614 ± 0.0430 | 7.0135 ± 0.0621 | 0.000 ± 0.000 |
 
-| Granularity | State Footprint | State Reduction | Throughput (tok/s) | Val Loss ($\text{mean}\pm\text{std}$) | Val BPB ($\text{mean}\pm\text{std}$) |
-|:---|:---:|:---:|:---:|:---:|:---:|
-| **`per_connection` (L1)** | 98.1 KB | baseline (0%) | $95 \pm 6$ | **$4.8632 \pm 0.0088$** | **$7.0162 \pm 0.0127$** |
-| **`per_neuron` (L2)** | 58.1 KB | **-40.8%** | $262 \pm 270$ | $4.8659 \pm 0.0118$ | $7.0199 \pm 0.0170$ |
-| **`per_expert` (L3)** | 28.1 KB | **-71.4%** | $305 \pm 218$ | $4.8657 \pm 0.0118$ | $7.0197 \pm 0.0170$ |
+The state-footprint reduction is directly established. The short run is an engineering comparison and health check, not evidence of learned recall quality: all arms remain at zero recall accuracy after 12 steps, and two CPU seeds are insufficient for a scientific throughput or quality verdict. A longer registered evaluation on the project’s scale-up hardware is still required before claiming a quality/cost Pareto frontier.
 
-### Findings & Analysis
-1. **Fidelity vs. Cost Frontier**:
-   - `per_connection` (fine-grained GPT-5 Pro blueprint) achieves the lowest validation loss ($4.8632$) and best bits-per-byte ($7.0162$), capturing full-rank synaptic plasticity at the cost of higher state footprint (98.1 KB).
-   - `per_expert` (coarse Grok blueprint) drastically slashes state buffer footprint by **71.4%** ($98.1\text{ KB} \to 28.1\text{ KB}$) and yields the highest compute throughput ($305\text{ tok/s}$) with minimal loss degradation ($\Delta \text{loss} \approx +0.0025$).
-   - `per_neuron` (medium granularity) occupies the intermediate pareto point ($58.1\text{ KB}$ state footprint).
-
-All raw run artifacts and per-seed trajectories are tracked in [`results/granularity_comparison.json`](file:///data/projects/bio_inspired_nanochat/results/granularity_comparison.json).
-
+Raw configuration, per-seed loss trajectories, timing, state components, environment metadata, and aggregates are in `results/granularity_comparison.json`. Tests in `tests/test_synaptic_granularity.py` pin physical shapes, live pooled updates, invalid-config rejection, finite training/evaluation, state ordering, and report structure.

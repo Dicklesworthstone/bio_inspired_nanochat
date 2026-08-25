@@ -40,10 +40,12 @@ except ImportError:
 class SynapticGranularity(str, Enum):
     """Architectural granularity of synaptic state machines across the network (bead vap.2).
 
-    - PER_CONNECTION (Fine / L1): Every attention edge / projection connection has dedicated
-      presynaptic and postsynaptic state machines (faithful GPT-5 Pro blueprint).
-    - PER_NEURON (Medium / L2): Intermediate per-neuron rank-R eligibility traces.
-    - PER_EXPERT (Coarse / L3): Pooled per-expert / per-layer state machine (Grok blueprint).
+    - PER_CONNECTION (Fine / L1): Per-head/key presynaptic state plus full-resolution
+      projection eligibility (faithful, expensive).
+    - PER_NEURON (Medium / L2): Presynaptic state pooled over keys within each attention head
+      plus intermediate-rank projection eligibility.
+    - PER_EXPERT (Coarse / L3): One pooled presynaptic and molecular postsynaptic state machine
+      per layer/expert plus rank-1 projection eligibility (cheap).
     """
     PER_CONNECTION = "per_connection"
     PER_NEURON = "per_neuron"
@@ -404,6 +406,45 @@ class SynapticConfig:
     # metriplectic integration). Every other shape/mode falls back to release_canonical.
     native_presyn: bool = decouple_config("BIO_FUSED_PRESYN", default=False, cast=bool)
     native_genetics: bool = decouple_config("BIO_FUSED_GENETICS", default=False, cast=bool)
+
+
+def _resolve_synaptic_granularity(cfg: SynapticConfig) -> SynapticGranularity:
+    """Return the closed granularity enum, rejecting invalid direct config construction."""
+    raw = cfg.granularity.value if isinstance(cfg.granularity, SynapticGranularity) else cfg.granularity
+    try:
+        return SynapticGranularity(raw)
+    except ValueError as exc:
+        choices = ", ".join(member.value for member in SynapticGranularity)
+        raise ValueError(f"granularity must be one of {choices}; got {raw!r}") from exc
+
+
+def _eligibility_rank(cfg: SynapticConfig) -> int:
+    """Map architectural granularity to the live low-rank plasticity width."""
+    configured = max(1, int(cfg.rank_eligibility))
+    granularity = _resolve_synaptic_granularity(cfg)
+    if granularity is SynapticGranularity.PER_EXPERT:
+        return 1
+    if granularity is SynapticGranularity.PER_NEURON:
+        return min(configured, 4)
+    return configured
+
+
+def _presyn_state_shape(
+    batch_size: int, key_count: int, head_count: int, cfg: SynapticConfig
+) -> tuple[int, int, int]:
+    """Physical recurrent-state shape for one attention layer.
+
+    The attention score/output tensors remain ``(B, H, Tq, Tk)`` in every mode. Only the
+    persistent biological state is pooled: over keys for per-neuron, and over both heads and
+    keys for per-expert. This keeps the comparison architectural rather than changing the
+    transformer backbone itself.
+    """
+    granularity = _resolve_synaptic_granularity(cfg)
+    if granularity is SynapticGranularity.PER_EXPERT:
+        return (batch_size, 1, 1)
+    if granularity is SynapticGranularity.PER_NEURON:
+        return (batch_size, head_count, 1)
+    return (batch_size, head_count, key_count)
 
 
 # -----------------------------------------------------------------------------
@@ -988,6 +1029,34 @@ def _release_recurrence_group(
             "active_key_count must cover every query in its recurrence group; "
             f"got end={active_key_count}, queries={query_count}"
         )
+
+    # Pooled state has no materialized key suffix to slice or grow. Advance the single
+    # representative state machine once per causal query; release_canonical broadcasts it to
+    # the queried edges and averages their update back into the pool. Keeping the one-query loop
+    # preserves decode/prefill recurrence parity and also avoids feeding pooled shapes into the
+    # per-key scripted/native kernels.
+    if _resolve_synaptic_granularity(presyn.cfg) is not SynapticGranularity.PER_CONNECTION:
+        drives = drive.split(1, dim=2)
+        idxs = idx.split(1, dim=2)
+        valids: Sequence[Optional[Tensor]] = (
+            [None] * query_count if valid is None else valid.split(1, dim=2)
+        )
+        return torch.cat(
+            [
+                presyn.release_canonical(
+                    state,
+                    step_drive,
+                    step_idx,
+                    train=train,
+                    valid=step_valid,
+                    differentiable=differentiable,
+                    runtime_buffers=runtime_buffers,
+                )
+                for step_drive, step_idx, step_valid in zip(drives, idxs, valids)
+            ],
+            dim=2,
+        )
+
     state_key_count = int(state["C"].size(2))
     if active_key_count > state_key_count:
         raise ValueError(
@@ -1833,6 +1902,8 @@ class SynapticPresyn(nn.Module):
         """
         return bool(
             self.cfg.enable_presyn
+            and _resolve_synaptic_granularity(self.cfg)
+            is SynapticGranularity.PER_CONNECTION
             and self.cfg.native_presyn
             and drive.is_cuda
             and drive.dtype == torch.float32
@@ -1930,19 +2001,33 @@ class SynapticPresyn(nn.Module):
             raise ValueError(
                 f"valid mask must match drive shape {drive.shape}, got {valid.shape}"
             )
+        granularity = _resolve_synaptic_granularity(cfg)
         dtype = state["C"].dtype
         state_key_count = int(state["C"].shape[2])
-        if active_key_count is not None:
-            if active_key_count < 1 or active_key_count > state_key_count:
-                raise ValueError(
-                    "active_key_count must be between 1 and the state key extent "
-                    f"({state_key_count}), got {active_key_count}"
-                )
-            active_keys = (
-                torch.arange(state_key_count, device=state["C"].device)
-                .view(1, 1, state_key_count)
-                .lt(active_key_count)
+        expected_state_shape = _presyn_state_shape(B, state_key_count, H, cfg)
+        if tuple(state["C"].shape) != expected_state_shape:
+            raise ValueError(
+                f"{granularity.value} presynaptic state must have shape "
+                f"{expected_state_shape}, got {tuple(state['C'].shape)}"
             )
+        if active_key_count is not None:
+            invalid_extent = active_key_count < 1 or (
+                granularity is SynapticGranularity.PER_CONNECTION
+                and active_key_count > state_key_count
+            )
+            if invalid_extent:
+                raise ValueError(
+                    "active_key_count must be positive and cannot exceed a per-connection "
+                    f"state extent ({state_key_count}); got {active_key_count}"
+                )
+            if granularity is SynapticGranularity.PER_CONNECTION:
+                active_keys = (
+                    torch.arange(state_key_count, device=state["C"].device)
+                    .view(1, 1, state_key_count)
+                    .lt(active_key_count)
+                )
+            else:
+                active_keys = None
         else:
             active_keys = None
         heat_state = state.get("HEAT")
@@ -1952,6 +2037,15 @@ class SynapticPresyn(nn.Module):
             heat_state = torch.zeros_like(state["C"])
             state["HEAT"] = heat_state
         flat_idx = idx.reshape(B, H, -1)
+        state_idx = (
+            flat_idx
+            if granularity is SynapticGranularity.PER_CONNECTION
+            else torch.zeros_like(flat_idx)
+        )
+
+        def gather_edge_state(value: Tensor) -> Tensor:
+            expanded = value if value.size(1) == H else value.expand(B, H, state_key_count)
+            return expanded.gather(2, state_idx).view(B, H, T, K)
 
         # yw9.3: source the calcium/buffer kinetics from learnable Parameters when enabled, else
         # the hand-tuned cfg constants. The learnable values are stability-preserving by
@@ -1968,14 +2062,14 @@ class SynapticPresyn(nn.Module):
             alpha_buf_on, alpha_buf_off = cfg.alpha_buf_on, cfg.alpha_buf_off
 
         # --- gather per-edge state for the selected keys (prior state is detached) ---
-        c_prev = state["C"].gather(2, flat_idx).view(B, H, T, K)
-        buf_prev = state["BUF"].gather(2, flat_idx).view(B, H, T, K)
+        c_prev = gather_edge_state(state["C"])
+        buf_prev = gather_edge_state(state["BUF"])
         if heat_state is not None:
-            heat_prev = heat_state.gather(2, flat_idx).view(B, H, T, K)
-        pr_edge = state["PR"].gather(2, flat_idx).view(B, H, T, K)
-        cl_edge = state["CL"].gather(2, flat_idx).view(B, H, T, K)
-        rrp_edge = state["RRP"].gather(2, flat_idx).view(B, H, T, K)
-        e_energy = state["E"].gather(2, flat_idx).view(B, H, T, K)
+            heat_prev = gather_edge_state(heat_state)
+        pr_edge = gather_edge_state(state["PR"])
+        cl_edge = gather_edge_state(state["CL"])
+        rrp_edge = gather_edge_state(state["RRP"])
+        e_energy = gather_edge_state(state["E"])
 
         # --- calcium + buffer ODE (BUF now ACTIVE; influx carries the grad w.r.t. drive) ---
         influx = alpha_ca * F.softplus(drive)
@@ -2142,12 +2236,23 @@ class SynapticPresyn(nn.Module):
             else:
                 flat_valid = torch.ones_like(flat_rel)
 
-            add_vals = torch.zeros_like(state["C"])
-            drv_vals = torch.zeros_like(state["C"])
-            cnt_vals = torch.zeros_like(state["C"])
-            add_vals.scatter_add_(2, flat_idx, flat_rel)    # vesicles released per key
-            drv_vals.scatter_add_(2, flat_idx, flat_drive)  # accumulated drive per key
-            cnt_vals.scatter_add_(2, flat_idx, flat_valid)  # access count per key
+            if granularity is SynapticGranularity.PER_CONNECTION:
+                add_vals = torch.zeros_like(state["C"])
+                drv_vals = torch.zeros_like(state["C"])
+                cnt_vals = torch.zeros_like(state["C"])
+                add_vals.scatter_add_(2, state_idx, flat_rel)    # released per key
+                drv_vals.scatter_add_(2, state_idx, flat_drive)  # drive per key
+                cnt_vals.scatter_add_(2, state_idx, flat_valid)  # accesses per key
+            elif granularity is SynapticGranularity.PER_NEURON:
+                cnt_vals = flat_valid.sum(dim=2, keepdim=True)
+                divisor = cnt_vals.clamp_min(1.0)
+                add_vals = flat_rel.sum(dim=2, keepdim=True) / divisor
+                drv_vals = flat_drive.sum(dim=2, keepdim=True) / divisor
+            else:
+                cnt_vals = flat_valid.sum(dim=(1, 2), keepdim=True)
+                divisor = cnt_vals.clamp_min(1.0)
+                add_vals = flat_rel.sum(dim=(1, 2), keepdim=True) / divisor
+                drv_vals = flat_drive.sum(dim=(1, 2), keepdim=True) / divisor
             accessed = (cnt_vals > 0).to(dtype)
 
             # Calcium + buffer at key positions. The default remains the faithful clamped-Euler
@@ -2404,17 +2509,19 @@ class PostsynapticHebb(nn.Module):
     def __init__(self, d_k: int, d_v: int, cfg: SynapticConfig):
         super().__init__()
         object.__setattr__(self, "cfg", cfg)
-        R = cfg.rank_eligibility
-        self.fast = nn.Parameter(torch.zeros(d_v))
-        self.slow = nn.Parameter(torch.zeros(d_v))
+        granularity = _resolve_synaptic_granularity(cfg)
+        R = _eligibility_rank(cfg)
+        state_width = 1 if granularity is SynapticGranularity.PER_EXPERT else d_v
+        self.fast = nn.Parameter(torch.zeros(state_width))
+        self.slow = nn.Parameter(torch.zeros(state_width))
         self.U = nn.Parameter(torch.zeros(d_v, R))
         self.V = nn.Parameter(torch.zeros(R, d_v))
 
-        self.register_buffer("camkii", torch.zeros(d_v))
-        self.register_buffer("pp1", torch.ones(d_v) * 0.5)
-        self.register_buffer("bdnf", torch.zeros(d_v))
+        self.register_buffer("camkii", torch.zeros(state_width))
+        self.register_buffer("pp1", torch.ones(state_width) * 0.5)
+        self.register_buffer("bdnf", torch.zeros(state_width))
         # B(t) accumulator for |ΔW_hebb| - used when bdnf_hebb_accumulate=True
-        self.register_buffer("bdnf_hebb_accum", torch.zeros(d_v))
+        self.register_buffer("bdnf_hebb_accum", torch.zeros(state_width))
         # Track last delta for logging/debugging
         self.register_buffer("_last_hebb_delta_mag", torch.zeros(1))
 
@@ -2430,7 +2537,11 @@ class PostsynapticHebb(nn.Module):
             self._cusp_latch = CuspLatch(cfg)
 
     def forward(self, v: Tensor) -> Tensor:
+        # The per-expert mode broadcasts its single molecular gate across the expert/layer
+        # output. Finer modes retain one gate per output neuron.
         diag = 1.0 + self.fast + self.slow
+        if diag.numel() == 1:
+            diag = diag.expand(v.shape[-1])
         return v * diag + v @ (self.U @ self.V)
 
     @torch.no_grad()
@@ -2445,6 +2556,13 @@ class PostsynapticHebb(nn.Module):
             The main bdnf buffer then tracks this with decay.
         """
         cfg = self.cfg
+        if self.camkii.numel() == 1:
+            ca_proxy = ca_proxy.mean().reshape_as(self.camkii)
+        elif ca_proxy.shape != self.camkii.shape:
+            raise ValueError(
+                f"postsynaptic calcium proxy must have shape {self.camkii.shape}, "
+                f"got {ca_proxy.shape}"
+            )
         if cfg.bistable_latch and self._cusp_latch is not None and self._cusp_latch.certified:
             # 0642.2.2.1: certified cusp-normal-form latch. m evolves by one gradient step of the
             # cusp cubic m̃³+a·m̃+b(c) with the certified splitting parameter a and the live calcium
@@ -2532,7 +2650,10 @@ class PostsynapticHebb(nn.Module):
         # self.slow is (out,) so we need to reduce to that shape
         trace_product = traceU @ traceV  # (in, out)
 
-        if trace_product.shape[0] == trace_product.shape[1]:
+        if self.slow.numel() == 1:
+            # One molecular consolidation state for the whole expert/layer.
+            delta = trace_product.mean().reshape_as(self.slow)
+        elif trace_product.shape[0] == trace_product.shape[1]:
             # Square matrix: take diagonal
             delta = trace_product.diag()
         else:
@@ -2584,7 +2705,13 @@ class PostsynapticHebb(nn.Module):
     @torch.no_grad()
     def hebb_fast(self, traceU: Tensor, traceV: Tensor):
         # Update fast weights (diagonal)
-        delta = (traceU @ traceV).diag() if traceU.shape[0] == traceV.shape[1] else (traceU @ traceV).mean(0)
+        trace_product = traceU @ traceV
+        if self.fast.numel() == 1:
+            delta = trace_product.mean().reshape_as(self.fast)
+        elif trace_product.shape[0] == trace_product.shape[1]:
+            delta = trace_product.diag()
+        else:
+            delta = trace_product.mean(0)
         if delta.shape != self.fast.shape:
             return
         self.fast.mul_(self.cfg.post_fast_decay).add_(self.cfg.post_fast_lr * delta)
@@ -2659,14 +2786,8 @@ class SynapticLinear(nn.Module):
             self.post = PostsynapticHebb(in_features, out_features, cfg)
 
             # Granularity-aware eligibility rank (vap.2): coarse per-expert uses rank 1,
-            # medium per-neuron uses intermediate rank, per-connection uses full rank.
-            granularity = getattr(cfg, "granularity", SynapticGranularity.PER_CONNECTION)
-            if granularity in (SynapticGranularity.PER_EXPERT, "per_expert"):
-                _R = 1
-            elif granularity in (SynapticGranularity.PER_NEURON, "per_neuron"):
-                _R = max(1, min(cfg.rank_eligibility, 4))
-            else:
-                _R = cfg.rank_eligibility
+            # medium per-neuron uses at most rank 4, per-connection uses the configured rank.
+            _R = _eligibility_rank(cfg)
 
             # Eligibility buffers
             self.register_buffer("u_buf", torch.zeros(in_features, _R))
@@ -3004,7 +3125,8 @@ class SynapticLinear(nn.Module):
 
 
 def build_presyn_state(B: int, T: int, H: int, device, dtype, cfg: SynapticConfig):
-    state_shape = (B, H, T)
+    """Allocate recurrent presynaptic state at the configured physical granularity."""
+    state_shape = _presyn_state_shape(B, T, H, cfg)
     ones = torch.ones(state_shape, device=device, dtype=dtype)
     zeros = torch.zeros(state_shape, device=device, dtype=dtype)
     state = {
@@ -3175,7 +3297,27 @@ class SynapticCausalSelfAttention(nn.Module):
             # Fill in missing keys from older caches/checkpoints and extend along time as needed.
             if "C" not in presyn_state:
                 raise KeyError("presyn_state missing required key 'C'")
-            T_state = int(presyn_state["C"].size(2))
+            granularity = _resolve_synaptic_granularity(self.cfg)
+            physical_shape = tuple(presyn_state["C"].shape)
+            if len(physical_shape) != 3 or physical_shape[0] != B:
+                raise ValueError(
+                    f"presynaptic state must be rank 3 with batch size {B}, got {physical_shape}"
+                )
+            if granularity is SynapticGranularity.PER_CONNECTION:
+                if physical_shape[1] != H:
+                    raise ValueError(
+                        f"per_connection state requires {H} heads, got {physical_shape[1]}"
+                    )
+                T_state = int(physical_shape[2])
+            else:
+                expected_shape = _presyn_state_shape(B, Tk, H, self.cfg)
+                if physical_shape != expected_shape:
+                    raise ValueError(
+                        f"{granularity.value} state must have physical shape "
+                        f"{expected_shape}, got {physical_shape}"
+                    )
+                # Pooled state is independent of logical KV extent and never grows with Tk.
+                T_state = Tk
             if "BUF" not in presyn_state:
                 presyn_state["BUF"] = torch.zeros_like(presyn_state["C"])
             if self.cfg.metriplectic_integrator and "HEAT" not in presyn_state:
@@ -3276,6 +3418,18 @@ class SynapticCausalSelfAttention(nn.Module):
                     valid=valid[:, :, query_index : query_index + 1],
                     active_key_count=query_index + 1,
                 )
+                flex_state = presyn_state
+                if (
+                    _resolve_synaptic_granularity(self.cfg)
+                    is not SynapticGranularity.PER_CONNECTION
+                ):
+                    # Flex's score modifier indexes per-head/per-key tensors. Broadcast the
+                    # compact pooled state as a zero-copy view for scoring; the persistent cache
+                    # itself remains compact and is updated only by release_canonical above.
+                    flex_state = dict(presyn_state)
+                    for state_name in ("C", "RRP", "CL", "PR", "E"):
+                        state_value = presyn_state[state_name]
+                        flex_state[state_name] = state_value.expand(B, H, Tk)
                 query_offset = query_index
                 block_mask = create_block_mask(
                     make_causal_mask(query_offset), B, H, 1, Tk, device=device
@@ -3285,7 +3439,7 @@ class SynapticCausalSelfAttention(nn.Module):
                         q[:, :, query_index : query_index + 1],
                         k_full,
                         v_full,
-                        presyn_state,
+                        flex_state,
                         block_mask=block_mask,
                         query_offset=query_offset,
                     )
