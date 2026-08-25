@@ -6,6 +6,7 @@ Two implementations are available:
 2) Our own RustBPE Tokenizer for training and tiktoken for efficient inference
 """
 
+import json
 import os
 import copy
 import pickle # nosec B403
@@ -199,16 +200,40 @@ class RustBPETokenizer:
 
     @classmethod
     def from_directory(cls, tokenizer_dir):
+        # fmep: prefer the lossless JSON serialization written by save(). The
+        # legacy pickle fallback stays ONLY so checkpoints/artifacts saved before
+        # this change still load; new saves never produce it.
+        json_path = os.path.join(tokenizer_dir, "tokenizer.json")
+        if os.path.exists(json_path):
+            try:
+                with open(json_path, "r", encoding="utf-8") as f:
+                    payload = json.load(f)
+            except Exception as exc:
+                raise ValueError(f"Failed to parse tokenizer JSON file at {json_path}: {exc}") from exc
+
+            if not isinstance(payload, dict) or payload.get("format") != "rustbpe-tiktoken-v1":
+                raise ValueError(
+                    f"Unsupported tokenizer serialization format: {payload.get('format') if isinstance(payload, dict) else type(payload)}"
+                )
+            mergeable_ranks = {
+                bytes.fromhex(hex_ranks): int(rank)
+                for hex_ranks, rank in payload["mergeable_ranks"]
+            }
+            enc = tiktoken.Encoding(
+                name="rustbpe",
+                pat_str=payload["pattern"],
+                mergeable_ranks=mergeable_ranks,
+                special_tokens=dict(payload["special_tokens"]),
+            )
+            return cls(enc, "<|bos|>")
+
         pickle_path = os.path.join(tokenizer_dir, "tokenizer.pkl")
         if not os.path.exists(pickle_path):
-            # Fallback: if tokenizer.pkl doesn't exist, try to find it in the package data or regenerate it
-            # For now, let's just try to regenerate it if we are in the main process
-            print(f"Tokenizer not found at {pickle_path}, attempting to regenerate...")
-            # This is a bit hacky, but we need to ensure the tokenizer exists
-            # We can't easily regenerate it here without the training data.
-            # So we'll raise a more informative error.
-            raise FileNotFoundError(f"Tokenizer not found at {pickle_path}. Please run 'python -m bio_inspired_nanochat.tokenizer' to generate it.")
-            
+            raise FileNotFoundError(
+                f"Tokenizer not found at {json_path} or {pickle_path}. "
+                f"Please run 'python -m bio_inspired_nanochat.tokenizer' to generate it."
+            )
+
         with open(pickle_path, "rb") as f:
             enc = pickle.load(f) # nosec B301
         return cls(enc, "<|bos|>")
@@ -273,12 +298,27 @@ class RustBPETokenizer:
         return self.enc.decode(ids)
 
     def save(self, tokenizer_dir):
-        # save the encoding object to disk
+        # fmep: serialize the encoding LOSSLESSLY as JSON instead of pickle. A
+        # tiktoken Encoding is fully described by its pattern, mergeable ranks
+        # and special tokens; token bytes are hex-encoded to stay JSON-safe.
+        # Arbitrary-pickle artifacts in a shared writable cache dir were a code
+        # execution side-door the checkpoint path deliberately avoids.
         os.makedirs(tokenizer_dir, exist_ok=True)
-        pickle_path = os.path.join(tokenizer_dir, "tokenizer.pkl")
-        with open(pickle_path, "wb") as f:
-            pickle.dump(self.enc, f)
-        print(f"Saved tokenizer encoding to {pickle_path}")
+        json_path = os.path.join(tokenizer_dir, "tokenizer.json")
+        payload = {
+            "format": "rustbpe-tiktoken-v1",
+            "pattern": self.enc._pat_str,
+            "special_tokens": dict(self.enc._special_tokens),
+            "mergeable_ranks": [
+                [token_bytes.hex(), rank]
+                for token_bytes, rank in sorted(self.enc._mergeable_ranks.items(), key=lambda kv: kv[1])
+            ],
+        }
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f)
+            f.flush()
+            os.fsync(f.fileno())
+        print(f"Saved tokenizer encoding to {json_path}")
 
     def render_conversation(self, conversation, max_tokens=2048):
         """

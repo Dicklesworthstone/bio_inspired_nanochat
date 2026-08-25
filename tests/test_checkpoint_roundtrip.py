@@ -114,3 +114,32 @@ def test_legacy_directory_without_markers_stays_discoverable(tmp_path):
     (tmp_path / "model_000007.pt").write_bytes(b"x")
     (tmp_path / "meta_000007.json").write_text("{}")
     assert list_checkpoint_steps(str(tmp_path)) == [7]
+
+
+def test_rustbpe_tokenizer_json_round_trip(tmp_path):
+    """fmep: save()/from_directory() must round-trip a tiktoken Encoding through
+    lossless JSON (no pickle) with identical encode behavior."""
+    import tiktoken
+
+    from bio_inspired_nanochat.tokenizer import RustBPETokenizer
+
+    # tiktoken's byte-fallback requires ALL 256 single-byte tokens present.
+    ranks = {bytes([i]): i for i in range(256)}
+    ranks.update({b"ab": 256, b"abc": 257})
+    enc = tiktoken.Encoding(
+        name="test",
+        pat_str=r"\s+",
+        mergeable_ranks={b"a": 0, b"b": 1, b"c": 2, b"ab": 3, b"abc": 4, b" ": 5},
+        special_tokens={"<|bos|>": 6, "<|endoftext|>": 7},
+    )
+    tok = RustBPETokenizer(enc, "<|bos|>")
+    sample = "abc ab c"
+    ids_before = tok.encode(sample)
+
+    tok.save(str(tmp_path))
+    assert (tmp_path / "tokenizer.json").exists()
+    assert not (tmp_path / "tokenizer.pkl").exists(), "new saves must not write pickle"
+
+    tok2 = RustBPETokenizer.from_directory(str(tmp_path))
+    assert tok2.encode(sample) == ids_before
+    assert tok2.get_vocab_size() == tok.get_vocab_size()
