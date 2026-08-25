@@ -1,23 +1,13 @@
-"""Security and integrity tests for CMA-ES checkpoint resumption (bead zrzy).
-
-Validates:
-1. Checkpoints write cryptographic manifest (es_manifest.json) alongside serialized state.
-2. Valid checkpoints resume smoothly and match search state.
-3. Tampered checkpoint pickle bytes fail closed with SHA-256 mismatch and Rich error.
-4. Corrupted manifest JSON fails closed.
-5. Mismatched search space dimensions fail closed.
-6. Legacy unverified checkpoints (missing manifest) are refused by default.
-7. Legacy unverified checkpoints load only when --allow-unverified-checkpoint is explicitly passed.
-"""
+"""Security and integrity tests for inert CMA-ES checkpoint replay (bead zrzy)."""
 
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
+import pickle
 from pathlib import Path
 
-import cma as cma_module
+import numpy as np
 import pytest
 from rich.console import Console
 
@@ -25,8 +15,10 @@ from bio_inspired_nanochat.synaptic import SynapticConfig
 from scripts.tune_bio_params import (
     TOP10_PARAM_SPECS,
     _cma_bounds,
-    _load_verified_cma_checkpoint,
+    _load_cma_checkpoint,
+    _new_cma_strategy,
     _prepare_run_artifacts,
+    _save_cma_checkpoint,
     encode_params,
     main as tune_main,
 )
@@ -34,238 +26,235 @@ from scripts.tune_bio_params import (
 pytestmark = pytest.mark.unit
 
 
-def _create_mock_checkpoint(
+def _artifacts(run_dir: Path, *, seed: int = 42):
+    return _prepare_run_artifacts(
+        argparse.Namespace(
+            run_dir=str(run_dir),
+            resume=True,
+            seed=seed,
+            no_tensorboard=True,
+        )
+    )
+
+
+def _create_safe_checkpoint(
     run_dir: Path,
     *,
-    dim: int = len(TOP10_PARAM_SPECS),
-    countiter: int = 2,
-    write_manifest: bool = True,
-    tamper_manifest: bool = False,
-    corrupt_manifest: bool = False,
-) -> Path:
+    generations: int = 2,
+    seed: int = 42,
+):
     run_dir.mkdir(parents=True, exist_ok=True)
-    specs = TOP10_PARAM_SPECS[:dim]
+    artifacts = _artifacts(run_dir, seed=seed)
+    assert artifacts is not None
+    specs = TOP10_PARAM_SPECS
     defaults = SynapticConfig()
     x0 = encode_params(defaults, specs)
     lbs, ubs = _cma_bounds(specs)
-    es = cma_module.CMAEvolutionStrategy(
+    sigma0 = 0.2
+    popsize = 4
+    es = _new_cma_strategy(
         x0,
-        0.2,
-        {"popsize": 4, "bounds": [lbs, ubs], "verbose": -1, "seed": 42},
+        sigma0,
+        popsize=popsize,
+        lower_bounds=lbs,
+        upper_bounds=ubs,
+        seed=seed,
     )
-    # Advance iterations
-    es.countiter = countiter
-
-    es_bytes = es.pickle_dumps()
-    es_path = run_dir / "es_latest.pkl"
-    es_path.write_bytes(es_bytes)
-
-    if write_manifest:
-        manifest_path = run_dir / "es_manifest.json"
-        if corrupt_manifest:
-            manifest_path.write_text("{ corrupt json ", encoding="utf-8")
-        else:
-            sha = "0000000000000000000000000000000000000000000000000000000000000000" if tamper_manifest else hashlib.sha256(es_bytes).hexdigest()
-            doc = {
-                "format": "cmaes-checkpoint-manifest-v1",
-                "run_id": "test-run",
-                "generation": countiter,
-                "countiter": countiter,
-                "best_loss": 1.234,
-                "dim": dim,
-                "sha256": sha,
-                "saved_at_unix": 1000.0,
+    records: list[dict[str, object]] = []
+    best_history: list[float] = []
+    best = float("inf")
+    for generation in range(1, generations + 1):
+        solutions = es.ask()
+        fitnesses = [float(np.square(solution).sum()) for solution in solutions]
+        es.tell(solutions, fitnesses)
+        best = min(best, min(fitnesses))
+        best_history.append(best)
+        records.append(
+            {
+                "generation": generation,
+                "solutions": np.asarray(solutions, dtype=np.float64).tolist(),
+                "fitnesses": fitnesses,
+                "sigma_after": None,
             }
-            manifest_path.write_text(json.dumps(doc, indent=2), encoding="utf-8")
-
-    return es_path
+        )
+    _save_cma_checkpoint(
+        artifacts.es_state_json,
+        run_id=artifacts.run_id,
+        specs=specs,
+        x0=x0,
+        sigma0=sigma0,
+        popsize=popsize,
+        seed=seed,
+        strategy=es,
+        generation_records=records,
+        best_loss_history=best_history,
+        restart_events=0,
+    )
+    return artifacts, es
 
 
 def test_verified_checkpoint_roundtrip(tmp_path: Path):
-    """A valid checkpoint with genuine manifest resumes with exact generation count."""
+    """A valid JSON checkpoint reproduces the exact next CMA population."""
     run_dir = tmp_path / "valid_run"
-    _create_mock_checkpoint(run_dir, countiter=5)
+    artifacts, original = _create_safe_checkpoint(run_dir, generations=3)
+    expected_next_population = np.asarray(original.ask(), dtype=np.float64)
 
-    args = argparse.Namespace(
-        run_dir=str(run_dir),
-        resume=True,
-        seed=42,
-        no_tensorboard=True,
-    )
-
-    artifacts = _prepare_run_artifacts(args)
-    assert artifacts is not None
-
-    es = _load_verified_cma_checkpoint(
+    loaded = _load_cma_checkpoint(
         artifacts,
         specs=TOP10_PARAM_SPECS,
-        allow_unverified=False,
         console=Console(quiet=True),
     )
-    assert es is not None
-    assert es.countiter == 5
-    assert es.N == len(TOP10_PARAM_SPECS)
+    assert loaded is not None
+    assert loaded.strategy.countiter == 3
+    assert loaded.strategy.N == len(TOP10_PARAM_SPECS)
+    assert len(loaded.generation_records) == 3
+    actual_next_population = np.asarray(loaded.strategy.ask(), dtype=np.float64)
+    np.testing.assert_array_equal(actual_next_population, expected_next_population)
 
 
-def test_tampered_pickle_fails_closed(tmp_path: Path):
-    """Mutating the pickle bytes triggers a SHA-256 mismatch and fails closed."""
-    run_dir = tmp_path / "tampered_run"
-    es_path = _create_mock_checkpoint(run_dir, countiter=3)
+def _write_marker(marker_path: str) -> None:
+    Path(marker_path).write_text("pickle payload executed", encoding="utf-8")
 
-    # Tamper with the pickle bytes
-    raw = bytearray(es_path.read_bytes())
-    raw[-1] ^= 0xFF
-    es_path.write_bytes(bytes(raw))
 
-    args = argparse.Namespace(
-        run_dir=str(run_dir),
-        resume=True,
-        seed=42,
-        no_tensorboard=True,
+class _MaliciousCheckpoint:
+    def __init__(self, marker_path: Path):
+        self.marker_path = marker_path
+
+    def __reduce__(self):
+        return (_write_marker, (str(self.marker_path),))
+
+
+def test_legacy_pickle_fails_closed(tmp_path: Path):
+    """A malicious legacy pickle is refused without executing its payload."""
+    run_dir = tmp_path / "legacy_pickle_run"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    artifacts = _artifacts(run_dir)
+    assert artifacts is not None
+    marker_path = tmp_path / "payload_was_executed"
+
+    artifacts.legacy_es_latest_pkl.write_bytes(
+        pickle.dumps(_MaliciousCheckpoint(marker_path))
     )
 
-    artifacts = _prepare_run_artifacts(args)
-    assert artifacts is not None
-
     with pytest.raises(ValueError) as ei:
-        _load_verified_cma_checkpoint(
+        _load_cma_checkpoint(
             artifacts,
             specs=TOP10_PARAM_SPECS,
-            allow_unverified=False,
             console=Console(quiet=True),
         )
-    assert "SHA-256 digest mismatch" in str(ei.value)
-
-
-def test_corrupted_manifest_fails_closed(tmp_path: Path):
-    """Malformed manifest JSON fails closed."""
-    run_dir = tmp_path / "corrupt_manifest_run"
-    _create_mock_checkpoint(run_dir, corrupt_manifest=True)
-
-    args = argparse.Namespace(
-        run_dir=str(run_dir),
-        resume=True,
-        seed=42,
-        no_tensorboard=True,
+    assert "Legacy CMA pickle checkpoints are not executable resume inputs" in str(
+        ei.value
     )
+    assert not marker_path.exists()
 
-    artifacts = _prepare_run_artifacts(args)
-    assert artifacts is not None
+
+def test_corrupted_json_fails_closed(tmp_path: Path):
+    """Malformed state JSON fails closed."""
+    run_dir = tmp_path / "corrupt_json_run"
+    artifacts, _ = _create_safe_checkpoint(run_dir, generations=2)
+
+    # Corrupt JSON state
+    artifacts.es_state_json.write_text("{corrupt: json", encoding="utf-8")
 
     with pytest.raises(ValueError) as ei:
-        _load_verified_cma_checkpoint(
+        _load_cma_checkpoint(
             artifacts,
             specs=TOP10_PARAM_SPECS,
-            allow_unverified=False,
             console=Console(quiet=True),
         )
-    assert "Corrupt checkpoint manifest" in str(ei.value)
+    assert "Corrupt CMA checkpoint" in str(ei.value)
 
 
 def test_dimension_mismatch_fails_closed(tmp_path: Path):
-    """Manifest with mismatched search space dimension fails closed."""
+    """Checkpoint with mismatched search space dimension fails closed."""
     run_dir = tmp_path / "mismatch_run"
-    # Create checkpoint with dim=5 instead of 10
-    _create_mock_checkpoint(run_dir, dim=5)
+    artifacts, _ = _create_safe_checkpoint(run_dir, generations=2)
 
-    args = argparse.Namespace(
-        run_dir=str(run_dir),
-        resume=True,
-        seed=42,
-        no_tensorboard=True,
-    )
-
-    artifacts = _prepare_run_artifacts(args)
-    assert artifacts is not None
-
+    # Attempt to load with subset of specs (dim 5 vs 10)
     with pytest.raises(ValueError) as ei:
-        _load_verified_cma_checkpoint(
+        _load_cma_checkpoint(
             artifacts,
-            specs=TOP10_PARAM_SPECS,  # dim=10
-            allow_unverified=False,
+            specs=TOP10_PARAM_SPECS[:5],
             console=Console(quiet=True),
         )
-    assert "Checkpoint search space mismatch" in str(ei.value)
+    assert "search space" in str(ei.value) or "match" in str(ei.value)
 
 
-def test_legacy_unverified_refused_by_default(tmp_path: Path):
-    """Checkpoints without manifest fail closed unless --allow-unverified-checkpoint is used."""
-    run_dir = tmp_path / "legacy_run"
-    _create_mock_checkpoint(run_dir, write_manifest=False)
+def test_tampered_numeric_history_fails_replay_validation(tmp_path: Path):
+    """A modified generation record cannot silently change the resumed state."""
+    run_dir = tmp_path / "tampered_history_run"
+    artifacts, _ = _create_safe_checkpoint(run_dir, generations=2)
+    document = json.loads(artifacts.es_state_json.read_text(encoding="utf-8"))
+    document["generation_records"][0]["solutions"][0][0] += 0.25
+    artifacts.es_state_json.write_text(json.dumps(document), encoding="utf-8")
 
-    args = argparse.Namespace(
-        run_dir=str(run_dir),
-        resume=True,
-        seed=42,
-        no_tensorboard=True,
-    )
-
-    artifacts = _prepare_run_artifacts(args)
-    assert artifacts is not None
-
-    with pytest.raises(ValueError) as ei:
-        _load_verified_cma_checkpoint(
+    with pytest.raises(
+        ValueError,
+        match="candidate solutions do not match|checkpoint replay did not reproduce",
+    ):
+        _load_cma_checkpoint(
             artifacts,
             specs=TOP10_PARAM_SPECS,
-            allow_unverified=False,
             console=Console(quiet=True),
         )
-    assert "Unverified checkpoint" in str(ei.value)
-    assert "--allow-unverified-checkpoint" in str(ei.value)
 
 
-def test_legacy_unverified_allowed_with_explicit_opt_in(tmp_path: Path):
-    """Checkpoints without manifest load when allow_unverified=True is passed."""
-    run_dir = tmp_path / "legacy_optin_run"
-    _create_mock_checkpoint(run_dir, countiter=4, write_manifest=False)
-
-    args = argparse.Namespace(
-        run_dir=str(run_dir),
-        resume=True,
-        seed=42,
-        no_tensorboard=True,
-    )
-
-    artifacts = _prepare_run_artifacts(args)
+def test_missing_checkpoint_raises_file_not_found(tmp_path: Path):
+    """Missing state JSON raises FileNotFoundError."""
+    run_dir = tmp_path / "empty_run"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    artifacts = _artifacts(run_dir)
     assert artifacts is not None
 
-    es = _load_verified_cma_checkpoint(
-        artifacts,
-        specs=TOP10_PARAM_SPECS,
-        allow_unverified=True,
-        console=Console(quiet=True),
-    )
-    assert es is not None
-    assert es.countiter == 4
+    with pytest.raises(FileNotFoundError):
+        _load_cma_checkpoint(
+            artifacts,
+            specs=TOP10_PARAM_SPECS,
+            console=Console(quiet=True),
+        )
 
 
-def test_e2e_resume_command_uses_verified_manifest(tmp_path: Path):
-    """Running optimize then resuming through CLI uses manifest verification."""
+def test_e2e_resume_command_roundtrip(tmp_path: Path):
+    """Running optimize then resuming through CLI works with JSON state format."""
     run_dir = tmp_path / "cli_resume_run"
     cmd1 = [
         "optimize",
-        "--seed", "42",
-        "--device", "cpu",
-        "--generations", "1",
-        "--popsize", "4",
-        "--steps", "2",
-        "--batch-size", "4",
-        "--run-dir", str(run_dir),
+        "--seed",
+        "42",
+        "--device",
+        "cpu",
+        "--generations",
+        "1",
+        "--popsize",
+        "4",
+        "--steps",
+        "2",
+        "--batch-size",
+        "4",
+        "--run-dir",
+        str(run_dir),
         "--no-tensorboard",
     ]
     ret1 = tune_main(cmd1)
     assert ret1 == 0
-    assert (run_dir / "es_manifest.json").exists(), "es_manifest.json must be written"
+    assert (run_dir / "es_state.json").exists(), "es_state.json must be written"
 
     cmd2 = [
         "optimize",
-        "--seed", "42",
-        "--device", "cpu",
-        "--generations", "2",
-        "--popsize", "4",
-        "--steps", "2",
-        "--batch-size", "4",
-        "--run-dir", str(run_dir),
+        "--seed",
+        "42",
+        "--device",
+        "cpu",
+        "--generations",
+        "2",
+        "--popsize",
+        "4",
+        "--steps",
+        "2",
+        "--batch-size",
+        "4",
+        "--run-dir",
+        str(run_dir),
         "--resume",
         "--no-tensorboard",
     ]

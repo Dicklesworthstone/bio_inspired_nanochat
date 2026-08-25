@@ -300,7 +300,7 @@ uv run python -m scripts.tune_bio_params optimize \
 
 This will:
 - ✅ Support `torchrun --distributed` for multi-GPU population eval (rank0 controller)
-- ✅ Save `progress.jsonl`, `best_params.json`, and `es_latest.pkl` (+ per-gen checkpoints) under `--run-dir`
+- ✅ Save `progress.jsonl`, `best_params.json`, and `es_state.json` (+ per-generation replay states) under `--run-dir`; legacy pickle checkpoints are refused
 - ✅ Log scalars/histograms/covariance heatmap to TensorBoard under `--run-dir/tb/`
 
 ---

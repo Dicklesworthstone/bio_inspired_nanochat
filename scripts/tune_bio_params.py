@@ -37,12 +37,9 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import hashlib
-import hmac
 import json
 import math
 import os
-import pickle  # nosec B403
 import time
 from collections.abc import Callable
 from collections import deque
@@ -64,7 +61,11 @@ from rich import box
 from rich.syntax import Syntax
 
 from bio_inspired_nanochat.checkpoint_manager import config_hash
-from bio_inspired_nanochat.results_registry import DEFAULT_REGISTRY, append_record, make_record
+from bio_inspired_nanochat.results_registry import (
+    DEFAULT_REGISTRY,
+    append_record,
+    make_record,
+)
 from bio_inspired_nanochat.synaptic import SynapticConfig
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
 
@@ -104,24 +105,25 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 MODEL_CONFIG = GPTSynapticConfig(
     sequence_len=256,
     vocab_size=1024,  # small vocab for synthetic task
-    n_layer=2,        # shallow
+    n_layer=2,  # shallow
     n_head=4,
     n_kv_head=4,
-    n_embd=128,       # thin
+    n_embd=128,  # thin
     synapses=True,
-    use_moe=False,    # disable MoE to focus on synaptic dynamics
+    use_moe=False,  # disable MoE to focus on synaptic dynamics
 )
 
 # Optimization settings
-POPULATION_SIZE = 8       # CMA-ES population size
-MAX_GENERATIONS = 50      # How long to run
-STEPS_PER_EVAL = 100      # Training steps per candidate evaluation
+POPULATION_SIZE = 8  # CMA-ES population size
+MAX_GENERATIONS = 50  # How long to run
+STEPS_PER_EVAL = 100  # Training steps per candidate evaluation
 BATCH_SIZE = 16
 PENALTY_LOSS = 100.0
 
 # -----------------------------------------------------------------------------
 # Parameter Definitions (Search Space)
 # -----------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class ParamSpec:
@@ -140,10 +142,10 @@ TOP10_PARAM_SPECS: tuple[ParamSpec, ...] = (
     # syt1_slope / syt7_slope / cpx_thresh were removed; tuning them had no effect on the model.
     # tau_c is an exp calcium-decay TIME CONSTANT (retention = exp(-1/tau_c); 8j9.2/x6z4).
     ParamSpec("tau_c", 6.0, 2.0, 20.0, True),
-    ParamSpec("alpha_ca", 0.55, 0.05, 2.00, True),       # calcium influx gain
-    ParamSpec("syt_fast_kd", 0.4, 0.10, 2.00, True),     # Syt1 (fast) Hill Kd
-    ParamSpec("syt_slow_kd", 1.0, 0.20, 5.00, True),     # Syt7 (slow) Hill Kd
-    ParamSpec("doc2_gain", 0.08, 0.00, 0.50, False),     # Doc2 facilitation gain
+    ParamSpec("alpha_ca", 0.55, 0.05, 2.00, True),  # calcium influx gain
+    ParamSpec("syt_fast_kd", 0.4, 0.10, 2.00, True),  # Syt1 (fast) Hill Kd
+    ParamSpec("syt_slow_kd", 1.0, 0.20, 5.00, True),  # Syt7 (slow) Hill Kd
+    ParamSpec("doc2_gain", 0.08, 0.00, 0.50, False),  # Doc2 facilitation gain
     ParamSpec("complexin_bias", 0.0, 0.00, 2.00, False),  # complexin inhibitory bias
     ParamSpec("prime_rate", 0.075, 0.005, 0.30, True),
     ParamSpec("unprime_per_release", 0.05, 0.001, 0.30, True),
@@ -188,7 +190,9 @@ def _validate_param_specs(specs: Sequence[ParamSpec]) -> None:
         raise ValueError("Duplicate ParamSpec.name in search space")
     for spec in specs:
         if spec.lower >= spec.upper:
-            raise ValueError(f"Invalid bounds for {spec.name}: {spec.lower} >= {spec.upper}")
+            raise ValueError(
+                f"Invalid bounds for {spec.name}: {spec.lower} >= {spec.upper}"
+            )
         if spec.log_scale and spec.lower <= 0:
             raise ValueError(f"log_scale params must be >0 lower bound: {spec.name}")
 
@@ -261,6 +265,7 @@ def _parse_vector(text: str, specs: Sequence[ParamSpec]) -> np.ndarray:
         vals.append(math.log(v) if spec.log_scale else v)
     return np.array(vals, dtype=np.float64)
 
+
 # -----------------------------------------------------------------------------
 # Sanity / Toy Objectives
 # -----------------------------------------------------------------------------
@@ -285,7 +290,9 @@ def run_rosenbrock_2d_cmaes(
     Note: `seed=0` is treated as falsy by some libraries; prefer non-zero seeds.
     """
     if seed == 0:
-        raise ValueError("Use a non-zero seed for deterministic Rosenbrock sanity checks")
+        raise ValueError(
+            "Use a non-zero seed for deterministic Rosenbrock sanity checks"
+        )
 
     es = cma.CMAEvolutionStrategy(
         [-1.2, 1.0],
@@ -303,12 +310,19 @@ def run_rosenbrock_2d_cmaes(
     fbest = float(es.result.fbest)
     return xbest, fbest
 
+
 # -----------------------------------------------------------------------------
 # Synthetic Task: Associative Recall / Copy
 # -----------------------------------------------------------------------------
 
+
 def generate_batch(
-    batch_size: int, seq_len: int, vocab_size: int, device: str, *, seed: int | None = None
+    batch_size: int,
+    seq_len: int,
+    vocab_size: int,
+    device: str,
+    *,
+    seed: int | None = None,
 ):
     """
     Generates a 'Needle in a Haystack' / Copy task.
@@ -331,7 +345,9 @@ def generate_batch(
         data = torch.randint(0, vocab_size, (batch_size, half), device=device)
     else:
         gen = torch.Generator().manual_seed(int(seed))
-        data = torch.randint(0, vocab_size, (batch_size, half), generator=gen).to(device)
+        data = torch.randint(0, vocab_size, (batch_size, half), generator=gen).to(
+            device
+        )
 
     # Inputs: [Data] [Data]
     x = torch.cat([data, data], dim=1)  # (B, T)
@@ -348,9 +364,11 @@ def generate_batch(
 
     return x, y
 
+
 # -----------------------------------------------------------------------------
 # Evaluation Loop
 # -----------------------------------------------------------------------------
+
 
 def _seed_everything(seed: int) -> None:
     np.random.seed(seed)
@@ -421,11 +439,10 @@ class RunArtifacts:
     run_dir: Path
     progress_jsonl: Path
     best_params_json: Path
-    es_latest_pkl: Path
-    es_manifest_json: Path
+    es_state_json: Path
+    legacy_es_latest_pkl: Path
     tb_dir: Path
     tb_writer: SummaryWriter | None
-
 
 def _prepare_run_artifacts(args: argparse.Namespace) -> RunArtifacts | None:
     if args.run_dir is None:
@@ -447,8 +464,8 @@ def _prepare_run_artifacts(args: argparse.Namespace) -> RunArtifacts | None:
         run_dir=run_dir,
         progress_jsonl=run_dir / "progress.jsonl",
         best_params_json=run_dir / "best_params.json",
-        es_latest_pkl=run_dir / "es_latest.pkl",
-        es_manifest_json=run_dir / "es_manifest.json",
+        es_state_json=run_dir / "es_state.json",
+        legacy_es_latest_pkl=run_dir / "es_latest.pkl",
         tb_dir=tb_dir,
         tb_writer=tb_writer,
     )
@@ -487,101 +504,321 @@ def _save_best_params(
     )
 
 
-def _load_verified_cma_checkpoint(
+_CMA_STATE_FORMAT = "cmaes-safe-replay-v2"
+_CMA_STATE_MAX_BYTES = 64 * 1024 * 1024
+
+
+@dataclass
+class LoadedCmaCheckpoint:
+    strategy: Any
+    generation_records: list[dict[str, object]]
+    best_loss_history: list[float]
+    restart_events: int
+    x0: list[float]
+    sigma0: float
+    popsize: int
+    seed: int
+
+
+def _finite_float(value: object, *, label: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{label} must be a finite number")
+    result = float(value)
+    if not math.isfinite(result):
+        raise ValueError(f"{label} must be a finite number")
+    return result
+
+
+def _plain_int(value: object, *, label: str, minimum: int = 0) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+        raise ValueError(f"{label} must be an integer >= {minimum}")
+    return value
+
+
+def _float_vector(value: object, *, length: int, label: str) -> list[float]:
+    if not isinstance(value, list) or len(value) != length:
+        raise ValueError(f"{label} must contain exactly {length} values")
+    return [
+        _finite_float(item, label=f"{label}[{index}]")
+        for index, item in enumerate(value)
+    ]
+
+
+def _new_cma_strategy(
+    x0: Sequence[float] | np.ndarray[Any, Any],
+    sigma0: float,
+    *,
+    popsize: int,
+    lower_bounds: Sequence[float],
+    upper_bounds: Sequence[float],
+    seed: int,
+) -> Any:
+    """Create CMA-ES with an RNG isolated from model-evaluation seeding.
+
+    Candidate evaluation intentionally resets NumPy for repeatable training. Using CMA's default
+    global RNG would therefore make later populations depend on evaluation internals and prevent
+    deterministic history replay. The dedicated stream advances only when CMA asks for candidates.
+    """
+    cma_rng = np.random.RandomState(seed)  # noqa: NPY002 -- cma expects legacy randn API
+    return cma.CMAEvolutionStrategy(
+        x0,
+        sigma0,
+        {
+            "popsize": popsize,
+            "bounds": [list(lower_bounds), list(upper_bounds)],
+            "verbose": -1,
+            "seed": np.nan,
+            "randn": cma_rng.randn,
+        },
+    )
+
+
+def _atomic_write_json(path: Path, payload: dict[str, object]) -> None:
+    raw = json.dumps(payload, indent=2, sort_keys=True, allow_nan=False) + "\n"
+    temporary = path.with_name(f".{path.name}.tmp")
+    with temporary.open("w", encoding="utf-8") as handle:
+        handle.write(raw)
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(temporary, path)
+
+
+def _save_cma_checkpoint(
+    path: Path,
+    *,
+    run_id: str,
+    specs: Sequence[ParamSpec],
+    x0: Sequence[float] | np.ndarray[Any, Any],
+    sigma0: float,
+    popsize: int,
+    seed: int,
+    strategy: Any,
+    generation_records: Sequence[dict[str, object]],
+    best_loss_history: Sequence[float],
+    restart_events: int,
+) -> None:
+    lower_bounds, upper_bounds = _cma_bounds(specs)
+    payload: dict[str, object] = {
+        "format": _CMA_STATE_FORMAT,
+        "cma_version": str(cma_module.__version__),
+        "numpy_version": str(np.__version__),
+        "run_id": run_id,
+        "search_space": [asdict(spec) for spec in specs],
+        "x0": [float(value) for value in x0],
+        "sigma0": float(sigma0),
+        "popsize": int(popsize),
+        "seed": int(seed),
+        "bounds": {"lower": lower_bounds, "upper": upper_bounds},
+        "generation_records": list(generation_records),
+        "best_loss_history": [float(value) for value in best_loss_history],
+        "restart_events": int(restart_events),
+        "strategy_summary": {
+            "countiter": int(strategy.countiter),
+            "mean": np.asarray(strategy.mean, dtype=np.float64).tolist(),
+            "sigma": float(strategy.sigma),
+        },
+        "saved_at_unix": time.time(),
+    }
+    _atomic_write_json(path, payload)
+
+
+def _load_cma_checkpoint(
     artifacts: RunArtifacts,
     *,
     specs: Sequence[ParamSpec],
-    allow_unverified: bool = False,
     console: Console | None = None,
-) -> Any:
-    """Safely resume CMAEvolutionStrategy state with cryptographic integrity verification.
+) -> LoadedCmaCheckpoint:
+    """Rebuild CMA-ES from inert, schema-validated JSON history.
 
-    Refuses to deserialize unverified pickle bytes from untrusted or tampered run directories.
-    Fails closed with clear Rich error diagnostics if the SHA-256 hash does not match the manifest
-    or if the checkpoint dimensions do not match the target search space.
+    Legacy pickle checkpoints are never deserialized. A co-located checksum cannot authenticate
+    a pickle when an attacker can replace both files, so the resume format contains only numeric
+    state and replays it through CMA-ES's public ask/tell API.
     """
+    state_path = artifacts.es_state_json
     _console = console or Console()
-    if not artifacts.es_latest_pkl.exists():
-        _console.print(f"[bold red]Checkpoint file missing: {artifacts.es_latest_pkl}[/bold red]")
-        raise FileNotFoundError(f"Missing checkpoint: {artifacts.es_latest_pkl}")
-
-    raw_bytes = artifacts.es_latest_pkl.read_bytes()
-    actual_sha256 = hashlib.sha256(raw_bytes).hexdigest()
-
-    if artifacts.es_manifest_json.exists():
-        try:
-            manifest_doc = json.loads(artifacts.es_manifest_json.read_text(encoding="utf-8"))
-        except Exception as exc:
-            _console.print(
-                f"[bold red]Checkpoint manifest at {artifacts.es_manifest_json} is corrupted: {exc}[/bold red]"
+    if not state_path.exists():
+        if artifacts.legacy_es_latest_pkl.exists():
+            message = (
+                "Legacy CMA pickle checkpoints are not executable resume inputs. "
+                "Start a new optimization run; there is no unsafe compatibility override."
             )
-            raise ValueError(
-                f"Corrupt checkpoint manifest at {artifacts.es_manifest_json}: {exc}"
-            ) from exc
-
-        if not isinstance(manifest_doc, dict) or manifest_doc.get("format") != "cmaes-checkpoint-manifest-v1":
-            _console.print(
-                f"[bold red]Unsupported checkpoint manifest format in {artifacts.es_manifest_json}[/bold red]"
-            )
-            raise ValueError(
-                f"Unsupported checkpoint manifest format in {artifacts.es_manifest_json}: "
-                f"{manifest_doc.get('format') if isinstance(manifest_doc, dict) else type(manifest_doc)}"
-            )
-
-        expected_sha256 = manifest_doc.get("sha256")
-        if not isinstance(expected_sha256, str) or not hmac.compare_digest(actual_sha256, expected_sha256):
-            _console.print(
-                f"[bold red]Security Error: Checkpoint integrity verification failed for {artifacts.es_latest_pkl}! "
-                f"Computed SHA-256 ({actual_sha256[:16]}...) does not match manifest SHA-256 ({str(expected_sha256)[:16]}...). "
-                f"Refusing to deserialize potentially tampered checkpoint.[/bold red]"
-            )
-            raise ValueError(
-                f"Checkpoint integrity verification failed for {artifacts.es_latest_pkl}: "
-                f"SHA-256 digest mismatch against {artifacts.es_manifest_json}"
-            )
-
-        expected_dim = manifest_doc.get("dim")
-        if expected_dim is not None and int(expected_dim) != len(specs):
-            _console.print(
-                f"[bold red]Checkpoint dimension mismatch: manifest recorded dim={expected_dim}, "
-                f"current search space has dim={len(specs)}.[/bold red]"
-            )
-            raise ValueError(
-                f"Checkpoint search space mismatch: manifest has dim={expected_dim}, expected {len(specs)}"
-            )
-    else:
-        if not allow_unverified:
-            _console.print(
-                f"[bold red]Security Error: Checkpoint manifest {artifacts.es_manifest_json} not found. "
-                f"Refusing to deserialize unverified legacy pickle bytes from {artifacts.es_latest_pkl}. "
-                f"Pass --allow-unverified-checkpoint to explicitly authorize loading legacy unverified checkpoints.[/bold red]"
-            )
-            raise ValueError(
-                f"Unverified checkpoint: {artifacts.es_manifest_json} is missing. "
-                f"Refusing to execute unverified pickle bytes from {artifacts.es_latest_pkl}. "
-                f"Pass --allow-unverified-checkpoint to authorize."
-            )
-        _console.print(
-            f"[bold yellow]Warning: Loading unverified legacy checkpoint {artifacts.es_latest_pkl} "
-            f"without cryptographic manifest verification (--allow-unverified-checkpoint enabled).[/bold yellow]"
-        )
-
-    try:
-        es = pickle.loads(raw_bytes)  # nosec B301
-    except Exception as exc:
-        _console.print(f"[bold red]Failed to deserialize verified checkpoint: {exc}[/bold red]")
-        raise ValueError(f"Failed to deserialize checkpoint {artifacts.es_latest_pkl}: {exc}") from exc
-
-    es_dim = getattr(es, "N", None)
-    if es_dim is not None and int(es_dim) != len(specs):
-        _console.print(
-            f"[bold red]Restored CMA-ES dimension mismatch: object has N={es_dim}, expected {len(specs)}.[/bold red]"
-        )
+            _console.print(f"[bold red]Security Error: {message}[/bold red]")
+            raise ValueError(message)
+        raise FileNotFoundError(f"Missing checkpoint: {state_path}")
+    size = state_path.stat().st_size
+    if size > _CMA_STATE_MAX_BYTES:
         raise ValueError(
-            f"Restored CMA-ES dimension mismatch: object has N={es_dim}, expected {len(specs)}"
+            f"CMA checkpoint exceeds the {_CMA_STATE_MAX_BYTES}-byte safety limit: {state_path}"
+        )
+    try:
+        document = json.loads(state_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        _console.print(
+            f"[bold red]Corrupt CMA checkpoint {state_path}: {exc}[/bold red]"
+        )
+        raise ValueError(f"Corrupt CMA checkpoint {state_path}: {exc}") from exc
+    if not isinstance(document, dict) or document.get("format") != _CMA_STATE_FORMAT:
+        raise ValueError(f"Unsupported CMA checkpoint format in {state_path}")
+    if document.get("cma_version") != str(cma_module.__version__):
+        raise ValueError(
+            "CMA checkpoint library version mismatch: "
+            f"saved={document.get('cma_version')!r}, current={cma_module.__version__!r}"
+        )
+    if document.get("numpy_version") != str(np.__version__):
+        raise ValueError(
+            "CMA checkpoint NumPy version mismatch: "
+            f"saved={document.get('numpy_version')!r}, current={np.__version__!r}"
+        )
+    expected_space = [asdict(spec) for spec in specs]
+    if document.get("search_space") != expected_space:
+        raise ValueError(
+            "CMA checkpoint search space does not match the active parameter specs"
         )
 
-    return es
+    dim = len(specs)
+    x0 = _float_vector(document.get("x0"), length=dim, label="checkpoint x0")
+    sigma0 = _finite_float(document.get("sigma0"), label="checkpoint sigma0")
+    if sigma0 <= 0.0:
+        raise ValueError("checkpoint sigma0 must be > 0")
+    popsize = _plain_int(document.get("popsize"), label="checkpoint popsize", minimum=2)
+    seed = _plain_int(document.get("seed"), label="checkpoint seed")
+    bounds = document.get("bounds")
+    lower_bounds, upper_bounds = _cma_bounds(specs)
+    if not isinstance(bounds, dict):
+        raise ValueError("checkpoint bounds must be an object")
+    if (
+        _float_vector(bounds.get("lower"), length=dim, label="checkpoint lower bounds")
+        != lower_bounds
+    ):
+        raise ValueError("checkpoint lower bounds do not match the active search space")
+    if (
+        _float_vector(bounds.get("upper"), length=dim, label="checkpoint upper bounds")
+        != upper_bounds
+    ):
+        raise ValueError("checkpoint upper bounds do not match the active search space")
+
+    raw_records = document.get("generation_records")
+    if not isinstance(raw_records, list):
+        raise ValueError("checkpoint generation_records must be a list")
+    records: list[dict[str, object]] = []
+    strategy = _new_cma_strategy(
+        x0,
+        sigma0,
+        popsize=popsize,
+        lower_bounds=lower_bounds,
+        upper_bounds=upper_bounds,
+        seed=seed,
+    )
+    for expected_generation, raw_record in enumerate(raw_records, start=1):
+        if not isinstance(raw_record, dict):
+            raise ValueError(
+                f"checkpoint generation_records[{expected_generation - 1}] must be an object"
+            )
+        generation = _plain_int(
+            raw_record.get("generation"),
+            label=f"checkpoint generation_records[{expected_generation - 1}].generation",
+            minimum=1,
+        )
+        if generation != expected_generation:
+            raise ValueError(
+                "checkpoint generations must be contiguous and one-indexed"
+            )
+        raw_solutions = raw_record.get("solutions")
+        if not isinstance(raw_solutions, list) or len(raw_solutions) != popsize:
+            raise ValueError(
+                f"checkpoint generation {generation} must contain {popsize} solutions"
+            )
+        solutions = [
+            _float_vector(
+                solution,
+                length=dim,
+                label=f"checkpoint generation {generation} solution",
+            )
+            for solution in raw_solutions
+        ]
+        fitnesses = _float_vector(
+            raw_record.get("fitnesses"),
+            length=popsize,
+            label=f"checkpoint generation {generation} fitnesses",
+        )
+        sigma_after_raw = raw_record.get("sigma_after")
+        sigma_after = (
+            None
+            if sigma_after_raw is None
+            else _finite_float(
+                sigma_after_raw,
+                label=f"checkpoint generation {generation} sigma_after",
+            )
+        )
+        if sigma_after is not None and sigma_after <= 0.0:
+            raise ValueError(
+                f"checkpoint generation {generation} sigma_after must be > 0"
+            )
+        replay_solutions = strategy.ask()
+        if not np.allclose(replay_solutions, solutions, rtol=1e-6, atol=1e-6):
+            raise ValueError(
+                f"checkpoint generation {generation} candidate solutions do not match deterministic seed replay"
+            )
+        strategy.tell(replay_solutions, fitnesses)
+        if sigma_after is not None:
+            strategy.sigma = sigma_after
+        records.append(
+            {
+                "generation": generation,
+                "solutions": solutions,
+                "fitnesses": fitnesses,
+                "sigma_after": sigma_after,
+            }
+        )
+
+    summary = document.get("strategy_summary")
+    if not isinstance(summary, dict):
+        raise ValueError("checkpoint strategy_summary must be an object")
+    expected_countiter = _plain_int(
+        summary.get("countiter"), label="checkpoint strategy_summary.countiter"
+    )
+    expected_mean = _float_vector(
+        summary.get("mean"), length=dim, label="checkpoint strategy_summary.mean"
+    )
+    expected_sigma = _finite_float(
+        summary.get("sigma"), label="checkpoint strategy_summary.sigma"
+    )
+    if (
+        expected_countiter != len(records)
+        or int(strategy.countiter) != expected_countiter
+    ):
+        raise ValueError(
+            "checkpoint generation count does not match replayed CMA state"
+        )
+    if not np.allclose(strategy.mean, expected_mean, rtol=1e-12, atol=1e-12):
+        raise ValueError("checkpoint replay did not reproduce the recorded CMA mean")
+    if not math.isclose(
+        float(strategy.sigma), expected_sigma, rel_tol=1e-12, abs_tol=1e-12
+    ):
+        raise ValueError("checkpoint replay did not reproduce the recorded CMA sigma")
+
+    raw_best_history = document.get("best_loss_history")
+    if not isinstance(raw_best_history, list) or len(raw_best_history) != len(records):
+        raise ValueError(
+            "checkpoint best_loss_history must have one value per generation"
+        )
+    best_loss_history = [
+        _finite_float(value, label=f"checkpoint best_loss_history[{index}]")
+        for index, value in enumerate(raw_best_history)
+    ]
+    restart_events = _plain_int(
+        document.get("restart_events"), label="checkpoint restart_events"
+    )
+    return LoadedCmaCheckpoint(
+        strategy=strategy,
+        generation_records=records,
+        best_loss_history=best_loss_history,
+        restart_events=restart_events,
+        x0=x0,
+        sigma0=sigma0,
+        popsize=popsize,
+        seed=seed,
+    )
 
 
 def _append_progress(progress_jsonl: Path, payload: dict[str, object]) -> None:
@@ -783,7 +1020,11 @@ def evaluate_candidate_detailed(
                 else None
             )
             for step_idx in range(steps_i):
-                if deadline is not None and (step_idx % 10) == 0 and time.monotonic() > deadline:
+                if (
+                    deadline is not None
+                    and (step_idx % 10) == 0
+                    and time.monotonic() > deadline
+                ):
                     raise TimeoutError(
                         f"Candidate evaluation exceeded timeout_seconds={timeout_seconds}"
                     )
@@ -799,7 +1040,9 @@ def evaluate_candidate_detailed(
                 )
                 _logits, loss = model(x, y)
                 if not torch.isfinite(loss):
-                    raise FloatingPointError("Non-finite loss encountered during evaluation")
+                    raise FloatingPointError(
+                        "Non-finite loss encountered during evaluation"
+                    )
 
                 optim.zero_grad(set_to_none=True)
                 loss.backward()
@@ -813,9 +1056,13 @@ def evaluate_candidate_detailed(
                 if lce_points is not None and ((step_idx + 1) % lce_stride_i) == 0:
                     lce_points.append((step_idx + 1, loss_val))
 
-            mean_last_loss = float(np.mean(list(mean_window))) if mean_window else PENALTY_LOSS
+            mean_last_loss = (
+                float(np.mean(list(mean_window))) if mean_window else PENALTY_LOSS
+            )
             if not math.isfinite(mean_last_loss):
-                raise FloatingPointError("Non-finite mean_last_loss encountered during evaluation")
+                raise FloatingPointError(
+                    "Non-finite mean_last_loss encountered during evaluation"
+                )
 
             # Held-out evaluation (74f.1): score generalization on a FIXED held-out set
             # (identical across all candidates), which is far less noisy than the last-k
@@ -863,7 +1110,9 @@ def evaluate_candidate_detailed(
                 raise
             last_exc = exc
             if attempt + 1 >= attempts:
-                return CandidateEvalResult(mean_last_loss=PENALTY_LOSS, steps_run=steps_i)
+                return CandidateEvalResult(
+                    mean_last_loss=PENALTY_LOSS, steps_run=steps_i
+                )
             if device.startswith("cuda") and torch.cuda.is_available():
                 torch.cuda.empty_cache()
             continue
@@ -945,7 +1194,9 @@ def readiness_from_objectives(
     seed_sigma = math.sqrt((g_std**2 + b_std**2) / 2.0)
     signal = abs(float(g.mean()) - float(b.mean()))
     sigma_sep = signal / seed_sigma if seed_sigma > 1e-12 else float("inf")
-    rel = signal / abs(float(b.mean())) if abs(float(b.mean())) > 1e-12 else float("inf")
+    rel = (
+        signal / abs(float(b.mean())) if abs(float(b.mean())) > 1e-12 else float("inf")
+    )
     paired = paired_comparison(good_per_seed, bad_per_seed, lower_is_better=True)
     p_t = paired.t_p_value if paired else float("nan")
     p_w = paired.wilcoxon_p_value if paired else float("nan")
@@ -978,8 +1229,12 @@ def proxy_signal_check(
     """End-to-end proxy readiness gate (74f.1 acceptance): run the multi-seed held-out
     objective for a known-good and known-bad config on the SAME seeds and report whether
     they separate by > ``sigma_gate`` of seed-noise."""
-    good = multi_seed_objective(good_vector, specs=specs, seeds=seeds, steps=steps, **eval_kw)
-    bad = multi_seed_objective(bad_vector, specs=specs, seeds=seeds, steps=steps, **eval_kw)
+    good = multi_seed_objective(
+        good_vector, specs=specs, seeds=seeds, steps=steps, **eval_kw
+    )
+    bad = multi_seed_objective(
+        bad_vector, specs=specs, seeds=seeds, steps=steps, **eval_kw
+    )
     gate = readiness_from_objectives(
         good["per_seed"], bad["per_seed"], sigma_gate=sigma_gate, rel_gate=rel_gate
     )
@@ -1070,7 +1325,9 @@ def _distributed_worker_loop(
         sols = torch.empty((pop, dim), dtype=torch.float64, device=comm_device)
         dist.broadcast(sols, src=0)
 
-        fitness = torch.full((pop,), float("nan"), dtype=torch.float64, device=comm_device)
+        fitness = torch.full(
+            (pop,), float("nan"), dtype=torch.float64, device=comm_device
+        )
         use_lce = mode == mode_lce and target_steps > steps_to_run
         for sol_idx in range(dist_info.rank, pop, dist_info.world_size):
             res = evaluate_candidate_detailed(
@@ -1100,11 +1357,15 @@ def _distributed_worker_loop(
         gathered = [torch.empty_like(fitness) for _ in range(dist_info.world_size)]
         dist.all_gather(gathered, fitness)
 
+
 # -----------------------------------------------------------------------------
 # Main Optimization Script
 # -----------------------------------------------------------------------------
 
-def _cmd_eval(args: argparse.Namespace, *, console: Console, specs: Sequence[ParamSpec]) -> int:
+
+def _cmd_eval(
+    args: argparse.Namespace, *, console: Console, specs: Sequence[ParamSpec]
+) -> int:
     defaults = SynapticConfig()
     x0 = encode_params(defaults, specs)
     if args.vector is not None:
@@ -1152,7 +1413,9 @@ def _cmd_eval(args: argparse.Namespace, *, console: Console, specs: Sequence[Par
     return 0
 
 
-def _cmd_sanity(args: argparse.Namespace, *, console: Console, specs: Sequence[ParamSpec]) -> int:
+def _cmd_sanity(
+    args: argparse.Namespace, *, console: Console, specs: Sequence[ParamSpec]
+) -> int:
     console.print(
         Panel.fit(
             "[bold cyan]CMA-ES Sanity Checks[/bold cyan]\n"
@@ -1168,7 +1431,9 @@ def _cmd_sanity(args: argparse.Namespace, *, console: Console, specs: Sequence[P
         sigma0=float(args.rosen_sigma0),
     )
     rosen_err = float(np.linalg.norm(xbest - np.array([1.0, 1.0], dtype=np.float64)))
-    rosen_ok = (rosen_err <= float(args.rosen_tol)) and (fbest <= float(args.rosen_f_tol))
+    rosen_ok = (rosen_err <= float(args.rosen_tol)) and (
+        fbest <= float(args.rosen_f_tol)
+    )
 
     defaults = SynapticConfig()
     x0 = encode_params(defaults, specs)
@@ -1224,17 +1489,23 @@ def _cmd_sanity(args: argparse.Namespace, *, console: Console, specs: Sequence[P
     return 0
 
 
-def _cmd_proxy(args: argparse.Namespace, *, console: Console, specs: Sequence[ParamSpec]) -> int:
+def _cmd_proxy(
+    args: argparse.Namespace, *, console: Console, specs: Sequence[ParamSpec]
+) -> int:
     rng = np.random.default_rng(int(args.seed))
     full_steps = int(args.full_steps)
     proxy_steps = int(args.proxy_steps)
     if full_steps <= 0 or proxy_steps <= 0:
         raise ValueError("--full-steps and --proxy-steps must be > 0")
     if proxy_steps >= full_steps:
-        raise ValueError("--proxy-steps must be < --full-steps for a meaningful proxy check")
+        raise ValueError(
+            "--proxy-steps must be < --full-steps for a meaningful proxy check"
+        )
 
     mode = str(args.mode)
-    target_steps = int(args.target_steps) if args.target_steps is not None else full_steps
+    target_steps = (
+        int(args.target_steps) if args.target_steps is not None else full_steps
+    )
     if target_steps < full_steps:
         raise ValueError("--target-steps must be >= --full-steps (or omit it)")
 
@@ -1335,7 +1606,9 @@ def _cmd_proxy(args: argparse.Namespace, *, console: Console, specs: Sequence[Pa
     return 0
 
 
-def _cmd_optimize(args: argparse.Namespace, *, console: Console, specs: Sequence[ParamSpec]) -> int:
+def _cmd_optimize(
+    args: argparse.Namespace, *, console: Console, specs: Sequence[ParamSpec]
+) -> int:
     dist_info = DistInfo(
         enabled=False,
         rank=0,
@@ -1399,24 +1672,29 @@ def _cmd_optimize(args: argparse.Namespace, *, console: Console, specs: Sequence
     x0 = encode_params(defaults, specs)
     sigma0 = float(args.sigma0)
 
+    loaded_checkpoint: LoadedCmaCheckpoint | None = None
     if artifacts is not None and args.resume:
-        es = _load_verified_cma_checkpoint(
+        loaded_checkpoint = _load_cma_checkpoint(
             artifacts,
             specs=specs,
-            allow_unverified=bool(getattr(args, "allow_unverified_checkpoint", False)),
             console=console,
         )
+        es = loaded_checkpoint.strategy
+        x0 = np.asarray(loaded_checkpoint.x0, dtype=np.float64)
+        sigma0 = float(loaded_checkpoint.sigma0)
+        checkpoint_popsize = int(loaded_checkpoint.popsize)
+        checkpoint_seed = int(loaded_checkpoint.seed)
     else:
         lbs, ubs = _cma_bounds(specs)
-        es = cma.CMAEvolutionStrategy(
+        checkpoint_popsize = int(args.popsize)
+        checkpoint_seed = int(args.seed)
+        es = _new_cma_strategy(
             x0,
             sigma0,
-            {
-                "popsize": int(args.popsize),
-                "bounds": [lbs, ubs],
-                "verbose": -1,
-                "seed": int(args.seed),
-            },
+            popsize=checkpoint_popsize,
+            lower_bounds=lbs,
+            upper_bounds=ubs,
+            seed=checkpoint_seed,
         )
 
     best_loss, best_params = (
@@ -1424,8 +1702,16 @@ def _cmd_optimize(args: argparse.Namespace, *, console: Console, specs: Sequence
         if artifacts is not None
         else (float("inf"), {})
     )
-    best_loss_history: list[float] = [float(best_loss)]
-    restart_events = 0
+    if loaded_checkpoint is None:
+        generation_records: list[dict[str, object]] = []
+        best_loss_history: list[float] = (
+            [float(best_loss)] if math.isfinite(float(best_loss)) else []
+        )
+        restart_events = 0
+    else:
+        generation_records = list(loaded_checkpoint.generation_records)
+        best_loss_history = list(loaded_checkpoint.best_loss_history)
+        restart_events = int(loaded_checkpoint.restart_events)
 
     table = Table(title="Optimization History", box=box.SIMPLE)
     table.add_column("Gen", justify="right", style="cyan", no_wrap=True)
@@ -1463,7 +1749,9 @@ def _cmd_optimize(args: argparse.Namespace, *, console: Console, specs: Sequence
                 gen_start = time.monotonic()
                 next_gen = int(getattr(es, "countiter", 0)) + 1
                 full_steps = int(args.steps)
-                proxy_steps = int(args.proxy_steps) if args.proxy_steps is not None else 0
+                proxy_steps = (
+                    int(args.proxy_steps) if args.proxy_steps is not None else 0
+                )
                 proxy_gens = int(args.proxy_generations)
                 proxy_enabled = (
                     proxy_steps > 0
@@ -1504,7 +1792,9 @@ def _cmd_optimize(args: argparse.Namespace, *, console: Console, specs: Sequence
                     )
                     dist.broadcast(ctrl, src=0)
                     sols_np = np.asarray(solutions, dtype=np.float64)
-                    sols_t = torch.as_tensor(sols_np, dtype=torch.float64, device=comm_device)
+                    sols_t = torch.as_tensor(
+                        sols_np, dtype=torch.float64, device=comm_device
+                    )
                     dist.broadcast(sols_t, src=0)
 
                     fitness = torch.full(
@@ -1651,8 +1941,12 @@ def _cmd_optimize(args: argparse.Namespace, *, console: Console, specs: Sequence
                             "proxy_target_steps": int(proxy_target_steps)
                             if proxy_enabled
                             else None,
-                            "lce_exponent": float(args.lce_exponent) if use_lce else None,
-                            "lce_tail_points": int(args.lce_tail_points) if use_lce else None,
+                            "lce_exponent": float(args.lce_exponent)
+                            if use_lce
+                            else None,
+                            "lce_tail_points": int(args.lce_tail_points)
+                            if use_lce
+                            else None,
                             "lce_stride": int(args.lce_stride) if use_lce else None,
                             "stagnation_window_gens": int(args.stagnation_gens),
                             "stagnation_min_improve_frac": float(
@@ -1679,25 +1973,42 @@ def _cmd_optimize(args: argparse.Namespace, *, console: Console, specs: Sequence
                             gen=gen,
                         )
 
-                    if not args.no_checkpoints:
-                        es_bytes = es.pickle_dumps()
-                        es_sha256 = hashlib.sha256(es_bytes).hexdigest()
-                        artifacts.es_latest_pkl.write_bytes(es_bytes)
-                        (artifacts.run_dir / f"es_gen_{gen:04d}.pkl").write_bytes(es_bytes)
-                        manifest = {
-                            "format": "cmaes-checkpoint-manifest-v1",
-                            "run_id": run_id,
-                            "generation": int(gen),
-                            "countiter": int(getattr(es, "countiter", gen)),
-                            "best_loss": float(best_loss),
-                            "dim": len(specs),
-                            "sha256": es_sha256,
-                            "saved_at_unix": time.time(),
+                    generation_records.append(
+                        {
+                            "generation": gen,
+                            "solutions": np.asarray(
+                                solutions, dtype=np.float64
+                            ).tolist(),
+                            "fitnesses": [float(value) for value in fitnesses],
+                            "sigma_after": sigma_after,
                         }
-                        manifest_raw = json.dumps(manifest, indent=2, sort_keys=True) + "\n"
-                        artifacts.es_manifest_json.write_text(manifest_raw, encoding="utf-8")
-                        (artifacts.run_dir / f"es_manifest_gen_{gen:04d}.json").write_text(
-                            manifest_raw, encoding="utf-8"
+                    )
+                    if not args.no_checkpoints:
+                        _save_cma_checkpoint(
+                            artifacts.es_state_json,
+                            run_id=run_id,
+                            specs=specs,
+                            x0=x0,
+                            sigma0=sigma0,
+                            popsize=checkpoint_popsize,
+                            seed=checkpoint_seed,
+                            strategy=es,
+                            generation_records=generation_records,
+                            best_loss_history=best_loss_history,
+                            restart_events=restart_events,
+                        )
+                        _save_cma_checkpoint(
+                            artifacts.run_dir / f"es_state_gen_{gen:04d}.json",
+                            run_id=run_id,
+                            specs=specs,
+                            x0=x0,
+                            sigma0=sigma0,
+                            popsize=checkpoint_popsize,
+                            seed=checkpoint_seed,
+                            strategy=es,
+                            generation_records=generation_records,
+                            best_loss_history=best_loss_history,
+                            restart_events=restart_events,
                         )
 
                     if artifacts.tb_writer is not None:
@@ -1710,12 +2021,18 @@ def _cmd_optimize(args: argparse.Namespace, *, console: Console, specs: Sequence
                         )
                         if stagnation_improve is not None:
                             artifacts.tb_writer.add_scalar(
-                                "stagnation/improve_frac", float(stagnation_improve), gen
+                                "stagnation/improve_frac",
+                                float(stagnation_improve),
+                                gen,
                             )
                         if stagnation_triggered:
-                            artifacts.tb_writer.add_scalar("stagnation/triggered", 1.0, gen)
+                            artifacts.tb_writer.add_scalar(
+                                "stagnation/triggered", 1.0, gen
+                            )
                         else:
-                            artifacts.tb_writer.add_scalar("stagnation/triggered", 0.0, gen)
+                            artifacts.tb_writer.add_scalar(
+                                "stagnation/triggered", 0.0, gen
+                            )
                         if sigma_before is not None:
                             artifacts.tb_writer.add_scalar(
                                 "stagnation/sigma_before", float(sigma_before), gen
@@ -1811,7 +2128,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     _validate_param_specs(TOP10_PARAM_SPECS)
     console = Console()
 
-    parser = argparse.ArgumentParser(description="Tune synaptic bio parameters with CMA-ES")
+    parser = argparse.ArgumentParser(
+        description="Tune synaptic bio parameters with CMA-ES"
+    )
     parser.add_argument(
         "--search-space",
         type=str,
@@ -1821,8 +2140,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    eval_p = sub.add_parser("eval", help="Run a single deterministic candidate evaluation")
-    eval_p.add_argument("--vector", type=str, default=None, help="Comma-separated 10D vector")
+    eval_p = sub.add_parser(
+        "eval", help="Run a single deterministic candidate evaluation"
+    )
+    eval_p.add_argument(
+        "--vector", type=str, default=None, help="Comma-separated 10D vector"
+    )
     eval_p.add_argument("--seed", type=int, default=42)
     eval_p.add_argument("--device", type=str, default=DEVICE)
     eval_p.add_argument("--steps", type=int, default=STEPS_PER_EVAL)
@@ -1867,7 +2190,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     proxy_p.add_argument("--full-steps", type=int, default=100)
     proxy_p.add_argument("--target-steps", type=int, default=None)
     proxy_p.add_argument("--candidates", type=int, default=3)
-    proxy_p.add_argument("--mode", type=str, choices=["mean_last", "lce"], default="lce")
+    proxy_p.add_argument(
+        "--mode", type=str, choices=["mean_last", "lce"], default="lce"
+    )
     proxy_p.add_argument("--batch-size", type=int, default=8)
     proxy_p.add_argument("--lr", type=float, default=1e-3)
     proxy_p.add_argument("--weight-decay", type=float, default=1e-2)
@@ -1977,24 +2302,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     opt_p.add_argument(
         "--resume",
         action="store_true",
-        help="Resume from --run-dir/es_latest.pkl",
-    )
-    opt_p.add_argument(
-        "--allow-unverified-checkpoint",
-        action="store_true",
-        help="Allow resuming from legacy unverified checkpoints lacking a cryptographic manifest (warning: security risk)",
+        help="Resume from the inert, schema-validated --run-dir/es_state.json",
     )
     opt_p.add_argument(
         "--no-checkpoints",
         action="store_true",
-        help="Disable writing CMA-ES pickle checkpoints even if --run-dir is set",
+        help="Disable writing CMA-ES replay checkpoints even if --run-dir is set",
     )
     opt_p.add_argument(
         "--no-tensorboard",
         action="store_true",
         help="Disable TensorBoard logging even if --run-dir is set",
     )
-    opt_p.add_argument("--save-best", type=str, default=None, help="Optional path to save best config python")
+    opt_p.add_argument(
+        "--save-best",
+        type=str,
+        default=None,
+        help="Optional path to save best config python",
+    )
 
     args = parser.parse_args(argv)
     specs = PARAM_SPACES.get(getattr(args, "search_space", "top10"), TOP10_PARAM_SPECS)

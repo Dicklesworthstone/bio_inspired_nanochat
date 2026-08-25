@@ -2,7 +2,7 @@
 
 Verifies the full CMA-ES optimization lifecycle in CI time:
   1. 2-generation optimization on the synthetic associative recall task.
-  2. Structured artifacts produced: progress.jsonl, best_params.json, per-gen pickle checkpoints.
+  2. Structured artifacts produced: progress.jsonl, best_params.json, inert JSON replay states.
   3. Resume contract: resuming from checkpoint continues without loss of state.
   4. Stagnation policy: triggers early-stopping or sigma-reset under stalled loss.
   5. Detailed per-generation logging in events.jsonl.
