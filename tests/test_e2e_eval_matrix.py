@@ -38,7 +38,7 @@ from bio_inspired_nanochat.checkpoint_manager import (
 )
 from bio_inspired_nanochat.gpt import GPT, GPTConfig
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
-from bio_inspired_nanochat.results_registry import read_records
+from bio_inspired_nanochat.results_registry import RunRecord, read_records
 from bio_inspired_nanochat.synaptic import SynapticConfig
 from scripts.eval_matrix import (
     SUMMARY_FIELDS,
@@ -51,6 +51,7 @@ from scripts.eval_matrix import (
     _load_base_train_checkpoint,
     _parse_int_list,
     _parse_str_list,
+    _publish_success_summary,
     _summarize_routing_counts,
     _val_loss_ppl_ece,
 )
@@ -527,6 +528,75 @@ def test_eval_matrix_batch_propagates_remote_rank_failure(monkeypatch, tmp_path)
         assert eval_matrix_module.main() == 1
     finally:
         sys.argv = old_argv
+
+
+def test_success_publication_commits_csv_after_registry_and_jsonl(monkeypatch, tmp_path):
+    import scripts.eval_matrix as eval_matrix_module
+
+    events = []
+    monkeypatch.setattr(
+        eval_matrix_module,
+        "append_record",
+        lambda _record, _path: events.append("registry"),
+    )
+    monkeypatch.setattr(
+        eval_matrix_module,
+        "_write_jsonl",
+        lambda _path, _row: events.append("jsonl"),
+    )
+    monkeypatch.setattr(
+        eval_matrix_module,
+        "_append_csv",
+        lambda _path, *, fieldnames, row: events.append("csv"),
+    )
+
+    _publish_success_summary(
+        tmp_path,
+        {"status": "ok", "run_id": "run"},
+        RunRecord("run", "eval", {"eval_bpb": 1.0}),
+        str(tmp_path / "registry.jsonl"),
+    )
+
+    assert events == ["registry", "jsonl", "csv"]
+
+
+@pytest.mark.parametrize("failure_stage", ["registry", "jsonl"])
+def test_success_publication_never_exposes_csv_before_audit_sinks(
+    monkeypatch,
+    tmp_path,
+    failure_stage,
+):
+    import scripts.eval_matrix as eval_matrix_module
+
+    events = []
+
+    def append_registry(_record, _path):
+        events.append("registry")
+        if failure_stage == "registry":
+            raise OSError("planted registry failure")
+
+    def append_jsonl(_path, _row):
+        events.append("jsonl")
+        if failure_stage == "jsonl":
+            raise OSError("planted JSONL failure")
+
+    monkeypatch.setattr(eval_matrix_module, "append_record", append_registry)
+    monkeypatch.setattr(eval_matrix_module, "_write_jsonl", append_jsonl)
+    monkeypatch.setattr(
+        eval_matrix_module,
+        "_append_csv",
+        lambda _path, *, fieldnames, row: events.append("csv"),
+    )
+
+    with pytest.raises(OSError, match="planted"):
+        _publish_success_summary(
+            tmp_path,
+            {"status": "ok", "run_id": "run"},
+            RunRecord("run", "eval", {"eval_bpb": 1.0}),
+            str(tmp_path / "registry.jsonl"),
+        )
+
+    assert "csv" not in events
 
 
 def test_eval_matrix_rejects_duplicate_batch_cells():

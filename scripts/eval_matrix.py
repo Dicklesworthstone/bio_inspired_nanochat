@@ -42,7 +42,12 @@ from bio_inspired_nanochat.checkpoint_manager import (
 )
 from bio_inspired_nanochat.gpt import GPT, GPTConfig
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
-from bio_inspired_nanochat.results_registry import DEFAULT_REGISTRY, append_record, make_record
+from bio_inspired_nanochat.results_registry import (
+    DEFAULT_REGISTRY,
+    RunRecord,
+    append_record,
+    make_record,
+)
 from bio_inspired_nanochat.synaptic import SynapticConfig, SynapticMoE
 
 from scripts.base_eval import evaluate_model
@@ -775,6 +780,24 @@ def _write_summary(out_dir: Path, row: dict[str, Any]) -> None:
     _write_jsonl(out_dir / "summary.jsonl", row)
 
 
+def _publish_success_summary(
+    out_dir: Path,
+    row: dict[str, Any],
+    registry_record: RunRecord,
+    registry_path: str,
+) -> None:
+    """Publish one successful cell, with CSV as the final commit index.
+
+    Statistical readers consume ``summary.csv``. Keeping that append last means
+    registry validation or JSONL-mirror failures cannot expose unaudited success
+    evidence, even though earlier diagnostic/audit artifacts may remain for repair.
+    """
+    csv_row = _normalize_row_for_csv(row)
+    append_record(registry_record, registry_path)
+    _write_jsonl(out_dir / "summary.jsonl", row)
+    _append_csv(out_dir / "summary.csv", fieldnames=SUMMARY_FIELDS, row=csv_row)
+
+
 def _utc_stamp() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
 
@@ -1502,6 +1525,32 @@ def _run_one(
         "capability_metric_status": capability_metric_status,
     }
     if ddp_rank == 0:
+        registry_metrics = {"tok_per_sec": float(summary.tok_per_sec)}
+        if summary.train_loss_final is not None and math.isfinite(summary.train_loss_final):
+            registry_metrics["train_loss"] = float(summary.train_loss_final)
+        if summary.val_bpb is not None and math.isfinite(summary.val_bpb):
+            registry_metrics["eval_bpb"] = float(summary.val_bpb)
+        if summary.niah_acc is not None and math.isfinite(summary.niah_acc):
+            registry_metrics["niah_accuracy"] = float(summary.niah_acc)
+        for metric_name, value in (
+            ("id_ece", summary.id_ece),
+            ("ood_auroc", summary.ood_auroc),
+            ("forgetting_rate", summary.forgetting_rate),
+            ("moe_gini", summary.moe_gini),
+            ("dead_expert_frac", summary.dead_expert_frac),
+        ):
+            if value is not None and math.isfinite(value):
+                registry_metrics[metric_name] = float(value)
+        registry_record = make_record(
+            "eval",
+            registry_metrics,
+            run_id=run_id,
+            config=registry_config,
+            seed=seed,
+            dataset_shards=[f"{data}:val"],
+            timestamp=time.time(),
+            notes=f"artifact_dir={run_dir}; preset={preset}; recipe={recipe_source}",
+        )
         capability_log = run_dir / "capability_metrics.jsonl"
         _write_jsonl(
             capability_log,
@@ -1553,36 +1602,7 @@ def _run_one(
                 "exposures_per_task": continual_exposures,
             },
         )
-        _write_summary(out_dir, row)
-        registry_metrics = {"tok_per_sec": float(summary.tok_per_sec)}
-        if summary.train_loss_final is not None and math.isfinite(summary.train_loss_final):
-            registry_metrics["train_loss"] = float(summary.train_loss_final)
-        if summary.val_bpb is not None and math.isfinite(summary.val_bpb):
-            registry_metrics["eval_bpb"] = float(summary.val_bpb)
-        if summary.niah_acc is not None and math.isfinite(summary.niah_acc):
-            registry_metrics["niah_accuracy"] = float(summary.niah_acc)
-        for metric_name, value in (
-            ("id_ece", summary.id_ece),
-            ("ood_auroc", summary.ood_auroc),
-            ("forgetting_rate", summary.forgetting_rate),
-            ("moe_gini", summary.moe_gini),
-            ("dead_expert_frac", summary.dead_expert_frac),
-        ):
-            if value is not None and math.isfinite(value):
-                registry_metrics[metric_name] = float(value)
-        append_record(
-            make_record(
-                "eval",
-                registry_metrics,
-                run_id=run_id,
-                config=registry_config,
-                seed=seed,
-                dataset_shards=[f"{data}:val"],
-                timestamp=time.time(),
-                notes=f"artifact_dir={run_dir}; preset={preset}; recipe={recipe_source}",
-            ),
-            registry_path,
-        )
+        _publish_success_summary(out_dir, row, registry_record, registry_path)
 
     # Pretty print
     if ddp_rank == 0:
