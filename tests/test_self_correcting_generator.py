@@ -16,6 +16,7 @@ from bio_inspired_nanochat.sheaf_obstruction import (
 )
 from bio_inspired_nanochat.self_correcting_generator import (
     CorrectionOutcome,
+    SelfCorrectionEvalSample,
     SelfCorrectingGenerator,
     SelfCorrectionConfig,
     SelfCorrectionEvent,
@@ -564,11 +565,29 @@ def test_evaluate_self_correction_benchmark_on_labeled_set(tmp_path):
         deliberation_controller=ctrl,
     )
 
-    # Labeled dataset: clean prompts vs inconsistency-planted prompts
+    # The oracle scores actual output tokens; labels are metadata only.
     samples = [
-        (torch.tensor([1, 2], dtype=torch.long), 5, True),   # triggers planted 99 -> repaired
-        (torch.tensor([3, 4], dtype=torch.long), 5, True),   # triggers planted 99 -> repaired
-        (torch.tensor([5, 6], dtype=torch.long), 5, True),   # triggers planted 99 -> repaired
+        SelfCorrectionEvalSample(
+            prompt=torch.tensor([1, 2], dtype=torch.long),
+            max_new_tokens=5,
+            is_error=lambda tokens: 99 in tokens,
+            expected_inconsistency=True,
+            name="planted_0",
+        ),
+        SelfCorrectionEvalSample(
+            prompt=torch.tensor([3, 4], dtype=torch.long),
+            max_new_tokens=5,
+            is_error=lambda tokens: 99 in tokens,
+            expected_inconsistency=True,
+            name="planted_1",
+        ),
+        SelfCorrectionEvalSample(
+            prompt=torch.tensor([5, 6], dtype=torch.long),
+            max_new_tokens=5,
+            is_error=lambda tokens: 99 in tokens,
+            expected_inconsistency=True,
+            name="planted_2",
+        ),
     ]
 
     events_path = tmp_path / "events.jsonl"
@@ -587,9 +606,220 @@ def test_evaluate_self_correction_benchmark_on_labeled_set(tmp_path):
     assert report.error_reduction_pct == 100.0
     assert report.repaired_count == 3
     assert report.abstention_count == 0
+    assert report.coverage == 1.0
+    assert report.answered_error_rate == 0.0
     assert report.avg_attempts_used >= 1.0
     assert report.avg_latency_ms > 0.0
+    assert report.avg_baseline_latency_ms > 0.0
+    assert report.latency_overhead_ratio is not None
+    assert report.verdict == "improved"
+    assert report.cumulative_single_pass_error_rate == (1.0, 1.0, 1.0)
+    assert report.cumulative_self_correcting_error_rate == (0.0, 0.0, 0.0)
+    assert all(result.baseline_error for result in report.sample_results)
+    assert all(not result.self_correcting_failure for result in report.sample_results)
     assert events_path.exists()
 
     table = report.summary_table()
     assert table is not None
+
+
+def test_benchmark_counts_abstention_as_primary_failure():
+    from bio_inspired_nanochat.self_correcting_generator import (
+        evaluate_self_correction_benchmark,
+    )
+
+    generator = SelfCorrectingGenerator(
+        _TokenStateModel(),
+        SelfCorrectionConfig(enabled=True, max_repair_attempts=1),
+        sheaf_detector=_FixedDetector(available=True, flagged=True),
+        deliberation_controller=_ScriptedController(),
+    )
+    sample = SelfCorrectionEvalSample(
+        prompt=torch.tensor([1, 2]),
+        max_new_tokens=5,
+        is_error=lambda tokens: 99 in tokens,
+        expected_inconsistency=True,
+    )
+
+    report = evaluate_self_correction_benchmark(generator, [sample])
+
+    assert report.single_pass_errors == 1
+    assert report.self_correcting_errors == 1
+    assert report.abstention_count == 1
+    assert report.coverage == 0.0
+    assert report.error_reduction_pct == 0.0
+    assert report.verdict == "null"
+    assert not report.sample_results[0].self_correcting_output_error
+    assert report.sample_results[0].self_correcting_failure
+
+
+def test_benchmark_labels_do_not_predetermine_measured_errors():
+    from bio_inspired_nanochat.self_correcting_generator import (
+        evaluate_self_correction_benchmark,
+    )
+
+    generator = SelfCorrectingGenerator(
+        _TokenStateModel(),
+        SelfCorrectionConfig(enabled=True),
+        deliberation_controller=_ScriptedController(),
+    )
+    sample = SelfCorrectionEvalSample(
+        prompt=torch.tensor([1, 2]),
+        max_new_tokens=5,
+        is_error=lambda _tokens: False,
+        expected_inconsistency=True,
+    )
+
+    report = evaluate_self_correction_benchmark(generator, [sample])
+
+    assert report.inconsistent_samples == 1
+    assert report.single_pass_errors == 0
+    assert report.self_correcting_errors == 0
+    assert report.error_reduction_pct is None
+    assert report.verdict == "null"
+
+
+def test_benchmark_reports_worse_without_fabricating_reduction_from_zero_baseline():
+    from bio_inspired_nanochat.self_correcting_generator import (
+        evaluate_self_correction_benchmark,
+    )
+
+    generator = SelfCorrectingGenerator(
+        _TokenStateModel(),
+        SelfCorrectionConfig(enabled=True, max_repair_attempts=1),
+        sheaf_detector=_FixedDetector(available=True, flagged=True),
+        deliberation_controller=_ScriptedController(),
+    )
+    sample = SelfCorrectionEvalSample(
+        prompt=torch.tensor([1, 2]),
+        max_new_tokens=5,
+        is_error=lambda _tokens: False,
+        expected_inconsistency=False,
+    )
+
+    report = evaluate_self_correction_benchmark(generator, [sample])
+
+    assert report.single_pass_errors == 0
+    assert report.self_correcting_errors == 1
+    assert report.error_reduction_pct is None
+    assert report.verdict == "worse"
+
+
+def test_benchmark_pairs_identical_sampling_rng_for_both_arms():
+    from bio_inspired_nanochat.self_correcting_generator import (
+        evaluate_self_correction_benchmark,
+    )
+
+    class _StochasticController(_ScriptedController):
+        def generate(
+            self,
+            prompt: torch.Tensor,
+            max_new_tokens: int,
+            control: ControlType = ControlType.DELIBERATION,
+            *,
+            temperature: float | None = None,
+            top_k: int | None = None,
+            rng: torch.Generator | None = None,
+        ) -> _ScriptedTrajectory:
+            if rng is None:
+                raise AssertionError("benchmark must supply an explicit generator")
+            sampled = torch.randint(0, 128, (max_new_tokens,), generator=rng).tolist()
+            return _ScriptedTrajectory(prompt.reshape(-1).tolist() + sampled)
+
+    generator = SelfCorrectingGenerator(
+        _TokenStateModel(),
+        SelfCorrectionConfig(enabled=True),
+        sheaf_detector=_FixedDetector(available=True, flagged=False),
+        deliberation_controller=_StochasticController(),
+    )
+    sample = SelfCorrectionEvalSample(
+        prompt=torch.tensor([1, 2]),
+        max_new_tokens=12,
+        is_error=lambda _tokens: False,
+        expected_inconsistency=False,
+    )
+
+    report = evaluate_self_correction_benchmark(generator, [sample], seed=1729)
+
+    result = report.sample_results[0]
+    assert result.baseline_tokens == result.self_correcting_tokens
+
+
+def test_benchmark_rejects_non_boolean_oracle_result():
+    from bio_inspired_nanochat.self_correcting_generator import (
+        evaluate_self_correction_benchmark,
+    )
+
+    generator = SelfCorrectingGenerator(
+        _TokenStateModel(),
+        SelfCorrectionConfig(enabled=True),
+        deliberation_controller=_ScriptedController(),
+    )
+    sample = SelfCorrectionEvalSample(
+        prompt=torch.tensor([1, 2]),
+        max_new_tokens=5,
+        is_error=cast(Any, lambda _tokens: 0),
+        expected_inconsistency=True,
+    )
+
+    with pytest.raises(TypeError, match="must return bool"):
+        evaluate_self_correction_benchmark(generator, [sample])
+
+
+@pytest.mark.parametrize(
+    "prompt, message",
+    [
+        (torch.tensor([1.5]), "integer dtype"),
+        (torch.tensor([128]), "outside model vocabulary"),
+    ],
+)
+def test_benchmark_rejects_invalid_prompt_before_running_either_arm(prompt, message):
+    from bio_inspired_nanochat.self_correcting_generator import (
+        evaluate_self_correction_benchmark,
+    )
+
+    controller = _ScriptedController()
+    generator = SelfCorrectingGenerator(
+        _TokenStateModel(),
+        SelfCorrectionConfig(enabled=True),
+        deliberation_controller=controller,
+    )
+    sample = SelfCorrectionEvalSample(
+        prompt=prompt,
+        max_new_tokens=5,
+        is_error=lambda _tokens: False,
+        expected_inconsistency=False,
+    )
+
+    with pytest.raises(ValueError, match=message):
+        evaluate_self_correction_benchmark(generator, [sample])
+
+    assert controller.calls == []
+
+
+def test_benchmark_restores_model_mode_state_and_global_rng():
+    from bio_inspired_nanochat.self_correcting_generator import (
+        evaluate_self_correction_benchmark,
+    )
+
+    model = _TokenStateModel().train()
+    generator = SelfCorrectingGenerator(
+        model,
+        SelfCorrectionConfig(enabled=True),
+        deliberation_controller=_ScriptedController(),
+    )
+    sample = SelfCorrectionEvalSample(
+        prompt=torch.tensor([1, 2]),
+        max_new_tokens=5,
+        is_error=lambda tokens: 99 in tokens,
+        expected_inconsistency=True,
+    )
+    model_state = {name: value.clone() for name, value in model.state_dict().items()}
+    rng_state = torch.get_rng_state().clone()
+
+    evaluate_self_correction_benchmark(generator, [sample], seed=123)
+
+    assert model.training
+    assert torch.equal(torch.get_rng_state(), rng_state)
+    for name, value in model.state_dict().items():
+        torch.testing.assert_close(value, model_state[name])
