@@ -36,6 +36,7 @@ from bio_inspired_nanochat.checkpoint_manager import (
     synaptic_config_to_meta,
 )
 from bio_inspired_nanochat.dataloader import (
+    collate_dataloader_state_dicts,
     tokenizing_distributed_data_loader,
     tokenizing_distributed_data_loader_with_state,
 )
@@ -582,9 +583,17 @@ if resuming:
 # -----------------------------------------------------------------------------
 # Initialize the DataLoaders for train/val
 tokens_dir = os.path.join(base_dir, "tokenized_data")
-dataloader_resume_state_dict = (
-    None if not resuming else meta_data["dataloader_state_dict"]
-)
+dataloader_resume_state_dict = None
+if resuming:
+    if (
+        train_state is not None
+        and isinstance(train_state, dict)
+        and "dataloader_state_dict" in train_state
+    ):
+        dataloader_resume_state_dict = train_state["dataloader_state_dict"]
+    elif meta_data is not None and "dataloader_state_dict" in meta_data:
+        dataloader_resume_state_dict = meta_data["dataloader_state_dict"]
+
 train_loader = tokenizing_distributed_data_loader_with_state(
     device_batch_size,
     max_seq_len,
@@ -767,6 +776,16 @@ while True:
         and save_every > 0
         and step % save_every == 0
     ):
+        if ddp_world_size > 1 and torch.distributed.is_initialized():
+            gathered_loaders = [None for _ in range(ddp_world_size)]
+            torch.distributed.all_gather_object(gathered_loaders, dataloader_state_dict)
+            collated_loader_state = collate_dataloader_state_dicts(
+                [g for g in gathered_loaders if g is not None],
+                world_size=ddp_world_size,
+            )
+        else:
+            collated_loader_state = dataloader_state_dict
+
         save_checkpoint(
             checkpoint_dir,
             step,
@@ -790,7 +809,7 @@ while True:
                 "device_batch_size": device_batch_size,
                 "total_batch_size": total_batch_size,
                 "max_seq_len": max_seq_len,
-                "dataloader_state_dict": dataloader_state_dict,
+                "dataloader_state_dict": collated_loader_state,
                 "loop_state": {  # all loop state (other than step) so that we can resume training
                     "min_val_bpb": min_val_bpb,
                     "smooth_train_loss": smooth_train_loss,
@@ -804,6 +823,7 @@ while True:
                 "rng": capture_rng_state(),
                 "step": step,
                 "splitmerge": sm_ctrl.state_dict() if sm_ctrl is not None else None,
+                "dataloader_state_dict": dataloader_state_dict,
             },
         )
 

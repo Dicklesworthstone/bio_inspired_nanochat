@@ -167,3 +167,188 @@ def test_dataloader_rejects_resume_shard_outside_dataset(sample_parquet_dir: Pat
         )
         with pytest.raises(ValueError, match="outside the parquet row-group"):
             next(row_group_loader)
+
+
+def test_multi_rank_lossless_exact_resume(sample_parquet_dir: Path) -> None:
+    """Multi-rank regression: each rank resumes from its exact position with zero repeats/skips."""
+    B, T = 2, 8
+    world_size = 2
+    total_steps = 10
+    resume_step = 4
+
+    uninterrupted_batches: dict[int, list[tuple[torch.Tensor, torch.Tensor]]] = {0: [], 1: []}
+    saved_states: dict[int, dict] = {}
+
+    # 1. Run uninterrupted stream for both ranks
+    for rank in range(world_size):
+        with (
+            patch("bio_inspired_nanochat.dataset.DATA_DIR", str(sample_parquet_dir)),
+            patch("bio_inspired_nanochat.dataloader.get_tokenizer", return_value=MockTokenizer()),
+            patch("bio_inspired_nanochat.dataloader.get_dist_info", return_value=(True, rank, rank, world_size)),
+        ):
+            loader = tokenizing_distributed_data_loader_with_state(
+                B=B,
+                T=T,
+                split="train",
+                tokenizer_threads=1,
+                tokenizer_batch_size=4,
+                device="cpu",
+            )
+            for step in range(total_steps):
+                inputs, targets, state = next(loader)
+                uninterrupted_batches[rank].append((inputs.clone(), targets.clone()))
+                if step == resume_step - 1:
+                    saved_states[rank] = state
+
+    # 2. Resume each rank independently from saved rank-local state
+    for rank in range(world_size):
+        with (
+            patch("bio_inspired_nanochat.dataset.DATA_DIR", str(sample_parquet_dir)),
+            patch("bio_inspired_nanochat.dataloader.get_tokenizer", return_value=MockTokenizer()),
+            patch("bio_inspired_nanochat.dataloader.get_dist_info", return_value=(True, rank, rank, world_size)),
+        ):
+            resumed_loader = tokenizing_distributed_data_loader_with_state(
+                B=B,
+                T=T,
+                split="train",
+                tokenizer_threads=1,
+                tokenizer_batch_size=4,
+                device="cpu",
+                resume_state_dict=saved_states[rank],
+            )
+            for step in range(resume_step, total_steps):
+                inputs_res, targets_res, _ = next(resumed_loader)
+                expected_inputs, expected_targets = uninterrupted_batches[rank][step]
+                torch.testing.assert_close(
+                    inputs_res,
+                    expected_inputs,
+                    msg=f"Rank {rank} inputs mismatch at step {step}",
+                )
+                torch.testing.assert_close(
+                    targets_res,
+                    expected_targets,
+                    msg=f"Rank {rank} targets mismatch at step {step}",
+                )
+
+
+def test_collated_multi_rank_state_resume(sample_parquet_dir: Path) -> None:
+    """Collated multi-rank state dictionary allows each rank to extract its own state."""
+    from bio_inspired_nanochat.dataloader import collate_dataloader_state_dicts
+
+    B, T = 2, 8
+    world_size = 2
+    steps = 6
+    cut_step = 2
+
+    rank_states = {}
+    ground_truth = {0: [], 1: []}
+
+    for rank in range(world_size):
+        with (
+            patch("bio_inspired_nanochat.dataset.DATA_DIR", str(sample_parquet_dir)),
+            patch("bio_inspired_nanochat.dataloader.get_tokenizer", return_value=MockTokenizer()),
+            patch("bio_inspired_nanochat.dataloader.get_dist_info", return_value=(True, rank, rank, world_size)),
+        ):
+            loader = tokenizing_distributed_data_loader_with_state(
+                B=B,
+                T=T,
+                split="train",
+                tokenizer_threads=1,
+                tokenizer_batch_size=4,
+                device="cpu",
+            )
+            for step in range(steps):
+                inp, tgt, st = next(loader)
+                ground_truth[rank].append((inp.clone(), tgt.clone()))
+                if step == cut_step - 1:
+                    rank_states[rank] = st
+
+    collated = collate_dataloader_state_dicts(rank_states, world_size=world_size)
+    assert collated["version"] == 2
+    assert collated["world_size"] == world_size
+    assert "0" in collated["ranks"]
+    assert "1" in collated["ranks"]
+
+    for rank in range(world_size):
+        with (
+            patch("bio_inspired_nanochat.dataset.DATA_DIR", str(sample_parquet_dir)),
+            patch("bio_inspired_nanochat.dataloader.get_tokenizer", return_value=MockTokenizer()),
+            patch("bio_inspired_nanochat.dataloader.get_dist_info", return_value=(True, rank, rank, world_size)),
+        ):
+            res_loader = tokenizing_distributed_data_loader_with_state(
+                B=B,
+                T=T,
+                split="train",
+                tokenizer_threads=1,
+                tokenizer_batch_size=4,
+                device="cpu",
+                resume_state_dict=collated,
+            )
+            for step in range(cut_step, steps):
+                inp_res, tgt_res, _ = next(res_loader)
+                expected_inp, expected_tgt = ground_truth[rank][step]
+                torch.testing.assert_close(inp_res, expected_inp)
+                torch.testing.assert_close(tgt_res, expected_tgt)
+
+
+def test_incompatible_world_size_and_rank_fail_closed(sample_parquet_dir: Path) -> None:
+    """Loader rejects state recorded for a different world_size or rank."""
+    from bio_inspired_nanochat.dataloader import collate_dataloader_state_dicts
+
+    with (
+        patch("bio_inspired_nanochat.dataset.DATA_DIR", str(sample_parquet_dir)),
+        patch("bio_inspired_nanochat.dataloader.get_tokenizer", return_value=MockTokenizer()),
+        patch("bio_inspired_nanochat.dataloader.get_dist_info", return_value=(True, 0, 0, 4)),
+    ):
+        # Saved for world_size=2, currently running on world_size=4
+        collated_ws2 = collate_dataloader_state_dicts(
+            {"0": {"pq_idx": 0, "rg_idx": 0}, "1": {"pq_idx": 0, "rg_idx": 1}},
+            world_size=2,
+        )
+        with pytest.raises(ValueError, match="checkpoint world_size \\(2\\) does not match current world_size \\(4\\)"):
+            next(tokenizing_distributed_data_loader_with_state(
+                B=2, T=8, split="train", device="cpu", resume_state_dict=collated_ws2
+            ))
+
+        # Single-rank state recorded for rank 1, running on rank 0
+        state_rank1 = {"pq_idx": 0, "rg_idx": 1, "rank": 1, "world_size": 4}
+        with pytest.raises(ValueError, match="recorded for rank 1"):
+            next(tokenizing_distributed_data_loader_with_state(
+                B=2, T=8, split="train", device="cpu", resume_state_dict=state_rank1
+            ))
+
+
+def test_malformed_resume_state_fails_closed(sample_parquet_dir: Path) -> None:
+    """Loader rejects non-conforming or corrupted state dict payloads."""
+    with (
+        patch("bio_inspired_nanochat.dataset.DATA_DIR", str(sample_parquet_dir)),
+        patch("bio_inspired_nanochat.dataloader.get_tokenizer", return_value=MockTokenizer()),
+    ):
+        # Non-integer doc_idx
+        with pytest.raises(ValueError, match="doc_idx"):
+            next(tokenizing_distributed_data_loader_with_state(
+                B=2, T=8, split="train", device="cpu",
+                resume_state_dict={"pq_idx": 0, "rg_idx": 0, "doc_idx": "five"}
+            ))
+
+        # Negative doc_idx
+        with pytest.raises(ValueError, match="doc_idx"):
+            next(tokenizing_distributed_data_loader_with_state(
+                B=2, T=8, split="train", device="cpu",
+                resume_state_dict={"pq_idx": 0, "rg_idx": 0, "doc_idx": -1}
+            ))
+
+        # Invalid token_buffer type
+        with pytest.raises(ValueError, match="token_buffer"):
+            next(tokenizing_distributed_data_loader_with_state(
+                B=2, T=8, split="train", device="cpu",
+                resume_state_dict={"pq_idx": 0, "rg_idx": 0, "token_buffer": "invalid_payload"}
+            ))
+
+        # Invalid token in token_buffer (e.g. negative or bool)
+        with pytest.raises(ValueError, match="token_buffer"):
+            next(tokenizing_distributed_data_loader_with_state(
+                B=2, T=8, split="train", device="cpu",
+                resume_state_dict={"pq_idx": 0, "rg_idx": 0, "token_buffer": [1, 2, -5]}
+            ))
+
