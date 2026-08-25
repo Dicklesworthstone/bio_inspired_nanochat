@@ -9,8 +9,8 @@
 
 import torch
 import os
-import shutil
 import argparse
+import time
 
 from typing import Dict, cast
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig, Block
@@ -73,9 +73,8 @@ def main():
     model = GPTSynaptic(model_cfg).to(device).to(torch.bfloat16)
     
     # 3. Setup NeuroViz & NeuroScore
-    log_dir = "runs/verify_evo"
-    if os.path.exists(log_dir):
-        shutil.rmtree(log_dir)
+    run_stamp = time.strftime("%Y%m%d-%H%M%S")
+    log_dir = os.path.join("runs", "verify_evo", run_stamp)
         
     viz_cfg = NeuroVizConfig(
         log_dir=log_dir,
@@ -115,7 +114,10 @@ def main():
         blocks = model.transformer.h
     block0 = cast(Block, blocks[0])
     moe_layer = cast(SynapticMoE, block0.mlp) # First layer MoE
-    init_genes = moe_layer.Xi.detach().clone()
+    genes = moe_layer.Xi
+    if genes is None:
+        raise RuntimeError("Evolution verification requires an enabled Xi genome")
+    init_genes = genes.detach().clone()
     print(f"[*] Initial Genes (Layer 0, Expert 0): {init_genes[0].float().cpu().numpy()}")
     
     model.train()
@@ -135,10 +137,10 @@ def main():
         
         # Check gradients on Xi
         if step == 0:
-            if moe_layer.Xi.grad is None:
+            if genes.grad is None:
                 print("[!] WARNING: No gradient on Xi parameters! Genetics are frozen.")
             else:
-                grad_norm = moe_layer.Xi.grad.norm().item()
+                grad_norm = genes.grad.norm().item()
                 print(f"[*] Xi Gradient Norm: {grad_norm:.6f}")
         
         optimizer.step()
@@ -157,7 +159,7 @@ def main():
     print("\n[*] Verification Results:")
     
     # Check Genetics Divergence
-    final_genes = moe_layer.Xi.detach()
+    final_genes = genes.detach()
     diff = (final_genes - init_genes).abs().mean().item()
     print(f"  -> Genetic Drift (Mean L1): {diff:.6f}")
     if diff > 1e-5:
@@ -191,4 +193,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
