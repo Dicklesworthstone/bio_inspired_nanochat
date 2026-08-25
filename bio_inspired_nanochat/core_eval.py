@@ -1,9 +1,6 @@
 """
 Functions for evaluating the CORE metric, as described in the DCLM paper.
 https://arxiv.org/abs/2406.11794
-
-TODOs:
-- All tasks ~match except for squad. We get 31% reference is 37%. Figure out why.
 """
 import random
 from typing import Protocol, cast
@@ -81,11 +78,7 @@ def render_prompts_schema(item, continuation_delimiter, fewshot_examples=None):
 
 
 def render_prompts_lm(item, continuation_delimiter, fewshot_examples=None):
-    """
-    Render complete prompt for a language modeling task.
-    Notice that we manually trim the context in the template,
-    which in some datasets seems to have trailing whitespace (which we don't want).
-    """
+    """Render complete prompt for a language modeling task."""
     template_str = """
 {%- for example in fewshot_examples -%}
 {{ example.context | trim }}{{ continuation_delimiter }}{{ example.continuation }}
@@ -102,11 +95,6 @@ def render_prompts_lm(item, continuation_delimiter, fewshot_examples=None):
     # Return two prompts: without and with the continuation
     prompt_without = template.render(include_continuation=False, **context)
     prompt_with = template.render(include_continuation=True, **context)
-    # Due to the way the data seems to be stored, I think I need to strip in the case of LM here.
-    # Otherwise we may get trailing whitespaces in prompt_without (which get absorbed into the next
-    # token in prompt_with), meaning we don't get a nice and clean prefix in the token space
-    # to detect the final continuation. Tokenizers...
-    prompt_without = prompt_without.strip()
     return [prompt_without, prompt_with]
 
 
@@ -167,13 +155,20 @@ def batch_sequences_schema(tokenizer, prompts):
 
 
 def batch_sequences_lm(tokenizer, prompts):
-    # In LM tasks, we have two prompts: without and with continuation
+    """Batch sequences for language modeling / completion scoring.
+
+    Answer options or continuations can merge with preceding whitespace or delimiters
+    in BPE token space (e.g. ': ' + 'Paris' vs ':' + ' Paris'). We determine the continuation
+    boundary by finding the common token prefix between prompt_without and prompt_with,
+    ensuring all continuation tokens are included without token boundary off-by-one errors.
+    """
     tokens = tokenizer(prompts, prepend=tokenizer.get_bos_token_id())
     tokens_without, tokens_with = tokens
-    start_idx, end_idx = len(tokens_without), len(tokens_with)
-    assert start_idx < end_idx, "prompt without is supposed to be a prefix of prompt with"
-    assert tokens_without == tokens_with[:start_idx], "prompt without is supposed to be a prefix of prompt with"
-    # we only need the with continuation prompt in the LM task, i.e. batch size of 1
+    common_len = find_common_length([tokens_without, tokens_with], direction='left')
+    start_idx = common_len
+    end_idx = len(tokens_with)
+    if start_idx >= end_idx:
+        start_idx = max(0, end_idx - 1)
     return [tokens_with], [start_idx], [end_idx]
 
 

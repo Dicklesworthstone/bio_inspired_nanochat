@@ -33,7 +33,13 @@ from bio_inspired_nanochat.common import (
     print0,
     stable_seed_u64,
 )
-from bio_inspired_nanochat.checkpoint_manager import save_checkpoint, load_model
+from bio_inspired_nanochat.checkpoint_manager import (
+    checkpoint_model_config,
+    config_provenance,
+    load_model,
+    save_checkpoint,
+    synaptic_config_to_meta,
+)
 from bio_inspired_nanochat.engine import Engine, batch_slices
 from bio_inspired_nanochat.report import get_report
 from tasks.gsm8k import GSM8K
@@ -342,23 +348,46 @@ for step in range(num_steps):
         "lrm": lrm,
     })
 
-    # Master process saves the model once in a while. Skip first step. Save last step.
-    if master_process and ((step > 0 and step % save_every == 0) or step == num_steps - 1):
+    # Save the model once in a while. Skip first step. Save last step. (All ranks participate to satisfy barrier)
+    if (step > 0 and save_every > 0 and step % save_every == 0) or step == num_steps - 1:
         base_dir = get_base_dir()
         depth = model.config.n_layer
-        model_tag = f"d{depth}" # base the model tag on the depth of the base model
+        model_tag = f"d{depth}"  # base the model tag on the depth of the base model
         checkpoint_dir = os.path.join(base_dir, "chatrl_checkpoints", model_tag)
-        model_config_kwargs = model.config.__dict__ # slightly naughty, abusing the simplicity of GPTConfig, TODO nicer
+        model_config_kwargs = {
+            "sequence_len": model.config.sequence_len,
+            "vocab_size": model.config.vocab_size,
+            "n_layer": model.config.n_layer,
+            "n_head": model.config.n_head,
+            "n_kv_head": model.config.n_kv_head,
+            "n_embd": model.config.n_embd,
+        }
+        syn_cfg = getattr(model.config, "syn_cfg", None)
+        use_syn = bool(getattr(model.config, "synapses", False))
         save_checkpoint(
             checkpoint_dir,
             step,
             model.state_dict(),
-            None, # note: we don't bother to save the optimizer state
+            None,  # note: we don't bother to save the optimizer state
             {
-                "model_config": model_config_kwargs,
-            }
+                "step": step,
+                "model_config": checkpoint_model_config(model, model_config_kwargs),
+                "synapses": use_syn,
+                "synaptic_config": (
+                    synaptic_config_to_meta(syn_cfg)
+                    if use_syn and syn_cfg is not None
+                    else None
+                ),
+                "provenance": (
+                    config_provenance(syn_cfg)
+                    if use_syn and syn_cfg is not None
+                    else None
+                ),
+                "user_config": user_config,
+            },
+            rank=ddp_rank,
         )
-        print(f"✅ Saved model checkpoint to {checkpoint_dir}")
+        print0(f"✅ Saved model checkpoint to {checkpoint_dir}")
 
 # Log to report
 get_report().log(section="Chat RL", data=[

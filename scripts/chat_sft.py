@@ -20,8 +20,13 @@ import inspect
 from typing import Protocol, cast
 
 from bio_inspired_nanochat.common import compute_init, compute_cleanup, get_base_dir, print0, DummyWandb, autodetect_device_type
-from bio_inspired_nanochat.checkpoint_manager import load_model
-from bio_inspired_nanochat.checkpoint_manager import save_checkpoint
+from bio_inspired_nanochat.checkpoint_manager import (
+    checkpoint_model_config,
+    config_provenance,
+    load_model,
+    save_checkpoint,
+    synaptic_config_to_meta,
+)
 from bio_inspired_nanochat.engine import Engine
 from bio_inspired_nanochat.report import get_report
 from scripts.chat_eval import run_chat_eval
@@ -286,27 +291,47 @@ for step in range(num_iterations):
     })
     step += 1
 
-# Save the model at the end of the run
-if master_process:
-    base_dir = get_base_dir()
-    depth = model.config.n_layer
-    model_tag = f"d{depth}" # base the model tag on the depth of the base model
-    checkpoint_dir = os.path.join(base_dir, "chatsft_checkpoints", model_tag)
-    model_config_kwargs = model.config.__dict__ # slightly naughty, abusing the simplicity of GPTConfig, TODO nicer
-    save_checkpoint(
-        checkpoint_dir,
-        step,
-        model.state_dict(),
-        None, # note: we don't bother to save the optimizer state
-        {
-            "step": step,
-            "val_loss": val_loss,
-            **metrics,
-            "model_config": model_config_kwargs,
-            "synapses": getattr(model.config, 'synapses', False), # preserve synaptic flag from loaded model
-        }
-    )
-    print(f"✅ Saved model checkpoint to {checkpoint_dir}")
+# Save the model at the end of the run (all ranks participate to satisfy distributed barrier)
+base_dir = get_base_dir()
+depth = model.config.n_layer
+model_tag = f"d{depth}"  # base the model tag on the depth of the base model
+checkpoint_dir = os.path.join(base_dir, "chatsft_checkpoints", model_tag)
+model_config_kwargs = {
+    "sequence_len": model.config.sequence_len,
+    "vocab_size": model.config.vocab_size,
+    "n_layer": model.config.n_layer,
+    "n_head": model.config.n_head,
+    "n_kv_head": model.config.n_kv_head,
+    "n_embd": model.config.n_embd,
+}
+syn_cfg = getattr(model.config, "syn_cfg", None)
+use_syn = bool(getattr(model.config, "synapses", False))
+save_checkpoint(
+    checkpoint_dir,
+    step,
+    model.state_dict(),
+    None,  # note: we don't bother to save the optimizer state
+    {
+        "step": step,
+        "val_loss": val_loss,
+        **metrics,
+        "model_config": checkpoint_model_config(model, model_config_kwargs),
+        "synapses": use_syn,
+        "synaptic_config": (
+            synaptic_config_to_meta(syn_cfg)
+            if use_syn and syn_cfg is not None
+            else None
+        ),
+        "provenance": (
+            config_provenance(syn_cfg)
+            if use_syn and syn_cfg is not None
+            else None
+        ),
+        "user_config": user_config,
+    },
+    rank=ddp_rank,
+)
+print0(f"✅ Saved model checkpoint to {checkpoint_dir}")
 
 # Log to report
 get_report().log(section="Chat SFT", data=[
