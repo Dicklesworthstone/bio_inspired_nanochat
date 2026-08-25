@@ -38,13 +38,42 @@ def test_moe_stats_cpu_parity():
     gates_np = gates.numpy()
     
     counts_rust, probs_rust = backend.accumulate_router_stats_cpu(idx_np, gates_np, E)
-    
-    print("Comparing MoE stats...")
-    print(f"Counts max diff: {np.abs(counts_rust - me.numpy()).max()}")
-    print(f"Probs max diff: {np.abs(probs_rust - pe.numpy()).max()}")
-    
+
     assert np.allclose(counts_rust, me.numpy(), atol=1e-5)
     assert np.allclose(probs_rust, pe.numpy(), atol=1e-4)
+
+
+@pytest.mark.skipif(rustbpe is None, reason="rustbpe not installed")
+@pytest.mark.parametrize(
+    ("idx_shape", "gates_shape"),
+    [
+        ((2, 3), (2, 3)),
+        ((2, 3, 1), (2, 4, 1)),
+        ((2, 3, 1), (2, 3, 1, 1)),
+    ],
+)
+def test_moe_stats_cpu_rejects_invalid_gate_geometry(idx_shape, gates_shape):
+    assert rustbpe is not None
+    backend = cast(Any, rustbpe)
+    idx = np.zeros(idx_shape, dtype=np.int64)
+    gates = np.zeros(gates_shape, dtype=np.float32)
+
+    expected = "idx must be 3D" if len(idx_shape) != 3 else "gates must have the same shape"
+    with pytest.raises(ValueError, match=expected):
+        backend.accumulate_router_stats_cpu(idx, gates, 4)
+
+
+@pytest.mark.skipif(rustbpe is None, reason="rustbpe not installed")
+def test_moe_stats_cpu_rejects_zero_experts():
+    assert rustbpe is not None
+    backend = cast(Any, rustbpe)
+
+    with pytest.raises(ValueError, match="num_experts must be positive"):
+        backend.accumulate_router_stats_cpu(
+            np.zeros((1, 1, 1), dtype=np.int64),
+            np.ones((1, 1, 1), dtype=np.float32),
+            0,
+        )
 
 @pytest.mark.skipif(rustbpe is None, reason="rustbpe not installed")
 def test_metabolism_cpu_parity():
@@ -67,13 +96,22 @@ def test_metabolism_cpu_parity():
     f_rust, e_rust = backend.update_metabolism_cpu(
         fatigue.numpy(), energy.numpy(), alpha_fatigue.numpy(), alpha_energy.numpy(), util.numpy()
     )
-    
-    print("Comparing Metabolism...")
-    print(f"Fatigue max diff: {np.abs(f_rust - f_py.numpy()).max()}")
-    print(f"Energy max diff: {np.abs(e_rust - e_py.numpy()).max()}")
-    
+
     assert np.allclose(f_rust, f_py.numpy(), atol=1e-5)
     assert np.allclose(e_rust, e_py.numpy(), atol=1e-5)
+
+
+@pytest.mark.skipif(rustbpe is None, reason="rustbpe not installed")
+@pytest.mark.parametrize("mismatched_position", range(1, 5))
+def test_metabolism_cpu_rejects_mismatched_vector_lengths(mismatched_position):
+    assert rustbpe is not None
+    backend = cast(Any, rustbpe)
+    arrays = [np.zeros(4, dtype=np.float32) for _ in range(5)]
+    arrays[mismatched_position] = np.zeros(3, dtype=np.float32)
+    names = ["fatigue", "energy", "alpha_fatigue", "alpha_energy", "util"]
+
+    with pytest.raises(ValueError, match=rf"{names[mismatched_position]} length must match"):
+        backend.update_metabolism_cpu(*arrays)
 
 def test_stochastic_binomial_counts_matches_moments():
     from bio_inspired_nanochat.synaptic import _sample_binomial_counts

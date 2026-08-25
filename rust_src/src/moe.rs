@@ -23,6 +23,17 @@ pub fn accumulate_router_stats_cpu<'py>(
             "idx must be 3D (B, T, k)",
         ));
     }
+    if gates_arr.shape() != shape {
+        return Err(pyo3::exceptions::PyValueError::new_err(format!(
+            "gates must have the same shape as idx {shape:?}, got {:?}",
+            gates_arr.shape()
+        )));
+    }
+    if num_experts == 0 {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "num_experts must be positive",
+        ));
+    }
     let b_dim = shape[0];
     let t_dim = shape[1];
     let k_dim = shape[2];
@@ -125,12 +136,32 @@ pub fn update_metabolism_cpu<'py>(
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("util must be 1D: {}", e)))?;
 
     let size = f.len();
+    for (name, actual) in [
+        ("energy", e.len()),
+        ("alpha_fatigue", af.len()),
+        ("alpha_energy", ae.len()),
+        ("util", u.len()),
+    ] {
+        if actual != size {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "{name} length must match fatigue length {size}, got {actual}"
+            )));
+        }
+    }
     let mut f_new = Array1::<f32>::zeros(size);
     let mut e_new = Array1::<f32>::zeros(size);
 
     // Use slice iteration for parallel processing to avoid Zip limit (max 6)
-    let f_slice = f_new.as_slice_mut().unwrap();
-    let e_slice = e_new.as_slice_mut().unwrap();
+    let f_slice = f_new.as_slice_mut().ok_or_else(|| {
+        pyo3::exceptions::PyRuntimeError::new_err(
+            "internal fatigue output allocation was not contiguous",
+        )
+    })?;
+    let e_slice = e_new.as_slice_mut().ok_or_else(|| {
+        pyo3::exceptions::PyRuntimeError::new_err(
+            "internal energy output allocation was not contiguous",
+        )
+    })?;
 
     f_slice
         .par_iter_mut()
