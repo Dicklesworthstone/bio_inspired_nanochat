@@ -43,13 +43,9 @@ from __future__ import annotations
 
 import dataclasses
 import math
-
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Optional
-
-# Significance level of the pre-registered confirmation rule (see eval_stats.compare_matrix).
-CONFIRMATION_ALPHA: float = 0.05
 
 from bio_inspired_nanochat.ablation_registry import (
     MECHANISMS,
@@ -57,6 +53,9 @@ from bio_inspired_nanochat.ablation_registry import (
     validate_config,
 )
 from bio_inspired_nanochat.synaptic import SynapticConfig
+
+# Significance level of the pre-registered confirmation rule (see eval_stats.compare_matrix).
+CONFIRMATION_ALPHA: float = 0.05
 
 # Mechanisms that are infrastructure/perf toggles, not biology — excluded from the science matrix.
 INFRA_MECHANISMS: frozenset[str] = frozenset(
