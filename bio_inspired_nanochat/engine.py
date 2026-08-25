@@ -13,6 +13,8 @@ The whole thing is made as efficient as possible.
 
 from bio_inspired_nanochat.torch_imports import torch, F
 import ast
+import math
+import numbers
 import operator
 import signal
 import inspect
@@ -318,7 +320,23 @@ class KVCache:
 @torch.inference_mode()
 def sample_next_token(logits, rng, temperature=1.0, top_k=None):
     """Sample a single next token from given logits of shape (B, vocab_size). Returns (B, 1)."""
-    assert temperature >= 0.0, "temperature must be non-negative"
+    if logits.ndim != 2 or logits.shape[0] < 1 or logits.shape[1] < 1:
+        raise ValueError(
+            f"logits must have shape (batch, vocabulary), got {tuple(logits.shape)}"
+        )
+    if not logits.dtype.is_floating_point or not bool(torch.isfinite(logits).all()):
+        raise ValueError("logits must use a floating dtype and contain only finite values")
+    if (
+        isinstance(temperature, bool)
+        or not isinstance(temperature, numbers.Real)
+        or not math.isfinite(float(temperature))
+        or temperature < 0.0
+    ):
+        raise ValueError("temperature must be finite and non-negative")
+    if top_k is not None and (
+        isinstance(top_k, bool) or not isinstance(top_k, int) or top_k < 0
+    ):
+        raise ValueError("top_k must be a non-negative integer or None")
     if temperature == 0.0:
         return torch.argmax(logits, dim=-1, keepdim=True)
     if top_k is not None and top_k > 0:
@@ -377,7 +395,38 @@ class Engine:
         detect -> deliberate -> regenerate -> recheck loop. Default ``None``/``False`` preserves
         the baseline streaming fastpath with zero overhead.
         """
-        assert isinstance(tokens, list) and isinstance(tokens[0], int), "expecting list of ints"
+        if (
+            not isinstance(tokens, list)
+            or not tokens
+            or any(isinstance(token, bool) or not isinstance(token, int) for token in tokens)
+        ):
+            raise ValueError("tokens must be a non-empty list of integer token IDs")
+        vocab_size = getattr(getattr(self.model, "config", None), "vocab_size", None)
+        if isinstance(vocab_size, int) and any(
+            token < 0 or token >= vocab_size for token in tokens
+        ):
+            raise ValueError(f"tokens must be inside model vocabulary [0, {vocab_size})")
+        if isinstance(num_samples, bool) or not isinstance(num_samples, int) or num_samples < 1:
+            raise ValueError("num_samples must be a positive integer")
+        if max_tokens is not None and (
+            isinstance(max_tokens, bool)
+            or not isinstance(max_tokens, int)
+            or max_tokens < 0
+        ):
+            raise ValueError("max_tokens must be a non-negative integer or None")
+        if (
+            isinstance(temperature, bool)
+            or not isinstance(temperature, numbers.Real)
+            or not math.isfinite(float(temperature))
+            or temperature < 0.0
+        ):
+            raise ValueError("temperature must be finite and non-negative")
+        if top_k is not None and (
+            isinstance(top_k, bool) or not isinstance(top_k, int) or top_k < 0
+        ):
+            raise ValueError("top_k must be a non-negative integer or None")
+        if isinstance(seed, bool) or not isinstance(seed, int):
+            raise ValueError("seed must be an integer")
         device = self.model.get_device()
         rng = torch.Generator(device=device)
         rng.manual_seed(seed)
@@ -410,22 +459,38 @@ class Engine:
                 cfg = SelfCorrectionConfig(**self_correction)
                 if cfg.enabled:
                     self_correcting_gen = SelfCorrectingGenerator(self.model, cfg=cfg)
+            else:
+                raise TypeError(
+                    "self_correction must be a SelfCorrectionConfig, "
+                    "SelfCorrectingGenerator, bool, mapping, or None"
+                )
 
         if self_correcting_gen is not None and self_correcting_gen.cfg.enabled:
+            if num_samples != 1:
+                raise ValueError(
+                    "self-correcting generation currently supports exactly one sample; "
+                    "duplicating one repaired trajectory would not produce independent samples"
+                )
             # Run closed-loop self-correction over the prompt
             prompt_tensor = torch.tensor(tokens, dtype=torch.long, device=device)
             max_new = max_tokens if max_tokens is not None else 64
+            assistant_end = self.tokenizer.encode_special("<|assistant_end|>")
+            bos = self.tokenizer.get_bos_token_id()
+            if self_correcting_gen.cfg.abstain_token_id in (assistant_end, bos):
+                raise ValueError(
+                    "abstain_token_id must not equal a terminal assistant or BOS token"
+                )
             traj = self_correcting_gen.generate(
                 prompt=prompt_tensor,
                 max_new_tokens=max_new,
                 temperature=temperature,
+                top_k=0 if top_k is None else top_k,
+                rng=rng,
             )
-            assistant_end = self.tokenizer.encode_special("<|assistant_end|>")
-            bos = self.tokenizer.get_bos_token_id()
             generated_only = traj.final_tokens[len(tokens):]
             for tok in generated_only:
                 token_column = [tok] * num_samples
-                token_masks = [1] * num_samples
+                token_masks = [0 if traj.is_abstention else 1] * num_samples
                 if yield_metrics:
                     metrics = {
                         "self_correction": {

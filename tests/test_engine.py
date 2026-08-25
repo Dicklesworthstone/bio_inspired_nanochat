@@ -586,6 +586,63 @@ def test_sample_next_token_top_k_zero_is_disabled_not_degenerate():
     assert (out >= 0).all() and (out < 17).all()
 
 
+@pytest.mark.parametrize(
+    ("logits", "temperature", "top_k", "error"),
+    [
+        (torch.randn(17), 1.0, 0, "shape"),
+        (torch.tensor([[1, 2]]), 1.0, 0, "floating dtype"),
+        (torch.tensor([[0.0, float("nan")]]), 1.0, 0, "finite"),
+        (torch.randn(1, 17), float("inf"), 0, "temperature"),
+        (torch.randn(1, 17), 1.0, -1, "top_k"),
+    ],
+)
+def test_sample_next_token_rejects_invalid_inputs(logits, temperature, top_k, error):
+    from bio_inspired_nanochat.engine import sample_next_token
+
+    with pytest.raises(ValueError, match=error):
+        sample_next_token(
+            logits,
+            torch.Generator(),
+            temperature=temperature,
+            top_k=top_k,
+        )
+
+
+@pytest.mark.parametrize(
+    ("tokens", "kwargs", "error"),
+    [
+        ([], {}, "non-empty list"),
+        ([1.5], {}, "integer token IDs"),
+        ([4], {}, "model vocabulary"),
+        ([1], {"num_samples": 0}, "num_samples"),
+        ([1], {"max_tokens": -1}, "max_tokens"),
+        ([1], {"temperature": float("nan")}, "temperature"),
+        ([1], {"top_k": -1}, "top_k"),
+        ([1], {"seed": True}, "seed"),
+        ([1], {"self_correction": "enabled"}, "self_correction"),
+    ],
+)
+def test_generate_rejects_invalid_boundary_inputs(tokens, kwargs, error):
+    from types import SimpleNamespace
+
+    from bio_inspired_nanochat.engine import Engine
+
+    class _BoundaryModel:
+        config = SimpleNamespace(vocab_size=4)
+
+        def forward(self, *_args, **_kwargs):
+            raise AssertionError("invalid input must fail before model forward")
+
+        def get_device(self):
+            return torch.device("cpu")
+
+    engine = Engine(_BoundaryModel(), tokenizer=None)
+    call_kwargs = {"max_tokens": 0, **kwargs}
+
+    with pytest.raises((TypeError, ValueError), match=error):
+        list(engine.generate(tokens, **call_kwargs))
+
+
 def test_generate_resets_per_sequence_state_at_start():
     """A new prompt is a new scratchpad: because synaptic plasticity runs during inference,
     Engine.generate must reset the per-sequence state once at the start so one generation's fast

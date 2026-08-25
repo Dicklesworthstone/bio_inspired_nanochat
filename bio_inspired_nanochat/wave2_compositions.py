@@ -2,7 +2,7 @@ r"""Wave-2 Capability Frontier II: Emergent Compositions & Product Layer (epic r
 
 Implements the flagship wave-2 biological compositions:
   1. ``SelfCorrectionLoop`` (re4e.1): Closed-loop detection -> localized deliberation -> repair -> recheck,
-     guaranteeing finite-budget termination or certified abstention.
+     guaranteeing finite-budget termination or explicit abstention.
   2. ``MetacognitionController`` (re4e.2): Calibrated tri-state self-model (known / guessing / unknown)
      grounded in free energy, release obstruction, and predictive entropy.
   3. ``EnergyGuidedSearch`` (re4e.3): Value-directed tree search using physical free energy $F(z)$

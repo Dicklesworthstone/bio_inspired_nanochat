@@ -16,6 +16,7 @@ Key architecture:
 from __future__ import annotations
 
 import math
+import numbers
 import time
 from dataclasses import dataclass
 from enum import Enum
@@ -53,14 +54,65 @@ class CausalDeliberationConfig:
     placebo_ops_per_iter: int = 1000
 
     def validate(self) -> None:
-        if self.max_iters < 0:
-            raise ValueError(f"max_iters must be non-negative, got {self.max_iters}")
-        if self.eps <= 0.0 or not math.isfinite(self.eps):
+        if not isinstance(self.enabled, bool):
+            raise ValueError("enabled must be a boolean")
+        if (
+            isinstance(self.max_iters, bool)
+            or not isinstance(self.max_iters, int)
+            or self.max_iters < 0
+        ):
+            raise ValueError(f"max_iters must be a non-negative integer, got {self.max_iters!r}")
+        if (
+            isinstance(self.eps, bool)
+            or not isinstance(self.eps, numbers.Real)
+            or self.eps <= 0.0
+            or not math.isfinite(self.eps)
+        ):
             raise ValueError(f"eps must be positive and finite, got {self.eps}")
-        if self.step_size <= 0.0 or not math.isfinite(self.step_size):
+        if (
+            isinstance(self.step_size, bool)
+            or not isinstance(self.step_size, numbers.Real)
+            or self.step_size <= 0.0
+            or not math.isfinite(self.step_size)
+        ):
             raise ValueError(f"step_size must be positive and finite, got {self.step_size}")
-        if self.temperature <= 0.0 or not math.isfinite(self.temperature):
+        if (
+            isinstance(self.energy_decay, bool)
+            or not isinstance(self.energy_decay, numbers.Real)
+            or not math.isfinite(self.energy_decay)
+            or not 0.0 <= self.energy_decay <= 1.0
+        ):
+            raise ValueError(f"energy_decay must be finite and in [0, 1], got {self.energy_decay}")
+        if (
+            isinstance(self.fast_weight_coupling, bool)
+            or not isinstance(self.fast_weight_coupling, numbers.Real)
+            or not math.isfinite(self.fast_weight_coupling)
+            or self.fast_weight_coupling < 0.0
+        ):
+            raise ValueError(
+                "fast_weight_coupling must be finite and non-negative, "
+                f"got {self.fast_weight_coupling}"
+            )
+        if isinstance(self.top_k, bool) or not isinstance(self.top_k, int) or self.top_k < 0:
+            raise ValueError(f"top_k must be a non-negative integer, got {self.top_k!r}")
+        if (
+            isinstance(self.temperature, bool)
+            or not isinstance(self.temperature, numbers.Real)
+            or self.temperature <= 0.0
+            or not math.isfinite(self.temperature)
+        ):
             raise ValueError(f"temperature must be positive and finite, got {self.temperature}")
+        if not isinstance(self.commit_relaxed_state, bool):
+            raise ValueError("commit_relaxed_state must be a boolean")
+        if (
+            isinstance(self.placebo_ops_per_iter, bool)
+            or not isinstance(self.placebo_ops_per_iter, int)
+            or self.placebo_ops_per_iter < 0
+        ):
+            raise ValueError(
+                "placebo_ops_per_iter must be a non-negative integer, "
+                f"got {self.placebo_ops_per_iter!r}"
+            )
 
 
 @dataclass
@@ -117,13 +169,19 @@ class FullStateRelaxer(nn.Module):
 
         Returns: (h_new, energy_new, fast_weights_new)
         """
-        h_in = h.detach().requires_grad_(True)
-        e = self.energy(h_in).sum()
-        grad = torch.autograd.grad(e, h_in, create_graph=False)[0]
+        # The serving engine deliberately runs under inference mode. Relaxation
+        # is the one bounded operation that needs an input gradient; clone the
+        # inference tensor inside a normal-autograd island and return detached
+        # state so no graph escapes into decoding.
+        with torch.inference_mode(False), torch.enable_grad():
+            h_base = h.detach().clone()
+            h_in = h_base.requires_grad_(True)
+            e = self.energy(h_in).sum()
+            grad = torch.autograd.grad(e, h_in, create_graph=False)[0]
 
-        # Monotone gradient descent step on hidden state
-        h_new = h - self.step_size * grad
-        e_new = self.energy(h_new)
+            # Monotone gradient descent step on hidden state
+            h_new = h_base - self.step_size * grad
+            e_new = self.energy(h_new)
 
         fw_new = None
         if fast_weights is not None:
@@ -131,7 +189,7 @@ class FullStateRelaxer(nn.Module):
             act_outer = torch.bmm(h_new.unsqueeze(2), h_new.unsqueeze(1)) if h_new.ndim == 2 else (h_new.T @ h_new)
             fw_new = self.energy_decay * fast_weights + (1.0 - self.energy_decay) * act_outer
 
-        return h_new, e_new, fw_new
+        return h_new.detach(), e_new.detach(), fw_new.detach() if fw_new is not None else None
 
 
 class CausalDeliberationController:
@@ -148,7 +206,26 @@ class CausalDeliberationController:
                     "deliberation; synthetic representation and logit fallbacks are not supported"
                 )
         d_model = getattr(model.config, "n_embd", 64) if hasattr(model, "config") else 64
-        self.relaxer = FullStateRelaxer(d_model, step_size=cfg.step_size, energy_decay=cfg.energy_decay)
+        try:
+            model_parameter = next(model.parameters())
+        except StopIteration:
+            model_parameter = None
+        # Engine.generate is an inference-mode generator. Parameters created
+        # inside that context become inference tensors and cannot participate in
+        # the input-gradient calculation used by relaxation, so construct the
+        # relaxer in an explicit normal-autograd island.
+        with torch.inference_mode(False):
+            self.relaxer = FullStateRelaxer(
+                d_model,
+                step_size=cfg.step_size,
+                energy_decay=cfg.energy_decay,
+            )
+            if model_parameter is not None:
+                self.relaxer.to(
+                    device=model_parameter.device,
+                    dtype=model_parameter.dtype,
+                )
+        self.relaxer.eval()
 
     def _extract_hidden_states(self, tokens: Tensor) -> Tensor:
         hidden_fn = getattr(self.model, "get_hidden_states")
@@ -171,18 +248,33 @@ class CausalDeliberationController:
         lm_head: Callable[[Tensor], Tensor],
         control: ControlType = ControlType.DELIBERATION,
         fast_weights: Optional[Tensor] = None,
+        *,
+        temperature: float | None = None,
+        top_k: int | None = None,
+        rng: torch.Generator | None = None,
     ) -> Tuple[Tensor, DeliberationStepResult, Optional[Tensor]]:
         """Run the causal deliberation or control loop for one token generation step."""
         t0 = time.perf_counter()
         flops = 0
         h_cur = hidden_state.clone()
         fw_cur = fast_weights.clone() if fast_weights is not None else None
+        sampling_temperature = self.cfg.temperature if temperature is None else float(temperature)
+        sampling_top_k = (
+            self.cfg.top_k
+            if top_k is None
+            and control in (ControlType.DELIBERATION, ControlType.TOPK_TEMP_MATCHED)
+            else (0 if top_k is None else top_k)
+        )
 
         if control == ControlType.BASELINE or self.cfg.max_iters == 0:
             logits = lm_head(h_cur)
             flops += h_cur.numel() * 2
-            probs = F.softmax(logits / self.cfg.temperature, dim=-1)
-            token = int(torch.multinomial(probs.view(-1), num_samples=1).item())
+            token = self._sample_token(
+                logits,
+                temperature=sampling_temperature,
+                top_k=sampling_top_k,
+                rng=rng,
+            )
             dt = (time.perf_counter() - t0) * 1000.0
             result = DeliberationStepResult(
                 token_idx=0,
@@ -206,8 +298,12 @@ class CausalDeliberationController:
                 flops += self.cfg.placebo_ops_per_iter
             logits = lm_head(h_cur)
             flops += h_cur.numel() * 2
-            probs = F.softmax(logits / self.cfg.temperature, dim=-1)
-            token = int(torch.multinomial(probs.view(-1), num_samples=1).item())
+            token = self._sample_token(
+                logits,
+                temperature=sampling_temperature,
+                top_k=sampling_top_k,
+                rng=rng,
+            )
             dt = (time.perf_counter() - t0) * 1000.0
             result = DeliberationStepResult(
                 token_idx=0,
@@ -250,15 +346,12 @@ class CausalDeliberationController:
         logits = lm_head(h_cur)
         flops += h_cur.numel() * 2
 
-        # Support matching
-        if control == ControlType.TOPK_TEMP_MATCHED or self.cfg.top_k > 0:
-            topk_vals, topk_indices = torch.topk(logits, min(self.cfg.top_k, logits.shape[-1]), dim=-1)
-            probs = F.softmax(topk_vals / self.cfg.temperature, dim=-1)
-            choice = int(torch.multinomial(probs.view(-1), num_samples=1).item())
-            token = int(topk_indices.view(-1)[choice].item())
-        else:
-            probs = F.softmax(logits / self.cfg.temperature, dim=-1)
-            token = int(torch.multinomial(probs.view(-1), num_samples=1).item())
+        token = self._sample_token(
+            logits,
+            temperature=sampling_temperature,
+            top_k=sampling_top_k,
+            rng=rng,
+        )
 
         dt = (time.perf_counter() - t0) * 1000.0
         e_final = float(self.relaxer.energy(h_cur).mean().item())
@@ -278,17 +371,78 @@ class CausalDeliberationController:
 
         return h_cur, result, fw_cur
 
+    @staticmethod
+    def _sample_token(
+        logits: Tensor,
+        *,
+        temperature: float,
+        top_k: int,
+        rng: torch.Generator | None,
+    ) -> int:
+        if logits.ndim != 2 or logits.shape[0] != 1 or logits.shape[1] < 1:
+            raise ValueError(
+                "token logits must have shape (1, vocabulary), "
+                f"got {tuple(logits.shape)}"
+            )
+        if not logits.dtype.is_floating_point:
+            raise ValueError(f"token logits must use a floating dtype, got {logits.dtype}")
+        if not bool(torch.isfinite(logits).all()):
+            raise ValueError("token logits must be finite")
+        if not math.isfinite(temperature) or temperature < 0.0:
+            raise ValueError(f"temperature must be finite and non-negative, got {temperature!r}")
+        if isinstance(top_k, bool) or not isinstance(top_k, int) or top_k < 0:
+            raise ValueError(f"top_k must be a non-negative integer, got {top_k!r}")
+        if temperature == 0.0:
+            return int(torch.argmax(logits, dim=-1).reshape(-1)[0].item())
+        if top_k > 0:
+            values, indices = torch.topk(logits, min(top_k, logits.shape[-1]), dim=-1)
+            probabilities = F.softmax(values / temperature, dim=-1)
+            choice = int(
+                torch.multinomial(
+                    probabilities.reshape(-1),
+                    num_samples=1,
+                    generator=rng,
+                ).item()
+            )
+            return int(indices.reshape(-1)[choice].item())
+        probabilities = F.softmax(logits / temperature, dim=-1)
+        return int(
+            torch.multinomial(
+                probabilities.reshape(-1),
+                num_samples=1,
+                generator=rng,
+            ).item()
+        )
+
     def generate(
         self,
         prompt: Tensor,
         max_new_tokens: int,
         control: ControlType = ControlType.DELIBERATION,
+        *,
+        temperature: float | None = None,
+        top_k: int | None = None,
+        rng: torch.Generator | None = None,
     ) -> CausalDeliberationTrajectory:
         """Autoregressively generate tokens, causally committing relaxed states at each step."""
         if isinstance(max_new_tokens, bool) or not isinstance(max_new_tokens, int):
             raise TypeError("max_new_tokens must be a non-negative integer")
         if max_new_tokens < 0:
             raise ValueError("max_new_tokens must be a non-negative integer")
+        sampling_temperature = self.cfg.temperature if temperature is None else temperature
+        if (
+            isinstance(sampling_temperature, bool)
+            or not isinstance(sampling_temperature, numbers.Real)
+            or not math.isfinite(float(sampling_temperature))
+            or float(sampling_temperature) < 0.0
+        ):
+            raise ValueError("temperature must be finite and non-negative")
+        if top_k is not None and (
+            isinstance(top_k, bool)
+            or not isinstance(top_k, int)
+            or top_k < 0
+        ):
+            raise ValueError("top_k must be a non-negative integer")
 
         prompt_tensor = prompt if isinstance(prompt, Tensor) else torch.as_tensor(prompt)
         if prompt_tensor.ndim == 1:
@@ -303,10 +457,23 @@ class CausalDeliberationController:
             raise ValueError(
                 f"prompt must have shape (T,) or (1, T), got {tuple(prompt_tensor.shape)}"
             )
+        if prompt_tokens.dtype not in (
+            torch.uint8,
+            torch.int8,
+            torch.int16,
+            torch.int32,
+            torch.int64,
+        ):
+            raise ValueError(f"prompt must use an integer dtype, got {prompt_tokens.dtype}")
 
         prompt_length = int(prompt_tokens.shape[1])
         if prompt_length == 0:
             raise ValueError("prompt must contain at least one token")
+        vocab_size = getattr(getattr(self.model, "config", None), "vocab_size", None)
+        if isinstance(vocab_size, int) and (
+            bool((prompt_tokens < 0).any()) or bool((prompt_tokens >= vocab_size).any())
+        ):
+            raise ValueError(f"prompt contains a token outside model vocabulary [0, {vocab_size})")
         context_length = getattr(getattr(self.model, "config", None), "sequence_len", None)
         if isinstance(context_length, int) and prompt_length + max_new_tokens > context_length:
             raise ValueError(
@@ -350,6 +517,9 @@ class CausalDeliberationController:
                 lm_head=hidden_to_logits,
                 control=control,
                 fast_weights=fast_weights,
+                temperature=float(sampling_temperature),
+                top_k=top_k,
+                rng=rng,
             )
             res.token_idx = step
             step_results.append(res)

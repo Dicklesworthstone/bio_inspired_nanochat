@@ -1,13 +1,15 @@
 """Self-correcting generation loop (beads `re4e.1`, `re4e.1.2`).
 
 Composes sheaf hallucination detection (r00r.5), causal free-energy deliberation (r00r.15),
-localized span regeneration, and certified abstention into an integrated closed-loop
+localized span regeneration, and bounded abstention into an integrated closed-loop
 self-healing inference engine.
 """
 
 from __future__ import annotations
 
 import json
+import math
+import numbers
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -37,9 +39,11 @@ from bio_inspired_nanochat.sheaf_obstruction import (
 class CorrectionOutcome(str, Enum):
     """Result status of the self-correcting generation loop."""
 
-    VERIFIED_CONSISTENT = "VERIFIED_CONSISTENT"
+    NO_OBSTRUCTION_DETECTED = "NO_OBSTRUCTION_DETECTED"
     REPAIRED = "REPAIRED"
-    CERTIFIED_ABSTAIN = "CERTIFIED_ABSTAIN"
+    ABSTAIN = "ABSTAIN"
+    UNCHECKED = "UNCHECKED"
+    UNRESOLVED = "UNRESOLVED"
     PASSTHROUGH = "PASSTHROUGH"
 
 
@@ -58,14 +62,33 @@ class SelfCorrectionConfig:
     def validate(self) -> None:
         if not isinstance(self.enabled, bool):
             raise ValueError("enabled must be a boolean")
-        if self.max_repair_attempts < 1:
-            raise ValueError(f"max_repair_attempts must be >= 1, got {self.max_repair_attempts}")
-        if not (0.0 < self.obstruction_threshold <= 1.0):
+        if (
+            isinstance(self.max_repair_attempts, bool)
+            or not isinstance(self.max_repair_attempts, int)
+            or self.max_repair_attempts < 1
+        ):
+            raise ValueError(
+                "max_repair_attempts must be a positive integer, "
+                f"got {self.max_repair_attempts!r}"
+            )
+        if (
+            isinstance(self.obstruction_threshold, bool)
+            or not isinstance(self.obstruction_threshold, numbers.Real)
+            or not math.isfinite(float(self.obstruction_threshold))
+            or not 0.0 < self.obstruction_threshold <= 1.0
+        ):
             raise ValueError(
                 f"obstruction_threshold must be in (0, 1], got {self.obstruction_threshold}"
             )
-        if self.deliberation_budget < 0:
-            raise ValueError(f"deliberation_budget must be >= 0, got {self.deliberation_budget}")
+        if (
+            isinstance(self.deliberation_budget, bool)
+            or not isinstance(self.deliberation_budget, int)
+            or self.deliberation_budget < 0
+        ):
+            raise ValueError(
+                "deliberation_budget must be a non-negative integer, "
+                f"got {self.deliberation_budget!r}"
+            )
         if (
             isinstance(self.max_repair_span, bool)
             or not isinstance(self.max_repair_span, int)
@@ -74,6 +97,16 @@ class SelfCorrectionConfig:
             raise ValueError(
                 f"max_repair_span must be a positive integer, got {self.max_repair_span!r}"
             )
+        if (
+            isinstance(self.abstain_token_id, bool)
+            or not isinstance(self.abstain_token_id, int)
+            or self.abstain_token_id < 0
+        ):
+            raise ValueError(
+                f"abstain_token_id must be a non-negative integer, got {self.abstain_token_id!r}"
+            )
+        if not isinstance(self.abstain_on_exhaustion, bool):
+            raise ValueError("abstain_on_exhaustion must be a boolean")
 
 
 @dataclass
@@ -147,7 +180,19 @@ class _DeliberationGenerator(Protocol):
         prompt: Tensor,
         max_new_tokens: int,
         control: ControlType = ControlType.DELIBERATION,
+        *,
+        temperature: float | None = None,
+        top_k: int | None = None,
+        rng: torch.Generator | None = None,
     ) -> _GenerationTrajectory: ...
+
+
+class _ObstructionDetector(Protocol):
+    def inspect(
+        self,
+        stalks: Tensor,
+        edge_index: Tensor,
+    ) -> SheafDetectorDecision: ...
 
 
 class SelfCorrectingGenerator:
@@ -157,7 +202,7 @@ class SelfCorrectingGenerator:
         self,
         model: nn.Module,
         cfg: Optional[SelfCorrectionConfig] = None,
-        sheaf_detector: Optional[SheafObstructionDetector] = None,
+        sheaf_detector: Optional[_ObstructionDetector] = None,
         deliberation_controller: Optional[_DeliberationGenerator] = None,
     ):
         self.model = model
@@ -168,6 +213,17 @@ class SelfCorrectingGenerator:
                 f"{type(model).__name__} must implement get_hidden_states() for "
                 "self-correction; synthetic representation fallbacks are not supported"
             )
+        vocab_size = getattr(getattr(model, "config", None), "vocab_size", None)
+        if not isinstance(vocab_size, int) or vocab_size < 1:
+            raise TypeError(
+                f"{type(model).__name__}.config.vocab_size must be a positive integer"
+            )
+        if self.cfg.abstain_token_id >= vocab_size:
+            raise ValueError(
+                f"abstain_token_id {self.cfg.abstain_token_id} is outside model vocabulary "
+                f"[0, {vocab_size})"
+            )
+        self.vocab_size = vocab_size
 
         self.sheaf_detector = sheaf_detector or SheafObstructionDetector(
             SheafDetectorConfig(
@@ -183,6 +239,50 @@ class SelfCorrectingGenerator:
                 commit_relaxed_state=True,
             ),
         )
+
+    @staticmethod
+    def _normalize_prompt(prompt: Tensor) -> Tensor:
+        prompt_tensor = prompt if isinstance(prompt, Tensor) else torch.as_tensor(prompt)
+        if prompt_tensor.ndim == 1:
+            normalized = prompt_tensor
+        elif prompt_tensor.ndim == 2 and prompt_tensor.shape[0] == 1:
+            normalized = prompt_tensor.reshape(-1)
+        elif prompt_tensor.ndim == 2:
+            raise ValueError(
+                "prompt must contain exactly one sequence; batched generation is not supported"
+            )
+        else:
+            raise ValueError(
+                f"prompt must have shape (T,) or (1, T), got {tuple(prompt_tensor.shape)}"
+            )
+        if normalized.numel() == 0:
+            raise ValueError("prompt must contain at least one token")
+        return normalized
+
+    def _validated_generated_tokens(
+        self,
+        trajectory: _GenerationTrajectory,
+        *,
+        prompt_tokens: list[int],
+        expected_new_tokens: int,
+    ) -> list[int]:
+        generated = list(trajectory.generated_tokens)
+        expected_length = len(prompt_tokens) + expected_new_tokens
+        if generated[: len(prompt_tokens)] != prompt_tokens:
+            raise ValueError("deliberation controller did not preserve the supplied prompt")
+        if len(generated) != expected_length:
+            raise ValueError(
+                "deliberation controller returned an unexpected token count: "
+                f"got {len(generated)}, expected {expected_length}"
+            )
+        if any(
+            isinstance(token, bool)
+            or not isinstance(token, int)
+            or not 0 <= token < self.vocab_size
+            for token in generated
+        ):
+            raise ValueError("deliberation controller returned a token outside the model vocabulary")
+        return generated
 
     def _extract_hidden_states(self, tokens: Tensor) -> Tensor:
         hidden_fn = getattr(self.model, "get_hidden_states")
@@ -236,15 +336,60 @@ class SelfCorrectingGenerator:
         prompt: Tensor,
         max_new_tokens: int,
         temperature: float = 0.8,
+        top_k: int | None = None,
+        rng: torch.Generator | None = None,
     ) -> SelfCorrectingTrajectory:
         """Autoregressively generate tokens and apply the detect-deliberate-regenerate-recheck loop."""
         t0 = time.perf_counter()
+        if isinstance(max_new_tokens, bool) or not isinstance(max_new_tokens, int):
+            raise TypeError("max_new_tokens must be a non-negative integer")
+        if max_new_tokens < 0:
+            raise ValueError("max_new_tokens must be a non-negative integer")
+        if (
+            isinstance(temperature, bool)
+            or not isinstance(temperature, numbers.Real)
+            or not math.isfinite(float(temperature))
+            or temperature < 0.0
+        ):
+            raise ValueError("temperature must be finite and non-negative")
+        if top_k is not None and (
+            isinstance(top_k, bool) or not isinstance(top_k, int) or top_k < 0
+        ):
+            raise ValueError("top_k must be a non-negative integer")
+        prompt_tensor = self._normalize_prompt(prompt)
+        if prompt_tensor.dtype not in (
+            torch.uint8,
+            torch.int8,
+            torch.int16,
+            torch.int32,
+            torch.int64,
+        ):
+            raise ValueError(f"prompt must use an integer dtype, got {prompt_tensor.dtype}")
+        if bool((prompt_tensor < 0).any()) or bool(
+            (prompt_tensor >= self.vocab_size).any()
+        ):
+            raise ValueError(
+                f"prompt contains a token outside model vocabulary [0, {self.vocab_size})"
+            )
+        prompt_list = [int(token) for token in prompt_tensor.tolist()]
         if not self.cfg.enabled:
             # Fallback passthrough
-            traj = self.deliberation_controller.generate(prompt, max_new_tokens, ControlType.BASELINE)
+            traj = self.deliberation_controller.generate(
+                prompt_tensor,
+                max_new_tokens,
+                ControlType.BASELINE,
+                temperature=temperature,
+                top_k=top_k,
+                rng=rng,
+            )
+            generated_tokens = self._validated_generated_tokens(
+                traj,
+                prompt_tokens=prompt_list,
+                expected_new_tokens=max_new_tokens,
+            )
             dt = (time.perf_counter() - t0) * 1000.0
             return SelfCorrectingTrajectory(
-                final_tokens=traj.generated_tokens,
+                final_tokens=generated_tokens,
                 outcome=CorrectionOutcome.PASSTHROUGH,
                 attempts_used=0,
                 events=[],
@@ -254,27 +399,42 @@ class SelfCorrectingGenerator:
 
         # Initial draft generation
         draft_traj = self.deliberation_controller.generate(
-            prompt=prompt,
+            prompt=prompt_tensor,
             max_new_tokens=max_new_tokens,
             control=ControlType.BASELINE,
+            temperature=temperature,
+            top_k=top_k,
+            rng=rng,
         )
-        current_tokens = list(draft_traj.generated_tokens)
-        prompt_len = len(current_tokens) - max_new_tokens
-        prompt_list = current_tokens[:prompt_len]
+        current_tokens = self._validated_generated_tokens(
+            draft_traj,
+            prompt_tokens=prompt_list,
+            expected_new_tokens=max_new_tokens,
+        )
+        prompt_len = len(prompt_list)
         events: List[SelfCorrectionEvent] = []
-        outcome = CorrectionOutcome.VERIFIED_CONSISTENT
+        outcome = CorrectionOutcome.UNCHECKED
         is_abstain = False
+        try:
+            model_device = next(self.model.parameters()).device
+        except StopIteration:
+            model_device = prompt_tensor.device
 
         for attempt in range(1, self.cfg.max_repair_attempts + 1):
             t_att_0 = time.perf_counter()
             # Extract representations for newly generated tokens
             gen_len = len(current_tokens) - prompt_len
             if gen_len <= 1:
+                outcome = CorrectionOutcome.UNCHECKED
                 break
 
             # Extract real hidden representations for the generated sequence.
             with torch.no_grad():
-                tok_tensor = torch.tensor([current_tokens], dtype=torch.long, device=next(self.model.parameters()).device)
+                tok_tensor = torch.tensor(
+                    [current_tokens],
+                    dtype=torch.long,
+                    device=model_device,
+                )
                 h_seq = self._extract_hidden_states(tok_tensor)
                 h_gen = h_seq[0, prompt_len:]
 
@@ -282,12 +442,19 @@ class SelfCorrectingGenerator:
             edge_index = self._path_edge_index(gen_len, h_gen.device)
             det: SheafDetectorDecision = self.sheaf_detector.inspect(h_gen, edge_index)
 
+            if not det.available:
+                outcome = (
+                    CorrectionOutcome.UNRESOLVED
+                    if events
+                    else CorrectionOutcome.UNCHECKED
+                )
+                break
             if not det.flagged:
-                # Sequence verified consistent!
+                # The available detector found no above-threshold obstruction.
                 if attempt > 1:
                     outcome = CorrectionOutcome.REPAIRED
                 else:
-                    outcome = CorrectionOutcome.VERIFIED_CONSISTENT
+                    outcome = CorrectionOutcome.NO_OBSTRUCTION_DETECTED
                 break
 
             # Localize the obstruction using the detector's per-edge residual evidence.
@@ -304,11 +471,19 @@ class SelfCorrectingGenerator:
             # Deliberate on the prefix state and regenerate the corrupted span
             prefix_tokens = current_tokens[:span_start_abs]
             regen_traj = self.deliberation_controller.generate(
-                prompt=torch.tensor(prefix_tokens, dtype=torch.long),
+                prompt=torch.tensor(prefix_tokens, dtype=torch.long, device=model_device),
                 max_new_tokens=repair_len,
                 control=ControlType.DELIBERATION,
+                temperature=temperature,
+                top_k=top_k,
+                rng=rng,
             )
-            repaired_toks = regen_traj.generated_tokens[span_start_abs:span_start_abs + repair_len]
+            regenerated = self._validated_generated_tokens(
+                regen_traj,
+                prompt_tokens=prefix_tokens,
+                expected_new_tokens=repair_len,
+            )
+            repaired_toks = regenerated[span_start_abs:]
 
             # Stitch replacement span back into sequence
             new_tokens = (
@@ -320,7 +495,11 @@ class SelfCorrectingGenerator:
 
             # Re-check repaired representations
             with torch.no_grad():
-                tok_tensor_re = torch.tensor([current_tokens], dtype=torch.long, device=next(self.model.parameters()).device)
+                tok_tensor_re = torch.tensor(
+                    [current_tokens],
+                    dtype=torch.long,
+                    device=model_device,
+                )
                 h_seq_re = self._extract_hidden_states(tok_tensor_re)
                 h_gen_re = h_seq_re[0, prompt_len:]
                 edge_index_re = self._path_edge_index(h_gen_re.shape[0], h_gen_re.device)
@@ -329,7 +508,7 @@ class SelfCorrectingGenerator:
                     edge_index_re,
                 )
 
-            repaired_ok = not det_re.flagged
+            repaired_ok = det_re.available and not det_re.flagged
             dt_att = (time.perf_counter() - t_att_0) * 1000.0
 
             event = SelfCorrectionEvent(
@@ -353,11 +532,11 @@ class SelfCorrectingGenerator:
         else:
             # Exhausted repair attempts
             if self.cfg.abstain_on_exhaustion:
-                outcome = CorrectionOutcome.CERTIFIED_ABSTAIN
+                outcome = CorrectionOutcome.ABSTAIN
                 is_abstain = True
                 current_tokens = prompt_list + [self.cfg.abstain_token_id]
             else:
-                outcome = CorrectionOutcome.REPAIRED
+                outcome = CorrectionOutcome.UNRESOLVED
 
         dt_total = (time.perf_counter() - t0) * 1000.0
         return SelfCorrectingTrajectory(
@@ -443,7 +622,7 @@ class SelfCorrectionEvalReport:
         t.add_row("Self-Correcting Error Rate", f"{self.self_correcting_error_rate * 100:.1f}%")
         t.add_row("Error Reduction", f"{self.error_reduction_pct:.1f}%")
         t.add_row("Repaired Inconsistencies", str(self.repaired_count))
-        t.add_row("Certified Abstentions", str(self.abstention_count))
+        t.add_row("Abstentions", str(self.abstention_count))
         t.add_row("Avg Attempts Used", f"{self.avg_attempts_used:.2f}")
         t.add_row("Avg Latency (ms)", f"{self.avg_latency_ms:.2f}")
         return t
@@ -481,10 +660,13 @@ def evaluate_self_correction_benchmark(
 
         if traj.outcome is CorrectionOutcome.REPAIRED:
             repaired_count += 1
-        elif traj.outcome is CorrectionOutcome.CERTIFIED_ABSTAIN:
+        elif traj.outcome is CorrectionOutcome.ABSTAIN:
             abstention_count += 1
 
-        if is_inconsistent and traj.outcome not in (CorrectionOutcome.REPAIRED, CorrectionOutcome.CERTIFIED_ABSTAIN):
+        if is_inconsistent and traj.outcome not in (
+            CorrectionOutcome.REPAIRED,
+            CorrectionOutcome.ABSTAIN,
+        ):
             self_correcting_errors += 1
 
     single_err_rate = single_pass_errors / total if total > 0 else 0.0

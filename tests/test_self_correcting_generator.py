@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 import torch
@@ -9,6 +10,10 @@ import torch.nn as nn
 
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
 from bio_inspired_nanochat.causal_deliberation import ControlType
+from bio_inspired_nanochat.sheaf_obstruction import (
+    ObstructionAction,
+    SheafDetectorDecision,
+)
 from bio_inspired_nanochat.self_correcting_generator import (
     CorrectionOutcome,
     SelfCorrectingGenerator,
@@ -34,16 +39,34 @@ class _TokenStateModel(nn.Module):
     def hidden_to_logits(self, hidden: torch.Tensor) -> torch.Tensor:
         return self.lm_head(hidden)
 
+    def get_device(self) -> torch.device:
+        return self.anchor.device
+
 
 class _ScriptedController:
     """Plant a bad draft token, then return a clean deliberated replacement."""
+
+    def __init__(self) -> None:
+        self.calls: list[dict[str, object]] = []
 
     def generate(
         self,
         prompt: torch.Tensor,
         max_new_tokens: int,
         control: ControlType = ControlType.DELIBERATION,
+        *,
+        temperature: float | None = None,
+        top_k: int | None = None,
+        rng: torch.Generator | None = None,
     ) -> "_ScriptedTrajectory":
+        self.calls.append(
+            {
+                "control": control,
+                "temperature": temperature,
+                "top_k": top_k,
+                "rng": rng,
+            }
+        )
         prompt_tokens = prompt.reshape(-1).tolist()
         generated = (
             [10, 10, 99, 10, 10]
@@ -58,6 +81,38 @@ class _ScriptedTrajectory:
     generated_tokens: list[int]
 
 
+class _FixedDetector:
+    """Return a deliberate detector state without relying on representation values."""
+
+    def __init__(self, *, available: bool, flagged: bool) -> None:
+        self.available = available
+        self.flagged = flagged
+
+    def inspect(
+        self,
+        stalks: torch.Tensor,
+        edge_index: torch.Tensor,
+    ) -> SheafDetectorDecision:
+        flagged = self.available and self.flagged
+        residuals = (1.0,) * int(edge_index.shape[1]) if self.available else ()
+        score = 0.9 if flagged else 0.0
+        return SheafDetectorDecision(
+            enabled=True,
+            available=self.available,
+            flagged=flagged,
+            score=score,
+            score_after=score,
+            threshold=0.4,
+            calibrated_probability=None,
+            requested_action=ObstructionAction.DELIBERATE,
+            action_taken="deliberate" if flagged else "noop",
+            output_stalks=stalks,
+            edge_residual_norms=residuals,
+            should_deliberate=flagged,
+            fallback_reason=None if self.available else "test_unavailable",
+        )
+
+
 def test_rejects_models_without_real_hidden_states():
     """The detector must never run on fabricated random representations."""
     with pytest.raises(TypeError, match="get_hidden_states"):
@@ -67,6 +122,31 @@ def test_rejects_models_without_real_hidden_states():
 def test_config_rejects_nonpositive_repair_span():
     with pytest.raises(ValueError, match="max_repair_span"):
         SelfCorrectionConfig(max_repair_span=0).validate()
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        SelfCorrectionConfig(max_repair_attempts=True),
+        SelfCorrectionConfig(obstruction_threshold=float("nan")),
+        SelfCorrectionConfig(deliberation_budget=cast(Any, 1.5)),
+        SelfCorrectionConfig(abstain_token_id=-1),
+        SelfCorrectionConfig(abstain_on_exhaustion=cast(Any, 1)),
+    ],
+)
+def test_config_rejects_invalid_types_and_nonfinite_values(config):
+    with pytest.raises(ValueError):
+        config.validate()
+
+
+def test_rejects_abstain_token_outside_model_vocabulary():
+    model = _TokenStateModel()
+
+    with pytest.raises(ValueError, match="outside model vocabulary"):
+        SelfCorrectingGenerator(
+            model,
+            SelfCorrectionConfig(abstain_token_id=model.config.vocab_size),
+        )
 
 
 def test_self_correction_is_default_off_and_passes_through():
@@ -84,8 +164,8 @@ def test_self_correction_is_default_off_and_passes_through():
     assert not traj.is_abstention
 
 
-def test_verified_consistent_when_no_obstruction():
-    """Verify that clean sequences return VERIFIED_CONSISTENT."""
+def test_reports_no_obstruction_when_score_is_below_threshold():
+    """A below-threshold sequence is not overclaimed as globally verified."""
     cfg = GPTSynapticConfig(vocab_size=32, n_layer=1, n_head=2, n_kv_head=2, n_embd=32, sequence_len=32)
     model = GPTSynaptic(cfg)
     model.eval()
@@ -98,12 +178,12 @@ def test_verified_consistent_when_no_obstruction():
     prompt = torch.tensor([1, 2, 3], dtype=torch.long)
     traj = generator.generate(prompt, max_new_tokens=4)
 
-    assert traj.outcome == CorrectionOutcome.VERIFIED_CONSISTENT
+    assert traj.outcome == CorrectionOutcome.NO_OBSTRUCTION_DETECTED
     assert not traj.is_abstention
 
 
-def test_certified_abstain_on_exhaustion():
-    """Verify that persistent inconsistency terminates in CERTIFIED_ABSTAIN."""
+def test_abstain_on_exhaustion():
+    """Persistent inconsistency terminates in an honest bounded abstention."""
     cfg = GPTSynapticConfig(vocab_size=32, n_layer=1, n_head=2, n_kv_head=2, n_embd=32, sequence_len=32)
     model = GPTSynaptic(cfg)
     model.eval()
@@ -116,15 +196,60 @@ def test_certified_abstain_on_exhaustion():
             obstruction_threshold=0.0001,
             max_repair_attempts=2,
             abstain_on_exhaustion=True,
-            abstain_token_id=99,
+            abstain_token_id=31,
         ),
     )
     prompt = torch.tensor([[1, 2, 3]], dtype=torch.long)
     traj = generator.generate(prompt, max_new_tokens=4)
 
-    assert traj.outcome == CorrectionOutcome.CERTIFIED_ABSTAIN
+    assert traj.outcome == CorrectionOutcome.ABSTAIN
     assert traj.is_abstention
-    assert traj.final_tokens == [1, 2, 3, 99]
+    assert traj.final_tokens == [1, 2, 3, 31]
+
+
+def test_short_generation_is_reported_unchecked():
+    generator = SelfCorrectingGenerator(
+        _TokenStateModel(),
+        SelfCorrectionConfig(enabled=True),
+        deliberation_controller=_ScriptedController(),
+    )
+
+    trajectory = generator.generate(torch.tensor([1, 2]), max_new_tokens=1)
+
+    assert trajectory.outcome is CorrectionOutcome.UNCHECKED
+    assert not trajectory.is_abstention
+
+
+def test_unavailable_detector_is_reported_unchecked():
+    generator = SelfCorrectingGenerator(
+        _TokenStateModel(),
+        SelfCorrectionConfig(enabled=True),
+        sheaf_detector=_FixedDetector(available=False, flagged=False),
+        deliberation_controller=_ScriptedController(),
+    )
+
+    trajectory = generator.generate(torch.tensor([1, 2]), max_new_tokens=5)
+
+    assert trajectory.outcome is CorrectionOutcome.UNCHECKED
+
+
+def test_failed_repair_without_abstention_is_unresolved():
+    generator = SelfCorrectingGenerator(
+        _TokenStateModel(),
+        SelfCorrectionConfig(
+            enabled=True,
+            max_repair_attempts=1,
+            abstain_on_exhaustion=False,
+        ),
+        sheaf_detector=_FixedDetector(available=True, flagged=True),
+        deliberation_controller=_ScriptedController(),
+    )
+
+    trajectory = generator.generate(torch.tensor([1, 2]), max_new_tokens=5)
+
+    assert trajectory.outcome is CorrectionOutcome.UNRESOLVED
+    assert trajectory.attempts_used == 1
+    assert not trajectory.events[0].repaired_successfully
 
 
 @pytest.mark.parametrize(
@@ -248,7 +373,10 @@ def test_engine_generate_with_self_correction_disabled_and_enabled():
         assert len(cols) == 1
         assert len(masks) == 1
         assert "self_correction" in metrics
-        assert metrics["self_correction"]["outcome"] == CorrectionOutcome.VERIFIED_CONSISTENT.value
+        assert (
+            metrics["self_correction"]["outcome"]
+            == CorrectionOutcome.NO_OBSTRUCTION_DETECTED.value
+        )
 
     # Non-streaming generate_batch integration
     batch_results, batch_masks = engine.generate_batch(
@@ -260,6 +388,123 @@ def test_engine_generate_with_self_correction_disabled_and_enabled():
     assert len(batch_results) == 1
     assert len(batch_results[0]) == len(prompt) + 4
     assert len(batch_masks[0]) == len(prompt) + 4
+
+
+def test_engine_self_correction_repairs_inside_inference_mode():
+    """The low-threshold path must support the input gradients used by relaxation."""
+    from bio_inspired_nanochat.engine import Engine
+
+    class _MockTok:
+        def encode_special(self, _value):
+            return -5
+
+        def get_bos_token_id(self):
+            return -10
+
+    model = GPTSynaptic(
+        GPTSynapticConfig(
+            vocab_size=32,
+            n_layer=1,
+            n_head=2,
+            n_kv_head=2,
+            n_embd=32,
+            sequence_len=32,
+        )
+    ).eval()
+    engine = Engine(model, _MockTok())
+
+    output = list(
+        engine.generate(
+            [1, 2, 3],
+            num_samples=1,
+            max_tokens=4,
+            temperature=0.0,
+            self_correction=SelfCorrectionConfig(
+                enabled=True,
+                obstruction_threshold=0.0001,
+                max_repair_attempts=1,
+                abstain_token_id=31,
+            ),
+            yield_metrics=True,
+        )
+    )
+
+    assert output
+    assert output[0][2]["self_correction"]["outcome"] in {
+        CorrectionOutcome.REPAIRED.value,
+        CorrectionOutcome.ABSTAIN.value,
+    }
+
+
+def test_engine_forces_abstention_and_forwards_sampling_controls():
+    from bio_inspired_nanochat.engine import Engine
+
+    class _MockTok:
+        def encode_special(self, _value):
+            return -5
+
+        def get_bos_token_id(self):
+            return -10
+
+    model = _TokenStateModel()
+    controller = _ScriptedController()
+    generator = SelfCorrectingGenerator(
+        model,
+        SelfCorrectionConfig(enabled=True, max_repair_attempts=1),
+        sheaf_detector=_FixedDetector(available=True, flagged=True),
+        deliberation_controller=controller,
+    )
+    engine = Engine(model, _MockTok())
+
+    output = list(
+        engine.generate(
+            [1, 2],
+            num_samples=1,
+            max_tokens=5,
+            temperature=0.25,
+            top_k=3,
+            seed=17,
+            self_correction=generator,
+            yield_metrics=True,
+        )
+    )
+
+    assert len(output) == 1
+    token_columns, masks, metrics = output[0]
+    assert token_columns == [0]
+    assert masks == [0]
+    assert metrics["self_correction"]["outcome"] == CorrectionOutcome.ABSTAIN.value
+    assert all(call["temperature"] == 0.25 for call in controller.calls)
+    assert all(call["top_k"] == 3 for call in controller.calls)
+    assert all(isinstance(call["rng"], torch.Generator) for call in controller.calls)
+
+
+def test_engine_rejects_duplicate_self_correcting_samples():
+    from bio_inspired_nanochat.engine import Engine
+
+    class _MockTok:
+        def encode_special(self, _value):
+            return -5
+
+        def get_bos_token_id(self):
+            return -10
+
+    engine = Engine(_TokenStateModel(), _MockTok())
+    generator = SelfCorrectingGenerator(
+        engine.model,
+        SelfCorrectionConfig(enabled=True),
+        deliberation_controller=_ScriptedController(),
+    )
+
+    with pytest.raises(ValueError, match="exactly one sample"):
+        list(
+            engine.generate(
+                [1, 2],
+                num_samples=2,
+                max_tokens=2,
+                self_correction=generator,
+            )
+        )
 
 
 def test_trajectory_append_jsonl_trace(tmp_path):
@@ -348,5 +593,3 @@ def test_evaluate_self_correction_benchmark_on_labeled_set(tmp_path):
 
     table = report.summary_table()
     assert table is not None
-
-

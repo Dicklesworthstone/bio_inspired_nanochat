@@ -2,7 +2,7 @@ r"""E2E SCRIPT: Wave-2 Capability-Frontier Compositions Verification Battery (be
 
 Comprehensive verification of the 7 emergent Wave-2 compositions:
   1. ``self_correcting_generation_loop`` (re4e.1): Planted inconsistency detected -> deliberated ->
-     repaired or certified abstain within iteration cap.
+     repaired or explicitly abstained within iteration cap.
   2. ``metacognition_self_model`` (re4e.2): Calibrated tri-state self-model (known/guessing/unknown)
      grounded in physical free energy and entropy.
   3. ``energy_guided_search`` (re4e.3): Value-directed search using free energy F(z) achieving

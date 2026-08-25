@@ -1,5 +1,7 @@
 """Tests for full-state causal deliberation with compute-matched controls (bead `r00r.15`)."""
 
+from typing import Any, cast
+
 import pytest
 import torch
 import torch.nn as nn
@@ -116,6 +118,8 @@ def test_generation_normalizes_singleton_batch_prompt():
         (torch.tensor([[1, 2], [3, 4]]), "exactly one sequence"),
         (torch.tensor([[[1, 2]]]), "shape"),
         (torch.tensor([], dtype=torch.long), "at least one token"),
+        (torch.tensor([1.0, 2.0]), "integer dtype"),
+        (torch.tensor([1, 32]), "outside model vocabulary"),
     ],
 )
 def test_generation_rejects_invalid_prompt_before_forward(prompt, error):
@@ -238,6 +242,102 @@ def test_full_state_relaxer_energy_monotone_descent():
         e_prev = e_val
 
     assert e_prev < e0, "Energy should strictly decrease after 5 relaxation steps"
+
+
+def test_deliberation_relaxation_runs_inside_inference_mode():
+    """Serving constructs and executes the controller under Engine's inference mode."""
+    model = GPTSynaptic(
+        GPTSynapticConfig(
+            vocab_size=32,
+            n_layer=1,
+            n_head=2,
+            n_kv_head=2,
+            n_embd=32,
+            sequence_len=8,
+        )
+    ).eval()
+
+    with torch.inference_mode():
+        controller = CausalDeliberationController(
+            model,
+            CausalDeliberationConfig(max_iters=1),
+        )
+        trajectory = controller.generate(
+            torch.tensor([1, 2]),
+            max_new_tokens=1,
+            control=ControlType.DELIBERATION,
+            temperature=0.0,
+            top_k=0,
+        )
+
+    assert len(trajectory.generated_tokens) == 3
+    assert trajectory.total_iterations == 1
+
+
+def test_sampling_controls_support_greedy_top_k_and_seeded_rng():
+    logits = torch.tensor([[0.0, 1.0, 2.0, 3.0]])
+
+    assert CausalDeliberationController._sample_token(
+        logits,
+        temperature=0.0,
+        top_k=0,
+        rng=None,
+    ) == 3
+    assert CausalDeliberationController._sample_token(
+        logits,
+        temperature=1.0,
+        top_k=1,
+        rng=None,
+    ) == 3
+
+    first_rng = torch.Generator().manual_seed(19)
+    second_rng = torch.Generator().manual_seed(19)
+    first = CausalDeliberationController._sample_token(
+        logits,
+        temperature=1.0,
+        top_k=0,
+        rng=first_rng,
+    )
+    second = CausalDeliberationController._sample_token(
+        logits,
+        temperature=1.0,
+        top_k=0,
+        rng=second_rng,
+    )
+    assert first == second
+
+
+@pytest.mark.parametrize(
+    "logits",
+    [
+        torch.tensor([1.0, 2.0]),
+        torch.tensor([[1, 2]]),
+        torch.tensor([[1.0, float("nan")]]),
+    ],
+)
+def test_sampling_rejects_invalid_logits(logits):
+    with pytest.raises(ValueError, match="logits"):
+        CausalDeliberationController._sample_token(
+            logits,
+            temperature=1.0,
+            top_k=0,
+            rng=None,
+        )
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        CausalDeliberationConfig(max_iters=True),
+        CausalDeliberationConfig(energy_decay=1.1),
+        CausalDeliberationConfig(top_k=-1),
+        CausalDeliberationConfig(commit_relaxed_state=cast(Any, 1)),
+        CausalDeliberationConfig(placebo_ops_per_iter=cast(Any, 1.5)),
+    ],
+)
+def test_config_rejects_invalid_types_and_ranges(config):
+    with pytest.raises(ValueError):
+        config.validate()
 
 
 def test_causal_commitment_alters_subsequent_logits():

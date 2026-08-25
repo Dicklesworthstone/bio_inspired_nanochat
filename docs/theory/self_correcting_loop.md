@@ -1,14 +1,14 @@
 # Self-Correcting Generation Loop — Design Note & Termination Proof (beads `re4e.1`, `re4e.1.1`)
 
-_Capability Frontier (`re4e`) · Emergent Compositions & Verified Repair. Author: GoldenRiver · 2026-08-24._
+_Capability Frontier (`re4e`) · Emergent Compositions & Bounded Repair. Author: GoldenRiver · 2026-08-24._
 
 ## Purpose & Scope
 
 The **Self-Correcting Generation Loop** composes:
-1. **Sheaf Inconsistency Detection** (`r00r.5`): Fast real-time detection of semantic incoherence via coboundary obstruction norm $\|\delta^0(s)\|_2 > \tau_{\text{obstruction}}$.
+1. **Sheaf Obstruction Detection** (`r00r.5`): Fast detection of representation discontinuities via a fixed-sheaf coboundary residual. This MVP detector is not an H¹ or semantic-correctness certificate.
 2. **Span Localization**: Precise isolation of the offending token span $[t_{\text{start}}, t_{\text{end}}]$.
 3. **Causal Deliberation & Localized Regeneration** (`r00r.1` / `r00r.15`): Free-energy gradient relaxation and constrained resampling over the corrupted span.
-4. **Re-Checking & Certified Abstention** (`re4e.10`): Post-regeneration consistency check. If obstruction remains above threshold after $N_{\text{max}}$ attempts, the loop terminates cleanly with a certified `ABSTAIN` token instead of hallucinating.
+4. **Re-Checking & Bounded Abstention**: Post-regeneration obstruction check. If the residual remains above threshold after $N_{\text{max}}$ attempts, the loop terminates with an `ABSTAIN` token. This bounded fallback is separate from the conformal certificate implemented by `re4e.10`.
 
 ---
 
@@ -20,17 +20,17 @@ Input: Prompt tokens X_0, Model M, Sheaf Detector D_sheaf, Max Attempts N_max, B
 
 1. Generate initial sequence X = (x_1, ..., x_T).
 2. For attempt n in 1 .. N_max:
-   a. Compute sheaf consistency certificate:
+   a. Compute the fixed-sheaf obstruction measurement:
       C = D_sheaf.detect_inconsistencies(X, M.hidden_states(X))
    b. If not C.detected_obstruction:
-      return X, Status.VERIFIED_CONSISTENT
+      return X, Status.NO_OBSTRUCTION_DETECTED
    c. Locate maximal obstruction span [t_start, t_end] = C.corrupted_span.
    d. Rewind sequence to t_start - 1.
    e. Run full-state causal deliberation on prefix state h_{t_start - 1} with budget K_delib.
-   f. Regenerate replacement span (x'_t_start, ..., x'_t_end) using energy-penalized sampling.
+   f. Regenerate replacement span (x'_t_start, ..., x'_t_end) from the relaxed state.
    g. Reconstruct candidate sequence X' = X[1:t_start - 1] + X'_span + X[t_end + 1:T].
    h. Update X <- X'.
-3. Return X, Status.CERTIFIED_ABSTAIN
+3. Return the configured abstention token, Status.ABSTAIN
 ```
 
 ---
@@ -43,11 +43,12 @@ For any input prompt and finite generation length $T$, the self-correcting loop 
 **Proof**:
 1. Each iteration $n \in [1, N_{\text{max}}]$ executes a finite forward pass of length $\le T$ and a bounded deliberation loop of at most $K_{\text{delib}}$ steps.
 2. The outer loop counter $n$ strictly increments on each attempt.
-3. If $n = N_{\text{max}}$ without achieving $\|\delta^0(s)\|_2 \le \tau$, the loop breaks unconditionally and returns the certified `ABSTAIN` status.
+3. If $n = N_{\text{max}}$ without achieving $\|\delta^0(s)\|_2 \le \tau$, the loop breaks unconditionally and returns the `ABSTAIN` status when abstention is enabled.
 4. Thus, infinite loops and runtime divergence are strictly impossible. $\blacksquare$
 
-### Theorem 2 (Lyapunov Monotonicity of Deliberation Phase)
-During span repair step (e), the relaxation descends the quadratic Lyapunov free-energy $\mathcal{E}(h)$, ensuring that each regeneration attempt starts from a lower-energy, higher-coherence basin.
+### Deliberation Energy Check
+
+The current relaxation takes fixed-size gradient steps on the learned quadratic energy proxy $\mathcal{E}(h)$. Tests check descent for the configured reference setting; the implementation does not claim that lower proxy energy certifies semantic coherence.
 
 ---
 
