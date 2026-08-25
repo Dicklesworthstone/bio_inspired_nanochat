@@ -348,9 +348,13 @@ class GPT(nn.Module):
         # zero out classifier weights
         torch.nn.init.zeros_(self.lm_head.weight)
         # zero out c_proj weights in all blocks
-        for block in self.blocks:
-            torch.nn.init.zeros_(cast(torch.Tensor, block.mlp.c_proj.weight))
-            torch.nn.init.zeros_(cast(torch.Tensor, block.attn.c_proj.weight))
+        for module in self.blocks:
+            block = cast(Block, module)
+            attention = cast(
+                CausalSelfAttention | UltrametricCausalSelfAttention, block.attn
+            )
+            torch.nn.init.zeros_(block.mlp.c_proj.weight)
+            torch.nn.init.zeros_(attention.c_proj.weight)
         # init the rotary embeddings
         head_dim = self.config.n_embd // self.config.n_head
         cos, sin = self._precompute_rotary_embeddings(self.rotary_seq_len, head_dim)
