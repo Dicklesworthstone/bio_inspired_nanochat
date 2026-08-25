@@ -15,12 +15,14 @@ from __future__ import annotations
 
 import hashlib
 import multiprocessing
+from collections.abc import Callable
+from datetime import timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol, cast
 
 import pytest
 import torch
-import torch.distributed as dist
+import torch.distributed as torch_dist
 
 import bio_inspired_nanochat.synaptic_splitmerge as splitmerge_module
 from bio_inspired_nanochat.synaptic import SynapticConfig, SynapticMoE
@@ -31,6 +33,33 @@ from bio_inspired_nanochat.synaptic_splitmerge import (
 )
 
 pytestmark = pytest.mark.unit
+
+
+class _DistributedApi(Protocol):
+    """The gloo API exercised by these subprocess acceptance tests."""
+
+    FileStore: Callable[[str, int], object]
+
+    def init_process_group(
+        self,
+        *,
+        backend: str,
+        store: object,
+        rank: int,
+        world_size: int,
+        timeout: timedelta,
+    ) -> None: ...
+
+    def all_reduce(self, tensor: torch.Tensor) -> None: ...
+
+    def all_gather_object(self, object_list: list[Any], obj: Any) -> None: ...
+
+    def is_initialized(self) -> bool: ...
+
+    def destroy_process_group(self) -> None: ...
+
+
+dist = cast(_DistributedApi, torch_dist)
 
 
 def _moe(num_experts: int = 3, n_embd: int = 8, seed: int = 0) -> SynapticMoE:
@@ -134,8 +163,6 @@ def _distributed_worker(rank: int, world: int, store_path: str, out_path: str) -
     status = "exception"
     detail = ""
     try:
-        from datetime import timedelta
-
         dist.init_process_group(
             backend="gloo",
             store=dist.FileStore(store_path, world),
@@ -321,8 +348,6 @@ def _topological_worker(
     rank: int, world: int, store_path: str, out_path: str, action: str
 ) -> None:
     try:
-        from datetime import timedelta
-
         dist.init_process_group(
             backend="gloo",
             store=dist.FileStore(store_path, world),
