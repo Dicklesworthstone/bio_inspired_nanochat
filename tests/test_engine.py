@@ -204,6 +204,7 @@ def test_ultrametric_attention_kv_cache_decode_is_finite():
     logits2 = model.forward(next_tok, kv_cache=kv_cache)
     assert logits2.shape == (B, 1, cfg.vocab_size)
     assert torch.isfinite(logits2).all()
+    assert kv_cache.get_pos() == 9
 
 
 def test_ultrametric_attention_init_weights_restores_to_empty_buffers():
@@ -252,7 +253,6 @@ def test_ultrametric_attention_init_weights_restores_to_empty_buffers():
         logits = model(tokens)
     assert logits.shape == (2, 8, cfg.vocab_size)
     assert torch.isfinite(logits).all()
-    assert kv_cache.get_pos() == 9
 
 
 def test_synaptic_moe_xi_swap_swaps_metabolism_buffers():
