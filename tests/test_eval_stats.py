@@ -377,6 +377,34 @@ def test_load_matrix_csv_missing_metric_raises(tmp_path):
         load_matrix_csv(p, "eval_accuracy")
 
 
+def test_load_matrix_csv_rejects_conflicting_duplicate_cells(tmp_path):
+    p = tmp_path / "summary.csv"
+    p.write_text(
+        "status,preset,seed,val_bpb\n"
+        "ok,bio_all,7,0.8\n"
+        "ok,bio_all,7,1.2\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=r"bio_all.*seed=7.*summary\.csv: lines 2 and 3.*0\.8.*1\.2",
+    ):
+        load_matrix_csv(p, "val_bpb")
+
+
+def test_load_matrix_csv_accepts_exact_idempotent_duplicate(tmp_path):
+    p = tmp_path / "summary.csv"
+    p.write_text(
+        "status,preset,seed,val_bpb\n"
+        "ok,bio_all,7,0.8\n"
+        "ok,bio_all,7,0.800\n",
+        encoding="utf-8",
+    )
+
+    assert load_matrix_csv(p, "val_bpb") == {"bio_all": {7: 0.8}}
+
+
 def test_cli_writes_strict_json_and_markdown_reports(tmp_path, monkeypatch):
     csv_path = tmp_path / "summary.csv"
     rows = ["status,preset,seed,recipe_source,data,val_bpb"]

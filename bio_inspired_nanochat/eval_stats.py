@@ -505,9 +505,10 @@ def load_matrix_csv(path: Path, metric: str) -> dict[str, dict[int, float]]:
     """Read preset/seed/<metric> rows from an eval_matrix summary.csv.
 
     Successful rows only (``status == ok`` when present); non-finite metrics skipped.
-    Repeated (preset, seed) keep the last finite value.
+    Exact repeated cells are idempotent; conflicting finite values fail closed.
     """
     data: dict[str, dict[int, float]] = {}
+    source_lines: dict[tuple[str, int], int] = {}
     with open(path, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         if reader.fieldnames is None or metric not in reader.fieldnames:
@@ -516,6 +517,7 @@ def load_matrix_csv(path: Path, metric: str) -> dict[str, dict[int, float]]:
                 f"(columns: {reader.fieldnames})"
             )
         for row in reader:
+            line_number = reader.line_num
             if row.get("status", "ok") not in ("ok", "", None):
                 continue
             raw = row.get(metric, "")
@@ -528,7 +530,19 @@ def load_matrix_csv(path: Path, metric: str) -> dict[str, dict[int, float]]:
                 continue
             if not math.isfinite(value):
                 continue
-            data.setdefault(preset, {})[seed] = value
+            by_seed = data.setdefault(preset, {})
+            if seed in by_seed:
+                previous = by_seed[seed]
+                if value != previous:
+                    previous_line = source_lines[(preset, seed)]
+                    raise ValueError(
+                        f"conflicting duplicate matrix cell {preset!r}, seed={seed} "
+                        f"in {path}: lines {previous_line} and {line_number} contain "
+                        f"{previous!r} and {value!r}"
+                    )
+                continue
+            by_seed[seed] = value
+            source_lines[(preset, seed)] = line_number
     return data
 
 
