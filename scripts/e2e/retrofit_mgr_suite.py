@@ -42,6 +42,7 @@ from bio_inspired_nanochat.hf_bio_adapter import (
     HFBioLinearAdapter,
     inject_bio_adapters,
     iter_bio_adapters,
+    set_bio_adaptation,
 )
 from bio_inspired_nanochat.mgr_variants import (
     OrdinalLRScheduler,
@@ -209,6 +210,7 @@ def run_retrofit_mgr_e2e(
         adapters = list(iter_bio_adapters(toy_ffn))
         adapter_count_ok = len(adapters) == 2 and all(isinstance(a, HFBioLinearAdapter) for _, a in adapters)
 
+        set_bio_adaptation(toy_ffn, True)
         out_active = toy_ffn(x_probe)
         active_finite = bool(torch.isfinite(out_active).all())
 

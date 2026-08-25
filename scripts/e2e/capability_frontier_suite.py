@@ -54,6 +54,7 @@ from bio_inspired_nanochat.hf_bio_adapter import (
     HFBioLinearAdapter,
     inject_bio_adapters,
     iter_bio_adapters,
+    set_bio_adaptation,
 )
 from bio_inspired_nanochat.hypothesis_generator import (
     generate_hypotheses,
@@ -348,6 +349,7 @@ def run_capability_frontier_e2e(
         adapters = list(iter_bio_adapters(toy_model))
         has_adapters = len(adapters) == 2 and all(isinstance(a, HFBioLinearAdapter) for _, a in adapters)
 
+        set_bio_adaptation(toy_model, True)
         out_active = toy_model(x_probe)
         forward_runs_finite = bool(torch.isfinite(out_active).all())
 

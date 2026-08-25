@@ -109,7 +109,9 @@ class HFBioLinearAdapter(nn.Module):
         self.in_features = in_features
         self.out_features = out_features
         self.source_kind = source_kind
-        self.adaptation_enabled = True
+        # Injection is function-preserving and behavior-neutral by default. Callers must opt in
+        # explicitly with set_bio_adaptation(..., True) before training or adaptive inference.
+        self.adaptation_enabled = False
 
         core = SynapticLinear(
             in_features,
@@ -149,10 +151,10 @@ class HFBioLinearAdapter(nn.Module):
         )
 
     @torch.no_grad()
-    def _signals(self, x: Tensor) -> tuple[Tensor, Tensor]:
+    def _signals(self, x: Tensor, *, advance: bool) -> tuple[Tensor, Tensor]:
         """Advance bounded presynaptic/metabolic state and return per-row gates."""
         rows = int(x.shape[0])
-        if self.adaptation_enabled:
+        if advance:
             drive = torch.tanh(x.detach().float().square().mean().sqrt())
             cfg = self.synaptic_config
             if cfg.enable_presyn:
@@ -184,12 +186,14 @@ class HFBioLinearAdapter(nn.Module):
             )
         output_shape = (*x.shape[:-1], self.out_features)
         flat = x.reshape(-1, self.in_features)
-        calcium, energy = self._signals(flat)
+        grad_on = torch.is_grad_enabled()
+        advance = self.adaptation_enabled and (not grad_on or self.training)
+        calcium, energy = self._signals(flat, advance=advance)
         output = self.core(
             flat,
             calcium,
             energy,
-            update_mem=self.adaptation_enabled,
+            update_mem=advance,
         )
         return output.reshape(output_shape)
 
@@ -318,7 +322,7 @@ def inject_bio_adapters(
 
 
 def set_bio_adaptation(model: nn.Module, enabled: bool) -> int:
-    """Enable or pause state/weight updates on every injected adapter."""
+    """Explicitly enable or pause training/adaptive-inference updates on every adapter."""
     count = 0
     for _, adapter in iter_bio_adapters(model):
         adapter.adaptation_enabled = bool(enabled)

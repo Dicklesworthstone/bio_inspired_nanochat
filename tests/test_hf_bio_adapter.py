@@ -130,6 +130,57 @@ def test_explicit_pattern_supports_unusual_model_and_toggles_are_neutral() -> No
     torch.testing.assert_close(actual, expected, rtol=1e-6, atol=1e-7)
 
 
+@pytest.mark.unit
+def test_eval_is_nonmutating_by_default_and_adaptive_inference_is_explicit() -> None:
+    model = _tiny_gpt2().eval()
+    tokens = torch.tensor([[1, 5, 8, 13, 3], [2, 7, 11, 4, 9]])
+    inject_bio_adapters(
+        model,
+        SynapticConfig(
+            enable_presyn=True,
+            enable_hebbian=True,
+            enable_metabolism=True,
+            stochastic_train_frac=0.0,
+            fast_weight_eta=0.02,
+            fast_weight_max_norm=0.1,
+            post_slow_lr=1e-5,
+        ),
+    )
+    adapters = tuple(iter_bio_adapters(model))
+    before = {
+        f"{name}::{key}": value.detach().clone()
+        for name, adapter in adapters
+        for key, value in adapter.state_dict().items()
+    }
+
+    with torch.no_grad():
+        first = model(tokens).logits
+        second = model(tokens).logits
+
+    after_default = {
+        f"{name}::{key}": value.detach().clone()
+        for name, adapter in adapters
+        for key, value in adapter.state_dict().items()
+    }
+    assert all(not adapter.adaptation_enabled for _, adapter in adapters)
+    assert all(torch.equal(after_default[key], value) for key, value in before.items())
+    torch.testing.assert_close(second, first, rtol=0.0, atol=0.0)
+
+    set_bio_adaptation(model, True)
+    with torch.no_grad():
+        model(tokens)
+
+    metrics = bio_adapter_metrics(model)
+    assert all(int(values["adaptation_steps"]) == 1 for values in metrics.values())
+    assert all(float(values["calcium"]) > 0.0 for values in metrics.values())
+    after_opt_in = {
+        f"{name}::{key}": value.detach()
+        for name, adapter in adapters
+        for key, value in adapter.state_dict().items()
+    }
+    assert any(not torch.equal(after_opt_in[key], value) for key, value in before.items())
+
+
 @pytest.mark.e2e
 def test_short_adapter_finetune_activates_dynamics_and_roundtrips_bundle(
     tmp_path: Path,

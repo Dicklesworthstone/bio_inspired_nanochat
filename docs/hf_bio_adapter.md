@@ -21,6 +21,7 @@ from transformers import AutoModelForCausalLM
 from bio_inspired_nanochat.hf_bio_adapter import (
     bio_adapter_parameters,
     inject_bio_adapters,
+    set_bio_adaptation,
 )
 from bio_inspired_nanochat.synaptic import SynapticConfig
 
@@ -34,6 +35,7 @@ report = inject_bio_adapters(
     ),
 )
 optimizer_parameters = bio_adapter_parameters(model)
+set_bio_adaptation(model, True)  # explicit opt-in before training or adaptive inference
 ```
 
 Injection copies every source weight and bias into `SynapticLinear.w_slow`, zeros the fast-weight
@@ -56,8 +58,10 @@ inject_bio_adapters(
 )
 ```
 
-Inspect live dynamics with `bio_adapter_metrics(model)`. Pause online state and weight updates with
-`set_bio_adaptation(model, False)`; this does not discard learned adapter weights. At a sequence
+Injection is non-adaptive by default, so ordinary `model.eval()` validation is state-idempotent.
+Inspect live dynamics with `bio_adapter_metrics(model)`. Explicitly opt into training or adaptive
+inference with `set_bio_adaptation(model, True)`, and pause updates again with
+`set_bio_adaptation(model, False)`; pausing does not discard learned adapter weights. At a sequence
 boundary, `reset_bio_adapters(model)` clears transient traces and calcium/energy state while
 preserving pretrained and consolidated slow weights.
 
