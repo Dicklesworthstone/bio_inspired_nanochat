@@ -135,11 +135,11 @@
         },
         {
           "path": "bio_inspired_nanochat/cusp_certificate.py",
-          "sha256": "27a343b40436afdf5414bb4f1c40a046af52fc1b28465db23780e5e644c2f416"
+          "sha256": "3bbed2b849559d6b361982089d3ee2c301b821db16165c68e2d7bc6fe7a4101e"
         },
         {
           "path": "bio_inspired_nanochat/stochastic_thermo.py",
-          "sha256": "8dc88d46194952fbc55e01766054c0230d9ca213660cef1f1b1c956693516e1f"
+          "sha256": "9d9d71a29842958dbc5a6ec6a81c35ba32a6fa53919cf6ea59c3777689ea8aa2"
         },
         {
           "path": "tests/test_cusp_certificate.py",
@@ -350,7 +350,7 @@
       "runtime_mapping": [
         {
           "path": "bio_inspired_nanochat/metriplectic_integrator.py",
-          "sha256": "6a13a4c9ce66aac3ba0d3912894f1506d48cfae58b24eb3d8cc70130b656218d"
+          "sha256": "943ef48e1231387c991649ba6b9c89bc4c6f7627df8f8cd08da26288f0047a59"
         },
         {
           "path": "tests/test_metriplectic_runtime.py",
@@ -420,7 +420,7 @@
         },
         {
           "path": "bio_inspired_nanochat/ablation_matrix.py",
-          "sha256": "339ca44ed51c866ead00c9f3fe392eda606169f92e10c58a12e9ea98bfbbae56"
+          "sha256": "11169f694026edcda0a60a55b981d9ff7512c766a3f972a2b73729e69dad37e9"
         },
         {
           "path": "tests/test_chunked_tbptt.py",
@@ -444,7 +444,7 @@
         },
         {
           "path": "tests/test_ablation_matrix.py",
-          "sha256": "da8bfa2e9c653879bed8d415d54b08d3cbf478f254856b8ae915c18cb1ef5bbc"
+          "sha256": "fde237a7f6bc1e888a0e3960d7f14b5af125d80999d64f94bf022dc8936d2c1c"
         },
         {
           "path": "tests/test_scaleup_ablation_e2e.py",
@@ -500,7 +500,7 @@
       "runtime_mapping": [
         {
           "path": "bio_inspired_nanochat/stochastic_thermo.py",
-          "sha256": "9bf065e80ba614ad9fdc1b30923af91ca2cc06a08660b9f8c1a55550c98f2698"
+          "sha256": "9d9d71a29842958dbc5a6ec6a81c35ba32a6fa53919cf6ea59c3777689ea8aa2"
         },
         {
           "path": "tests/test_stochastic_thermo.py",
@@ -562,7 +562,7 @@
       "runtime_mapping": [
         {
           "path": "bio_inspired_nanochat/synaptic.py",
-          "sha256": "6c9360c2e22f8b22fee35d02f3de6fa9cfca9488369b1669c54bacc668db81a8"
+          "sha256": "187a474e3b8d3a55b538df2df7533a92efa7569239bf193c9bc2151bbcf4e155"
         },
         {
           "path": "bio_inspired_nanochat/flex_synaptic.py",
@@ -606,7 +606,7 @@
         },
         {
           "path": "tests/test_stochastic_thermo.py",
-          "sha256": "81bb6f838d9702cd79440732259b773eb38a036a77e6bd33d5a59a047faed0f1"
+          "sha256": "835589038d830ece10fe98f2f054008c5cdcc1af3b5c11f841d864748e604249"
         },
         {
           "path": "bio_inspired_nanochat/ablation_registry.py",

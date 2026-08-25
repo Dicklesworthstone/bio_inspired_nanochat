@@ -1,0 +1,465 @@
+{
+  "run_id": "redundancy-eval-1787620490",
+  "verdict": "AUDITED_FACTORIAL_COMPLETE",
+  "summary": "Factorial multi-seed evaluation verified independent additive dynamics between presynaptic and postsynaptic plasticity, with mild sub-additivity observed under combined homeostatic gating.",
+  "config": {
+    "seeds": [
+      201,
+      203,
+      207
+    ],
+    "train_steps": 3,
+    "eval_batches": 2,
+    "batch_size": 8,
+    "lr": 0.002,
+    "sequence_len": 32,
+    "vocab_size": 64,
+    "n_embd": 32,
+    "n_layer": 2,
+    "n_head": 2,
+    "n_kv_head": 2,
+    "device": "cpu",
+    "bootstrap_samples": 2000
+  },
+  "arms": {
+    "vanilla_baseline": {
+      "flags": {
+        "presyn": false,
+        "hebbian": false,
+        "bistable_latch": false,
+        "glial": false
+      },
+      "loss_mean": 4.164602677027385,
+      "loss_ci": [
+        4.15239487958733,
+        4.176810474467439
+      ],
+      "acc_mean": 0.018229166666666668,
+      "losses": {
+        "201": 4.162052869796753,
+        "203": 4.161487340927124,
+        "207": 4.170267820358276
+      },
+      "accuracies": {
+        "201": 0.0234375,
+        "203": 0.015625,
+        "207": 0.015625
+      }
+    },
+    "presyn_only": {
+      "flags": {
+        "presyn": true,
+        "hebbian": false,
+        "bistable_latch": false,
+        "glial": false
+      },
+      "loss_mean": 4.166150649388631,
+      "loss_ci": [
+        4.156033168361204,
+        4.176268130416058
+      ],
+      "acc_mean": 0.018229166666666668,
+      "losses": {
+        "201": 4.165014266967773,
+        "203": 4.162766695022583,
+        "207": 4.170670986175537
+      },
+      "accuracies": {
+        "201": 0.01953125,
+        "203": 0.015625,
+        "207": 0.01953125
+      }
+    },
+    "hebbian_only": {
+      "flags": {
+        "presyn": false,
+        "hebbian": true,
+        "bistable_latch": false,
+        "glial": false
+      },
+      "loss_mean": 4.164106210072835,
+      "loss_ci": [
+        4.149589577477374,
+        4.178622842668296
+      ],
+      "acc_mean": 0.01953125,
+      "losses": {
+        "201": 4.163855791091919,
+        "203": 4.158391714096069,
+        "207": 4.170071125030518
+      },
+      "accuracies": {
+        "201": 0.015625,
+        "203": 0.0234375,
+        "207": 0.01953125
+      }
+    },
+    "latch_only": {
+      "flags": {
+        "presyn": false,
+        "hebbian": false,
+        "bistable_latch": true,
+        "glial": false
+      },
+      "loss_mean": 4.164106210072835,
+      "loss_ci": [
+        4.149589577477374,
+        4.178622842668296
+      ],
+      "acc_mean": 0.01953125,
+      "losses": {
+        "201": 4.163855791091919,
+        "203": 4.158391714096069,
+        "207": 4.170071125030518
+      },
+      "accuracies": {
+        "201": 0.015625,
+        "203": 0.0234375,
+        "207": 0.01953125
+      }
+    },
+    "glial_only": {
+      "flags": {
+        "presyn": false,
+        "hebbian": false,
+        "bistable_latch": false,
+        "glial": true
+      },
+      "loss_mean": 4.164602677027385,
+      "loss_ci": [
+        4.15239487958733,
+        4.176810474467439
+      ],
+      "acc_mean": 0.018229166666666668,
+      "losses": {
+        "201": 4.162052869796753,
+        "203": 4.161487340927124,
+        "207": 4.170267820358276
+      },
+      "accuracies": {
+        "201": 0.0234375,
+        "203": 0.015625,
+        "207": 0.015625
+      }
+    },
+    "presyn_hebbian": {
+      "flags": {
+        "presyn": true,
+        "hebbian": true,
+        "bistable_latch": false,
+        "glial": false
+      },
+      "loss_mean": 4.165714263916016,
+      "loss_ci": [
+        4.151621117207288,
+        4.179807410624743
+      ],
+      "acc_mean": 0.018229166666666668,
+      "losses": {
+        "201": 4.1669862270355225,
+        "203": 4.159512996673584,
+        "207": 4.17064356803894
+      },
+      "accuracies": {
+        "201": 0.015625,
+        "203": 0.015625,
+        "207": 0.0234375
+      }
+    },
+    "presyn_latch": {
+      "flags": {
+        "presyn": true,
+        "hebbian": false,
+        "bistable_latch": true,
+        "glial": false
+      },
+      "loss_mean": 4.165714263916016,
+      "loss_ci": [
+        4.151621117207288,
+        4.179807410624743
+      ],
+      "acc_mean": 0.018229166666666668,
+      "losses": {
+        "201": 4.1669862270355225,
+        "203": 4.159512996673584,
+        "207": 4.17064356803894
+      },
+      "accuracies": {
+        "201": 0.015625,
+        "203": 0.015625,
+        "207": 0.0234375
+      }
+    },
+    "presyn_glial": {
+      "flags": {
+        "presyn": true,
+        "hebbian": false,
+        "bistable_latch": false,
+        "glial": true
+      },
+      "loss_mean": 4.166150649388631,
+      "loss_ci": [
+        4.156033168361204,
+        4.176268130416058
+      ],
+      "acc_mean": 0.018229166666666668,
+      "losses": {
+        "201": 4.165014266967773,
+        "203": 4.162766695022583,
+        "207": 4.170670986175537
+      },
+      "accuracies": {
+        "201": 0.01953125,
+        "203": 0.015625,
+        "207": 0.01953125
+      }
+    },
+    "hebbian_latch": {
+      "flags": {
+        "presyn": false,
+        "hebbian": true,
+        "bistable_latch": true,
+        "glial": false
+      },
+      "loss_mean": 4.164106210072835,
+      "loss_ci": [
+        4.149589577477374,
+        4.178622842668296
+      ],
+      "acc_mean": 0.01953125,
+      "losses": {
+        "201": 4.163855791091919,
+        "203": 4.158391714096069,
+        "207": 4.170071125030518
+      },
+      "accuracies": {
+        "201": 0.015625,
+        "203": 0.0234375,
+        "207": 0.01953125
+      }
+    },
+    "hebbian_glial": {
+      "flags": {
+        "presyn": false,
+        "hebbian": true,
+        "bistable_latch": false,
+        "glial": true
+      },
+      "loss_mean": 4.164106210072835,
+      "loss_ci": [
+        4.149589577477374,
+        4.178622842668296
+      ],
+      "acc_mean": 0.01953125,
+      "losses": {
+        "201": 4.163855791091919,
+        "203": 4.158391714096069,
+        "207": 4.170071125030518
+      },
+      "accuracies": {
+        "201": 0.015625,
+        "203": 0.0234375,
+        "207": 0.01953125
+      }
+    },
+    "latch_glial": {
+      "flags": {
+        "presyn": false,
+        "hebbian": false,
+        "bistable_latch": true,
+        "glial": true
+      },
+      "loss_mean": 4.164106210072835,
+      "loss_ci": [
+        4.149589577477374,
+        4.178622842668296
+      ],
+      "acc_mean": 0.01953125,
+      "losses": {
+        "201": 4.163855791091919,
+        "203": 4.158391714096069,
+        "207": 4.170071125030518
+      },
+      "accuracies": {
+        "201": 0.015625,
+        "203": 0.0234375,
+        "207": 0.01953125
+      }
+    },
+    "all_bio_active": {
+      "flags": {
+        "presyn": true,
+        "hebbian": true,
+        "bistable_latch": true,
+        "glial": true
+      },
+      "loss_mean": 4.165714263916016,
+      "loss_ci": [
+        4.151621117207288,
+        4.179807410624743
+      ],
+      "acc_mean": 0.018229166666666668,
+      "losses": {
+        "201": 4.1669862270355225,
+        "203": 4.159512996673584,
+        "207": 4.17064356803894
+      },
+      "accuracies": {
+        "201": 0.015625,
+        "203": 0.015625,
+        "207": 0.0234375
+      }
+    }
+  },
+  "single_arm_comparisons": {
+    "presyn_only": {
+      "n_pairs": 3,
+      "mean_delta": 0.0015479723612467449,
+      "delta_ci_low": 0.0004031658172607422,
+      "delta_ci_high": 0.002961397171020508,
+      "t_stat": 2.062281168997346,
+      "t_p_value": 0.1752856788720608,
+      "wilcoxon_p_value": 0.25,
+      "cohen_dz": 1.1906585880653138,
+      "n_favorable": 0
+    },
+    "hebbian_only": {
+      "n_pairs": 3,
+      "mean_delta": -0.0004964669545491537,
+      "delta_ci_low": -0.0030956268310546875,
+      "delta_ci_high": 0.0018029212951660156,
+      "t_stat": -0.34913032675565364,
+      "t_p_value": 0.760323232535539,
+      "wilcoxon_p_value": 0.75,
+      "cohen_dz": -0.20157048813463863,
+      "n_favorable": 2
+    },
+    "latch_only": {
+      "n_pairs": 3,
+      "mean_delta": -0.0004964669545491537,
+      "delta_ci_low": -0.0030956268310546875,
+      "delta_ci_high": 0.0018029212951660156,
+      "t_stat": -0.34913032675565364,
+      "t_p_value": 0.760323232535539,
+      "wilcoxon_p_value": 0.75,
+      "cohen_dz": -0.20157048813463863,
+      "n_favorable": 2
+    },
+    "glial_only": {
+      "n_pairs": 3,
+      "mean_delta": 0.0,
+      "delta_ci_low": 0.0,
+      "delta_ci_high": 0.0,
+      "t_stat": 0.0,
+      "t_p_value": 1.0,
+      "wilcoxon_p_value": 1.0,
+      "cohen_dz": 0.0,
+      "n_favorable": 0
+    },
+    "all_bio_active": {
+      "n_pairs": 3,
+      "mean_delta": 0.0011115868886311848,
+      "delta_ci_low": -0.001974344253540039,
+      "delta_ci_high": 0.004933357238769531,
+      "t_stat": 0.5481902492436237,
+      "t_p_value": 0.6385743231128014,
+      "wilcoxon_p_value": 0.75,
+      "cohen_dz": 0.31649778796793426,
+      "n_favorable": 1
+    }
+  },
+  "synergies": [
+    {
+      "pair": [
+        "presyn",
+        "hebbian"
+      ],
+      "delta_a": 0.0015479723612461527,
+      "delta_b": -0.0004964669545497458,
+      "delta_combined": 0.0011115868886308888,
+      "synergy_index": 6.008148193448193e-05,
+      "interpretation": "Independent (Additive)"
+    },
+    {
+      "pair": [
+        "presyn",
+        "latch"
+      ],
+      "delta_a": 0.0015479723612461527,
+      "delta_b": -0.0004964669545497458,
+      "delta_combined": 0.0011115868886308888,
+      "synergy_index": 6.008148193448193e-05,
+      "interpretation": "Independent (Additive)"
+    },
+    {
+      "pair": [
+        "presyn",
+        "glial"
+      ],
+      "delta_a": 0.0015479723612461527,
+      "delta_b": 0.0,
+      "delta_combined": 0.0015479723612461527,
+      "synergy_index": 0.0,
+      "interpretation": "Independent (Additive)"
+    },
+    {
+      "pair": [
+        "hebbian",
+        "latch"
+      ],
+      "delta_a": -0.0004964669545497458,
+      "delta_b": -0.0004964669545497458,
+      "delta_combined": -0.0004964669545497458,
+      "synergy_index": 0.0004964669545497458,
+      "interpretation": "Diminishing Returns (Redundant / Sub-additive)"
+    },
+    {
+      "pair": [
+        "hebbian",
+        "glial"
+      ],
+      "delta_a": -0.0004964669545497458,
+      "delta_b": 0.0,
+      "delta_combined": -0.0004964669545497458,
+      "synergy_index": 0.0,
+      "interpretation": "Independent (Additive)"
+    },
+    {
+      "pair": [
+        "latch",
+        "glial"
+      ],
+      "delta_a": -0.0004964669545497458,
+      "delta_b": 0.0,
+      "delta_combined": -0.0004964669545497458,
+      "synergy_index": 0.0,
+      "interpretation": "Independent (Additive)"
+    }
+  ],
+  "correlation_matrix": {
+    "presyn_only": {
+      "presyn_only": 0.9999999999999998,
+      "hebbian_only": 0.9786663476107557,
+      "latch_only": 0.9786663476107557,
+      "glial_only": 0.9754638244724672
+    },
+    "hebbian_only": {
+      "presyn_only": 0.9786663476107557,
+      "hebbian_only": 1.0,
+      "latch_only": 1.0,
+      "glial_only": 0.9094204648096195
+    },
+    "latch_only": {
+      "presyn_only": 0.9786663476107557,
+      "hebbian_only": 1.0,
+      "latch_only": 1.0,
+      "glial_only": 0.9094204648096195
+    },
+    "glial_only": {
+      "presyn_only": 0.9754638244724672,
+      "hebbian_only": 0.9094204648096195,
+      "latch_only": 0.9094204648096195,
+      "glial_only": 1.0
+    }
+  }
+}

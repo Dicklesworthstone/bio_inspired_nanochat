@@ -1,0 +1,143 @@
+{
+  "run_id": "fw-bench-1787620734",
+  "verdict": "AUDITED_BENCHMARK_COMPLETE",
+  "summary": "Apples-to-apples working-memory suite comparison evaluated Vanilla Transformer, Classical Outer-Product Fast Weights, DeltaNet Error-Correcting Fast Weights, and Bio-Inspired Synaptic Transformers across multi-pair associative recall, distractor binding, and NIAH.",
+  "config": {
+    "seeds": [
+      301,
+      303,
+      307
+    ],
+    "vocab_size": 97,
+    "sequence_len": 160,
+    "n_embd": 64,
+    "n_layer": 2,
+    "n_head": 2,
+    "n_kv_head": 2,
+    "batch_size": 16,
+    "recall_pairs": [
+      2,
+      4,
+      8
+    ],
+    "binding_distractors": [
+      0,
+      8,
+      32
+    ],
+    "niah_lengths": [
+      16,
+      64
+    ],
+    "device": "cpu",
+    "bootstrap_samples": 2000
+  },
+  "architectures": {
+    "vanilla": {
+      "composite_mean": 0.01736111111111111,
+      "composite_ci": [
+        0.008735632945311364,
+        0.025986589276910853
+      ],
+      "recall_mean": 0.020833333333333332,
+      "binding_mean": 0.013888888888888888,
+      "niah_mean": 0.01736111111111111,
+      "per_seed_composite": {
+        "301": 0.020833333333333332,
+        "303": 0.01736111111111111,
+        "307": 0.013888888888888888
+      }
+    },
+    "outer_product_fw": {
+      "composite_mean": 0.01736111111111111,
+      "composite_ci": [
+        -0.008515323386288125,
+        0.04323754560851034
+      ],
+      "recall_mean": 0.027777777777777776,
+      "binding_mean": 0.013888888888888888,
+      "niah_mean": 0.010416666666666666,
+      "per_seed_composite": {
+        "301": 0.027777777777777776,
+        "303": 0.01736111111111111,
+        "307": 0.006944444444444444
+      }
+    },
+    "deltanet_fw": {
+      "composite_mean": 0.015046296296296294,
+      "composite_ci": [
+        -0.01268073672955131,
+        0.042773329322143894
+      ],
+      "recall_mean": 0.027777777777777776,
+      "binding_mean": 0.013888888888888888,
+      "niah_mean": 0.003472222222222222,
+      "per_seed_composite": {
+        "301": 0.027777777777777776,
+        "303": 0.010416666666666666,
+        "307": 0.006944444444444444
+      }
+    },
+    "bio_synaptic": {
+      "composite_mean": 0.01736111111111111,
+      "composite_ci": [
+        -0.020236476553326544,
+        0.054958698775548764
+      ],
+      "recall_mean": 0.006944444444444444,
+      "binding_mean": 0.006944444444444444,
+      "niah_mean": 0.03819444444444444,
+      "per_seed_composite": {
+        "301": 0.010416666666666666,
+        "303": 0.006944444444444444,
+        "307": 0.03472222222222222
+      }
+    }
+  },
+  "comparisons_vs_vanilla": {
+    "outer_product_fw": {
+      "n_pairs": 3,
+      "mean_delta": 0.0,
+      "delta_ci_low": -0.006944444444444444,
+      "delta_ci_high": 0.006944444444444444,
+      "t_stat": 0.0,
+      "t_p_value": 1.0,
+      "wilcoxon_p_value": 1.0,
+      "cohen_dz": 0.0,
+      "n_favorable": 1
+    },
+    "deltanet_fw": {
+      "n_pairs": 3,
+      "mean_delta": -0.0023148148148148143,
+      "delta_ci_low": -0.006944444444444444,
+      "delta_ci_high": 0.006944444444444444,
+      "t_stat": -0.4999999999999999,
+      "t_p_value": 0.6666666666666667,
+      "wilcoxon_p_value": 1.0,
+      "cohen_dz": -0.28867513459481287,
+      "n_favorable": 1
+    },
+    "bio_synaptic": {
+      "n_pairs": 3,
+      "mean_delta": 0.0,
+      "delta_ci_low": -0.010416666666666666,
+      "delta_ci_high": 0.02083333333333333,
+      "t_stat": 0.0,
+      "t_p_value": 1.0,
+      "wilcoxon_p_value": 1.0,
+      "cohen_dz": 0.0,
+      "n_favorable": 1
+    }
+  },
+  "comparisons_bio_vs_deltanet": {
+    "n_pairs": 3,
+    "mean_delta": 0.0023148148148148125,
+    "delta_ci_low": -0.017361111111111112,
+    "delta_ci_high": 0.027777777777777773,
+    "t_stat": 0.17342199390482385,
+    "t_p_value": 0.8782838761099635,
+    "wilcoxon_p_value": 1.0,
+    "cohen_dz": 0.1001252348643517,
+    "n_favorable": 1
+  }
+}

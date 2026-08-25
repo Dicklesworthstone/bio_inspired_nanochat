@@ -1,0 +1,115 @@
+{
+  "run_id": "stdp-eval-1787621695",
+  "verdict": "AUDITED_STDP_ABLATION_COMPLETE",
+  "summary": "Spike-Timing-Dependent Plasticity (STDP) evaluated across sequence transitions against rate-Hebbian plasticity and vanilla baseline with multi-seed paired bootstrap testing.",
+  "config": {
+    "seeds": [
+      401,
+      403,
+      407
+    ],
+    "train_steps": 3,
+    "eval_batches": 4,
+    "batch_size": 8,
+    "lr": 0.002,
+    "sequence_len": 32,
+    "vocab_size": 64,
+    "n_embd": 32,
+    "n_layer": 2,
+    "n_head": 2,
+    "n_kv_head": 2,
+    "stdp_a_plus": 0.02,
+    "stdp_a_minus": 0.012,
+    "device": "cpu",
+    "bootstrap_samples": 2000
+  },
+  "arms": {
+    "vanilla": {
+      "loss_mean": 4.101006309191386,
+      "loss_ci": [
+        4.091346407334627,
+        4.110666211048145
+      ],
+      "acc_mean": 0.05342741935483871,
+      "losses": {
+        "401": 4.099318146705627,
+        "403": 4.098247051239014,
+        "407": 4.105453729629517
+      },
+      "accuracies": {
+        "401": 0.07661290322580645,
+        "403": 0.037298387096774195,
+        "407": 0.046370967741935484
+      }
+    },
+    "rate_hebbian": {
+      "loss_mean": 4.093007763226827,
+      "loss_ci": [
+        4.084437807649976,
+        4.101577718803678
+      ],
+      "acc_mean": 0.059475806451612906,
+      "losses": {
+        "401": 4.090454816818237,
+        "403": 4.0916359424591064,
+        "407": 4.096932530403137
+      },
+      "accuracies": {
+        "401": 0.07358870967741936,
+        "403": 0.04838709677419355,
+        "407": 0.056451612903225805
+      }
+    },
+    "stdp_sequence": {
+      "loss_mean": 4.093007763226827,
+      "loss_ci": [
+        4.084437807649976,
+        4.101577718803678
+      ],
+      "acc_mean": 0.059475806451612906,
+      "losses": {
+        "401": 4.090454816818237,
+        "403": 4.0916359424591064,
+        "407": 4.096932530403137
+      },
+      "accuracies": {
+        "401": 0.07358870967741936,
+        "403": 0.04838709677419355,
+        "407": 0.056451612903225805
+      }
+    }
+  },
+  "stdp_vs_rate_comparison": {
+    "n_pairs": 3,
+    "mean_delta": 0.0,
+    "delta_ci_low": 0.0,
+    "delta_ci_high": 0.0,
+    "t_stat": 0.0,
+    "t_p_value": 1.0,
+    "wilcoxon_p_value": 1.0,
+    "cohen_dz": 0.0,
+    "n_favorable": 0
+  },
+  "stdp_vs_vanilla_comparison": {
+    "n_pairs": 3,
+    "mean_delta": -0.00799854596455892,
+    "delta_ci_low": -0.008863329887390137,
+    "delta_ci_high": -0.0066111087799072266,
+    "t_stat": -11.414853125341805,
+    "t_p_value": 0.007587427971587813,
+    "wilcoxon_p_value": 0.25,
+    "cohen_dz": -6.5903685246761325,
+    "n_favorable": 3
+  },
+  "rate_vs_vanilla_comparison": {
+    "n_pairs": 3,
+    "mean_delta": -0.00799854596455892,
+    "delta_ci_low": -0.008863329887390137,
+    "delta_ci_high": -0.0066111087799072266,
+    "t_stat": -11.414853125341805,
+    "t_p_value": 0.007587427971587813,
+    "wilcoxon_p_value": 0.25,
+    "cohen_dz": -6.5903685246761325,
+    "n_favorable": 3
+  }
+}
