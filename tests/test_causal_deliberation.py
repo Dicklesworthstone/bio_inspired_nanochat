@@ -81,6 +81,137 @@ def test_baseline_generation_advances_real_transformer_context():
     assert model.hidden_input_lengths == [3, 4, 5]
 
 
+def test_generation_normalizes_singleton_batch_prompt():
+    """A conventional (1, T) prompt remains one sequence instead of gaining a third rank."""
+    model = TrackingGPTSynaptic(
+        GPTSynapticConfig(
+            vocab_size=32,
+            n_layer=1,
+            n_head=2,
+            n_kv_head=2,
+            n_embd=32,
+            sequence_len=8,
+        )
+    ).eval()
+    controller = CausalDeliberationController(
+        model,
+        CausalDeliberationConfig(max_iters=0, commit_relaxed_state=False),
+    )
+
+    trajectory = controller.generate(
+        prompt=torch.tensor([[1, 2, 3]]),
+        max_new_tokens=1,
+        control=ControlType.BASELINE,
+    )
+
+    assert trajectory.generated_tokens[:3] == [1, 2, 3]
+    assert len(trajectory.generated_tokens) == 4
+    assert model.hidden_input_lengths == [3]
+
+
+@pytest.mark.parametrize(
+    ("prompt", "error"),
+    [
+        (torch.tensor(7), "shape"),
+        (torch.tensor([[1, 2], [3, 4]]), "exactly one sequence"),
+        (torch.tensor([[[1, 2]]]), "shape"),
+        (torch.tensor([], dtype=torch.long), "at least one token"),
+    ],
+)
+def test_generation_rejects_invalid_prompt_before_forward(prompt, error):
+    model = TrackingGPTSynaptic(
+        GPTSynapticConfig(
+            vocab_size=32,
+            n_layer=1,
+            n_head=2,
+            n_kv_head=2,
+            n_embd=32,
+            sequence_len=8,
+        )
+    ).eval()
+    controller = CausalDeliberationController(model, CausalDeliberationConfig(max_iters=0))
+
+    with pytest.raises(ValueError, match=error):
+        controller.generate(prompt, max_new_tokens=1, control=ControlType.BASELINE)
+
+    assert model.hidden_input_lengths == []
+
+
+@pytest.mark.parametrize("max_new_tokens", [-1, True, 1.5])
+def test_generation_rejects_invalid_budget_before_forward(max_new_tokens):
+    model = TrackingGPTSynaptic(
+        GPTSynapticConfig(
+            vocab_size=32,
+            n_layer=1,
+            n_head=2,
+            n_kv_head=2,
+            n_embd=32,
+            sequence_len=8,
+        )
+    ).eval()
+    controller = CausalDeliberationController(model, CausalDeliberationConfig(max_iters=0))
+
+    with pytest.raises((TypeError, ValueError), match="non-negative integer"):
+        controller.generate(
+            torch.tensor([1, 2]),
+            max_new_tokens=max_new_tokens,
+            control=ControlType.BASELINE,
+        )
+
+    assert model.hidden_input_lengths == []
+
+
+def test_generation_enforces_context_bound_before_forward():
+    model = TrackingGPTSynaptic(
+        GPTSynapticConfig(
+            vocab_size=32,
+            n_layer=1,
+            n_head=2,
+            n_kv_head=2,
+            n_embd=32,
+            sequence_len=4,
+        )
+    ).eval()
+    controller = CausalDeliberationController(model, CausalDeliberationConfig(max_iters=0))
+
+    with pytest.raises(ValueError, match="exceeds model context length 4"):
+        controller.generate(
+            torch.tensor([1, 2, 3]),
+            max_new_tokens=2,
+            control=ControlType.BASELINE,
+        )
+
+    assert model.hidden_input_lengths == []
+
+    trajectory = controller.generate(
+        torch.tensor([1, 2, 3]),
+        max_new_tokens=1,
+        control=ControlType.BASELINE,
+    )
+    assert len(trajectory.generated_tokens) == 4
+
+
+def test_zero_generation_budget_returns_prompt_without_forward():
+    model = TrackingGPTSynaptic(
+        GPTSynapticConfig(
+            vocab_size=32,
+            n_layer=1,
+            n_head=2,
+            n_kv_head=2,
+            n_embd=32,
+            sequence_len=4,
+        )
+    ).eval()
+    controller = CausalDeliberationController(model, CausalDeliberationConfig(max_iters=0))
+
+    trajectory = controller.generate(torch.tensor([[1, 2, 3, 4]]), max_new_tokens=0)
+
+    assert trajectory.generated_tokens == [1, 2, 3, 4]
+    assert trajectory.step_results == []
+    assert trajectory.total_iterations == 0
+    assert model.hidden_input_lengths == []
+
+
 def test_deliberation_rejects_models_without_representation_contract():
     """Unsupported models fail explicitly instead of silently fabricating state."""
     with pytest.raises(TypeError, match="get_hidden_states"):

@@ -218,9 +218,6 @@ class SelfCorrectingGenerator:
                 is_abstention=False,
             )
 
-        prompt_list = prompt.clone().tolist() if isinstance(prompt, Tensor) else list(prompt)
-        prompt_len = len(prompt_list)
-
         # Initial draft generation
         draft_traj = self.deliberation_controller.generate(
             prompt=prompt,
@@ -228,6 +225,8 @@ class SelfCorrectingGenerator:
             control=ControlType.BASELINE,
         )
         current_tokens = list(draft_traj.generated_tokens)
+        prompt_len = len(current_tokens) - max_new_tokens
+        prompt_list = current_tokens[:prompt_len]
         events: List[SelfCorrectionEvent] = []
         outcome = CorrectionOutcome.VERIFIED_CONSISTENT
         is_abstain = False

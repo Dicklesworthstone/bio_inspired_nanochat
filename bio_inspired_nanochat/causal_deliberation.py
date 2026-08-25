@@ -285,14 +285,57 @@ class CausalDeliberationController:
         control: ControlType = ControlType.DELIBERATION,
     ) -> CausalDeliberationTrajectory:
         """Autoregressively generate tokens, causally committing relaxed states at each step."""
-        tokens = prompt.clone().tolist() if isinstance(prompt, Tensor) else list(prompt)
+        if isinstance(max_new_tokens, bool) or not isinstance(max_new_tokens, int):
+            raise TypeError("max_new_tokens must be a non-negative integer")
+        if max_new_tokens < 0:
+            raise ValueError("max_new_tokens must be a non-negative integer")
+
+        prompt_tensor = prompt if isinstance(prompt, Tensor) else torch.as_tensor(prompt)
+        if prompt_tensor.ndim == 1:
+            prompt_tokens = prompt_tensor.unsqueeze(0)
+        elif prompt_tensor.ndim == 2 and prompt_tensor.shape[0] == 1:
+            prompt_tokens = prompt_tensor
+        elif prompt_tensor.ndim == 2:
+            raise ValueError(
+                "prompt must contain exactly one sequence; batched generation is not supported"
+            )
+        else:
+            raise ValueError(
+                f"prompt must have shape (T,) or (1, T), got {tuple(prompt_tensor.shape)}"
+            )
+
+        prompt_length = int(prompt_tokens.shape[1])
+        if prompt_length == 0:
+            raise ValueError("prompt must contain at least one token")
+        context_length = getattr(getattr(self.model, "config", None), "sequence_len", None)
+        if isinstance(context_length, int) and prompt_length + max_new_tokens > context_length:
+            raise ValueError(
+                f"prompt length {prompt_length} + max_new_tokens {max_new_tokens} exceeds "
+                f"model context length {context_length}"
+            )
+
+        tokens = [int(token) for token in prompt_tokens[0].tolist()]
         step_results: List[DeliberationStepResult] = []
         total_flops = 0
         total_time_ms = 0.0
 
+        if max_new_tokens == 0:
+            return CausalDeliberationTrajectory(
+                generated_tokens=tokens,
+                step_results=step_results,
+                total_iterations=0,
+                total_flops=0,
+                total_wall_time_ms=0.0,
+                mean_iterations_per_token=0.0,
+                convergence_rate=0.0,
+            )
+
         # Run the prompt through the real transformer trunk to get its initial state.
         with torch.no_grad():
-            x = torch.tensor([tokens], dtype=torch.long, device=next(self.model.parameters()).device)
+            x = prompt_tokens.to(
+                dtype=torch.long,
+                device=next(self.model.parameters()).device,
+            )
             hidden = self._extract_hidden_states(x)
 
         h_t = hidden[:, -1, :].clone()

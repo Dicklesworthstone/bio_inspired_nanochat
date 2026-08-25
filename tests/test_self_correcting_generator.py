@@ -44,7 +44,7 @@ class _ScriptedController:
         max_new_tokens: int,
         control: ControlType = ControlType.DELIBERATION,
     ) -> "_ScriptedTrajectory":
-        prompt_tokens = prompt.tolist()
+        prompt_tokens = prompt.reshape(-1).tolist()
         generated = (
             [10, 10, 99, 10, 10]
             if control is ControlType.BASELINE
@@ -119,15 +119,22 @@ def test_certified_abstain_on_exhaustion():
             abstain_token_id=99,
         ),
     )
-    prompt = torch.tensor([1, 2, 3], dtype=torch.long)
+    prompt = torch.tensor([[1, 2, 3]], dtype=torch.long)
     traj = generator.generate(prompt, max_new_tokens=4)
 
     assert traj.outcome == CorrectionOutcome.CERTIFIED_ABSTAIN
     assert traj.is_abstention
-    assert traj.final_tokens[-1] == 99
+    assert traj.final_tokens == [1, 2, 3, 99]
 
 
-def test_local_residuals_drive_middle_span_repair():
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        torch.tensor([1, 2], dtype=torch.long),
+        torch.tensor([[1, 2]], dtype=torch.long),
+    ],
+)
+def test_local_residuals_drive_middle_span_repair(prompt):
     """The repair target follows the planted interior obstruction, not position zero."""
     model = _TokenStateModel()
     generator = SelfCorrectingGenerator(
@@ -142,7 +149,7 @@ def test_local_residuals_drive_middle_span_repair():
     )
 
     trajectory = generator.generate(
-        torch.tensor([1, 2], dtype=torch.long),
+        prompt,
         max_new_tokens=5,
     )
 
