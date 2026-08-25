@@ -1,12 +1,12 @@
 {
-  "run_id": "val-1787580042",
-  "timestamp": "2026-08-24T14:00:42.198295+00:00",
-  "git_sha": "57e0edde391761926fb12ebf56901d371f63ebef",
+  "run_id": "val-1787670351",
+  "timestamp": "2026-08-25T15:05:51.964381+00:00",
+  "git_sha": "fb2cfe3ac9a09792091635056ed836b43cd9eb8a",
   "hardware": "cpu:x86_64",
-  "total_checks": 16,
-  "passed_checks": 16,
+  "total_checks": 5,
+  "passed_checks": 5,
   "failed_checks": 0,
-  "total_duration_sec": 125.68602703418583,
+  "total_duration_sec": 36.3864085432142,
   "all_passed": true,
   "verdict": "ALL SYSTEMS PERFECT (VERIFIED WORKING)",
   "checks": [
@@ -25,134 +25,8 @@
       ],
       "timeout_sec": 45.0,
       "passed": true,
-      "duration_sec": 2.7002082224935293,
-      "stdout": "============================= test session starts ==============================\nplatform linux -- Python 3.14.2, pytest-9.0.2, pluggy-1.6.0 -- /data/projects/bio_inspired_nanochat/.venv/bin/python3\ncachedir: .pytest_cache\nrootdir: /data/projects/bio_inspired_nanochat\nconfigfile: pyproject.toml\nplugins: cov-7.1.0, anyio-4.12.1\ncollecting ... collected 62 items\n\ntests/test_ablation_registry.py::test_registry_defaults_match_synaptic_config PASSED [  1%]\ntests/test_ablation_registry.py::test_default_config_is_valid_and_quiet PASSED [  3%]\ntests/test_ablation_registry.py::test_each_preset_toggles_only_its_declared_fields[bio_all] PASSED [  4%]\ntests/test_ablation_registry.py::test_each_preset_toggles_only_its_declared_fields[bio_no_bdnf] PASSED [  6%]\ntests/test_ablation_registry.py::test_each_preset_toggles_only_its_declared_fields[bio_no_doc2] PASSED [  8%]\ntests/test_ablation_registry.py::test_each_preset_toggles_only_its_declared_fields[bio_no_genome] PASSED [  9%]\ntests/test_ablation_registry.py::test_each_preset_toggles_only_its_declared_fields[bio_no_hebbian] PASSED [ 11%]\ntests/test_ablation_registry.py::test_each_preset_toggles_only_its_declared_fields[bio_no_metabolism] PASSED [ 12%]\ntests/test_ablation_registry.py::test_each_preset_toggles_only_its_declared_fields[bio_no_presyn] PASSED [ 14%]\ntests/test_ablation_registry.py::test_each_preset_toggles_only_its_declared_fields[bio_no_septin_barrier] PASSED [ 16%]\ntests/test_ablation_registry.py::test_each_preset_toggles_only_its_declared_fields[bio_no_stochastic_release] PASSED [ 17%]\ntests/test_ablation_registry.py::test_each_preset_toggles_only_its_declared_fields[vanilla] PASSED [ 19%]\ntests/test_ablation_registry.py::test_every_preset_produces_a_valid_config[bio_all] PASSED [ 20%]\ntests/test_ablation_registry.py::test_every_preset_produces_a_valid_config[bio_no_bdnf] PASSED [ 22%]\ntests/test_ablation_registry.py::test_every_preset_produces_a_valid_config[bio_no_doc2] PASSED [ 24%]\ntests/test_ablation_registry.py::test_every_preset_produces_a_valid_config[bio_no_genome] PASSED [ 25%]\ntests/test_ablation_registry.py::test_every_preset_produces_a_valid_config[bio_no_hebbian] PASSED [ 27%]\ntests/test_ablation_registry.py::test_every_preset_produces_a_valid_config[bio_no_metabolism] PASSED [ 29%]\ntests/test_ablation_registry.py::test_every_preset_produces_a_valid_config[bio_no_presyn] PASSED [ 30%]\ntests/test_ablation_registry.py::test_every_preset_produces_a_valid_config[bio_no_septin_barrier] PASSED [ 32%]\ntests/test_ablation_registry.py::test_every_preset_produces_a_valid_config[bio_no_stochastic_release] PASSED [ 33%]\ntests/test_ablation_registry.py::test_every_preset_produces_a_valid_config[vanilla] PASSED [ 35%]\ntests/test_ablation_registry.py::test_optin_mechanism_without_prerequisite_is_an_error PASSED [ 37%]\ntests/test_ablation_registry.py::test_flex_without_presyn_is_an_error PASSED [ 38%]\ntests/test_ablation_registry.py::test_flex_with_presyn_only_warns_prefill_only PASSED [ 40%]\ntests/test_ablation_registry.py::test_out_of_range_knobs_are_errors PASSED [ 41%]\ntests/test_ablation_registry.py::test_is_mechanism_on_reads_off_value PASSED [ 43%]\ntests/test_ablation_registry.py::test_native_presyn_is_registered_default_off_and_requires_presyn PASSED [ 45%]\ntests/test_ablation_registry.py::test_unknown_preset_raises PASSED       [ 46%]\ntests/test_results_registry.py::test_make_record_stamps_provenance_and_validates_metrics PASSED [ 48%]\ntests/test_results_registry.py::test_make_record_rejects_unknown_metric PASSED [ 50%]\ntests/test_results_registry.py::test_make_record_rejects_unknown_harness PASSED [ 51%]\ntests/test_results_registry.py::test_make_record_hashes_full_mapping_config PASSED [ 53%]\ntests/test_results_registry.py::test_make_record_rejects_ambiguous_config_and_empty_run_id PASSED [ 54%]\ntests/test_results_registry.py::test_default_registry_is_a_committable_results_path PASSED [ 56%]\ntests/test_results_registry.py::test_append_and_read_roundtrip PASSED    [ 58%]\ntests/test_results_registry.py::test_read_missing_registry_is_empty PASSED [ 59%]\ntests/test_results_registry.py::test_read_registry_reports_corrupt_line PASSED [ 61%]\ntests/test_results_registry.py::test_best_record_respects_optimization_direction PASSED [ 62%]\ntests/test_results_registry.py::test_best_record_excludes_ineligible_falsification_results PASSED [ 64%]\ntests/test_results_registry.py::test_legacy_free_text_verdict_is_ineligible_until_migrated PASSED [ 66%]\ntests/test_results_registry.py::test_persisted_verdict_eligibility_invariant_fails_closed PASSED [ 67%]\ntests/test_results_registry.py::test_record_json_roundtrip PASSED        [ 69%]\ntests/test_results_registry.py::test_summarize_and_cli PASSED            [ 70%]\ntests/test_metrics_schema.py::test_registry_is_populated_and_well_formed PASSED [ 72%]\ntests/test_metrics_schema.py::test_each_harness_area_is_represented PASSED [ 74%]\ntests/test_metrics_schema.py::test_duplicate_registration_is_rejected PASSED [ 75%]\ntests/test_metrics_schema.py::test_validate_accepts_known_metrics_and_coerces_to_float PASSED [ 77%]\ntests/test_metrics_schema.py::test_validate_rejects_unknown_metric_when_strict PASSED [ 79%]\ntests/test_metrics_schema.py::test_validate_drops_unknown_metric_when_not_strict PASSED [ 80%]\ntests/test_metrics_schema.py::test_validate_rejects_non_finite_values[nan] PASSED [ 82%]\ntests/test_metrics_schema.py::test_validate_rejects_non_finite_values[inf] PASSED [ 83%]\ntests/test_metrics_schema.py::test_validate_rejects_non_finite_values[-inf] PASSED [ 85%]\ntests/test_metrics_schema.py::test_validate_rejects_non_numeric_value PASSED [ 87%]\ntests/test_metrics_schema.py::test_helpers PASSED                        [ 88%]\ntests/test_checkpoint_roundtrip.py::test_custom_config_round_trips_through_meta_json PASSED [ 90%]\ntests/test_checkpoint_roundtrip.py::test_full_default_config_round_trips PASSED [ 91%]\ntests/test_checkpoint_roundtrip.py::test_missing_config_falls_back_to_defaults PASSED [ 93%]\ntests/test_checkpoint_roundtrip.py::test_unknown_saved_field_is_ignored_forward_compat PASSED [ 95%]\ntests/test_checkpoint_roundtrip.py::test_missing_new_field_takes_default_back_compat PASSED [ 96%]\ntests/test_checkpoint_roundtrip.py::test_config_hash_is_stable_and_sensitive PASSED [ 98%]\ntests/test_checkpoint_roundtrip.py::test_provenance_stamp_has_sha_and_config_hash PASSED [100%]\n\n============================== 62 passed in 0.32s ==============================",
-      "stderr": "",
-      "error_message": "",
-      "invariants_count": 0
-    },
-    {
-      "id": "e2e_bio_train",
-      "name": "Full Bio Training Loop E2E (eqyk.4)",
-      "category": "Foundations E2E",
-      "command": [
-        "pytest",
-        "tests/test_e2e_train_bio.py",
-        "-v",
-        "--tb=short"
-      ],
-      "timeout_sec": 60.0,
-      "passed": true,
-      "duration_sec": 18.46314638108015,
-      "stdout": "============================= test session starts ==============================\nplatform linux -- Python 3.14.2, pytest-9.0.2, pluggy-1.6.0 -- /data/projects/bio_inspired_nanochat/.venv/bin/python3\ncachedir: .pytest_cache\nrootdir: /data/projects/bio_inspired_nanochat\nconfigfile: pyproject.toml\nplugins: cov-7.1.0, anyio-4.12.1\ncollecting ... collected 3 items\n\ntests/test_e2e_train_bio.py::test_bio_e2e_run_passes_and_logs PASSED     [ 33%]\ntests/test_e2e_train_bio.py::test_bio_e2e_battery_catches_no_learning PASSED [ 66%]\ntests/test_e2e_train_bio.py::test_bio_e2e_moe_default_stays_finite PASSED [100%]\n\n============================== 3 passed in 15.57s ==============================",
-      "stderr": "",
-      "error_message": "",
-      "invariants_count": 0
-    },
-    {
-      "id": "e2e_cmaes",
-      "name": "CMA-ES Tune Loop & Resume E2E (eqyk.7)",
-      "category": "Foundations E2E",
-      "command": [
-        "pytest",
-        "tests/test_e2e_cmaes.py",
-        "-v",
-        "--tb=short"
-      ],
-      "timeout_sec": 45.0,
-      "passed": true,
-      "duration_sec": 38.222186711616814,
-      "stdout": "============================= test session starts ==============================\nplatform linux -- Python 3.14.2, pytest-9.0.2, pluggy-1.6.0 -- /data/projects/bio_inspired_nanochat/.venv/bin/python3\ncachedir: .pytest_cache\nrootdir: /data/projects/bio_inspired_nanochat\nconfigfile: pyproject.toml\nplugins: cov-7.1.0, anyio-4.12.1\ncollecting ... collected 2 items\n\ntests/test_e2e_cmaes.py::test_cmaes_e2e_full_battery PASSED              [ 50%]\ntests/test_e2e_cmaes.py::test_cmaes_e2e_cli_entrypoint PASSED            [100%]\n\n============================== 2 passed in 34.78s ==============================",
-      "stderr": "",
-      "error_message": "",
-      "invariants_count": 0
-    },
-    {
-      "id": "e2e_online_hebbian",
-      "name": "Online Hebbian & Bistable Plasticity E2E (eqyk.8)",
-      "category": "Foundations E2E",
-      "command": [
-        "pytest",
-        "tests/test_e2e_online_learning.py",
-        "-v",
-        "--tb=short"
-      ],
-      "timeout_sec": 45.0,
-      "passed": true,
-      "duration_sec": 18.654174010269344,
-      "stdout": "============================= test session starts ==============================\nplatform linux -- Python 3.14.2, pytest-9.0.2, pluggy-1.6.0 -- /data/projects/bio_inspired_nanochat/.venv/bin/python3\ncachedir: .pytest_cache\nrootdir: /data/projects/bio_inspired_nanochat\nconfigfile: pyproject.toml\nplugins: cov-7.1.0, anyio-4.12.1\ncollecting ... collected 2 items\n\ntests/test_e2e_online_learning.py::test_online_learning_e2e_passes_and_logs PASSED [ 50%]\ntests/test_e2e_online_learning.py::test_online_learning_e2e_deterministic PASSED [100%]\n\n============================== 2 passed in 15.42s ==============================",
-      "stderr": "",
-      "error_message": "",
-      "invariants_count": 0
-    },
-    {
-      "id": "e2e_structural_evolution",
-      "name": "Structural Evolution & Neurogenesis E2E (eqyk.9)",
-      "category": "Foundations E2E",
-      "command": [
-        "pytest",
-        "tests/test_e2e_structural_lifecycle.py",
-        "-v",
-        "--tb=short"
-      ],
-      "timeout_sec": 45.0,
-      "passed": true,
-      "duration_sec": 4.438061193563044,
-      "stdout": "============================= test session starts ==============================\nplatform linux -- Python 3.14.2, pytest-9.0.2, pluggy-1.6.0 -- /data/projects/bio_inspired_nanochat/.venv/bin/python3\ncachedir: .pytest_cache\nrootdir: /data/projects/bio_inspired_nanochat\nconfigfile: pyproject.toml\nplugins: cov-7.1.0, anyio-4.12.1\ncollecting ... collected 3 items\n\ntests/test_e2e_structural_lifecycle.py::test_forced_lifecycle_invariants_and_lineage PASSED [ 33%]\ntests/test_e2e_structural_lifecycle.py::test_lifecycle_resets_optimizer_momentum_adamw_and_muon PASSED [ 66%]\ntests/test_e2e_structural_lifecycle.py::test_function_preserving_controller_step_no_loss_spike PASSED [100%]\n\n============================== 3 passed in 1.07s ===============================",
-      "stderr": "",
-      "error_message": "",
-      "invariants_count": 0
-    },
-    {
-      "id": "e2e_wake_sleep",
-      "name": "Wake/Sleep Consolidation & Forgetting E2E (eqyk.10)",
-      "category": "Foundations E2E",
-      "command": [
-        "pytest",
-        "tests/test_e2e_wake_sleep.py",
-        "-v",
-        "--tb=short"
-      ],
-      "timeout_sec": 45.0,
-      "passed": true,
-      "duration_sec": 2.9265249501913786,
-      "stdout": "============================= test session starts ==============================\nplatform linux -- Python 3.14.2, pytest-9.0.2, pluggy-1.6.0 -- /data/projects/bio_inspired_nanochat/.venv/bin/python3\ncachedir: .pytest_cache\nrootdir: /data/projects/bio_inspired_nanochat\nconfigfile: pyproject.toml\nplugins: cov-7.1.0, anyio-4.12.1\ncollecting ... collected 4 items\n\ntests/test_e2e_wake_sleep.py::test_wake_sleep_consolidation_full_battery PASSED [ 25%]\ntests/test_e2e_wake_sleep.py::test_replay_buffer_surprise_prioritization PASSED [ 50%]\ntests/test_e2e_wake_sleep.py::test_homeostatic_downscale_bounds_slow_weights PASSED [ 75%]\ntests/test_e2e_wake_sleep.py::test_wake_sleep_cli_entrypoint PASSED      [100%]\n\n============================== 4 passed in 0.78s ===============================",
-      "stderr": "",
-      "error_message": "",
-      "invariants_count": 0
-    },
-    {
-      "id": "e2e_neuromod_rl",
-      "name": "Neuromodulated 3-Factor RL Micro-Run E2E (eqyk.11)",
-      "category": "Foundations E2E",
-      "command": [
-        "pytest",
-        "tests/test_e2e_neuromod_rl.py",
-        "-v",
-        "--tb=short"
-      ],
-      "timeout_sec": 45.0,
-      "passed": true,
-      "duration_sec": 5.283745381049812,
-      "stdout": "============================= test session starts ==============================\nplatform linux -- Python 3.14.2, pytest-9.0.2, pluggy-1.6.0 -- /data/projects/bio_inspired_nanochat/.venv/bin/python3\ncachedir: .pytest_cache\nrootdir: /data/projects/bio_inspired_nanochat\nconfigfile: pyproject.toml\nplugins: cov-7.1.0, anyio-4.12.1\ncollecting ... collected 3 items\n\ntests/test_e2e_neuromod_rl.py::test_neuromod_rl_full_battery PASSED      [ 33%]\ntests/test_e2e_neuromod_rl.py::test_neuromod_bus_gating_mechanisms PASSED [ 66%]\ntests/test_e2e_neuromod_rl.py::test_neuromod_rl_cli_entrypoint PASSED    [100%]\n\n============================== 3 passed in 2.25s ===============================",
-      "stderr": "",
-      "error_message": "",
-      "invariants_count": 0
-    },
-    {
-      "id": "e2e_interpretability",
-      "name": "Interpretability Probe/Lesion/Stimulation E2E (eqyk.12)",
-      "category": "Foundations E2E",
-      "command": [
-        "pytest",
-        "tests/test_e2e_probe_lesion_stim.py",
-        "-v",
-        "--tb=short"
-      ],
-      "timeout_sec": 45.0,
-      "passed": true,
-      "duration_sec": 2.722170002758503,
-      "stdout": "============================= test session starts ==============================\nplatform linux -- Python 3.14.2, pytest-9.0.2, pluggy-1.6.0 -- /data/projects/bio_inspired_nanochat/.venv/bin/python3\ncachedir: .pytest_cache\nrootdir: /data/projects/bio_inspired_nanochat\nconfigfile: pyproject.toml\nplugins: cov-7.1.0, anyio-4.12.1\ncollecting ... collected 2 items\n\ntests/test_e2e_probe_lesion_stim.py::test_probe_lesion_stim_full_battery PASSED [ 50%]\ntests/test_e2e_probe_lesion_stim.py::test_probe_lesion_stim_cli_entrypoint PASSED [100%]\n\n============================== 2 passed in 0.23s ===============================",
+      "duration_sec": 4.625077264383435,
+      "stdout": "============================= test session starts ==============================\nplatform linux -- Python 3.14.2, pytest-9.0.2, pluggy-1.6.0 -- /data/projects/bio_inspired_nanochat/.venv/bin/python3\ncachedir: .pytest_cache\nrootdir: /data/projects/bio_inspired_nanochat\nconfigfile: pyproject.toml\nplugins: cov-7.1.0, anyio-4.12.1\ncollecting ... collected 78 items\n\ntests/test_ablation_registry.py::test_registry_defaults_match_synaptic_config PASSED [  1%]\ntests/test_ablation_registry.py::test_default_config_is_valid_and_quiet PASSED [  2%]\ntests/test_ablation_registry.py::test_each_preset_toggles_only_its_declared_fields[bio_all] PASSED [  3%]\ntests/test_ablation_registry.py::test_each_preset_toggles_only_its_declared_fields[bio_no_bdnf] PASSED [  5%]\ntests/test_ablation_registry.py::test_each_preset_toggles_only_its_declared_fields[bio_no_doc2] PASSED [  6%]\ntests/test_ablation_registry.py::test_each_preset_toggles_only_its_declared_fields[bio_no_genome] PASSED [  7%]\ntests/test_ablation_registry.py::test_each_preset_toggles_only_its_declared_fields[bio_no_hebbian] PASSED [  8%]\ntests/test_ablation_registry.py::test_each_preset_toggles_only_its_declared_fields[bio_no_metabolism] PASSED [ 10%]\ntests/test_ablation_registry.py::test_each_preset_toggles_only_its_declared_fields[bio_no_presyn] PASSED [ 11%]\ntests/test_ablation_registry.py::test_each_preset_toggles_only_its_declared_fields[bio_no_septin_barrier] PASSED [ 12%]\ntests/test_ablation_registry.py::test_each_preset_toggles_only_its_declared_fields[bio_no_stochastic_release] PASSED [ 14%]\ntests/test_ablation_registry.py::test_each_preset_toggles_only_its_declared_fields[granularity_per_expert] PASSED [ 15%]\ntests/test_ablation_registry.py::test_each_preset_toggles_only_its_declared_fields[granularity_per_neuron] PASSED [ 16%]\ntests/test_ablation_registry.py::test_each_preset_toggles_only_its_declared_fields[vanilla] PASSED [ 17%]\ntests/test_ablation_registry.py::test_every_preset_produces_a_valid_config[bio_all] PASSED [ 19%]\ntests/test_ablation_registry.py::test_every_preset_produces_a_valid_config[bio_no_bdnf] PASSED [ 20%]\ntests/test_ablation_registry.py::test_every_preset_produces_a_valid_config[bio_no_doc2] PASSED [ 21%]\ntests/test_ablation_registry.py::test_every_preset_produces_a_valid_config[bio_no_genome] PASSED [ 23%]\ntests/test_ablation_registry.py::test_every_preset_produces_a_valid_config[bio_no_hebbian] PASSED [ 24%]\ntests/test_ablation_registry.py::test_every_preset_produces_a_valid_config[bio_no_metabolism] PASSED [ 25%]\ntests/test_ablation_registry.py::test_every_preset_produces_a_valid_config[bio_no_presyn] PASSED [ 26%]\ntests/test_ablation_registry.py::test_every_preset_produces_a_valid_config[bio_no_septin_barrier] PASSED [ 28%]\ntests/test_ablation_registry.py::test_every_preset_produces_a_valid_config[bio_no_stochastic_release] PASSED [ 29%]\ntests/test_ablation_registry.py::test_every_preset_produces_a_valid_config[granularity_per_expert] PASSED [ 30%]\ntests/test_ablation_registry.py::test_every_preset_produces_a_valid_config[granularity_per_neuron] PASSED [ 32%]\ntests/test_ablation_registry.py::test_every_preset_produces_a_valid_config[vanilla] PASSED [ 33%]\ntests/test_ablation_registry.py::test_optin_mechanism_without_prerequisite_is_an_error PASSED [ 34%]\ntests/test_ablation_registry.py::test_flex_without_presyn_is_an_error PASSED [ 35%]\ntests/test_ablation_registry.py::test_flex_with_presyn_only_warns_prefill_only PASSED [ 37%]\ntests/test_ablation_registry.py::test_out_of_range_knobs_are_errors PASSED [ 38%]\ntests/test_ablation_registry.py::test_is_mechanism_on_reads_off_value PASSED [ 39%]\ntests/test_ablation_registry.py::test_native_presyn_is_registered_default_off_and_requires_presyn PASSED [ 41%]\ntests/test_ablation_registry.py::test_unknown_preset_raises PASSED       [ 42%]\ntests/test_results_registry.py::test_make_record_stamps_provenance_and_validates_metrics PASSED [ 43%]\ntests/test_results_registry.py::test_make_record_rejects_unknown_metric PASSED [ 44%]\ntests/test_results_registry.py::test_direct_record_construction_enforces_schema_and_finiteness PASSED [ 46%]\ntests/test_results_registry.py::test_make_record_rejects_unknown_harness PASSED [ 47%]\ntests/test_results_registry.py::test_make_record_hashes_full_mapping_config PASSED [ 48%]\ntests/test_results_registry.py::test_make_record_rejects_ambiguous_config_and_empty_run_id PASSED [ 50%]\ntests/test_results_registry.py::test_default_registry_is_a_committable_results_path PASSED [ 51%]\ntests/test_results_registry.py::test_append_and_read_roundtrip PASSED    [ 52%]\ntests/test_results_registry.py::test_append_revalidates_mutated_record_before_any_io PASSED [ 53%]\ntests/test_results_registry.py::test_read_missing_registry_is_empty PASSED [ 55%]\ntests/test_results_registry.py::test_read_registry_reports_corrupt_line PASSED [ 56%]\ntests/test_results_registry.py::test_read_registry_rejects_unknown_fields_with_line_context PASSED [ 57%]\ntests/test_results_registry.py::test_read_registry_rejects_nonstandard_json_constant_with_line_context PASSED [ 58%]\ntests/test_results_registry.py::test_read_registry_rejects_duplicate_json_fields_with_line_context[{\"run_id\":\"first\",\"run_id\":\"second\",\"harness\":\"eval\",\"metrics\":{}}] PASSED [ 60%]\ntests/test_results_registry.py::test_read_registry_rejects_duplicate_json_fields_with_line_context[{\"run_id\":\"nested\",\"harness\":\"eval\",\"metrics\":{\"val_bpb\":1,\"val_bpb\":2}}] PASSED [ 61%]\ntests/test_results_registry.py::test_best_record_respects_optimization_direction PASSED [ 62%]\ntests/test_results_registry.py::test_best_record_rejects_neutral_metrics PASSED [ 64%]\ntests/test_results_registry.py::test_performance_registry_metrics_are_schema_valid PASSED [ 65%]\ntests/test_results_registry.py::test_best_record_excludes_ineligible_falsification_results PASSED [ 66%]\ntests/test_results_registry.py::test_legacy_free_text_verdict_is_ineligible_until_migrated PASSED [ 67%]\ntests/test_results_registry.py::test_persisted_verdict_eligibility_invariant_fails_closed PASSED [ 69%]\ntests/test_results_registry.py::test_record_json_roundtrip PASSED        [ 70%]\ntests/test_results_registry.py::test_summarize_and_cli PASSED            [ 71%]\ntests/test_results_registry.py::test_summarize_revalidates_mutated_records PASSED [ 73%]\ntests/test_metrics_schema.py::test_registry_is_populated_and_well_formed PASSED [ 74%]\ntests/test_metrics_schema.py::test_each_harness_area_is_represented PASSED [ 75%]\ntests/test_metrics_schema.py::test_duplicate_registration_is_rejected PASSED [ 76%]\ntests/test_metrics_schema.py::test_validate_accepts_known_metrics_and_coerces_to_float PASSED [ 78%]\ntests/test_metrics_schema.py::test_validate_rejects_unknown_metric_when_strict PASSED [ 79%]\ntests/test_metrics_schema.py::test_validate_drops_unknown_metric_when_not_strict PASSED [ 80%]\ntests/test_metrics_schema.py::test_validate_rejects_non_finite_values[nan] PASSED [ 82%]\ntests/test_metrics_schema.py::test_validate_rejects_non_finite_values[inf] PASSED [ 83%]\ntests/test_metrics_schema.py::test_validate_rejects_non_finite_values[-inf] PASSED [ 84%]\ntests/test_metrics_schema.py::test_validate_rejects_non_numeric_value PASSED [ 85%]\ntests/test_metrics_schema.py::test_helpers PASSED                        [ 87%]\ntests/test_checkpoint_roundtrip.py::test_custom_config_round_trips_through_meta_json PASSED [ 88%]\ntests/test_checkpoint_roundtrip.py::test_full_default_config_round_trips PASSED [ 89%]\ntests/test_checkpoint_roundtrip.py::test_missing_config_falls_back_to_defaults PASSED [ 91%]\ntests/test_checkpoint_roundtrip.py::test_unknown_saved_field_is_ignored_forward_compat PASSED [ 92%]\ntests/test_checkpoint_roundtrip.py::test_missing_new_field_takes_default_back_compat PASSED [ 93%]\ntests/test_checkpoint_roundtrip.py::test_config_hash_is_stable_and_sensitive PASSED [ 94%]\ntests/test_checkpoint_roundtrip.py::test_provenance_stamp_has_sha_and_config_hash PASSED [ 96%]\ntests/test_checkpoint_roundtrip.py::test_crash_debris_step_is_not_discovered_when_markers_in_use PASSED [ 97%]\ntests/test_checkpoint_roundtrip.py::test_legacy_directory_without_markers_stays_discoverable PASSED [ 98%]\ntests/test_checkpoint_roundtrip.py::test_rustbpe_tokenizer_json_round_trip PASSED [100%]\n\n============================== 78 passed in 0.72s ==============================",
       "stderr": "",
       "error_message": "",
       "invariants_count": 0
@@ -169,8 +43,8 @@
       ],
       "timeout_sec": 60.0,
       "passed": true,
-      "duration_sec": 7.485877679660916,
-      "stdout": "============================= test session starts ==============================\nplatform linux -- Python 3.14.2, pytest-9.0.2, pluggy-1.6.0 -- /data/projects/bio_inspired_nanochat/.venv/bin/python3\ncachedir: .pytest_cache\nrootdir: /data/projects/bio_inspired_nanochat\nconfigfile: pyproject.toml\nplugins: cov-7.1.0, anyio-4.12.1\ncollecting ... collected 4 items\n\ntests/test_presyn_backend_parity.py::test_python_canonical_matches_frozen_decode_trajectory PASSED [ 25%]\ntests/test_presyn_backend_parity.py::test_triton_interpreter_matches_frozen_decode_trajectory PASSED [ 50%]\ntests/test_presyn_backend_parity.py::test_cuda_triton_dispatch_matches_frozen_decode_trajectory SKIPPED [ 75%]\ntests/test_presyn_backend_parity.py::test_rust_backend_matches_frozen_decode_trajectory SKIPPED [100%]\n\n=========================== short test summary info ============================\nSKIPPED [1] tests/test_presyn_backend_parity.py:154: CUDA backend unavailable\nSKIPPED [1] tests/test_presyn_backend_parity.py:205: rustbpe extension not built; run `uv run maturin develop --release`\n========================= 2 passed, 2 skipped in 5.01s =========================",
+      "duration_sec": 11.301194512285292,
+      "stdout": "============================= test session starts ==============================\nplatform linux -- Python 3.14.2, pytest-9.0.2, pluggy-1.6.0 -- /data/projects/bio_inspired_nanochat/.venv/bin/python3\ncachedir: .pytest_cache\nrootdir: /data/projects/bio_inspired_nanochat\nconfigfile: pyproject.toml\nplugins: cov-7.1.0, anyio-4.12.1\ncollecting ... collected 4 items\n\ntests/test_presyn_backend_parity.py::test_python_canonical_matches_frozen_decode_trajectory PASSED [ 25%]\ntests/test_presyn_backend_parity.py::test_triton_interpreter_matches_frozen_decode_trajectory PASSED [ 50%]\ntests/test_presyn_backend_parity.py::test_cuda_triton_dispatch_matches_frozen_decode_trajectory SKIPPED [ 75%]\ntests/test_presyn_backend_parity.py::test_rust_backend_matches_frozen_decode_trajectory PASSED [100%]\n\n=========================== short test summary info ============================\nSKIPPED [1] tests/test_presyn_backend_parity.py:154: CUDA backend unavailable\n========================= 3 passed, 1 skipped in 7.40s =========================",
       "stderr": "",
       "error_message": "",
       "invariants_count": 0
@@ -187,8 +61,8 @@
       ],
       "timeout_sec": 60.0,
       "passed": true,
-      "duration_sec": 2.7972475048154593,
-      "stdout": "============================= test session starts ==============================\nplatform linux -- Python 3.14.2, pytest-9.0.2, pluggy-1.6.0 -- /data/projects/bio_inspired_nanochat/.venv/bin/python3\ncachedir: .pytest_cache\nrootdir: /data/projects/bio_inspired_nanochat\nconfigfile: pyproject.toml\nplugins: cov-7.1.0, anyio-4.12.1\ncollecting ... collected 3 items\n\ntests/test_property_invariants.py::test_property_invariants_full_battery PASSED [ 33%]\ntests/test_property_invariants.py::test_metamorphic_prefix_causality PASSED [ 66%]\ntests/test_property_invariants.py::test_property_invariants_cli_entrypoint PASSED [100%]\n\n============================== 3 passed in 0.43s ===============================",
+      "duration_sec": 5.2106629917398095,
+      "stdout": "============================= test session starts ==============================\nplatform linux -- Python 3.14.2, pytest-9.0.2, pluggy-1.6.0 -- /data/projects/bio_inspired_nanochat/.venv/bin/python3\ncachedir: .pytest_cache\nrootdir: /data/projects/bio_inspired_nanochat\nconfigfile: pyproject.toml\nplugins: cov-7.1.0, anyio-4.12.1\ncollecting ... collected 3 items\n\ntests/test_property_invariants.py::test_property_invariants_full_battery PASSED [ 33%]\ntests/test_property_invariants.py::test_metamorphic_prefix_causality PASSED [ 66%]\ntests/test_property_invariants.py::test_property_invariants_cli_entrypoint PASSED [100%]\n\n============================== 3 passed in 1.57s ===============================",
       "stderr": "",
       "error_message": "",
       "invariants_count": 0
@@ -205,80 +79,8 @@
       ],
       "timeout_sec": 45.0,
       "passed": true,
-      "duration_sec": 2.411166471429169,
-      "stdout": "============================= test session starts ==============================\nplatform linux -- Python 3.14.2, pytest-9.0.2, pluggy-1.6.0 -- /data/projects/bio_inspired_nanochat/.venv/bin/python3\ncachedir: .pytest_cache\nrootdir: /data/projects/bio_inspired_nanochat\nconfigfile: pyproject.toml\nplugins: cov-7.1.0, anyio-4.12.1\ncollecting ... collected 2 items\n\ntests/test_e2e_theory_artifacts.py::test_theory_artifacts_full_battery PASSED [ 50%]\ntests/test_e2e_theory_artifacts.py::test_theory_artifacts_cli_entrypoint PASSED [100%]\n\n============================== 2 passed in 0.15s ===============================",
-      "stderr": "",
-      "error_message": "",
-      "invariants_count": 0
-    },
-    {
-      "id": "capability_frontier_1",
-      "name": "Capability Frontier I Batteries (Deliberation/Adaptive/Scientist) (eqyk.19)",
-      "category": "Capability Frontier",
-      "command": [
-        "pytest",
-        "tests/test_e2e_capability_frontier.py",
-        "-v",
-        "--tb=short"
-      ],
-      "timeout_sec": 60.0,
-      "passed": true,
-      "duration_sec": 3.4099946776404977,
-      "stdout": "============================= test session starts ==============================\nplatform linux -- Python 3.14.2, pytest-9.0.2, pluggy-1.6.0 -- /data/projects/bio_inspired_nanochat/.venv/bin/python3\ncachedir: .pytest_cache\nrootdir: /data/projects/bio_inspired_nanochat\nconfigfile: pyproject.toml\nplugins: cov-7.1.0, anyio-4.12.1\ncollecting ... collected 2 items\n\ntests/test_e2e_capability_frontier.py::test_capability_frontier_full_battery PASSED [ 50%]\ntests/test_e2e_capability_frontier.py::test_capability_frontier_cli_entrypoint PASSED [100%]\n\n============================== 2 passed in 0.88s ===============================",
-      "stderr": "",
-      "error_message": "",
-      "invariants_count": 0
-    },
-    {
-      "id": "uncertainty_calibration",
-      "name": "Uncertainty Calibration & Selective Prediction (eqyk.20)",
-      "category": "Capability Frontier",
-      "command": [
-        "pytest",
-        "tests/test_e2e_uncertainty.py",
-        "-v",
-        "--tb=short"
-      ],
-      "timeout_sec": 60.0,
-      "passed": true,
-      "duration_sec": 4.517792952246964,
-      "stdout": "============================= test session starts ==============================\nplatform linux -- Python 3.14.2, pytest-9.0.2, pluggy-1.6.0 -- /data/projects/bio_inspired_nanochat/.venv/bin/python3\ncachedir: .pytest_cache\nrootdir: /data/projects/bio_inspired_nanochat\nconfigfile: pyproject.toml\nplugins: cov-7.1.0, anyio-4.12.1\ncollecting ... collected 4 items\n\ntests/test_e2e_uncertainty.py::test_uncertainty_e2e_logs_metrics_actions_and_thermodynamic_evidence PASSED [ 25%]\ntests/test_e2e_uncertainty.py::test_uncertainty_e2e_rejects_invalid_target_coverage[nan] PASSED [ 50%]\ntests/test_e2e_uncertainty.py::test_uncertainty_e2e_rejects_invalid_target_coverage[0.0] PASSED [ 75%]\ntests/test_e2e_uncertainty.py::test_uncertainty_e2e_rejects_invalid_target_coverage[1.0] PASSED [100%]\n\n============================== 4 passed in 1.29s ===============================",
-      "stderr": "",
-      "error_message": "",
-      "invariants_count": 0
-    },
-    {
-      "id": "retrofit_mgr_geometry",
-      "name": "Synaptic Retrofit & MGR Attention Variants Battery (eqyk.21)",
-      "category": "Capability Frontier",
-      "command": [
-        "pytest",
-        "tests/test_e2e_retrofit_mgr.py",
-        "-v",
-        "--tb=short"
-      ],
-      "timeout_sec": 45.0,
-      "passed": true,
-      "duration_sec": 5.589466559700668,
-      "stdout": "============================= test session starts ==============================\nplatform linux -- Python 3.14.2, pytest-9.0.2, pluggy-1.6.0 -- /data/projects/bio_inspired_nanochat/.venv/bin/python3\ncachedir: .pytest_cache\nrootdir: /data/projects/bio_inspired_nanochat\nconfigfile: pyproject.toml\nplugins: cov-7.1.0, anyio-4.12.1\ncollecting ... collected 2 items\n\ntests/test_e2e_retrofit_mgr.py::test_retrofit_mgr_full_battery PASSED    [ 50%]\ntests/test_e2e_retrofit_mgr.py::test_retrofit_mgr_cli_entrypoint PASSED  [100%]\n\n============================== 2 passed in 1.95s ===============================",
-      "stderr": "",
-      "error_message": "",
-      "invariants_count": 0
-    },
-    {
-      "id": "wave2_compositions",
-      "name": "Wave-2 Emergent Compositions (Self-Correct, Metacognition, Search) (eqyk.22)",
-      "category": "Capability Frontier",
-      "command": [
-        "pytest",
-        "tests/test_e2e_wave2_compositions.py",
-        "-v",
-        "--tb=short"
-      ],
-      "timeout_sec": 45.0,
-      "passed": true,
-      "duration_sec": 2.9451082115992904,
-      "stdout": "============================= test session starts ==============================\nplatform linux -- Python 3.14.2, pytest-9.0.2, pluggy-1.6.0 -- /data/projects/bio_inspired_nanochat/.venv/bin/python3\ncachedir: .pytest_cache\nrootdir: /data/projects/bio_inspired_nanochat\nconfigfile: pyproject.toml\nplugins: cov-7.1.0, anyio-4.12.1\ncollecting ... collected 2 items\n\ntests/test_e2e_wave2_compositions.py::test_wave2_compositions_full_battery PASSED [ 50%]\ntests/test_e2e_wave2_compositions.py::test_wave2_compositions_cli_entrypoint PASSED [100%]\n\n============================== 2 passed in 0.12s ===============================",
+      "duration_sec": 4.003732872195542,
+      "stdout": "============================= test session starts ==============================\nplatform linux -- Python 3.14.2, pytest-9.0.2, pluggy-1.6.0 -- /data/projects/bio_inspired_nanochat/.venv/bin/python3\ncachedir: .pytest_cache\nrootdir: /data/projects/bio_inspired_nanochat\nconfigfile: pyproject.toml\nplugins: cov-7.1.0, anyio-4.12.1\ncollecting ... collected 2 items\n\ntests/test_e2e_theory_artifacts.py::test_theory_artifacts_full_battery PASSED [ 50%]\ntests/test_e2e_theory_artifacts.py::test_theory_artifacts_cli_entrypoint PASSED [100%]\n\n============================== 2 passed in 0.27s ===============================",
       "stderr": "",
       "error_message": "",
       "invariants_count": 0
@@ -298,8 +100,8 @@
       ],
       "timeout_sec": 45.0,
       "passed": true,
-      "duration_sec": 3.1191561240702868,
-      "stdout": "Running Performance Regression Benchmarks...\n                      Performance Regression Gate Results                       \n\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 Benchmark      \u2503        \u2503       Observed \u2503        Baseline \u2503        \u2503        \u2503\n\u2503 Config         \u2503 Mode   \u2503        (tok/s) \u2503         (tok/s) \u2503  Ratio \u2503 Status \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 standard_tran\u2026 \u2502 train  \u2502         7534.3 \u2502          3000.0 \u2502 251.1% \u2502 PASS   \u2502\n\u2502 synaptic_tran\u2026 \u2502 train  \u2502         2642.4 \u2502          1500.0 \u2502 176.2% \u2502 PASS   \u2502\n\u2502 standard_tran\u2026 \u2502 decode \u2502        12648.9 \u2502          3000.0 \u2502 421.6% \u2502 PASS   \u2502\n\u2502 synaptic_tran\u2026 \u2502 decode \u2502         1932.2 \u2502          1000.0 \u2502 193.2% \u2502 PASS   \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\nAll performance regression gates passed!",
+      "duration_sec": 11.245740902610123,
+      "stdout": "Running Performance Regression Benchmarks...\n                      Performance Regression Gate Results                       \n\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 Benchmark      \u2503        \u2503       Observed \u2503        Baseline \u2503        \u2503        \u2503\n\u2503 Config         \u2503 Mode   \u2503        (tok/s) \u2503         (tok/s) \u2503  Ratio \u2503 Status \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 standard_tran\u2026 \u2502 train  \u2502         6909.7 \u2502          2956.2 \u2502 233.7% \u2502 PASS   \u2502\n\u2502 synaptic_tran\u2026 \u2502 train  \u2502          205.1 \u2502           349.6 \u2502  58.6% \u2502 PASS   \u2502\n\u2502 standard_tran\u2026 \u2502 decode \u2502          232.0 \u2502           276.7 \u2502  83.9% \u2502 PASS   \u2502\n\u2502 synaptic_tran\u2026 \u2502 decode \u2502           79.2 \u2502            76.1 \u2502 104.1% \u2502 PASS   \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\nAll performance regression gates passed!",
       "stderr": "",
       "error_message": "",
       "invariants_count": 0

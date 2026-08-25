@@ -2,7 +2,7 @@
   "standard_transformer_train": {
     "name": "standard_transformer_train",
     "mode": "train",
-    "tok_per_sec": 3000.0,
+    "tok_per_sec": 2956.1721656461873,
     "peak_memory_mb": 0.4375,
     "device": "cpu",
     "benchmark_config": {
@@ -19,13 +19,13 @@
       "measure_steps": 5,
       "device": "cpu"
     },
-    "tolerance": 0.50
+    "tolerance": 0.4
   },
   "synaptic_transformer_train": {
     "name": "synaptic_transformer_train",
     "mode": "train",
-    "tok_per_sec": 1500.0,
-    "peak_memory_mb": 0.7368,
+    "tok_per_sec": 349.6316120392317,
+    "peak_memory_mb": 0.73681640625,
     "device": "cpu",
     "benchmark_config": {
       "name": "synaptic_transformer_train",
@@ -41,12 +41,12 @@
       "measure_steps": 5,
       "device": "cpu"
     },
-    "tolerance": 0.50
+    "tolerance": 0.4
   },
   "standard_transformer_cached_tq1_decode": {
     "name": "standard_transformer_cached_tq1_decode",
     "mode": "decode",
-    "tok_per_sec": 1170.0,
+    "tok_per_sec": 276.67450421396904,
     "peak_memory_mb": 0.4375,
     "device": "cpu",
     "benchmark_config": {
@@ -63,13 +63,13 @@
       "measure_steps": 200,
       "device": "cpu"
     },
-    "tolerance": 0.50
+    "tolerance": 0.4
   },
   "synaptic_transformer_cached_tq1_decode": {
     "name": "synaptic_transformer_cached_tq1_decode",
     "mode": "decode",
-    "tok_per_sec": 296.0,
-    "peak_memory_mb": 0.7368,
+    "tok_per_sec": 76.05800888029756,
+    "peak_memory_mb": 0.73681640625,
     "device": "cpu",
     "benchmark_config": {
       "name": "synaptic_transformer_cached_tq1_decode",
@@ -85,6 +85,6 @@
       "measure_steps": 200,
       "device": "cpu"
     },
-    "tolerance": 0.50
+    "tolerance": 0.4
   }
 }

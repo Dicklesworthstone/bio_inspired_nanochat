@@ -1,10 +1,10 @@
-# System Master Validation Report — val-1787670351
+# System Master Validation Report — val-1787670289
 
-> **Verdict**: **ALL SYSTEMS PERFECT (VERIFIED WORKING)**  
-> **Timestamp**: `2026-08-25T15:05:51.964381+00:00`  
+> **Verdict**: **DEGRADED (1 FAILURE(S))**  
+> **Timestamp**: `2026-08-25T15:04:49.860018+00:00`  
 > **Git SHA**: `fb2cfe3ac9a09792091635056ed836b43cd9eb8a`  
 > **Hardware**: `cpu:x86_64`  
-> **Summary**: `5/5 Passed` (100.0%) in `36.39s`
+> **Summary**: `4/5 Passed` (80.0%) in `34.56s`
 
 ---
 
@@ -12,11 +12,11 @@
 
 | Category | Subsystem | Status | Duration | Command |
 | :--- | :--- | :---: | :---: | :--- |
-| Foundations | Unit Tests (Ablations, Metrics, Checkpoints, Registry) | ✅ **PASS** | 4.63s | `pytest tests/test_ablation_registry.py tests/test_results_registry.py tests/test_metrics_schema.py tests/test_checkpoint_roundtrip.py -v --tb=short` |
-| Parity & Invariants | Cross-Backend Parity (Triton/Rust/Python Reference) (eqyk.13) | ✅ **PASS** | 11.30s | `pytest tests/test_presyn_backend_parity.py -v --tb=short` |
-| Parity & Invariants | Property-Based Metamorphic Invariants Suite (eqyk.14) | ✅ **PASS** | 5.21s | `pytest tests/test_property_invariants.py -v --tb=short` |
-| Theory & Proofs | Formal Theory Certificates & Lyapunov Invariants (eqyk.18) | ✅ **PASS** | 4.00s | `pytest tests/test_e2e_theory_artifacts.py -v --tb=short` |
-| Performance | Performance Regression Throughput Gates (eqyk.15) | ✅ **PASS** | 11.25s | `python -m scripts.perf_regression_gate --mode check --tolerance 0.50` |
+| Foundations | Unit Tests (Ablations, Metrics, Checkpoints, Registry) | ✅ **PASS** | 4.33s | `pytest tests/test_ablation_registry.py tests/test_results_registry.py tests/test_metrics_schema.py tests/test_checkpoint_roundtrip.py -v --tb=short` |
+| Parity & Invariants | Cross-Backend Parity (Triton/Rust/Python Reference) (eqyk.13) | ✅ **PASS** | 11.52s | `pytest tests/test_presyn_backend_parity.py -v --tb=short` |
+| Parity & Invariants | Property-Based Metamorphic Invariants Suite (eqyk.14) | ✅ **PASS** | 5.05s | `pytest tests/test_property_invariants.py -v --tb=short` |
+| Theory & Proofs | Formal Theory Certificates & Lyapunov Invariants (eqyk.18) | ✅ **PASS** | 3.65s | `pytest tests/test_e2e_theory_artifacts.py -v --tb=short` |
+| Performance | Performance Regression Throughput Gates (eqyk.15) | ❌ **FAIL** | 10.01s | `python -m scripts.perf_regression_gate --mode check --tolerance 0.50` |
 
 ---
 
@@ -24,7 +24,7 @@
 
 ### [PASS] Unit Tests (Ablations, Metrics, Checkpoints, Registry) (`unit_core`)
 - **Category**: Foundations
-- **Duration**: 4.63s
+- **Duration**: 4.33s
 ```text
 tests/test_metrics_schema.py::test_validate_rejects_non_finite_values[-inf] PASSED [ 84%]
 tests/test_metrics_schema.py::test_validate_rejects_non_numeric_value PASSED [ 85%]
@@ -40,12 +40,12 @@ tests/test_checkpoint_roundtrip.py::test_crash_debris_step_is_not_discovered_whe
 tests/test_checkpoint_roundtrip.py::test_legacy_directory_without_markers_stays_discoverable PASSED [ 98%]
 tests/test_checkpoint_roundtrip.py::test_rustbpe_tokenizer_json_round_trip PASSED [100%]
 
-============================== 78 passed in 0.72s ==============================
+============================== 78 passed in 0.57s ==============================
 ```
 
 ### [PASS] Cross-Backend Parity (Triton/Rust/Python Reference) (eqyk.13) (`parity_backends`)
 - **Category**: Parity & Invariants
-- **Duration**: 11.30s
+- **Duration**: 11.52s
 ```text
 platform linux -- Python 3.14.2, pytest-9.0.2, pluggy-1.6.0 -- /data/projects/bio_inspired_nanochat/.venv/bin/python3
 cachedir: .pytest_cache
@@ -61,12 +61,12 @@ tests/test_presyn_backend_parity.py::test_rust_backend_matches_frozen_decode_tra
 
 =========================== short test summary info ============================
 SKIPPED [1] tests/test_presyn_backend_parity.py:154: CUDA backend unavailable
-========================= 3 passed, 1 skipped in 7.40s =========================
+========================= 3 passed, 1 skipped in 7.42s =========================
 ```
 
 ### [PASS] Property-Based Metamorphic Invariants Suite (eqyk.14) (`property_invariants`)
 - **Category**: Parity & Invariants
-- **Duration**: 5.21s
+- **Duration**: 5.05s
 ```text
 ============================= test session starts ==============================
 platform linux -- Python 3.14.2, pytest-9.0.2, pluggy-1.6.0 -- /data/projects/bio_inspired_nanochat/.venv/bin/python3
@@ -80,12 +80,12 @@ tests/test_property_invariants.py::test_property_invariants_full_battery PASSED 
 tests/test_property_invariants.py::test_metamorphic_prefix_causality PASSED [ 66%]
 tests/test_property_invariants.py::test_property_invariants_cli_entrypoint PASSED [100%]
 
-============================== 3 passed in 1.57s ===============================
+============================== 3 passed in 1.69s ===============================
 ```
 
 ### [PASS] Formal Theory Certificates & Lyapunov Invariants (eqyk.18) (`theory_certificates`)
 - **Category**: Theory & Proofs
-- **Duration**: 4.00s
+- **Duration**: 3.65s
 ```text
 ============================= test session starts ==============================
 platform linux -- Python 3.14.2, pytest-9.0.2, pluggy-1.6.0 -- /data/projects/bio_inspired_nanochat/.venv/bin/python3
@@ -98,12 +98,13 @@ collecting ... collected 2 items
 tests/test_e2e_theory_artifacts.py::test_theory_artifacts_full_battery PASSED [ 50%]
 tests/test_e2e_theory_artifacts.py::test_theory_artifacts_cli_entrypoint PASSED [100%]
 
-============================== 2 passed in 0.27s ===============================
+============================== 2 passed in 0.26s ===============================
 ```
 
-### [PASS] Performance Regression Throughput Gates (eqyk.15) (`perf_regression_gates`)
+### [FAIL] Performance Regression Throughput Gates (eqyk.15) (`perf_regression_gates`)
 - **Category**: Performance
-- **Duration**: 11.25s
+- **Duration**: 10.01s
+- **Error**: `Command exited with code 1`
 ```text
 Running Performance Regression Benchmarks...
                       Performance Regression Gate Results                       
@@ -111,10 +112,10 @@ Running Performance Regression Benchmarks...
 ┃ Benchmark      ┃        ┃       Observed ┃        Baseline ┃        ┃        ┃
 ┃ Config         ┃ Mode   ┃        (tok/s) ┃         (tok/s) ┃  Ratio ┃ Status ┃
 ┡━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━┩
-│ standard_tran… │ train  │         6909.7 │          2956.2 │ 233.7% │ PASS   │
-│ synaptic_tran… │ train  │          205.1 │           349.6 │  58.6% │ PASS   │
-│ standard_tran… │ decode │          232.0 │           276.7 │  83.9% │ PASS   │
-│ synaptic_tran… │ decode │           79.2 │            76.1 │ 104.1% │ PASS   │
+│ standard_tran… │ train  │         4072.7 │          3000.0 │ 135.8% │ PASS   │
+│ synaptic_tran… │ train  │          408.8 │          1500.0 │  27.3% │ FAIL   │
+│ standard_tran… │ decode │          392.1 │          1170.0 │  33.5% │ FAIL   │
+│ synaptic_tran… │ decode │           86.0 │           296.0 │  29.0% │ FAIL   │
 └────────────────┴────────┴────────────────┴─────────────────┴────────┴────────┘
-All performance regression gates passed!
+Performance regression gate failed!
 ```
