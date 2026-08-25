@@ -2691,45 +2691,84 @@ class SynapticLinear(nn.Module):
         ):
             # vg9.9: genuine rank-R eligibility. Project the post-activity y onto R random modes
             # and accumulate its correlation with the pre-activity x into u_buf (in, R); project
-            # x onto R modes and accumulate its correlation with y into v_buf (R, out). The R
-            # columns/rows are now distinct, so delta = u_buf @ v_buf is a real rank-R Hebbian
-            # trace. Batch-normalized so the magnitude matches the old mean-based trace.
-            batch = max(1, x.shape[0])
-            y_proj = y @ self.proj_out.to(y.dtype)   # (B, R) post-activity in R modes
-            x_proj = x @ self.proj_in.to(x.dtype)    # (B, R) pre-activity in R modes
-            if self.cfg.enable_stdp and x.shape[0] > 1:
-                # Temporal sequence STDP: pre at t-1 -> post at t (LTP), pre at t -> post at t-1 (LTD)
-                x_pre = x[:-1]
-                x_post = x[1:]
-                y_pre = y[:-1]
-                y_post = y[1:]
-                y_proj_post = y_proj[1:]
-                y_proj_pre = y_proj[:-1]
-                x_proj_pre = x_proj[:-1]
-                x_proj_post = x_proj[1:]
+            # x onto R modes and accumulate its correlation with y into v_buf (R, out).
+            if x.ndim == 3:
+                # 3D tensor: (B, T, in_features) along sequence axis
+                b_size, t_len, _ = x.shape
+                y_proj = y @ self.proj_out.to(y.dtype)  # (B, T, R)
+                x_proj = x @ self.proj_in.to(x.dtype)   # (B, T, R)
 
-                ltp_u = (x_pre.transpose(0, 1) @ y_proj_post) / (batch - 1)
-                ltd_u = (x_post.transpose(0, 1) @ y_proj_pre) / (batch - 1)
-                ltp_v = (x_proj_pre.transpose(0, 1) @ y_post) / (batch - 1)
-                ltd_v = (x_proj_post.transpose(0, 1) @ y_pre) / (batch - 1)
+                if self.cfg.enable_stdp and t_len > 1:
+                    # Sequence-axis STDP: pre at t-1 -> post at t (LTP), pre at t -> post at t-1 (LTD)
+                    # Computed within each batch sequence independently (no cross-batch boundary artifacts)
+                    x_pre = x[:, :-1, :]
+                    x_post = x[:, 1:, :]
+                    y_proj_post = y_proj[:, 1:, :]
+                    y_proj_pre = y_proj[:, :-1, :]
+                    x_proj_pre = x_proj[:, :-1, :]
+                    x_proj_post = x_proj[:, 1:, :]
+                    y_post = y[:, 1:, :]
+                    y_pre = y[:, :-1, :]
 
-                w_plus = math.exp(-1.0 / max(1e-3, self.cfg.stdp_tau_plus))
-                w_minus = math.exp(-1.0 / max(1e-3, self.cfg.stdp_tau_minus))
-                stdp_delta_u = (self.cfg.stdp_a_plus * w_plus) * ltp_u - (self.cfg.stdp_a_minus * w_minus) * ltd_u
-                stdp_delta_v = (self.cfg.stdp_a_plus * w_plus) * ltp_v - (self.cfg.stdp_a_minus * w_minus) * ltd_v
+                    norm_factor = max(1, b_size * (t_len - 1))
+                    ltp_u = torch.einsum("bti,btr->ir", x_pre, y_proj_post) / norm_factor
+                    ltd_u = torch.einsum("bti,btr->ir", x_post, y_proj_pre) / norm_factor
+                    ltp_v = torch.einsum("btr,btj->rj", x_proj_pre, y_post) / norm_factor
+                    ltd_v = torch.einsum("btr,btj->rj", x_proj_post, y_pre) / norm_factor
 
-                self.u_buf.mul_(self.cfg.post_trace_decay).add_(stdp_delta_u)
-                self.v_buf.mul_(self.cfg.post_trace_decay).add_(stdp_delta_v)
+                    w_plus = math.exp(-1.0 / max(1e-3, self.cfg.stdp_tau_plus))
+                    w_minus = math.exp(-1.0 / max(1e-3, self.cfg.stdp_tau_minus))
+                    stdp_delta_u = (self.cfg.stdp_a_plus * w_plus) * ltp_u - (self.cfg.stdp_a_minus * w_minus) * ltd_u
+                    stdp_delta_v = (self.cfg.stdp_a_plus * w_plus) * ltp_v - (self.cfg.stdp_a_minus * w_minus) * ltd_v
+
+                    self.u_buf.mul_(self.cfg.post_trace_decay).add_(stdp_delta_u)
+                    self.v_buf.mul_(self.cfg.post_trace_decay).add_(stdp_delta_v)
+                else:
+                    norm_factor = max(1, b_size * t_len)
+                    self.u_buf.mul_(self.cfg.post_trace_decay).add_(
+                        0.05 * torch.einsum("bti,btr->ir", x, y_proj) / norm_factor
+                    )
+                    self.v_buf.mul_(self.cfg.post_trace_decay).add_(
+                        0.05 * torch.einsum("btr,btj->rj", x_proj, y) / norm_factor
+                    )
             else:
-                self.u_buf.mul_(self.cfg.post_trace_decay).add_(
-                    0.05 * (x.transpose(0, 1) @ y_proj) / batch   # (in, R)
-                )
-                self.v_buf.mul_(self.cfg.post_trace_decay).add_(
-                    0.05 * (x_proj.transpose(0, 1) @ y) / batch   # (R, out)
-                )
+                # 2D tensor: (N, in_features) e.g. routed MoE tokens or single time-slice
+                batch = max(1, x.shape[0])
+                y_proj = y @ self.proj_out.to(y.dtype)  # (N, R)
+                x_proj = x @ self.proj_in.to(x.dtype)   # (N, R)
+
+                if self.cfg.enable_stdp and x.shape[0] > 1:
+                    x_pre = x[:-1]
+                    x_post = x[1:]
+                    y_proj_post = y_proj[1:]
+                    y_proj_pre = y_proj[:-1]
+                    x_proj_pre = x_proj[:-1]
+                    x_proj_post = x_proj[1:]
+                    y_post = y[1:]
+                    y_pre = y[:-1]
+
+                    ltp_u = (x_pre.transpose(0, 1) @ y_proj_post) / (batch - 1)
+                    ltd_u = (x_post.transpose(0, 1) @ y_proj_pre) / (batch - 1)
+                    ltp_v = (x_proj_pre.transpose(0, 1) @ y_post) / (batch - 1)
+                    ltd_v = (x_proj_post.transpose(0, 1) @ y_pre) / (batch - 1)
+
+                    w_plus = math.exp(-1.0 / max(1e-3, self.cfg.stdp_tau_plus))
+                    w_minus = math.exp(-1.0 / max(1e-3, self.cfg.stdp_tau_minus))
+                    stdp_delta_u = (self.cfg.stdp_a_plus * w_plus) * ltp_u - (self.cfg.stdp_a_minus * w_minus) * ltd_u
+                    stdp_delta_v = (self.cfg.stdp_a_plus * w_plus) * ltp_v - (self.cfg.stdp_a_minus * w_minus) * ltd_v
+
+                    self.u_buf.mul_(self.cfg.post_trace_decay).add_(stdp_delta_u)
+                    self.v_buf.mul_(self.cfg.post_trace_decay).add_(stdp_delta_v)
+                else:
+                    self.u_buf.mul_(self.cfg.post_trace_decay).add_(
+                        0.05 * (x.transpose(0, 1) @ y_proj) / batch  # (in, R)
+                    )
+                    self.v_buf.mul_(self.cfg.post_trace_decay).add_(
+                        0.05 * (x_proj.transpose(0, 1) @ y) / batch  # (R, out)
+                    )
         # Per-neuron calcium proxy for the CaMKII/PP1 gate.
         if self.post is not None:
-            ca_vec = y.abs().mean(0).clamp(0, 10.0)
+            ca_vec = y.abs().reshape(-1, y.shape[-1]).mean(0).clamp(0, 10.0)
             self.post.update(y, ca_vec, genes=genes)
 
     def _apply_hebb_weight_writes(self, gate_scale: Optional[Tensor]) -> None:
@@ -2856,25 +2895,41 @@ class SynapticLinear(nn.Module):
             y_fast = x @ self.w_fast
 
             # Build a per-sample gate from calcium/energy signals.
-            # Shapes supported: scalar, (N,), or (N, out); others are reduced to (N, 1).
-            def _gate_from_signal(signal: Tensor, out_dim: int, n_rows: int) -> Tensor:
+            def _gate_from_signal(signal: Tensor, y_ref: Tensor) -> Tensor:
                 sig = signal
-                if sig.ndim == 0:
-                    sig = sig.view(1, 1).expand(n_rows, 1)
-                elif sig.ndim == 1:
-                    if sig.shape[0] == n_rows:
-                        sig = sig.view(n_rows, 1)
+                if y_ref.ndim == 3:
+                    B, T, out_dim = y_ref.shape
+                    if sig.ndim == 0:
+                        return sig.view(1, 1, 1).expand(B, T, 1)
+                    elif sig.ndim == 1:
+                        if sig.shape[0] == B:
+                            return sig.view(B, 1, 1).expand(B, T, 1)
+                        elif sig.shape[0] == B * T:
+                            return sig.view(B, T, 1)
+                        else:
+                            return sig.mean().view(1, 1, 1).expand(B, T, 1)
+                    elif sig.ndim == 2 and sig.shape == (B, T):
+                        return sig.unsqueeze(-1)
+                    elif sig.ndim == 3 and sig.shape == (B, T, out_dim):
+                        return sig
                     else:
-                        sig = sig.mean().view(1, 1).expand(n_rows, 1)
-                elif sig.ndim == 2 and sig.shape[0] == n_rows and sig.shape[1] == out_dim:
-                    return sig
+                        return sig.mean().view(1, 1, 1).expand(B, T, 1)
                 else:
-                    sig = sig.reshape(n_rows, -1).mean(dim=1, keepdim=True)
-                return sig
+                    n_rows, out_dim = y_ref.shape
+                    if sig.ndim == 0:
+                        return sig.view(1, 1).expand(n_rows, 1)
+                    elif sig.ndim == 1:
+                        if sig.shape[0] == n_rows:
+                            return sig.view(n_rows, 1)
+                        else:
+                            return sig.mean().view(1, 1).expand(n_rows, 1)
+                    elif sig.ndim == 2 and sig.shape[0] == n_rows and sig.shape[1] == out_dim:
+                        return sig
+                    else:
+                        return sig.reshape(n_rows, -1).mean(dim=1, keepdim=True)
 
-            n_rows, out_dim = y_fast.shape
-            fast_gate = _gate_from_signal(calcium, out_dim, n_rows)
-            energy_gate = _gate_from_signal(energy, out_dim, n_rows)
+            fast_gate = _gate_from_signal(calcium, y_fast)
+            energy_gate = _gate_from_signal(energy, y_fast)
             fast_gate = (fast_gate * energy_gate).clamp(0.0, 1.0).to(y_fast.dtype)
 
             y = y_slow + (y_fast * fast_gate)
@@ -3328,12 +3383,12 @@ class SynapticMLP(nn.Module):
         B, T, C = x.shape
         c0 = self.C0
         e0 = self.E0
-        c = c0.expand(B * T)
-        e = e0.expand(B * T)
-        h = self.fc(x.reshape(B * T, C), c, e, update_mem=update_mem)
+        c = c0.expand(B, T)
+        e = e0.expand(B, T)
+        h = self.fc(x, c, e, update_mem=update_mem)
         h = F.relu(h).square()
-        h = self.drop(h.reshape(B, T, -1))
-        y = self.proj(h.reshape(B * T, -1), c, e, update_mem=update_mem).reshape(B, T, C)
+        h = self.drop(h)
+        y = self.proj(h, c, e, update_mem=update_mem)
         return y
 
 
