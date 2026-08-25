@@ -456,6 +456,10 @@ class DepletionDrivenPadicRetriever:
             self._active_levels = None
             flat_config = replace(self.config, enabled=False)
             result = padic_retrieval_kernel(query, memory, config=flat_config)
+            # The kernel defaults active_levels to leaf resolution (L) when no
+            # explicit levels are passed; in flat-fallback mode that misreports
+            # hierarchy telemetry. Zeroes mark "no hierarchical level active".
+            result = replace(result, active_levels=torch.zeros_like(result.active_levels))
             result = replace(
                 result,
                 rrp_fraction=rrp,

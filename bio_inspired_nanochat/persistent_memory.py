@@ -115,6 +115,15 @@ class PersistentLifelongMemoryManager:
                         f"memory partition {field_name} shape {tuple(value.shape)} does not "
                         f"match model shape {tuple(target.shape)} at layer {idx}"
                     )
+                # Reject cross-precision partitions BEFORE any session teardown:
+                # add_/sub_ on the slow path cannot cast, so a float32 partition
+                # mounted into a bfloat16 model used to crash mid-mount with the
+                # previous active session already torn down.
+                if value.dtype != target.dtype:
+                    raise ValueError(
+                        f"memory partition {field_name} dtype {value.dtype} does not "
+                        f"match model dtype {target.dtype} at layer {idx}"
+                    )
 
     def load_partition(self, user_id: str) -> Optional[UserMemoryPartition]:
         """Load user memory partition from disk if it exists."""
@@ -177,7 +186,7 @@ class PersistentLifelongMemoryManager:
 
         for idx, mod in enumerate(syn_layers):
             if idx in slow_deltas:
-                delta = slow_deltas[idx].to(mod.w_slow.device)
+                delta = slow_deltas[idx].to(device=mod.w_slow.device, dtype=mod.w_slow.dtype)
                 mod.w_slow.data.add_(delta)
                 self._active_slow_deltas[idx] = delta.clone()
             if idx in fast_weights and mod.w_fast is not None:
@@ -258,7 +267,8 @@ class PersistentLifelongMemoryManager:
             if mod.w_fast is not None:
                 mod.w_fast.data.zero_()
             if idx in self._active_slow_deltas:
-                mod.w_slow.data.sub_(self._active_slow_deltas[idx].to(mod.w_slow.device))
+                delta = self._active_slow_deltas[idx]
+                mod.w_slow.data.sub_(delta.to(device=mod.w_slow.device, dtype=mod.w_slow.dtype))
 
         self._active_slow_deltas.clear()
         self.active_user = None
@@ -280,7 +290,8 @@ class PersistentLifelongMemoryManager:
             syn_layers = [m for m in model.modules() if isinstance(m, SynapticLinear)]
             for idx, mod in enumerate(syn_layers):
                 if idx in self._active_slow_deltas:
-                    mod.w_slow.data.sub_(self._active_slow_deltas[idx].to(mod.w_slow.device))
+                    delta = self._active_slow_deltas[idx]
+                    mod.w_slow.data.sub_(delta.to(device=mod.w_slow.device, dtype=mod.w_slow.dtype))
                 if mod.w_fast is not None:
                     mod.w_fast.data.zero_()
             self._active_slow_deltas.clear()

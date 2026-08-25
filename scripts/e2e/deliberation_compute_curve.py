@@ -447,7 +447,11 @@ def _evaluate_mode(
         batch=config.eval_sequences,
         length=config.copy_length,
         vocab_size=config.vocab_size,
-        seed=seed * 10_000 + 9_999,
+        # Route through the configured offset: a literal 9_999 duplicated
+        # calibration_seed_offset's default, so with a non-default
+        # evaluation_seed_offset the leakage guard validated one split while this
+        # call scored the calibration split (readout fitted on its own eval data).
+        seed=seed * 10_000 + config.evaluation_seed_offset,
     )
     expected = batch.inputs[:, : config.copy_length]
     prompts = batch.inputs[:, : config.copy_length + 1]

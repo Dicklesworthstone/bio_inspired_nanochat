@@ -429,7 +429,16 @@ class SheafObstructionDetector:
             requested_action=action,
             action_taken="repair",
             output_stalks=repaired_stalks,
-            edge_residual_norms=result.edge_residual_norms,
+            # Re-measure on the REPAIRED stalks so the reported per-edge norms
+            # describe output_stalks; pairing pre-repair norms with post-repair
+            edge_residual_norms=measure_sheaf_obstruction(
+                repaired_stalks,
+                edge_index,
+                tail_restrictions=tail_restrictions,
+                head_restrictions=head_restrictions,
+                edge_weight=edge_weight,
+                eps=eps,
+            ).edge_residual_norms,
             repaired=True,
         )
 
@@ -554,6 +563,13 @@ def measure_sheaf_obstruction(
     reference_sq = restricted_tail.square().sum(dim=-1) + restricted_head.square().sum(dim=-1)
     quadratic = (weights * residual_sq).sum()
     reference = (weights * reference_sq).sum()
+    # A degenerate restriction set (zero maps, or stalks inside every
+    # restriction's null space) forces reference == 0 and therefore
+    # normalized == bounded_score == 0: a "perfectly gluable" certificate for
+    # arbitrarily inconsistent bindings. Report unavailable instead of a vacuous
+    # perfect-consistency pass.
+    if float(reference.item()) <= eps:
+        return _unavailable("degenerate_reference_energy")
     normalized = quadratic / (reference + eps)
     bounded_score = normalized / (1.0 + normalized)
     return SheafObstructionResult(

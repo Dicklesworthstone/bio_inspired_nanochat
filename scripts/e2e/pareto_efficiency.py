@@ -494,12 +494,18 @@ def run_pareto_e2e(
     )
     events = read_run_events(rd)
     n_scored_arms = sum(len(v) for k, v in results.items() if k != "fixed")
+    # The guarded NaN path legitimately stops training before cfg.steps
+    # (train_stopped_early + snapshot restore is a SUPPORTED outcome); compare
+    # against the train events actually emitted instead of demanding the full
+    # budget, which false-failed valid runs and cried wolf on healthy harnesses.
+    expected_train_events = len(losses)
     inv_trace = InvariantResult(
         "jsonl_trace_written",
-        len(events) >= cfg.steps + n_scored_arms,
+        len(events) >= expected_train_events + n_scored_arms,
         len(events),
-        f"{len(events)} events (>= {cfg.steps} train_step + {n_scored_arms} scored "
-        f"pareto_sequence rows; attrited sequences emit none)",
+        f"{len(events)} events (>= {expected_train_events} train_step"
+        f"{' [early stop: ' + train_stopped_early + ']' if train_stopped_early else ''}"
+        f" + {n_scored_arms} scored pareto_sequence rows; attrited sequences emit none)",
     )
 
     report = ParetoE2EReport(

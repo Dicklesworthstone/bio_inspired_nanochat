@@ -434,7 +434,9 @@ def test_tree_ness_fallback_writes_detailed_jsonl(tmp_path):
     assert not record["tree_ness_passed"]
     assert record["fallback_used"]
     assert record["fallback_reason"] == "tree_ness_below_floor"
-    assert record["active_levels"] == [3]
+    # Flat fallback runs NO hierarchical descent: zeroes (not leaf-level 3) mark
+    # "no active level" so analytics cannot mistake flat reads for padic leaf reads.
+    assert record["active_levels"] == [0]
     assert record["rrp_fraction"] == pytest.approx([0.4])
     assert record["retrieved_coordinates"] == [3]
     assert len(record["max_weight"]) == len(record["weight_entropy"]) == 1

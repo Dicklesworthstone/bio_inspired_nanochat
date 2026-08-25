@@ -351,6 +351,17 @@ def build_batch_plan(
             raise ValueError(
                 f"hypothesis harness {hypothesis.harness!r} is not an approved existing runner"
             )
+        if hypothesis.harness != "eval_matrix":
+            # Fail closed: only the eval-matrix CLI is wired into the plan
+            # builder below. Previously the other allowlisted names passed this
+            # check and then silently ran scripts.eval_matrix anyway — the wrong
+            # experiment for a preregistered hypothesis. Wire each harness's CLI
+            # contract here before re-enabling it.
+            raise NotImplementedError(
+                f"harness {hypothesis.harness!r} is allowlisted but has no dispatch "
+                f"wiring in this planner; only 'eval_matrix' cells can currently be "
+                f"executed faithfully"
+            )
         if eval_options.tokens_per_run > hypothesis.compute_budget.maximum_tokens_per_run:
             raise ValueError(
                 f"requested {eval_options.tokens_per_run} tokens exceeds "

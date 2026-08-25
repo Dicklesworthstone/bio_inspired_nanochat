@@ -31,6 +31,7 @@ Deeper tree search remains downstream `re4e.3` work.
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 
@@ -286,6 +287,24 @@ class DeliberationConfig:
             raise ValueError("candidate_top_k must be a positive integer")
         if not np.isfinite(self.candidate_energy_weight) or self.candidate_energy_weight < 0.0:
             raise ValueError("candidate_energy_weight must be finite and non-negative")
+        # Full validation (wave-two review): the remaining six knobs feed the
+        # halting test, the integrator step and the effort→temperature coupling.
+        # eps<=0 makes |ΔF|<eps unfireable (every token burns max_iters and is
+        # logged 'budget hit'); negative max_iters slipped past both ==0 guards;
+        # temp_floor > temp_ceil silently INVERTS easy-commit/hard-explore.
+        for name in ("eps", "dt", "T", "temp_floor", "temp_ceil"):
+            value = float(getattr(self, name))
+            if not math.isfinite(value) or value <= 0.0:
+                raise ValueError(f"{name} must be finite and positive")
+        if isinstance(self.max_iters, bool) or not isinstance(self.max_iters, int):
+            raise TypeError("max_iters must be a non-negative integer")
+        if self.max_iters < 0:
+            raise ValueError("max_iters must be a non-negative integer")
+        if self.temp_floor > self.temp_ceil:
+            raise ValueError(
+                f"temp_floor ({self.temp_floor}) must be <= temp_ceil ({self.temp_ceil}): "
+                f"easy tokens sharpen toward floor, hard tokens widen toward ceil"
+            )
 
 
 @dataclass(frozen=True)
