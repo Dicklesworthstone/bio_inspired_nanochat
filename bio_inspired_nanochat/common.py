@@ -11,10 +11,31 @@ import shutil
 import time
 import urllib.request
 import urllib.error
+from typing import Protocol, cast
+
 from bio_inspired_nanochat.torch_imports import torch
-import torch.distributed as dist
+import torch.distributed as torch_dist
 from filelock import FileLock
 from decouple import Config as DecoupleConfig, RepositoryEnv, RepositoryEmpty
+
+
+class _DistributedApi(Protocol):
+    """Process-group lifecycle used by the shared compute helpers."""
+
+    def is_available(self) -> bool: ...
+
+    def is_initialized(self) -> bool: ...
+
+    def init_process_group(
+        self, *, backend: str, device_id: torch.device
+    ) -> None: ...
+
+    def barrier(self) -> None: ...
+
+    def destroy_process_group(self) -> None: ...
+
+
+dist = cast(_DistributedApi, torch_dist)
 
 # Initialize decouple config (project-local .env if exists; fallback to empty config)
 _env_path = ".env"
