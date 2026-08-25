@@ -9,40 +9,30 @@ Or torchrun for training:
 torchrun --standalone --nproc_per_node=8 -m scripts.mid_train -- --device_batch_size=16
 """
 
-import math
 import os
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 import time
-import wandb
-import torch
-import torch.nn.functional as F
+from collections import deque
 from contextlib import nullcontext
 from typing import Protocol, cast
+
+import torch
+import torch.distributed as torch_dist
+import torch.nn.functional as F
+import wandb
 
 from bio_inspired_nanochat.common import compute_init, compute_cleanup, print0, DummyWandb, get_base_dir, autodetect_device_type
 from bio_inspired_nanochat.tokenizer import get_token_bytes
 from bio_inspired_nanochat.checkpoint_manager import (
-    capture_prefetched_batch,
-    capture_rng_state,
-    checkpoint_model_config,
-    config_provenance,
     find_largest_model,
+    load_model,
     load_rank_training_checkpoint,
     restore_optimizer_states,
-    restore_prefetched_batch,
     restore_rank_model_state,
-    restore_rng_state,
     save_checkpoint,
-    synaptic_config_to_meta,
     validate_exact_resume_payload_step,
 )
-from bio_inspired_nanochat.dataloader import (
-    collate_dataloader_state_dicts,
-    tokenizing_task_data_loader_with_state,
-)
 from bio_inspired_nanochat.loss_eval import evaluate_bpb
-from bio_inspired_nanochat.checkpoint_manager import load_model
-import torch.distributed as torch_dist
 
 from tasks.common import TaskMixture
 from tasks.gsm8k import GSM8K

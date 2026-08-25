@@ -48,7 +48,7 @@ class _MethodPatch:
     restoring the class method.
     """
 
-    def __init__(self, owner: nn.Module, attr: str, wrapper) -> None:
+    def __init__(self, owner: Any, attr: str, wrapper: Any) -> None:
         self._owner = owner
         self._attr = attr
         # Save the CURRENT value (bound method OR module-level function) and
@@ -185,7 +185,10 @@ class PatchClampProbe:
 
         def _root_hook(_module: nn.Module, _inp: Any, _out: Any) -> None:
             try:
-                telem = self.model.bio_telemetry()
+                telem_fn = getattr(self.model, "bio_telemetry", None)
+                if not callable(telem_fn):
+                    return
+                telem = telem_fn()
             except Exception:  # pragma: no cover - telemetry must never break probing
                 return
             for entry in telem.get("layers", []):
@@ -341,7 +344,7 @@ def optogenetic_clamp(
       - 'dopamine': Injects a high dopamine plasticity gain.
     """
     saved_state: dict[tuple[int, str], tuple[Any, str, Any]] = {}
-    handles: list[RemovableHandle] = []
+    handles: list[RemovableHandle | _MethodPatch] = []
 
     def _save_and_set(obj: Any, attr: str, new_val: Any) -> None:
         key = (id(obj), attr)
