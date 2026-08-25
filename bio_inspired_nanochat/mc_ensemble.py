@@ -204,8 +204,8 @@ def mc_predict(
     model.eval()
     probs_sum = None
     entropy_sum = None
-    logit_sum = None
-    logit_sq_sum = None
+    logit_mean_run = None
+    logit_m2_run = None
     try:
         with mc_sampling(model, evidence_collector=evidence_collector):
             for sample_index in range(n_samples):
@@ -222,8 +222,16 @@ def mc_predict(
                 ent = _entropy(probs)
                 probs_sum = probs if probs_sum is None else probs_sum + probs
                 entropy_sum = ent if entropy_sum is None else entropy_sum + ent
-                logit_sum = logits if logit_sum is None else logit_sum + logits
-                logit_sq_sum = logits * logits if logit_sq_sum is None else logit_sq_sum + logits * logits
+                # Welford-style running variance for the logits: E[x²]−E[x]² in
+                # fp32 catastrophically cancels for large |logits| and clamped to
+                # 0 exactly when uncertainty reporting matters most.
+                if logit_mean_run is None:
+                    logit_mean_run = logits.clone()
+                    logit_m2_run = torch.zeros_like(logits)
+                else:
+                    delta = logits - logit_mean_run
+                    logit_mean_run = logit_mean_run + delta / (sample_index + 1)
+                    logit_m2_run = logit_m2_run + delta * (logits - logit_mean_run)
     finally:
         # Restore train/eval mode even if a forward pass raises (the mc_sampling context manager
         # already restores the per-module _mc_sampling/_mc_frac flags in its own finally).
@@ -231,13 +239,13 @@ def mc_predict(
             model.train()
 
     assert (probs_sum is not None and entropy_sum is not None
-            and logit_sum is not None and logit_sq_sum is not None)  # n_samples >= 1 ⟹ the loop ran
+            and logit_mean_run is not None and logit_m2_run is not None)  # n_samples >= 1 ⟹ the loop ran
     mean_probs = probs_sum / n_samples
     predictive_entropy = _entropy(mean_probs)
     expected_entropy = entropy_sum / n_samples
     mutual_information = (predictive_entropy - expected_entropy).clamp(min=0.0)  # BALD; ≥ 0 up to noise
-    logit_mean = logit_sum / n_samples
-    logit_variance = (logit_sq_sum / n_samples - logit_mean * logit_mean).clamp(min=0.0)
+    # Sample variance from Welford's M2 (numerically stable for large logits).
+    logit_variance = (logit_m2_run / n_samples).clamp(min=0.0)
     return MCPrediction(
         mean_probs=mean_probs,
         predictive_entropy=predictive_entropy,

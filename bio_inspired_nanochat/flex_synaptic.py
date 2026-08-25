@@ -79,12 +79,23 @@ class SynapticFlexAttention(nn.Module):
             # scale (1/sqrt(E)), `score` is already scaled.
             scaled_score = score
 
+            # Compiled flex_attention evaluates score_mod on BLOCK-PADDED KV lanes
+            # (up to the next block multiple) and masks them only afterwards, so
+            # raw tensor indexing with kv_idx goes out of bounds whenever Tk is not
+            # a multiple of the block size. Clamp to the real extent: padded lanes
+            # are masked out downstream regardless of the value computed here.
+            limit = key_factor.shape[-1] - 1
+            if isinstance(kv_idx, torch.Tensor):
+                kv = torch.clamp(kv_idx, 0, limit)
+            else:
+                kv = max(0, min(int(kv_idx), limit))
+
             # Bio modulation (canonical): release = fuse_base*RRP * sigmoid(score), biased into
             # the logits as lambda_loge*log(release*qamp + eps) -- the same form as the standard
             # path (release_canonical -> lambda_loge*log(eps+e)). Flex does not EMA-normalize e,
             # which is the second intended difference from the standard path.
-            kf_val = key_factor[b, h, kv_idx]
-            qa_val = qamp[b, h, kv_idx]
+            kf_val = key_factor[b, h, kv]
+            qa_val = qamp[b, h, kv]
             release = kf_val * torch.sigmoid(scaled_score)
             bio_bias = lambda_loge * torch.log(release * qa_val + epsilon)
 

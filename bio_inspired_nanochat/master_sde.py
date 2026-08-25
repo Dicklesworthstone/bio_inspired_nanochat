@@ -172,21 +172,28 @@ def slow_manifold_projector(
     z: np.ndarray,
     *,
     k: float = 1.0,
-    eps: float = 0.01,
 ) -> tuple[np.ndarray, float]:
-    """Explicit low-rank projector onto the slow manifold M_eps = {x = h(y, eps)}.
+    """Explicit projector onto the critical manifold M = {x = k*y}.
 
-    Given full state z = (x, y), projects onto the critical manifold x = k*y and
-    computes the reconstruction error ||x - k*y||, which is bounded by O(eps) under
-    normal hyperbolicity.
+    Accepts either a single state ``z = (x, y)`` (1-D, size 2) or the full
+    master-SDE core ``z = (C, B, h)`` (1-D, size 3), or a batched stack of
+    states with the state on the LAST axis (..., 2) / (..., 3). Returns the
+    projected state (same shape) and the reconstruction error
+    ``||x - k*y||`` — the O(eps) slowness of that error under normal
+    hyperbolicity is a property of trajectories, not something this function
+    computes, so no ``eps`` parameter is needed.
     """
     z = np.asarray(z, dtype=np.float64)
-    x = z[0]
-    y = z[1] if z.ndim == 1 and z.size == 2 else z[1:]
+    if z.shape[-1] < 2:
+        raise ValueError(
+            f"slow_manifold_projector expects state on the last axis with >= 2 components, "
+            f"got shape {z.shape}"
+        )
+    x = z[..., 0]
+    y = z[..., 1]
     x_proj = k * y
-    z_proj = np.empty_like(z)
-    z_proj[0] = x_proj
-    z_proj[1] = y
+    z_proj = np.array(z, copy=True)
+    z_proj[..., 0] = x_proj
     reconstruction_error = float(np.linalg.norm(x - x_proj))
     return z_proj, reconstruction_error
 

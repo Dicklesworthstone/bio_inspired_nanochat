@@ -431,11 +431,20 @@ class StructuralGeometryMonitor:
         significant = bool(ratio >= self.cfg.persistence_ratio_threshold)
         top = tuple(float(x) for x in edges[::-1][: self.cfg.max_persistence_features])
 
-        merge = (
-            merge_certificate
-            if merge_certificate is not None
-            else ot_merge_certificate(merge_a_array, merge_b_array)
-        )
+        if merge_certificate is not None:
+            # Symmetric validation with the split-certificate path: a caller-
+            # supplied certificate containing NaN/Inf or negative costs used to
+            # be recorded verbatim and detonated later in to_jsonl
+            # (allow_nan=False), far from the injection site.
+            for field in ("transport_cost", "naive_cost", "barycenter_std", "naive_std"):
+                value = float(getattr(merge_certificate, field))
+                if not math.isfinite(value) or value < 0.0:
+                    raise ValueError(
+                        f"supplied merge_certificate has invalid {field}={value!r}"
+                    )
+            merge = merge_certificate
+        else:
+            merge = ot_merge_certificate(merge_a_array, merge_b_array)
         rec = StructuralGeometryRecord(
             step=int(step),
             routing_points_input=n_input,

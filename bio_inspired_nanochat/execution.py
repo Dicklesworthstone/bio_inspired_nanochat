@@ -346,12 +346,22 @@ def execute_code(
         )
 
     if not result_dict:
+        # The child died BEFORE writing its result dict (RLIMIT_AS MemoryError
+        # during import, segfault, reliability-guard kill). That is a crash, not
+        # a hang: genuine hangs take the p.is_alive() branch above. Labeling
+        # crashes as timeouts made callers' retry/backoff logic keyed on
+        # .timeout misfire.
+        exitcode = p.exitcode
+        detail = (
+            f"killed by signal {-exitcode}" if isinstance(exitcode, int) and exitcode < 0
+            else f"exitcode={exitcode}"
+        )
         return ExecutionResult(
             success=False,
             stdout="",
             stderr="",
-            error="Execution failed (no result returned)",
-            timeout=True,
+            error=f"Execution failed (no result returned; {detail})",
+            timeout=False,
             memory_exceeded=False,
         )
 
