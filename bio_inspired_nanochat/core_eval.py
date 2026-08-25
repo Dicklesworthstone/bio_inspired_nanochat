@@ -6,10 +6,32 @@ TODOs:
 - All tasks ~match except for squad. We get 31% reference is 37%. Figure out why.
 """
 import random
+from typing import Protocol, cast
 
 from jinja2 import Template
 import torch
-import torch.distributed as dist
+import torch.distributed as torch_dist
+
+
+class _ReduceOpApi(Protocol):
+    SUM: object
+
+
+class _DistributedApi(Protocol):
+    ReduceOp: _ReduceOpApi
+
+    def is_initialized(self) -> bool: ...
+
+    def get_rank(self) -> int: ...
+
+    def get_world_size(self) -> int: ...
+
+    def barrier(self) -> None: ...
+
+    def all_reduce(self, tensor: torch.Tensor, *, op: object) -> None: ...
+
+
+dist = cast(_DistributedApi, torch_dist)
 
 # -----------------------------------------------------------------------------
 # Prompt rendering utilities
