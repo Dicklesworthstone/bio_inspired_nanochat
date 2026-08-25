@@ -25,6 +25,7 @@ from bio_inspired_nanochat.checkpoint_manager import (
     checkpoint_model_config,
     list_checkpoint_steps,
     load_checkpoint,
+    load_rank_training_checkpoint,
     prune_checkpoints,
     restore_rng_state,
     restore_prefetched_batch,
@@ -520,6 +521,80 @@ def test_train_state_roundtrips_through_disk(tmp_path):
     assert [random.random() for _ in range(4)] == expected_py, "python RNG must round-trip"
     assert np.random.rand(4).tolist() == expected_np, "numpy RNG must round-trip"
     assert torch.equal(torch.randn(4), expected_tc), "torch RNG must round-trip"
+
+
+def test_rank_training_checkpoint_loads_only_optimizer_and_train_shards(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setattr(torch.distributed, "is_available", lambda: True)
+    monkeypatch.setattr(torch.distributed, "is_initialized", lambda: True)
+    monkeypatch.setattr(torch.distributed, "get_world_size", lambda: 1)
+    monkeypatch.setattr(torch.distributed, "barrier", lambda: None)
+    save_checkpoint(
+        str(tmp_path),
+        4,
+        {"model": torch.ones(1)},
+        {"optimizer": torch.arange(2)},
+        {"step": 4, "model_config": {}},
+        train_state={"step": 4, "rng": {}},
+    )
+
+    original_load = torch.load
+    loaded_paths = []
+
+    def recording_load(path, *args, **kwargs):
+        loaded_paths.append(os.path.basename(os.fspath(path)))
+        if os.path.basename(os.fspath(path)).startswith("model_"):
+            raise AssertionError("rank-only restore must not reload model weights")
+        return original_load(path, *args, **kwargs)
+
+    monkeypatch.setattr(torch, "load", recording_load)
+    optimizer_state, metadata, train_state = load_rank_training_checkpoint(
+        str(tmp_path),
+        4,
+        "cpu",
+        rank=0,
+        expected_world_size=1,
+    )
+
+    assert loaded_paths == ["optim_000004_rank0.pt", "train_000004_rank0.pt"]
+    assert torch.equal(optimizer_state["optimizer"], torch.arange(2))
+    assert metadata["step"] == train_state["step"] == 4
+
+
+def test_rank_training_checkpoint_rejects_world_size_before_loading_shards(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setattr(torch.distributed, "is_available", lambda: True)
+    monkeypatch.setattr(torch.distributed, "is_initialized", lambda: True)
+    monkeypatch.setattr(torch.distributed, "get_world_size", lambda: 1)
+    monkeypatch.setattr(torch.distributed, "barrier", lambda: None)
+    save_checkpoint(
+        str(tmp_path),
+        5,
+        {"model": torch.ones(1)},
+        {"optimizer": torch.arange(2)},
+        {"step": 5, "model_config": {}},
+        train_state={"step": 5},
+    )
+    monkeypatch.setattr(
+        torch,
+        "load",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("world-size mismatch must fail before loading shards")
+        ),
+    )
+
+    with pytest.raises(ValueError, match="world size"):
+        load_rank_training_checkpoint(
+            str(tmp_path),
+            5,
+            "cpu",
+            rank=0,
+            expected_world_size=2,
+        )
 
 
 def test_prefetched_batch_roundtrips_through_rank_local_train_state(tmp_path):

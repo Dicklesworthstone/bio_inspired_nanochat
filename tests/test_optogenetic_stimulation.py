@@ -233,3 +233,47 @@ def test_maintained_pin_rejects_ambiguous_mixed_mode_overlap():
             pass
 
     assert torch.equal(syn_lin.w_fast, original)
+
+
+def test_rrp_clamp_engages_on_live_release_path():
+    """Regression (wave-two review): the calcium/RRP clamps used forward hooks
+    on SynapticPresyn, but the live attention path calls release_canonical as a
+    plain bound method — hooks never fired, so clamps were silent no-ops and
+    causal experiments reported false nulls. The instance-level wrapper must be
+    installed while active, removed on exit, and must actually suppress RRP
+    relative to an unclamped run (refill from the reserve ring means the pinned
+    value shows up as suppression, not exact zeros, after release consumes it)."""
+
+    from bio_inspired_nanochat.probing import optogenetic_clamp
+    from bio_inspired_nanochat.synaptic import SynapticPresyn
+
+    torch.manual_seed(0)
+    model = _make_model()
+    model.eval()
+    prompt = torch.randint(0, 32, (1, 4))
+    presyn = next(m for m in model.modules() if isinstance(m, SynapticPresyn))
+
+    def _mean_rrp() -> float:
+        states = model._last_presyn_state or []
+        vals = [float(s["RRP"].mean()) for s in states if s and "RRP" in s]
+        return sum(vals) / len(vals)
+
+    with torch.no_grad():
+        model(prompt)  # prime telemetry/state once for a comparable baseline
+        baseline_rrp = _mean_rrp()
+
+        with optogenetic_clamp(model, target="rrp", value=0.0):
+            # Wiring proof: the instance attribute shadows the class method.
+            assert "release_canonical" in presyn.__dict__
+            model(prompt)
+            clamped_rrp = _mean_rrp()
+
+        assert "release_canonical" not in presyn.__dict__, "wrapper must be removed on exit"
+        model(prompt)
+    restored_rrp = _mean_rrp()
+
+    assert clamped_rrp < baseline_rrp, (
+        f"clamped RRP ({clamped_rrp:.3f}) must sit below the unclamped level "
+        f"({baseline_rrp:.3f}): pinning to zero before every release drains the pool"
+    )
+    assert restored_rrp > 0.0

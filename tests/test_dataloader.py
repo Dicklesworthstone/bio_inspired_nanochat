@@ -14,7 +14,10 @@ from bio_inspired_nanochat.checkpoint_manager import (
     capture_prefetched_batch,
     restore_prefetched_batch,
 )
-from bio_inspired_nanochat.dataloader import tokenizing_distributed_data_loader_with_state
+from bio_inspired_nanochat.dataloader import (
+    tokenizing_distributed_data_loader_with_state,
+    tokenizing_task_data_loader_with_state,
+)
 
 
 class MockTokenizer:
@@ -36,6 +39,143 @@ class MockTokenizer:
             tokens.extend([ord(c) % 256 for c in doc])
             out.append(tokens)
         return out
+
+
+class MockConversationTokenizer:
+    """Render list-valued conversations directly as deterministic token IDs."""
+
+    def render_conversation(self, conversation: list[int]) -> tuple[list[int], list[int]]:
+        return list(conversation), [0] * len(conversation)
+
+
+def _conversation_dataset() -> list[list[int]]:
+    return [list(range(start, start + 5)) for start in range(10, 50, 5)]
+
+
+def test_task_loader_resumes_without_repeating_or_skipping_tokens() -> None:
+    dataset = _conversation_dataset()
+    tokenizer = MockConversationTokenizer()
+    loader = tokenizing_task_data_loader_with_state(
+        dataset,
+        tokenizer,
+        B=2,
+        T=3,
+        device="cpu",
+    )
+    uninterrupted = []
+    saved_state = None
+    for index in range(7):
+        inputs, targets, state = next(loader)
+        uninterrupted.append((inputs.clone(), targets.clone()))
+        if index == 2:
+            saved_state = state
+
+    assert saved_state is not None
+    resumed = tokenizing_task_data_loader_with_state(
+        dataset,
+        tokenizer,
+        B=2,
+        T=3,
+        device="cpu",
+        resume_state_dict=saved_state,
+    )
+    for expected_inputs, expected_targets in uninterrupted[3:]:
+        resumed_inputs, resumed_targets, _state = next(resumed)
+        torch.testing.assert_close(resumed_inputs, expected_inputs)
+        torch.testing.assert_close(resumed_targets, expected_targets)
+
+
+def test_task_loader_checkpoint_restores_prefetched_batch_exactly() -> None:
+    dataset = _conversation_dataset()
+    tokenizer = MockConversationTokenizer()
+    loader = tokenizing_task_data_loader_with_state(
+        dataset,
+        tokenizer,
+        B=2,
+        T=3,
+        device="cpu",
+    )
+    next(loader)
+    prefetched_inputs, prefetched_targets, state_after_prefetch = next(loader)
+    uninterrupted_next_inputs, uninterrupted_next_targets, _ = next(loader)
+
+    train_state = {
+        "prefetched_batch": capture_prefetched_batch(
+            prefetched_inputs,
+            prefetched_targets,
+        ),
+    }
+    resumed_inputs, resumed_targets = restore_prefetched_batch(
+        train_state,
+        device="cpu",
+        expected_shape=(2, 3),
+    )
+    resumed_loader = tokenizing_task_data_loader_with_state(
+        dataset,
+        tokenizer,
+        B=2,
+        T=3,
+        device="cpu",
+        resume_state_dict=state_after_prefetch,
+    )
+    resumed_next_inputs, resumed_next_targets, _ = next(resumed_loader)
+
+    torch.testing.assert_close(resumed_inputs, prefetched_inputs)
+    torch.testing.assert_close(resumed_targets, prefetched_targets)
+    torch.testing.assert_close(resumed_next_inputs, uninterrupted_next_inputs)
+    torch.testing.assert_close(resumed_next_targets, uninterrupted_next_targets)
+
+
+def test_task_loader_tracks_rank_local_epoch_boundary() -> None:
+    dataset = _conversation_dataset()[:4]
+    with patch(
+        "bio_inspired_nanochat.dataloader.get_dist_info",
+        return_value=(True, 0, 0, 2),
+    ):
+        loader = tokenizing_task_data_loader_with_state(
+            dataset,
+            MockConversationTokenizer(),
+            B=1,
+            T=4,
+            device="cpu",
+        )
+        _inputs, _targets, first = next(loader)
+        _inputs, _targets, second = next(loader)
+
+    assert first["epochs_completed"] == 0
+    assert second["epochs_completed"] == 1
+    assert second["cursor"] == 0
+    assert second["batches_yielded"] == 2
+
+
+@pytest.mark.parametrize(
+    "resume_state",
+    [
+        {"kind": "task_mixture", "version": 2},
+        {
+            "kind": "task_mixture",
+            "version": 1,
+            "cursor": 0,
+            "batches_yielded": 0,
+            "documents_consumed": 0,
+            "epochs_completed": 0,
+            "token_buffer": [True],
+            "rank": 0,
+            "world_size": 1,
+        },
+    ],
+)
+def test_task_loader_rejects_malformed_resume_state(resume_state) -> None:
+    loader = tokenizing_task_data_loader_with_state(
+        _conversation_dataset(),
+        MockConversationTokenizer(),
+        B=1,
+        T=4,
+        device="cpu",
+        resume_state_dict=resume_state,
+    )
+    with pytest.raises(ValueError):
+        next(loader)
 
 
 @pytest.fixture
