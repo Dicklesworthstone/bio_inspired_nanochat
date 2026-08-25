@@ -4,7 +4,7 @@ import importlib.util
 import json
 import os
 import time
-from typing import Any, cast
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -17,10 +17,10 @@ def _require(module: str) -> Any:
     return importlib.import_module(module)
 
 
-st = cast(Any, _require("streamlit"))
-go = cast(Any, _require("plotly.graph_objects"))
-px = cast(Any, _require("plotly.express"))
-make_subplots = cast(Any, _require("plotly.subplots")).make_subplots
+st = _require("streamlit")
+go = _require("plotly.graph_objects")
+px = _require("plotly.express")
+make_subplots = _require("plotly.subplots").make_subplots
 
 st.set_page_config(
     page_title="Bio-Nanochat Dashboard",
@@ -136,8 +136,13 @@ def get_layers():
     return [d for d in os.listdir(images_dir) if os.path.isdir(os.path.join(images_dir, d))]
 
 def load_json(path):
-    with open(path, 'r') as f:
-        return json.load(f)
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError) as exc:
+        st.error(f"Could not read dashboard artifact {path!r}: {exc}")
+        st.stop()
+        raise RuntimeError("Streamlit stop returned unexpectedly") from exc
 
 # -----------------------------------------------------------------------------
 # Sidebar
@@ -822,7 +827,7 @@ elif page == "Structural Plasticity":
     if html_files:
         latest_html = html_files[0]
         st.caption(f"Latest interactive lineage: {os.path.basename(latest_html)}")
-        with open(latest_html, 'r') as f:
+        with open(latest_html, "r", encoding="utf-8") as f:
             html_content = f.read()
         st.components.v1.html(html_content, height=600, scrolling=True)
     else:
@@ -1140,4 +1145,3 @@ elif page == "In-Silico Neuroscience Lab":
                 )
             except (RuntimeError, ValueError, TypeError, KeyError) as e:
                 st.error(f"Error during sleep phase: {e}")
-
