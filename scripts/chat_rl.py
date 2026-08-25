@@ -25,9 +25,16 @@ import torch
 import torch.nn.functional as F
 import torch.distributed as torch_dist
 
-from bio_inspired_nanochat.common import compute_init, compute_cleanup, print0, get_base_dir, DummyWandb
+from bio_inspired_nanochat.common import (
+    DummyWandb,
+    compute_cleanup,
+    compute_init,
+    get_base_dir,
+    print0,
+    stable_seed_u64,
+)
 from bio_inspired_nanochat.checkpoint_manager import save_checkpoint, load_model
-from bio_inspired_nanochat.engine import Engine
+from bio_inspired_nanochat.engine import Engine, batch_slices
 from bio_inspired_nanochat.report import get_report
 from tasks.gsm8k import GSM8K
 
@@ -109,34 +116,20 @@ def get_batch():
 
         # Generate num_samples samples using batched generation, use loop to avoid OOMs
         model.eval() # ensure the model is in eval mode
-        generated_token_sequences = []
-        masks = []
-        if num_samples > device_batch_size:
-             # Logic handles this via looping, but the original code asserted.
-             # The original code: num_sampling_steps = num_samples // device_batch_size
-             # If num_samples % device_batch_size != 0, we might miss some?
-             # But let's just keep the logic but replace assert.
-             # Actually, the original code loop range(num_sampling_steps) implies it truncates if not divisible.
-             # Let's enforce divisibility or <=.
-             pass 
-        # The original assertion `assert num_samples <= device_batch_size` in `run_gsm8k_eval` suggests it wasn't looping there.
-        # But here in `get_batch` it loops.
-        # Let's fix `run_gsm8k_eval` assert first.
-        
-        num_sampling_steps = num_samples // device_batch_size # go sequentially to prevent OOMs
-        for sampling_step in range(num_sampling_steps):
-            seed = hash((step, example_idx, sampling_step)) & 0x7FFFFFFF # positive half of int32
-            with autocast_ctx:
-                generated_token_sequences_batch, masks_batch = engine.generate_batch(
-                    tokens,
-                    num_samples=device_batch_size,
-                    max_tokens=max_new_tokens,
-                    temperature=temperature,
-                    top_k=top_k,
-                    seed=seed, # must make sure to change the seed for each sampling step
-                )
-            generated_token_sequences.extend(generated_token_sequences_batch)
-            masks.extend(masks_batch)
+        rollout_seed = stable_seed_u64(
+            step,
+            salt=f"chat_rl.rollout.example:{example_idx}",
+        ) % (2**63)
+        with autocast_ctx:
+            generated_token_sequences, masks = engine.generate_batch(
+                tokens,
+                num_samples=num_samples,
+                max_batch_size=device_batch_size,
+                max_tokens=max_new_tokens,
+                temperature=temperature,
+                top_k=top_k,
+                seed=rollout_seed,
+            )
 
         # Calculate the rewards for each sample
         rewards = []
@@ -176,7 +169,8 @@ def run_gsm8k_eval(task, tokenizer, engine,
     num_samples=1,
     max_completion_tokens=256,
     temperature=0.0,
-    top_k=50
+    top_k=50,
+    seed=42,
 ):
     """
     Evaluates GSM8K task and returns a list of records of evaluation outcomes.
@@ -189,16 +183,18 @@ def run_gsm8k_eval(task, tokenizer, engine,
         conversation = task[idx]
         tokens = tokenizer.render_for_completion(conversation)
         prefix_length = len(tokens)
-        # Generate k samples using batched generation inside the Engine
-        if num_samples > device_batch_size:
-             # We should probably implement batching here too, but for now raising error is safer than crashing
-             raise ValueError(f"num_samples {num_samples} must be <= device_batch_size {device_batch_size}")
+        example_seed = stable_seed_u64(
+            seed,
+            salt=f"chat_rl.eval.example:{idx}",
+        ) % (2**63)
         generated_token_sequences, masks = engine.generate_batch(
             tokens,
             num_samples=num_samples,
+            max_batch_size=device_batch_size,
             max_tokens=max_completion_tokens,
             temperature=temperature,
-            top_k=top_k
+            top_k=top_k,
+            seed=example_seed,
         )
         # Check each sample for correctness
         outcomes = []
@@ -279,13 +275,13 @@ for step in range(num_steps):
         sequences_all, inputs_all, targets_all, rewards_all, advantages_all = next(batch_iterator)
         # Evaluate the loss and gradients
         model.train() # ensure the model is in train mode
-        # We need one more loop because we can never exceed the device_batch_size
-        if inputs_all.size(0) % device_batch_size != 0:
-            raise ValueError(f"inputs_all size {inputs_all.size(0)} must be divisible by device_batch_size {device_batch_size}")
-        num_passes = inputs_all.size(0) // device_batch_size
-        for pass_idx in range(num_passes):
+        # Keep every rollout while bounding each forward/backward micro-batch.
+        # Normalize by the full example's token count so a smaller remainder
+        # chunk is not overweighted relative to a full chunk.
+        slices = batch_slices(inputs_all.size(0), device_batch_size)
+        total_valid = (targets_all >= 0).sum().clamp(min=1)
+        for pass_idx, (b0, b1) in enumerate(slices):
             # Pluck out the batch for this pass
-            b0, b1 = pass_idx * device_batch_size, (pass_idx + 1) * device_batch_size
             inputs = inputs_all[b0:b1]
             targets = targets_all[b0:b1]
             rewards = rewards_all[b0:b1]
@@ -305,9 +301,8 @@ for step in range(num_steps):
                     logp = -model(inputs, targets, loss_reduction='none').view_as(inputs) # (B, T)
             # Calculate the PG objective. Note that ignore_index=-1 ensures that invalid tokens have loss 0.
             pg_obj = (logp * advantages.unsqueeze(-1)).sum()
-            # normalize by the number of valid tokens, number of passes, and examples_per_rank
-            num_valid = (targets >= 0).sum().clamp(min=1)
-            pg_obj = pg_obj / (num_valid * num_passes * examples_per_rank)
+            # Normalize over all tokens from this example and all examples assigned to this rank.
+            pg_obj = pg_obj / (total_valid * examples_per_rank)
             # Note, there is no need to add PPO ratio+clip because we are on policy
             # Finally, formulate the loss that we want to minimize (instead of objective we wish to maximize)
             loss = -pg_obj

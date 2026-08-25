@@ -250,7 +250,7 @@ class DummyWandb:
         pass
 
 
-def _stable_seed_u64(seed: int, *, salt: str) -> int:
+def stable_seed_u64(seed: int, *, salt: str) -> int:
     """Return a deterministic 64-bit seed derived from (seed, salt).
 
     Note: Python's built-in hash() is intentionally randomized across processes, so we use a
@@ -289,7 +289,7 @@ def _eca_bits_grid(
 
     rule_table = _eca_rule_table(rule)
     g = torch.Generator(device="cpu")
-    g.manual_seed(_stable_seed_u64(seed, salt=salt) % (2**63))
+    g.manual_seed(stable_seed_u64(seed, salt=salt) % (2**63))
 
     state = (torch.rand(width, generator=g, device="cpu") > 0.5).to(torch.uint8)
     if int(state.sum().item()) == 0:

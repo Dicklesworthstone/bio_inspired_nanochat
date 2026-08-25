@@ -12,6 +12,176 @@ import pytest
 
 from bio_inspired_nanochat.engine import KVCache
 
+
+def test_stable_seed_u64_has_process_independent_vector() -> None:
+    from bio_inspired_nanochat.common import stable_seed_u64
+
+    assert stable_seed_u64(17, salt="engine.generate_batch.chunk:0") == 5140774374088659371
+
+
+def test_batch_slices_preserve_non_divisible_remainder() -> None:
+    from bio_inspired_nanochat.engine import batch_slices
+
+    assert batch_slices(7, 3) == ((0, 3), (3, 6), (6, 7))
+    assert batch_slices(2, 8) == ((0, 2),)
+
+
+@pytest.mark.parametrize(
+    ("total_size", "max_batch_size", "error"),
+    [
+        (0, 1, "total_size"),
+        (True, 1, "total_size"),
+        (1, 0, "max_batch_size"),
+        (1, True, "max_batch_size"),
+    ],
+)
+def test_batch_slices_reject_invalid_counts(total_size, max_batch_size, error) -> None:
+    from bio_inspired_nanochat.engine import batch_slices
+
+    with pytest.raises(ValueError, match=error):
+        batch_slices(total_size, max_batch_size)
+
+
+def test_generate_batch_chunks_exactly_with_stable_seeds() -> None:
+    from types import SimpleNamespace
+
+    from bio_inspired_nanochat.engine import Engine
+
+    class _Tokenizer:
+        def encode_special(self, _token):
+            return 98
+
+        def get_bos_token_id(self):
+            return 99
+
+    class _Model:
+        config = SimpleNamespace(vocab_size=128)
+
+        def forward(self, *_args, **_kwargs):
+            raise AssertionError("fake generate should replace model execution")
+
+    engine = Engine(_Model(), _Tokenizer())
+    calls = []
+
+    def _fake_generate(tokens, num_samples=1, **kwargs):
+        seed = kwargs["seed"]
+        calls.append((num_samples, seed))
+        yield [2 + seed % 80] * num_samples, [1] * num_samples
+
+    engine.generate = _fake_generate
+    first_results, first_masks = engine.generate_batch(
+        [1],
+        num_samples=5,
+        max_batch_size=2,
+        max_tokens=1,
+        seed=17,
+    )
+    first_calls = calls.copy()
+    calls.clear()
+    second_results, second_masks = engine.generate_batch(
+        [1],
+        num_samples=5,
+        max_batch_size=2,
+        max_tokens=1,
+        seed=17,
+    )
+
+    assert [size for size, _seed in first_calls] == [2, 2, 1]
+    assert first_calls == calls
+    assert len({seed for _size, seed in first_calls}) == 3
+    assert len(first_results) == len(first_masks) == 5
+    assert (first_results, first_masks) == (second_results, second_masks)
+
+
+def test_generate_batch_preserves_unchunked_seed() -> None:
+    from types import SimpleNamespace
+
+    from bio_inspired_nanochat.engine import Engine
+
+    class _Tokenizer:
+        def encode_special(self, _token):
+            return 98
+
+        def get_bos_token_id(self):
+            return 99
+
+    class _Model:
+        config = SimpleNamespace(vocab_size=128)
+
+        def forward(self, *_args, **_kwargs):
+            raise AssertionError("fake generate should replace model execution")
+
+    engine = Engine(_Model(), _Tokenizer())
+    seeds = []
+
+    def _fake_generate(tokens, num_samples=1, **kwargs):
+        seeds.append(kwargs["seed"])
+        yield [7] * num_samples, [1] * num_samples
+
+    engine.generate = _fake_generate
+    results, _masks = engine.generate_batch(
+        [1],
+        num_samples=3,
+        max_batch_size=8,
+        max_tokens=1,
+        seed=23,
+    )
+
+    assert len(results) == 3
+    assert seeds == [23]
+
+
+def test_generate_batch_chunks_real_model_remainder() -> None:
+    from bio_inspired_nanochat.engine import Engine
+    from bio_inspired_nanochat.gpt import GPT, GPTConfig
+
+    class _Tokenizer:
+        _special = {
+            "<|python_start|>": 58,
+            "<|python_end|>": 59,
+            "<|output_start|>": 60,
+            "<|output_end|>": 61,
+            "<|assistant_end|>": 62,
+        }
+
+        def encode_special(self, token):
+            return self._special[token]
+
+        def get_bos_token_id(self):
+            return 63
+
+        def decode(self, _tokens):
+            return ""
+
+        def encode(self, _text):
+            return []
+
+    model = GPT(
+        GPTConfig(
+            sequence_len=8,
+            vocab_size=64,
+            n_layer=1,
+            n_head=2,
+            n_kv_head=2,
+            n_embd=16,
+        )
+    ).eval()
+    engine = Engine(model, _Tokenizer())
+
+    results, masks = engine.generate_batch(
+        [1, 2],
+        num_samples=3,
+        max_batch_size=2,
+        max_tokens=1,
+        temperature=1.0,
+        top_k=4,
+        seed=31,
+    )
+
+    assert len(results) == len(masks) == 3
+    assert all(len(result) in (2, 3) for result in results)
+
+
 def test_use_calculator_is_ast_safe_and_supports_count() -> None:
     from bio_inspired_nanochat.engine import use_calculator
 

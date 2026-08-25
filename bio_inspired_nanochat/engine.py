@@ -20,11 +20,33 @@ import signal
 import inspect
 from contextlib import contextmanager
 from collections import deque
-from bio_inspired_nanochat.common import compute_init, autodetect_device_type
+from bio_inspired_nanochat.common import (
+    autodetect_device_type,
+    compute_init,
+    stable_seed_u64,
+)
 from bio_inspired_nanochat.checkpoint_manager import load_model
 from contextlib import nullcontext
 
 # -----------------------------------------------------------------------------
+
+
+def batch_slices(total_size: int, max_batch_size: int) -> tuple[tuple[int, int], ...]:
+    """Partition ``range(total_size)`` into exact, non-empty bounded slices."""
+    if isinstance(total_size, bool) or not isinstance(total_size, int) or total_size < 1:
+        raise ValueError("total_size must be a positive integer")
+    if (
+        isinstance(max_batch_size, bool)
+        or not isinstance(max_batch_size, int)
+        or max_batch_size < 1
+    ):
+        raise ValueError("max_batch_size must be a positive integer")
+    return tuple(
+        (start, min(start + max_batch_size, total_size))
+        for start in range(0, total_size, max_batch_size)
+    )
+
+
 # Calculator tool helpers
 @contextmanager
 def timeout(duration, formula):
@@ -792,12 +814,39 @@ class Engine:
             # Prepare ids for next iteration
             ids = torch.tensor(token_column, dtype=torch.long, device=device).unsqueeze(1)
 
-    def generate_batch(self, tokens, num_samples=1, **kwargs):
+    def generate_batch(self, tokens, num_samples=1, *, max_batch_size=None, **kwargs):
         """
         Non-streaming batch generation that just returns the final token sequences.
         Returns a list of token sequences (list of lists of ints).
         Terminal tokens (assistant_end, bos) are not included in the results.
+
+        ``max_batch_size`` bounds peak decode batch size without dropping a
+        remainder. Each chunk receives a deterministic derived seed, so identical
+        inputs/configuration reproduce across Python processes and DDP ranks.
         """
+        max_batch_size = num_samples if max_batch_size is None else max_batch_size
+        slices = batch_slices(num_samples, max_batch_size)
+        if len(slices) > 1:
+            base_seed = kwargs.pop("seed", 42)
+            if isinstance(base_seed, bool) or not isinstance(base_seed, int):
+                raise ValueError("seed must be an integer")
+            all_results = []
+            all_masks = []
+            for chunk_index, (start, end) in enumerate(slices):
+                chunk_seed = stable_seed_u64(
+                    base_seed,
+                    salt=f"engine.generate_batch.chunk:{chunk_index}",
+                ) % (2**63)
+                chunk_results, chunk_masks = self.generate_batch(
+                    tokens,
+                    num_samples=end - start,
+                    seed=chunk_seed,
+                    **kwargs,
+                )
+                all_results.extend(chunk_results)
+                all_masks.extend(chunk_masks)
+            return all_results, all_masks
+
         # Strip yield_metrics from kwargs since generate_batch doesn't use metrics
         # and generate() yields 3 values when yield_metrics=True which would cause
         # unpacking to fail below.
