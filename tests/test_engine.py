@@ -271,6 +271,8 @@ def test_synaptic_moe_xi_swap_swaps_metabolism_buffers():
         cfg=cfg,
         dropout=0.0,
     )
+    xi = moe.Xi
+    assert xi is not None
 
     with torch.no_grad():
         moe.router.weight.zero_()
@@ -278,11 +280,11 @@ def test_synaptic_moe_xi_swap_swaps_metabolism_buffers():
         moe.router.weight[1, 0] = -1.0
 
         # Make metabolism visibly different between experts.
-        moe.Xi.zero_()
-        moe.Xi[0, 0] = 10.0
-        moe.Xi[1, 0] = -10.0
-        moe.Xi[0, 1] = 10.0
-        moe.Xi[1, 1] = -10.0
+        xi.zero_()
+        xi[0, 0] = 10.0
+        xi[1, 0] = -10.0
+        xi[0, 1] = 10.0
+        xi[1, 1] = -10.0
 
     x = torch.zeros((1, 8, 4), dtype=torch.float32)
     x[0, ::2, 0] = 1.0
@@ -299,9 +301,9 @@ def test_synaptic_moe_xi_swap_swaps_metabolism_buffers():
     fat_a, en_a = run_once()
 
     with torch.no_grad():
-        xi = moe.Xi.detach().clone()
-        moe.Xi[0].copy_(xi[1])
-        moe.Xi[1].copy_(xi[0])
+        xi_before_swap = xi.detach().clone()
+        xi[0].copy_(xi_before_swap[1])
+        xi[1].copy_(xi_before_swap[0])
 
     fat_b, en_b = run_once()
 
