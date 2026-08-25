@@ -261,6 +261,33 @@ def test_serving_is_non_adaptive_by_default():
     )
 
 
+def test_adaptive_serving_rejects_pending_training_plasticity_without_mutation():
+    """Inference must not combine an unflushed training write with request adaptation."""
+    model = _make_model()
+    pending_module = next(
+        module for module in model.modules() if hasattr(module, "_plasticity_pending")
+    )
+    pending_module._plasticity_pending = True
+    state_before = {name: value.detach().clone() for name, value in model.state_dict().items()}
+
+    with pytest.raises(RuntimeError, match="clean post-backward plasticity boundary"):
+        SynapticServingEngine(model).serve_request(
+            ServingRequest(
+                "unsafe-adaptation",
+                torch.ones((1, 2), dtype=torch.long),
+                max_tokens=1,
+                knobs=ServingKnobs(adaptive_serving=True, trust_threshold=0.0),
+                sla=SLARequirement(min_confidence=0.0, strict_enforcement=False),
+            )
+        )
+
+    assert pending_module._plasticity_pending is True
+    assert all(
+        torch.equal(value, state_before[name])
+        for name, value in model.state_dict().items()
+    )
+
+
 def test_serving_restores_exact_training_modes():
     model = _make_model()
     model.train()

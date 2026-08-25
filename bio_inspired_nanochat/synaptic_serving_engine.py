@@ -210,6 +210,14 @@ class SynapticServingEngine:
             or req.prompt_tokens.max().item() >= self.model.config.vocab_size
         ):
             raise ValueError("prompt_tokens contain token IDs outside the model vocabulary")
+        if req.knobs.adaptive_serving and req.max_tokens > 0 and any(
+            bool(getattr(module, "_plasticity_pending", False))
+            for module in self.model.modules()
+        ):
+            raise RuntimeError(
+                "adaptive serving requires a clean post-backward plasticity boundary; "
+                "flush or reset pending training writes before serving"
+            )
 
         # Step 1: estimate only the work the ATP budget can actually fund. Sequence length
         # is included because this implementation recomputes the growing prefix every step.
