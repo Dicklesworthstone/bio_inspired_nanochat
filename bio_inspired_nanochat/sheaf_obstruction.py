@@ -241,6 +241,7 @@ class SheafDetectorDecision:
     requested_action: ObstructionAction
     action_taken: str
     output_stalks: Tensor
+    edge_residual_norms: tuple[float, ...] = ()
     should_abstain: bool = False
     should_clarify: bool = False
     should_deliberate: bool = False
@@ -261,6 +262,7 @@ class SheafDetectorDecision:
             "calibrated_probability": self.calibrated_probability,
             "requested_action": self.requested_action.value,
             "action_taken": self.action_taken,
+            "edge_residual_norms": list(self.edge_residual_norms),
             "should_abstain": self.should_abstain,
             "should_clarify": self.should_clarify,
             "should_deliberate": self.should_deliberate,
@@ -343,6 +345,7 @@ class SheafObstructionDetector:
                 score=result.score,
                 fallback_reason="calibration_unavailable",
                 calibrated_probability=probability,
+                edge_residual_norms=result.edge_residual_norms,
             )
         if not math.isfinite(threshold):
             return self._noop(
@@ -352,6 +355,7 @@ class SheafObstructionDetector:
                 score=result.score,
                 fallback_reason="calibration_threshold_disabled",
                 calibrated_probability=probability,
+                edge_residual_norms=result.edge_residual_norms,
             )
 
         flagged = result.score >= threshold
@@ -367,6 +371,7 @@ class SheafObstructionDetector:
                 requested_action=action,
                 action_taken="below_threshold_noop",
                 output_stalks=stalks,
+                edge_residual_norms=result.edge_residual_norms,
             )
         if action is not ObstructionAction.REPAIR:
             return SheafDetectorDecision(
@@ -380,6 +385,7 @@ class SheafObstructionDetector:
                 requested_action=action,
                 action_taken=action.value,
                 output_stalks=stalks,
+                edge_residual_norms=result.edge_residual_norms,
                 should_abstain=action is ObstructionAction.ABSTAIN,
                 should_clarify=action is ObstructionAction.CLARIFY,
                 should_deliberate=action is ObstructionAction.DELIBERATE,
@@ -409,6 +415,7 @@ class SheafObstructionDetector:
                 requested_action=action,
                 action_taken="repair_failed_flag_only",
                 output_stalks=stalks,
+                edge_residual_norms=result.edge_residual_norms,
                 fallback_reason=repair_reason,
             )
         return SheafDetectorDecision(
@@ -422,6 +429,7 @@ class SheafObstructionDetector:
             requested_action=action,
             action_taken="repair",
             output_stalks=repaired_stalks,
+            edge_residual_norms=result.edge_residual_norms,
             repaired=True,
         )
 
@@ -440,6 +448,7 @@ class SheafObstructionDetector:
         score: float = 0.0,
         threshold: float | None = None,
         calibrated_probability: float | None = None,
+        edge_residual_norms: tuple[float, ...] = (),
     ) -> SheafDetectorDecision:
         return SheafDetectorDecision(
             enabled=self.config.enabled,
@@ -452,6 +461,7 @@ class SheafObstructionDetector:
             requested_action=action,
             action_taken="noop",
             output_stalks=stalks,
+            edge_residual_norms=edge_residual_norms,
             fallback_reason=fallback_reason,
         )
 

@@ -10,7 +10,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Optional
+from typing import List, Optional, Protocol
 
 import torch
 import torch.nn as nn
@@ -23,9 +23,11 @@ from bio_inspired_nanochat.causal_deliberation import (
     CausalDeliberationController,
     ControlType,
 )
-from bio_inspired_nanochat.sheaf_detector import (
-    HallucinationReport,
-    SheafHallucinationDetector,
+from bio_inspired_nanochat.sheaf_obstruction import (
+    ObstructionAction,
+    SheafDetectorConfig,
+    SheafDetectorDecision,
+    SheafObstructionDetector,
 )
 
 
@@ -42,14 +44,17 @@ class CorrectionOutcome(str, Enum):
 class SelfCorrectionConfig:
     """Knobs and thresholds for the self-correcting generation loop."""
 
-    enabled: bool = True
+    enabled: bool = False
     max_repair_attempts: int = 3
     obstruction_threshold: float = 0.40
     deliberation_budget: int = 4
+    max_repair_span: int = 3
     abstain_token_id: int = 0
     abstain_on_exhaustion: bool = True
 
     def validate(self) -> None:
+        if not isinstance(self.enabled, bool):
+            raise ValueError("enabled must be a boolean")
         if self.max_repair_attempts < 1:
             raise ValueError(f"max_repair_attempts must be >= 1, got {self.max_repair_attempts}")
         if not (0.0 < self.obstruction_threshold <= 1.0):
@@ -58,6 +63,14 @@ class SelfCorrectionConfig:
             )
         if self.deliberation_budget < 0:
             raise ValueError(f"deliberation_budget must be >= 0, got {self.deliberation_budget}")
+        if (
+            isinstance(self.max_repair_span, bool)
+            or not isinstance(self.max_repair_span, int)
+            or self.max_repair_span < 1
+        ):
+            raise ValueError(
+                f"max_repair_span must be a positive integer, got {self.max_repair_span!r}"
+            )
 
 
 @dataclass
@@ -69,6 +82,8 @@ class SelfCorrectionEvent:
     span_end: int
     corrupted_tokens: List[int]
     repaired_tokens: List[int]
+    localization_peak: int
+    edge_residual_norms: tuple[float, ...]
     initial_obstruction: float
     repaired_obstruction: float
     repaired_successfully: bool
@@ -87,6 +102,20 @@ class SelfCorrectingTrajectory:
     is_abstention: bool
 
 
+class _GenerationTrajectory(Protocol):
+    @property
+    def generated_tokens(self) -> List[int]: ...
+
+
+class _DeliberationGenerator(Protocol):
+    def generate(
+        self,
+        prompt: Tensor,
+        max_new_tokens: int,
+        control: ControlType = ControlType.DELIBERATION,
+    ) -> _GenerationTrajectory: ...
+
+
 class SelfCorrectingGenerator:
     """Closed-loop generation engine with mid-generation sheaf detection and causal repair."""
 
@@ -94,8 +123,8 @@ class SelfCorrectingGenerator:
         self,
         model: nn.Module,
         cfg: Optional[SelfCorrectionConfig] = None,
-        sheaf_detector: Optional[SheafHallucinationDetector] = None,
-        deliberation_controller: Optional[CausalDeliberationController] = None,
+        sheaf_detector: Optional[SheafObstructionDetector] = None,
+        deliberation_controller: Optional[_DeliberationGenerator] = None,
     ):
         self.model = model
         self.cfg = cfg or SelfCorrectionConfig()
@@ -106,10 +135,12 @@ class SelfCorrectingGenerator:
                 "self-correction; synthetic representation fallbacks are not supported"
             )
 
-        d_model = getattr(model.config, "n_embd", 64) if hasattr(model, "config") else 64
-        self.sheaf_detector = sheaf_detector or SheafHallucinationDetector(
-            d_model=d_model,
-            threshold=self.cfg.obstruction_threshold,
+        self.sheaf_detector = sheaf_detector or SheafObstructionDetector(
+            SheafDetectorConfig(
+                enabled=True,
+                action=ObstructionAction.DELIBERATE,
+                threshold=self.cfg.obstruction_threshold,
+            )
         )
         self.deliberation_controller = deliberation_controller or CausalDeliberationController(
             model,
@@ -132,6 +163,39 @@ class SelfCorrectingGenerator:
                 f"(batch={tokens.shape[0]}, sequence={tokens.shape[1]}, hidden)"
             )
         return hidden
+
+    @staticmethod
+    def _path_edge_index(num_tokens: int, device: torch.device) -> Tensor:
+        if num_tokens < 2:
+            raise ValueError(f"obstruction graph requires at least 2 tokens, got {num_tokens}")
+        tail = torch.arange(num_tokens - 1, dtype=torch.long, device=device)
+        return torch.stack((tail, tail + 1))
+
+    def _localize_span(
+        self,
+        edge_residual_norms: tuple[float, ...],
+        num_tokens: int,
+    ) -> tuple[int, int, int]:
+        """Map path-edge residual evidence to a bounded token span around its peak."""
+        if len(edge_residual_norms) != num_tokens - 1:
+            raise ValueError(
+                "detector returned an edge-residual count that does not match the token path: "
+                f"got {len(edge_residual_norms)}, expected {num_tokens - 1}"
+            )
+        residuals = torch.tensor(edge_residual_norms, dtype=torch.float64)
+        if not bool(torch.isfinite(residuals).all()) or bool((residuals < 0.0).any()):
+            raise ValueError("detector edge residuals must be finite and non-negative")
+
+        node_scores = torch.zeros(num_tokens, dtype=residuals.dtype)
+        node_scores[:-1] += residuals
+        node_scores[1:] += residuals
+        if float(node_scores.max().item()) <= 0.0:
+            raise ValueError("flagged obstruction has no positive local residual evidence")
+
+        peak = int(node_scores.argmax().item())
+        span_len = min(self.cfg.max_repair_span, num_tokens)
+        start = max(0, min(peak - span_len // 2, num_tokens - span_len))
+        return start, start + span_len, peak
 
     def generate(
         self,
@@ -181,10 +245,11 @@ class SelfCorrectingGenerator:
                 h_seq = self._extract_hidden_states(tok_tensor)
                 h_gen = h_seq[0, prompt_len:]
 
-            # Run Sheaf Inconsistency Check
-            det: HallucinationReport = self.sheaf_detector(h_gen)
+            # Run the canonical fixed-sheaf obstruction check over the generated-token path.
+            edge_index = self._path_edge_index(gen_len, h_gen.device)
+            det: SheafDetectorDecision = self.sheaf_detector.inspect(h_gen, edge_index)
 
-            if not det.is_hallucination:
+            if not det.flagged:
                 # Sequence verified consistent!
                 if attempt > 1:
                     outcome = CorrectionOutcome.REPAIRED
@@ -192,11 +257,13 @@ class SelfCorrectingGenerator:
                     outcome = CorrectionOutcome.VERIFIED_CONSISTENT
                 break
 
-            # Locate corrupted span
-            span_start_rel = 0
-            span_end_rel = min(gen_len - 1, 2)
+            # Localize the obstruction using the detector's per-edge residual evidence.
+            span_start_rel, span_end_rel, peak_rel = self._localize_span(
+                det.edge_residual_norms,
+                gen_len,
+            )
             span_start_abs = prompt_len + span_start_rel
-            span_end_abs = min(len(current_tokens), prompt_len + span_end_rel + 1)
+            span_end_abs = prompt_len + span_end_rel
 
             corrupted_toks = current_tokens[span_start_abs:span_end_abs]
             repair_len = span_end_abs - span_start_abs
@@ -223,9 +290,13 @@ class SelfCorrectingGenerator:
                 tok_tensor_re = torch.tensor([current_tokens], dtype=torch.long, device=next(self.model.parameters()).device)
                 h_seq_re = self._extract_hidden_states(tok_tensor_re)
                 h_gen_re = h_seq_re[0, prompt_len:]
-                det_re: HallucinationReport = self.sheaf_detector(h_gen_re)
+                edge_index_re = self._path_edge_index(h_gen_re.shape[0], h_gen_re.device)
+                det_re: SheafDetectorDecision = self.sheaf_detector.inspect(
+                    h_gen_re,
+                    edge_index_re,
+                )
 
-            repaired_ok = not det_re.is_hallucination
+            repaired_ok = not det_re.flagged
             dt_att = (time.perf_counter() - t_att_0) * 1000.0
 
             event = SelfCorrectionEvent(
@@ -234,8 +305,10 @@ class SelfCorrectingGenerator:
                 span_end=span_end_abs,
                 corrupted_tokens=corrupted_toks,
                 repaired_tokens=repaired_toks,
-                initial_obstruction=det.obstruction_score,
-                repaired_obstruction=det_re.obstruction_score,
+                localization_peak=prompt_len + peak_rel,
+                edge_residual_norms=det.edge_residual_norms,
+                initial_obstruction=det.score,
+                repaired_obstruction=det_re.score,
                 repaired_successfully=repaired_ok,
                 wall_time_ms=dt_att,
             )
@@ -275,6 +348,7 @@ class SelfCorrectingGenerator:
             table.add_column("Span", style="cyan")
             table.add_column("Original Tokens", style="red")
             table.add_column("Repaired Tokens", style="green")
+            table.add_column("Peak", justify="right")
             table.add_column("Obstruction Δ", justify="right")
             table.add_column("Status", style="bold")
 
@@ -285,6 +359,7 @@ class SelfCorrectingGenerator:
                     f"[{ev.span_start}:{ev.span_end}]",
                     str(ev.corrupted_tokens),
                     str(ev.repaired_tokens),
+                    str(ev.localization_peak),
                     f"{ev.initial_obstruction:.3f} → {ev.repaired_obstruction:.3f}",
                     status_str,
                 )

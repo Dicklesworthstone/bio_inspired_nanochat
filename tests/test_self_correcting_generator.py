@@ -1,10 +1,14 @@
 """Tests for the Self-Correcting Generation Loop (beads `re4e.1`, `re4e.1.3`)."""
 
+from dataclasses import dataclass
+from types import SimpleNamespace
+
 import pytest
 import torch
 import torch.nn as nn
 
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
+from bio_inspired_nanochat.causal_deliberation import ControlType
 from bio_inspired_nanochat.self_correcting_generator import (
     CorrectionOutcome,
     SelfCorrectingGenerator,
@@ -14,19 +18,64 @@ from bio_inspired_nanochat.self_correcting_generator import (
 )
 
 
+class _TokenStateModel(nn.Module):
+    """Tiny real representation API with one planted token-level inconsistency."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.anchor = nn.Parameter(torch.zeros(()))
+        self.config = SimpleNamespace(n_embd=2, vocab_size=128)
+        self.lm_head = nn.Linear(2, 128, bias=False)
+
+    def get_hidden_states(self, tokens: torch.Tensor) -> torch.Tensor:
+        sign = torch.where(tokens == 99, -1.0, 1.0).to(dtype=torch.float32)
+        return torch.stack((sign, torch.zeros_like(sign)), dim=-1)
+
+    def hidden_to_logits(self, hidden: torch.Tensor) -> torch.Tensor:
+        return self.lm_head(hidden)
+
+
+class _ScriptedController:
+    """Plant a bad draft token, then return a clean deliberated replacement."""
+
+    def generate(
+        self,
+        prompt: torch.Tensor,
+        max_new_tokens: int,
+        control: ControlType = ControlType.DELIBERATION,
+    ) -> "_ScriptedTrajectory":
+        prompt_tokens = prompt.tolist()
+        generated = (
+            [10, 10, 99, 10, 10]
+            if control is ControlType.BASELINE
+            else [10] * max_new_tokens
+        )
+        return _ScriptedTrajectory(prompt_tokens + generated[:max_new_tokens])
+
+
+@dataclass
+class _ScriptedTrajectory:
+    generated_tokens: list[int]
+
+
 def test_rejects_models_without_real_hidden_states():
     """The detector must never run on fabricated random representations."""
     with pytest.raises(TypeError, match="get_hidden_states"):
         SelfCorrectingGenerator(nn.Linear(8, 8))
 
 
-def test_self_correction_passthrough_when_disabled():
-    """Verify that disabled generator returns PASSTHROUGH immediately."""
+def test_config_rejects_nonpositive_repair_span():
+    with pytest.raises(ValueError, match="max_repair_span"):
+        SelfCorrectionConfig(max_repair_span=0).validate()
+
+
+def test_self_correction_is_default_off_and_passes_through():
+    """The production-safe default reduces exactly to baseline generation."""
     cfg = GPTSynapticConfig(vocab_size=32, n_layer=1, n_head=2, n_kv_head=2, n_embd=32, sequence_len=32)
     model = GPTSynaptic(cfg)
     model.eval()
 
-    generator = SelfCorrectingGenerator(model, SelfCorrectionConfig(enabled=False))
+    generator = SelfCorrectingGenerator(model)
     prompt = torch.tensor([1, 2, 3], dtype=torch.long)
     traj = generator.generate(prompt, max_new_tokens=4)
 
@@ -44,7 +93,7 @@ def test_verified_consistent_when_no_obstruction():
     # Very high threshold -> never flags obstruction
     generator = SelfCorrectingGenerator(
         model,
-        SelfCorrectionConfig(obstruction_threshold=1.0),
+        SelfCorrectionConfig(enabled=True, obstruction_threshold=1.0),
     )
     prompt = torch.tensor([1, 2, 3], dtype=torch.long)
     traj = generator.generate(prompt, max_new_tokens=4)
@@ -63,6 +112,7 @@ def test_certified_abstain_on_exhaustion():
     generator = SelfCorrectingGenerator(
         model,
         SelfCorrectionConfig(
+            enabled=True,
             obstruction_threshold=0.0001,
             max_repair_attempts=2,
             abstain_on_exhaustion=True,
@@ -77,6 +127,39 @@ def test_certified_abstain_on_exhaustion():
     assert traj.final_tokens[-1] == 99
 
 
+def test_local_residuals_drive_middle_span_repair():
+    """The repair target follows the planted interior obstruction, not position zero."""
+    model = _TokenStateModel()
+    generator = SelfCorrectingGenerator(
+        model,
+        SelfCorrectionConfig(
+            enabled=True,
+            max_repair_attempts=1,
+            obstruction_threshold=0.05,
+            max_repair_span=3,
+        ),
+        deliberation_controller=_ScriptedController(),
+    )
+
+    trajectory = generator.generate(
+        torch.tensor([1, 2], dtype=torch.long),
+        max_new_tokens=5,
+    )
+
+    assert trajectory.outcome is CorrectionOutcome.REPAIRED
+    assert trajectory.final_tokens == [1, 2, 10, 10, 10, 10, 10]
+    assert trajectory.attempts_used == 1
+    event = trajectory.events[0]
+    assert (event.span_start, event.span_end) == (3, 6)
+    assert event.localization_peak == 4
+    assert event.corrupted_tokens == [10, 99, 10]
+    assert event.repaired_tokens == [10, 10, 10]
+    assert [
+        index for index, residual in enumerate(event.edge_residual_norms) if residual > 0.0
+    ] == [1, 2]
+    assert event.repaired_successfully
+
+
 def test_rich_table_lineage_logging():
     """Verify that logging history functions without exceptions."""
     cfg = GPTSynapticConfig(vocab_size=32, n_layer=1, n_head=2, n_kv_head=2, n_embd=32, sequence_len=32)
@@ -89,6 +172,8 @@ def test_rich_table_lineage_logging():
         span_end=5,
         corrupted_tokens=[10, 11],
         repaired_tokens=[12, 13],
+        localization_peak=4,
+        edge_residual_norms=(0.1, 0.7, 0.2),
         initial_obstruction=0.65,
         repaired_obstruction=0.20,
         repaired_successfully=True,

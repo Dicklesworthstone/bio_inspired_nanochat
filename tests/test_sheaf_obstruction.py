@@ -30,6 +30,11 @@ def _ring(nodes: int) -> torch.Tensor:
     return torch.stack((tail, torch.roll(tail, shifts=-1)))
 
 
+def _path(nodes: int) -> torch.Tensor:
+    tail = torch.arange(nodes - 1, dtype=torch.long)
+    return torch.stack((tail, tail + 1))
+
+
 def test_consistent_section_has_zero_obstruction_and_honest_provenance() -> None:
     stalks = torch.tensor([[1.0, -0.5], [1.0, -0.5], [1.0, -0.5]])
     result = measure_sheaf_obstruction(stalks, _ring(3))
@@ -266,6 +271,31 @@ def test_detector_emits_nonmutating_runtime_actions(
     if signal_field is not None:
         assert getattr(decision, signal_field) is True
     json.dumps(decision.to_event_dict(), allow_nan=False)
+
+
+def test_detector_decision_preserves_local_residual_evidence() -> None:
+    """A planted interior outlier is localized to its two incident path edges."""
+    stalks = torch.ones((7, 2))
+    stalks[4] = -1.0
+    detector = SheafObstructionDetector(
+        SheafDetectorConfig(
+            enabled=True,
+            action=ObstructionAction.DELIBERATE,
+            threshold=0.05,
+        )
+    )
+
+    decision = detector.inspect(stalks, _path(7))
+
+    assert decision.flagged
+    assert decision.should_deliberate
+    assert len(decision.edge_residual_norms) == 6
+    assert [
+        index for index, residual in enumerate(decision.edge_residual_norms) if residual > 0.0
+    ] == [3, 4]
+    event = decision.to_event_dict()
+    assert event["edge_residual_norms"] == list(decision.edge_residual_norms)
+    json.dumps(event, allow_nan=False)
 
 
 def test_below_threshold_detector_path_returns_original_tensor() -> None:
