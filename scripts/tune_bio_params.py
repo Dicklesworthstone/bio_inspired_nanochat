@@ -42,15 +42,16 @@ import math
 import os
 import pickle
 import time
+from collections.abc import Callable
 from collections import deque
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
-from typing import Any, Dict, Sequence
+from typing import Any, Dict, Protocol, Sequence, cast
 
-import cma
+import cma as cma_module
 import numpy as np
 import torch
-import torch.distributed as dist
+import torch.distributed as torch_dist
 from torch.utils.tensorboard import SummaryWriter
 
 from rich.console import Console
@@ -64,6 +65,32 @@ from bio_inspired_nanochat.checkpoint_manager import config_hash
 from bio_inspired_nanochat.results_registry import DEFAULT_REGISTRY, append_record, make_record
 from bio_inspired_nanochat.synaptic import SynapticConfig
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
+
+
+class _CmaApi(Protocol):
+    CMAEvolutionStrategy: Callable[
+        [Sequence[float] | np.ndarray, float, dict[str, Any]], Any
+    ]
+
+
+class _DistributedApi(Protocol):
+    """Collectives used by distributed population evaluation."""
+
+    def is_initialized(self) -> bool: ...
+
+    def init_process_group(self, *, backend: str, init_method: str) -> None: ...
+
+    def broadcast(self, tensor: torch.Tensor, *, src: int) -> None: ...
+
+    def all_gather(
+        self, tensor_list: list[torch.Tensor], tensor: torch.Tensor
+    ) -> None: ...
+
+    def destroy_process_group(self) -> None: ...
+
+
+cma = cast(_CmaApi, cma_module)
+dist = cast(_DistributedApi, torch_dist)
 
 # -----------------------------------------------------------------------------
 # Configuration
