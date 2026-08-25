@@ -50,6 +50,13 @@ def _signals():
     return torch.ones(B), torch.ones(B)  # calcium, energy (per-row)
 
 
+def _fast_state(lin: SynapticLinear) -> tuple[torch.Tensor, torch.Tensor]:
+    """Return the buffers guaranteed by this test module's Hebbian configuration."""
+    assert lin.w_fast is not None
+    assert lin.u_buf is not None
+    return lin.w_fast, lin.u_buf
+
+
 def _adapt_passes(lin: SynapticLinear, x: torch.Tensor, ca, en, n: int) -> None:
     """Run n inference adaptation passes (plasticity applied immediately under no_grad)."""
     lin.eval()
@@ -64,14 +71,15 @@ def _adapt_passes(lin: SynapticLinear, x: torch.Tensor, ca, en, n: int) -> None:
 @pytest.mark.unit
 def test_legacy_fast_weight_write_is_negligible():
     lin = _make_lin(fast_weight_normalized=False)
+    w_fast, _ = _fast_state(lin)
     lin.reset_sequence_state(reset_fast_weights=True)  # w_fast := 0
     x = torch.randn(B, IN)
     ca, en = _signals()
     _adapt_passes(lin, x, ca, en, 8)
     # The raw rank-R write barely moves w_fast off zero — this is the documented limitation.
-    assert lin.w_fast.norm().item() < 1e-3, (
+    assert w_fast.norm().item() < 1e-3, (
         "legacy un-normalized online write is expected to be numerically negligible; "
-        f"got ||w_fast||={lin.w_fast.norm().item():.3e}"
+        f"got ||w_fast||={w_fast.norm().item():.3e}"
     )
 
 
@@ -81,11 +89,12 @@ def test_legacy_fast_weight_write_is_negligible():
 @pytest.mark.unit
 def test_normalized_write_adapts_meaningfully():
     lin = _make_lin(fast_weight_normalized=True, fast_weight_eta=0.5, fast_weight_max_norm=1.0)
+    w_fast, _ = _fast_state(lin)
     lin.reset_sequence_state(reset_fast_weights=True)
     x = torch.randn(B, IN)
     ca, en = _signals()
     _adapt_passes(lin, x, ca, en, 6)
-    n = lin.w_fast.norm().item()
+    n = w_fast.norm().item()
     # Impactful: w_fast is driven to an O(1) magnitude, not ~0.
     assert n > 0.1, f"normalized online write must move w_fast meaningfully; got ||w_fast||={n:.3e}"
 
@@ -93,12 +102,13 @@ def test_normalized_write_adapts_meaningfully():
 @pytest.mark.unit
 def test_normalized_write_is_bounded_and_finite_over_many_passes():
     lin = _make_lin(fast_weight_normalized=True, fast_weight_eta=0.5, fast_weight_max_norm=1.0)
+    w_fast, _ = _fast_state(lin)
     lin.reset_sequence_state(reset_fast_weights=True)
     x = torch.randn(B, IN)
     ca, en = _signals()
     _adapt_passes(lin, x, ca, en, 200)  # many passes — naive LR boost would NaN here
-    assert torch.isfinite(lin.w_fast).all(), "w_fast must stay finite (no positive-feedback blowup)"
-    assert lin.w_fast.norm().item() <= 1.0 + 1e-5, "||w_fast|| must respect fast_weight_max_norm"
+    assert torch.isfinite(w_fast).all(), "w_fast must stay finite (no positive-feedback blowup)"
+    assert w_fast.norm().item() <= 1.0 + 1e-5, "||w_fast|| must respect fast_weight_max_norm"
 
 
 # --------------------------------------------------------------------------- #
@@ -106,7 +116,7 @@ def test_normalized_write_is_bounded_and_finite_over_many_passes():
 # --------------------------------------------------------------------------- #
 @pytest.mark.unit
 def test_normalized_write_is_the_default():
-    assert SynapticConfig().fast_weight_normalized is True
+    assert SynapticConfig().fast_weight_normalized
 
 
 @pytest.mark.unit
@@ -115,15 +125,17 @@ def test_flag_off_preserves_deterministic_legacy_write():
     ca, en = _signals()
 
     lin_legacy = _make_lin(fast_weight_normalized=False)
+    legacy_w_fast, _ = _fast_state(lin_legacy)
     lin_legacy.reset_sequence_state(reset_fast_weights=True)
     _adapt_passes(lin_legacy, x, ca, en, 4)
 
     # Same seed/inputs, normalization explicitly disabled -> identical w_fast trajectory.
     lin_ref = _make_lin(fast_weight_normalized=False)
+    ref_w_fast, _ = _fast_state(lin_ref)
     lin_ref.reset_sequence_state(reset_fast_weights=True)
     _adapt_passes(lin_ref, x, ca, en, 4)
 
-    assert torch.equal(lin_legacy.w_fast, lin_ref.w_fast)
+    assert torch.equal(legacy_w_fast, ref_w_fast)
 
 
 # --------------------------------------------------------------------------- #
@@ -132,16 +144,17 @@ def test_flag_off_preserves_deterministic_legacy_write():
 @pytest.mark.unit
 def test_reset_sequence_state_clears_online_adaptation():
     lin = _make_lin(fast_weight_normalized=True)
+    w_fast, u_buf = _fast_state(lin)
     lin.reset_sequence_state(reset_fast_weights=True)
     x = torch.randn(B, IN)
     ca, en = _signals()
     _adapt_passes(lin, x, ca, en, 5)
-    assert lin.w_fast.norm().item() > 0.1, "precondition: adaptation happened"
-    assert lin.u_buf.abs().sum().item() > 0, "precondition: eligibility trace accumulated"
+    assert w_fast.norm().item() > 0.1, "precondition: adaptation happened"
+    assert u_buf.abs().sum().item() > 0, "precondition: eligibility trace accumulated"
 
     lin.reset_sequence_state(reset_fast_weights=True)
-    assert lin.w_fast.norm().item() == 0.0, "per-sequence reset must clear fast weights"
-    assert lin.u_buf.abs().sum().item() == 0.0, "per-sequence reset must clear eligibility traces"
+    assert w_fast.norm().item() == 0.0, "per-sequence reset must clear fast weights"
+    assert u_buf.abs().sum().item() == 0.0, "per-sequence reset must clear eligibility traces"
 
 
 # --------------------------------------------------------------------------- #
@@ -159,7 +172,7 @@ def test_normalized_write_is_grad_safe_during_training():
         loss.backward()  # MUST NOT raise from in-place fast-weight mutation
         assert torch.isfinite(loss)
     opt.step()
-    assert lin._plasticity_pending is True, "online plasticity must have run with grad enabled"
+    assert lin._plasticity_pending, "online plasticity must have run with grad enabled"
 
 
 # --------------------------------------------------------------------------- #
