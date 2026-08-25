@@ -15,6 +15,9 @@ from __future__ import annotations
 
 import os
 import socket
+import time
+from collections.abc import Callable
+from datetime import timedelta
 from typing import Protocol, cast
 
 import pytest
@@ -34,9 +37,18 @@ class _DistributedApi(Protocol):
 
     def is_gloo_available(self) -> bool: ...
 
-    def init_process_group(self, backend: str, *, rank: int, world_size: int) -> None: ...
+    def init_process_group(
+        self,
+        backend: str,
+        *,
+        rank: int,
+        world_size: int,
+        timeout: timedelta,
+    ) -> None: ...
 
     def destroy_process_group(self) -> None: ...
+
+    def barrier(self) -> None: ...
 
 
 dist = cast(_DistributedApi, torch_dist)
@@ -71,12 +83,83 @@ _MUON_LR = 0.02
 _MUON_MOMENTUM = 0.95
 _MUON_NESTEROV = True
 _MUON_NS_STEPS = 5
+_PROCESS_GROUP_TIMEOUT_SECONDS = 20.0
+_SPAWN_TIMEOUT_SECONDS = 30.0
+_SPAWN_CLEANUP_SECONDS = 2.0
 
 
 def _free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
+
+
+def _init_gloo(rank: int, world_size: int, port: int) -> None:
+    os.environ["MASTER_ADDR"] = "127.0.0.1"
+    os.environ["MASTER_PORT"] = str(port)
+    os.environ["TORCH_DISTRIBUTED_DEBUG"] = "DETAIL"
+    dist.init_process_group(
+        "gloo",
+        rank=rank,
+        world_size=world_size,
+        timeout=timedelta(seconds=_PROCESS_GROUP_TIMEOUT_SECONDS),
+    )
+
+
+def _process_statuses(context: mp.ProcessContext) -> str:
+    return ", ".join(
+        f"pid={process.pid}, alive={process.is_alive()}, exitcode={process.exitcode}"
+        for process in context.processes
+    )
+
+
+def _stop_spawned_processes(context: mp.ProcessContext) -> str:
+    """Stop only this context's children and report their final status."""
+    for process in context.processes:
+        if process.is_alive():
+            process.terminate()
+    for process in context.processes:
+        process.join(timeout=_SPAWN_CLEANUP_SECONDS)
+    for process in context.processes:
+        if process.is_alive():
+            process.kill()
+    for process in context.processes:
+        process.join(timeout=_SPAWN_CLEANUP_SECONDS)
+    return _process_statuses(context)
+
+
+def _run_workers(
+    worker: Callable[..., None],
+    *,
+    args: tuple[object, ...],
+    nprocs: int,
+    timeout_seconds: float = _SPAWN_TIMEOUT_SECONDS,
+) -> None:
+    """Run spawned workers with a hard deadline and owned-child cleanup."""
+    started_at = time.monotonic()
+    worker_name = getattr(worker, "__qualname__", repr(worker))
+    context = cast(
+        mp.ProcessContext,
+        mp.spawn(worker, args=args, nprocs=nprocs, join=False),
+    )
+    deadline = started_at + timeout_seconds
+    try:
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            if context.join(timeout=remaining, grace_period=_SPAWN_CLEANUP_SECONDS):
+                return
+    except BaseException:
+        _stop_spawned_processes(context)
+        raise
+
+    timed_out_statuses = _process_statuses(context)
+    final_statuses = _stop_spawned_processes(context)
+    raise TimeoutError(
+        f"worker {worker_name} exceeded {timeout_seconds:.1f}s deadline; "
+        f"at deadline: [{timed_out_statuses}]; after cleanup: [{final_statuses}]"
+    )
 
 
 def _init_param(idx: int, shape: tuple[int, ...]) -> torch.Tensor:
@@ -107,9 +190,7 @@ def _avg_grad(idx: int, step: int, shape: tuple[int, ...], world_size: int) -> t
 # Workers (must be top-level for spawn picklability)
 # --------------------------------------------------------------------------- #
 def _adamw_worker(rank: int, world_size: int, port: int, tmpdir: str, n_steps: int) -> None:
-    os.environ["MASTER_ADDR"] = "127.0.0.1"
-    os.environ["MASTER_PORT"] = str(port)
-    dist.init_process_group("gloo", rank=rank, world_size=world_size)
+    _init_gloo(rank, world_size, port)
     try:
         params = [torch.nn.Parameter(_init_param(i, s)) for i, (_, s) in enumerate(_ADAMW_SPECS)]
         opt = DistAdamW(
@@ -127,14 +208,13 @@ def _adamw_worker(rank: int, world_size: int, port: int, tmpdir: str, n_steps: i
                 p.grad = None
         if rank == 0:
             torch.save([p.detach().clone() for p in params], os.path.join(tmpdir, "adamw.pt"))
+        dist.barrier()
     finally:
         dist.destroy_process_group()
 
 
 def _muon_worker(rank: int, world_size: int, port: int, tmpdir: str, n_steps: int) -> None:
-    os.environ["MASTER_ADDR"] = "127.0.0.1"
-    os.environ["MASTER_PORT"] = str(port)
-    dist.init_process_group("gloo", rank=rank, world_size=world_size)
+    _init_gloo(rank, world_size, port)
     try:
         params = [torch.nn.Parameter(_init_param(200 + i, s)) for i, (_, s) in enumerate(_MUON_SPECS)]
         opt = DistMuon(
@@ -152,8 +232,23 @@ def _muon_worker(rank: int, world_size: int, port: int, tmpdir: str, n_steps: in
                 p.grad = None
         if rank == 0:
             torch.save([p.detach().clone() for p in params], os.path.join(tmpdir, "muon.pt"))
+        # Do not let one rank tear down gloo while a peer is still draining the
+        # optimizer's final asynchronous collective. Without this rendezvous,
+        # rank 0 can exit cleanly while rank 1 remains stuck during teardown.
+        dist.barrier()
     finally:
         dist.destroy_process_group()
+
+
+def _intentional_crash_worker(rank: int, port: int) -> None:
+    """Make one child fail while its sibling waits for process-group startup."""
+    if rank == 0:
+        raise RuntimeError("intentional distributed worker crash")
+    _init_gloo(rank, world_size=2, port=port)
+
+
+def _intentional_hang_worker(_rank: int) -> None:
+    time.sleep(60)
 
 
 # --------------------------------------------------------------------------- #
@@ -212,7 +307,11 @@ def _muon_oracle(n_steps: int, world_size: int) -> list[torch.Tensor]:
 def test_distadamw_matches_single_process_on_averaged_grads(tmp_path):
     """DistAdamW(ws=2) == single-process AdamW on averaged grads, incl. 0-D/odd params."""
     n_steps, ws, port = 5, 2, _free_port()
-    mp.spawn(_adamw_worker, args=(ws, port, str(tmp_path), n_steps), nprocs=ws, join=True)
+    _run_workers(
+        _adamw_worker,
+        args=(ws, port, str(tmp_path), n_steps),
+        nprocs=ws,
+    )
     got = torch.load(os.path.join(tmp_path, "adamw.pt"), weights_only=True)
     expected = _adamw_oracle(n_steps, ws)
     for (name, _), g, e in zip(_ADAMW_SPECS, got, expected):
@@ -223,10 +322,15 @@ def test_distadamw_matches_single_process_on_averaged_grads(tmp_path):
         )
 
 
-def test_distmuon_matches_single_process_on_averaged_grads(tmp_path):
+@pytest.mark.parametrize("_repeat", range(3))
+def test_distmuon_matches_single_process_on_averaged_grads(tmp_path, _repeat):
     """DistMuon(ws=2) == single-process Muon on averaged grads (bf16 NS tolerance)."""
     n_steps, ws, port = 5, 2, _free_port()
-    mp.spawn(_muon_worker, args=(ws, port, str(tmp_path), n_steps), nprocs=ws, join=True)
+    _run_workers(
+        _muon_worker,
+        args=(ws, port, str(tmp_path), n_steps),
+        nprocs=ws,
+    )
     got = torch.load(os.path.join(tmp_path, "muon.pt"), weights_only=True)
     expected = _muon_oracle(n_steps, ws)
     for (name, _), g, e in zip(_MUON_SPECS, got, expected):
@@ -236,3 +340,37 @@ def test_distmuon_matches_single_process_on_averaged_grads(tmp_path):
             f"DistMuon param {name!r} diverged from single-process oracle: "
             f"max|Δ|={max_diff:.3e} (shape={tuple(g.shape)})"
         )
+
+
+def test_spawn_harness_propagates_worker_crash_and_cleans_up() -> None:
+    before = {process.pid for process in mp.active_children()}
+    with pytest.raises(mp.ProcessRaisedException, match="intentional distributed worker crash"):
+        _run_workers(
+            _intentional_crash_worker,
+            args=(_free_port(),),
+            nprocs=2,
+            timeout_seconds=5.0,
+        )
+    leaked = [
+        process.pid
+        for process in mp.active_children()
+        if process.pid not in before and process.is_alive()
+    ]
+    assert not leaked, f"spawn harness leaked child processes after worker crash: {leaked}"
+
+
+def test_spawn_harness_times_out_and_cleans_up() -> None:
+    before = {process.pid for process in mp.active_children()}
+    with pytest.raises(TimeoutError, match=r"exceeded 0\.2s deadline.*after cleanup"):
+        _run_workers(
+            _intentional_hang_worker,
+            args=(),
+            nprocs=2,
+            timeout_seconds=0.2,
+        )
+    leaked = [
+        process.pid
+        for process in mp.active_children()
+        if process.pid not in before and process.is_alive()
+    ]
+    assert not leaked, f"spawn harness leaked child processes after timeout: {leaked}"
