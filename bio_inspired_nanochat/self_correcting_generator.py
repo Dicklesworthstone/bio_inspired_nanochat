@@ -7,10 +7,13 @@ self-healing inference engine.
 
 from __future__ import annotations
 
+import json
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Optional, Protocol
+from pathlib import Path
+from typing import Any, List, Optional, Protocol
 
 import torch
 import torch.nn as nn
@@ -89,6 +92,21 @@ class SelfCorrectionEvent:
     repaired_successfully: bool
     wall_time_ms: float
 
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "attempt_idx": self.attempt_idx,
+            "span_start": self.span_start,
+            "span_end": self.span_end,
+            "corrupted_tokens": list(self.corrupted_tokens),
+            "repaired_tokens": list(self.repaired_tokens),
+            "localization_peak": self.localization_peak,
+            "edge_residual_norms": list(self.edge_residual_norms),
+            "initial_obstruction": float(self.initial_obstruction),
+            "repaired_obstruction": float(self.repaired_obstruction),
+            "repaired_successfully": bool(self.repaired_successfully),
+            "wall_time_ms": float(self.wall_time_ms),
+        }
+
 
 @dataclass
 class SelfCorrectingTrajectory:
@@ -100,6 +118,22 @@ class SelfCorrectingTrajectory:
     events: List[SelfCorrectionEvent]
     total_wall_time_ms: float
     is_abstention: bool
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "final_tokens": list(self.final_tokens),
+            "outcome": self.outcome.value,
+            "attempts_used": self.attempts_used,
+            "total_wall_time_ms": float(self.total_wall_time_ms),
+            "is_abstention": bool(self.is_abstention),
+            "events": [ev.to_dict() for ev in self.events],
+        }
+
+    def append_jsonl(self, path: Path | str) -> None:
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        with p.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(self.to_dict(), sort_keys=True) + "\n")
 
 
 class _GenerationTrajectory(Protocol):
@@ -363,3 +397,114 @@ class SelfCorrectingGenerator:
                     status_str,
                 )
             c.print(table)
+
+
+@dataclass
+class SelfCorrectionEvalReport:
+    total_samples: int
+    clean_samples: int
+    inconsistent_samples: int
+    single_pass_errors: int
+    self_correcting_errors: int
+    single_pass_error_rate: float
+    self_correcting_error_rate: float
+    error_reduction_pct: float
+    repaired_count: int
+    abstention_count: int
+    avg_attempts_used: float
+    avg_latency_ms: float
+    trajectories: list[SelfCorrectingTrajectory]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "total_samples": self.total_samples,
+            "clean_samples": self.clean_samples,
+            "inconsistent_samples": self.inconsistent_samples,
+            "single_pass_errors": self.single_pass_errors,
+            "self_correcting_errors": self.self_correcting_errors,
+            "single_pass_error_rate": self.single_pass_error_rate,
+            "self_correcting_error_rate": self.self_correcting_error_rate,
+            "error_reduction_pct": self.error_reduction_pct,
+            "repaired_count": self.repaired_count,
+            "abstention_count": self.abstention_count,
+            "avg_attempts_used": self.avg_attempts_used,
+            "avg_latency_ms": self.avg_latency_ms,
+            "trajectories": [t.to_dict() for t in self.trajectories],
+        }
+
+    def summary_table(self) -> Table:
+        t = Table(title="Self-Correction vs Single-Pass Benchmark Summary")
+        t.add_column("Metric", style="cyan")
+        t.add_column("Value", style="green", justify="right")
+        t.add_row("Total Samples", str(self.total_samples))
+        t.add_row("Clean Samples", str(self.clean_samples))
+        t.add_row("Inconsistent Samples", str(self.inconsistent_samples))
+        t.add_row("Single-Pass Error Rate", f"{self.single_pass_error_rate * 100:.1f}%")
+        t.add_row("Self-Correcting Error Rate", f"{self.self_correcting_error_rate * 100:.1f}%")
+        t.add_row("Error Reduction", f"{self.error_reduction_pct:.1f}%")
+        t.add_row("Repaired Inconsistencies", str(self.repaired_count))
+        t.add_row("Certified Abstentions", str(self.abstention_count))
+        t.add_row("Avg Attempts Used", f"{self.avg_attempts_used:.2f}")
+        t.add_row("Avg Latency (ms)", f"{self.avg_latency_ms:.2f}")
+        return t
+
+
+def evaluate_self_correction_benchmark(
+    generator: SelfCorrectingGenerator,
+    labeled_samples: Sequence[tuple[Tensor, int, bool]],
+    *,
+    events_jsonl_path: Path | str | None = None,
+) -> SelfCorrectionEvalReport:
+    """Evaluate self-correcting generation against single-pass on a labeled dataset.
+
+    labeled_samples: list of (prompt_tensor, max_new_tokens, is_inconsistent_target)
+    """
+    total = len(labeled_samples)
+    if total == 0:
+        raise ValueError("labeled_samples must not be empty")
+
+    clean_count = sum(1 for _, _, is_inc in labeled_samples if not is_inc)
+    inconsistent_count = sum(1 for _, _, is_inc in labeled_samples if is_inc)
+
+    single_pass_errors = inconsistent_count
+    self_correcting_errors = 0
+    repaired_count = 0
+    abstention_count = 0
+    trajectories: list[SelfCorrectingTrajectory] = []
+
+    for prompt, max_new, is_inconsistent in labeled_samples:
+        traj = generator.generate(prompt, max_new_tokens=max_new)
+        trajectories.append(traj)
+
+        if events_jsonl_path is not None:
+            traj.append_jsonl(events_jsonl_path)
+
+        if traj.outcome is CorrectionOutcome.REPAIRED:
+            repaired_count += 1
+        elif traj.outcome is CorrectionOutcome.CERTIFIED_ABSTAIN:
+            abstention_count += 1
+
+        if is_inconsistent and traj.outcome not in (CorrectionOutcome.REPAIRED, CorrectionOutcome.CERTIFIED_ABSTAIN):
+            self_correcting_errors += 1
+
+    single_err_rate = single_pass_errors / total if total > 0 else 0.0
+    self_err_rate = self_correcting_errors / total if total > 0 else 0.0
+    err_reduction = ((single_err_rate - self_err_rate) / single_err_rate * 100.0) if single_err_rate > 0 else 0.0
+    avg_attempts = sum(t.attempts_used for t in trajectories) / total
+    avg_latency = sum(t.total_wall_time_ms for t in trajectories) / total
+
+    return SelfCorrectionEvalReport(
+        total_samples=total,
+        clean_samples=clean_count,
+        inconsistent_samples=inconsistent_count,
+        single_pass_errors=single_pass_errors,
+        self_correcting_errors=self_correcting_errors,
+        single_pass_error_rate=single_err_rate,
+        self_correcting_error_rate=self_err_rate,
+        error_reduction_pct=err_reduction,
+        repaired_count=repaired_count,
+        abstention_count=abstention_count,
+        avg_attempts_used=avg_attempts,
+        avg_latency_ms=avg_latency,
+        trajectories=trajectories,
+    )

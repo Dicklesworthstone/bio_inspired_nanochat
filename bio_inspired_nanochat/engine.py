@@ -363,7 +363,7 @@ class Engine:
 
     @torch.inference_mode()
     def generate(self, tokens, num_samples=1, max_tokens=None, temperature=1.0, top_k=None, seed=42,
-                 yield_metrics=False, deliberation=None):
+                 yield_metrics=False, deliberation=None, self_correction=None):
         """Same as generate, but does single prefill and then clones the KV cache.
 
         ``deliberation`` (bead r00r.1.2): an optional ``DeliberationConfig`` (or a prebuilt
@@ -371,6 +371,11 @@ class Engine:
         continuations are advanced on isolated cache branches; their relaxed free energies enter the
         actual decode logits, while effort/confidence modulate temperature. Default ``None`` and a
         zero-step budget preserve the single-step baseline exactly.
+
+        ``self_correction`` (beads re4e.1, re4e.1.2): an optional ``SelfCorrectionConfig``,
+        ``SelfCorrectingGenerator``, or boolean flag that turns on the closed-loop
+        detect -> deliberate -> regenerate -> recheck loop. Default ``None``/``False`` preserves
+        the baseline streaming fastpath with zero overhead.
         """
         assert isinstance(tokens, list) and isinstance(tokens[0], int), "expecting list of ints"
         device = self.model.get_device()
@@ -384,6 +389,58 @@ class Engine:
         # preserving the backprop-trained slow/fast weights. See GPTSynaptic.reset_sequence_state.
         if hasattr(self.model, "reset_sequence_state"):
             self.model.reset_sequence_state()
+
+        # Build self-correcting generator if requested (bead re4e.1.2)
+        self_correcting_gen = None
+        if self_correction is not None and self_correction is not False:
+            from bio_inspired_nanochat.self_correcting_generator import (
+                SelfCorrectionConfig,
+                SelfCorrectingGenerator,
+            )
+            if isinstance(self_correction, SelfCorrectingGenerator):
+                self_correcting_gen = self_correction
+            elif isinstance(self_correction, SelfCorrectionConfig):
+                if self_correction.enabled:
+                    self_correcting_gen = SelfCorrectingGenerator(self.model, cfg=self_correction)
+            elif isinstance(self_correction, bool) and self_correction:
+                self_correcting_gen = SelfCorrectingGenerator(
+                    self.model, cfg=SelfCorrectionConfig(enabled=True)
+                )
+            elif isinstance(self_correction, dict):
+                cfg = SelfCorrectionConfig(**self_correction)
+                if cfg.enabled:
+                    self_correcting_gen = SelfCorrectingGenerator(self.model, cfg=cfg)
+
+        if self_correcting_gen is not None and self_correcting_gen.cfg.enabled:
+            # Run closed-loop self-correction over the prompt
+            prompt_tensor = torch.tensor(tokens, dtype=torch.long, device=device)
+            max_new = max_tokens if max_tokens is not None else 64
+            traj = self_correcting_gen.generate(
+                prompt=prompt_tensor,
+                max_new_tokens=max_new,
+                temperature=temperature,
+            )
+            assistant_end = self.tokenizer.encode_special("<|assistant_end|>")
+            bos = self.tokenizer.get_bos_token_id()
+            generated_only = traj.final_tokens[len(tokens):]
+            for tok in generated_only:
+                token_column = [tok] * num_samples
+                token_masks = [1] * num_samples
+                if yield_metrics:
+                    metrics = {
+                        "self_correction": {
+                            "outcome": traj.outcome.value,
+                            "attempts_used": traj.attempts_used,
+                            "is_abstention": traj.is_abstention,
+                            "wall_time_ms": traj.total_wall_time_ms,
+                        }
+                    }
+                    yield token_column, token_masks, metrics
+                else:
+                    yield token_column, token_masks
+                if tok == assistant_end or tok == bos:
+                    break
+            return
 
         # Build the deliberation controller (None ⟹ baseline single-step decode). Lazy import keeps
         # the metriplectic/numpy stack off engine.py's import path unless deliberation is requested.

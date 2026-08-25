@@ -195,3 +195,158 @@ def test_rich_table_lineage_logging():
         is_abstention=False,
     )
     generator.log_trajectory(traj)
+
+
+def test_engine_generate_with_self_correction_disabled_and_enabled():
+    """Verify that Engine.generate integrates self-correction behind default-off toggle."""
+    from bio_inspired_nanochat.engine import Engine
+
+    class _MockTok:
+        _special = {
+            "<|python_start|>": -1, "<|python_end|>": -2,
+            "<|output_start|>": -3, "<|output_end|>": -4, "<|assistant_end|>": -5,
+        }
+        def encode_special(self, s):
+            return self._special[s]
+        def get_bos_token_id(self):
+            return -10
+        def decode(self, toks):
+            return " ".join(str(t) for t in toks)
+        def encode(self, s):
+            return [1, 2]
+
+    cfg = GPTSynapticConfig(vocab_size=32, n_layer=1, n_head=2, n_kv_head=2, n_embd=32, sequence_len=32)
+    model = GPTSynaptic(cfg)
+    model.eval()
+
+    engine = Engine(model, _MockTok())
+    prompt = [1, 2, 3]
+
+    # Baseline passthrough when self_correction is None or disabled
+    out_default = list(engine.generate(prompt, num_samples=1, max_tokens=4, self_correction=None))
+    assert len(out_default) == 4
+    assert all(len(cols) == 1 for cols, _ in out_default)
+
+    out_disabled = list(engine.generate(
+        prompt,
+        num_samples=1,
+        max_tokens=4,
+        self_correction=SelfCorrectionConfig(enabled=False),
+    ))
+    assert len(out_disabled) == 4
+
+    # Enabled self-correction
+    out_enabled = list(engine.generate(
+        prompt,
+        num_samples=1,
+        max_tokens=4,
+        self_correction=SelfCorrectionConfig(enabled=True, obstruction_threshold=1.0),
+        yield_metrics=True,
+    ))
+    assert len(out_enabled) == 4
+    for cols, masks, metrics in out_enabled:
+        assert len(cols) == 1
+        assert len(masks) == 1
+        assert "self_correction" in metrics
+        assert metrics["self_correction"]["outcome"] == CorrectionOutcome.VERIFIED_CONSISTENT.value
+
+    # Non-streaming generate_batch integration
+    batch_results, batch_masks = engine.generate_batch(
+        prompt,
+        num_samples=1,
+        max_tokens=4,
+        self_correction=SelfCorrectionConfig(enabled=True, obstruction_threshold=1.0),
+    )
+    assert len(batch_results) == 1
+    assert len(batch_results[0]) == len(prompt) + 4
+    assert len(batch_masks[0]) == len(prompt) + 4
+
+
+def test_trajectory_append_jsonl_trace(tmp_path):
+    """Verify that trajectory events dump valid structured JSONL records."""
+    import json
+
+    jsonl_file = tmp_path / "events.jsonl"
+    event = SelfCorrectionEvent(
+        attempt_idx=1,
+        span_start=3,
+        span_end=5,
+        corrupted_tokens=[10, 99],
+        repaired_tokens=[10, 10],
+        localization_peak=4,
+        edge_residual_norms=(0.1, 0.8),
+        initial_obstruction=0.75,
+        repaired_obstruction=0.15,
+        repaired_successfully=True,
+        wall_time_ms=10.5,
+    )
+    traj = SelfCorrectingTrajectory(
+        final_tokens=[1, 2, 3, 10, 10],
+        outcome=CorrectionOutcome.REPAIRED,
+        attempts_used=1,
+        events=[event],
+        total_wall_time_ms=22.0,
+        is_abstention=False,
+    )
+    traj.append_jsonl(jsonl_file)
+    assert jsonl_file.exists()
+
+    lines = jsonl_file.read_text(encoding="utf-8").strip().splitlines()
+    assert len(lines) == 1
+    record = json.loads(lines[0])
+    assert record["outcome"] == "REPAIRED"
+    assert record["attempts_used"] == 1
+    assert len(record["events"]) == 1
+    assert record["events"][0]["localization_peak"] == 4
+
+
+def test_evaluate_self_correction_benchmark_on_labeled_set(tmp_path):
+    """Verify that the benchmark measures measurable error reduction vs single-pass."""
+    from bio_inspired_nanochat.self_correcting_generator import (
+        evaluate_self_correction_benchmark,
+    )
+
+    model = _TokenStateModel()
+    ctrl = _ScriptedController()
+    generator = SelfCorrectingGenerator(
+        model,
+        SelfCorrectionConfig(
+            enabled=True,
+            max_repair_attempts=2,
+            obstruction_threshold=0.40,
+            max_repair_span=3,
+        ),
+        deliberation_controller=ctrl,
+    )
+
+    # Labeled dataset: clean prompts vs inconsistency-planted prompts
+    samples = [
+        (torch.tensor([1, 2], dtype=torch.long), 5, True),   # triggers planted 99 -> repaired
+        (torch.tensor([3, 4], dtype=torch.long), 5, True),   # triggers planted 99 -> repaired
+        (torch.tensor([5, 6], dtype=torch.long), 5, True),   # triggers planted 99 -> repaired
+    ]
+
+    events_path = tmp_path / "events.jsonl"
+    report = evaluate_self_correction_benchmark(
+        generator,
+        samples,
+        events_jsonl_path=events_path,
+    )
+
+    assert report.total_samples == 3
+    assert report.inconsistent_samples == 3
+    assert report.single_pass_errors == 3
+    assert report.self_correcting_errors == 0
+    assert report.single_pass_error_rate == 1.0
+    assert report.self_correcting_error_rate == 0.0
+    assert report.error_reduction_pct == 100.0
+    assert report.repaired_count == 3
+    assert report.abstention_count == 0
+    assert report.avg_attempts_used >= 1.0
+    assert report.avg_latency_ms > 0.0
+    assert events_path.exists()
+
+    table = report.summary_table()
+    assert table is not None
+
+
