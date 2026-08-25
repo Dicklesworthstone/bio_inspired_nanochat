@@ -657,10 +657,10 @@
         "transition_parity": "pass-fallback-outside-exact-midpoint-theorem-and-covered-by-runtime-regressions",
         "concurrency_parity": "not-applicable-pure-transform",
         "cancel_drain_parity": "not-applicable",
-        "runtime_evidence": "pass-58-targeted-metriplectic-tests-and-full-suite",
+        "runtime_evidence": "pass-58-targeted-metriplectic-tests-17-formal-feedback-tests-and-full-suite",
         "drift_gate": "pass-append-only-runtime-hash-refresh"
       },
-      "change_scope": "Commit ea54808 clamps only the NumPy guarded-step fallback calcium and buffer components into the same physical domain as the Torch fallback. The theorem-covered analytic functions and implicit midpoint proposal are unchanged, and the guarded fallback remains outside the exact midpoint theorem contract. This append-only cycle refreshes the runtime mapping after reviewing that diff and its mapped regressions; it does not claim new formal coverage for the fallback.",
+      "change_scope": "Commit ea54808 clamps only the NumPy guarded-step fallback calcium and buffer components into the same physical domain as the Torch fallback. The theorem-covered analytic functions and implicit midpoint proposal are unchanged, and the guarded fallback remains outside the exact midpoint theorem contract. The formal-feedback launcher now also converts unavailable or non-executable Lake environments into explicit status codes instead of leaking an unhandled PermissionError. This append-only cycle refreshes the runtime mapping after reviewing those narrow diffs and their mapped regressions; it does not claim new formal coverage for the fallback.",
       "runtime_mapping": [
         {
           "path": "bio_inspired_nanochat/metriplectic_integrator.py",
@@ -677,6 +677,14 @@
         {
           "path": "tests/test_metriplectic_runtime.py",
           "sha256": "073bc5f635dea75a686ff11a51eaef81daa02a012eea1ab344cf5ef55aa261da"
+        },
+        {
+          "path": "scripts/formal_feedback.py",
+          "sha256": "ee6528a391a6e5d3a66724b45a8138a2e90f991cf80ad7415189fa0e1c003cf3"
+        },
+        {
+          "path": "tests/test_formal_feedback.py",
+          "sha256": "0e0932526f6578dd9398b0b23b23a93bb03345df1fe5533897e99bf29c47b676"
         }
       ],
       "regression_command": "uv run python -m pytest tests/test_metriplectic_theory.py tests/test_metriplectic_integrator.py tests/test_metriplectic_runtime.py -q",
