@@ -1,6 +1,8 @@
 """Tests for the Self-Correcting Generation Loop (beads `re4e.1`, `re4e.1.3`)."""
 
+import pytest
 import torch
+import torch.nn as nn
 
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
 from bio_inspired_nanochat.self_correcting_generator import (
@@ -10,6 +12,12 @@ from bio_inspired_nanochat.self_correcting_generator import (
     SelfCorrectionEvent,
     SelfCorrectingTrajectory,
 )
+
+
+def test_rejects_models_without_real_hidden_states():
+    """The detector must never run on fabricated random representations."""
+    with pytest.raises(TypeError, match="get_hidden_states"):
+        SelfCorrectingGenerator(nn.Linear(8, 8))
 
 
 def test_self_correction_passthrough_when_disabled():

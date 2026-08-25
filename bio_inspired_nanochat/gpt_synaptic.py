@@ -234,15 +234,16 @@ class GPTSynaptic(nn.Module):
         H = self.config.n_head
         return 6 * L * N * N + 4 * L * N * H * 128
 
-    def forward(
+    def _forward_hidden(
         self,
         idx: Tensor,
-        targets: Optional[Tensor] = None,
         kv_cache=None,
-        train_mode=True,
+        train_mode: bool = True,
         max_layers: int | None = None,
-    ):
-        B, T = idx.size()
+        structural_training: bool = False,
+    ) -> tuple[Tensor, int]:
+        """Run the synaptic transformer trunk without applying the language head."""
+        _B, T = idx.size()
         active_layers = self.config.n_layer if max_layers is None else max_layers
         if (
             isinstance(active_layers, bool)
@@ -304,7 +305,7 @@ class GPTSynaptic(nn.Module):
             layer_state = presyn_states[li]
             x, layer_state = block(x, kv_cache, layer_state, train_mode)
             presyn_states[li] = layer_state
-            if self.config.structural_every and targets is not None:
+            if self.config.structural_every and structural_training:
                 if (li + 1) % self.config.structural_every == 0 and hasattr(
                     block.mlp, "experts"
                 ):
@@ -331,14 +332,56 @@ class GPTSynaptic(nn.Module):
             for state in presyn_states
         ]
 
-        logits = self.lm_head(x.to(dtype=self.lm_head.weight.dtype))
+        return x, active_layers
+
+    def get_hidden_states(
+        self,
+        idx: Tensor,
+        kv_cache=None,
+        max_layers: int | None = None,
+    ) -> Tensor:
+        """Return the real final hidden state for every input token.
+
+        Representation reads are observational: synaptic plasticity and persistent
+        presynaptic normalizer updates are disabled even if the module is in training mode.
+        """
+        hidden, _active_layers = self._forward_hidden(
+            idx,
+            kv_cache=kv_cache,
+            train_mode=False,
+            max_layers=max_layers,
+        )
+        return hidden
+
+    def hidden_to_logits(self, hidden: Tensor) -> Tensor:
+        """Project final hidden states through the configured bounded language head."""
+        logits = self.lm_head(hidden.to(dtype=self.lm_head.weight.dtype))
+        sc = self.config.logit_softcap
+        if sc and sc > 0.0:
+            logits = sc * torch.tanh(logits / sc)
+        return logits
+
+    def forward(
+        self,
+        idx: Tensor,
+        targets: Optional[Tensor] = None,
+        kv_cache=None,
+        train_mode: bool = True,
+        max_layers: int | None = None,
+    ):
+        x, active_layers = self._forward_hidden(
+            idx,
+            kv_cache=kv_cache,
+            train_mode=train_mode,
+            max_layers=max_layers,
+            structural_training=targets is not None,
+        )
+
         # Logit softcap (parity with vanilla GPT) — bound logits on BOTH the inference
         # return and the loss path. See vg9.1. We match GPT exactly: the inference
         # path returns softcapped logits in the lm_head dtype (no float cast), and the
         # loss path casts to fp32 before cross-entropy.
-        sc = self.config.logit_softcap
-        if sc and sc > 0.0:
-            logits = sc * torch.tanh(logits / sc)
+        logits = self.hidden_to_logits(x)
         if targets is None:
             return logits, None
         aux = sum(

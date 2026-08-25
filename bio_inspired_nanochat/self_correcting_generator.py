@@ -100,6 +100,11 @@ class SelfCorrectingGenerator:
         self.model = model
         self.cfg = cfg or SelfCorrectionConfig()
         self.cfg.validate()
+        if not callable(getattr(model, "get_hidden_states", None)):
+            raise TypeError(
+                f"{type(model).__name__} must implement get_hidden_states() for "
+                "self-correction; synthetic representation fallbacks are not supported"
+            )
 
         d_model = getattr(model.config, "n_embd", 64) if hasattr(model, "config") else 64
         self.sheaf_detector = sheaf_detector or SheafHallucinationDetector(
@@ -113,6 +118,20 @@ class SelfCorrectingGenerator:
                 commit_relaxed_state=True,
             ),
         )
+
+    def _extract_hidden_states(self, tokens: Tensor) -> Tensor:
+        hidden_fn = getattr(self.model, "get_hidden_states")
+        hidden = hidden_fn(tokens)
+        if not isinstance(hidden, Tensor):
+            raise TypeError(
+                f"{type(self.model).__name__}.get_hidden_states() must return a Tensor"
+            )
+        if hidden.ndim != 3 or hidden.shape[:2] != tokens.shape:
+            raise ValueError(
+                f"get_hidden_states() returned shape {tuple(hidden.shape)}, expected "
+                f"(batch={tokens.shape[0]}, sequence={tokens.shape[1]}, hidden)"
+            )
+        return hidden
 
     def generate(
         self,
@@ -156,16 +175,11 @@ class SelfCorrectingGenerator:
             if gen_len <= 1:
                 break
 
-            # Mock or extract hidden representations for the generated sequence
-            d_model = getattr(self.model.config, "n_embd", 64) if hasattr(self.model, "config") else 64
+            # Extract real hidden representations for the generated sequence.
             with torch.no_grad():
                 tok_tensor = torch.tensor([current_tokens], dtype=torch.long, device=next(self.model.parameters()).device)
-                fn = getattr(self.model, "get_hidden_states", None)
-                h_seq = fn(tok_tensor) if callable(fn) else torch.randn(1, len(current_tokens), d_model, device=tok_tensor.device)
-                if h_seq.ndim == 3:
-                    h_gen = h_seq[0, prompt_len:]
-                else:
-                    h_gen = h_seq[prompt_len:]
+                h_seq = self._extract_hidden_states(tok_tensor)
+                h_gen = h_seq[0, prompt_len:]
 
             # Run Sheaf Inconsistency Check
             det: HallucinationReport = self.sheaf_detector(h_gen)
@@ -207,8 +221,8 @@ class SelfCorrectingGenerator:
             # Re-check repaired representations
             with torch.no_grad():
                 tok_tensor_re = torch.tensor([current_tokens], dtype=torch.long, device=next(self.model.parameters()).device)
-                h_seq_re = fn(tok_tensor_re) if callable(fn) else torch.randn(1, len(current_tokens), d_model, device=tok_tensor_re.device)
-                h_gen_re = h_seq_re[0, prompt_len:] if h_seq_re.ndim == 3 else h_seq_re[prompt_len:]
+                h_seq_re = self._extract_hidden_states(tok_tensor_re)
+                h_gen_re = h_seq_re[0, prompt_len:]
                 det_re: HallucinationReport = self.sheaf_detector(h_gen_re)
 
             repaired_ok = not det_re.is_hallucination

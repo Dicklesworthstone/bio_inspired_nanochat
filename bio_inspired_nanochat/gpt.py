@@ -487,16 +487,9 @@ class GPT(nn.Module):
                 group["initial_lr"] = group["lr"]
         return optimizers
 
-    def forward(
-        self,
-        idx,
-        targets=None,
-        kv_cache=None,
-        loss_reduction='mean',
-        max_layers: int | None = None,
-    ):
-        B, T = idx.size()
-
+    def _forward_hidden(self, idx, kv_cache=None, max_layers: int | None = None):
+        """Run the transformer trunk and return its final normalized residual stream."""
+        _B, T = idx.size()
         active_layers = self.config.n_layer if max_layers is None else max_layers
         if (
             isinstance(active_layers, bool)
@@ -529,15 +522,37 @@ class GPT(nn.Module):
             if layer_index >= active_layers:
                 break
             x = block(x, cos_sin, kv_cache)
-        x = norm(x)
+        return norm(x)
+
+    def get_hidden_states(self, idx, kv_cache=None, max_layers: int | None = None):
+        """Return the real final hidden state for every input token.
+
+        The result is the exact residual stream consumed by ``lm_head`` in
+        :meth:`forward`; gradients remain available when the caller enables them.
+        """
+        return self._forward_hidden(idx, kv_cache=kv_cache, max_layers=max_layers)
+
+    def hidden_to_logits(self, hidden):
+        """Project final hidden states through the same bounded head as ``forward``."""
+        softcap = 15.0
+        logits = self.lm_head(hidden)
+        return softcap * torch.tanh(logits / softcap)
+
+    def forward(
+        self,
+        idx,
+        targets=None,
+        kv_cache=None,
+        loss_reduction='mean',
+        max_layers: int | None = None,
+    ):
+        x = self._forward_hidden(idx, kv_cache=kv_cache, max_layers=max_layers)
 
         # Forward the lm_head (compute logits)
-        softcap = 15
         if targets is not None:
             # training mode: compute and return the loss
             # TODO: experiment with Liger Kernels / chunked cross-entropy etc.
-            logits = self.lm_head(x)
-            logits = softcap * torch.tanh(logits / softcap) # logits softcap
+            logits = self.hidden_to_logits(x)
             logits = logits.float() # use tf32/fp32 for logits
             logits_flat = logits.reshape(-1, logits.size(-1))
             targets_flat = targets.reshape(-1)
@@ -550,9 +565,7 @@ class GPT(nn.Module):
             return loss
         else:
             # inference mode: compute and return the logits
-            logits = self.lm_head(x)
-            logits = softcap * torch.tanh(logits / softcap) # logits softcap
-            return logits
+            return self.hidden_to_logits(x)
 
     @torch.inference_mode()
     def generate(self, tokens, max_tokens, temperature=1.0, top_k=None, seed=42):

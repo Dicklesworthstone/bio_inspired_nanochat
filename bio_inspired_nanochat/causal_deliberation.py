@@ -141,8 +141,29 @@ class CausalDeliberationController:
         self.model = model
         self.cfg = cfg
         cfg.validate()
+        for method_name in ("get_hidden_states", "hidden_to_logits"):
+            if not callable(getattr(model, method_name, None)):
+                raise TypeError(
+                    f"{type(model).__name__} must implement {method_name}() for causal "
+                    "deliberation; synthetic representation and logit fallbacks are not supported"
+                )
         d_model = getattr(model.config, "n_embd", 64) if hasattr(model, "config") else 64
         self.relaxer = FullStateRelaxer(d_model, step_size=cfg.step_size, energy_decay=cfg.energy_decay)
+
+    def _extract_hidden_states(self, tokens: Tensor) -> Tensor:
+        hidden_fn = getattr(self.model, "get_hidden_states")
+        hidden = hidden_fn(tokens)
+        if not isinstance(hidden, Tensor):
+            raise TypeError(
+                f"{type(self.model).__name__}.get_hidden_states() must return a Tensor"
+            )
+        expected_shape = (*tokens.shape, self.relaxer.d_model)
+        if hidden.shape != expected_shape:
+            raise ValueError(
+                f"get_hidden_states() returned shape {tuple(hidden.shape)}, expected "
+                f"{expected_shape}"
+            )
+        return hidden
 
     def deliberate_token(
         self,
@@ -269,31 +290,21 @@ class CausalDeliberationController:
         total_flops = 0
         total_time_ms = 0.0
 
-        # Run prompt through base forward to get initial state
+        # Run the prompt through the real transformer trunk to get its initial state.
         with torch.no_grad():
             x = torch.tensor([tokens], dtype=torch.long, device=next(self.model.parameters()).device)
-            fn = getattr(self.model, "get_hidden_states", None)
-            hidden = fn(x) if callable(fn) else None
-            if hidden is None:
-                # Fallback: create mock hidden state from parameter dimension
-                d_model = getattr(self.model.config, "n_embd", 64) if hasattr(self.model, "config") else 64
-                hidden = torch.randn(1, d_model, device=x.device)
+            hidden = self._extract_hidden_states(x)
 
-        h_t = hidden[:, -1, :].clone() if hidden.ndim == 3 else hidden.clone()
+        h_t = hidden[:, -1, :].clone()
+        committed_offset = torch.zeros_like(h_t)
         fast_weights = torch.zeros(h_t.shape[-1], h_t.shape[-1], device=h_t.device)
 
-        lm_head = getattr(self.model, "lm_head", None)
-        if lm_head is None:
-            vocab_size = getattr(self.model.config, "vocab_size", 64) if hasattr(self.model, "config") else 64
-            head_layer = nn.Linear(h_t.shape[-1], vocab_size, device=h_t.device)
-
-            def lm_head(h: Tensor) -> Tensor:
-                return head_layer(h)
+        hidden_to_logits = getattr(self.model, "hidden_to_logits")
 
         for step in range(max_new_tokens):
             h_relaxed, res, fw_relaxed = self.deliberate_token(
                 hidden_state=h_t,
-                lm_head=lm_head,
+                lm_head=hidden_to_logits,
                 control=control,
                 fast_weights=fast_weights,
             )
@@ -303,14 +314,27 @@ class CausalDeliberationController:
             total_flops += res.flops_spent
             total_time_ms += res.wall_time_ms
 
-            if self.cfg.commit_relaxed_state:
-                # Causal commitment: next step's input state is the relaxed state h_relaxed
-                h_t = h_relaxed
+            commit_relaxation = (
+                self.cfg.commit_relaxed_state
+                and control in (ControlType.DELIBERATION, ControlType.TOPK_TEMP_MATCHED)
+                and res.iterations_used > 0
+            )
+            if commit_relaxation:
+                # Preserve the relaxation delta while still advancing the real transformer
+                # context with the selected token on the next step.
+                committed_offset = committed_offset + (h_relaxed - h_t)
                 if fw_relaxed is not None:
                     fast_weights = fw_relaxed
-            else:
-                # Discarded state: unrelaxed baseline state
-                h_t = h_t + 0.01 * torch.randn_like(h_t)
+
+            if step + 1 < max_new_tokens:
+                with torch.no_grad():
+                    x = torch.tensor(
+                        [tokens],
+                        dtype=torch.long,
+                        device=next(self.model.parameters()).device,
+                    )
+                    base_hidden = self._extract_hidden_states(x)[:, -1, :]
+                h_t = base_hidden + committed_offset if commit_relaxation else base_hidden
 
         tot_iters = sum(r.iterations_used for r in step_results)
         converged_count = sum(1 for r in step_results if r.halted_converged)
