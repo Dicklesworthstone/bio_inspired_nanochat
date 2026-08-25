@@ -27,8 +27,12 @@ half-written one. A stray `*.tmp` from a crash is ignored: the loaders open the 
 | Step, loop state (min_val_bpb, smoothed loss, total time), dataloader position, model config, full `SynapticConfig` + provenance | `meta_*.json` (rank 0) | resume the loop where it left off; rebuild the *exact* bio kinetics (vg9.6) |
 | **RNG state** (torch + CUDA + python + numpy), **per-rank** | `train_*_rankR.pt` | **the synaptic forward is stochastic during training** (stochastic vesicle release draws from the global RNG); without restoring RNG a resume diverges — proven in `tests/test_scaleup_checkpoint.py::test_resume_is_bit_comparable` |
 
-RNG is **per-rank** because each rank draws independently; restoring rank 0's RNG onto all ranks
-would collapse their stochasticity. `capture_rng_state()` / `restore_rng_state()` handle this.
+RNG blobs are **per-rank** so each rank's exact draw stream survives a save/resume boundary;
+restoring rank 0's stream onto all ranks would desynchronize them from their pre-save
+futures. `capture_rng_state()` / `restore_rng_state()` handle this. Note that ranks are
+*seeded identically* at run start (`compute_init`, for weight-init parity), so the streams
+start correlated — per-rank blobs preserve each stream exactly; they do not create
+independence between ranks (jgkf).
 
 ### Stateful controllers (persist when enabled)
 

@@ -205,7 +205,11 @@ def capture_rng_state() -> dict:
     The synaptic forward is *stochastic* during training (stochastic vesicle release
     draws from the global torch RNG), so without restoring RNG a resumed run diverges
     from the uninterrupted one — verified in tests/test_scaleup_checkpoint.py. RNG state
-    is per-rank (each rank draws independently), so it is saved in the per-rank blob.
+    is per-rank and each rank's exact stream is preserved, so a resumed rank
+    reproduces its pre-save draw sequence bit-for-bit. NOTE (jgkf): ranks are
+    SEEDED identically at run start (compute_init), so their streams are
+    correlated, not independent — the per-rank blobs exist to preserve whatever
+    each rank's stream actually was across a save/resume boundary.
     """
     state: dict = {"torch": torch.get_rng_state(), "python": random.getstate()}
     try:
