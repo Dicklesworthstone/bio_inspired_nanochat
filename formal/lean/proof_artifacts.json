@@ -693,6 +693,176 @@
       "mathlib_revision": "a3a10db0e9d66acbebf76c5e6a135066525ac900",
       "build_command": "rch exec -- lake build",
       "build_result": "attempted-2026-08-25-rch-refused-non-compilation-command-local-fallback-lake-permission-denied"
+    },
+    {
+      "cycle_id": "lfl-review-runtime-refresh-2026-08-25",
+      "frog_id": "bio_inspired_nanochat-crossreview",
+      "theorem_ids": [
+        "BioInspiredNanochat.Metriplectic.poisson_entropy_degeneracy",
+        "BioInspiredNanochat.Metriplectic.friction_energy_degeneracy",
+        "BioInspiredNanochat.Metriplectic.energyRate_zero",
+        "BioInspiredNanochat.Metriplectic.entropyRate_nonnegative",
+        "BioInspiredNanochat.Metriplectic.freeEnergyRate_nonpositive",
+        "BioInspiredNanochat.Metriplectic.freeEnergy_nonincreasing",
+        "BioInspiredNanochat.Metriplectic.trajectory_energy_constant",
+        "BioInspiredNanochat.Metriplectic.trajectory_entropy_from_start",
+        "BioInspiredNanochat.Metriplectic.trajectory_freeEnergy_nonincreasing",
+        "BioInspiredNanochat.Metriplectic.trajectory_component_bounds"
+      ],
+      "route": "runtime-first-proof-preserving",
+      "proof_friction_class": "documentation-drift",
+      "runtime_defect_found": false,
+      "artifact_hash": "sha256:831498bc2853d86701250ea89024ab5f5f6190d2e3a5a9ae66f93a7d5d42d963",
+      "hash_scope": "formal/lean/BioInspiredNanochat.lean",
+      "sorry_or_admit_present": false,
+      "axioms": [
+        "propext",
+        "Classical.choice",
+        "Quot.sound"
+      ],
+      "assurance": {
+        "exact_real_algebra": "E-unchanged",
+        "live_torch_regressions": "B",
+        "floating_point_refinement": "dtype-aware-guarded-runtime-gap"
+      },
+      "conformance": {
+        "statement_parity": "pass-reduced-core",
+        "state_parity": "pass-live-C-B-HEAT-core",
+        "transition_parity": "pass-closed-form-implicit-midpoint-vs-numpy-reference"
+      },
+      "change_scope": "Runtime hash refresh after the cross-codebase review cycle. Four files drifted from their pinned snapshots, none in Lean-proved territory: (1) synaptic.py - peer commit 50c9c36 added synaptic-state granularity options, then review fixes recomputed the fused-genetics fallback router stats in plain PyTorch, gated deferred Hebbian writes to training forwards only, and disabled STDP temporal pairing on 2-D scattered inputs (no release_canonical dynamics touched); (2) ablation_registry.py - same peer granularity commit; (3) flex_synaptic.py - score_mod clamps kv_idx before tensor indexing (compiled FlexAttention block padding); (4) mc_ensemble.py - logit_variance switched to Welford running M2 (numerically identical expectation, stable under large logits). All mapped regressions re-executed green at the refreshed hashes.",
+      "runtime_mapping": [
+        {
+          "path": "bio_inspired_nanochat/metriplectic_integrator.py",
+          "sha256": "943ef48e1231387c991649ba6b9c89bc4c6f7627df8f8cd08da26288f0047a59"
+        },
+        {
+          "path": "tests/test_metriplectic_theory.py",
+          "sha256": "ee549239d15d63bbc260388a99d4f010e0a1a03509773b65c3194db3d5d442da"
+        },
+        {
+          "path": "tests/test_metriplectic_integrator.py",
+          "sha256": "9d7c9e8728c28ca62f570a3e378e1428744a0d6722f3fd665bdf5e9510902c6a"
+        },
+        {
+          "path": "tests/test_metriplectic_runtime.py",
+          "sha256": "073bc5f635dea75a686ff11a51eaef81daa02a012eea1ab344cf5ef55aa261da"
+        },
+        {
+          "path": "scripts/formal_feedback.py",
+          "sha256": "ee6528a391a6e5d3a66724b45a8138a2e90f991cf80ad7415189fa0e1c003cf3"
+        },
+        {
+          "path": "tests/test_formal_feedback.py",
+          "sha256": "0e0932526f6578dd9398b0b23b23a93bb03345df1fe5533897e99bf29c47b676"
+        },
+        {
+          "path": "docs/theory/singular_perturbation.md",
+          "sha256": "2e1c9653f4329c529268cfbd1ee3fc1a4bb21682398f7703f55eb51b3748aafe"
+        },
+        {
+          "path": "bio_inspired_nanochat/cusp_certificate.py",
+          "sha256": "3bbed2b849559d6b361982089d3ee2c301b821db16165c68e2d7bc6fe7a4101e"
+        },
+        {
+          "path": "bio_inspired_nanochat/stochastic_thermo.py",
+          "sha256": "9d9d71a29842958dbc5a6ec6a81c35ba32a6fa53919cf6ea59c3777689ea8aa2"
+        },
+        {
+          "path": "tests/test_cusp_certificate.py",
+          "sha256": "9128264ec2fa68aa06041cba8b84742127aadc03401e350512c16339fbffa7e6"
+        },
+        {
+          "path": "tests/test_cusp_falsification.py",
+          "sha256": "dfdfefa2d2a019567375f00d804a60294cff28ff91d6df202aa5e3ab8973f1c6"
+        },
+        {
+          "path": "tests/test_singular_perturbation_theory.py",
+          "sha256": "2a0b8b5a2e8f256ef822b8ccf33075549f60086fa4c747d517b032fcc6d51419"
+        },
+        {
+          "path": "tests/test_stochastic_thermo.py",
+          "sha256": "835589038d830ece10fe98f2f054008c5cdcc1af3b5c11f841d864748e604249"
+        },
+        {
+          "path": "bio_inspired_nanochat/synaptic.py",
+          "sha256": "3e99f3686fbbbef2d8250c920638237a13d69308c47f2706c98ad8be8158d841"
+        },
+        {
+          "path": "docs/theory/metriplectic.md",
+          "sha256": "1453020ce0308dc3333b01bf798d6f62e70b12ac2d9d9659e2b4330e6f6395a1"
+        },
+        {
+          "path": "bio_inspired_nanochat/ablation_registry.py",
+          "sha256": "8b0f057713ce01138f3ac8afdd1ec7defe186318331fbac7d521bd87562c05f2"
+        },
+        {
+          "path": "bio_inspired_nanochat/ablation_matrix.py",
+          "sha256": "11169f694026edcda0a60a55b981d9ff7512c766a3f972a2b73729e69dad37e9"
+        },
+        {
+          "path": "tests/test_chunked_tbptt.py",
+          "sha256": "220a40f90d5747ecef71635ac4e25f2e759d16f3bb14301e545074441f0da013"
+        },
+        {
+          "path": "tests/test_diff_recurrence_wiring.py",
+          "sha256": "0dd62863c7e4e97fb1202790093ddc570f5ffd67033aef643d03cf6da181fc90"
+        },
+        {
+          "path": "tests/test_ablation_registry.py",
+          "sha256": "986063054ab7c6a8adc8e907fc308a9127c379c141a0fdcca271ed74671cb325"
+        },
+        {
+          "path": "tests/test_param_census.py",
+          "sha256": "11e97a7ec532083bd0e09563a5d4d57a2fda595e7357ebfa18c5863abb4f8220"
+        },
+        {
+          "path": "tests/test_ablation_matrix.py",
+          "sha256": "fde237a7f6bc1e888a0e3960d7f14b5af125d80999d64f94bf022dc8936d2c1c"
+        },
+        {
+          "path": "tests/test_scaleup_ablation_e2e.py",
+          "sha256": "1deea1917c20e04d0aef8e38b69a2eb328c80a06bd4985c97d25d0a33d6d451c"
+        },
+        {
+          "path": "bio_inspired_nanochat/flex_synaptic.py",
+          "sha256": "0fa69fe8e4b9a095eb8de506074bb8fe5f4cb8f0f6b458f664cebfb26f9f6d60"
+        },
+        {
+          "path": "bio_inspired_nanochat/mc_ensemble.py",
+          "sha256": "9d9d7429b03895562946b77d4645fc0ff5aeaee13189e20493a0824213d969ca"
+        },
+        {
+          "path": "scripts/e2e/uncertainty_calibration.py",
+          "sha256": "5a7ec60dc8887d84a8d31c89e8a579d1a7971f863189494bf2420d1ed0abb16e"
+        },
+        {
+          "path": "tests/test_attention_bias_clamp.py",
+          "sha256": "69ea14848287f3145f460222d93fa3c69ebbb247f7dbd732175a4402556a2e87"
+        },
+        {
+          "path": "tests/test_e2e_decode_parity.py",
+          "sha256": "edd64c96ffbc09cce3eccc22c9d397f5132ea7453674ecdf1ae7e5d4cd6a94ba"
+        },
+        {
+          "path": "tests/test_e2e_uncertainty.py",
+          "sha256": "896501278ef8802ce4ed9f99fca9cb2e664739c1128b9054a6fcdd68f3daa3fb"
+        },
+        {
+          "path": "tests/test_flex_canonical.py",
+          "sha256": "da384233b61cd03b65c8b0e54cb1a1c558608ef1a26d508d66210b32d8c5e808"
+        },
+        {
+          "path": "tests/test_mc_ensemble.py",
+          "sha256": "1e496b51bc57249e662b42b7b49100565015d47e7fab7acc4b1961a527b37cc2"
+        }
+      ],
+      "regression_command": "uv run python -m pytest tests/test_metriplectic_theory.py tests/test_metriplectic_integrator.py tests/test_metriplectic_runtime.py tests/test_stdp.py tests/test_mc_ensemble.py tests/test_flex_canonical.py tests/test_ablation_registry.py -q",
+      "regression_result": "112 passed, 1 skipped (2026-08-25)",
+      "lean_toolchain": "leanprover/lean4:v4.27.0",
+      "mathlib_revision": "a3a10db0e9d66acbebf76c5e6a135066525ac900",
+      "build_command": "rch exec -- lake build",
+      "build_result": "attempted-2026-08-25-rch-refused-non-compilation-command-local-fallback-lake-permission-denied"
     }
   ]
 }
