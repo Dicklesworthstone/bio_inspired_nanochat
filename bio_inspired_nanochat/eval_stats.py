@@ -126,9 +126,33 @@ class Aggregate:
     ci_high: float
 
 
+def _finite_observation_array(
+    values: list[float] | np.ndarray,
+    *,
+    name: str,
+) -> np.ndarray:
+    """Return a one-dimensional float array, rejecting invalid evidence."""
+    array = np.asarray(values, dtype=np.float64)
+    if array.ndim != 1:
+        raise ValueError(f"{name} must be a one-dimensional sequence")
+    if not np.isfinite(array).all():
+        bad_positions = np.flatnonzero(~np.isfinite(array)).tolist()
+        raise ValueError(
+            f"{name} contains non-finite observation(s) at positions {bad_positions}"
+        )
+    return array
+
+
 def aggregate(values: list[float] | np.ndarray, confidence: float = 0.95) -> Aggregate:
     """Mean and Student-t confidence interval over seeds."""
-    a = np.asarray(values, dtype=np.float64)
+    if (
+        isinstance(confidence, bool)
+        or not isinstance(confidence, (int, float))
+        or not math.isfinite(float(confidence))
+        or not 0.0 < float(confidence) < 1.0
+    ):
+        raise ValueError(f"confidence must be finite and in (0, 1), got {confidence!r}")
+    a = _finite_observation_array(values, name="aggregate values")
     n = int(a.size)
     if n == 0:
         raise ValueError("aggregate() needs at least one value")
@@ -156,6 +180,7 @@ class PairedResult:
 
 def paired_t_test(deltas: np.ndarray) -> tuple[float, float]:
     """Two-sided paired t-test on per-pair differences. Returns (t_stat, p_value)."""
+    deltas = _finite_observation_array(deltas, name="paired deltas")
     n = deltas.size
     if n < 2:
         return float("nan"), float("nan")
@@ -188,6 +213,7 @@ def wilcoxon_signed_rank(deltas: np.ndarray) -> float:
     Zero differences are dropped. Exact (enumeration) for n <= 18; otherwise a
     normal approximation with tie and continuity correction.
     """
+    deltas = _finite_observation_array(deltas, name="Wilcoxon deltas")
     d = deltas[deltas != 0.0]
     n = d.size
     if n == 0:
@@ -230,7 +256,16 @@ def bootstrap_ci(
     seed: int = 0,
 ) -> tuple[float, float]:
     """Percentile bootstrap CI of the mean (deterministic given ``seed``)."""
-    a = np.asarray(values, dtype=np.float64)
+    if isinstance(n_boot, bool) or not isinstance(n_boot, int) or n_boot <= 0:
+        raise ValueError(f"n_boot must be a positive integer, got {n_boot!r}")
+    if (
+        isinstance(confidence, bool)
+        or not isinstance(confidence, (int, float))
+        or not math.isfinite(float(confidence))
+        or not 0.0 < float(confidence) < 1.0
+    ):
+        raise ValueError(f"confidence must be finite and in (0, 1), got {confidence!r}")
+    a = _finite_observation_array(values, name="bootstrap values")
     if a.size == 0:
         return float("nan"), float("nan")
     rng = np.random.default_rng(seed)
@@ -252,6 +287,8 @@ def paired_comparison(
 
     Returns ``None`` if fewer than 2 seeds are shared (no paired test possible).
     """
+    if not isinstance(lower_is_better, bool):
+        raise TypeError("lower_is_better must be a bool")
     seeds = sorted(set(treatment) & set(baseline))
     if len(seeds) < 2:
         return None
@@ -287,6 +324,8 @@ def paired_comparison(
 
 def _direction_lower_better(metric: str, lower_is_better: Optional[bool]) -> bool:
     if lower_is_better is not None:
+        if not isinstance(lower_is_better, bool):
+            raise TypeError("lower_is_better must be a bool or None")
         return lower_is_better
     spec = get_metric(metric)
     if spec is None:
@@ -298,6 +337,11 @@ def _direction_lower_better(metric: str, lower_is_better: Optional[bool]) -> boo
             f"Unknown metric {metric!r}: no schema entry and no explicit "
             f"lower_is_better override. Register it in metrics_schema or pass "
             f"lower_is_better explicitly."
+        )
+    if spec.direction == Direction.NEUTRAL:
+        raise ValueError(
+            f"Metric {metric!r} has neutral direction: comparison requires an explicit "
+            "lower_is_better override grounded in the experiment's hypothesis."
         )
     return spec.direction == Direction.LOWER_BETTER
 

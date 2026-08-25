@@ -19,6 +19,8 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import math
+import numbers
 import os
 import platform
 from dataclasses import asdict, dataclass, field, is_dataclass
@@ -51,20 +53,64 @@ class RunRecord:
     eligible_for_best: bool = True
 
     def __post_init__(self) -> None:
+        self._validate()
+
+    def _validate(self) -> None:
+        """Enforce the persisted registry schema on every construction path."""
+        if not isinstance(self.run_id, str) or not self.run_id.strip():
+            raise ValueError("run_id must be a non-empty string")
+        if self.harness not in _HARNESSES:
+            raise ValueError(
+                f"unknown harness {self.harness!r}; expected one of {_HARNESSES}"
+            )
+        if not isinstance(self.metrics, Mapping):
+            raise TypeError("metrics must be a mapping")
+        self.metrics = validate_metrics(self.metrics, strict=True)
         if self.verdict not in (None, "positive", "null", "invalidated"):
             raise ValueError("verdict must be positive, null, invalidated, or None")
         if not isinstance(self.eligible_for_best, bool):
             raise TypeError("eligible_for_best must be a bool")
         if self.verdict in ("null", "invalidated") and self.eligible_for_best:
             raise ValueError("null and invalidated records cannot be eligible for best-result queries")
+        if self.seed is not None and (
+            isinstance(self.seed, bool) or not isinstance(self.seed, int)
+        ):
+            raise TypeError("seed must be an integer or None")
+        if self.timestamp is not None and (
+            isinstance(self.timestamp, bool)
+            or not isinstance(self.timestamp, numbers.Real)
+            or not math.isfinite(float(self.timestamp))
+        ):
+            raise ValueError("timestamp must be finite numeric data or None")
+        if not isinstance(self.dataset_shards, list) or any(
+            not isinstance(shard, str) for shard in self.dataset_shards
+        ):
+            raise TypeError("dataset_shards must be a list of strings")
+        for name, value in (
+            ("git_sha", self.git_sha),
+            ("config_hash", self.config_hash),
+            ("hardware", self.hardware),
+        ):
+            if value is not None and not isinstance(value, str):
+                raise TypeError(f"{name} must be a string or None")
+        if not isinstance(self.notes, str):
+            raise TypeError("notes must be a string")
 
     def to_json(self) -> dict:
+        # Fields remain mutable for ergonomic callers, so revalidate immediately
+        # before serialization instead of trusting construction-time validation.
+        self._validate()
         return asdict(self)
 
     @classmethod
     def from_json(cls, d: Mapping[str, Any]) -> "RunRecord":
+        if not isinstance(d, Mapping):
+            raise TypeError("registry record must be a JSON object")
         known = set(cls.__dataclass_fields__)
-        payload = {k: v for k, v in d.items() if k in known}
+        unknown = sorted(set(d) - known)
+        if unknown:
+            raise ValueError(f"registry record contains unknown field(s): {unknown}")
+        payload = dict(d)
         if "eligible_for_best" not in payload:
             # Legacy free-text verdicts cannot safely participate in best-result queries.  Their
             # claims remain readable, but require an explicit schema migration before eligibility.
@@ -148,9 +194,27 @@ def make_record(
 
 def append_record(record: RunRecord, path: str = DEFAULT_REGISTRY) -> None:
     """Append a record to the committed JSONL registry (creating the dir/file if needed)."""
+    if not isinstance(record, RunRecord):
+        raise TypeError("record must be a RunRecord")
+    encoded = json.dumps(record.to_json(), sort_keys=True, allow_nan=False)
     os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
     with open(path, "a", encoding="utf-8") as f:
-        f.write(json.dumps(record.to_json(), sort_keys=True) + "\n")
+        f.write(encoded + "\n")
+
+
+def _strict_json_object(pairs: List[tuple[str, Any]]) -> dict[str, Any]:
+    """Build a JSON object while rejecting ambiguous duplicate field names."""
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON field {key!r}")
+        result[key] = value
+    return result
+
+
+def _reject_json_constant(value: str) -> None:
+    """Reject Python's non-standard NaN/Infinity JSON extensions."""
+    raise ValueError(f"non-standard JSON constant {value!r}")
 
 
 def read_records(path: str = DEFAULT_REGISTRY) -> List[RunRecord]:
@@ -162,12 +226,21 @@ def read_records(path: str = DEFAULT_REGISTRY) -> List[RunRecord]:
             line = line.strip()
             if line:
                 try:
-                    payload = json.loads(line)
-                except json.JSONDecodeError as exc:
+                    payload = json.loads(
+                        line,
+                        object_pairs_hook=_strict_json_object,
+                        parse_constant=_reject_json_constant,
+                    )
+                except (json.JSONDecodeError, ValueError) as exc:
                     raise ValueError(
-                        f"invalid registry JSON at {path}:{line_number}: {exc.msg}"
+                        f"invalid registry JSON at {path}:{line_number}: {exc}"
                     ) from exc
-                out.append(RunRecord.from_json(payload))
+                try:
+                    out.append(RunRecord.from_json(payload))
+                except (KeyError, TypeError, ValueError) as exc:
+                    raise ValueError(
+                        f"invalid registry record at {path}:{line_number}: {exc}"
+                    ) from exc
     return out
 
 
@@ -176,6 +249,14 @@ def best_record(records: List[RunRecord], metric: str) -> Optional[RunRecord]:
     spec = get_metric(metric)
     if spec is None:
         raise KeyError(f"unknown metric {metric!r}")
+    if spec.direction == Direction.NEUTRAL:
+        raise ValueError(
+            f"metric {metric!r} has neutral direction and cannot define a best record"
+        )
+    for record in records:
+        if not isinstance(record, RunRecord):
+            raise TypeError("records must contain only RunRecord instances")
+        record._validate()
     have = [r for r in records if r.eligible_for_best and metric in r.metrics]
     if not have:
         return None
@@ -184,6 +265,10 @@ def best_record(records: List[RunRecord], metric: str) -> Optional[RunRecord]:
 
 
 def summarize(records: List[RunRecord], *, harness: Optional[str] = None, limit: int = 20) -> str:
+    for record in records:
+        if not isinstance(record, RunRecord):
+            raise TypeError("records must contain only RunRecord instances")
+        record._validate()
     rows = [r for r in records if harness is None or r.harness == harness]
     rows = rows[-limit:]
     if not rows:

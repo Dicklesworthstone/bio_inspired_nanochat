@@ -65,6 +65,8 @@ _M("val_bpb", "bits/byte", Direction.LOWER_BETTER, "validation bits-per-byte")
 _M("lr", "ratio", Direction.NEUTRAL, "learning-rate multiplier this step")
 _M("grad_norm", "L2", Direction.LOWER_BETTER, "global gradient L2 norm")
 _M("tok_per_sec", "tokens/s", Direction.HIGHER_BETTER, "training throughput")
+_M("latency_ms", "milliseconds", Direction.LOWER_BETTER, "end-to-end benchmark latency")
+_M("memory_mb", "megabytes", Direction.LOWER_BETTER, "peak benchmark memory use")
 _M("mfu", "fraction", Direction.HIGHER_BETTER, "model FLOPs utilization")
 _M("total_training_time", "seconds", Direction.NEUTRAL, "cumulative wall-clock training time")
 # -- Divergence guard (vg9.7) / bio state --

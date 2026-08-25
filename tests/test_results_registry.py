@@ -50,6 +50,18 @@ def test_make_record_rejects_unknown_metric():
 
 
 @pytest.mark.unit
+def test_direct_record_construction_enforces_schema_and_finiteness():
+    with pytest.raises(ValueError, match="not finite"):
+        RunRecord("nan", "eval", {"val_bpb": float("nan")})
+    with pytest.raises(UnknownMetricError):
+        RunRecord("unknown", "eval", {"made_up_metric": 1.0})
+    with pytest.raises(ValueError, match="unknown harness"):
+        RunRecord("bad-harness", "other", {"val_bpb": 1.0})
+    with pytest.raises(ValueError, match="run_id"):
+        RunRecord(" ", "eval", {"val_bpb": 1.0})
+
+
+@pytest.mark.unit
 def test_make_record_rejects_unknown_harness():
     with pytest.raises(ValueError, match="unknown harness"):
         make_record("nope", {"train_loss": 4.5}, run_id="r")
@@ -113,6 +125,18 @@ def test_append_and_read_roundtrip(tmp_path):
 
 
 @pytest.mark.unit
+def test_append_revalidates_mutated_record_before_any_io(tmp_path):
+    path = tmp_path / "nested" / "registry.jsonl"
+    record = make_record("eval", {"val_bpb": 1.0}, run_id="mutated")
+    record.metrics["val_bpb"] = float("nan")
+
+    with pytest.raises(ValueError, match="not finite"):
+        append_record(record, str(path))
+
+    assert not path.exists()
+
+
+@pytest.mark.unit
 def test_read_missing_registry_is_empty(tmp_path):
     assert read_records(str(tmp_path / "nope.jsonl")) == []
 
@@ -125,6 +149,57 @@ def test_read_registry_reports_corrupt_line(tmp_path):
         encoding="utf-8",
     )
     with pytest.raises(ValueError, match=r"registry\.jsonl:2"):
+        read_records(str(path))
+
+
+@pytest.mark.unit
+def test_read_registry_rejects_unknown_fields_with_line_context(tmp_path):
+    path = tmp_path / "registry.jsonl"
+    path.write_text(
+        json.dumps(
+            {
+                "run_id": "typo",
+                "harness": "eval",
+                "metrics": {"val_bpb": 1.0},
+                "eligible_for_bset": False,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=r"registry\.jsonl:1:.*eligible_for_bset",
+    ):
+        read_records(str(path))
+
+
+@pytest.mark.unit
+def test_read_registry_rejects_nonstandard_json_constant_with_line_context(tmp_path):
+    path = tmp_path / "registry.jsonl"
+    path.write_text(
+        '{"run_id":"bad","harness":"eval","metrics":{"val_bpb":NaN}}\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match=r"registry\.jsonl:1:.*non-standard JSON constant"):
+        read_records(str(path))
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "line",
+    [
+        '{"run_id":"first","run_id":"second","harness":"eval","metrics":{}}',
+        '{"run_id":"nested","harness":"eval","metrics":{"val_bpb":1,"val_bpb":2}}',
+    ],
+)
+def test_read_registry_rejects_duplicate_json_fields_with_line_context(tmp_path, line):
+    path = tmp_path / "registry.jsonl"
+    path.write_text(line + "\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match=r"registry\.jsonl:1:.*duplicate JSON field"):
         read_records(str(path))
 
 
@@ -143,6 +218,29 @@ def test_best_record_respects_optimization_direction():
     assert best_record([], "val_bpb") is None
     with pytest.raises(KeyError):
         best_record(recs, "not_a_metric")
+
+
+@pytest.mark.unit
+def test_best_record_rejects_neutral_metrics():
+    records = [make_record("train", {"step": 1}, run_id="one")]
+
+    with pytest.raises(ValueError, match="neutral direction"):
+        best_record(records, "step")
+
+
+@pytest.mark.unit
+def test_performance_registry_metrics_are_schema_valid():
+    record = RunRecord(
+        "perf",
+        "eval",
+        {"tok_per_sec": 100.0, "latency_ms": 2.0, "memory_mb": 10.0},
+    )
+
+    assert record.metrics == {
+        "tok_per_sec": 100.0,
+        "latency_ms": 2.0,
+        "memory_mb": 10.0,
+    }
 
 
 @pytest.mark.unit
@@ -229,3 +327,12 @@ def test_summarize_and_cli(tmp_path, capsys):
     assert "val_bpb" in capsys.readouterr().out
     assert _main(["best", "--path", path, "--metric", "val_bpb"]) == 0
     assert "best by val_bpb" in capsys.readouterr().out
+
+
+@pytest.mark.unit
+def test_summarize_revalidates_mutated_records():
+    record = make_record("eval", {"val_bpb": 1.0}, run_id="mutated")
+    record.metrics["val_bpb"] = float("nan")
+
+    with pytest.raises(ValueError, match="not finite"):
+        summarize([record])

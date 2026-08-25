@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import math
 import sys
+from typing import Any, cast
 
 import numpy as np
 import pytest
@@ -128,6 +129,19 @@ def test_aggregate_known_ci():
     assert agg.ci_high == pytest.approx(4.0 + half, abs=1e-2)
 
 
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), -float("inf")])
+def test_aggregate_rejects_nonfinite_observations(bad):
+    with pytest.raises(ValueError, match="non-finite observation"):
+        aggregate([1.0, bad])
+
+
+def test_aggregate_rejects_non_vector_evidence_and_invalid_confidence():
+    with pytest.raises(ValueError, match="one-dimensional"):
+        aggregate(np.ones((2, 2)))
+    with pytest.raises(ValueError, match="confidence"):
+        aggregate([1.0, 2.0], confidence=1.0)
+
+
 # --------------------------------------------------------------------------- #
 # paired_comparison + compare_matrix
 # --------------------------------------------------------------------------- #
@@ -135,6 +149,23 @@ def test_paired_comparison_needs_two_shared_seeds():
     assert paired_comparison({1: 1.0}, {1: 2.0}, lower_is_better=True) is None
     res = paired_comparison({1: 1.0, 2: 1.0}, {1: 2.0, 2: 2.0}, lower_is_better=True)
     assert res is not None and res.n_pairs == 2
+
+    with pytest.raises(TypeError, match="lower_is_better"):
+        paired_comparison(
+            {1: 1.0},
+            {1: 2.0},
+            lower_is_better=cast(Any, 1),
+        )
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), -float("inf")])
+def test_paired_comparison_rejects_nonfinite_matched_observations(bad):
+    with pytest.raises(ValueError, match="non-finite observation"):
+        paired_comparison(
+            {1: 1.0, 2: bad, 3: 1.2},
+            {1: 1.1, 2: 1.1, 3: 1.1},
+            lower_is_better=True,
+        )
 
 
 def test_compare_matrix_detects_consistent_improvement():
@@ -257,6 +288,38 @@ def test_compare_matrix_higher_better_metric_direction():
     assert rep["presets"]["bio_all"]["better"] is True
     assert rep["presets"]["bio_all"]["paired_vs_baseline"]["mean_delta"] > 0
     assert rep["presets"]["bio_all"]["verdict"] == "null"
+
+
+def test_compare_matrix_neutral_metric_requires_explicit_direction():
+    data = {
+        "vanilla": {seed: 1.0 for seed in range(6)},
+        "bio_all": {seed: 2.0 + seed * 0.01 for seed in range(6)},
+    }
+
+    with pytest.raises(ValueError, match="neutral direction"):
+        compare_matrix(
+            data,
+            baseline="vanilla",
+            metric="live_tur_relative_variance",
+        )
+
+    report = compare_matrix(
+        data,
+        baseline="vanilla",
+        metric="live_tur_relative_variance",
+        lower_is_better=False,
+    )
+    assert report["presets"]["bio_all"]["supported_gain"] is True
+
+
+def test_compare_matrix_rejects_nonboolean_direction_override():
+    with pytest.raises(TypeError, match="lower_is_better"):
+        compare_matrix(
+            {"vanilla": {1: 1.0}},
+            baseline="vanilla",
+            metric="val_bpb",
+            lower_is_better=cast(Any, 1),
+        )
 
 
 def test_compare_matrix_unknown_baseline_raises():
