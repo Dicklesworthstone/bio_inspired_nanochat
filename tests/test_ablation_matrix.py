@@ -156,8 +156,22 @@ def test_go_no_go_blocks_when_over_the_cap():
 
 
 def test_go_no_go_proceeds_within_budget():
-    g = am.go_no_go(["bio_no_presyn"], tok_per_sec=1_000_000.0, cap_gpu_hours=100.0)
+    # Feasible design: n=6 matched seeds clears the exact-Wilcoxon floor for a
+    # single-survivor family (2*2^-6 = 0.03125 <= alpha), so the pass may proceed.
+    g = am.go_no_go(["bio_no_presyn"], tok_per_sec=1_000_000.0, cap_gpu_hours=100.0,
+                    seeds=tuple(1000 + i for i in range(6)))
     assert g.proceed is True and g.n_survivors == 1
+
+
+def test_go_no_go_blocks_statistically_infeasible_design():
+    """The pinned 3-seed design can NEVER fire the pre-registered rule: the exact
+    Wilcoxon two-sided floor is 2*2^-3 = 0.25 > alpha regardless of effect size,
+    so every verdict would be forced to 'null'. go_no_go must refuse to commit
+    GPU-hours to such a run instead of authorizing a foregone conclusion."""
+    g = am.go_no_go(["bio_no_presyn"], tok_per_sec=1_000_000.0, cap_gpu_hours=100.0)
+    assert g.proceed is False
+    assert "INFEASIBLE" in g.reason
+    assert "Raise seeds" in g.reason
 
 
 def test_decision_rule_primary_metric_is_a_declared_metric():

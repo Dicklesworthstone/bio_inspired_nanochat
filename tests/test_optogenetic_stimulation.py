@@ -1,5 +1,7 @@
 """Tests for Optogenetic Synaptic Stimulation (bead `odq.3`)."""
 
+import math
+
 import pytest
 import torch
 
@@ -139,3 +141,95 @@ def test_site_type_filtering():
                 assert mod.w_fast.data[0, 0].item() == pytest.approx(4.0)
 
 
+def test_overlapping_clamps_restore_original_state():
+    """Multiple interventions on one variable unwind to the pre-context value."""
+    model = _make_model()
+    stimulator = OptogeneticStimulator(model)
+    syn_lin = next(mod for mod in model.modules() if isinstance(mod, SynapticLinear))
+    assert syn_lin.w_fast is not None
+    original = syn_lin.w_fast.detach().clone()
+
+    clamps = [
+        SynapticClamp(variable_name="w_fast", mode=ClampMode.PIN_VALUE, value=1.0),
+        SynapticClamp(variable_name="w_fast", mode=ClampMode.PIN_VALUE, value=2.0),
+    ]
+    with stimulator.stimulate(clamps):
+        assert syn_lin.w_fast[0, 0].item() == pytest.approx(2.0)
+
+    assert torch.equal(syn_lin.w_fast, original)
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "match"),
+    [
+        ({"layer_idx": -1}, "layer_idx"),
+        ({"layer_idx": 1.5}, "layer_idx"),
+        ({"site_type": "typo"}, "site_type"),
+        ({"variable_name": "typo"}, "variable_name"),
+        ({"mode": "pin_value"}, "ClampMode"),
+        ({"value": math.nan}, "finite"),
+        ({"value": math.inf}, "finite"),
+    ],
+)
+def test_invalid_clamp_specifications_fail_closed(kwargs, match):
+    """Malformed experiments must not silently broaden or skip causal interventions."""
+    with pytest.raises(ValueError, match=match):
+        SynapticClamp(**kwargs)
+
+
+def test_unmatched_clamp_rolls_back_other_interventions():
+    """A partially invalid experiment fails atomically instead of leaving a clamp applied."""
+    model = _make_model()
+    stimulator = OptogeneticStimulator(model)
+    syn_lin = next(mod for mod in model.modules() if isinstance(mod, SynapticLinear))
+    assert syn_lin.w_fast is not None
+    original = syn_lin.w_fast.detach().clone()
+    clamps = [
+        SynapticClamp(variable_name="w_fast", value=2.0),
+        SynapticClamp(layer_idx=99, variable_name="w_fast", value=3.0),
+    ]
+
+    with pytest.raises(ValueError, match="matched no synaptic sites"):
+        stimulator.apply_clamps(clamps)
+
+    assert torch.equal(syn_lin.w_fast, original)
+
+
+def test_pin_value_remains_clamped_during_model_execution():
+    """A PIN intervention is a maintained clamp, not a one-time assignment."""
+    model = _make_model()
+    stimulator = OptogeneticStimulator(model)
+    synaptic_layers = [
+        mod
+        for mod in model.modules()
+        if isinstance(mod, SynapticLinear) and mod.w_fast is not None
+    ]
+    originals = [mod.w_fast.detach().clone() for mod in synaptic_layers]
+    clamp = SynapticClamp(variable_name="w_fast", value=2.0)
+
+    with stimulator.stimulate([clamp]), torch.no_grad():
+        model(torch.randint(0, 32, (1, 6)))
+        assert all(torch.all(mod.w_fast == 2.0) for mod in synaptic_layers)
+
+    assert all(
+        torch.equal(mod.w_fast, original)
+        for mod, original in zip(synaptic_layers, originals)
+    )
+
+
+def test_maintained_pin_rejects_ambiguous_mixed_mode_overlap():
+    model = _make_model()
+    stimulator = OptogeneticStimulator(model)
+    syn_lin = next(mod for mod in model.modules() if isinstance(mod, SynapticLinear))
+    assert syn_lin.w_fast is not None
+    original = syn_lin.w_fast.detach().clone()
+    clamps = [
+        SynapticClamp(variable_name="w_fast", mode=ClampMode.PIN_VALUE, value=1.0),
+        SynapticClamp(variable_name="w_fast", mode=ClampMode.ADD_DELTA, value=1.0),
+    ]
+
+    with pytest.raises(ValueError, match="cannot overlap"):
+        with stimulator.stimulate(clamps):
+            pass
+
+    assert torch.equal(syn_lin.w_fast, original)

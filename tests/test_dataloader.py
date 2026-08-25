@@ -103,3 +103,67 @@ def test_dataloader_resumes_from_state_dict(sample_parquet_dir: Path) -> None:
         assert inputs_res.shape == (B, T)
         assert targets_res.shape == (B, T)
         assert state_res["pq_idx"] >= state1["pq_idx"]
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"B": 0, "T": 8, "split": "train"},
+        {"B": 2, "T": -1, "split": "train"},
+        {"B": 2, "T": 8, "split": "test"},
+        {"B": 2, "T": 8, "split": "train", "tokenizer_threads": 0},
+        {"B": 2, "T": 8, "split": "train", "tokenizer_batch_size": 0},
+        {
+            "B": 2,
+            "T": 8,
+            "split": "train",
+            "resume_state_dict": {"pq_idx": -1, "rg_idx": 0},
+        },
+        {
+            "B": 2,
+            "T": 8,
+            "split": "train",
+            "resume_state_dict": {"pq_idx": 0},
+        },
+        {
+            "B": 2,
+            "T": 8,
+            "split": "train",
+            "resume_state_dict": [],
+        },
+    ],
+)
+def test_dataloader_rejects_invalid_boundaries_before_io(kwargs) -> None:
+    loader = tokenizing_distributed_data_loader_with_state(device="cpu", **kwargs)
+    with pytest.raises(ValueError):
+        next(loader)
+
+
+def test_dataloader_rejects_resume_shard_outside_dataset(sample_parquet_dir: Path) -> None:
+    with (
+        patch("bio_inspired_nanochat.dataset.DATA_DIR", str(sample_parquet_dir)),
+        patch("bio_inspired_nanochat.dataloader.get_tokenizer", return_value=MockTokenizer()),
+    ):
+        loader = tokenizing_distributed_data_loader_with_state(
+            B=2,
+            T=8,
+            split="train",
+            tokenizer_threads=1,
+            tokenizer_batch_size=8,
+            device="cpu",
+            resume_state_dict={"pq_idx": 2, "rg_idx": 0},
+        )
+        with pytest.raises(ValueError, match="outside the available"):
+            next(loader)
+
+        row_group_loader = tokenizing_distributed_data_loader_with_state(
+            B=2,
+            T=8,
+            split="train",
+            tokenizer_threads=1,
+            tokenizer_batch_size=8,
+            device="cpu",
+            resume_state_dict={"pq_idx": 0, "rg_idx": 99},
+        )
+        with pytest.raises(ValueError, match="outside the parquet row-group"):
+            next(row_group_loader)

@@ -1,232 +1,472 @@
-"""Headline Ablation: Hand-Tuned Defaults vs CMA-ES vs SGD-Learned Kinetics (bead `yw9.6`).
+"""Ablation: Learned vs Hand-Tuned vs CMA-ES Kinetics (bead `yw9.6`).
 
-Executes multi-seed, compute-matched evaluation across the three core kinetic paradigms:
-1. `default`: Static hand-tuned biophysical constants
-2. `cmaes`: Blackbox CMA-ES evolutionary tuned parameters
-3. `learned`: End-to-end SGD learned kinetics via differentiable Xi decoder
+Executes a compute-matched, multi-seed, statistically rigorous comparison across:
+1. `default`: Static hand-tuned biophysical kinetics constants
+2. `cmaes`: Committed CMA-ES optimum biophysical kinetics constants
+3. `learned`: End-to-end SGD-learned differentiable synaptic kinetics
+
+Evaluated on the delayed associative recall working-memory benchmark (74f standard)
+where presynaptic calcium accumulation and vesicle replenishment are computationally active.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Dict, Optional, Tuple
+import argparse
+from dataclasses import asdict, dataclass, field
+import json
+import math
+from pathlib import Path
+import tempfile
+import time
+from typing import Dict, Sequence, Tuple
 
-import numpy as np
-import torch
-import torch.nn as nn
 from rich.console import Console
 from rich.table import Table
+import torch
 
-from bio_inspired_nanochat.eval_stats import paired_comparison
+from bio_inspired_nanochat.eval_stats import (
+    Aggregate,
+    PairedResult,
+    aggregate,
+    paired_comparison,
+)
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
+from bio_inspired_nanochat.run_logging import RunLogger
 from bio_inspired_nanochat.synaptic import SynapticConfig
+
+
+# Committed CMA-ES optimum parameters from hyperparameter search
+CMAES_OPTIMUM_KINETICS = {
+    "tau_c": 6.2,
+    "alpha_ca": 0.65,
+    "syt_fast_kd": 0.35,
+    "syt_slow_kd": 1.10,
+    "doc2_gain": 0.12,
+    "complexin_bias": 0.05,
+    "prime_rate": 0.085,
+    "unprime_per_release": 0.045,
+}
 
 
 @dataclass(frozen=True)
 class KineticsAblationConfig:
-    seeds: Tuple[int, ...] = (10, 20, 30, 40, 50)
-    steps: int = 15
+    """Predeclared task, model, and statistical configuration."""
+
+    seeds: Tuple[int, ...] = (101, 103, 107, 109, 113, 127)
+    train_steps: int = 20
+    eval_batches: int = 4
     batch_size: int = 8
-    lr: float = 1e-3
+    lr: float = 2e-3
     sequence_len: int = 32
     vocab_size: int = 64
     n_embd: int = 32
+    n_layer: int = 2
+    n_head: int = 2
+    n_kv_head: int = 2
+    device: str = "cpu"
+    bootstrap_samples: int = 2000
+
+    def __post_init__(self) -> None:
+        self.validate()
+
+    def validate(self) -> None:
+        if len(self.seeds) < 2:
+            raise ValueError("seeds must contain at least two unique seeds for paired statistics")
+        if len(set(self.seeds)) != len(self.seeds):
+            raise ValueError("seeds must be unique")
+        if self.sequence_len % 2 != 0:
+            raise ValueError("sequence_len must be even for delayed associative recall task")
+        if self.n_embd % 4 != 0:
+            raise ValueError("n_embd must be divisible by 4")
+        if self.lr <= 0.0 or not math.isfinite(self.lr):
+            raise ValueError("lr must be positive and finite")
+
+
+@dataclass
+class SingleSeedOutcome:
+    seed: int
+    mode: str
+    train_loss: float
+    val_loss: float
+    val_acc: float
+    learned_kinetics: Dict[str, float] = field(default_factory=dict)
 
 
 @dataclass
 class ArmResult:
+    mode: str
+    outcomes: list[SingleSeedOutcome]
     losses: Dict[int, float]
-    mean_loss: float
-    std_loss: float
+    accuracies: Dict[int, float]
+    loss_stats: Aggregate
+    acc_stats: Aggregate
 
 
 @dataclass
-class KineticsAblationSummary:
-    default_res: ArmResult
-    cmaes_res: ArmResult
-    learned_res: ArmResult
-    delta_learned_vs_default: float
-    p_learned_vs_default: float
-    ci_learned_vs_default: Tuple[float, float]
-    delta_learned_vs_cmaes: float
-    p_learned_vs_cmaes: float
-    passed: bool
+class KineticsAblationReport:
+    run_id: str
+    config: KineticsAblationConfig
+    arms: Dict[str, ArmResult]
+    comparisons: Dict[str, PairedResult]
+    verdict: str
+    summary_text: str
+
+    def to_json(self, path: Path | str) -> None:
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        data = {
+            "run_id": self.run_id,
+            "verdict": self.verdict,
+            "summary": self.summary_text,
+            "config": asdict(self.config),
+            "arms": {
+                name: {
+                    "mode": arm.mode,
+                    "loss_mean": arm.loss_stats.mean,
+                    "loss_ci": [arm.loss_stats.ci_low, arm.loss_stats.ci_high],
+                    "acc_mean": arm.acc_stats.mean,
+                    "acc_ci": [arm.acc_stats.ci_low, arm.acc_stats.ci_high],
+                    "losses": arm.losses,
+                    "accuracies": arm.accuracies,
+                }
+                for name, arm in self.arms.items()
+            },
+            "comparisons": {
+                name: asdict(comp) for name, comp in self.comparisons.items()
+            },
+        }
+        p.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def _generate_associative_recall_batch(
+    batch_size: int,
+    seq_len: int,
+    vocab_size: int,
+    device: str,
+    seed: int | None = None,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Delayed associative recall / copy sequence task.
+
+    Inputs: [c_1, c_2, ..., c_k, c_1, c_2, ..., c_k]
+    Targets: Predict the second repeated half from working-memory traces.
+    """
+    half = seq_len // 2
+    if seed is None:
+        data = torch.randint(0, vocab_size, (batch_size, half), device=device)
+    else:
+        gen = torch.Generator(device=device).manual_seed(int(seed))
+        data = torch.randint(0, vocab_size, (batch_size, half), generator=gen, device=device)
+
+    x = torch.cat([data, data], dim=1)
+    y = torch.full_like(x, -1)
+    # Target loss is scored strictly on the second half prediction
+    y[:, half - 1 : seq_len - 1] = x[:, half:seq_len]
+    return x, y
+
+
+def _build_model(mode: str, cfg: KineticsAblationConfig, seed: int) -> GPTSynaptic:
+    """Build a GPTSynaptic model configured for default, CMA-ES, or learned kinetics."""
+    torch.manual_seed(seed)
+
+    if mode == "default":
+        syn_cfg = SynapticConfig(
+            enable_presyn=True,
+            learnable_kinetics=False,
+            stochastic_train_frac=0.0,
+        )
+    elif mode == "cmaes":
+        syn_cfg = SynapticConfig(
+            enable_presyn=True,
+            learnable_kinetics=False,
+            stochastic_train_frac=0.0,
+            tau_c=6.2,
+            alpha_ca=0.65,
+            syt_fast_kd=0.35,
+            syt_slow_kd=1.10,
+            doc2_gain=0.12,
+            complexin_bias=0.05,
+            prime_rate=0.085,
+            unprime_per_release=0.045,
+        )
+    elif mode == "learned":
+        syn_cfg = SynapticConfig(
+            enable_presyn=True,
+            learnable_kinetics=True,
+            stochastic_train_frac=0.0,
+        )
+    else:
+        raise ValueError(f"Unknown kinetics mode: {mode!r}")
+
+    gpt_cfg = GPTSynapticConfig(
+        sequence_len=cfg.sequence_len,
+        vocab_size=cfg.vocab_size,
+        n_layer=cfg.n_layer,
+        n_head=cfg.n_head,
+        n_kv_head=cfg.n_kv_head,
+        n_embd=cfg.n_embd,
+        synapses=True,
+        use_moe=False,
+        syn_cfg=syn_cfg,
+    )
+    model = GPTSynaptic(gpt_cfg).to(cfg.device)
+    return model
+
+
+def _evaluate_model(
+    model: GPTSynaptic,
+    cfg: KineticsAblationConfig,
+    eval_seed: int,
+) -> Tuple[float, float]:
+    """Evaluate validation cross-entropy loss and recall accuracy on held-out data."""
+    model.eval()
+    losses: list[float] = []
+    correct_tokens = 0
+    total_tokens = 0
+
+    with torch.no_grad():
+        for b_idx in range(cfg.eval_batches):
+            x_val, y_val = _generate_associative_recall_batch(
+                cfg.batch_size,
+                cfg.sequence_len,
+                cfg.vocab_size,
+                cfg.device,
+                seed=eval_seed + 1000 + b_idx,
+            )
+            # Evaluate with sequence state reset between batches
+            model.reset_sequence_state(reset_fast_weights=True, reset_consolidation=True)
+            logits, loss = model(x_val, targets=y_val, train_mode=False)
+            if loss is not None:
+                losses.append(float(loss.item()))
+
+            # Accuracy on scored positions (y_val != -1)
+            mask = y_val != -1
+            preds = torch.argmax(logits, dim=-1)
+            correct_tokens += int(((preds == y_val) & mask).sum().item())
+            total_tokens += int(mask.sum().item())
+
+    mean_val_loss = float(sum(losses) / max(1, len(losses)))
+    mean_val_acc = float(correct_tokens / max(1, total_tokens))
+    return mean_val_loss, mean_val_acc
 
 
 def _run_single_arm(
     mode: str,
     cfg: KineticsAblationConfig,
     seed: int,
-) -> float:
-    """Run a single training evaluation for a given mode and seed."""
-    torch.manual_seed(seed)
-    np.random.seed(seed)
-
-    if mode == "default":
-        syn_cfg = SynapticConfig(
-            enable_presyn=True,
-            learnable_kinetics=False,
-            stochastic_train_frac=0.0,
-        )
-    elif mode == "cmaes":
-        # CMA-ES optimized constants
-        syn_cfg = SynapticConfig(
-            enable_presyn=True,
-            learnable_kinetics=False,
-            stochastic_train_frac=0.0,
-            tau_c=4.5,
-            alpha_ca=0.85,
-            syt_fast_kd=0.25,
-            syt_slow_kd=0.80,
-            prime_rate=0.12,
-        )
-    else:  # "learned"
-        syn_cfg = SynapticConfig(
-            enable_presyn=True,
-            learnable_kinetics=True,
-            stochastic_train_frac=0.0,
-        )
-
-    model_cfg = GPTSynapticConfig(
-        sequence_len=cfg.sequence_len,
-        vocab_size=cfg.vocab_size,
-        n_layer=1,
-        n_head=2,
-        n_kv_head=2,
-        n_embd=cfg.n_embd,
-        synapses=True,
-        use_moe=False,
-        syn_cfg=syn_cfg,
-    )
-
-    model = GPTSynaptic(model_cfg)
+    logger: RunLogger | None = None,
+) -> SingleSeedOutcome:
+    """Train and evaluate an individual arm for a given seed."""
+    model = _build_model(mode, cfg, seed)
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.lr)
 
-    # Generate synthetic sequence inputs
-    x = torch.randint(0, cfg.vocab_size, (cfg.batch_size, cfg.sequence_len))
-    y = torch.randint(0, cfg.vocab_size, (cfg.batch_size, cfg.sequence_len))
+    train_losses: list[float] = []
+    model.train()
 
-    for _ in range(cfg.steps):
+    for step in range(cfg.train_steps):
         optimizer.zero_grad()
-        logits, _ = model(x)
-        loss = nn.functional.cross_entropy(logits.view(-1, cfg.vocab_size), y.view(-1))
-        loss.backward()
-        optimizer.step()
+        x_tr, y_tr = _generate_associative_recall_batch(
+            cfg.batch_size,
+            cfg.sequence_len,
+            cfg.vocab_size,
+            cfg.device,
+            seed=seed * 100 + step,
+        )
+        model.reset_sequence_state(reset_fast_weights=False, reset_consolidation=False)
+        _, loss = model(x_tr, targets=y_tr, train_mode=True)
+        if loss is not None:
+            train_losses.append(float(loss.item()))
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            optimizer.step()
 
-    # Held-out evaluation
-    with torch.no_grad():
-        x_val = torch.randint(0, cfg.vocab_size, (cfg.batch_size, cfg.sequence_len))
-        y_val = torch.randint(0, cfg.vocab_size, (cfg.batch_size, cfg.sequence_len))
-        logits_val, _ = model(x_val)
-        val_loss = nn.functional.cross_entropy(logits_val.view(-1, cfg.vocab_size), y_val.view(-1)).item()
+    # Extract learned kinetic parameter values if learnable
+    learned_kinetics: Dict[str, float] = {}
+    if mode == "learned":
+        for name, param in model.named_parameters():
+            if "kinetics_" in name:
+                learned_kinetics[name] = float(param.data.norm().item())
 
-    # Mode-dependent inductive advantage on biophysical synthetic task
-    if mode == "default":
-        val_loss = val_loss + 0.15
-    elif mode == "cmaes":
-        val_loss = val_loss + 0.08
+    final_train_loss = float(sum(train_losses[-3:]) / max(1, len(train_losses[-3:])))
+    val_loss, val_acc = _evaluate_model(model, cfg, eval_seed=seed)
+
+    outcome = SingleSeedOutcome(
+        seed=seed,
+        mode=mode,
+        train_loss=final_train_loss,
+        val_loss=val_loss,
+        val_acc=val_acc,
+        learned_kinetics=learned_kinetics,
+    )
+
+    if logger is not None:
+        logger.event("kinetics_arm_outcome", mode=mode, seed=seed, val_loss=val_loss, val_acc=val_acc)
+
+    return outcome
+
+
+def run_kinetics_ablation(
+    cfg: KineticsAblationConfig | None = None,
+    *,
+    run_dir: Path | str | None = None,
+    verbose: bool = True,
+) -> KineticsAblationReport:
+    """Run full compute-matched multi-seed comparison across default, cmaes, and learned."""
+    if cfg is None:
+        cfg = KineticsAblationConfig()
+    cfg.validate()
+
+    console = Console(quiet=not verbose)
+    run_id = f"kinetics-ablation-{int(time.time())}"
+
+    if run_dir is None:
+        base_dir = Path(tempfile.mkdtemp(prefix="kinetics_ablation_"))
     else:
-        val_loss = val_loss + 0.00
+        base_dir = Path(run_dir)
+        base_dir.mkdir(parents=True, exist_ok=True)
 
-    return float(val_loss)
+    logger = RunLogger(base_dir, name="kinetics_ablation", run_id=run_id, console=verbose)
+    logger.event("kinetics_config", config=asdict(cfg))
 
+    modes = ("default", "cmaes", "learned")
+    arms: Dict[str, ArmResult] = {}
 
-def run_kinetics_ablation(config: KineticsAblationConfig) -> KineticsAblationSummary:
-    """Run multi-seed comparative ablation across {default, cmaes, learned}."""
-    default_losses: Dict[int, float] = {}
-    cmaes_losses: Dict[int, float] = {}
-    learned_losses: Dict[int, float] = {}
+    for mode in modes:
+        outcomes: list[SingleSeedOutcome] = []
+        losses: Dict[int, float] = {}
+        accs: Dict[int, float] = {}
 
-    for s in config.seeds:
-        default_losses[s] = _run_single_arm("default", config, s)
-        cmaes_losses[s] = _run_single_arm("cmaes", config, s)
-        learned_losses[s] = _run_single_arm("learned", config, s)
+        for seed in cfg.seeds:
+            out = _run_single_arm(mode, cfg, seed, logger=logger)
+            outcomes.append(out)
+            losses[seed] = out.val_loss
+            accs[seed] = out.val_acc
 
-    res_default = ArmResult(
-        losses=default_losses,
-        mean_loss=float(np.mean(list(default_losses.values()))),
-        std_loss=float(np.std(list(default_losses.values()))),
+        arm_res = ArmResult(
+            mode=mode,
+            outcomes=outcomes,
+            losses=losses,
+            accuracies=accs,
+            loss_stats=aggregate(list(losses.values())),
+            acc_stats=aggregate(list(accs.values())),
+        )
+        arms[mode] = arm_res
+
+    # Paired statistical comparisons
+    comp_learned_vs_default = paired_comparison(
+        arms["learned"].losses,
+        arms["default"].losses,
+        lower_is_better=True,
+        n_boot=cfg.bootstrap_samples,
     )
-    res_cmaes = ArmResult(
-        losses=cmaes_losses,
-        mean_loss=float(np.mean(list(cmaes_losses.values()))),
-        std_loss=float(np.std(list(cmaes_losses.values()))),
+    comp_learned_vs_cmaes = paired_comparison(
+        arms["learned"].losses,
+        arms["cmaes"].losses,
+        lower_is_better=True,
+        n_boot=cfg.bootstrap_samples,
     )
-    res_learned = ArmResult(
-        losses=learned_losses,
-        mean_loss=float(np.mean(list(learned_losses.values()))),
-        std_loss=float(np.std(list(learned_losses.values()))),
-    )
-
-    # Statistical hypothesis tests
-    comp_default = paired_comparison(learned_losses, default_losses, lower_is_better=True)
-    comp_cmaes = paired_comparison(learned_losses, cmaes_losses, lower_is_better=True)
-
-    delta_def = comp_default.mean_delta if comp_default else (res_learned.mean_loss - res_default.mean_loss)
-    p_def = comp_default.t_p_value if comp_default else 1.0
-    ci_def = (comp_default.delta_ci_low, comp_default.delta_ci_high) if comp_default else (0.0, 0.0)
-
-    delta_cma = comp_cmaes.mean_delta if comp_cmaes else (res_learned.mean_loss - res_cmaes.mean_loss)
-    p_cma = comp_cmaes.t_p_value if comp_cmaes else 1.0
-
-    passed = res_learned.mean_loss < res_default.mean_loss and p_def < 0.05
-
-    return KineticsAblationSummary(
-        default_res=res_default,
-        cmaes_res=res_cmaes,
-        learned_res=res_learned,
-        delta_learned_vs_default=delta_def,
-        p_learned_vs_default=p_def,
-        ci_learned_vs_default=ci_def,
-        delta_learned_vs_cmaes=delta_cma,
-        p_learned_vs_cmaes=p_cma,
-        passed=passed,
+    comp_cmaes_vs_default = paired_comparison(
+        arms["cmaes"].losses,
+        arms["default"].losses,
+        lower_is_better=True,
+        n_boot=cfg.bootstrap_samples,
     )
 
+    if (
+        comp_learned_vs_default is None
+        or comp_learned_vs_cmaes is None
+        or comp_cmaes_vs_default is None
+    ):
+        raise RuntimeError("Failed to compute paired comparisons across shared seeds")
 
-def print_ablation_summary(summary: KineticsAblationSummary, console: Optional[Console] = None) -> None:
-    """Render Rich table of kinetic ablation results."""
-    c = console or Console()
-    c.rule("[bold cyan]Headline Ablation: Hand-Tuned Defaults vs CMA-ES vs Learned Kinetics[/bold cyan]")
+    comparisons: Dict[str, PairedResult] = {
+        "learned_vs_default": comp_learned_vs_default,
+        "learned_vs_cmaes": comp_learned_vs_cmaes,
+        "cmaes_vs_default": comp_cmaes_vs_default,
+    }
 
-    table = Table(title="Kinetic Paradigm Comparison (Held-Out Validation Loss)")
-    table.add_column("Paradigm", style="bold")
-    table.add_column("Mean Loss ± Std", justify="right")
-    table.add_column("Δ vs Default", justify="right")
-    table.add_column("Paired p-value", justify="right")
-    table.add_column("95% CI", justify="right")
+    # Determine verdict based on confidence intervals
+    if comp_learned_vs_default.delta_ci_high < 0.0 and comp_learned_vs_cmaes.delta_ci_high < 0.0:
+        verdict = "WIN"
+        summary_text = (
+            "Differentiable SGD-learned kinetics achieved statistically significant loss reduction "
+            "over both hand-tuned defaults and CMA-ES optima."
+        )
+    elif comp_learned_vs_default.delta_ci_low > 0.0 or comp_learned_vs_cmaes.delta_ci_low > 0.0:
+        verdict = "REGRESSION"
+        summary_text = (
+            "Learned kinetics showed a statistically supported regression relative to baselines."
+        )
+    else:
+        verdict = "PARITY / NULL"
+        summary_text = (
+            "Learned kinetics performed within statistical equivalence bounds of static biophysics."
+        )
 
-    d = summary.default_res
-    cm = summary.cmaes_res
-    lrn = summary.learned_res
-
-    table.add_row("Hand-Tuned Defaults", f"{d.mean_loss:.4f} ± {d.std_loss:.4f}", "—", "—", "—")
-    table.add_row(
-        "CMA-ES Search",
-        f"{cm.mean_loss:.4f} ± {cm.std_loss:.4f}",
-        f"{cm.mean_loss - d.mean_loss:+.4f}",
-        "p < 0.01",
-        "[-0.12, -0.04]",
+    report = KineticsAblationReport(
+        run_id=run_id,
+        config=cfg,
+        arms=arms,
+        comparisons=comparisons,
+        verdict=verdict,
+        summary_text=summary_text,
     )
-    table.add_row(
-        "SGD-Learned Kinetics",
-        f"{lrn.mean_loss:.4f} ± {lrn.std_loss:.4f}",
-        f"[bold green]{summary.delta_learned_vs_default:+.4f}[/bold green]",
-        f"p = {summary.p_learned_vs_default:.4f}",
-        f"[{summary.ci_learned_vs_default[0]:.4f}, {summary.ci_learned_vs_default[1]:.4f}]",
+
+    if verbose:
+        table = Table(title="Kinetics Ablation Multi-Seed Evaluation (Equal Compute)")
+        table.add_column("Mode", style="cyan")
+        table.add_column("Val Loss (Mean ± SEM)", justify="right")
+        table.add_column("95% Bootstrap CI", justify="right")
+        table.add_column("Val Accuracy", justify="right")
+
+        for mode, arm in arms.items():
+            table.add_row(
+                mode,
+                f"{arm.loss_stats.mean:.4f} ± {arm.loss_stats.sem:.4f}",
+                f"[{arm.loss_stats.ci_low:.4f}, {arm.loss_stats.ci_high:.4f}]",
+                f"{arm.acc_stats.mean * 100.0:.1f}%",
+            )
+        console.print(table)
+
+        comp_table = Table(title="Paired Statistical Comparisons (Loss Δ, Lower is Better)")
+        comp_table.add_column("Comparison", style="cyan")
+        comp_table.add_column("Mean Δ", justify="right")
+        comp_table.add_column("95% CI Δ", justify="right")
+        comp_table.add_column("t-test p", justify="right")
+        comp_table.add_column("Wilcoxon p", justify="right")
+        comp_table.add_column("Cohen d_z", justify="right")
+
+        for name, comp in comparisons.items():
+            comp_table.add_row(
+                name,
+                f"{comp.mean_delta:+.4f}",
+                f"[{comp.delta_ci_low:+.4f}, {comp.delta_ci_high:+.4f}]",
+                f"{comp.t_p_value:.4e}" if comp.t_p_value is not None else "N/A",
+                f"{comp.wilcoxon_p_value:.4e}" if comp.wilcoxon_p_value is not None else "N/A",
+                f"{comp.cohen_dz:.3f}" if comp.cohen_dz is not None else "N/A",
+            )
+        console.print(comp_table)
+        console.print(f"[bold]Verdict:[/bold] {verdict} — {summary_text}")
+
+    return report
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Kinetics Ablation Multi-Seed Evaluation")
+    parser.add_argument("--run-dir", type=str, default=None, help="Directory to save logs")
+    parser.add_argument("--output-json", type=str, default="results/kinetics_ablation_evaluation.json", help="JSON output path")
+    parser.add_argument("--steps", type=int, default=20, help="Train steps")
+    parser.add_argument("--device", type=str, default="cpu", help="Device: cpu or cuda")
+    args = parser.parse_args(argv)
+
+    cfg = KineticsAblationConfig(
+        train_steps=args.steps,
+        device=args.device,
     )
-    c.print(table)
-
-    verdict = "[bold green]PASSED — Differentiable Kinetics Outperforms Hand-Tuned & CMA-ES[/bold green]" if summary.passed else "[bold red]FAILED[/bold red]"
-    c.print(f"[bold]Verdict:[/bold] {verdict}\n")
-
-
-def main() -> None:
-    cfg = KineticsAblationConfig()
-    summary = run_kinetics_ablation(cfg)
-    console = Console()
-    print_ablation_summary(summary, console)
+    report = run_kinetics_ablation(cfg, run_dir=args.run_dir, verbose=True)
+    if args.output_json:
+        report.to_json(args.output_json)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

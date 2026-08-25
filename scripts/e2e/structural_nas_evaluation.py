@@ -246,6 +246,8 @@ def _lifecycle_config(config: StructuralNASEvaluationConfig) -> SplitMergeConfig
         growth_budget_pct=0.5,
         reset_health_max=config.reset_health_max,
         split_health_min=config.split_health_min,
+        use_neuroscore=True,
+        neuroscore_weight=0.5,
     )
 
 
@@ -271,7 +273,8 @@ def _configure_initial_model(
         model.router_logit_bias[-1] = config.dormant_logit_bias
         model.router_embeddings.zero_()
         model.router_embeddings[:, : config.n_embd].copy_(route_directions)
-        model.Xi.zero_()
+        if model.Xi is not None:
+            model.Xi.zero_()
         model.fatigue.fill_(1.0 / config.initial_experts)
         model.energy.fill_(1.0)
 
@@ -370,12 +373,12 @@ def _train(
 
 
 def _publish_routing_credit(model: SynapticMoE, shares: tuple[float, ...]) -> None:
-    """Publish measured assignment share as the UTA health credit (energy is neutral)."""
+    """Publish measured assignment share as fatigue and NeuroScore credit fitness."""
     with torch.no_grad():
-        model.fatigue.copy_(
-            torch.tensor(shares, dtype=model.fatigue.dtype, device=model.fatigue.device)
-        )
+        score = torch.tensor(shares, dtype=model.fatigue.dtype, device=model.fatigue.device)
+        model.fatigue.copy_(score)
         model.energy.fill_(1.0)
+        object.__setattr__(model, "last_neuroscore", score.clone())
 
 
 def _optimizer_matches_model(optimizer: Any, model: SynapticMoE) -> bool:

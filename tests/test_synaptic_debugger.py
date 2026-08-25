@@ -1,5 +1,6 @@
 """Tests for Living-Model Synaptic Debugger (bead `re4e.14`)."""
 
+import pytest
 import torch
 
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
@@ -96,3 +97,39 @@ def test_debugger_step_over_execution():
     assert frame2.step == 1
     assert debugger.current_tokens.shape[1] == 4
 
+
+def test_energy_history_records_real_telemetry_not_constant():
+    """uta-review regression: the energy trajectory used to read nonexistent
+    telemetry keys ('global'/'energy') and silently recorded a constant 1.0."""
+    from bio_inspired_nanochat.synaptic_debugger import _mean_bio_energy
+
+    model = _make_model()
+    debugger = SynapticDebugger(model)
+    prompt = torch.randint(0, 32, (1, 3))
+    debugger.run_until_breakpoint(prompt, max_tokens=2)
+
+    assert len(debugger._energy_history) == 2
+    telem = model.bio_telemetry()
+    expected = _mean_bio_energy(telem)
+    assert expected is not None
+    assert debugger._energy_history[-1] == pytest.approx(expected)
+
+
+def test_step_over_decodes_incrementally_through_kv_cache():
+    """Regression: step_over re-forwarded the whole prefix each call, re-applying
+    online plasticity to every prefix token (O(k^2) contamination). It must feed
+    only the new token through the live KV cache instead."""
+    model = _make_model()
+    debugger = SynapticDebugger(model)
+    prompt = torch.randint(0, 32, (1, 3))
+    debugger.run_until_breakpoint(prompt, max_tokens=1)
+
+    cache = debugger._kv_cache
+    assert cache is not None
+    pos_after_first = cache.get_pos()
+    assert pos_after_first == 4  # 3 prompt tokens + 1 generated
+
+    frame = debugger.step_over()
+    assert frame is not None
+    assert cache.get_pos() == pos_after_first + 1
+    assert debugger.current_tokens.shape[1] == pos_after_first + 1

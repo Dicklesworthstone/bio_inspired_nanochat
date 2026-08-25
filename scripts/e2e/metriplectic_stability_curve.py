@@ -49,6 +49,22 @@ from bio_inspired_nanochat.run_logging import RunLogger
 from bio_inspired_nanochat.torch_imports import Tensor, torch
 
 
+def _json_safe(v: Any) -> Any:
+    """Map non-finite floats to null so allow_nan=False writers never crash on
+    legitimate ±inf statistics (e.g. zero-variance paired effect sizes)."""
+    if isinstance(v, float):
+        return v if math.isfinite(v) else None
+    if isinstance(v, dict):
+        return {k: _json_safe(x) for k, x in v.items()}
+    if isinstance(v, (list, tuple)):
+        return [_json_safe(x) for x in v]
+    return v
+
+
+def _dump_report_json(report: Any) -> str:
+    return json.dumps(_json_safe(report.to_dict()), indent=2, sort_keys=True, allow_nan=False)
+
+
 @dataclass(frozen=True)
 class StabilitySweepConfig:
     """Deterministic controls for the matched fixed-horizon sweep."""
@@ -648,7 +664,7 @@ def run_stability_sweep(
             proof_obligation_verified=proof_obligation.verified,
         )
         report_path.write_text(
-            json.dumps(report.to_dict(), indent=2, sort_keys=True, allow_nan=False) + "\n",
+            _dump_report_json(report) + "\n",
             encoding="utf-8",
         )
     return report
@@ -864,7 +880,7 @@ def run_statistical_stability_sweep(
             registry_path=registry_path_str,
         )
         report_path.write_text(
-            json.dumps(report.to_dict(), indent=2, sort_keys=True, allow_nan=False) + "\n",
+            _dump_report_json(report) + "\n",
             encoding="utf-8",
         )
         if registry_path_str is not None:

@@ -104,7 +104,9 @@ def test_validate_all_fast_suite_run(tmp_path: Path):
 def test_validate_all_cli_entrypoint(tmp_path: Path):
     """The CLI entrypoint works with arguments."""
     ret = validate_main([
-        "--suite", "fast",
+        "--suite", "unit",
         "--out-dir", str(tmp_path),
     ])
-    assert ret == (0 if (tmp_path / "validation_report_latest.json").exists() else 1)
+    assert ret == 0
+    assert (tmp_path / "validation_report_latest.json").exists()
+    assert (tmp_path / "validation_report_latest.md").exists()

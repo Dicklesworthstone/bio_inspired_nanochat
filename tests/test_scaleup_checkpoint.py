@@ -50,6 +50,66 @@ def test_atomic_write_leaves_no_tmp_and_load_roundtrips(tmp_path):
     assert meta2["model_config"]["vocab_size"] == 97
 
 
+def test_save_checkpoint_does_not_mutate_caller_metadata(tmp_path):
+    metadata = {"model_config": {"vocab_size": 97}}
+    original = copy.deepcopy(metadata)
+
+    save_checkpoint(
+        str(tmp_path),
+        5,
+        {"layer.pre.calcium": torch.zeros(1)},
+        None,
+        metadata,
+    )
+
+    assert metadata == original
+    saved = cm.load_checkpoint_metadata(str(tmp_path), 5)
+    assert saved["synapses"] is True
+
+
+def test_find_last_step_ignores_malformed_model_filenames(tmp_path):
+    (tmp_path / "model_latest.pt").write_bytes(b"unrelated")
+    (tmp_path / "model_123.pt").write_bytes(b"not a padded checkpoint")
+    save_checkpoint(
+        str(tmp_path),
+        42,
+        {"w": torch.zeros(1)},
+        None,
+        {"model_config": {}},
+    )
+
+    assert cm.find_last_step(str(tmp_path)) == 42
+
+
+def test_find_last_step_ignores_model_only_partial_checkpoint(tmp_path):
+    save_checkpoint(
+        str(tmp_path),
+        41,
+        {"w": torch.zeros(1)},
+        None,
+        {"model_config": {}},
+    )
+    (tmp_path / "model_000042.pt").write_bytes(b"complete-file-but-incomplete-checkpoint")
+
+    assert cm.find_last_step(str(tmp_path)) == 41
+
+    (tmp_path / "meta_000041.json").rename(tmp_path / "meta_000041.json.saved")
+    with pytest.raises(FileNotFoundError, match="No complete checkpoints"):
+        cm.find_last_step(str(tmp_path))
+
+
+def test_load_checkpoint_metadata_reports_malformed_json_path(tmp_path):
+    metadata_path = tmp_path / "meta_000003.json"
+    metadata_path.write_text("{not-json", encoding="utf-8")
+
+    with pytest.raises(ValueError, match=str(metadata_path)):
+        cm.load_checkpoint_metadata(str(tmp_path), 3)
+
+    metadata_path.write_text("[]", encoding="utf-8")
+    with pytest.raises(ValueError, match="must be a JSON object"):
+        cm.load_checkpoint_metadata(str(tmp_path), 3)
+
+
 def test_rng_capture_restore_is_reproducible():
     torch.manual_seed(0)
     _ = torch.randn(10)  # advance RNG
@@ -58,6 +118,19 @@ def test_rng_capture_restore_is_reproducible():
     restore_rng_state(state)
     b = torch.randn(5)
     assert torch.equal(a, b), "restored RNG must reproduce the same draws"
+
+
+def test_restore_rng_state_rejects_malformed_numpy_state():
+    torch.manual_seed(123)
+    state_before = torch.get_rng_state().clone()
+    replacement = torch.Generator().manual_seed(999).get_state()
+
+    with pytest.raises(RuntimeError, match="NumPy RNG state"):
+        restore_rng_state(
+            {"torch": replacement, "numpy": {"type": "MT19937"}}
+        )
+
+    assert torch.equal(torch.get_rng_state(), state_before)
 
 
 def test_heterogeneous_moe_topology_roundtrips_strictly(tmp_path, monkeypatch):
@@ -120,6 +193,20 @@ def test_heterogeneous_moe_topology_roundtrips_strictly(tmp_path, monkeypatch):
     ]
     assert counts == [2, 3]
     assert loaded.state_dict().keys() == model.state_dict().keys()
+
+    class _WrongTokenizer:
+        @staticmethod
+        def get_vocab_size():
+            return 96
+
+    monkeypatch.setattr(cm, "get_tokenizer", lambda: _WrongTokenizer())
+    with pytest.raises(ValueError, match="vocabulary mismatch"):
+        cm.build_model(str(tmp_path), 4, torch.device("cpu"), "eval")
+
+
+def test_build_model_rejects_invalid_phase_before_loading(tmp_path):
+    with pytest.raises(ValueError, match="phase must be"):
+        cm.build_model(str(tmp_path), 1, torch.device("cpu"), "inference")
 
 
 def test_prune_keeps_last_k_and_best(tmp_path):

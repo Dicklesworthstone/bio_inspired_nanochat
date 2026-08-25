@@ -1,5 +1,8 @@
-"""Tests for fMRI Free-Energy Landscape & Attractor Dynamics Visualizer (bead `r00r.10`)."""
+"""Tests for the illustrative hidden-state landscape visualizer (bead `r00r.10`)."""
 
+import math
+
+import pytest
 import torch
 
 from bio_inspired_nanochat.fmri_attractor_viz import (
@@ -52,3 +55,49 @@ def test_plotly_landscape_dict_builder():
     assert "trajectory" in p_dict
     assert "basins" in p_dict
     assert len(p_dict["trajectory"]["x"]) == 4
+
+
+def test_projection_without_basins_reports_no_assignment():
+    """An empty landscape must not fabricate a nearest basin or global minimum."""
+    proj = FreeEnergyLandscapeProjector(num_basins=0)
+    traj = proj.project_hidden_states(torch.randn(3, 8))
+
+    assert proj.basins == []
+    assert all(point.nearest_basin_id is None for point in traj)
+    proj.log_trajectory(traj)
+
+
+def test_projector_rejects_invalid_configuration_and_hidden_states():
+    with pytest.raises(ValueError, match="num_basins"):
+        FreeEnergyLandscapeProjector(num_basins=-1)
+    with pytest.raises(ValueError, match="num_basins"):
+        FreeEnergyLandscapeProjector(num_basins=5)
+    with pytest.raises(ValueError, match="grid_res"):
+        FreeEnergyLandscapeProjector(grid_res=1)
+
+    projector = FreeEnergyLandscapeProjector()
+    with pytest.raises(ValueError, match="singleton batch"):
+        projector.project_hidden_states(torch.randn(2, 3, 8))
+    with pytest.raises(ValueError, match="non-empty shape"):
+        projector.project_hidden_states(torch.empty(0, 8))
+    with pytest.raises(ValueError, match="finite values"):
+        projector.project_hidden_states(torch.tensor([[1.0, math.nan]]))
+    for invalid_span in (0.0, -1.0, math.nan, math.inf):
+        with pytest.raises(ValueError, match="span"):
+            projector.compute_surface_grid(span=invalid_span)
+    with pytest.raises(ValueError, match="energy coordinates"):
+        projector.compute_energy_at(math.nan, 0.0)
+
+
+def test_projected_prefix_does_not_move_when_future_states_are_appended():
+    projector = FreeEnergyLandscapeProjector()
+    prefix = torch.randn(3, 8)
+    extended = torch.cat([prefix, torch.full((1, 8), 100.0)], dim=0)
+
+    prefix_trajectory = projector.project_hidden_states(prefix)
+    extended_trajectory = projector.project_hidden_states(extended)
+
+    for before, after in zip(prefix_trajectory, extended_trajectory[: len(prefix_trajectory)]):
+        assert before.coord_2d == pytest.approx(after.coord_2d)
+        assert before.free_energy == pytest.approx(after.free_energy)
+        assert before.nearest_basin_id == after.nearest_basin_id

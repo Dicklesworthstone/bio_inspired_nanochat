@@ -134,6 +134,11 @@ SUBSYSTEM: dict[str, str] = {
     "bdnf_gamma": "postsynaptic",
     "bdnf_hebb_accumulate": "postsynaptic",
     "bdnf_max": "postsynaptic",
+    "enable_stdp": "stdp",
+    "stdp_a_plus": "stdp",
+    "stdp_a_minus": "stdp",
+    "stdp_tau_plus": "stdp",
+    "stdp_tau_minus": "stdp",
     "bistable_latch": "latch",
     "latch_ltd_thr": "latch",
     "latch_input_gain": "latch",
@@ -260,6 +265,8 @@ def collect_reads(
             if stripped.startswith("#"):
                 continue
             for f in fields:
+                if f not in line:
+                    continue
                 accepted = False
                 if is_rust:
                     accepted = bool(rs_res[f].search(line))

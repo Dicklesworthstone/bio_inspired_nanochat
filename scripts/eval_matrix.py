@@ -437,8 +437,9 @@ def _val_loss_ppl_ece(
             valid = targets_flat >= 0
             if valid.any():
                 losses.append(loss_flat[valid].mean())
-            else:
-                losses.append(torch.tensor(float("nan"), device=logits.device))
+            # All-masked batch (every target is ignore_index): contribute NOTHING
+            # rather than a NaN — one degenerate batch used to poison the entire
+            # run's val_loss/val_ppl via the later stack().mean().
 
             # ECE (optional): use max prob and correctness per token.
             probs = torch.softmax(logits_flat, dim=-1)
@@ -696,11 +697,22 @@ def _checkpoint_recipe_stats(
     train_loss = float(smooth_loss) if smooth_loss is not None else None
     return requested, processed, walltime, throughput, train_loss
 
-
 def _write_jsonl(path: Path, record: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    # Strict JSON: non-finite floats (NaN/Inf from degraded rows) become null so
+    # the artifact stays parseable by jq/strict parsers exactly when it is most
+    # needed (debugging a degraded run). Mirrors eval_stats' CLI writer.
+    def _strict(v: Any) -> Any:
+        if isinstance(v, float) and not math.isfinite(v):
+            return None
+        if isinstance(v, dict):
+            return {k: _strict(x) for k, x in v.items()}
+        if isinstance(v, (list, tuple)):
+            return [_strict(x) for x in v]
+        return v
+
     with path.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(record, sort_keys=True) + "\n")
+        f.write(json.dumps(_strict(record), sort_keys=True, allow_nan=False) + "\n")
 
 
 def _append_csv(path: Path, *, fieldnames: tuple[str, ...], row: dict[str, Any]) -> None:

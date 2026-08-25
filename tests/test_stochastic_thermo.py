@@ -340,18 +340,33 @@ def test_integral_ft_closed_form_no_overflow_at_extreme_drive():
 
 def test_empirical_tur_and_monitor_reject_degenerate_batches():
     # A single-sample (or zero-variance) batch makes Var(J) an unreliable estimate that would read as a
-    # spurious "TUR violation" of a theorem; empirical_tur must refuse it, and the monitor must treat it
-    # as non-informative (satisfied), never a violation. An empty batch is rejected outright.
+    # spurious "TUR violation" of a theorem; empirical_tur must refuse it, and the monitor must treat
+    # it as NON-INFORMATIVE: never a violation, but also never vacuous positive evidence.
+    # An empty batch is rejected outright.
     rates = st.rates_from_release(p_release=0.4, rec_rate=0.06, pool=6.0)
     with pytest.raises(ValueError):
         st.empirical_tur(np.array([3.0]), 1.0)              # n = 1
     mon = st.StochasticThermoMonitor()
-    mon.record(np.array([3.0]), rates)                      # degenerate batch ⟹ non-informative
-    mon.record(np.array([2.0, 2.0, 2.0]), rates)            # zero-variance ⟹ non-informative
-    assert mon.all_currents_satisfy_tur(), "degenerate batches must NOT register a false TUR violation"
-    mon.assert_tur()                                        # must not raise
+    mon.record(np.array([3.0]), rates)                      # degenerate ⟹ untestable
+    mon.record(np.array([2.0, 2.0, 2.0]), rates)            # zero-variance ⟹ untestable
+    assert all(r.tur_satisfied for r in mon.records), "degenerate batches must NOT register a false TUR violation"
+    assert all(not r.tur_testable for r in mon.records)
+    assert not mon.all_currents_satisfy_tur(), "all-degenerate history carries NO TUR evidence — must not pass"
+    with pytest.raises(AssertionError, match="No testable TUR batches"):
+        mon.assert_tur()                                    # loud, not a vacuous pass
     with pytest.raises(ValueError):
         mon.record(np.array([]), rates)                     # empty batch rejected
+
+
+def test_tur_predicate_passes_on_mixed_history_with_testable_batch():
+    rates = st.rates_from_release(p_release=0.4, rec_rate=0.06, pool=6.0)
+    rng = np.random.default_rng(7)
+    mon = st.StochasticThermoMonitor()
+    mon.record(np.array([2.0, 2.0]), rates)                 # degenerate
+    good = np.repeat(rng.normal(1.0, 0.05, 64), 1) + 0.001 * rng.normal(size=64)
+    rec = mon.record(good + 2.0, rates)                     # testable batch
+    if rec.tur_satisfied:
+        assert mon.all_currents_satisfy_tur()
 
 
 def test_crooks_calibration_handles_min_count_zero():

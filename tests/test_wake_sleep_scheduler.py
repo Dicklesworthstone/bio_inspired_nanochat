@@ -1,9 +1,13 @@
 """Tests for Wake/Sleep Scheduler in training and inference loops (bead `cel.5`)."""
 
+import math
+
+import pytest
 import torch
 
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
 from bio_inspired_nanochat.sleep_consolidation import (
+    PrioritizedReplayBuffer,
     WakeSleepConfig,
     WakeSleepScheduler,
 )
@@ -65,3 +69,33 @@ def test_scheduler_disabled_flag():
     rep = scheduler.step_training(step_idx=10, tokens=torch.randint(0, 32, (2, 8)), step_loss=2.0)
     assert rep is None
     assert scheduler.on_session_end() is None
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "match"),
+    [
+        ({"sleep_every_n_steps": 0}, "sleep_every_n_steps"),
+        ({"sleep_duration_steps": -1}, "sleep_duration_steps"),
+        ({"surprise_threshold": math.nan}, "surprise_threshold"),
+        ({"surprise_threshold": -0.1}, "surprise_threshold"),
+        ({"enabled": 1}, "enabled"),
+        ({"consolidate_on_session_end": 1}, "consolidate_on_session_end"),
+    ],
+)
+def test_scheduler_rejects_invalid_configuration(kwargs, match):
+    with pytest.raises(ValueError, match=match):
+        WakeSleepConfig(**kwargs)
+
+
+def test_scheduler_preserves_empty_injected_buffer_and_validates_step_inputs():
+    model = _make_model()
+    buffer = PrioritizedReplayBuffer(capacity=2)
+    scheduler = WakeSleepScheduler(model=model, buffer=buffer)
+
+    assert scheduler.buffer is buffer
+    with pytest.raises(ValueError, match="step_idx"):
+        scheduler.step_training(-1, torch.ones(2, dtype=torch.long), 1.0)
+    with pytest.raises(ValueError, match="step_loss"):
+        scheduler.step_training(1, torch.ones(2, dtype=torch.long), math.nan)
+    with pytest.raises(ValueError, match="step_loss"):
+        scheduler.step_training(1, torch.ones(2, dtype=torch.long), -0.1)
