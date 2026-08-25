@@ -31,9 +31,9 @@ from bio_inspired_nanochat.working_memory_api import (
 class WorkingMemoryDemoResult:
     """Machine-readable evidence that a neural-memory write changed generation."""
 
-    baseline_token_id: int
-    injected_token_id: int
-    target_token_id: int
+    baseline_idx: int
+    injected_idx: int
+    target_idx: int
     predicted_margin: float
     observed_margin: float
     margin_error: float
@@ -42,21 +42,21 @@ class WorkingMemoryDemoResult:
 
     @property
     def baseline_token(self) -> int:
-        return self.baseline_token_id
+        return self.baseline_idx
 
     @property
     def injected_token(self) -> int:
-        return self.injected_token_id
+        return self.injected_idx
 
     @property
     def target_token(self) -> int:
-        return self.target_token_id
+        return self.target_idx
 
     @property
     def passed(self) -> bool:
         return (
-            self.baseline_token_id != self.target_token_id
-            and self.injected_token_id == self.target_token_id
+            self.baseline_idx != self.target_idx
+            and self.injected_idx == self.target_idx
             and self.predicted_margin > 0.0
             and self.margin_error < 1e-4
         )
@@ -64,9 +64,9 @@ class WorkingMemoryDemoResult:
     def to_dict(self) -> dict[str, int | float | str | bool]:
         return {
             "passed": self.passed,
-            "baseline_token": self.baseline_token_id,
-            "injected_token": self.injected_token_id,
-            "target_token": self.target_token_id,
+            "baseline_token": self.baseline_idx,
+            "injected_token": self.injected_idx,
+            "target_token": self.target_idx,
             "predicted_margin": self.predicted_margin,
             "observed_margin": self.observed_margin,
             "margin_error": self.margin_error,
@@ -192,9 +192,9 @@ def run_demo(run_dir: str | Path, *, seed: int = 19) -> WorkingMemoryDemoResult:
         margin_error = abs(predicted_margin - observed_margin)
 
         result = WorkingMemoryDemoResult(
-            baseline_token=baseline_token,
-            injected_token=injected_token,
-            target_token=target_token,
+            baseline_idx=baseline_token,
+            injected_idx=injected_token,
+            target_idx=target_token,
             predicted_margin=predicted_margin,
             observed_margin=observed_margin,
             margin_error=margin_error,

@@ -453,15 +453,16 @@ def run_compiled_lean_audit(
             text=True,
             timeout=timeout_seconds,
         )
-    except FileNotFoundError:
+    except OSError as exc:
+        return_code = 127 if isinstance(exc, FileNotFoundError) else 126
         Console(stderr=True).print(
             Panel(
-                f"compiled Lean audit executable was not found: {lean_command[0]}",
+                f"could not launch compiled Lean audit via {lean_command[0]}: {exc}",
                 title="Formal feedback unavailable",
                 style="red",
             )
         )
-        return 127
+        return return_code
     except subprocess.TimeoutExpired:
         Console(stderr=True).print(
             Panel(

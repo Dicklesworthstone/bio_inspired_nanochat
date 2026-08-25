@@ -250,3 +250,25 @@ def test_compiled_audit_propagates_unresolved_theorem_failure(tmp_path, monkeypa
     monkeypatch.setattr("scripts.formal_feedback.subprocess.run", unresolved)
 
     assert run_compiled_lean_audit(report, repo_root=tmp_path) == 1
+
+
+@pytest.mark.parametrize(
+    ("launch_error", "expected_status"),
+    [
+        (FileNotFoundError("lake is absent"), 127),
+        (PermissionError(13, "lake is not executable"), 126),
+    ],
+)
+def test_compiled_audit_reports_launch_failures_without_traceback(
+    tmp_path, monkeypatch, launch_error, expected_status
+):
+    _, _, manifest = _contract(tmp_path)
+    _write_manifest(manifest, [_record(tmp_path, cycle_id="current")])
+    report = validate_manifest(manifest, repo_root=tmp_path)
+
+    def unavailable(*_args, **_kwargs):
+        raise launch_error
+
+    monkeypatch.setattr("scripts.formal_feedback.subprocess.run", unavailable)
+
+    assert run_compiled_lean_audit(report, repo_root=tmp_path) == expected_status
