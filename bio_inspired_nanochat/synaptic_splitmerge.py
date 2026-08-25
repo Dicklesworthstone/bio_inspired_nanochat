@@ -1142,7 +1142,7 @@ class HomeostasisGuard:
             ramps = guard._ramps.get(pos)
             if not ramps or not update_mem:
                 return
-            bias = cast(Tensor, module.router_logit_bias)
+            bias = module.router_logit_bias
             base = guard._baseline[pos]
             bias.copy_(base)
             n = guard.cfg.gate_ramp_forwards
@@ -1170,7 +1170,7 @@ class HomeostasisGuard:
                 return
             # uta.6: hold the metabolic floor at the END of every guarded forward
             # so a collapsed expert cannot drag health into winner-take-all routing.
-            cast(Tensor, module.energy).clamp_min_(guard.cfg.energy_floor)
+            module.energy.clamp_min_(guard.cfg.energy_floor)
 
         return _post_hook
 
@@ -1188,8 +1188,8 @@ class HomeostasisGuard:
         if not self.cfg.homeostasis_guards:
             return
         with torch.no_grad():
-            self._baseline[layer_pos] = cast(Tensor, layer.router_logit_bias).detach().clone()
-            cast(Tensor, layer.energy).clamp_min_(self.cfg.energy_floor)
+            self._baseline[layer_pos] = layer.router_logit_bias.detach().clone()
+            layer.energy.clamp_min_(self.cfg.energy_floor)
         ramps = self._ramps.setdefault(layer_pos, {})
         for child, parent in zip(children, parents):
             ramps[int(child)] = [0, int(parent)]
