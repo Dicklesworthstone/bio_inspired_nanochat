@@ -55,7 +55,7 @@ from bio_inspired_nanochat.stochastic_thermo import (
     PredictiveThermoEvidence,
     predictive_distribution_verdict,
 )
-from bio_inspired_nanochat.synaptic import SynapticConfig
+from bio_inspired_nanochat.synaptic import SynapticConfig, SynapticGranularity
 from bio_inspired_nanochat.tropical_certificate import (
     CertificateScope,
     GeometryScope,
@@ -75,6 +75,9 @@ _REQUIRED_GATE_KEYS = (
     "composition",
 )
 _SUPPORTED_PREDICTIVE_MODES = frozenset({"straight_through", "gumbel_sigmoid_ste"})
+_SUPPORTED_SYNAPTIC_GRANULARITIES = frozenset(
+    member.value for member in SynapticGranularity
+)
 _PREDICTIVE_ALPHA = 0.05
 _PREDICTIVE_BOOTSTRAP_SAMPLES = 10_000
 _PREDICTIVE_BOOTSTRAP_SEED = 20260824
@@ -2680,6 +2683,11 @@ def _synaptic_config_schema_errors(cfg: SynapticConfig) -> list[str]:
                 except (OverflowError, ValueError):
                     valid = False
             expected = f"finite float or safe integer <= {_MAX_SAFE_INTEGER}"
+        elif isinstance(default, SynapticGranularity):
+            valid = type(value) is SynapticGranularity or (
+                type(value) is str and value in _SUPPORTED_SYNAPTIC_GRANULARITIES
+            )
+            expected = "one of " + ", ".join(sorted(_SUPPORTED_SYNAPTIC_GRANULARITIES))
         elif type(default) is str:
             valid = type(value) is str
             expected = "string"
@@ -2750,6 +2758,15 @@ def _synaptic_config_from_dict(payload: Mapping[str, Any]) -> SynapticConfig:
                 value,
                 f"synaptic_config.{name}",
             )
+        elif isinstance(default, SynapticGranularity):
+            raw = _nonempty(value, f"synaptic_config.{name}")
+            try:
+                values[name] = SynapticGranularity(raw)
+            except ValueError as exc:
+                expected = ", ".join(sorted(_SUPPORTED_SYNAPTIC_GRANULARITIES))
+                raise ValueError(
+                    f"synaptic_config.{name} must be one of {expected}"
+                ) from exc
         elif type(default) is str:
             values[name] = _nonempty(value, f"synaptic_config.{name}")
         else:  # pragma: no cover - fail closed on future unsupported fields

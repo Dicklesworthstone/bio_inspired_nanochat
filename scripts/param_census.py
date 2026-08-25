@@ -21,7 +21,8 @@ We disambiguate with a codebase-specific rule that is correct for this repo:
 * Everywhere else, only the ``syn_cfg`` handle is unambiguously a
   ``SynapticConfig``; a ``<obj>.cfg.<f>`` counts only when ``<f>`` is NOT a
   name shared with another config dataclass (the "collision set").
-* The Rust kernel reads config via ``cfg.getattr("<f>")``; those count too.
+* Python ``getattr(cfg, "<f>", ...)`` and Rust ``cfg.getattr("<f>")`` reads
+  count under the same handle-disambiguation rules.
 
 Output
 ------
@@ -41,6 +42,7 @@ import dataclasses
 import json
 import re
 import sys
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
@@ -69,6 +71,7 @@ OTHER_CONFIG_FILES = [
 # Subsystem for every SynapticConfig field. The completeness guard below makes
 # this map impossible to silently drift from the dataclass.
 SUBSYSTEM: dict[str, str] = {
+    "granularity": "general",
     "rank_eligibility": "general",
     "attn_topk": "general",
     "stochastic_train_frac": "general",
@@ -250,6 +253,14 @@ def collect_reads(
         f: re.compile(r"([A-Za-z_][A-Za-z0-9_.]*)\." + re.escape(f) + r"\b")
         for f in fields
     }
+    py_getattr_res = {
+        f: re.compile(
+            r"getattr\(\s*([A-Za-z_][A-Za-z0-9_.]*)\s*,\s*['\"]"
+            + re.escape(f)
+            + r"['\"]\s*[,)]"
+        )
+        for f in fields
+    }
     rs_res = {f: re.compile(r'getattr\("' + re.escape(f) + r'"\)') for f in fields}
     reads: dict[str, dict[str, list[str]]] = {
         f: {"runtime": [], "rust": [], "scripts": [], "tests": []} for f in fields
@@ -275,6 +286,11 @@ def collect_reads(
                         if classify_read(rel, m.group(1), f, collision):
                             accepted = True
                             break
+                    if not accepted:
+                        for m in py_getattr_res[f].finditer(line):
+                            if classify_read(rel, m.group(1), f, collision):
+                                accepted = True
+                                break
                 if not accepted:
                     continue
                 site = f"{rel}:{lineno}"
@@ -319,7 +335,9 @@ def build_census() -> dict[str, Any]:
         r = reads[f.name]
         live = bool(r["runtime"] or r["rust"])
         default = f.default
-        if not isinstance(default, (bool, int, float, str)) and default is not None:
+        if isinstance(default, Enum):
+            default = default.value
+        elif not isinstance(default, (bool, int, float, str)) and default is not None:
             default = repr(default)
         records.append(
             {
@@ -351,7 +369,8 @@ def build_census() -> dict[str, Any]:
             "synaptic-native files (synaptic.py, flex_synaptic.py, "
             "kernels/presyn_fused.py) credit cfg./self.cfg./syn_cfg.; other files "
             "credit syn_cfg. always and <obj>.cfg.<f> only when <f> is not shared "
-            'with another config dataclass; Rust credits getattr("<f>").'
+            "with another config dataclass; Python and Rust credit literal "
+            'getattr(..., "<f>") reads under the same handle rules.'
         ),
         "collision_fields": sorted(n for n in collision if n in SUBSYSTEM),
         "learned_genome_note": (

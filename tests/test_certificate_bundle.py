@@ -1047,6 +1047,7 @@ def test_manifest_rejects_unknown_config_fields() -> None:
 @pytest.mark.parametrize(
     ("field_name", "value", "match"),
     [
+        ("granularity", "per_synapse", "granularity"),
         ("tau_c", 0.0, "tau_c"),
         ("tau_c", 10**400, "safe integer"),
         ("tau_buf", 0.0, "tau_buf"),
@@ -1152,6 +1153,7 @@ def test_composition_policy_cannot_be_widened_by_the_caller() -> None:
 @pytest.mark.parametrize(
     ("path", "value", "match"),
     [
+        (("synaptic_config", "granularity"), "per_synapse", "one of"),
         (("synaptic_config", "enable_presyn"), "false", "JSON boolean"),
         (
             (
