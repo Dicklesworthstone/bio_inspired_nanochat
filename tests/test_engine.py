@@ -340,6 +340,37 @@ def test_kv_cache_prefill_presyn_state_list_expands_batch():
         assert st["RRP"].shape[0] == B_tgt
 
 
+def test_kv_cache_prefill_rejects_invalid_source_and_destination_state():
+    empty = KVCache(batch_size=1, num_heads=2, seq_len=4, head_dim=8, num_layers=1)
+    target = KVCache(batch_size=1, num_heads=2, seq_len=4, head_dim=8, num_layers=1)
+
+    with pytest.raises(ValueError, match="uninitialized"):
+        target.prefill(empty)
+
+    source = KVCache(batch_size=1, num_heads=2, seq_len=4, head_dim=8, num_layers=1)
+    source.kv_cache = torch.zeros(source.kv_shape)
+    target.prefill(source)
+    with pytest.raises(ValueError, match="non-empty"):
+        target.prefill(source)
+
+
+def test_kv_cache_prefill_rejects_incompatible_shapes():
+    source = KVCache(batch_size=2, num_heads=2, seq_len=4, head_dim=8, num_layers=1)
+    source.kv_cache = torch.zeros(source.kv_shape)
+
+    wrong_batch = KVCache(batch_size=3, num_heads=2, seq_len=4, head_dim=8, num_layers=1)
+    with pytest.raises(ValueError, match="batch mismatch"):
+        wrong_batch.prefill(source)
+
+    wrong_heads = KVCache(batch_size=2, num_heads=3, seq_len=4, head_dim=8, num_layers=1)
+    with pytest.raises(ValueError, match="dimension 3 mismatch"):
+        wrong_heads.prefill(source)
+
+    too_short = KVCache(batch_size=2, num_heads=2, seq_len=3, head_dim=8, num_layers=1)
+    with pytest.raises(ValueError, match="sequence capacity mismatch"):
+        too_short.prefill(source)
+
+
 def test_gpt_synaptic_preserves_per_layer_presyn_state():
     from bio_inspired_nanochat.engine import KVCache
     from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
@@ -592,6 +623,7 @@ def test_sample_next_token_top_k_zero_is_disabled_not_degenerate():
         (torch.randn(17), 1.0, 0, "shape"),
         (torch.tensor([[1, 2]]), 1.0, 0, "floating dtype"),
         (torch.tensor([[0.0, float("nan")]]), 1.0, 0, "finite"),
+        (torch.tensor([[float("-inf"), float("-inf")]]), 1.0, 0, "finite"),
         (torch.randn(1, 17), float("inf"), 0, "temperature"),
         (torch.randn(1, 17), 1.0, -1, "top_k"),
     ],
@@ -606,6 +638,15 @@ def test_sample_next_token_rejects_invalid_inputs(logits, temperature, top_k, er
             temperature=temperature,
             top_k=top_k,
         )
+
+
+def test_sample_next_token_allows_negative_infinity_masking():
+    from bio_inspired_nanochat.engine import sample_next_token
+
+    logits = torch.tensor([[float("-inf"), 2.0, float("-inf")]])
+    token = sample_next_token(logits, torch.Generator(), temperature=0.0)
+
+    assert token.tolist() == [[1]]
 
 
 @pytest.mark.parametrize(

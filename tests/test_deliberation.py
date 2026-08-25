@@ -437,7 +437,13 @@ def test_candidate_cache_fork_is_batch_aligned_and_does_not_mutate_committed_sta
     assert forked.pos == committed_pos + 1
     assert forked.presyn_state[0]["C"].shape[0] == 4
     assert cache.pos == committed_pos
-    torch.testing.assert_close(cache.kv_cache, committed_kv)
+    # Only the populated prefix is semantically part of the committed cache.
+    # The unused capacity comes from torch.empty and may contain NaNs, for which
+    # an all-capacity assert_close is spuriously false even when no byte changed.
+    torch.testing.assert_close(
+        cache.kv_cache[:, :, :, :, :committed_pos],
+        committed_kv[:, :, :, :, :committed_pos],
+    )
     torch.testing.assert_close(cache.presyn_state[0]["C"], committed_calcium)
 
 

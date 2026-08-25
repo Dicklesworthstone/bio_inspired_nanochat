@@ -313,6 +313,7 @@ def test_sampling_controls_support_greedy_top_k_and_seeded_rng():
         torch.tensor([1.0, 2.0]),
         torch.tensor([[1, 2]]),
         torch.tensor([[1.0, float("nan")]]),
+        torch.tensor([[float("-inf"), float("-inf")]]),
     ],
 )
 def test_sampling_rejects_invalid_logits(logits):
@@ -323,6 +324,19 @@ def test_sampling_rejects_invalid_logits(logits):
             top_k=0,
             rng=None,
         )
+
+
+def test_sampling_allows_negative_infinity_masking():
+    logits = torch.tensor([[float("-inf"), 2.0, float("-inf")]])
+
+    token = CausalDeliberationController._sample_token(
+        logits,
+        temperature=0.0,
+        top_k=0,
+        rng=None,
+    )
+
+    assert token == 1
 
 
 @pytest.mark.parametrize(

@@ -386,8 +386,11 @@ class CausalDeliberationController:
             )
         if not logits.dtype.is_floating_point:
             raise ValueError(f"token logits must use a floating dtype, got {logits.dtype}")
-        if not bool(torch.isfinite(logits).all()):
-            raise ValueError("token logits must be finite")
+        invalid_values = torch.isnan(logits) | torch.isposinf(logits)
+        if bool(invalid_values.any()) or not bool(torch.isfinite(logits).any(dim=-1).all()):
+            raise ValueError(
+                "token logits must contain a finite candidate and may use only -inf for masking"
+            )
         if not math.isfinite(temperature) or temperature < 0.0:
             raise ValueError(f"temperature must be finite and non-negative, got {temperature!r}")
         if isinstance(top_k, bool) or not isinstance(top_k, int) or top_k < 0:

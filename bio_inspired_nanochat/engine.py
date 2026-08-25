@@ -156,19 +156,28 @@ class KVCache:
         multiple samples in parallel from there.
         """
         # 1) validate the shapes
-        assert self.kv_cache is None, "Cannot prefill a non-empty KV cache"
-        assert other.kv_cache is not None, "Cannot prefill with a None KV cache"
+        if self.kv_cache is not None:
+            raise ValueError("cannot prefill a non-empty KV cache")
+        if other.kv_cache is None:
+            raise ValueError("cannot prefill from an uninitialized KV cache")
+        if not 0 <= other.pos <= other.kv_cache.size(4):
+            raise ValueError(
+                f"source cache position {other.pos} is outside its sequence capacity"
+            )
         for ix, (dim1, dim2) in enumerate(zip(self.kv_shape, other.kv_shape)):
             # ix 0: num_layers, 1: k/v, 2: batch_size, 3: num_heads, 4: seq_len, 5: head_dim
             if ix in [0, 1, 3, 5]:
                 # num_layers, k/v, num_heads, head_dim must match
-                assert dim1 == dim2, f"Dim {ix} mismatch: {dim1} != {dim2}"
+                if dim1 != dim2:
+                    raise ValueError(f"cache dimension {ix} mismatch: {dim1} != {dim2}")
             elif ix == 2:
                 # batch_size can be expanded
-                assert dim1 == dim2 or dim2 == 1, f"Batch dim mismatch: {dim1} != {dim2}"
+                if dim1 != dim2 and dim2 != 1:
+                    raise ValueError(f"cache batch mismatch: {dim1} != {dim2}")
             elif ix == 4:
                 # seq_len: self must be longer than other
-                assert dim1 >= dim2, f"Seq len mismatch: {dim1} < {dim2}"
+                if dim1 < dim2:
+                    raise ValueError(f"cache sequence capacity mismatch: {dim1} < {dim2}")
         # 2) initialize the cache
         dtype, device = other.kv_cache.dtype, other.kv_cache.device
         self.kv_cache = torch.empty(self.kv_shape, dtype=dtype, device=device)
@@ -324,8 +333,13 @@ def sample_next_token(logits, rng, temperature=1.0, top_k=None):
         raise ValueError(
             f"logits must have shape (batch, vocabulary), got {tuple(logits.shape)}"
         )
-    if not logits.dtype.is_floating_point or not bool(torch.isfinite(logits).all()):
-        raise ValueError("logits must use a floating dtype and contain only finite values")
+    if not logits.dtype.is_floating_point:
+        raise ValueError("logits must use a floating dtype")
+    invalid_values = torch.isnan(logits) | torch.isposinf(logits)
+    if bool(invalid_values.any()) or not bool(torch.isfinite(logits).any(dim=-1).all()):
+        raise ValueError(
+            "each logits row must contain a finite candidate and may use only -inf for masking"
+        )
     if (
         isinstance(temperature, bool)
         or not isinstance(temperature, numbers.Real)
