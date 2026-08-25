@@ -875,8 +875,10 @@ class ThermoStepRecord:
     relative_variance: float   # ε² = Var(J)/⟨J⟩² (the precision)
     mean_entropy: float        # ⟨Σ⟩
     entropy_bound: float       # 2/⟨Σ⟩ (the TUR floor on ε²)
-    tur_satisfied: bool        # ε² ≥ 2/⟨Σ⟩
+    tur_satisfied: bool        # ε² ≥ 2/⟨Σ⟩ (True vacuously for untestable batches)
     tur_slack: float           # ε² − 2/⟨Σ⟩ ≥ 0
+    tur_testable: bool = True  # False when the batch was degenerate (n<2 / Var=0 /
+                               # zero mean current) and the TUR could not be tested
 
 
 class StochasticThermoMonitor:
@@ -904,7 +906,8 @@ class StochasticThermoMonitor:
         # The empirical TUR is only meaningful with >= 2 samples AND non-zero spread: a degenerate
         # batch (n<2 or Var=0) gives an unreliable variance that would read as a spurious "violation"
         # of a theorem, so treat it as non-informative (satisfied, bound=∞) rather than a violation.
-        if c.size >= 2 and float(np.var(c)) > 0.0 and mean_j != 0.0 and mean_sig > 0.0:
+        testable = c.size >= 2 and float(np.var(c)) > 0.0 and mean_j != 0.0 and mean_sig > 0.0
+        if testable:
             cert = empirical_tur(c, mean_sig)
             rel_var, bound, satisfied, slack = (
                 cert.relative_variance, cert.entropy_bound, cert.satisfied, cert.slack,
@@ -917,14 +920,34 @@ class StochasticThermoMonitor:
             n_samples=int(c.size), affinity=a, mean_current=mean_j,
             relative_variance=rel_var, mean_entropy=mean_sig, entropy_bound=bound,
             tur_satisfied=bool(satisfied), tur_slack=slack,
+            tur_testable=bool(testable),
         )
         self.records.append(rec)
         return rec
 
     # -- audit predicates ----------------------------------------------------- #
     def all_currents_satisfy_tur(self) -> bool:
-        """Every recorded batch honored the TUR (a theorem, so this must hold — a self-consistency check)."""
-        return all(r.tur_satisfied for r in self.records)
+        """Every TESTABLE recorded batch honored the TUR (a theorem, so this must hold).
+
+        Requires at least one actually-tested batch: a run of only degenerate
+        batches carries zero TUR evidence, and returning True for it was a
+        fail-open default that let ``assert_tur`` pass vacuously.
+        """
+        tested = [r for r in self.records if r.tur_testable]
+        return bool(tested) and all(r.tur_satisfied for r in tested)
+
+    def assert_tur(self) -> None:
+        tested = [r for r in self.records if r.tur_testable]
+        if not tested:
+            raise AssertionError(
+                "No testable TUR batches recorded (all degenerate: n<2, zero "
+                "variance, or zero mean current) — there is no evidence to certify."
+            )
+        if not all(r.tur_satisfied for r in tested):
+            bad = next(r for r in tested if not r.tur_satisfied)
+            raise AssertionError(
+                f"TUR violated at step {bad.step}: ε²={bad.relative_variance:.4g} < 2/⟨Σ⟩={bad.entropy_bound:.4g}"
+            )
 
     def crooks_calibration(self, **kw) -> CrooksCalibration:
         """The Crooks detailed-FT calibration over ALL accumulated entropy production."""
@@ -936,12 +959,6 @@ class StochasticThermoMonitor:
         """The tracked fluctuation-theorem residual `sup|ln(P(+Σ)/P(−Σ)) − Σ|` (nan if no symmetric support)."""
         return self.crooks_calibration(**kw).max_abs_residual
 
-    def assert_tur(self) -> None:
-        if not self.all_currents_satisfy_tur():
-            bad = next(r for r in self.records if not r.tur_satisfied)
-            raise AssertionError(
-                f"TUR violated at step {bad.step}: ε²={bad.relative_variance:.4g} < 2/⟨Σ⟩={bad.entropy_bound:.4g}"
-            )
 
     def summary(self) -> dict:
         if not self.records:
@@ -961,8 +978,22 @@ class StochasticThermoMonitor:
         }
 
     def to_jsonl(self) -> list[str]:
-        """Per-step records as JSONL lines (the eqyk.2 detailed-logging artifact)."""
-        return [json.dumps(asdict(r), ensure_ascii=False) for r in self.records]
+        """Per-step records as JSONL lines (the eqyk.2 detailed-logging artifact).
+
+        Strict JSON: untestable batches legitimately carry inf bounds/slack;
+        serialize those as null instead of bare Infinity tokens.
+        """
+
+        def _safe(v):
+            if isinstance(v, float) and not math.isfinite(v):
+                return None
+            if isinstance(v, dict):
+                return {k: _safe(x) for k, x in v.items()}
+            if isinstance(v, (list, tuple)):
+                return [_safe(x) for x in v]
+            return v
+
+        return [json.dumps(_safe(asdict(r)), ensure_ascii=False, allow_nan=False) for r in self.records]
 
     def render(self, console=None) -> None:
         """Rich summary of the monitor (falls back to plain print without rich)."""

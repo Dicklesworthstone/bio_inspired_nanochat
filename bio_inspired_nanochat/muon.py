@@ -76,7 +76,12 @@ class Muon(torch.optim.Optimizer):
             params: list[Tensor] = group["params"]
             for p in params:
                 g = p.grad
-                assert g is not None
+                # Data-dependent sparsity (e.g. an MoE expert that received no tokens)
+                # and frozen Parameters (requires_grad=False, e.g. router_embeddings)
+                # legitimately have no gradient. Skip them — mirroring DistAdamW's
+                # documented policy — instead of crashing the whole optimizer step.
+                if g is None:
+                    continue
                 state = self.state[p]
                 if "momentum_buffer" not in state:
                     state["momentum_buffer"] = torch.zeros_like(g)
@@ -135,9 +140,17 @@ class DistMuon(torch.optim.Optimizer):
         rank = dist.get_rank()
         world_size = dist.get_world_size()
 
-        # Ensure all grads exist
-        if not all(p.grad is not None for group in self.param_groups for p in group["params"]):
-            raise ValueError("All params must have grads")
+        # Data-dependent sparsity (an MoE expert that received no tokens this
+        # step) and frozen Parameters (requires_grad=False, e.g.
+        # router_embeddings) can legitimately lack gradients. Substitute zeros
+        # UNIFORMLY on every rank so the reduce_scatter/all_gather collectives
+        # stay rank-symmetric; a zero gradient yields a zero orthogonalized
+        # update, i.e. the parameter is skipped. (Mirrors DistAdamW's documented
+        # skip policy.)
+        for group in self.param_groups:
+            for p in group["params"]:
+                if p.grad is None:
+                    p.grad = torch.zeros_like(p)
 
         # Kick off all the reduce scatter operations to average up the gradients across all ranks.
         # We keep the async ``Work`` handles and ``.wait()`` on them directly rather than

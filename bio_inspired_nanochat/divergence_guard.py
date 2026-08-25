@@ -157,7 +157,10 @@ class DivergenceGuard:
     def maybe_snapshot(self, model: nn.Module, optimizers: Any, step: int) -> None:
         if not self.cfg.enable_rollback:
             return
-        if step - self._snapshot_step >= self.cfg.snapshot_every:
+        # Snapshot immediately on first call (the warmup phase is exactly when
+        # divergence risk is highest — deferring to `snapshot_every` used to leave
+        # can_rollback() False during the earliest steps), then every interval.
+        if self._snapshot is None or step - self._snapshot_step >= self.cfg.snapshot_every:
             self._snapshot = (
                 {k: v.detach().to("cpu").clone() for k, v in model.state_dict().items()},
                 [copy.deepcopy(o.state_dict()) for o in _as_list(optimizers)],

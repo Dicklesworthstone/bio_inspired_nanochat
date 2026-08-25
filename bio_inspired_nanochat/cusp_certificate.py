@@ -542,8 +542,23 @@ class CuspMonitor:
 
     # -- traces --------------------------------------------------------------- #
     def to_jsonl(self) -> list[str]:
-        """Per-step records as JSONL lines (machine-readable audit trail)."""
-        return [json.dumps(asdict(r), ensure_ascii=False) for r in self.records]
+        """Per-step records as JSONL lines (machine-readable audit trail).
+
+        Strict JSON: unmeasured fields (e.g. ``projector_error`` when no influx
+        was supplied) serialize as null rather than bare NaN, which strict
+        consumers (jq, parse_constant-rejecting loaders) reject.
+        """
+
+        def _safe(v):
+            if isinstance(v, float) and not math.isfinite(v):
+                return None
+            if isinstance(v, dict):
+                return {k: _safe(x) for k, x in v.items()}
+            if isinstance(v, (list, tuple)):
+                return [_safe(x) for x in v]
+            return v
+
+        return [json.dumps(_safe(asdict(r)), ensure_ascii=False, allow_nan=False) for r in self.records]
 
     def render(self, console=None) -> None:
         """Rich summary of the monitor trace (falls back to plain print without rich)."""

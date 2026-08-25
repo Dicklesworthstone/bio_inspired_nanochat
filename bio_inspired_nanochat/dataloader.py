@@ -1,4 +1,5 @@
 from collections import deque
+from collections.abc import Mapping
 
 from bio_inspired_nanochat.torch_imports import torch
 import pyarrow.parquet as pq
@@ -20,7 +21,23 @@ def tokenizing_distributed_data_loader_with_state(B, T, split, tokenizer_threads
 
     Perfect state resumption is possible but would be a lot more bloated, probably not worth it atm.
     """
-    assert split in ["train", "val"], "split must be 'train' or 'val'"
+    if split not in {"train", "val"}:
+        raise ValueError("split must be 'train' or 'val'")
+    for name, value in (
+        ("B", B),
+        ("T", T),
+        ("tokenizer_threads", tokenizer_threads),
+        ("tokenizer_batch_size", tokenizer_batch_size),
+    ):
+        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+            raise ValueError(f"{name} must be a positive integer")
+    if resume_state_dict is not None:
+        if not isinstance(resume_state_dict, Mapping):
+            raise ValueError("resume_state_dict must be a mapping")
+        for key in ("pq_idx", "rg_idx"):
+            value = resume_state_dict.get(key)
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise ValueError(f"resume_state_dict[{key!r}] must be a non-negative integer")
 
     # infinite iterator over document batches (list of text strings)
     ddp, ddp_rank, ddp_local_rank, ddp_world_size = get_dist_info()
@@ -28,6 +45,10 @@ def tokenizing_distributed_data_loader_with_state(B, T, split, tokenizer_threads
         parquet_paths = parquet_paths_for_split(split)
         resume_pq_idx = resume_state_dict["pq_idx"] if resume_state_dict is not None else 0
         resume_rg_idx = resume_state_dict["rg_idx"] if resume_state_dict is not None else None
+        if parquet_paths and resume_pq_idx >= len(parquet_paths):
+            raise ValueError(
+                "resume_state_dict['pq_idx'] is outside the available parquet shard range"
+            )
         pq_idx = resume_pq_idx # we kick off parquet files at the resume index (or by default just 0)
         while True: # iterate infinitely (multi-epoch)
             if not parquet_paths:
@@ -38,6 +59,10 @@ def tokenizing_distributed_data_loader_with_state(B, T, split, tokenizer_threads
                 # Start from resume point if resuming on same file, otherwise from DDP rank
                 # I know this state resumption is a little bit tricky and a little bit hacky... sigh.
                 if resume_rg_idx is not None:
+                    if resume_rg_idx >= pf.num_row_groups:
+                        raise ValueError(
+                            "resume_state_dict['rg_idx'] is outside the parquet row-group range"
+                        )
                     base_idx = resume_rg_idx // ddp_world_size # in units of ddp_world_size
                     base_idx += 1 # advance by 1 so that we definitely don't repeat data after resuming
                     rg_idx = base_idx * ddp_world_size + ddp_rank

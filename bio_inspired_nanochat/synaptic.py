@@ -2713,8 +2713,10 @@ class SynapticLinear(nn.Module):
                 ltp_v = (x_proj_pre.transpose(0, 1) @ y_post) / (batch - 1)
                 ltd_v = (x_proj_post.transpose(0, 1) @ y_pre) / (batch - 1)
 
-                stdp_delta_u = self.cfg.stdp_a_plus * ltp_u - self.cfg.stdp_a_minus * ltd_u
-                stdp_delta_v = self.cfg.stdp_a_plus * ltp_v - self.cfg.stdp_a_minus * ltd_v
+                w_plus = math.exp(-1.0 / max(1e-3, self.cfg.stdp_tau_plus))
+                w_minus = math.exp(-1.0 / max(1e-3, self.cfg.stdp_tau_minus))
+                stdp_delta_u = (self.cfg.stdp_a_plus * w_plus) * ltp_u - (self.cfg.stdp_a_minus * w_minus) * ltd_u
+                stdp_delta_v = (self.cfg.stdp_a_plus * w_plus) * ltp_v - (self.cfg.stdp_a_minus * w_minus) * ltd_v
 
                 self.u_buf.mul_(self.cfg.post_trace_decay).add_(stdp_delta_u)
                 self.v_buf.mul_(self.cfg.post_trace_decay).add_(stdp_delta_v)
@@ -2831,7 +2833,18 @@ class SynapticLinear(nn.Module):
         # vg9.2: flush any plasticity Parameter writes deferred from the previous (training)
         # forward, BEFORE this step's matmuls use those Parameters — autograd-safe because they
         # have not yet been saved for this step's backward. First call is a no-op (zero traces).
-        if self._plasticity_pending and self.cfg.enable_hebbian and self.post is not None:
+        # 9mxi: only a TRAIN forward may flush the deferred writes. An eval forward
+        # (model.eval() / update_mem=False) leaves them pending so validation can
+        # never mutate w_fast/w_slow/post.* mid-evaluation; the next training
+        # forward lands the identical write before its matmuls, preserving the
+        # training trajectory exactly.
+        if (
+            self._plasticity_pending
+            and self.training
+            and update_mem
+            and self.cfg.enable_hebbian
+            and self.post is not None
+        ):
             with torch.no_grad():
                 self._apply_hebb_weight_writes(self._last_gate_scale)
             self._plasticity_pending = False
@@ -3673,7 +3686,19 @@ class SynapticMoE(nn.Module):
                         util = counts.clamp_min(1.0) / float(B * T)
                         update_metabolism_fused(fatigue_buf, energy_buf, alpha_fatigue, alpha_energy, util)
                 except ImportError:
-                    # Fallback
+                    # Compiled/Triton kernels unavailable: recompute the router
+                    # statistics in plain PyTorch. ``me``/``pe`` were never populated
+                    # by the expert loop on this path, so reading them here produced
+                    # all-zeros — metabolism EMAs collapsed to a constant fixed point
+                    # and aux_loss was identically 0 (load balancing silently off).
+                    flat_idx0 = idx.detach().reshape(-1)
+                    flat_g = gates.detach().reshape(-1)
+                    counts_fb = torch.zeros(E, device=device, dtype=me.dtype)
+                    counts_fb.index_add_(0, flat_idx0, torch.ones_like(flat_g))
+                    sums_fb = torch.zeros(E, device=device, dtype=me.dtype)
+                    sums_fb.index_add_(0, flat_idx0, flat_g.to(me.dtype))
+                    me = counts_fb
+                    pe = sums_fb
                     util = me.clamp_min(1.0) / float(B * T)
                     if update_mem:
                         fatigue_buf.mul_(1.0 - alpha_fatigue).add_(alpha_fatigue * util)

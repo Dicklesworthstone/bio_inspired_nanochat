@@ -41,12 +41,18 @@ class ColoredFormatter(logging.Formatter):
     RESET = '\033[0m'
     BOLD = '\033[1m'
     def format(self, record):
-        # Add color to the level name
+        # Colorize the level name WITHOUT permanently mutating the shared
+        # LogRecord: records fan out to every handler on the logger tree, and a
+        # mutated levelname (ANSI escapes embedded) broke level filtering and
+        # grep-ability for any handler attached after this one.
         levelname = record.levelname
-        if levelname in self.COLORS:
-            record.levelname = f"{self.COLORS[levelname]}{self.BOLD}{levelname}{self.RESET}"
-        # Format the message
-        message = super().format(record)
+        color = self.COLORS.get(levelname)
+        if color:
+            record.levelname = f"{color}{self.BOLD}{levelname}{self.RESET}"
+        try:
+            message = super().format(record)
+        finally:
+            record.levelname = levelname
         # Add color to specific parts of the message
         if levelname == 'INFO':
             # Highlight numbers and percentages

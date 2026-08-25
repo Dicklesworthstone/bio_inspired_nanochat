@@ -36,21 +36,30 @@ BASE_URL = "https://huggingface.co/datasets/karpathy/fineweb-edu-100b-shuffle/re
 MAX_SHARD = 1822 # the last datashard is shard_01822.parquet
 def index_to_filename(index):
     return f"shard_{index:05d}.parquet" # format of the filenames
-base_dir = get_base_dir()
-DATA_DIR = os.path.join(base_dir, "base_data")
-os.makedirs(DATA_DIR, exist_ok=True)
+# Resolved lazily via ensure_data_dir() so that merely importing this module
+# never creates directories under HOME (read-only-HOME CI containers crashed).
+DATA_DIR: str | None = None
+
+
+def ensure_data_dir() -> str:
+    """Return (and ensure) the base_data directory; safe to call repeatedly."""
+    global DATA_DIR
+    if DATA_DIR is None:
+        DATA_DIR = os.path.join(get_base_dir(), "base_data")
+        os.makedirs(DATA_DIR, exist_ok=True)
+    return DATA_DIR
 
 # -----------------------------------------------------------------------------
 # These functions are useful utilities to other modules, can/should be imported
 
 def list_parquet_files(data_dir: str | None = None) -> list[str]:
     """Looks into a data dir and returns full paths to all parquet files."""
-    data_dir = DATA_DIR if data_dir is None else data_dir
+    resolved = ensure_data_dir() if data_dir is None else data_dir
     parquet_files = sorted([
-        f for f in os.listdir(data_dir)
+        f for f in os.listdir(resolved)
         if f.endswith('.parquet') and not f.endswith('.tmp')
     ])
-    parquet_paths = [os.path.join(data_dir, f) for f in parquet_files]
+    parquet_paths = [os.path.join(resolved, f) for f in parquet_files]
     return parquet_paths
 
 
@@ -170,7 +179,7 @@ def download_single_file(
 
     # Construct the local filepath for this file and skip if it already exists
     filename = index_to_filename(index)
-    filepath = os.path.join(DATA_DIR, filename)
+    filepath = os.path.join(ensure_data_dir(), filename)
     temp_path = filepath + ".tmp"
     # Construct the remote URL for this file
     url = f"{BASE_URL}/{filename}"
@@ -278,7 +287,7 @@ if __name__ == "__main__":
     ids_to_download = list(range(num))
     sha256_map = _load_sha256_map(args.checksum_file)
     print(f"Downloading {len(ids_to_download)} shards using {args.num_workers} workers...")
-    print(f"Target directory: {DATA_DIR}")
+    print(f"Target directory: {ensure_data_dir()}")
     print(
         f"Integrity: verify_size={bool(args.verify_size)} "
         f"verify_existing={bool(args.verify_existing)} "
@@ -296,4 +305,4 @@ if __name__ == "__main__":
 
     # Report results
     successful = sum(1 for success in results if success)
-    print(f"Done! Downloaded: {successful}/{len(ids_to_download)} shards to {DATA_DIR}")
+    print(f"Done! Downloaded: {successful}/{len(ids_to_download)} shards to {ensure_data_dir()}")

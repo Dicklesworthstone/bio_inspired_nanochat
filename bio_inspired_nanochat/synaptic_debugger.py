@@ -17,6 +17,7 @@ from rich.panel import Panel
 from torch import Tensor
 
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic
+from bio_inspired_nanochat.engine import KVCache
 from bio_inspired_nanochat.optogenetic_stimulation import (
     ClampMode,
     OptogeneticStimulator,
@@ -26,6 +27,43 @@ from bio_inspired_nanochat.reasoning_trace_decoder import (
     ReasoningTraceDecoder,
 )
 from bio_inspired_nanochat.working_memory_api import WorkingMemoryScratchpad
+
+
+def _mean_bio_energy(telem: Dict[str, Any]) -> Optional[float]:
+    """Mean bio-energy across layers from REAL telemetry channels.
+
+    ``collect_bio_telemetry`` exposes per-layer presynaptic state under
+    ``layers[i]["attention"]`` (keys C/BUF/RRP/.../E as nested per-head lists) and
+    metabolism under ``layers[i]["mlp"]["energy"]`` for MoE blocks. The previous
+    implementation read nonexistent top-level keys and silently reported a constant
+    1.0, so the energy-trajectory feature never reflected model state. Returns
+    ``None`` when no energy channel is populated rather than fabricating one.
+    """
+    layer_means: List[float] = []
+    for lyr in telem.get("layers", []):
+        attn = lyr.get("attention") or {}
+        e_channel = attn.get("E")
+        if isinstance(e_channel, list):
+            flat: List[float] = []
+
+            def _collect(node: Any) -> None:
+                if isinstance(node, list):
+                    for item in node:
+                        _collect(item)
+                elif isinstance(node, (int, float)):
+                    flat.append(float(node))
+
+            _collect(e_channel)
+            if flat:
+                layer_means.append(sum(flat) / len(flat))
+                continue
+        mlp = lyr.get("mlp") or {}
+        mlp_energy = mlp.get("energy")
+        if isinstance(mlp_energy, list) and mlp_energy:
+            layer_means.append(sum(float(v) for v in mlp_energy) / len(mlp_energy))
+    if not layer_means:
+        return None
+    return sum(layer_means) / len(layer_means)
 
 
 @dataclass
@@ -64,6 +102,8 @@ class SynapticDebugger:
         self.call_stack: List[CognitiveStackFrame] = []
         self._energy_history: List[float] = []
         self.is_paused: bool = False
+        # Live KV cache for incremental single-token stepping (engine.KVCache).
+        self._kv_cache: Optional[Any] = None
 
     def add_breakpoint(self, bp: BioBreakpoint) -> None:
         """Register a biological state condition breakpoint."""
@@ -80,6 +120,16 @@ class SynapticDebugger:
 
         self.add_breakpoint(BioBreakpoint(name=name, condition_fn=cond))
 
+    def _step_input(self) -> Tensor:
+        """Input for one incremental decode step: only the NEW token when a KV
+        cache is live (so the prefix is not re-forwarded — re-running it used to
+        re-apply online plasticity to every prefix token each step, an O(k^2)
+        contamination of both runtime and breakpoint semantics)."""
+        assert self.current_tokens is not None
+        if self._kv_cache is not None and self.current_tokens.shape[1] > 1:
+            return self.current_tokens[:, -1:]
+        return self.current_tokens
+
     def step_over(self, temperature: float = 1.0) -> Optional[CognitiveStackFrame]:
         """Execute a single token generation step, capturing telemetry and checking breakpoints."""
         if self.current_tokens is None:
@@ -88,7 +138,7 @@ class SynapticDebugger:
         step = len(self.call_stack)
         self.model.eval()
         with torch.no_grad():
-            logits, _ = self.model(self.current_tokens)
+            logits, _ = self.model(self._step_input(), kv_cache=self._kv_cache)
             next_logits = logits[:, -1, :] / max(1e-3, temperature)
             probs = torch.softmax(next_logits, dim=-1)
             next_tok = torch.multinomial(probs, num_samples=1)
@@ -97,15 +147,16 @@ class SynapticDebugger:
             tok_val = int(next_tok.item())
             tok_str = self.tokenizer.decode([tok_val]) if self.tokenizer else str(tok_val)
 
-            # Capture telemetry & dynamic energy trajectory
+            # Capture telemetry & dynamic energy trajectory from real bio channels.
             telem = self.model.bio_telemetry()
-            energy_val = float(telem.get("global", {}).get("energy", 1.0)) if "global" in telem else float(telem.get("energy", 1.0))
-            self._energy_history.append(energy_val)
+            energy_val = _mean_bio_energy(telem)
+            if energy_val is not None:
+                self._energy_history.append(energy_val)
 
             traj_slice = (
                 self._energy_history[-3:]
                 if len(self._energy_history) >= 2
-                else [energy_val, max(0.01, energy_val - 0.1)]
+                else ([energy_val, max(0.01, energy_val - 0.1)] if energy_val is not None else [])
             )
             trace_obj = self.trace_decoder.decode_energy_trajectory(traj_slice)
             reasoning_text = trace_obj.summary_narrative
@@ -136,9 +187,34 @@ class SynapticDebugger:
         max_tokens: int = 16,
         temperature: float = 1.0,
     ) -> Tuple[Tensor, Optional[CognitiveStackFrame]]:
-        """Autoregressively generate tokens until completion or until a breakpoint fires."""
+        """Autoregressively generate tokens until completion or until a breakpoint fires.
+
+        Starts a FRESH debug session: transient per-sequence state (eligibility
+        traces, CaMKII/PP1/BDNF latches, presyn state) is reset so one session's
+        bio-state cannot leak into the next; trained weights are untouched. The
+        prompt is prefilled into a KV cache and every subsequent step decodes
+        incrementally from it.
+        """
         self.model.eval()
-        tokens = prompt_tokens.clone()
+        device = next(self.model.parameters()).device
+        tokens = prompt_tokens.clone().to(device)
+        # Transient-state reset only (vg9.4 contract); fast weights are trained
+        # parameters and must survive across sessions.
+        self.model.reset_sequence_state(reset_fast_weights=False)
+        cfg = self.model.config
+        cache = KVCache(
+            batch_size=tokens.shape[0],
+            num_heads=cfg.n_head,
+            seq_len=cfg.sequence_len,
+            head_dim=cfg.n_embd // cfg.n_head,
+            num_layers=cfg.n_layer,
+        )
+        if tokens.shape[1] > 0:
+            with torch.no_grad():
+                self.model(tokens, kv_cache=cache)
+            self._kv_cache: Optional[Any] = cache
+        else:
+            self._kv_cache = None
         self.current_tokens = tokens
         self.call_stack.clear()
         self._energy_history.clear()

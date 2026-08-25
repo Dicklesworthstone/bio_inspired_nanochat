@@ -78,6 +78,8 @@ _M("rrp_mean", "vesicles", Direction.NEUTRAL, "mean readily-releasable vesicle p
 _M("eval_bpb", "bits/byte", Direction.LOWER_BETTER, "evaluation bits-per-byte")
 _M("eval_accuracy", "fraction", Direction.HIGHER_BETTER, "evaluation accuracy")
 _M("niah_accuracy", "fraction", Direction.HIGHER_BETTER, "needle-in-haystack retrieval accuracy")
+_M("niah_acc", "fraction", Direction.HIGHER_BETTER, "needle-in-haystack retrieval accuracy (short name used by ablation_matrix.METRICS)")
+_M("working_memory", "fraction", Direction.HIGHER_BETTER, "working-memory task accuracy (ablation_matrix.METRICS)")
 _M("id_ece", "fraction", Direction.LOWER_BETTER, "in-distribution expected calibration error")
 _M("ood_auroc", "fraction", Direction.HIGHER_BETTER, "out-of-distribution detection AUROC")
 _M(

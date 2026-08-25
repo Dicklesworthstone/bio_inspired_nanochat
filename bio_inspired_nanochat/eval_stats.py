@@ -262,7 +262,15 @@ def paired_comparison(
     w_p = wilcoxon_signed_rank(deltas)
     ci_low, ci_high = bootstrap_ci(deltas, n_boot=n_boot, seed=seed)
     sd = deltas.std(ddof=1)
-    dz = float(deltas.mean() / sd) if sd > 0 else 0.0
+    mean_d = float(deltas.mean())
+    # Zero-variance deltas: match paired_t_test's convention (infinite effect in
+    # the direction of the constant shift) instead of the misleading 0.0 that
+    # read as "no effect" next to p=0.
+    dz = (
+        float(mean_d / sd)
+        if sd > 0
+        else (float("inf") if mean_d > 0 else float("-inf") if mean_d < 0 else 0.0)
+    )
     favorable = int((deltas < 0).sum() if lower_is_better else (deltas > 0).sum())
     return PairedResult(
         n_pairs=len(seeds),
@@ -282,9 +290,15 @@ def _direction_lower_better(metric: str, lower_is_better: Optional[bool]) -> boo
         return lower_is_better
     spec = get_metric(metric)
     if spec is None:
-        # Unknown metric: default to lower-is-better (losses/bpb dominate) and let the
-        # caller override. Common bpb/loss names also matched defensively.
-        return not any(k in metric for k in ("acc", "accuracy", "tok_per_sec", "mfu"))
+        # Fail CLOSED: guessing a direction silently INVERTS the favorable/adverse
+        # logic for any higher-is-better metric that misses the substring heuristic
+        # (e.g. "working_memory" accuracy), promoting regressions to gains. The
+        # caller must register the metric or pass ``lower_is_better`` explicitly.
+        raise ValueError(
+            f"Unknown metric {metric!r}: no schema entry and no explicit "
+            f"lower_is_better override. Register it in metrics_schema or pass "
+            f"lower_is_better explicitly."
+        )
     return spec.direction == Direction.LOWER_BETTER
 
 

@@ -110,7 +110,13 @@ def load_checkpoint_metadata(checkpoint_dir: str, step: int) -> dict[str, Any]:
     """Load only JSON metadata, so training can rebuild topology before tensor load."""
     meta_path = os.path.join(checkpoint_dir, f"meta_{step:06d}.json")
     with open(meta_path, "r", encoding="utf-8") as f:
-        return json.load(f)
+        try:
+            metadata = json.load(f)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"malformed checkpoint metadata: {meta_path}") from exc
+    if not isinstance(metadata, dict):
+        raise ValueError(f"checkpoint metadata must be a JSON object: {meta_path}")
+    return metadata
 
 
 def config_hash(cfg_dict: dict) -> str:
@@ -125,6 +131,7 @@ def _git_sha() -> Optional[str]:
             ["git", "rev-parse", "HEAD"],
             cwd=os.path.dirname(os.path.abspath(__file__)),
             stderr=subprocess.DEVNULL,
+            timeout=5.0,
         )
         return out.decode().strip()
     except Exception:
@@ -196,26 +203,65 @@ def restore_rng_state(state: Optional[dict]) -> None:
     """Restore RNGs saved by :func:`capture_rng_state` (no-op on None / missing keys)."""
     if not state:
         return
-    if state.get("torch") is not None:
-        torch.set_rng_state(state["torch"])
+    torch_state = state.get("torch")
+    python_state = None
+    numpy_state = None
+    cuda_state = state.get("cuda")
+
+    # Validate all CPU RNG payloads against isolated generators before changing any
+    # process-global stream. A corrupt later payload must not leave an earlier RNG restored.
+    if torch_state is not None:
+        try:
+            torch.Generator(device="cpu").set_state(torch_state)
+        except Exception as exc:
+            raise RuntimeError("Failed to restore the saved PyTorch RNG state") from exc
     if state.get("python") is not None:
-        # torch.save/load round-trips the python state tuple as nested lists; setstate
-        # requires tuples (version, internal-state-tuple, gauss).
-        py = state["python"]
-        random.setstate((int(py[0]), tuple(int(x) for x in py[1]), py[2]))
+        try:
+            # torch.save/load round-trips the Python state tuple as nested lists; setstate
+            # requires tuples (version, internal-state-tuple, gauss).
+            py = state["python"]
+            python_state = (int(py[0]), tuple(int(x) for x in py[1]), py[2])
+            random.Random().setstate(python_state)
+        except Exception as exc:
+            raise RuntimeError("Failed to restore the saved Python RNG state") from exc
     if state.get("numpy") is not None:
         try:
             import numpy as np
 
             n = state["numpy"]
-            np.random.set_state(
-                (n["type"], n["keys"].numpy().astype("uint32"), int(n["pos"]),
-                 int(n["has_gauss"]), float(n["cached"]))
+            numpy_state = (
+                n["type"],
+                n["keys"].numpy().astype("uint32"),
+                int(n["pos"]),
+                int(n["has_gauss"]),
+                float(n["cached"]),
             )
-        except Exception:
-            pass
-    if state.get("cuda") is not None and torch.cuda.is_available():
-        torch.cuda.set_rng_state_all(state["cuda"])
+            np.random.RandomState().set_state(numpy_state)
+        except Exception as exc:
+            raise RuntimeError("Failed to restore the saved NumPy RNG state") from exc
+    if cuda_state is not None and torch.cuda.is_available():
+        try:
+            if not isinstance(cuda_state, (list, tuple)):
+                raise TypeError("CUDA RNG state must be a sequence")
+            device_count = torch.cuda.device_count()
+            if len(cuda_state) != device_count:
+                raise ValueError(
+                    f"saved CUDA RNG state count {len(cuda_state)} does not match "
+                    f"available device count {device_count}"
+                )
+            for device_index, generator_state in enumerate(cuda_state):
+                torch.Generator(device=f"cuda:{device_index}").set_state(generator_state)
+        except Exception as exc:
+            raise RuntimeError("Failed to restore the saved CUDA RNG state") from exc
+
+    if torch_state is not None:
+        torch.set_rng_state(torch_state)
+    if python_state is not None:
+        random.setstate(python_state)
+    if numpy_state is not None:
+        np.random.set_state(numpy_state)
+    if cuda_state is not None and torch.cuda.is_available():
+        torch.cuda.set_rng_state_all(cuda_state)
 
 
 def save_checkpoint(checkpoint_dir, step, model_data, optimizer_data, meta_data, rank=0, train_state=None):
@@ -236,18 +282,18 @@ def save_checkpoint(checkpoint_dir, step, model_data, optimizer_data, meta_data,
         model_path = os.path.join(checkpoint_dir, f"model_{step:06d}.pt")
         _atomic_torch_save(model_data, model_path)
         logger.info(f"Saved model parameters to: {model_path}")
-        # Ensure meta_data exists and mark synaptic models
-        meta_data = meta_data or {}
+        # Work on a copy: adding inferred metadata must not mutate caller-owned state.
+        meta_to_save = dict(meta_data) if meta_data is not None else {}
         # Check if model_data contains synaptic-specific keys (heuristic detection)
         # This is a fallback; ideally the caller should set synapses=True in meta_data
-        if "synapses" not in meta_data:
+        if "synapses" not in meta_to_save:
             # Check for synaptic-specific buffer names in state dict
             synaptic_keys = [k for k in model_data.keys() if any(x in k for x in ["pre.", "post.", "H_fast", "U_buf", "V_buf", "gate_m"])]
             if synaptic_keys:
-                meta_data["synapses"] = True
+                meta_to_save["synapses"] = True
         # Save the metadata dict as json (atomic).
         meta_path = os.path.join(checkpoint_dir, f"meta_{step:06d}.json")
-        _atomic_write_json(meta_data, meta_path)
+        _atomic_write_json(meta_to_save, meta_path)
         logger.info(f"Saved metadata to: {meta_path}")
     # Note that optimizer state is sharded across ranks, so each rank must save its own.
     if optimizer_data is not None:
@@ -342,7 +388,8 @@ def build_model(checkpoint_dir, step, device, phase):
     - tokenizer
     - meta data saved during base model training
     """
-    assert phase in ["train", "eval"], f"Invalid phase: {phase}"
+    if phase not in {"train", "eval"}:
+        raise ValueError(f"phase must be 'train' or 'eval', got {phase!r}")
     model_data, optimizer_data, meta_data = load_checkpoint(checkpoint_dir, step, device, load_optimizer=False)
     if device.type in {"cpu", "mps"}:
         # Convert bfloat16 tensors to float for CPU inference
@@ -414,7 +461,13 @@ def build_model(checkpoint_dir, step, device, phase):
     # Load the Tokenizer
     tokenizer = get_tokenizer()
     # Sanity check: compatibility between model and tokenizer
-    assert tokenizer.get_vocab_size() == model_config_kwargs["vocab_size"]
+    tokenizer_vocab_size = tokenizer.get_vocab_size()
+    model_vocab_size = model_config_kwargs["vocab_size"]
+    if tokenizer_vocab_size != model_vocab_size:
+        raise ValueError(
+            "checkpoint tokenizer vocabulary mismatch: "
+            f"tokenizer={tokenizer_vocab_size}, model={model_vocab_size}"
+        )
     return model, tokenizer, meta_data
 
 
@@ -439,12 +492,17 @@ def find_largest_model(checkpoint_dir):
 
 
 def find_last_step(checkpoint_dir):
-    # Look into checkpoint_dir and find model_<step>.pt with the highest step
-    checkpoint_files = glob.glob(os.path.join(checkpoint_dir, "model_*.pt"))
-    if not checkpoint_files:
-        raise FileNotFoundError(f"No checkpoints found in {checkpoint_dir}")
-    last_step = int(max(os.path.basename(f).split("_")[-1].split(".")[0] for f in checkpoint_files))
-    return last_step
+    # A checkpoint becomes discoverable only after both atomic rank-0 files exist. A crash
+    # between publishing model and metadata can leave a valid-looking model-only step that
+    # must not eclipse the previous complete checkpoint during automatic resume.
+    steps = [
+        step
+        for step in list_checkpoint_steps(checkpoint_dir)
+        if os.path.isfile(os.path.join(checkpoint_dir, f"meta_{step:06d}.json"))
+    ]
+    if not steps:
+        raise FileNotFoundError(f"No complete checkpoints found in {checkpoint_dir}")
+    return steps[-1]
 
 # -----------------------------------------------------------------------------
 # convenience functions that take into account nanochat's directory structure
@@ -458,7 +516,6 @@ def load_model_from_dir(checkpoints_dir, device, phase, model_tag=None, step=Non
     if step is None:
         # guess the step by defaulting to the last step
         step = find_last_step(checkpoint_dir)
-    assert step is not None, f"No checkpoints found in {checkpoint_dir}"
     # build the model
     log0(f"Loading model from {checkpoint_dir} with step {step}")
     model, tokenizer, meta_data = build_model(checkpoint_dir, step, device, phase)

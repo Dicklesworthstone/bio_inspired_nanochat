@@ -425,5 +425,7 @@ def get_token_bytes(device="cpu"):
     if not os.path.exists(token_bytes_path):
         raise FileNotFoundError(f"Token bytes not found at {token_bytes_path}? It gets written by tok_train.py")
     with open(token_bytes_path, "rb") as f:
-        token_bytes = torch.load(f, map_location=device) # nosec B614
+        # weights_only=True: the artifact is a plain tensor blob; refuse arbitrary
+        # pickles from the (shared, writable) cache dir instead of executing them.
+        token_bytes = torch.load(f, map_location=device, weights_only=True)
     return token_bytes

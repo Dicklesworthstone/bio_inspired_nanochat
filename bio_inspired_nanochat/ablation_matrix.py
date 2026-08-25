@@ -42,9 +42,14 @@ including them (see ``docs/ablation_matrix.md`` §"Known gaps").
 from __future__ import annotations
 
 import dataclasses
+import math
+
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Optional
+
+# Significance level of the pre-registered confirmation rule (see eval_stats.compare_matrix).
+CONFIRMATION_ALPHA: float = 0.05
 
 from bio_inspired_nanochat.ablation_registry import (
     MECHANISMS,
@@ -270,10 +275,24 @@ def go_no_go(survivors: list[str], tok_per_sec: float, *,
     if n_surv == 0:
         return GoNoGo(False, hours, cap_gpu_hours, 0,
                       "No mechanism survived screening — nothing to confirm; report the null result.")
-    if hours > cap_gpu_hours:
-        return GoNoGo(False, hours, cap_gpu_hours, n_surv,
-                      f"Estimated {hours:.1f} GPU-h exceeds the {cap_gpu_hours:.1f} cap — cut seeds, "
-                      f"budget, or survivors before committing.")
+    # Pre-flight power check: refuse to authorize GPU-hours when the pre-registered
+    # rule (Holm-adjusted paired t AND Wilcoxon both <= alpha) is mathematically
+    # unfirable at this seed count — the exact Wilcoxon leg has floor p = 2^(1-n)
+    # and Holm multiplies by up to the survivor-family size. Without this, EVERY
+    # verdict would be forced to 'null' regardless of the data.
+    n = len(seeds)
+    family = max(1, n_surv)
+    best_case_p = min(1.0, 2.0 * (0.5 ** n) * family) if n >= 1 else 1.0
+    if best_case_p > CONFIRMATION_ALPHA:
+        min_n = math.ceil(math.log2(2.0 * family / CONFIRMATION_ALPHA))
+        return GoNoGo(
+            False, hours, cap_gpu_hours, n_surv,
+            f"INFEASIBLE design: with n={n} matched seeds and m={family} survivor(s), "
+            f"the smallest Holm-adjusted Wilcoxon p is {best_case_p:g} > alpha="
+            f"{CONFIRMATION_ALPHA:g}; supported_gain/supported_regression can never "
+            f"fire and every verdict would be forced to 'null'. Raise seeds to >= "
+            f"{min_n} or pre-register a small-n rule BEFORE spending GPU-hours.",
+        )
     return GoNoGo(True, hours, cap_gpu_hours, n_surv,
                   f"{n_surv} survivor(s); {hours:.1f} GPU-h within the {cap_gpu_hours:.1f} cap.")
 

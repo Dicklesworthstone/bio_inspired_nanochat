@@ -1,7 +1,8 @@
-"""fMRI for Living Transformers: Free-Energy Landscape & Attractor Dynamics Visualizer (bead `r00r.10`).
+"""Illustrative hidden-state landscape visualizer (bead `r00r.10`).
 
-Projects high-dimensional cognitive representations into an interactive 3D Free-Energy
-Lyapunov potential landscape, tracking attractor basin descents and depletion-driven basin hopping.
+Projects hidden states through a fixed, deterministic 2D map and overlays hand-authored
+potential wells. This is a qualitative visualization, not fMRI, a learned semantic probe,
+or evidence that the model follows a Lyapunov/free-energy objective.
 """
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ from torch import Tensor
 
 @dataclass
 class AttractorBasin:
-    """A semantic attractor basin (energy local minimum) on the low-dim manifold."""
+    """A hand-authored potential well on the illustrative 2D landscape."""
 
     basin_id: int
     name: str
@@ -30,31 +31,41 @@ class AttractorBasin:
 
 @dataclass
 class CognitiveTrajectoryPoint:
-    """A single token step's coordinates on the 2D energy manifold with associated free energy."""
+    """A token position and its coordinates on the illustrative 2D landscape."""
 
     token_idx: int
     token_str: str
     coord_2d: Tuple[float, float]
     free_energy: float
-    nearest_basin_id: int
+    nearest_basin_id: Optional[int]
 
 
 class FreeEnergyLandscapeProjector:
-    """Computes free-energy potential surface and projects hidden states onto attractor basins."""
+    """Projects hidden states onto a deterministic, hand-authored potential surface."""
 
     def __init__(self, num_basins: int = 4, grid_res: int = 40):
+        if (
+            isinstance(num_basins, bool)
+            or not isinstance(num_basins, int)
+            or not 0 <= num_basins <= 4
+        ):
+            raise ValueError("num_basins must be an integer in [0, 4]")
+        if isinstance(grid_res, bool) or not isinstance(grid_res, int) or grid_res < 2:
+            raise ValueError("grid_res must be an integer of at least 2")
         self.grid_res = grid_res
         self.basins: List[AttractorBasin] = [
-            AttractorBasin(0, "Factual Recall", (-1.5, -1.0), 3.0, 0.8),
-            AttractorBasin(1, "Logical Deduction", (1.5, -1.2), 3.5, 0.7),
-            AttractorBasin(2, "Creative Exploration", (0.0, 1.5), 2.5, 1.0),
-            AttractorBasin(3, "Syntactic Structuring", (-1.2, 1.2), 2.8, 0.9),
+            AttractorBasin(0, "Illustrative Basin A", (-1.5, -1.0), 3.0, 0.8),
+            AttractorBasin(1, "Illustrative Basin B", (1.5, -1.2), 3.5, 0.7),
+            AttractorBasin(2, "Illustrative Basin C", (0.0, 1.5), 2.5, 1.0),
+            AttractorBasin(3, "Illustrative Basin D", (-1.2, 1.2), 2.8, 0.9),
         ][:num_basins]
 
     def compute_energy_at(self, x: float | np.ndarray, y: float | np.ndarray) -> np.ndarray:
-        """Evaluate the Lyapunov potential landscape V(x, y) = harmonic_base - sum(basins)."""
+        """Evaluate the illustrative potential V(x, y) = harmonic_base - sum(wells)."""
         x_arr = np.asarray(x, dtype=np.float64)
         y_arr = np.asarray(y, dtype=np.float64)
+        if not np.isfinite(x_arr).all() or not np.isfinite(y_arr).all():
+            raise ValueError("energy coordinates must contain only finite values")
 
         # Base parabolic harmonic confinement
         base_v = 0.5 * (x_arr**2 + y_arr**2)
@@ -71,6 +82,8 @@ class FreeEnergyLandscapeProjector:
 
     def compute_surface_grid(self, span: float = 3.0) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Generate (X, Y, Z) coordinate meshgrid for 3D surface rendering."""
+        if not np.isfinite(span) or span <= 0.0:
+            raise ValueError("span must be finite and positive")
         x = np.linspace(-span, span, self.grid_res)
         y = np.linspace(-span, span, self.grid_res)
         X, Y = np.meshgrid(x, y)
@@ -85,11 +98,17 @@ class FreeEnergyLandscapeProjector:
         """Project (T, D) token activations onto the 2D energy surface trajectory."""
         h = hidden_states.detach().cpu().float()
         if h.ndim == 3:
-            h = h.squeeze(0)  # (T, D)
+            if h.shape[0] != 1:
+                raise ValueError("rank-3 hidden_states must have a singleton batch dimension")
+            h = h[0]
+        if h.ndim != 2 or h.shape[0] == 0 or h.shape[1] == 0:
+            raise ValueError("hidden_states must have non-empty shape (T, D) or (1, T, D)")
+        if not torch.isfinite(h).all():
+            raise ValueError("hidden_states must contain only finite values")
 
         t_len, d_dim = h.shape
 
-        # Use 2 exact orthonormal projections across representation dimensions
+        # Use two fixed orthonormal projections when D >= 2; D == 1 occupies only x.
         proj_matrix = torch.zeros(d_dim, 2)
         if d_dim == 1:
             proj_matrix[0, 0] = 1.0
@@ -100,9 +119,9 @@ class FreeEnergyLandscapeProjector:
 
         coords_2d = (h @ proj_matrix).numpy()
 
-        # Scale coordinates into landscape domain [-2.5, 2.5]
-        max_val = max(1e-4, np.max(np.abs(coords_2d)))
-        coords_2d = (coords_2d / max_val) * 2.0
+        # Bound each point independently. Whole-trajectory max normalization made an
+        # already-recorded prefix move whenever a larger future activation was appended.
+        coords_2d = np.tanh(coords_2d) * 2.0
 
         trajectory: List[CognitiveTrajectoryPoint] = []
         for i in range(t_len):
@@ -117,7 +136,7 @@ class FreeEnergyLandscapeProjector:
                 )
                 nearest_id = nearest_b.basin_id
             else:
-                nearest_id = 0
+                nearest_id = None
 
             t_str = tokens[i] if tokens and i < len(tokens) else f"tok_{i}"
 
@@ -137,7 +156,7 @@ class FreeEnergyLandscapeProjector:
         self,
         trajectory: List[CognitiveTrajectoryPoint],
     ) -> Dict[str, Any]:
-        """Build Plotly chart dictionary of the 3D free-energy landscape and descent trajectory."""
+        """Build a Plotly-compatible dictionary for the surface and projected trajectory."""
         X, Y, Z = self.compute_surface_grid()
 
         traj_x = [p.coord_2d[0] for p in trajectory]
@@ -164,21 +183,24 @@ class FreeEnergyLandscapeProjector:
         trajectory: List[CognitiveTrajectoryPoint],
         console: Optional[Console] = None,
     ) -> None:
-        """Render Rich table of cognitive attractor dynamics trajectory."""
+        """Render a Rich table of the projected hidden-state trajectory."""
         c = console or Console()
-        c.rule("[bold cyan]fMRI Attractor Dynamics & Free-Energy Descent[/bold cyan]")
+        c.rule("[bold cyan]Illustrative Hidden-State Landscape[/bold cyan]")
 
-        table = Table(title="Cognitive Step Progression Across Energy Landscape")
+        table = Table(title="Token Positions on a Hand-Authored Potential Surface")
         table.add_column("Step", justify="right")
         table.add_column("Token", style="bold")
         table.add_column("2D Coordinates (x, y)", justify="center")
-        table.add_column("Free Energy F", justify="right", style="bold green")
-        table.add_column("Attractor Basin", style="cyan")
+        table.add_column("Illustrative Potential", justify="right", style="bold green")
+        table.add_column("Nearest Well", style="cyan")
 
         for p in trajectory:
-            b_name = "Global Minimum"
-            if self.basins and 0 <= p.nearest_basin_id < len(self.basins):
-                b_name = self.basins[p.nearest_basin_id].name
+            b_name = "Unassigned"
+            if p.nearest_basin_id is not None:
+                b_name = next(
+                    (b.name for b in self.basins if b.basin_id == p.nearest_basin_id),
+                    "Unknown",
+                )
             table.add_row(
                 str(p.token_idx),
                 p.token_str,

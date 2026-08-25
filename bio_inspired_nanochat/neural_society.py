@@ -9,9 +9,11 @@ through a shared, tensor-level synaptic memory bus:
 
 from __future__ import annotations
 
+import math
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterator, List, Optional
 
 import torch
 from rich.console import Console
@@ -20,6 +22,18 @@ from torch import Tensor
 
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic
 from bio_inspired_nanochat.synaptic import SynapticLinear
+
+
+@contextmanager
+def _temporary_eval(model: torch.nn.Module) -> Iterator[None]:
+    """Run inference without permanently changing mixed per-module training modes."""
+    training_modes = [(module, module.training) for module in model.modules()]
+    model.eval()
+    try:
+        yield
+    finally:
+        for module, was_training in training_modes:
+            module.training = was_training
 
 
 @dataclass
@@ -37,8 +51,17 @@ class BusMessage:
 class SharedSynapticMemoryBus:
     """Topic-partitioned synaptic fast-weight communication and memory blackboard."""
 
-    def __init__(self, max_norm: float = 4.0):
+    def __init__(self, max_norm: float = 4.0, max_messages_per_topic: int = 128):
+        if not math.isfinite(max_norm) or max_norm <= 0.0:
+            raise ValueError("max_norm must be finite and positive")
+        if (
+            isinstance(max_messages_per_topic, bool)
+            or not isinstance(max_messages_per_topic, int)
+            or max_messages_per_topic <= 0
+        ):
+            raise ValueError("max_messages_per_topic must be a positive integer")
         self.max_norm = max_norm
+        self.max_messages_per_topic = max_messages_per_topic
         self.topics: Dict[str, List[BusMessage]] = {}
 
     def publish(
@@ -50,18 +73,38 @@ class SharedSynapticMemoryBus:
         confidence: float = 1.0,
     ) -> None:
         """Publish an associative vector binding onto a memory topic."""
-        k = key_vector.detach().cpu().view(-1)
-        v = value_vector.detach().cpu().view(-1)
+        if not isinstance(sender_id, str) or not sender_id.strip():
+            raise ValueError("sender_id must be non-empty")
+        if not isinstance(topic, str) or not topic.strip():
+            raise ValueError("topic must be non-empty")
+        if not isinstance(key_vector, Tensor) or not isinstance(value_vector, Tensor):
+            raise ValueError("key_vector and value_vector must be tensors")
+        if not key_vector.is_floating_point() or not value_vector.is_floating_point():
+            raise ValueError("key_vector and value_vector must be real floating tensors")
+        # Messages are immutable historical snapshots. Flatten non-contiguous inputs safely,
+        # and clone after moving to CPU so later caller mutations cannot rewrite the bus.
+        k = key_vector.detach().cpu().reshape(-1).clone()
+        v = value_vector.detach().cpu().reshape(-1).clone()
+        confidence_value = float(confidence)
+        if not math.isfinite(confidence_value) or not 0.0 <= confidence_value <= 1.0:
+            raise ValueError("confidence must be finite and in [0, 1]")
+        if k.numel() == 0 or v.numel() == 0:
+            raise ValueError("key_vector and value_vector must be non-empty")
+        if not torch.isfinite(k).all() or not torch.isfinite(v).all():
+            raise ValueError("key_vector and value_vector must contain only finite values")
         msg = BusMessage(
             sender_id=sender_id,
             topic=topic,
             key_vector=k,
             value_vector=v,
-            confidence=float(confidence),
+            confidence=confidence_value,
         )
         if topic not in self.topics:
             self.topics[topic] = []
-        self.topics[topic].append(msg)
+        topic_messages = self.topics[topic]
+        topic_messages.append(msg)
+        if len(topic_messages) > self.max_messages_per_topic:
+            del topic_messages[: -self.max_messages_per_topic]
 
     def clear_topic(self, topic: str) -> None:
         """Clear all messages from a topic."""
@@ -73,6 +116,9 @@ class SharedSynapticMemoryBus:
 
     def aggregate_topic(self, topic: str, in_dim: int, out_dim: int) -> Tensor:
         """Aggregate and blend all published associative bindings for a given topic."""
+        for name, value in (("in_dim", in_dim), ("out_dim", out_dim)):
+            if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+                raise ValueError(f"{name} must be a positive integer")
         delta = torch.zeros(in_dim, out_dim)
         if topic not in self.topics:
             return delta
@@ -108,8 +154,12 @@ class SharedSynapticMemoryBus:
         layer_idx: int = 0,
     ) -> bool:
         """Mount aggregated topic memories into target agent's synaptic fast weights."""
+        if not isinstance(topic, str) or not topic.strip():
+            raise ValueError("topic must be non-empty")
+        if isinstance(layer_idx, bool) or not isinstance(layer_idx, int):
+            raise ValueError("layer_idx must be an integer")
         syn_layers = [m for m in model.modules() if isinstance(m, SynapticLinear)]
-        if layer_idx >= len(syn_layers):
+        if topic not in self.topics or not 0 <= layer_idx < len(syn_layers):
             return False
 
         mod = syn_layers[layer_idx]
@@ -117,8 +167,13 @@ class SharedSynapticMemoryBus:
             return False
 
         in_d, out_d = mod.w_fast.shape
-        delta = self.aggregate_topic(topic, in_d, out_d).to(mod.w_fast.device)
-        mod.w_fast.data.copy_(delta)
+        delta = self.aggregate_topic(topic, in_d, out_d).to(
+            device=mod.w_fast.device, dtype=mod.w_fast.dtype
+        )
+        # A version-tracked copy fails loudly if a caller violates the required safe
+        # boundary by mounting between a forward and its backward pass.
+        with torch.no_grad():
+            mod.w_fast.copy_(delta)
         return True
 
 
@@ -132,6 +187,10 @@ class NeuralSociety:
 
     def register_agent(self, agent_id: str, model: GPTSynaptic, role: str) -> None:
         """Add a specialized agent to the neural society."""
+        if not isinstance(agent_id, str) or not agent_id.strip():
+            raise ValueError("agent_id must be non-empty")
+        if not isinstance(role, str) or not role.strip():
+            raise ValueError("role must be non-empty")
         self.agents[agent_id] = model
         self.agent_roles[agent_id] = role
 
@@ -142,6 +201,14 @@ class NeuralSociety:
     ) -> Dict[str, Any]:
         """Execute collaborative reasoning pipeline across the agent society."""
         t0 = time.perf_counter()
+        if not isinstance(task_prompt, Tensor):
+            raise ValueError("task_prompt must be a tensor")
+        if task_prompt.ndim != 2 or task_prompt.numel() == 0:
+            raise ValueError("task_prompt must be a non-empty rank-2 tensor")
+        if task_prompt.dtype not in {torch.int32, torch.int64}:
+            raise ValueError("task_prompt must contain integer token IDs")
+        if not isinstance(topic, str) or not topic.strip():
+            raise ValueError("topic must be non-empty")
         agent_names = list(self.agents.keys())
         if len(agent_names) == 0:
             return {"status": "no_agents", "steps": 0}
@@ -149,39 +216,74 @@ class NeuralSociety:
         # Step 1: Agent 1 (Perception/Retrieval) inspects prompt and publishes memory binding
         a1_id = agent_names[0]
         a1_model = self.agents[a1_id]
-        a1_device = next(a1_model.parameters()).device
-        with torch.no_grad():
-            wte_out = a1_model.wte(task_prompt.to(a1_device))
-            # Robust 1D vector aggregation across batch and sequence dimensions
-            if wte_out.ndim == 3:
-                emb = wte_out.mean(dim=(0, 1))
-            elif wte_out.ndim == 2:
-                emb = wte_out.mean(dim=0)
-            else:
-                emb = wte_out.view(-1)
-
-            self.bus.publish(
-                sender_id=a1_id,
-                topic=topic,
-                key_vector=emb,
-                value_vector=emb,
-                confidence=1.0,
-            )
-
-        # Step 2: Agent 2 (Reasoner) mounts collective memory and executes forward deduction
         a2_id = agent_names[min(1, len(agent_names) - 1)]
         a2_model = self.agents[a2_id]
-        a2_device = next(a2_model.parameters()).device
-        self.bus.sync_to_agent(a2_model, topic=topic, layer_idx=0)
+        min_token = task_prompt.min().item()
+        max_token = task_prompt.max().item()
+        if (
+            min_token < 0
+            or max_token >= a1_model.config.vocab_size
+            or max_token >= a2_model.config.vocab_size
+        ):
+            raise ValueError("task_prompt contains token IDs outside an agent vocabulary")
+        prompt_length = task_prompt.shape[1]
+        if (
+            prompt_length > a1_model.config.sequence_len
+            or prompt_length > a2_model.config.sequence_len
+        ):
+            raise ValueError("task_prompt exceeds an executing agent's context window")
 
-        with torch.no_grad():
-            logits, _ = a2_model(task_prompt.to(a2_device))
+        reasoner_layers = [
+            module for module in a2_model.modules() if isinstance(module, SynapticLinear)
+        ]
+        if not reasoner_layers or reasoner_layers[0].w_fast is None:
+            raise RuntimeError("reasoning agent has no compatible synaptic fast-weight target")
+        reasoner_fast = reasoner_layers[0].w_fast
+        fast_before = reasoner_fast.detach().clone()
+        topic_existed = topic in self.bus.topics
+        topic_before = list(self.bus.topics.get(topic, []))
+
+        a1_device = next(a1_model.parameters()).device
+        try:
+            with torch.no_grad():
+                wte_out = a1_model.wte(task_prompt.to(a1_device))
+                # Robust 1D vector aggregation across batch and sequence dimensions
+                if wte_out.ndim == 3:
+                    emb = wte_out.mean(dim=(0, 1))
+                elif wte_out.ndim == 2:
+                    emb = wte_out.mean(dim=0)
+                else:
+                    emb = wte_out.view(-1)
+
+                self.bus.publish(
+                    sender_id=a1_id,
+                    topic=topic,
+                    key_vector=emb,
+                    value_vector=emb,
+                    confidence=1.0,
+                )
+
+            # Step 2: Agent 2 mounts collective memory and executes a non-adaptive forward.
+            a2_device = next(a2_model.parameters()).device
+            if not self.bus.sync_to_agent(a2_model, topic=topic, layer_idx=0):
+                raise RuntimeError("reasoning agent has no compatible synaptic fast-weight target")
+
+            with _temporary_eval(a2_model), torch.no_grad():
+                logits, _ = a2_model(task_prompt.to(a2_device), train_mode=False)
+        except Exception:
+            with torch.no_grad():
+                reasoner_fast.copy_(fast_before)
+            if topic_existed:
+                self.bus.topics[topic] = topic_before
+            else:
+                self.bus.topics.pop(topic, None)
+            raise
 
         dt = (time.perf_counter() - t0) * 1000.0
         return {
             "status": "solved_collaborative",
             "topic": topic,
-            "participating_agents": len(self.agents),
+            "participating_agents": len({a1_id, a2_id}),
             "output_logits_norm": float(logits.norm().item()),
             "wall_time_ms": dt,
         }

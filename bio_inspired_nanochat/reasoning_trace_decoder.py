@@ -1,12 +1,13 @@
-"""Faithful Reasoning-Trace Decoder (bead `re4e.9`).
+"""Scalar energy-trajectory reporter (bead `re4e.9`).
 
-Decodes the latent deliberation trajectory and synaptic fast-weight evolution into an
-interpretable, mechanistically grounded Chain-of-Thought (mCoT) where each step causally
-corresponds to internal physical state transitions (Lyapunov descent, fast-weight consolidation).
+Reports measured changes in a supplied scalar trajectory. Scalar energy values alone do not
+identify concepts, cognitive operations, fast-weight changes, or causal chains of thought;
+the output therefore keeps causal-faithfulness false unless richer provenance is added later.
 """
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
@@ -24,21 +25,22 @@ class StepOperation(str, Enum):
 
     INITIAL_HYPOTHESIS = "INITIAL_HYPOTHESIS"
     ENERGY_RELAXATION = "ENERGY_RELAXATION"
-    FAST_WEIGHT_CONSOLIDATION = "FAST_WEIGHT_CONSOLIDATION"
+    ENERGY_INCREASE = "ENERGY_INCREASE"
+    ENERGY_UNCHANGED = "ENERGY_UNCHANGED"
     INCONSISTENCY_RESOLVED = "INCONSISTENCY_RESOLVED"
     CONVERGED = "CONVERGED"
 
 
 @dataclass
 class ReasoningStep:
-    """A single mechanistically decoded step in the deliberation chain."""
+    """A single observed transition in the supplied scalar trajectory."""
 
     step_index: int
     operation: StepOperation
     energy_before: float
     energy_after: float
     energy_delta: float
-    state_norm_delta: float
+    state_norm_delta: Optional[float]
     top_token_concepts: List[str]
     explanation: str
 
@@ -57,7 +59,7 @@ class ReasoningStep:
 
 @dataclass
 class MechanisticTrace:
-    """Full decoded mechanistic chain-of-thought for a deliberation episode."""
+    """Structured report of an observed scalar energy trajectory."""
 
     steps: List[ReasoningStep]
     initial_energy: float
@@ -78,7 +80,7 @@ class MechanisticTrace:
 
 
 class ReasoningTraceDecoder:
-    """Decodes latent deliberation trajectories into faithful human-readable traces."""
+    """Converts scalar energy trajectories into narrowly descriptive reports."""
 
     def __init__(
         self,
@@ -102,15 +104,26 @@ class ReasoningTraceDecoder:
     def decode_energy_trajectory(self, energy_trajectory: List[float]) -> MechanisticTrace:
         """Decode a list of successive energy values into structured reasoning steps."""
         traj = energy_trajectory
-        if len(traj) < 2:
-            init_e = traj[0] if traj else 0.0
+        if not all(math.isfinite(value) for value in traj):
+            raise ValueError("energy_trajectory values must all be finite")
+        if not traj:
+            return MechanisticTrace(
+                steps=[],
+                initial_energy=0.0,
+                final_energy=0.0,
+                total_energy_reduction=0.0,
+                is_causally_faithful=False,
+                summary_narrative="No deliberation trajectory was observed.",
+            )
+        if len(traj) == 1:
+            init_e = traj[0]
             return MechanisticTrace(
                 steps=[],
                 initial_energy=init_e,
                 final_energy=init_e,
                 total_energy_reduction=0.0,
-                is_causally_faithful=True,
-                summary_narrative="Single-step immediate decision (no multi-step deliberation trajectory).",
+                is_causally_faithful=False,
+                summary_narrative="One energy measurement was observed; no transition can be inferred.",
             )
 
         K = len(traj) - 1
@@ -122,23 +135,18 @@ class ReasoningTraceDecoder:
             e_delta = e_after - e_before
 
             # Determine operation
-            if k == 0:
-                op = StepOperation.INITIAL_HYPOTHESIS
-                expl = f"Evaluated initial draft state at Lyapunov energy {e_before:.3f}."
-            elif k == K - 1 and abs(e_delta) < 1e-4:
-                op = StepOperation.CONVERGED
-                expl = f"Relaxation reached fixed-point equilibrium (ΔE = {e_delta:+.4f})."
-            elif e_delta < -0.05:
-                op = StepOperation.INCONSISTENCY_RESOLVED
-                expl = f"Significant energy drop (ΔE = {e_delta:+.3f}); resolved state tension."
-            elif e_delta < 0:
-                op = StepOperation.ENERGY_RELAXATION
-                expl = f"Gradient relaxation descended energy landscape by {abs(e_delta):.3f}."
+            if abs(e_delta) < 1e-4:
+                op = StepOperation.ENERGY_UNCHANGED
+                expl = f"Energy change was within reporting tolerance (ΔE = {e_delta:+.4f})."
+            elif e_delta > 0:
+                op = StepOperation.ENERGY_INCREASE
+                expl = f"Energy increased by {e_delta:.3f}; the trajectory did not descend."
             else:
-                op = StepOperation.FAST_WEIGHT_CONSOLIDATION
-                expl = "Plastic fast-weight EMA consolidation."
+                op = StepOperation.ENERGY_RELAXATION
+                expl = f"Observed an energy decrease of {abs(e_delta):.3f}."
 
-            concepts = [f"latent_mode_{k}"]
+            # A scalar trajectory carries no token/concept attribution information.
+            concepts: List[str] = []
 
             step = ReasoningStep(
                 step_index=k + 1,
@@ -146,7 +154,9 @@ class ReasoningTraceDecoder:
                 energy_before=e_before,
                 energy_after=e_after,
                 energy_delta=e_delta,
-                state_norm_delta=abs(e_delta),
+                # This decoder receives energies, not hidden states. Reporting |ΔE| as a
+                # state-vector norm was dimensionally wrong and falsely implied an observation.
+                state_norm_delta=None,
                 top_token_concepts=concepts,
                 explanation=expl,
             )
@@ -156,34 +166,42 @@ class ReasoningTraceDecoder:
         final_e = traj[-1] if traj else 0.0
         total_drop = init_e - final_e
 
-        narrative = (
-            f"Deliberated for {K} steps: Initial energy {init_e:.3f} decreased to {final_e:.3f} "
-            f"(total dissipation ΔE = -{total_drop:.3f})."
-        )
+        if total_drop > 0:
+            narrative = (
+                f"Observed {K} transitions: Energy decreased from {init_e:.3f} to "
+                f"{final_e:.3f} (total dissipation {total_drop:.3f})."
+            )
+        elif total_drop < 0:
+            narrative = (
+                f"Observed {K} transitions: Energy increased from {init_e:.3f} to "
+                f"{final_e:.3f} (total increase {-total_drop:.3f})."
+            )
+        else:
+            narrative = f"Observed {K} transitions with unchanged net energy at {init_e:.3f}."
 
         return MechanisticTrace(
             steps=steps,
             initial_energy=init_e,
             final_energy=final_e,
             total_energy_reduction=total_drop,
-            is_causally_faithful=True,
+            is_causally_faithful=False,
             summary_narrative=narrative,
         )
 
     def log_trace(self, trace: MechanisticTrace, console: Optional[Console] = None) -> None:
-        """Render a formatted Rich representation of the mechanistic reasoning trace."""
+        """Render a formatted Rich representation of the energy report."""
         c = console or Console()
-        c.rule("[bold cyan]Mechanistic Reasoning Trace (mCoT)[/bold cyan]")
-        c.print(Panel(trace.summary_narrative, title="Deliberation Summary", style="green"))
+        c.rule("[bold cyan]Energy-Trajectory Report[/bold cyan]")
+        c.print(Panel(trace.summary_narrative, title="Trajectory Summary", style="green"))
 
-        table = Table(title="Step-by-Step Latent Reasoning Lineage")
+        table = Table(title="Step-by-Step Energy Changes")
         table.add_column("Step", justify="right")
         table.add_column("Operation", style="bold")
         table.add_column("Energy Before", justify="right")
         table.add_column("Energy After", justify="right")
         table.add_column("Δ Energy", justify="right")
         table.add_column("Concepts")
-        table.add_column("Mechanistic Explanation")
+        table.add_column("Observation")
 
         for s in trace.steps:
             col = "green" if s.energy_delta <= 0 else "yellow"

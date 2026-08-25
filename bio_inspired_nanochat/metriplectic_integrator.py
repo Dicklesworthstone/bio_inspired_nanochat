@@ -607,7 +607,11 @@ def guarded_step(
 
     if breach:
         # Deterministic fallback: the clamped-Euler baseline step (vg9.5/vg9.7), the safe default.
+        # Clamp identically to the torch twin (C >= 0, B in [0, 1]) so reference
+        # trajectories respect the same physical-domain guard.
         z_next = z + dt * field(z, omega, gC, gB, L_fn=L_fn, M_fn=M_fn)
+        z_next[0] = np.clip(z_next[0], 0.0, None)
+        z_next[1] = np.clip(z_next[1], 0.0, 1.0)
         used_fallback = True
     else:
         z_next, used_fallback = z_prop, False
