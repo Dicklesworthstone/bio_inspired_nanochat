@@ -32,7 +32,7 @@ from tokenizers.trainers import BpeTrainer
 
 # The compiled Rust extension is optional (built via `maturin develop`). Skip this
 # whole module cleanly when it isn't built, instead of breaking test collection.
-rustbpe = cast(Any, pytest.importorskip("rustbpe"))
+rustbpe = pytest.importorskip("rustbpe")
 
 GPT4_SPLIT_PATTERN = r"""'(?i:[sdmt]|ll|ve|re)|[^\r\n\p{L}\p{N}]?+\p{L}+|\p{N}{1,3}| ?[^\s\p{L}\p{N}]++[\r\n]*|\s*[\r\n]|\s+(?!\S)|\s+"""
 
@@ -538,7 +538,7 @@ def test_correctness(enwik8_small):
 
     # Finally use our own Rust implementation
     print("\nTraining rustbpe...")
-    rustbpe_tokenizer = cast(Any, rustbpe).Tokenizer()
+    rustbpe_tokenizer = rustbpe.Tokenizer()
     _, rustbpe_train_time = time_function(rustbpe_tokenizer.train_from_iterator, [text], vocab_size)
     rustbpe_ids, rustbpe_encode_time = time_function(rustbpe_tokenizer.encode, encode_text)
     print(f"RustBPE train time: {rustbpe_train_time:.4f}s")
@@ -583,7 +583,7 @@ def test_training_performance(enwik8_large):
 
     # Train rustbpe
     print("\nTraining rustbpe...")
-    rustbpe_tokenizer = cast(Any, rustbpe).Tokenizer()
+    rustbpe_tokenizer = rustbpe.Tokenizer()
     _, rustbpe_train_time = time_function(rustbpe_tokenizer.train_from_iterator, [text], vocab_size)
     print(f"RustBPE train time: {rustbpe_train_time:.4f}s")
     assert rustbpe_train_time > 0, "Training should take some time"
