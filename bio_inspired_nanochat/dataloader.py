@@ -16,7 +16,8 @@ def tokenizing_distributed_data_loader_with_state(B, T, split, tokenizer_threads
     Instead of turning this into a Class, we opt to return the state_dict with every batch,
     and then the caller can pass in a state_dict to resume training from a desired point.
     Note that this resumption is atm only *approximate* for simplicity.
-    We won't repeat the same documents but we might skip a few.
+    In distributed training the saved row-group cursor is not rank-specific, so resume can
+    skip or repeat documents across ranks. Single-rank resume advances past the saved group.
     The state_dict that is returned can be later passed into this function via `resume_state_dict` to approximately resume.
 
     Perfect state resumption is possible but would be a lot more bloated, probably not worth it atm.
