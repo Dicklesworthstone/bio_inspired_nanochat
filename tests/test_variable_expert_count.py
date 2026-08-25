@@ -43,11 +43,13 @@ def _set_health(moe: SynapticMoE, health: list[float]) -> None:
 
 def _shapes_consistent(moe: SynapticMoE) -> None:
     E = int(moe.num_experts)
+    xi = moe.Xi
+    assert xi is not None
     assert len(moe.experts) == E
     assert moe.router.weight.shape == (E, moe.router.in_features)
     assert moe.router_logit_bias.shape == (E,)
     assert moe.fatigue.shape == (E,) and moe.energy.shape == (E,)
-    assert moe.Xi.shape[0] == E and moe.router_embeddings.shape[0] == E
+    assert xi.shape[0] == E and moe.router_embeddings.shape[0] == E
 
 
 # --------------------------------------------------------------------------- #
@@ -56,7 +58,9 @@ def _shapes_consistent(moe: SynapticMoE) -> None:
 def test_growth_appends_complete_experts_and_preserves_survivors():
     moe = _moe(num_experts=4)
     old_W = moe.router.weight.detach().clone()
-    old_Xi = moe.Xi.detach().clone()
+    xi = moe.Xi
+    assert xi is not None
+    old_Xi = xi.detach().clone()
     old_fc0 = [p.detach().clone() for p in moe.experts[0].parameters()]
 
     touched = _resize_layer_experts_(moe, target_E=6, seed_idx=0, cfg=SplitMergeConfig())
@@ -65,7 +69,9 @@ def test_growth_appends_complete_experts_and_preserves_survivors():
     _shapes_consistent(moe)
     # survivors' router/genome rows must be bit-exact
     assert torch.equal(moe.router.weight[:4], old_W)
-    assert torch.equal(moe.Xi[:4], old_Xi)
+    resized_xi = moe.Xi
+    assert resized_xi is not None
+    assert torch.equal(resized_xi[:4], old_Xi)
     assert torch.allclose(
         moe.router_logit_bias[4:], torch.full((2,), -0.6931471805599453)
     )
@@ -128,17 +134,30 @@ def test_shrink_rejects_invalid_explicit_victim_sets(remove_indices):
 # --------------------------------------------------------------------------- #
 # 3. Controller triggers + optimizer sync helpers
 # --------------------------------------------------------------------------- #
-def _controller(moe, **cfg_overrides) -> SplitMergeController:
-    base = dict(
+def _controller(
+    model: torch.nn.Module,
+    *,
+    enabled: bool = True,
+    merges_per_call: int = 1,
+    splits_per_call: int = 0,
+    resets_per_call: int = 0,
+    min_experts: int = 2,
+    max_experts: int = 64,
+    growth_budget_pct: float = 0.5,
+) -> SplitMergeController:
+    cfg = SplitMergeConfig(
+        enabled=enabled,
+        merges_per_call=merges_per_call,
         variable_expert_count=True,
-        splits_per_call=0,  # any strong expert => unmet split demand
-        resets_per_call=0,
+        splits_per_call=splits_per_call,  # any strong expert => unmet split demand
+        resets_per_call=resets_per_call,
         min_step_interval=0,
         warmup_steps=0,
+        min_experts=min_experts,
+        max_experts=max_experts,
+        growth_budget_pct=growth_budget_pct,
     )
-    base.update(cfg_overrides)
-    cfg = SplitMergeConfig(**base)
-    return SplitMergeController(moe, cfg)
+    return SplitMergeController(model, cfg)
 
 
 def test_optimizer_sync_preserves_survivor_moments_and_drops_removed():
