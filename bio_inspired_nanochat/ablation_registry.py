@@ -21,7 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass, fields
 from typing import Any
 
-from bio_inspired_nanochat.synaptic import SynapticConfig
+from bio_inspired_nanochat.synaptic import SynapticConfig, SynapticGranularity
 
 
 @dataclass(frozen=True)
@@ -151,6 +151,8 @@ ABLATION_PRESETS: dict[str, dict[str, Any]] = {
     "bio_no_doc2": {"doc2_gain": 0.0},
     "bio_no_bdnf": {"bdnf_scale": 0.0},
     "bio_no_septin_barrier": {"barrier_strength": 0.0},
+    "granularity_per_neuron": {"granularity": SynapticGranularity.PER_NEURON},
+    "granularity_per_expert": {"granularity": SynapticGranularity.PER_EXPERT},
 }
 
 
@@ -200,6 +202,18 @@ def validate_config(cfg: SynapticConfig) -> tuple[list[str], list[str]]:
                 )
 
     # 2. Range checks on knobs that can break dynamics if mis-set.
+    valid_granularities = (
+        SynapticGranularity.PER_CONNECTION,
+        SynapticGranularity.PER_NEURON,
+        SynapticGranularity.PER_EXPERT,
+        "per_connection",
+        "per_neuron",
+        "per_expert",
+    )
+    if cfg.granularity not in valid_granularities:
+        errors.append(
+            f"granularity must be one of {valid_granularities!r}, got {cfg.granularity!r}"
+        )
     if not 0.0 <= cfg.stochastic_train_frac <= 1.0:
         errors.append(
             f"stochastic_train_frac must be in [0,1], got {cfg.stochastic_train_frac}"

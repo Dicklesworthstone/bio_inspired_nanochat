@@ -1,0 +1,237 @@
+{
+  "config": {
+    "vocab_size": 128,
+    "n_layer": 2,
+    "n_head": 4,
+    "n_kv_head": 4,
+    "n_embd": 64,
+    "sequence_len": 32,
+    "batch_size": 4,
+    "num_steps": 12,
+    "learning_rate": 0.001,
+    "seeds": [
+      42,
+      1337
+    ],
+    "granularities": [
+      "per_connection",
+      "per_neuron",
+      "per_expert"
+    ]
+  },
+  "arm_results": [
+    {
+      "granularity": "per_connection",
+      "seed": 42,
+      "train_losses": [
+        4.861407279968262,
+        4.864903450012207,
+        4.8692755699157715,
+        4.8563456535339355,
+        4.881980895996094,
+        4.846299648284912,
+        4.873453140258789,
+        4.85674524307251,
+        4.8901448249816895,
+        4.853151321411133,
+        4.8535027503967285,
+        4.895554065704346
+      ],
+      "final_train_loss": 4.895554065704346,
+      "val_loss": 4.869458556175232,
+      "val_bpb": 7.025143710808339,
+      "total_time_sec": 16.879243940114975,
+      "tokens_per_sec": 90.99933654904791,
+      "state_buffers_bytes": 100464,
+      "num_state_buffers": 60,
+      "peak_memory_bytes": 100464,
+      "passed": true
+    },
+    {
+      "granularity": "per_connection",
+      "seed": 1337,
+      "train_losses": [
+        4.890151500701904,
+        4.846005439758301,
+        4.891181945800781,
+        4.836598873138428,
+        4.877880096435547,
+        4.863779544830322,
+        4.875457286834717,
+        4.878988265991211,
+        4.860579490661621,
+        4.86857271194458,
+        4.872084140777588,
+        4.878597259521484
+      ],
+      "final_train_loss": 4.878597259521484,
+      "val_loss": 4.857001543045044,
+      "val_bpb": 7.007172039741128,
+      "total_time_sec": 15.476801448501647,
+      "tokens_per_sec": 99.24531274184594,
+      "state_buffers_bytes": 100464,
+      "num_state_buffers": 60,
+      "peak_memory_bytes": 100464,
+      "passed": true
+    },
+    {
+      "granularity": "per_neuron",
+      "seed": 42,
+      "train_losses": [
+        4.865157604217529,
+        4.859585285186768,
+        4.863052845001221,
+        4.850526809692383,
+        4.878604412078857,
+        4.8471455574035645,
+        4.867642402648926,
+        4.850789546966553,
+        4.884499549865723,
+        4.85597038269043,
+        4.856767177581787,
+        4.898106098175049
+      ],
+      "final_train_loss": 4.898106098175049,
+      "val_loss": 4.874167799949646,
+      "val_bpb": 7.031937713448023,
+      "total_time_sec": 21.85682182572782,
+      "tokens_per_sec": 70.27554199082886,
+      "state_buffers_bytes": 59504,
+      "num_state_buffers": 60,
+      "peak_memory_bytes": 59504,
+      "passed": true
+    },
+    {
+      "granularity": "per_neuron",
+      "seed": 1337,
+      "train_losses": [
+        4.888779640197754,
+        4.851784706115723,
+        4.892532825469971,
+        4.8406524658203125,
+        4.876770496368408,
+        4.858761310577393,
+        4.880124092102051,
+        4.887027263641357,
+        4.858275890350342,
+        4.872046947479248,
+        4.878347873687744,
+        4.881333827972412
+      ],
+      "final_train_loss": 4.881333827972412,
+      "val_loss": 4.857547044754028,
+      "val_bpb": 7.007959032351477,
+      "total_time_sec": 3.392356106080115,
+      "tokens_per_sec": 452.7826536981272,
+      "state_buffers_bytes": 59504,
+      "num_state_buffers": 60,
+      "peak_memory_bytes": 59504,
+      "passed": true
+    },
+    {
+      "granularity": "per_expert",
+      "seed": 42,
+      "train_losses": [
+        4.857399940490723,
+        4.860825061798096,
+        4.863821029663086,
+        4.853990077972412,
+        4.873457908630371,
+        4.842529773712158,
+        4.866033554077148,
+        4.852149486541748,
+        4.888734340667725,
+        4.856118679046631,
+        4.855092525482178,
+        4.897604942321777
+      ],
+      "final_train_loss": 4.897604942321777,
+      "val_loss": 4.87401020526886,
+      "val_bpb": 7.031710352383583,
+      "total_time_sec": 3.3466861182823777,
+      "tokens_per_sec": 458.96147583398783,
+      "state_buffers_bytes": 28784,
+      "num_state_buffers": 60,
+      "peak_memory_bytes": 28784,
+      "passed": true
+    },
+    {
+      "granularity": "per_expert",
+      "seed": 1337,
+      "train_losses": [
+        4.890538692474365,
+        4.849408149719238,
+        4.891245365142822,
+        4.844239711761475,
+        4.874147891998291,
+        4.860391616821289,
+        4.878851890563965,
+        4.883158206939697,
+        4.860324382781982,
+        4.869471073150635,
+        4.8733320236206055,
+        4.879167556762695
+      ],
+      "final_train_loss": 4.879167556762695,
+      "val_loss": 4.857391834259033,
+      "val_bpb": 7.007735110940053,
+      "total_time_sec": 10.210771259851754,
+      "tokens_per_sec": 150.42938098510498,
+      "state_buffers_bytes": 28784,
+      "num_state_buffers": 60,
+      "peak_memory_bytes": 28784,
+      "passed": true
+    }
+  ],
+  "aggregates": [
+    {
+      "granularity": "per_connection",
+      "num_seeds": 2,
+      "mean_val_loss": 4.863230049610138,
+      "std_val_loss": 0.008808438457685787,
+      "mean_val_bpb": 7.016157875274734,
+      "std_val_bpb": 0.012707890480878885,
+      "mean_throughput": 95.12232464544692,
+      "std_throughput": 5.830785683430314,
+      "mean_state_bytes": 100464.0,
+      "mean_peak_memory_bytes": 100464.0
+    },
+    {
+      "granularity": "per_neuron",
+      "num_seeds": 2,
+      "mean_val_loss": 4.865857422351837,
+      "std_val_loss": 0.011752648707262801,
+      "mean_val_bpb": 7.01994837289975,
+      "std_val_bpb": 0.0169554880072779,
+      "mean_throughput": 261.52909784447803,
+      "std_throughput": 270.4733725403109,
+      "mean_state_bytes": 59504.0,
+      "mean_peak_memory_bytes": 59504.0
+    },
+    {
+      "granularity": "per_expert",
+      "num_seeds": 2,
+      "mean_val_loss": 4.8657010197639465,
+      "std_val_loss": 0.011750962833322364,
+      "mean_val_bpb": 7.019722731661818,
+      "std_val_bpb": 0.01695305580530491,
+      "mean_throughput": 304.6954284095464,
+      "std_throughput": 218.16513648133613,
+      "mean_state_bytes": 28784.0,
+      "mean_peak_memory_bytes": 28784.0
+    }
+  ],
+  "passed": true,
+  "summary": {
+    "total_runs": 6,
+    "granularities_tested": [
+      "per_connection",
+      "per_neuron",
+      "per_expert"
+    ],
+    "seeds_tested": [
+      42,
+      1337
+    ]
+  }
+}

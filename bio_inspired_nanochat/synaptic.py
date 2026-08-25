@@ -22,6 +22,7 @@ import contextlib
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass
+from enum import Enum
 from typing import Optional, Tuple, List, Dict, Literal, cast, Any
 
 from bio_inspired_nanochat.torch_imports import torch, nn, F, Tensor
@@ -34,6 +35,24 @@ try:
     _HAS_FLEX = True
 except ImportError:
     _HAS_FLEX = False
+
+
+class SynapticGranularity(str, Enum):
+    """Architectural granularity of synaptic state machines across the network (bead vap.2).
+
+    - PER_CONNECTION (Fine / L1): Every attention edge / projection connection has dedicated
+      presynaptic and postsynaptic state machines (faithful GPT-5 Pro blueprint).
+    - PER_NEURON (Medium / L2): Intermediate per-neuron rank-R eligibility traces.
+    - PER_EXPERT (Coarse / L3): Pooled per-expert / per-layer state machine (Grok blueprint).
+    """
+    PER_CONNECTION = "per_connection"
+    PER_NEURON = "per_neuron"
+    PER_EXPERT = "per_expert"
+
+
+# -----------------------------------------------------------------------------
+# Utility functions
+# -----------------------------------------------------------------------------
 
 
 # -----------------------------------------------------------------------------
@@ -158,6 +177,9 @@ def _sample_binomial_counts(
 @dataclass
 class SynapticConfig:
     # General
+    granularity: Literal["per_connection", "per_neuron", "per_expert"] | SynapticGranularity = (
+        SynapticGranularity.PER_CONNECTION
+    )
     rank_eligibility: int = 8
     attn_topk: int = 32
     stochastic_train_frac: float = 0.12
@@ -2636,15 +2658,24 @@ class SynapticLinear(nn.Module):
             # Postsynaptic module (operates on output)
             self.post = PostsynapticHebb(in_features, out_features, cfg)
 
+            # Granularity-aware eligibility rank (vap.2): coarse per-expert uses rank 1,
+            # medium per-neuron uses intermediate rank, per-connection uses full rank.
+            granularity = getattr(cfg, "granularity", SynapticGranularity.PER_CONNECTION)
+            if granularity in (SynapticGranularity.PER_EXPERT, "per_expert"):
+                _R = 1
+            elif granularity in (SynapticGranularity.PER_NEURON, "per_neuron"):
+                _R = max(1, min(cfg.rank_eligibility, 4))
+            else:
+                _R = cfg.rank_eligibility
+
             # Eligibility buffers
-            self.register_buffer("u_buf", torch.zeros(in_features, cfg.rank_eligibility))
-            self.register_buffer("v_buf", torch.zeros(cfg.rank_eligibility, out_features))
+            self.register_buffer("u_buf", torch.zeros(in_features, _R))
+            self.register_buffer("v_buf", torch.zeros(_R, out_features))
             # vg9.9: FIXED random projections give the eligibility trace genuine rank R — each
             # rank channel accumulates the correlation of the pre/post activity with a DISTINCT
             # random projection of the other side, instead of the old mean-broadcast (all R
             # columns identical -> effectively rank 1, so rank_eligibility was a no-op knob).
             # Buffers: fixed per model and persisted in the checkpoint.
-            _R = cfg.rank_eligibility
             self.register_buffer("proj_in", torch.randn(in_features, _R) / math.sqrt(in_features))
             self.register_buffer("proj_out", torch.randn(out_features, _R) / math.sqrt(out_features))
         else:
