@@ -38,12 +38,14 @@ def _drive_traces(*, R=4, steps=3, seed=0) -> SynapticLinear:
 @pytest.mark.unit
 def test_eligibility_trace_has_genuine_rank_greater_than_one():
     lin = _drive_traces(R=4)
-    rank_u = torch.linalg.matrix_rank(lin.u_buf).item()
-    rank_v = torch.linalg.matrix_rank(lin.v_buf).item()
+    u_buf, v_buf = lin.u_buf, lin.v_buf
+    assert u_buf is not None and v_buf is not None
+    rank_u = torch.linalg.matrix_rank(u_buf).item()
+    rank_v = torch.linalg.matrix_rank(v_buf).item()
     assert rank_u > 1, f"u_buf must be genuinely rank-R (>1), got rank {rank_u}"
     assert rank_v > 1, f"v_buf must be genuinely rank-R (>1), got rank {rank_v}"
     # the low-rank Hebbian delta consumed by the weight update is genuinely rank > 1 too
-    delta = lin.u_buf @ lin.v_buf
+    delta = u_buf @ v_buf
     assert torch.linalg.matrix_rank(delta).item() > 1, "delta = u_buf @ v_buf must have real rank"
 
 
@@ -66,11 +68,13 @@ def test_higher_R_gives_higher_or_equal_trace_rank():
 @pytest.mark.unit
 def test_projections_are_fixed_across_forwards():
     lin = _drive_traces(R=4)
-    p_in, p_out = lin.proj_in.clone(), lin.proj_out.clone()
+    proj_in, proj_out = lin.proj_in, lin.proj_out
+    assert proj_in is not None and proj_out is not None
+    p_in, p_out = proj_in.clone(), proj_out.clone()
     with torch.no_grad():
         lin(torch.randn(B, IN), torch.ones(B), torch.ones(B))
-    assert torch.equal(lin.proj_in, p_in), "random projections must be FIXED (not updated)"
-    assert torch.equal(lin.proj_out, p_out)
+    assert torch.equal(proj_in, p_in), "random projections must be FIXED (not updated)"
+    assert torch.equal(proj_out, p_out)
 
 
 @pytest.mark.unit
