@@ -14,9 +14,10 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 import wandb
 import torch
-import torch.distributed as dist
+import torch.distributed as torch_dist
 from contextlib import nullcontext
 import inspect
+from typing import Protocol, cast
 
 from bio_inspired_nanochat.common import compute_init, compute_cleanup, get_base_dir, print0, DummyWandb, autodetect_device_type
 from bio_inspired_nanochat.checkpoint_manager import load_model
@@ -31,6 +32,20 @@ from tasks.gsm8k import GSM8K
 from tasks.smoltalk import SmolTalk
 from tasks.customjson import CustomJSON
 from tasks.spellingbee import SimpleSpelling, SpellingBee
+
+
+class _ReduceOpApi(Protocol):
+    AVG: object
+    SUM: object
+
+
+class _DistributedApi(Protocol):
+    ReduceOp: _ReduceOpApi
+
+    def all_reduce(self, tensor: torch.Tensor, *, op: object) -> None: ...
+
+
+dist = cast(_DistributedApi, torch_dist)
 
 # -----------------------------------------------------------------------------
 # SFT Hyperparameters

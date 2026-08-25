@@ -17,12 +17,14 @@ import wandb
 import torch
 import torch.nn.functional as F
 from contextlib import nullcontext
+from typing import Protocol, cast
+
 from bio_inspired_nanochat.common import compute_init, compute_cleanup, print0, DummyWandb, get_base_dir, autodetect_device_type
 from bio_inspired_nanochat.tokenizer import get_token_bytes
 from bio_inspired_nanochat.checkpoint_manager import save_checkpoint
 from bio_inspired_nanochat.loss_eval import evaluate_bpb
 from bio_inspired_nanochat.checkpoint_manager import load_model
-import torch.distributed as dist
+import torch.distributed as torch_dist
 
 from tasks.common import TaskMixture
 from tasks.gsm8k import GSM8K
@@ -30,6 +32,19 @@ from tasks.mmlu import MMLU
 from tasks.smoltalk import SmolTalk
 from tasks.customjson import CustomJSON
 from tasks.spellingbee import SimpleSpelling, SpellingBee
+
+
+class _ReduceOpApi(Protocol):
+    MAX: object
+
+
+class _DistributedApi(Protocol):
+    ReduceOp: _ReduceOpApi
+
+    def all_reduce(self, tensor: torch.Tensor, *, op: object) -> None: ...
+
+
+dist = cast(_DistributedApi, torch_dist)
 
 # -----------------------------------------------------------------------------
 run = "dummy" # wandb run name default ("dummy" is special - we won't log to wandb)
