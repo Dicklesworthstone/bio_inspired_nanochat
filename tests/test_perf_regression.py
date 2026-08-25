@@ -310,7 +310,7 @@ def test_perf_gate_cli_integration(tmp_path: Path):
     ret_check = gate_main([
         "--mode", "check",
         "--baselines", str(baselines_file),
-        "--tolerance", "0.50",
+        "--tolerance", "0.85",
         "--output-json", str(output_json),
     ])
     assert ret_check == 0

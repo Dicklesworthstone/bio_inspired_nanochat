@@ -31,9 +31,9 @@ from bio_inspired_nanochat.working_memory_api import (
 class WorkingMemoryDemoResult:
     """Machine-readable evidence that a neural-memory write changed generation."""
 
-    baseline_token: int
-    injected_token: int
-    target_token: int
+    baseline_token_id: int
+    injected_token_id: int
+    target_token_id: int
     predicted_margin: float
     observed_margin: float
     margin_error: float
@@ -41,10 +41,22 @@ class WorkingMemoryDemoResult:
     events_path: str
 
     @property
+    def baseline_token(self) -> int:
+        return self.baseline_token_id
+
+    @property
+    def injected_token(self) -> int:
+        return self.injected_token_id
+
+    @property
+    def target_token(self) -> int:
+        return self.target_token_id
+
+    @property
     def passed(self) -> bool:
         return (
-            self.baseline_token != self.target_token
-            and self.injected_token == self.target_token
+            self.baseline_token_id != self.target_token_id
+            and self.injected_token_id == self.target_token_id
             and self.predicted_margin > 0.0
             and self.margin_error < 1e-4
         )
@@ -52,9 +64,9 @@ class WorkingMemoryDemoResult:
     def to_dict(self) -> dict[str, int | float | str | bool]:
         return {
             "passed": self.passed,
-            "baseline_token": self.baseline_token,
-            "injected_token": self.injected_token,
-            "target_token": self.target_token,
+            "baseline_token": self.baseline_token_id,
+            "injected_token": self.injected_token_id,
+            "target_token": self.target_token_id,
             "predicted_margin": self.predicted_margin,
             "observed_margin": self.observed_margin,
             "margin_error": self.margin_error,
@@ -133,7 +145,7 @@ def run_demo(run_dir: str | Path, *, seed: int = 19) -> WorkingMemoryDemoResult:
         target_token = int(ranking[1].item())
         baseline_margin = float((baseline[baseline_token] - baseline[target_token]).item())
 
-        projection_input = captured[-1][-1].to(projection.w_fast)
+        projection_input = captured[-1].reshape(-1, captured[-1].shape[-1])[-1].to(projection.w_fast)
         input_norm = projection_input.norm()
         input_norm_value = float(input_norm.detach().item())
         if input_norm_value <= 1e-8:
