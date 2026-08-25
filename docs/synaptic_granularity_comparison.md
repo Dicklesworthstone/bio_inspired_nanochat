@@ -1,39 +1,26 @@
-# Synaptic Granularity Analysis: Per-Connection vs Per-Expert (bead vap.2)
+# Synaptic Granularity Comparison Status (bead `vap.2`)
 
-> **Context**: Evaluating the fidelity vs computational tractability tradeoff between fine-grained per-connection synaptic units (every attention edge possesses independent vesicles, Ca2+, and Hebbian traces) vs coarse-grained per-expert/per-layer synaptic state machines.
+This document describes implementation scales to compare. It is not a completed benchmark.
 
----
+## Architectural granularity spectrum
 
-## 1. Architectural Granularity Spectrum
-
-| Level | Granularity Mode | Memory Footprint | Compute Complexity | Inductive Fidelity | Implementation |
+| Level | Granularity mode | State scaling | Implemented path | Fidelity evidence | Benchmark status |
 |:---|:---|:---|:---|:---|:---|
-| **Fine (L1)** | **Per-Connection Attention Synapse** | $O(B \cdot H \cdot T \cdot T_{\text{key}})$ | Dense outer-product update | High: Exact biological spike/edge facilitation | `bio_inspired_nanochat/synaptic.py` (`SynapticAttention`) |
-| **Medium (L2)**| **Per-Neuron Rank-$R$ Projection** | $O(D \cdot R)$ buffers | $O(D \cdot R)$ matmuls | Moderate: Low-rank mode correlation | `SynapticLinear` with `rank_eligibility=R` |
-| **Coarse (L3)**| **Per-Expert MoE Metabolic State** | $O(E)$ scalar buffers | $O(E)$ elementwise add | High for routing: Expert fatigue / recovery | `bio_inspired_nanochat/gpt_synaptic.py` (`MoEMetabolism`) |
+| **Fine (L1)** | Per-attention-edge state | Grows with batch, heads, queries, and cached keys | Presynaptic modulation in `SynapticAttention` | Not established | Not run |
+| **Medium (L2)** | Per-neuron rank-$R$ traces | Low-rank buffers and projections | Eligibility state in `SynapticLinear` | Not established | Not run |
+| **Coarse (L3)** | Per-expert scalar state | Grows with expert count | MoE metabolic routing state | Not established | Not run |
 
----
+The labels “fine,” “medium,” and “coarse” describe state granularity, not measured
+biological fidelity or quality.
 
-## 2. Empirical Quality vs Cost Tradeoff
+## Evidence boundary
 
-On FineWeb 10M / Synthetic Associative Recall:
+No raw artifact or executable apples-to-apples harness is linked for the exact VRAM,
+bits-per-byte, or throughput numbers previously shown here. Those values and the resulting
+production recommendation have been removed. Unit tests for individual mechanisms do not
+establish the relative quality/cost frontier.
 
-- **L1 (Per-Connection)**:
-  - VRAM Consumption: $\sim 6.2\text{ GB}$ (at batch 16, context 1024).
-  - Validation bpb: $-0.092$ vs baseline.
-  - Training throughput: $88\%$ of vanilla transformer.
-- **L2 (Per-Neuron Rank-$R$)**:
-  - VRAM Consumption: $\sim 4.4\text{ GB}$.
-  - Validation bpb: $-0.081$ vs baseline.
-  - Training throughput: $95\%$ of vanilla transformer.
-- **L3 (Per-Expert Coarse)**:
-  - VRAM Consumption: $\sim 4.2\text{ GB}$.
-  - Validation bpb: $-0.045$ vs baseline.
-  - Training throughput: $99\%$ of vanilla transformer.
-
----
-
-## 3. Principled Recommendation
-
-1. **Default Production Architecture**: Use **L2 (Rank-$R$ Per-Neuron)** in linear/feedforward projections paired with **L3 (Per-Expert)** in MoE routers.
-2. **Dense Fine-Grained Attention**: Activate **L1** selectively via Triton fused kernels (`presyn_fused.py`) when associative needle retrieval or short-term synaptic memory is strictly required.
+A valid comparison needs one configuration switch that changes only granularity, identical
+model/data/training budgets, peak-memory measurement on named hardware, synchronized token
+throughput timing, held-out quality metrics, multiple seeds, and archived raw results. Until
+then, the best granularity and any selective-use recommendation remain open hypotheses.

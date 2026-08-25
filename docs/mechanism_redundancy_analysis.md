@@ -1,35 +1,27 @@
-# Redundancy, Saturation & Interaction Meta-Analysis Across Bio Mechanisms (bead 74f.5)
+# Mechanism Redundancy and Saturation Hypotheses (bead 74f.5)
 
-> **Context**: Investigating potential mechanism saturation and correlation across BDNF metaplasticity, CaMKII/PP1 consolidation, Doc2 dual release channels, Septin distance barriers, and MoE energy metabolism.
+This note records interaction risks to test. No completed factorial experiment or
+correlation artifact is currently linked from this document, so the classifications below
+are hypotheses, not empirical findings or production recommendations.
 
----
+## Interaction hypotheses
 
-## 1. Executive Summary & Correlation Matrix
+| Mechanism pair | Code-level interaction | Question requiring measurement |
+|:---|:---|:---|
+| BDNF and CaMKII/PP1 | BDNF scales update magnitude while the latch gates consolidation. | Do the signals add independent predictive value, or behave like one effective learning-rate control? |
+| Doc2 and vesicle fatigue | Both influence same-step release probability during sustained activity. | Does the Doc2 gain improve useful retention under depletion, or merely offset another parameter? |
+| Septin barrier and attention entropy | The barrier changes logits before softmax. | Is its effect distinguishable from temperature or other logit scaling on matched tasks? |
+| Glial homeostasis and MoE metabolism | Both can alter expert routing pressure. | Do they improve load balance independently, and what quality or latency cost accompanies that change? |
 
-An empirical concern in multi-mechanism biological architectures is **functional redundancy**: if multiple mechanisms act as surrogate learning rate scalers or attention smoothers, combining them may yield diminishing returns or increased hyperparameter sensitivity.
+The configured timescales and bounds do not by themselves prove independence, prevent
+cross-talk, guarantee stability, or justify retaining every mechanism.
 
-### Mechanism Interaction Matrix
+## Minimum credible experiment
 
-| Mechanism Pair | Primary Function | Interaction Type | Empirical Finding | Decision / Policy |
-|:---|:---|:---|:---|:---|
-| **BDNF $\leftrightarrow$ CaMKII/PP1** | Synaptic learning rate scaling vs bistable consolidation | **Complementary** | CaMKII sets discrete bistable switch; BDNF modulates continuous magnitude ($1 + \gamma B$). Low correlation ($r \approx 0.18$). | **Keep Both** |
-| **Doc2 $\leftrightarrow$ Vesicle Fatigue** | Asynchronous release vs vesicle depletion | **Synergistic** | Doc2 maintains residual release during heavy fatigue, preventing attention collapse under long bursts. | **Keep Both** |
-| **Septin Barrier $\leftrightarrow$ Softmax Entropy** | Local logit inhibition vs temperature scaling | **Partially Redundant** | Both sharpen attention distributions, but Septin imposes spatial distance inductive bias. | **Keep Septin (Default-On with small strength $0.1$)** |
-| **Glial Homeostasis $\leftrightarrow$ MoE Metabolism** | Global zero-sum logit bias vs local fatigue decay | **Orthogonal** | Metabolism operates per-expert locally; Glia coordinates across expert groups. | **Keep Both (Glia default-off for standard runs)** |
+A redundancy claim needs a factorial ablation with each mechanism off/on, interaction
+terms, fixed data order, matched compute, multiple predeclared seeds, and raw per-run
+artifacts. Report uncertainty for both quality and operational metrics; do not infer a
+correlation or bits-per-byte improvement from unit tests or implementation structure.
 
----
-
-## 2. Saturation Curve & Diminishing Returns
-
-$$\Delta \mathcal{L}_{\text{total}} \approx \sum_{i} \Delta \mathcal{L}_i - \sum_{i < j} \mathcal{I}(i, j)$$
-
-- **Single Mechanism Gain**: Turning on any individual mechanism (e.g. presyn alone or Hebbian alone) yields $0.02 - 0.05$ bpb improvement.
-- **Combined Stack (`bio_all`)**: Yields $0.08 - 0.12$ bpb improvement without loss plateaus or optimization instability.
-- **Cross-Talk Safeguards**: The Metriplectic / GENERIC bracket and timescale separation ($\tau_{\text{Ca}} \ll \tau_{\text{vesicle}} \ll \tau_{\text{Hebb}} \ll \tau_{\text{MoE}}$) algebraically prevent mechanism cross-talk by acting on decoupled physical strata.
-
----
-
-## 3. Conclusions & Production Recipe
-
-1. **Retain the Full Decoupled Stack**: The 4-timescale separation guarantees that mechanisms do not fight or saturate each other's gradients.
-2. **Strict Default Parameter Bounds**: CMA-ES optimization (`docs/cmaes_params.md`) bounds each parameter to prevent parameter drift into saturated regimes.
+Until that experiment exists, no numeric correlation, loss improvement, or saturation
+curve should be attributed to this project.

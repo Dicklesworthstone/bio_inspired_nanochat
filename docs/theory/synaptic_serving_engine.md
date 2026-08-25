@@ -1,83 +1,44 @@
-# Synaptic Serving Engine & Certified SLA Specification (bead `re4e.5.1`)
+# Synaptic Serving Engine: Implemented Guard Semantics
 
-_Product Layer & Production Inference Server · Certified SLA Tradeoffs. Author: GoldenRiver · 2026-08-24._
+This note describes the current implementation in
+`bio_inspired_nanochat/synaptic_serving_engine.py`. It is not a certification report.
 
-## Executive Summary & Architecture
+## Request controls
 
-The **Synaptic Serving Engine** exposes bio-inspired wave-1 capabilities as first-class, per-request API knobs, backed by conformal safety certificates (`r00r.7`, `re4e.10`) that enforce provable runtime SLAs (latency, trust, and energy bounds).
+`ServingKnobs` currently exposes deliberation depth, an abstract ATP budget, a minimum
+top-token probability, self-correction sharpening, and an opt-in adaptive-serving mode.
+`SLARequirement` adds a latency limit and, for strict requests, another confidence floor.
+Inputs, token ranges, context length, and numeric bounds are validated before generation.
 
----
+The latency pre-check uses a fixed analytical estimate scaled by batch size and the growing
+sequence length. Runtime is also checked against the configured limit after each model
+forward. ATP is a bookkeeping unit derived from deliberation depth and the same request-work
+factors; neither value is a calibrated hardware or energy measurement. A configurable batch
+limit prevents a single request from carrying an unbounded number of rows.
 
-## 1. Per-Request API Knobs & Knobs Schema
+The scheduler partitions queued requests into zero-deliberation and deliberative groups,
+then executes the fast tier before the deliberative tier. It restores caller order only in
+the returned response list; execution order is tiered. It does not perform a single batched
+model forward or automatically reduce deliberation depth.
 
-```json
-{
-  "prompt": "Solve this differential equation and explain the physical meaning",
-  "knobs": {
-    "deliberation_steps": 4,
-    "atp_energy_cap": 25.0,
-    "trust_threshold": 0.85,
-    "conformal_alpha": 0.05,
-    "enable_self_correction": true
-  },
-  "sla_requirements": {
-    "max_latency_ms": 150.0,
-    "min_confidence": 0.90,
-    "require_exact_certificate": true
-  }
-}
-```
+## Confidence guard
 
-### 1.1 First-Class Knob Semantics
-1. **`deliberation_steps` ($K \in [0, 10]$)**:
-   - Sets the number of latent Lyapunov descent steps ($h \leftarrow h - \eta \nabla \mathcal{F}(h)$).
-2. **`atp_energy_cap` ($E_{\text{cap}} > 0$)**:
-   - Bounds total inference cost. Generation halts immediately when accumulated ATP consumption reaches $E_{\text{cap}}$.
-3. **`trust_threshold` ($\tau \in [0, 1]$)**:
-   - Sheaf $H^1$ inconsistency detector threshold (`r00r.5`). Tokens with obstruction score $c_t > \tau$ trigger self-correction or abstention.
-4. **`conformal_alpha` ($\alpha \in (0, 0.2]$)**:
-   - Guarantees prediction error rate does not exceed $\alpha$ under conformal calibration (`re4e.10`).
+At each generated position, the engine computes the largest softmax probability for each
+batch row and gates the whole request on the least-confident row. Falling below the active
+threshold produces `CONFIDENCE_ABSTENTION`; meeting it records
+`confidence_floor_met`. A zero-token request records that confidence was not evaluated,
+and non-finite logits or probabilities abstain explicitly. These are heuristic decisions.
 
----
+The repository does not currently provide a calibration dataset, nonconformity score,
+quantile calculation, exchangeability check, or empirical coverage artifact for this
+engine. Therefore the top-probability threshold is not a conformal predictor and must not
+be described as a statistical certificate or coverage guarantee. A future conformal API
+would need those missing elements plus tests that measure achieved coverage on held-out
+data.
 
-## 2. SLA Enforcement & Honest Abstention Protocol
+## State behavior
 
-```text
- ┌─────────────────────────┐
- │ Incoming Request (Knobs)│
- └────────────┬────────────┘
-              │
-              ▼
- ┌─────────────────────────┐     Exceeds SLA / Load Cap
- │  SLA Feasibility Check  ├────────────────────────────► HTTP 429 SLA_UNACHIEVABLE
- └────────────┬────────────┘                               (Honest Refusal)
-              │ Feasible
-              ▼
- ┌─────────────────────────┐
- │ Heterogeneous Scheduler │ ──► Dynamic Batching by Budget Bucket
- └────────────┬────────────┘
-              │
-              ▼
- ┌─────────────────────────┐
- │   GPTSynaptic Forward   │
- └────────────┬────────────┘
-              │
-              ▼
- ┌─────────────────────────┐     Obstruction > Threshold
- │ Trust & Conformal Guard ├────────────────────────────► Certified Abstention
- └────────────┬────────────┘                               "I cannot guarantee this answer"
-              │ Certified Safe
-              ▼
- ┌─────────────────────────┐
- │ Certified Output + Card │
- └─────────────────────────┘
-```
-
----
-
-## 3. Heterogeneous Batch Scheduler
-
-1. **Budget Bucketing**:
-   - Requests are assigned to priority buckets based on `deliberation_steps` ($K=0$ fast-path, $K=2..4$ deliberative, $K \ge 5$ deep-search).
-2. **Graceful Degradation Under High Load**:
-   - When server queue exceeds capacity, the scheduler automatically downschedules non-critical requests to fast-path ($K=0$) or sheds requests whose strict SLA cannot be met.
+Serving temporarily places modules in evaluation mode and restores each module's prior
+mode afterward. Ordinary requests pass `train_mode=False`, so they do not persist online
+plasticity. `adaptive_serving=True` explicitly opts into model adaptation and should only
+be used where cross-request state mutation is intended.

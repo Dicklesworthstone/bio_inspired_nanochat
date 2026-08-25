@@ -1,70 +1,34 @@
-# Sleep Phases, Memory Replay & Synaptic Consolidation (SHY Hypothesis) — Design Note (bead `cel.1`)
+# Sleep Replay and Consolidation: Implemented Semantics (bead `cel.1`)
 
-_Continual Learning & Synaptic Consolidation (`cel`) · Biologically Grounded Continual Adaptation. Author: GoldenRiver · 2026-08-24._
+This module borrows sleep/replay terminology as an engineering analogy. It does not establish
+biological equivalence or show that the model solves catastrophic forgetting.
 
-## Purpose & Theoretical Foundations
+## Current execution path
 
-In standard deep neural networks, sequential learning on non-stationary distributions results in **catastrophic forgetting**. Biological brains solve this through two coupled mechanisms:
-1. **Two-Stage Memory Architecture (Hippocampal-Neocortical Division)**: Fast, plastic synaptic weights ($W_{\text{fast}}$) rapidly encode experiential context online during active wakefulness. During offline "sleep" states, prioritized replay of high-surprise experiences drives the distillation of $W_{\text{fast}}$ into durable slow weights ($W_{\text{slow}}$).
-2. **Synaptic Homeostasis Hypothesis (SHY)** (Tononi & Cirelli, 2003): Net synaptic weight increases during wakeful learning saturate energetic and metabolic budgets. Slow-wave sleep executes a global, multiplicative downscaling of synaptic strengths ($\beta_{\text{down}} < 1.0$), pruning weak or spurious connections while preserving relative potentiated ratios.
+`PrioritizedReplayBuffer` stores bounded CPU snapshots and samples them by surprise-weighted
+probability. Weight normalization is performed in log space so extreme finite priorities do
+not overflow. `WakeSleepScheduler.step_training` is a post-backward/post-optimizer hook: before
+replay, the controller lands one deferred wake-plasticity write and clears its eligibility
+traces so the same update is not applied twice.
 
----
+Each replay forward then uses the model's native adaptive synaptic update. The controller
+measures the resulting slow-state delta, retains it only when the configured CaMKII threshold
+is met, and scales that native delta by `consolidation_lr`. It does not add a second copy of
+the whole fast-weight matrix. It also does not clear `w_fast`, because that tensor currently
+contains trainable model state as well as adaptive state. The legacy helper offers an explicit
+`reset_fast_after=True` experiment switch, but its safe default is false.
 
-## 1. The Wake-Sleep Tri-Phasic Architecture
+Optional homeostatic scaling caps slow-weight norms after replay. Synthetic "dream" sequences
+are sampled from the current model state; they are not slow-weight-only, privacy-safe, or a
+guarantee against memorized-data emission.
 
-```text
-               ┌────────────────────────────────────────┐
-               │              WAKE PHASE                │
-               │ • Online Fast-Weight Adaptation W_fast │
-               │ • Experience stream evaluation         │
-               │ • Surprise metric: S = -log P(x_t)     │
-               │ • Top-K high-surprise buffer push      │
-               └───────────────────┬────────────────────┘
-                                   │
-                                   ▼
-               ┌────────────────────────────────────────┐
-               │            NREM SLEEP PHASE            │
-               │ • Prioritized Experience Replay (PER)  │
-               │ • Sharp-Wave Ripple replay forward pass│
-               │ • Fast->Slow Consolidation:            │
-               │   ΔW_slow = η_c * (W_fast ⊙ Gate)      │
-               │ • W_fast reset to zero                 │
-               └───────────────────┬────────────────────┘
-                                   │
-                                   ▼
-               ┌────────────────────────────────────────┐
-               │             REM SLEEP / SHY            │
-               │ • Homeostatic Multiplicative Renorm:   │
-               │   W_slow ← W_slow * (E_budget / ||W||) │
-               │ • Low-salience weight pruning          │
-               │ • Thermodynamic energy recovery        │
-               └────────────────────────────────────────┘
-```
+## Evidence boundary
 
----
+The test suite verifies buffer bounds and snapshots, mode restoration, device and numeric
+validation, single native slow-update scaling, pending-trace cleanup, and failure rollback in
+the controller. It does not establish improved retention, resistance to forgetting, selective
+preservation of useful memories, privacy, or equivalence to NREM/REM biology.
 
-## 2. Mathematical Formalization
-
-### 2.1 Wake Surprise Metric & Buffer Push
-During the online wake phase, sequence tokens $x_{1:T}$ generate sequence-level surprisal:
-$$\mathcal{S}(x_{1:T}) = \frac{1}{T} \sum_{t=1}^T -\log P(x_t \mid x_{<t})$$
-Sequences where $\mathcal{S}(x_{1:T}) > \tau_{\text{surprise}}$ are stored in a prioritized episodic replay ring buffer $\mathcal{B}_{\text{replay}}$ with priority $p_i = (\mathcal{S}_i)^\alpha$.
-
-### 2.2 NREM Fast-to-Slow Synaptic Consolidation
-During offline NREM replay, replaying stored trajectories activates the CaMKII/PP1 consolidation latch $\Lambda \in [0, 1]^{d_{\text{out}} \times d_{\text{in}}}$. Slow weights distill the accumulated fast representation:
-$$W_{\text{slow}}^{(t+1)} = W_{\text{slow}}^{(t)} + \eta_{\text{cons}} \cdot \left( W_{\text{fast}} \odot \Lambda \right)$$
-Following consolidation, the fast weights are cleared: $W_{\text{fast}} \leftarrow 0$.
-
-### 2.3 Synaptic Homeostatic Downscaling (SHY)
-To maintain bounded total metabolic weight norm $\Omega_{\text{max}}$ without distorting signal direction:
-$$W_{\text{slow}} \leftarrow W_{\text{slow}} \cdot \min\left(1.0, \frac{\Omega_{\text{target}}}{\|W_{\text{slow}}\|_F}\right)$$
-This contracts noise while preserving consolidated memory traces.
-
----
-
-## 3. Implementation Blueprint & Acceptance
-
-1. **Replay Buffer**: `HighSurpriseReplayBuffer` tracking sequence perplexity and priority sampling.
-2. **Consolidation Controller**: `OfflineConsolidationPhase` executing NREM replay passes and fast $\to$ slow weight transfer.
-3. **Homeostasis Renormalizer**: `SynapticHomeostasisModule` enforcing SHY downscaling bounds.
-4. **Acceptance**: Tested against standard continual learning benchmarks (sequential task transfer without forgetting).
+A credible continual-learning result still requires predeclared sequential tasks, matched
+training and replay compute, no-replay and conventional-replay baselines, multiple seeds, raw
+per-run artifacts, and retention/forward-transfer metrics with uncertainty.

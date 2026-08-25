@@ -40,22 +40,22 @@
         "std": 0.0
       },
       "nas": {
-        "ci_high": 0.0029692157362608313,
-        "ci_low": 0.0010505811120362879,
-        "mean": 0.0020098984241485596,
+        "ci_high": 0.0023532684355427242,
+        "ci_low": 0.0013421450347255253,
+        "mean": 0.0018477067351341248,
         "n": 8,
-        "sem": 0.00040569545519381626,
-        "std": 0.0011474800298564426
+        "sem": 0.0002138021294791589,
+        "std": 0.0006047237423473501
       },
       "paired": {
-        "cohen_dz": 1.7515759506507589,
-        "delta_ci_high": 0.002853039652109146,
-        "delta_ci_low": 0.0015198159962892532,
-        "mean_delta": 0.0020098984241485596,
+        "cohen_dz": 3.055455914401343,
+        "delta_ci_high": 0.0022956784814596176,
+        "delta_ci_low": 0.00157415340654552,
+        "mean_delta": 0.0018477067351341248,
         "n_favorable": 0,
         "n_pairs": 8,
-        "t_p_value": 0.001648378400813887,
-        "t_stat": 4.9542049298737005,
+        "t_p_value": 5.5497048958208494e-05,
+        "t_stat": 8.642134386758933,
         "wilcoxon_p_value": 0.0078125
       }
     },
@@ -69,22 +69,22 @@
         "std": 0.005592465401467198
       },
       "nas": {
-        "ci_high": 0.1577813237736509,
-        "ci_low": 0.14972282351753258,
-        "mean": 0.15375207364559174,
+        "ci_high": 0.15745914574956316,
+        "ci_low": 0.14972061816359145,
+        "mean": 0.1535898819565773,
         "n": 8,
-        "sem": 0.0017039705675627357,
-        "std": 0.004819556573063603
+        "sem": 0.0016363123191262005,
+        "std": 0.00462819014797289
       },
       "paired": {
-        "cohen_dz": 1.5186908978854763,
-        "delta_ci_high": 0.004920971207320689,
-        "delta_ci_low": 0.0020033642649650574,
-        "mean_delta": 0.003429301083087921,
+        "cohen_dz": 1.5038152685791617,
+        "delta_ci_high": 0.004739090846851468,
+        "delta_ci_low": 0.0019369013607501984,
+        "mean_delta": 0.0032671093940734863,
         "n_favorable": 0,
         "n_pairs": 8,
-        "t_p_value": 0.003586339247806999,
-        "t_stat": 4.2955065296844275,
+        "t_p_value": 0.003777087718440664,
+        "t_stat": 4.253431896256778,
         "wilcoxon_p_value": 0.0078125
       }
     }
@@ -115,7 +115,7 @@
     "top_k": 2,
     "train_steps": 20
   },
-  "events_path": "runs/e2e/structural_nas_evaluation/5a38783059ea/events.jsonl",
+  "events_path": "runs/e2e/structural_nas_evaluation/6a16f9252047/events.jsonl",
   "invariants": {
     "all_outcomes_finite": true,
     "equal_average_expert_count": true,
@@ -199,10 +199,10 @@
         {
           "experts_after": 4,
           "experts_before": 5,
-          "loss_after": 0.1614587903022766,
+          "loss_after": 0.16150611639022827,
           "loss_before": 0.15989822149276733,
-          "loss_discontinuity": 0.0015605688095092773,
-          "loss_spike": 0.0015605688095092773,
+          "loss_discontinuity": 0.0016078948974609375,
+          "loss_spike": 0.0016078948974609375,
           "name": "final_apoptosis",
           "optimizer_synced": true,
           "planned_operations": [
@@ -219,8 +219,8 @@
           "routing_shares_after": [
             0.16666666666666666,
             0.16666666666666666,
-            0.16666666666666666,
-            0.5
+            0.5,
+            0.16666666666666666
           ],
           "routing_shares_before": [
             0.0,
@@ -262,21 +262,21 @@
       ],
       "expert_dispatches": 936,
       "final_expert_count": 4,
-      "final_loss": 0.1614587903022766,
+      "final_loss": 0.16150611639022827,
       "forward_calls": 26,
       "initial_loss": 0.192663311958313,
-      "max_event_loss_spike": 0.0015605688095092773,
+      "max_event_loss_spike": 0.0016078948974609375,
       "method": "nas",
       "moe_matmul_flops": 190080,
       "router_width_token_units": 1872,
       "routing_gini": 0.25,
       "seed": 503,
       "top_k": 2,
-      "total_event_loss_discontinuity": 0.0020492523908615112,
+      "total_event_loss_discontinuity": 0.0020965784788131714,
       "train_forward_calls": 20,
       "training_average_expert_count": 4.0,
       "training_router_width_token_units": 1440,
-      "wall_time_seconds": 0.12101632449775934
+      "wall_time_seconds": 1.2859178623184562
     },
     {
       "average_expert_count": 4.0,
@@ -399,7 +399,7 @@
       "train_forward_calls": 20,
       "training_average_expert_count": 4.0,
       "training_router_width_token_units": 1440,
-      "wall_time_seconds": 0.10497784707695246
+      "wall_time_seconds": 0.5758477812632918
     },
     {
       "average_expert_count": 4.0,
@@ -549,7 +549,7 @@
       "train_forward_calls": 20,
       "training_average_expert_count": 4.0,
       "training_router_width_token_units": 1440,
-      "wall_time_seconds": 0.1222844971343875
+      "wall_time_seconds": 3.253246854059398
     },
     {
       "average_expert_count": 4.0,
@@ -672,7 +672,7 @@
       "train_forward_calls": 20,
       "training_average_expert_count": 4.0,
       "training_router_width_token_units": 1440,
-      "wall_time_seconds": 0.0962597131729126
+      "wall_time_seconds": 1.5487699685618281
     },
     {
       "average_expert_count": 4.0,
@@ -745,10 +745,10 @@
         {
           "experts_after": 4,
           "experts_before": 5,
-          "loss_after": 0.14766953885555267,
+          "loss_after": 0.147830531001091,
           "loss_before": 0.14639365673065186,
-          "loss_discontinuity": 0.0012758821249008179,
-          "loss_spike": 0.0012758821249008179,
+          "loss_discontinuity": 0.001436874270439148,
+          "loss_spike": 0.001436874270439148,
           "name": "final_apoptosis",
           "optimizer_synced": true,
           "planned_operations": [
@@ -765,8 +765,8 @@
           "routing_shares_after": [
             0.16666666666666666,
             0.16666666666666666,
-            0.16666666666666666,
-            0.5
+            0.5,
+            0.16666666666666666
           ],
           "routing_shares_before": [
             0.0,
@@ -808,21 +808,21 @@
       ],
       "expert_dispatches": 936,
       "final_expert_count": 4,
-      "final_loss": 0.14766953885555267,
+      "final_loss": 0.147830531001091,
       "forward_calls": 26,
       "initial_loss": 0.188146710395813,
-      "max_event_loss_spike": 0.0012758821249008179,
+      "max_event_loss_spike": 0.001436874270439148,
       "method": "nas",
       "moe_matmul_flops": 190080,
       "router_width_token_units": 1872,
       "routing_gini": 0.25,
       "seed": 547,
       "top_k": 2,
-      "total_event_loss_discontinuity": 0.0017762929201126099,
+      "total_event_loss_discontinuity": 0.00193728506565094,
       "train_forward_calls": 20,
       "training_average_expert_count": 4.0,
       "training_router_width_token_units": 1440,
-      "wall_time_seconds": 0.10541415121406317
+      "wall_time_seconds": 1.5428804643452168
     },
     {
       "average_expert_count": 4.0,
@@ -945,7 +945,7 @@
       "train_forward_calls": 20,
       "training_average_expert_count": 4.0,
       "training_router_width_token_units": 1440,
-      "wall_time_seconds": 0.1274439748376608
+      "wall_time_seconds": 1.0774551117792726
     },
     {
       "average_expert_count": 4.0,
@@ -1095,7 +1095,7 @@
       "train_forward_calls": 20,
       "training_average_expert_count": 4.0,
       "training_router_width_token_units": 1440,
-      "wall_time_seconds": 0.11664482392370701
+      "wall_time_seconds": 0.12656907457858324
     },
     {
       "average_expert_count": 4.0,
@@ -1218,7 +1218,7 @@
       "train_forward_calls": 20,
       "training_average_expert_count": 4.0,
       "training_router_width_token_units": 1440,
-      "wall_time_seconds": 0.0973829235881567
+      "wall_time_seconds": 1.7976899705827236
     },
     {
       "average_expert_count": 4.0,
@@ -1368,7 +1368,7 @@
       "train_forward_calls": 20,
       "training_average_expert_count": 4.0,
       "training_router_width_token_units": 1440,
-      "wall_time_seconds": 0.11287236586213112
+      "wall_time_seconds": 0.8961142878979445
     },
     {
       "average_expert_count": 4.0,
@@ -1491,7 +1491,7 @@
       "train_forward_calls": 20,
       "training_average_expert_count": 4.0,
       "training_router_width_token_units": 1440,
-      "wall_time_seconds": 0.09846801217645407
+      "wall_time_seconds": 0.9781755991280079
     },
     {
       "average_expert_count": 4.0,
@@ -1641,7 +1641,7 @@
       "train_forward_calls": 20,
       "training_average_expert_count": 4.0,
       "training_router_width_token_units": 1440,
-      "wall_time_seconds": 0.11246559675782919
+      "wall_time_seconds": 2.0970610715448856
     },
     {
       "average_expert_count": 4.0,
@@ -1764,7 +1764,7 @@
       "train_forward_calls": 20,
       "training_average_expert_count": 4.0,
       "training_router_width_token_units": 1440,
-      "wall_time_seconds": 0.0974949337542057
+      "wall_time_seconds": 0.4591175774112344
     },
     {
       "average_expert_count": 4.0,
@@ -1914,7 +1914,7 @@
       "train_forward_calls": 20,
       "training_average_expert_count": 4.0,
       "training_router_width_token_units": 1440,
-      "wall_time_seconds": 0.11085114069283009
+      "wall_time_seconds": 1.6807641284540296
     },
     {
       "average_expert_count": 4.0,
@@ -2037,7 +2037,7 @@
       "train_forward_calls": 20,
       "training_average_expert_count": 4.0,
       "training_router_width_token_units": 1440,
-      "wall_time_seconds": 0.0979961110278964
+      "wall_time_seconds": 0.9712808066979051
     },
     {
       "average_expert_count": 4.0,
@@ -2110,10 +2110,10 @@
         {
           "experts_after": 4,
           "experts_before": 5,
-          "loss_after": 0.15823861956596375,
+          "loss_after": 0.15673276782035828,
           "loss_before": 0.15341849625110626,
-          "loss_discontinuity": 0.004820123314857483,
-          "loss_spike": 0.004820123314857483,
+          "loss_discontinuity": 0.003314271569252014,
+          "loss_spike": 0.003314271569252014,
           "name": "final_apoptosis",
           "optimizer_synced": true,
           "planned_operations": [
@@ -2130,8 +2130,8 @@
           "routing_shares_after": [
             0.16666666666666666,
             0.16666666666666666,
-            0.16666666666666666,
-            0.5
+            0.5,
+            0.16666666666666666
           ],
           "routing_shares_before": [
             0.0,
@@ -2173,21 +2173,21 @@
       ],
       "expert_dispatches": 936,
       "final_expert_count": 4,
-      "final_loss": 0.15823861956596375,
+      "final_loss": 0.15673276782035828,
       "forward_calls": 26,
       "initial_loss": 0.19115574657917023,
-      "max_event_loss_spike": 0.004820123314857483,
+      "max_event_loss_spike": 0.003314271569252014,
       "method": "nas",
       "moe_matmul_flops": 190080,
       "router_width_token_units": 1872,
       "routing_gini": 0.25,
       "seed": 661,
       "top_k": 2,
-      "total_event_loss_discontinuity": 0.005302980542182922,
+      "total_event_loss_discontinuity": 0.0037971287965774536,
       "train_forward_calls": 20,
       "training_average_expert_count": 4.0,
       "training_router_width_token_units": 1440,
-      "wall_time_seconds": 0.11348637565970421
+      "wall_time_seconds": 1.3039851263165474
     },
     {
       "average_expert_count": 4.0,
@@ -2310,14 +2310,14 @@
       "train_forward_calls": 20,
       "training_average_expert_count": 4.0,
       "training_router_width_token_units": 1440,
-      "wall_time_seconds": 0.09775152057409286
+      "wall_time_seconds": 0.6967537002637982
     }
   ],
   "protocol_id": "a2307f21b18f",
   "registry_path": "results/registry.jsonl",
   "registry_verdict": "invalidated",
-  "report_path": "results/structural_nas_evaluation_a2307f21b18f.json",
-  "run_id": "5a38783059ea",
+  "report_path": "runs/e2e/structural_nas_evaluation/6a16f9252047/statistics.json",
+  "run_id": "6a16f9252047",
   "schema_version": 1,
   "scope": "controlled synthetic routed-learning task; not language-model-scale evidence",
   "specialization": {

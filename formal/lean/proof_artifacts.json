@@ -562,7 +562,7 @@
       "runtime_mapping": [
         {
           "path": "bio_inspired_nanochat/synaptic.py",
-          "sha256": "400accf1d913b22f2326199a74146f43ec809168ec6fe0d60c8d8b21927a6b18"
+          "sha256": "6c9360c2e22f8b22fee35d02f3de6fa9cfca9488369b1669c54bacc668db81a8"
         },
         {
           "path": "bio_inspired_nanochat/flex_synaptic.py",
@@ -586,7 +586,7 @@
         },
         {
           "path": "tests/test_e2e_decode_parity.py",
-          "sha256": "cb39defd977cda8e726aec485cbf8f1d24353bca17a1e306332957491d23b213"
+          "sha256": "edd64c96ffbc09cce3eccc22c9d397f5132ea7453674ecdf1ae7e5d4cd6a94ba"
         },
         {
           "path": "tests/test_e2e_uncertainty.py",

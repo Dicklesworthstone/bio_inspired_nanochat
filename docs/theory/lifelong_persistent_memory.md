@@ -1,70 +1,43 @@
-# Lifelong Persistent Synaptic Memory & Privacy Threat Model (beads `re4e.4`, `re4e.4.1`)
+# Persistent Synaptic Memory: Implemented Semantics and Limits
 
-_Persistent Memory & Multi-Tenant Isolation · Biologically-Grounded Cross-Session Consolidation. Author: GoldenRiver · 2026-08-24._
+This note describes `PersistentLifelongMemoryManager`. It is not a claim of cryptographic
+multi-tenant isolation.
 
-## Executive Summary & System Specification
+## Implemented lifecycle
 
-This document specifies the architecture for **Persistent Lifelong Synaptic Memory**: extending the within-session synaptic working memory API (`r00r.9`) into durable, per-user memory stores that consolidate across sessions via offline sleep replay (`r00r.6`, `cel.2`).
+One manager can have one active `(user, model)` pair. Mounting loads that user's saved fast
+weights and slow-weight deltas into the model. Switching users first unmounts the model that
+actually owns the live state. An implicit same-user switch to another model is rejected so an
+incompatible destination cannot destroy the active session. Unmounting can transfer a bounded fraction of fast weights into
+the user's durable slow deltas, persists the partition, clears fast weights, and subtracts the
+mounted slow deltas so the model returns to its base state.
 
----
+Partition data is loaded with PyTorch's restricted `weights_only=True` mode. Layer indices,
+tensor shapes, floating dtypes, and finite values are validated before a different active user
+is disturbed. Partitions are written to a sibling temporary file and atomically replaced only
+after serialization succeeds. A storage failure during unmount leaves both the prior durable
+copy and the live session available for retry.
 
-## 1. Multi-Tenant Isolated Memory Architecture
+## Identifier and storage limits
 
-```text
- ┌────────────────────────────────────────────────────────────────────────┐
- │                      Multi-User Session Ingress                        │
- └───────────────────┬────────────────────────────────┬───────────────────┘
-                     │                                │
-        User Alice (ID: 0x8A1F)           User Bob (ID: 0x3B9C)
-                     │                                │
-                     ▼                                ▼
-   ┌──────────────────────────────────┐ ┌──────────────────────────────────┐
-   │    Alice Scratchpad & Latch      │ │     Bob Scratchpad & Latch       │
-   │  • W_fast(Alice)                 │ │  • W_fast(Bob)                   │
-   │  • ReplayBuffer(Alice)           │ │  • ReplayBuffer(Bob)             │
-   └─────────────────┬────────────────┘ └─────────────────┬────────────────┘
-                     │                                │
-                     ▼ (Session End / Sleep)          ▼ (Session End / Sleep)
-   ┌──────────────────────────────────┐ ┌──────────────────────────────────┐
-   │    Alice Consolidated Adapter    │ │     Bob Consolidated Adapter     │
-   │  • W_slow_delta(Alice)           │ │  • W_slow_delta(Bob)             │
-   │  • Strict per-user encryption    │ │  • Strict per-user encryption    │
-   └──────────────────────────────────┘ └──────────────────────────────────┘
-```
+Filenames use the first 24 hexadecimal characters of SHA-256 over a fixed project string and
+the supplied user ID. This avoids putting a raw user ID in the filename; it is not encryption,
+keyed pseudonymization, or protection against offline guessing of low-entropy identifiers. The
+`.pt` partition contents are not encrypted by this module. Storage permissions, encryption at
+rest, key management, authentication, and authorization are deployment responsibilities that
+remain unimplemented here.
 
-### 1.1 Per-User Isolated Namespacing
-1. **Namespace Isolation**: Each user partition is addressed by a non-reversible cryptographic key `H(user_id || salt)`.
-2. **Zero Cross-Talk Guarantee**: Under no circumstance can User A's fast weights or replayed dreams modulate the activation path of User B.
-3. **Session Loading Contract**: On session start, `load_user_memory(user_id)` dynamically mounts $W_{\text{fast}}$ and user-specific slow deltas into the inference graph.
+The configured `max_delta_norm` bounds each stored slow-delta tensor. The implementation does
+not impose a five-megabyte per-user quota, daily decay, low-rank-factor cap, or per-user replay
+buffer. Those features must not be inferred from this component.
 
----
+## Erasure behavior
 
-## 2. Cross-Session Sleep Consolidation Protocol
+`forget_user` unmounts and clears an active user's live slow/fast state before unlinking that
+user's partition; callers must supply the exact active model. For an inactive user it unlinks
+the matching partition when present. The module does not overwrite filesystem blocks, erase
+backups, verify deletion across replicas, or run a post-erasure behavioral privacy audit.
 
-1. **Wake Phase (Session Live)**:
-   - High-surprise user prompts and interactions accumulate in the per-user `PrioritizedReplayBuffer`.
-   - Local plastic fast-weights $W_{\text{fast}}$ absorb contextual facts.
-2. **Offline Sleep Phase (Session Exit)**:
-   - The user-scoped `SleepConsolidationController` samples top-surprise sequences or generates synthetic dreams.
-   - Fast-to-slow distillation: $\Delta W_{\text{user}} \leftarrow \Delta W_{\text{user}} + \eta_{\text{cons}} (W_{\text{fast}} \odot \text{Latch})$.
-   - Synaptic Homeostatic Scaling (SHY): $\Delta W_{\text{user}} \leftarrow \min(1, \frac{C_{\text{max}}}{\|\Delta W_{\text{user}}\|}) \cdot \Delta W_{\text{user}}$.
-   - $W_{\text{fast}}$ is zeroed.
-3. **Capacity & Pruning Bounds**:
-   - Memory growth is strictly bounded to $K \le 8$ low-rank factors or a maximum tensor footprint of 5MB per user.
-   - Low-utility associations decay exponentially: $\Delta W \leftarrow \gamma \Delta W$ ($\gamma = 0.99$ per day).
-
----
-
-## 3. Privacy Threat Model & Hard "Forget" Semantics
-
-### 3.1 Right-to-be-Forgotten Protocol
-When a user invokes `forget_user_memory(user_id)`:
-1. **Storage Purge**: The disk artifact `user_store/{hash}.pt` is immediately unlinked and overwritten.
-2. **Graph Unmount**: Active memory scratchpads are flushed: $W_{\text{fast}} \leftarrow 0$, $\Delta W_{\text{user}} \leftarrow 0$.
-3. **Verification Audit**: An automated probe confirms that post-forget associative recall falls back to the unconditioned base model baseline.
-
-### 3.2 Threat Model & Defenses
-- **Threat 1: Memory Extraction / Inversion**: Adversary queries the model to extract previously stored user facts.
-  - *Defense*: Clamping maximum injection norm $\|\Delta W_{\text{fast}}\| \le 2.0$ prevents single-shot memorization of verbatim high-entropy secrets without repeated consolidation.
-- **Threat 2: Memory Poisoning / Backdoor Injection**: Malicious input attempts to destabilize the model via divergent weight matrices.
-  - *Defense*: Strict validation rejecting NaN/Inf and norm-capping all injected deltas prior to graph attachment.
+The tests cover state separation across normal mount/unmount sequences and fail-closed behavior
+for wrong-user, wrong-model, corrupt-partition, and storage-failure paths. They do not prove zero
+cross-talk against every failure mode or resistance to memory extraction attacks.
