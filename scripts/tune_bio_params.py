@@ -1182,8 +1182,12 @@ def readiness_from_objectives(
 
     Separated from the (expensive) training so it can be unit-tested deterministically.
     The proxy is READY when the good/bad configs separate by > ``sigma_gate`` units of
-    seed-noise AND by >= ``rel_gate`` relative improvement, and the paired test (matched
-    seeds, via eval_stats) is significant — i.e. the objective carries signal over noise.
+    seed-noise AND by >= ``rel_gate`` relative improvement. The paired t/Wilcoxon
+    p-values are computed and REPORTED for transparency, but they do not gate: with
+    the typical 3-seed design the exact Wilcoxon floor is 2*2^-3 = 0.25 > alpha=0.05,
+    so a significance leg could never pass and adding one would make ``ready``
+    unreachable (the same arithmetic that blocks go_no_go in ablation_matrix).
+    ``sigma_separation >= sigma_gate`` is itself the signal-over-noise criterion.
     """
     from bio_inspired_nanochat.eval_stats import paired_comparison
 

@@ -2768,35 +2768,18 @@ class SynapticLinear(nn.Module):
                 y_proj = y @ self.proj_out.to(y.dtype)  # (N, R)
                 x_proj = x @ self.proj_in.to(x.dtype)   # (N, R)
 
-                if self.cfg.enable_stdp and x.shape[0] > 1:
-                    x_pre = x[:-1]
-                    x_post = x[1:]
-                    y_proj_post = y_proj[1:]
-                    y_proj_pre = y_proj[:-1]
-                    x_proj_pre = x_proj[:-1]
-                    x_proj_post = x_proj[1:]
-                    y_post = y[1:]
-                    y_pre = y[:-1]
-
-                    ltp_u = (x_pre.transpose(0, 1) @ y_proj_post) / (batch - 1)
-                    ltd_u = (x_post.transpose(0, 1) @ y_proj_pre) / (batch - 1)
-                    ltp_v = (x_proj_pre.transpose(0, 1) @ y_post) / (batch - 1)
-                    ltd_v = (x_proj_post.transpose(0, 1) @ y_pre) / (batch - 1)
-
-                    w_plus = math.exp(-1.0 / max(1e-3, self.cfg.stdp_tau_plus))
-                    w_minus = math.exp(-1.0 / max(1e-3, self.cfg.stdp_tau_minus))
-                    stdp_delta_u = (self.cfg.stdp_a_plus * w_plus) * ltp_u - (self.cfg.stdp_a_minus * w_minus) * ltd_u
-                    stdp_delta_v = (self.cfg.stdp_a_plus * w_plus) * ltp_v - (self.cfg.stdp_a_minus * w_minus) * ltd_v
-
-                    self.u_buf.mul_(self.cfg.post_trace_decay).add_(stdp_delta_u)
-                    self.v_buf.mul_(self.cfg.post_trace_decay).add_(stdp_delta_v)
-                else:
-                    self.u_buf.mul_(self.cfg.post_trace_decay).add_(
-                        0.05 * (x.transpose(0, 1) @ y_proj) / batch  # (in, R)
-                    )
-                    self.v_buf.mul_(self.cfg.post_trace_decay).add_(
-                        0.05 * (x_proj.transpose(0, 1) @ y) / batch  # (R, out)
-                    )
+                # STDP temporal pairing is DISABLED here on purpose: rows of a 2-D
+                # input are routing-order token subsets (e.g. top-k expert
+                # selections) or single time-slices, so "row N-1 -> row N" is a
+                # fictitious spike pair — LTP/LTD computed over unrelated tokens,
+                # scaling with batch size. Only the dense (B, T, C) path above has
+                # a true temporal axis. Accumulate the plain co-activity trace.
+                self.u_buf.mul_(self.cfg.post_trace_decay).add_(
+                    0.05 * (x.transpose(0, 1) @ y_proj) / batch  # (in, R)
+                )
+                self.v_buf.mul_(self.cfg.post_trace_decay).add_(
+                    0.05 * (x_proj.transpose(0, 1) @ y) / batch  # (R, out)
+                )
         # Per-neuron calcium proxy for the CaMKII/PP1 gate.
         if self.post is not None:
             ca_vec = y.abs().reshape(-1, y.shape[-1]).mean(0).clamp(0, 10.0)
