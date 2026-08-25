@@ -135,12 +135,14 @@ def test_merge_is_exact_for_identical_pair():
     x = torch.randn(2, 5, 16)
     moe = _pure_moe(0, E, top_k=E)
     a, b = 2, 3
+    xi = moe.Xi
+    assert xi is not None
     with torch.no_grad():
         # make b an exact clone of a so the pair is genuinely mergeable
         _clone_linear_from_(moe.experts[b].fc1, moe.experts[a].fc1, 0.0)
         _clone_linear_from_(moe.experts[b].fc2, moe.experts[a].fc2, 0.0)
         moe.router.weight[b].copy_(moe.router.weight[a])
-        moe.Xi[b].copy_(moe.Xi[a])
+        xi[b].copy_(xi[a])
         moe.router_embeddings[b].copy_(moe.router_embeddings[a])
     out0, _ = moe(x)
 
@@ -219,15 +221,19 @@ def test_legacy_merge_reseeds_loser_genome_and_routing_bias():
     E = 6
     moe = _pure_moe(0, E, top_k=E)
     winner, loser = 2, 3
+    xi = moe.Xi
+    assert xi is not None
     with torch.no_grad():
-        moe.Xi[winner].copy_(torch.full_like(moe.Xi[winner], 0.7))
-        moe.Xi[loser].copy_(torch.full_like(moe.Xi[loser], -0.7))   # distinct stale genome
+        xi[winner].copy_(torch.full_like(xi[winner], 0.7))
+        xi[loser].copy_(torch.full_like(xi[loser], -0.7))   # distinct stale genome
         moe.router_logit_bias[winner] = 1.5
         moe.router_logit_bias[loser] = -3.0                          # stale dead-slot bias
     cfg = SplitMergeConfig(function_preserving=False)
     with torch.no_grad():
         _merge_expert_into_and_clone_(moe, winner_idx=winner, loser_idx=loser, alpha=0.5, cfg=cfg)
-    assert torch.allclose(moe.Xi[loser], moe.Xi[winner]), "reborn loser must inherit the winner's genome"
+    reborn_xi = moe.Xi
+    assert reborn_xi is not None
+    assert torch.allclose(reborn_xi[loser], reborn_xi[winner]), "reborn loser must inherit the winner's genome"
     assert moe.router_logit_bias[loser].item() == pytest.approx(moe.router_logit_bias[winner].item())
 
 
