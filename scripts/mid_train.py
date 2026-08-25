@@ -9,7 +9,7 @@ Or torchrun for training:
 torchrun --standalone --nproc_per_node=8 -m scripts.mid_train -- --device_batch_size=16
 """
 
-from collections import deque
+import math
 import os
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 import time
@@ -21,7 +21,25 @@ from typing import Protocol, cast
 
 from bio_inspired_nanochat.common import compute_init, compute_cleanup, print0, DummyWandb, get_base_dir, autodetect_device_type
 from bio_inspired_nanochat.tokenizer import get_token_bytes
-from bio_inspired_nanochat.checkpoint_manager import save_checkpoint
+from bio_inspired_nanochat.checkpoint_manager import (
+    capture_prefetched_batch,
+    capture_rng_state,
+    checkpoint_model_config,
+    config_provenance,
+    find_largest_model,
+    load_rank_training_checkpoint,
+    restore_optimizer_states,
+    restore_prefetched_batch,
+    restore_rank_model_state,
+    restore_rng_state,
+    save_checkpoint,
+    synaptic_config_to_meta,
+    validate_exact_resume_payload_step,
+)
+from bio_inspired_nanochat.dataloader import (
+    collate_dataloader_state_dicts,
+    tokenizing_task_data_loader_with_state,
+)
 from bio_inspired_nanochat.loss_eval import evaluate_bpb
 from bio_inspired_nanochat.checkpoint_manager import load_model
 import torch.distributed as torch_dist
@@ -43,6 +61,8 @@ class _DistributedApi(Protocol):
 
     def all_reduce(self, tensor: torch.Tensor, *, op: object) -> None: ...
 
+    def all_gather_object(self, object_list: list[object], obj: object) -> None: ...
+
 
 dist = cast(_DistributedApi, torch_dist)
 
@@ -51,6 +71,8 @@ run = "dummy" # wandb run name default ("dummy" is special - we won't log to wan
 device_type = "" # cuda|cpu|mps (empty => autodetect)
 model_tag = None # model tag to load the model from (base model or midtrained model)
 step = None # step to load the model from (base model or midtrained model)
+resume_model_tag = None # mid-checkpoint model tag to resume (None => infer largest)
+resume_from_step = -1 # exact mid-training checkpoint step (-1 => fresh run)
 dtype = "bfloat16"
 synapses = 0 # use synaptic model (GPTSynaptic) if 1, otherwise use standard GPT (note: model loaded from checkpoint will auto-detect)
 num_iterations = -1 # explicit number of steps of the optimization (-1 = disable)
@@ -65,6 +87,7 @@ eval_every = 150 # -1 = disable
 eval_tokens = 20*524288
 total_batch_size = 524288
 dry_run = 0 # dry_run=1 is for experiments: we will log to wandb but we won't write checkpoints or report
+save_every = -1 # periodic optimizer-step checkpoint interval (-1 => final only)
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 with open(os.path.join('bio_inspired_nanochat', 'configurator.py')) as f:
     exec(f.read()) # nosec B102 # overrides from command line or config file
@@ -83,14 +106,104 @@ get_max_memory = torch.cuda.max_memory_allocated if device_type == "cuda" else l
 use_dummy_wandb = run == "dummy" or not master_process
 wandb_run = DummyWandb() if use_dummy_wandb else wandb.init(project="nanochat-mid", name=run, config=user_config)
 
-# Load the model and tokenizer
-model, tokenizer, meta = load_model("base", device, phase="train", model_tag=model_tag, step=step)
-pretrain_batch_size = meta.get("device_batch_size", None)
-if pretrain_batch_size is not None and device_batch_size > pretrain_batch_size:
-    print0(f"FOOTGUN WARNING: base model training used device_batch_size {pretrain_batch_size}, did you pass in a good --device_batch_size to this script?")
+# Load the source model or reconstruct the exact mid-training checkpoint.
+if isinstance(resume_from_step, bool) or not isinstance(resume_from_step, int):
+    raise ValueError("resume_from_step must be an integer")
+resuming = resume_from_step >= 0
+base_dir = get_base_dir()
+mid_checkpoints_dir = os.path.join(base_dir, "mid_checkpoints")
+resolved_resume_tag = resume_model_tag
+if resuming:
+    if step is not None:
+        raise ValueError("step selects a base checkpoint and cannot be combined with resume_from_step")
+    if resolved_resume_tag is None:
+        resolved_resume_tag = find_largest_model(mid_checkpoints_dir)
+    model, tokenizer, meta = load_model(
+        "mid",
+        device,
+        phase="train",
+        model_tag=resolved_resume_tag,
+        step=resume_from_step,
+    )
+else:
+    model, tokenizer, meta = load_model(
+        "base",
+        device,
+        phase="train",
+        model_tag=model_tag,
+        step=step,
+    )
+
+depth = int(model.config.n_layer)
+output_dirname = str(resolved_resume_tag) if resuming else f"d{depth}"
+checkpoint_dir = os.path.join(mid_checkpoints_dir, output_dirname)
+optimizer_data = None
+train_state = None
+if resuming:
+    optimizer_data, checkpoint_meta, train_state = load_rank_training_checkpoint(
+        checkpoint_dir,
+        resume_from_step,
+        device,
+        rank=ddp_rank,
+        expected_world_size=ddp_world_size,
+    )
+    validate_exact_resume_payload_step(
+        checkpoint_meta,
+        resume_from_step,
+        payload_name="checkpoint metadata",
+    )
+    validate_exact_resume_payload_step(
+        train_state,
+        resume_from_step,
+        payload_name="rank-local training state",
+    )
+    saved_user_config = checkpoint_meta.get("user_config")
+    if not isinstance(saved_user_config, dict):
+        raise ValueError("exact mid-training resume requires saved user_config metadata")
+    trajectory_fields = (
+        "max_seq_len",
+        "device_batch_size",
+        "total_batch_size",
+        "num_iterations",
+        "unembedding_lr",
+        "embedding_lr",
+        "matrix_lr",
+        "init_lr_frac",
+        "weight_decay",
+        "eval_every",
+        "eval_tokens",
+        "save_every",
+    )
+    missing_fields = [name for name in trajectory_fields if name not in saved_user_config]
+    if missing_fields:
+        raise ValueError(
+            "exact mid-training resume is missing trajectory configuration: "
+            f"{missing_fields}"
+        )
+    max_seq_len = int(saved_user_config["max_seq_len"])
+    device_batch_size = int(saved_user_config["device_batch_size"])
+    total_batch_size = int(saved_user_config["total_batch_size"])
+    num_iterations = int(saved_user_config["num_iterations"])
+    unembedding_lr = float(saved_user_config["unembedding_lr"])
+    embedding_lr = float(saved_user_config["embedding_lr"])
+    matrix_lr = float(saved_user_config["matrix_lr"])
+    init_lr_frac = float(saved_user_config["init_lr_frac"])
+    weight_decay = float(saved_user_config["weight_decay"])
+    eval_every = int(saved_user_config["eval_every"])
+    eval_tokens = int(saved_user_config["eval_tokens"])
+    save_every = int(saved_user_config["save_every"])
+    user_config.update({name: saved_user_config[name] for name in trajectory_fields})
+    restore_rank_model_state(model, train_state, required=True)
+else:
+    pretrain_batch_size = meta.get("device_batch_size")
+    if pretrain_batch_size is not None and device_batch_size > pretrain_batch_size:
+        print0(
+            "FOOTGUN WARNING: base model training used device_batch_size "
+            f"{pretrain_batch_size}; verify --device_batch_size for mid-training"
+        )
+
 orig_model = model
 model = torch.compile(model, dynamic=False)
-depth = model.config.n_layer
 use_syn = bool(getattr(model.config, "synapses", False))
 num_flops_per_token = model.estimate_flops()
 tokens_per_fwdbwd = device_batch_size * max_seq_len # tokens per iteration for a single rank
@@ -115,9 +228,11 @@ for opt in optimizers:
     for group in opt.param_groups:
         group["lr"] = group["lr"] * init_lr_frac
         group["initial_lr"] = group["lr"] # save the initial learning so we can decay easily later
+if resuming:
+    restore_optimizer_states(optimizers, optimizer_data)
+    del optimizer_data
 
 # Midtraining data mixture and DataLoader
-base_dir = get_base_dir()
 identity_conversations_filepath = os.path.join(base_dir, "identity_conversations.jsonl")
 train_dataset = TaskMixture([
     SmolTalk(split="train"), # 460K rows of general conversations

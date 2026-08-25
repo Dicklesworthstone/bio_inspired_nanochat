@@ -33,6 +33,46 @@ from bio_inspired_nanochat.synaptic import (
     SynapticLinear,
     SynapticPresyn,
 )
+from bio_inspired_nanochat import synaptic as _synaptic_module
+
+
+class _MethodPatch:
+    """Instance-level bound-method patch with a hook-handle-compatible removal.
+
+    Forward hooks only fire on ``Module.__call__`` — but the live attention path
+    invokes ``self.pre.release_canonical(...)`` as a PLAIN BOUND METHOD
+    (synaptic.py), so hooks registered on SynapticPresyn never execute and any
+    instrument relying on them silently records nothing / clamps nothing.
+    Wrapping the bound method on the instance is the interception point that
+    runs in every live path. ``remove()`` deletes the instance attribute,
+    restoring the class method.
+    """
+
+    def __init__(self, owner: nn.Module, attr: str, wrapper) -> None:
+        self._owner = owner
+        self._attr = attr
+        # Save the CURRENT value (bound method OR module-level function) and
+        # restore exactly that on remove() — a blind pop would leave module
+        # globals undefined (NameError on the next caller).
+        self._had_original = hasattr(owner, attr)
+        self._original = getattr(owner, attr, None)
+        setattr(owner, attr, wrapper)
+
+    def remove(self) -> None:
+        original = self._original
+        # If the saved original was a method BOUND TO THIS OWNER, restoring via
+        # setattr would leave it as a permanent instance attribute shadowing the
+        # class method — delete the instance attr instead so normal lookup
+        # resumes. Module globals and foreign objects restore by assignment.
+        bound_to_owner = getattr(original, "__self__", None) is self._owner
+        if self._had_original and not bound_to_owner:
+            setattr(self._owner, self._attr, original)
+        else:
+            try:
+                delattr(self._owner, self._attr)
+            except AttributeError:
+                pass
+
 
 
 @dataclass
@@ -84,8 +124,19 @@ class PatchClampProbe:
         for name, module in self.model.named_modules():
             if isinstance(module, SynapticLinear):
                 self._attach_linear_hook(name, module)
-            elif isinstance(module, SynapticPresyn):
-                self._attach_presyn_hook(name, module)
+
+        # Presynaptic calcium/RRP are recorded from the model's public
+        # bio_telemetry() read API via a ROOT forward hook. The previous design
+        # hooked SynapticPresyn modules, but the live attention path invokes
+        # release_canonical as a plain bound method — Module.__call__ (and any
+        # hook on it) never executes on ANY path (canonical, chunked, or fused
+        # CPU scan), so those snapshots silently stayed None forever.
+        presyn_layer_names = [
+            name for name, module in self.model.named_modules()
+            if isinstance(module, SynapticPresyn)
+        ]
+        if presyn_layer_names:
+            self._attach_presyn_telemetry_hook(presyn_layer_names)
 
         return self
 
@@ -124,30 +175,50 @@ class PatchClampProbe:
 
         self.handles.append(lin.register_forward_hook(_hook))
 
-    def _attach_presyn_hook(self, name: str, presyn: SynapticPresyn) -> None:
-        def _hook(m: nn.Module, inp: Any, out: Any) -> None:
-            parts = name.split(".")
-            layer_idx = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 0
+    def _attach_presyn_telemetry_hook(self, layer_names: list[str]) -> None:
+        """Append per-layer calcium/RRP snapshots after every root forward.
 
-            out_tensor = out[0] if isinstance(out, (tuple, list)) else out
-            state_dict = out[1] if isinstance(out, (tuple, list)) and len(out) > 1 and isinstance(out[1], dict) else {}
+        Reads the public ``bio_telemetry()`` schema ({layers[i].attention.{C,RRP}})
+        — valid on EVERY execution path (canonical, chunked recurrence, and the
+        fused CPU scan), unlike module hooks which never fire on SynapticPresyn.
+        """
 
-            c_val = float(state_dict["C"].mean().item()) if "C" in state_dict else None
-            rrp_val = float(state_dict["RRP"].mean().item()) if "RRP" in state_dict else None
+        def _root_hook(_module: nn.Module, _inp: Any, _out: Any) -> None:
+            try:
+                telem = self.model.bio_telemetry()
+            except Exception:  # pragma: no cover - telemetry must never break probing
+                return
+            for entry in telem.get("layers", []):
+                attn = entry.get("attention") or {}
+                if "C" not in attn or "RRP" not in attn:
+                    continue
 
-            tokens = int(out_tensor.shape[2]) if torch.is_tensor(out_tensor) and out_tensor.dim() >= 3 else 1
+                def _flat_mean(node) -> float | None:
+                    vals: list[float] = []
 
-            self.snapshots.append(
-                ProbeSnapshot(
-                    layer_idx=layer_idx,
-                    module_name=name,
-                    token_count=tokens,
-                    mean_calcium=c_val,
-                    mean_rrp=rrp_val,
+                    def _walk(n):
+                        if isinstance(n, list):
+                            for item in n:
+                                _walk(item)
+                        elif isinstance(n, (int, float)):
+                            vals.append(float(n))
+
+                    _walk(node)
+                    return sum(vals) / len(vals) if vals else None
+
+                c_val = _flat_mean(attn.get("C"))
+                rrp_val = _flat_mean(attn.get("RRP"))
+                self.snapshots.append(
+                    ProbeSnapshot(
+                        layer_idx=int(entry.get("index", 0)),
+                        module_name=f"h.{entry.get('index', 0)}.pre",
+                        token_count=1,
+                        mean_calcium=c_val,
+                        mean_rrp=rrp_val,
+                    )
                 )
-            )
 
-        self.handles.append(presyn.register_forward_hook(_hook))
+        self.handles.append(self.model.register_forward_hook(_root_hook))
 
     def detach(self) -> None:
         """Remove all attached hooks."""
@@ -298,20 +369,49 @@ def optogenetic_clamp(
                 _save_and_set(post, "camkii", float(value))
 
         elif target == "rrp" and isinstance(module, SynapticPresyn):
-            def _clamp_rrp_hook(m: nn.Module, inp: Any, out: Any) -> Any:
-                if isinstance(out, tuple) and len(out) > 1 and isinstance(out[1], dict):
-                    out[1]["RRP"].fill_(float(value))
-                return out
+            # Wrap release_canonical on the instance: forward hooks on
+            # SynapticPresyn never fire (the attention path calls the bound
+            # method directly), so the old hook-based clamp silently no-opped
+            # and optogenetics experiments reported false null effects. Clamp
+            # BEFORE each call so the dynamics actually see the pinned value.
+            original_release = module.release_canonical
 
-            handles.append(module.register_forward_hook(_clamp_rrp_hook))
+            def _clamped_release(state, *args, _orig=original_release, _key="RRP", **kwargs):
+                if isinstance(state, dict) and _key in state:
+                    state[_key].fill_(float(value))
+                return _orig(state, *args, **kwargs)
+
+            handles.append(_MethodPatch(module, "release_canonical", _clamped_release))
 
         elif target == "calcium" and isinstance(module, SynapticPresyn):
-            def _clamp_ca_hook(m: nn.Module, inp: Any, out: Any) -> Any:
-                if isinstance(out, tuple) and len(out) > 1 and isinstance(out[1], dict):
-                    out[1]["C"].fill_(float(value))
-                return out
+            original_release_ca = module.release_canonical
 
-            handles.append(module.register_forward_hook(_clamp_ca_hook))
+            def _clamped_release_ca(state, *args, _orig=original_release_ca, **kwargs):
+                if isinstance(state, dict) and "C" in state:
+                    state["C"].fill_(float(value))
+                return _orig(state, *args, **kwargs)
+
+            handles.append(_MethodPatch(module, "release_canonical", _clamped_release_ca))
+
+    if target in ("rrp", "calcium") and hasattr(
+        _synaptic_module, "_scripted_detached_presyn_scan_cpu"
+    ):
+        # The fused CPU scan bypasses release_canonical entirely; clamp its
+        # returned state too so EVERY execution path stays pinned. Return tuple
+        # order: (out, C, BUF, RRP, RES, PR, CL, E, AMP, DELAY, ema_e).
+        state_index = 3 if target == "rrp" else 1
+
+        def _scan_clamp(*args, _orig=_synaptic_module._scripted_detached_presyn_scan_cpu,
+                        _idx=state_index, _v=float(value), **kwargs):
+            result = _orig(*args, **kwargs)
+            tensor = result[_idx]
+            if torch.is_tensor(tensor):
+                tensor.fill_(_v)
+            return result
+
+        handles.append(
+            _MethodPatch(_synaptic_module, "_scripted_detached_presyn_scan_cpu", _scan_clamp)
+        )
 
     try:
         yield

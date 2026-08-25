@@ -623,6 +623,70 @@ def load_checkpoint(checkpoint_dir, step, device, load_optimizer=False, rank=0, 
     return model_data, optimizer_data, meta_data
 
 
+def load_rank_training_checkpoint(
+    checkpoint_dir: str,
+    step: int,
+    device: str | torch.device,
+    *,
+    rank: int,
+    expected_world_size: int,
+) -> tuple[Any, dict[str, Any], Mapping[str, Any]]:
+    """Load exact rank-local optimizer/train state without reloading model weights.
+
+    Callers that already rebuilt the model through :func:`load_model` should not
+    materialize a second full model state merely to restore optimizer and runtime
+    state. The marker's world size is validated before either shard is loaded so
+    an incompatible distributed resume fails before mutating an optimizer or RNG.
+    """
+    _validate_checkpoint_step(step)
+    _validate_checkpoint_rank(rank)
+    if (
+        isinstance(expected_world_size, bool)
+        or not isinstance(expected_world_size, int)
+        or expected_world_size <= 0
+    ):
+        raise ValueError("expected_world_size must be a positive integer")
+    if rank >= expected_world_size:
+        raise ValueError(
+            f"checkpoint rank {rank} must be smaller than world size {expected_world_size}"
+        )
+    require_complete_checkpoint(checkpoint_dir, step)
+
+    marker_path = os.path.join(checkpoint_dir, f"commit_{step:06d}.json")
+    if not os.path.exists(marker_path):
+        raise ValueError("exact training resume requires a checkpoint completion marker")
+    with open(marker_path, "r", encoding="utf-8") as file:
+        marker = json.load(file)
+    saved_world_size = marker.get("world_size") if isinstance(marker, dict) else None
+    if (
+        isinstance(saved_world_size, bool)
+        or not isinstance(saved_world_size, int)
+        or saved_world_size <= 0
+    ):
+        raise ValueError("exact training resume requires a valid saved world size")
+    if saved_world_size != expected_world_size:
+        raise ValueError(
+            "checkpoint world size does not match the resumed training configuration: "
+            f"saved={saved_world_size}, current={expected_world_size}"
+        )
+
+    optimizer_path = os.path.join(checkpoint_dir, f"optim_{step:06d}_rank{rank:d}.pt")
+    train_path = os.path.join(checkpoint_dir, f"train_{step:06d}_rank{rank:d}.pt")
+    optimizer_data = torch.load(
+        optimizer_path,
+        map_location=device,
+        weights_only=True,
+    )
+    train_state = torch.load(
+        train_path,
+        map_location="cpu",
+        weights_only=True,
+    )
+    if not isinstance(train_state, Mapping):
+        raise ValueError("checkpoint rank-local training state must be a mapping")
+    return optimizer_data, load_checkpoint_metadata(checkpoint_dir, step), train_state
+
+
 def _uses_commit_markers(checkpoint_dir: str) -> bool:
     """True once the directory has durably entered commit-marker mode."""
     markers_in_use, _ = _load_commit_regime(checkpoint_dir)

@@ -363,3 +363,134 @@ def tokenizing_distributed_data_loader(*args, **kwargs):
     # helper function that only emits the inputs/targets and not the state_dict
     for inputs, targets, state_dict in tokenizing_distributed_data_loader_with_state(*args, **kwargs):
         yield inputs, targets
+
+
+def tokenizing_task_data_loader_with_state(
+    dataset: Any,
+    tokenizer: Any,
+    B: int,
+    T: int,
+    *,
+    device: str | torch.device = "cuda",
+    resume_state_dict: Mapping[str, Any] | None = None,
+):
+    """Tokenize an indexed conversation task with exact rank-local resumption.
+
+    Unlike the parquet loader above, mid-training reads structured conversations
+    through ``tokenizer.render_conversation``. The checkpoint cursor describes the
+    next document, while ``token_buffer`` preserves every rendered token that has
+    not yet entered a training batch.
+    """
+    for name, value in (("B", B), ("T", T)):
+        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+            raise ValueError(f"{name} must be a positive integer")
+
+    dataset_size = len(dataset)
+    if dataset_size <= 0:
+        raise ValueError("dataset must contain at least one conversation")
+
+    _ddp, rank, _local_rank, world_size = get_dist_info()
+    if dataset_size < world_size:
+        raise ValueError(
+            f"dataset size {dataset_size} must be at least world_size {world_size}"
+        )
+    rank_state = extract_rank_dataloader_state(
+        resume_state_dict,
+        rank=rank,
+        world_size=world_size,
+    )
+
+    if rank_state is None:
+        cursor = rank
+        batches_yielded = 0
+        documents_consumed = 0
+        epochs_completed = 0
+        resume_tokens: list[int] = []
+    else:
+        if rank_state.get("kind") != "task_mixture" or rank_state.get("version") != 1:
+            raise ValueError(
+                "task-mixture resume state must have kind='task_mixture' and version=1"
+            )
+        required = {
+            "cursor",
+            "batches_yielded",
+            "documents_consumed",
+            "epochs_completed",
+            "token_buffer",
+            "rank",
+            "world_size",
+        }
+        missing = sorted(required - rank_state.keys())
+        if missing:
+            raise ValueError(f"task-mixture resume state is missing fields: {missing}")
+        for name in (
+            "cursor",
+            "batches_yielded",
+            "documents_consumed",
+            "epochs_completed",
+        ):
+            value = rank_state[name]
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise ValueError(
+                    f"task-mixture resume_state_dict[{name!r}] must be a non-negative integer"
+                )
+        cursor = rank_state["cursor"]
+        if cursor >= dataset_size:
+            raise ValueError("task-mixture resume cursor is outside the dataset")
+        batches_yielded = rank_state["batches_yielded"]
+        documents_consumed = rank_state["documents_consumed"]
+        epochs_completed = rank_state["epochs_completed"]
+        raw_tokens = rank_state["token_buffer"]
+        if not isinstance(raw_tokens, (list, tuple, deque)):
+            raise ValueError("task-mixture token_buffer must be a sequence of token IDs")
+        resume_tokens = []
+        for token in raw_tokens:
+            if isinstance(token, bool) or not isinstance(token, int) or token < 0:
+                raise ValueError(
+                    "task-mixture token_buffer elements must be non-negative integers"
+                )
+            resume_tokens.append(token)
+
+    needed_tokens = B * T + 1
+    token_buffer = deque(resume_tokens)
+    device_obj = torch.device(device)
+    use_cuda_optimizations = device_obj.type == "cuda"
+
+    while True:
+        while len(token_buffer) < needed_tokens:
+            conversation = dataset[cursor]
+            token_ids, _mask = tokenizer.render_conversation(conversation)
+            token_buffer.extend(token_ids)
+            documents_consumed += 1
+            cursor += world_size
+            if cursor >= dataset_size:
+                cursor %= dataset_size
+                epochs_completed += 1
+
+        tokens = [token_buffer.popleft() for _ in range(needed_tokens)]
+        scratch = torch.tensor(
+            tokens,
+            dtype=torch.long,
+            pin_memory=use_cuda_optimizations,
+        )
+        inputs = scratch[:-1].view(B, T).to(
+            device=device_obj,
+            non_blocking=use_cuda_optimizations,
+        )
+        targets = scratch[1:].view(B, T).to(
+            device=device_obj,
+            non_blocking=use_cuda_optimizations,
+        )
+        batches_yielded += 1
+        state_dict = {
+            "kind": "task_mixture",
+            "version": 1,
+            "cursor": cursor,
+            "batches_yielded": batches_yielded,
+            "documents_consumed": documents_consumed,
+            "epochs_completed": epochs_completed,
+            "token_buffer": list(token_buffer),
+            "rank": rank,
+            "world_size": world_size,
+        }
+        yield inputs, targets, state_dict
