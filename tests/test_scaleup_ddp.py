@@ -15,15 +15,31 @@ from __future__ import annotations
 
 import os
 import socket
+from typing import Protocol, cast
 
 import pytest
 
 from bio_inspired_nanochat.torch_imports import torch
-import torch.distributed as dist
+import torch.distributed as torch_dist
 import torch.multiprocessing as mp
 
 from bio_inspired_nanochat.adamw import DistAdamW
 from bio_inspired_nanochat.muon import DistMuon, Muon
+
+
+class _DistributedApi(Protocol):
+    """The gloo API exercised by the spawned optimizer workers."""
+
+    def is_available(self) -> bool: ...
+
+    def is_gloo_available(self) -> bool: ...
+
+    def init_process_group(self, backend: str, *, rank: int, world_size: int) -> None: ...
+
+    def destroy_process_group(self) -> None: ...
+
+
+dist = cast(_DistributedApi, torch_dist)
 
 pytestmark = pytest.mark.skipif(
     not (dist.is_available() and dist.is_gloo_available()),
@@ -47,8 +63,14 @@ _MUON_SPECS: tuple[tuple[str, tuple[int, ...]], ...] = (
     ("c", (6, 2)),  # different shape
 )
 
-_ADAMW_KW = dict(lr=0.1, betas=(0.9, 0.95), eps=1e-8, weight_decay=0.01)
-_MUON_KW = dict(lr=0.02, momentum=0.95, nesterov=True, ns_steps=5)
+_ADAMW_LR = 0.1
+_ADAMW_BETAS = (0.9, 0.95)
+_ADAMW_EPS = 1e-8
+_ADAMW_WEIGHT_DECAY = 0.01
+_MUON_LR = 0.02
+_MUON_MOMENTUM = 0.95
+_MUON_NESTEROV = True
+_MUON_NS_STEPS = 5
 
 
 def _free_port() -> int:
@@ -90,7 +112,13 @@ def _adamw_worker(rank: int, world_size: int, port: int, tmpdir: str, n_steps: i
     dist.init_process_group("gloo", rank=rank, world_size=world_size)
     try:
         params = [torch.nn.Parameter(_init_param(i, s)) for i, (_, s) in enumerate(_ADAMW_SPECS)]
-        opt = DistAdamW([{"params": params}], **_ADAMW_KW)
+        opt = DistAdamW(
+            [{"params": params}],
+            lr=_ADAMW_LR,
+            betas=_ADAMW_BETAS,
+            eps=_ADAMW_EPS,
+            weight_decay=_ADAMW_WEIGHT_DECAY,
+        )
         for step in range(n_steps):
             for i, p in enumerate(params):
                 p.grad = _grad_for(i, step, tuple(p.shape), rank).clone()
@@ -109,7 +137,13 @@ def _muon_worker(rank: int, world_size: int, port: int, tmpdir: str, n_steps: in
     dist.init_process_group("gloo", rank=rank, world_size=world_size)
     try:
         params = [torch.nn.Parameter(_init_param(200 + i, s)) for i, (_, s) in enumerate(_MUON_SPECS)]
-        opt = DistMuon(params, **_MUON_KW)
+        opt = DistMuon(
+            params,
+            lr=_MUON_LR,
+            momentum=_MUON_MOMENTUM,
+            nesterov=_MUON_NESTEROV,
+            ns_steps=_MUON_NS_STEPS,
+        )
         for step in range(n_steps):
             for i, p in enumerate(params):
                 p.grad = _grad_for(200 + i, step, tuple(p.shape), rank).clone()
@@ -128,8 +162,8 @@ def _muon_worker(rank: int, world_size: int, port: int, tmpdir: str, n_steps: in
 def _adamw_oracle(n_steps: int, world_size: int) -> list[torch.Tensor]:
     params = [_init_param(i, s).clone() for i, (_, s) in enumerate(_ADAMW_SPECS)]
     state = [dict() for _ in params]
-    beta1, beta2 = _ADAMW_KW["betas"]
-    eps, lr, wd = _ADAMW_KW["eps"], _ADAMW_KW["lr"], _ADAMW_KW["weight_decay"]
+    beta1, beta2 = _ADAMW_BETAS
+    eps, lr, wd = _ADAMW_EPS, _ADAMW_LR, _ADAMW_WEIGHT_DECAY
     for step in range(n_steps):
         for i, p in enumerate(params):
             g = _avg_grad(i, step, tuple(p.shape), world_size)
@@ -156,7 +190,13 @@ def _muon_oracle(n_steps: int, world_size: int) -> list[torch.Tensor]:
     # Reuse the non-distributed Muon (shares the NS iteration + update formula) fed
     # the same averaged gradients; its per-param result must match DistMuon.
     params = [torch.nn.Parameter(_init_param(200 + i, s)) for i, (_, s) in enumerate(_MUON_SPECS)]
-    opt = Muon(params, **_MUON_KW)
+    opt = Muon(
+        params,
+        lr=_MUON_LR,
+        momentum=_MUON_MOMENTUM,
+        nesterov=_MUON_NESTEROV,
+        ns_steps=_MUON_NS_STEPS,
+    )
     for step in range(n_steps):
         for i, p in enumerate(params):
             p.grad = _avg_grad(200 + i, step, tuple(p.shape), world_size)
