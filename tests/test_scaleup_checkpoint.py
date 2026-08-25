@@ -35,6 +35,11 @@ from bio_inspired_nanochat.checkpoint_manager import (
     synaptic_config_to_meta,
     validate_exact_resume_payload_step,
 )
+from bio_inspired_nanochat.dataloader import (
+    collate_dataloader_state_dicts,
+    extract_rank_dataloader_state,
+    tokenizing_task_data_loader_with_state,
+)
 
 # tests/ is on sys.path (conftest), so this resolves.
 from _bio_testkit import make_tiny_synaptic
@@ -768,3 +773,174 @@ def test_divergence_guard_snapshot_roundtrips_under_safe_checkpoint_loading(tmp_
 
     assert restored.can_rollback()
     assert restored.state_dict()["loss_ema"] == 2.0
+
+
+class _MockConversationTokenizer:
+    def render_conversation(self, conversation: list[int]) -> tuple[list[int], list[int]]:
+        return list(conversation), [0] * len(conversation)
+
+
+def test_mid_train_checkpoint_roundtrip_with_task_mixture_loader(tmp_path, monkeypatch):
+    monkeypatch.setattr(torch.distributed, "is_available", lambda: True)
+    monkeypatch.setattr(torch.distributed, "is_initialized", lambda: True)
+    monkeypatch.setattr(torch.distributed, "get_world_size", lambda: 1)
+    monkeypatch.setattr(torch.distributed, "barrier", lambda: None)
+    dataset = [list(range(start, start + 5)) for start in range(10, 50, 5)]
+    tokenizer = _MockConversationTokenizer()
+    loader = tokenizing_task_data_loader_with_state(
+        dataset,
+        tokenizer,
+        B=2,
+        T=3,
+        device="cpu",
+    )
+    x, y, dataloader_state = next(loader)
+    model = torch.nn.Linear(3, 3)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+    user_config = {
+        "max_seq_len": 3,
+        "device_batch_size": 2,
+        "total_batch_size": 6,
+        "num_iterations": 10,
+        "unembedding_lr": 0.004,
+        "embedding_lr": 0.2,
+        "matrix_lr": 0.02,
+        "init_lr_frac": 1.0,
+        "weight_decay": 0.0,
+        "eval_every": 5,
+        "eval_tokens": 100,
+        "save_every": 2,
+    }
+    model_config = {
+        "sequence_len": 3,
+        "vocab_size": 256,
+        "n_layer": 1,
+        "n_head": 1,
+        "n_kv_head": 1,
+        "n_embd": 3,
+    }
+    meta_data = {
+        "step": 4,
+        "val_bpb": 1.234,
+        "model_config": model_config,
+        "synapses": False,
+        "user_config": user_config,
+        "device_batch_size": 2,
+        "total_batch_size": 6,
+        "max_seq_len": 3,
+        "dataloader_state_dict": dataloader_state,
+        "loop_state": {
+            "min_val_bpb": 1.234,
+            "smooth_train_loss": 2.5,
+            "total_training_time": 10.0,
+        },
+    }
+    train_state = {
+        "rng": capture_rng_state(),
+        "step": 4,
+        "prefetched_batch": capture_prefetched_batch(x, y),
+        "rank_model_state": None,
+    }
+    save_checkpoint(
+        str(tmp_path),
+        4,
+        model.state_dict(),
+        [optimizer.state_dict()],
+        meta_data,
+        rank=0,
+        train_state=train_state,
+    )
+
+    _opt_data, ckpt_meta, restored_train_state = load_rank_training_checkpoint(
+        str(tmp_path),
+        4,
+        torch.device("cpu"),
+        rank=0,
+        expected_world_size=1,
+    )
+    validate_exact_resume_payload_step(ckpt_meta, 4, payload_name="checkpoint metadata")
+    validate_exact_resume_payload_step(restored_train_state, 4, payload_name="rank-local train state")
+
+    restored_x, restored_y = restore_prefetched_batch(
+        restored_train_state,
+        device=torch.device("cpu"),
+        expected_shape=(2, 3),
+    )
+    torch.testing.assert_close(restored_x, x)
+    torch.testing.assert_close(restored_y, y)
+
+    restored_loader_state = extract_rank_dataloader_state(
+        ckpt_meta.get("dataloader_state_dict"),
+        rank=0,
+        world_size=1,
+    )
+    assert restored_loader_state is not None
+    assert restored_loader_state["kind"] == "task_mixture"
+    assert restored_loader_state["cursor"] == dataloader_state["cursor"]
+
+
+def test_mid_train_multi_rank_state_collation(tmp_path, monkeypatch):
+    monkeypatch.setattr(torch.distributed, "is_available", lambda: True)
+    monkeypatch.setattr(torch.distributed, "is_initialized", lambda: True)
+    monkeypatch.setattr(torch.distributed, "get_world_size", lambda: 2)
+    monkeypatch.setattr(torch.distributed, "barrier", lambda: None)
+    rank0_state = {
+        "kind": "task_mixture",
+        "version": 1,
+        "cursor": 0,
+        "batches_yielded": 2,
+        "documents_consumed": 2,
+        "epochs_completed": 0,
+        "token_buffer": [1, 2, 3],
+        "rank": 0,
+        "world_size": 2,
+    }
+    rank1_state = {
+        "kind": "task_mixture",
+        "version": 1,
+        "cursor": 1,
+        "batches_yielded": 2,
+        "documents_consumed": 2,
+        "epochs_completed": 0,
+        "token_buffer": [4, 5, 6],
+        "rank": 1,
+        "world_size": 2,
+    }
+    collated = collate_dataloader_state_dicts([rank0_state, rank1_state], world_size=2)
+    meta_data = {
+        "step": 2,
+        "model_config": {},
+        "dataloader_state_dict": collated,
+    }
+    model = torch.nn.Linear(2, 2)
+    save_checkpoint(
+        str(tmp_path),
+        2,
+        model.state_dict(),
+        [{}],
+        meta_data,
+        rank=0,
+        train_state={"step": 2, "rank_model_state": model.state_dict()},
+    )
+    save_checkpoint(
+        str(tmp_path),
+        2,
+        model.state_dict(),
+        [{}],
+        meta_data,
+        rank=1,
+        train_state={"step": 2, "rank_model_state": model.state_dict()},
+    )
+
+    _opt_data, ckpt_meta, _rank1_ts = load_rank_training_checkpoint(
+        str(tmp_path),
+        2,
+        torch.device("cpu"),
+        rank=1,
+        expected_world_size=2,
+    )
+    extracted1 = extract_rank_dataloader_state(ckpt_meta.get("dataloader_state_dict"), rank=1, world_size=2)
+    assert extracted1 is not None
+    assert extracted1["rank"] == 1
+    assert extracted1["token_buffer"] == [4, 5, 6]
+
