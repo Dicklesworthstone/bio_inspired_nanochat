@@ -17,6 +17,7 @@ from bio_inspired_nanochat.gpt import (
     GPTConfig,
     MLP as GPTMLP,
 )
+from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
 from bio_inspired_nanochat.synaptic import SynapticLinear, SynapticMoE
 from scripts.enable_synapses import build_synaptic, retrofit_checkpoint
 
@@ -117,6 +118,31 @@ def test_retrofit_can_clone_dense_mlp_into_identical_moe_experts(tmp_path):
         logits, _ = model(torch.arange(8).view(1, -1), train_mode=False)
     assert logits.shape == (1, 8, 32)
     assert torch.isfinite(logits).all()
+
+
+@pytest.mark.unit
+def test_meta_initialization_resets_moe_router_bias():
+    config = GPTSynapticConfig(
+        sequence_len=8,
+        vocab_size=32,
+        n_layer=1,
+        n_head=2,
+        n_kv_head=2,
+        n_embd=16,
+        use_moe=True,
+        num_experts=3,
+        moe_top_k=2,
+    )
+    with torch.device("meta"):
+        model = GPTSynaptic(config)
+    model.to_empty(device=torch.device("cpu"))
+    moe = model.h[0].mlp
+    assert isinstance(moe, SynapticMoE)
+    moe.router_logit_bias.fill_(float("nan"))
+
+    model.init_weights()
+
+    assert torch.equal(moe.router_logit_bias, torch.zeros_like(moe.router_logit_bias))
 
 
 @pytest.mark.unit

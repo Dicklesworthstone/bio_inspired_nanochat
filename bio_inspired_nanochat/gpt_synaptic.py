@@ -613,6 +613,7 @@ class GPTSynaptic(nn.Module):
             if isinstance(module, SynapticMoE):
                 module.fatigue.zero_()
                 module.energy.fill_(1.0)
+                module.router_logit_bias.zero_()
                 if module.glial is not None:
                     module.glial.reset_()
                 emb = torch.randn(
