@@ -3,11 +3,11 @@
 No headline verdict is currently supported.
 
 The repository has a synthetic smoke harness at
-`scripts/e2e/kinetics_ablation_eval.py`. It runs three configurations on independently
-random input and target tokens and exercises the multi-seed statistics plumbing. The
-middle arm uses hand-entered candidate constants; no committed artifact establishes them
-as a reproduced CMA-ES optimum. Random-token cross-entropy is not an associative-recall or
-working-memory benchmark.
+`scripts/e2e/kinetics_ablation_eval.py`. It runs three configurations on the same
+deterministic, seed-paired delayed-copy batches and exercises the model, kinetics, and
+multi-seed statistics plumbing. The middle arm uses hand-entered candidate constants; no
+committed artifact establishes them as a reproduced CMA-ES optimum. This synthetic proxy
+is not the required real-data evaluation and cannot establish the headline claim.
 
 The previous version of the harness added fixed, mode-dependent penalties to measured
 validation losses after evaluation. Those offsets forced the learned arm to appear better.
@@ -23,5 +23,7 @@ optimizer artifact and reproduce its objective before comparison. The learned ar
 receive post-hoc metric adjustments. A result artifact must contain raw per-seed outcomes,
 paired deltas, confidence intervals, test definitions, revision, and hardware provenance.
 
-Until that experiment is run, `run_kinetics_ablation` should be interpreted only as a CI-time
-execution smoke test, regardless of the direction of its synthetic loss differences.
+Until that experiment is run, `run_kinetics_ablation` should be interpreted only as a
+synthetic execution smoke test. Its report marks `supports_headline_claim` false regardless
+of the direction of its observed loss differences; intervals spanning zero are reported as
+inconclusive, not as evidence of parity or equivalence.
