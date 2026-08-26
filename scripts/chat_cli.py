@@ -96,7 +96,7 @@ while True:
     print()
     # we have to ensure that the assistant end token is the last token
     # so even if generation ends due to max tokens, we have to append it to the end
-    if response_tokens[-1] != assistant_end:
+    if not response_tokens or response_tokens[-1] != assistant_end:
         response_tokens.append(assistant_end)
     conversation_tokens.extend(response_tokens)
 
