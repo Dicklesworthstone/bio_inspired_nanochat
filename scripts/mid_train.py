@@ -533,7 +533,13 @@ while True:
     flops_per_sec = num_flops_per_token * total_batch_size / dt if dt > 0 else 0.0
     promised_flops_per_sec_h100 = 989e12 * ddp_world_size
     mfu = 100 * flops_per_sec / promised_flops_per_sec_h100
-    if step > 10:
+    # Warmup exclusion must be symmetric between fresh and resumed runs:
+    # `step > 10` alone is always-true after an exact resume (step starts in the
+    # thousands), so torch.compile recompile latency from the first ~10
+    # post-resume iterations polluted total_training_time — skewing wall-clock
+    # and MFU comparisons vs an equivalent fresh run.
+    steps_since_warmup = step - resume_from_step if resuming else step
+    if steps_since_warmup > 10:
         total_training_time += dt
     print0(
         f"step {step:05d} ({pct_done:.2f}%) | loss: {debiased_smooth_loss:.6f} | "
