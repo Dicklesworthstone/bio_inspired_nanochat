@@ -33,7 +33,7 @@ from bio_inspired_nanochat.eval_stats import (
 )
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
 from bio_inspired_nanochat.run_logging import RunLogger
-from bio_inspired_nanochat.synaptic import SynapticConfig
+from bio_inspired_nanochat.synaptic import LearnableKinetics, SynapticConfig
 
 
 # Unverified candidates retained only to exercise a distinct static-kinetics arm. No
@@ -155,6 +155,11 @@ class KineticsAblationReport:
                     "acc_ci": [arm.acc_stats.ci_low, arm.acc_stats.ci_high],
                     "losses": arm.losses,
                     "accuracies": arm.accuracies,
+                    "kinetics_by_seed": {
+                        str(outcome.seed): outcome.learned_kinetics
+                        for outcome in arm.outcomes
+                        if outcome.learned_kinetics
+                    },
                 }
                 for name, arm in self.arms.items()
             },
@@ -307,12 +312,15 @@ def _run_single_arm(
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
 
-    # Extract learned kinetic parameter values if learnable
+    # Extract learned kinetic values if learnable. The parameters live as
+    # theta_* inside LearnableKinetics modules (a "kinetics_" substring never
+    # occurs in a parameter name, so the previous filter captured nothing).
     learned_kinetics: Dict[str, float] = {}
     if mode == "learned":
-        for name, param in model.named_parameters():
-            if "kinetics_" in name:
-                learned_kinetics[name] = float(param.detach().norm().item())
+        for module_name, module in model.named_modules():
+            if isinstance(module, LearnableKinetics):
+                for key, value in module.values().items():
+                    learned_kinetics[f"{module_name}.{key}"] = value
 
     final_train_loss = float(sum(train_losses[-3:]) / max(1, len(train_losses[-3:])))
     val_loss, val_acc = _evaluate_model(model, cfg, eval_seed=seed)
