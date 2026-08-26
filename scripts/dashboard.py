@@ -140,9 +140,11 @@ def load_json(path):
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
     except (OSError, json.JSONDecodeError) as exc:
+        # Torn reads are prevented at the WRITER (atomic tmp+replace in
+        # neuroviz._save_json); if an artifact is genuinely absent/corrupt,
+        # failing this page loudly beats silently rendering stale panels.
         st.error(f"Could not read dashboard artifact {path!r}: {exc}")
-        st.stop()
-        raise RuntimeError("Streamlit stop returned unexpectedly") from exc
+        raise
 
 # -----------------------------------------------------------------------------
 # Sidebar
@@ -162,14 +164,11 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("**Navigation**")
     page = st.radio("Go to", [
-        "Overview", 
-        "Synaptic Dynamics", 
-        "Anatomy of a Decision",
-        "Semantic Space (3D)",
-        "Functional Connectivity",
+        "Overview",
+        "Synaptic Dynamics",
         "Interactive Petri Dish",
         "Interactive Hebbian Learning",
-        "Structural Plasticity", 
+        "Structural Plasticity",
         "Population Stats",
         "Genetics & Diversity",
         "Metabolism Economy",
@@ -215,19 +214,27 @@ if page == "Overview":
                 last_row = df.iloc[-1]
                 
                 col1, col2, col3, col4 = st.columns(4)
-                col1.metric("Global Energy", f"{last_row['energy']:.2f}", delta=None)
-                col2.metric("Global Fatigue", f"{last_row['fatigue']:.2f}", delta=None, delta_color="inverse")
+                # Column names MUST match the vitals.csv schema written by
+                # NeuroVizManager._log_vitals (energy_mean/health_mean/
+                # utilization_mean/dead_expert_frac) — the previous labels
+                # ('energy'/'fatigue') KeyError'd on every load.
+                col1.metric("Global Energy", f"{last_row['energy_mean']:.2f}", delta=None)
+                col2.metric("Utilization", f"{last_row['utilization_mean']:.2f}", delta=None)
                 col3.metric("Loss", f"{last_row['loss']:.4f}", delta=None, delta_color="inverse")
                 col4.metric("Step", int(last_row['step']))
-                
+
                 # Scrolling EKG Chart
                 st.markdown("### System Vitals")
-                
+
                 # Reshape for plotly
-                df_melt = df.melt(id_vars=['step'], value_vars=['energy', 'fatigue', 'loss'], var_name='Metric', value_name='Value')
-                
-                fig = px.line(df_melt, x='step', y='Value', color='Metric', 
-                              color_discrete_map={'energy': '#00CC96', 'fatigue': '#EF553B', 'loss': '#AB63FA'})
+                df_melt = df.melt(
+                    id_vars=['step'],
+                    value_vars=['energy_mean', 'health_mean', 'utilization_mean', 'loss'],
+                    var_name='Metric',
+                    value_name='Value',
+                )
+
+                fig = px.line(df_melt, x='step', y='Value', color='Metric')
                 
                 fig.update_layout(
                     template="plotly_dark",
@@ -383,247 +390,6 @@ elif page == "Synaptic Dynamics":
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.warning("No raster data found yet.")
-
-# -----------------------------------------------------------------------------
-# Page: Anatomy of a Decision
-# -----------------------------------------------------------------------------
-
-elif page == "Anatomy of a Decision":
-    st.header(f"Anatomy of a Decision: {selected_layer}")
-    st.markdown("""
-    **Why did the Router choose Expert X?**
-    
-    We break down the routing logits into their biological components for a single token.
-    
-    *   **Content Match**: The standard dot-product similarity.
-    *   **Gene Bias**: Innate preference based on genetics.
-    *   **Energy Bias**: Boost for high-energy experts.
-    *   **Fatigue Penalty**: Penalty for tired experts.
-    """)
-    
-    files = get_files(f"images/{selected_layer}/{selected_layer}_decision_*.json")
-    if files:
-        idx = st.slider("History", 0, len(files)-1, 0, format="Step -%d", key="decision_slider")
-        data = load_json(files[idx])
-        
-        # Data is for all experts. We want to show the Top-K winners.
-        total_logits = np.array(data['total_logits'])
-        top_k_idx = np.argsort(total_logits)[-3:][::-1] # Top 3
-        
-        # Create columns for the top 3 experts
-        cols = st.columns(3)
-        
-        for i, expert_id in enumerate(top_k_idx):
-            with cols[i]:
-                st.subheader(f"Rank #{i+1}: Expert {expert_id}")
-                
-                # Extract components
-                components = {
-                    "Content": data['router_logits'][expert_id],
-                    "Genetics": data['gene_bias'][expert_id],
-                    "Alignment": data['align_bias'][expert_id],
-                    "Energy": data['energy_bias'][expert_id],
-                    "Fatigue": data['fatigue_bias'][expert_id]
-                }
-                
-                # Waterfall chart
-                fig = go.Figure(go.Waterfall(
-                    name = "20", orientation = "v",
-                    measure = ["relative"] * 5 + ["total"],
-                    x = list(components.keys()) + ["Total"],
-                    textposition = "outside",
-                    text = [f"{v:.2f}" for v in components.values()] + [f"{total_logits[expert_id]:.2f}"],
-                    y = list(components.values()) + [total_logits[expert_id]],
-                    connector = {"line":{"color":"rgb(63, 63, 63)"}},
-                ))
-                
-                fig.update_layout(
-                    title = "Logit Composition",
-                    showlegend = False,
-                    template="plotly_dark",
-                    height=400,
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)'
-                )
-                st.plotly_chart(fig, use_container_width=True)
-                
-    else:
-        st.warning("No decision data found yet.")
-
-# -----------------------------------------------------------------------------
-# Page: Semantic Space (3D)
-# -----------------------------------------------------------------------------
-
-elif page == "Semantic Space (3D)":
-    st.header(f"Semantic Space (3D): {selected_layer}")
-    st.markdown("""
-    **Where does the Token live?**
-    
-    We project the **Token's Router Probe** and all **Expert Embeddings** into 3D space.
-    
-    *   **🔴 Red Star**: The current Token.
-    *   **⚪ Grey Dots**: The Experts.
-    *   **🔵 Blue Halo**: The Experts that were actually chosen (Gated).
-    
-    This shows if the router is picking experts that are *semantically close* to the token (good alignment) or if other biases (Fatigue/Energy) are forcing it to pick distant experts.
-    """)
-    
-    files = get_files(f"images/{selected_layer}/{selected_layer}_semantic_*.json")
-    if files:
-        idx = st.slider("History", 0, len(files)-1, 0, format="Step -%d", key="semantic_slider")
-        data = load_json(files[idx])
-        
-        token_x = data['token_x']
-        token_y = data['token_y']
-        token_z = data.get('token_z', 0.0) # Fallback for old 2D data
-        
-        exp_x = data['experts_x']
-        exp_y = data['experts_y']
-        exp_z = data.get('experts_z', [0.0]*len(exp_x))
-        
-        gates = np.array(data['gates'])
-        
-        fig = go.Figure()
-        
-        # All experts
-        fig.add_trace(go.Scatter3d(
-            x=exp_x, y=exp_y, z=exp_z,
-            mode='markers',
-            marker=dict(
-                size=5,
-                color=gates,
-                colorscale=[[0, 'grey'], [0.01, 'grey'], [0.01, '#2196F3'], [1, '#2196F3']],
-                showscale=False,
-                opacity=0.6
-            ),
-            text=[f"Expert {i}<br>Gate: {g:.2f}" for i, g in enumerate(gates)],
-            hoverinfo='text',
-            name='Experts'
-        ))
-        
-        # Selected experts (Halo)
-        selected_mask = gates > 0
-        if np.any(selected_mask):
-            fig.add_trace(go.Scatter3d(
-                x=np.array(exp_x)[selected_mask],
-                y=np.array(exp_y)[selected_mask],
-                z=np.array(exp_z)[selected_mask],
-                mode='markers',
-                marker=dict(
-                    size=10,
-                    color='rgba(0,0,0,0)',
-                    line=dict(color='#2196F3', width=5)
-                ),
-                hoverinfo='skip',
-                name='Selected'
-            ))
-        
-        # Token
-        fig.add_trace(go.Scatter3d(
-            x=[token_x], y=[token_y], z=[token_z],
-            mode='markers',
-            marker=dict(size=12, symbol='diamond', color='#FF5252'),
-            name='Current Token'
-        ))
-        
-        fig.update_layout(
-            template="plotly_dark",
-            height=700,
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            scene=dict(
-                xaxis=dict(showgrid=False, zeroline=False, showticklabels=False, title=''),
-                yaxis=dict(showgrid=False, zeroline=False, showticklabels=False, title=''),
-                zaxis=dict(showgrid=False, zeroline=False, showticklabels=False, title=''),
-            ),
-            showlegend=True
-        )
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.warning("No semantic space data found yet.")
-
-# -----------------------------------------------------------------------------
-# Page: Functional Connectivity
-# -----------------------------------------------------------------------------
-
-elif page == "Functional Connectivity":
-    st.header(f"Functional Connectivity: {selected_layer}")
-    st.markdown("""
-    **The Connectome.**
-    
-    This graph shows which experts fire together.
-    *   **Nodes**: Experts.
-    *   **Edges**: Co-activation frequency.
-    
-    Clusters represent **Functional Modules** (e.g., a group of experts that specialize in Python code or French grammar).
-    """)
-    
-    files = get_files(f"images/{selected_layer}/{selected_layer}_connectivity_*.json")
-    if files:
-        idx = st.slider("History", 0, len(files)-1, 0, format="Step -%d", key="connect_slider")
-        data = load_json(files[idx])
-        adj = np.array(data['adjacency'])
-        
-        # Build graph for Plotly
-        # We use a circular layout for simplicity and stability
-        E = adj.shape[0]
-        
-        # Filter weak edges
-        threshold = 0.1
-        rows, cols = np.where(adj > threshold)
-        
-        edge_x = []
-        edge_y = []
-        
-        # Circular layout
-        radius = 10
-        node_x = [radius * np.cos(2*np.pi*i/E) for i in range(E)]
-        node_y = [radius * np.sin(2*np.pi*i/E) for i in range(E)]
-        
-        for r, c in zip(rows, cols):
-            if r >= c:
-                continue # Undirected
-            x0, y0 = node_x[r], node_y[r]
-            x1, y1 = node_x[c], node_y[c]
-            edge_x.extend([x0, x1, None])
-            edge_y.extend([y0, y1, None])
-            
-        edge_trace = go.Scatter(
-            x=edge_x, y=edge_y,
-            line=dict(width=0.5, color='#888'),
-            hoverinfo='none',
-            mode='lines')
-
-        node_trace = go.Scatter(
-            x=node_x, y=node_y,
-            mode='markers+text',
-            hoverinfo='text',
-            marker=dict(
-                showscale=False,
-                color='#2196F3',
-                size=10,
-                line_width=2),
-            text=[str(i) for i in range(E)],
-            textposition="top center"
-        )
-        
-        fig = go.Figure(data=[edge_trace, node_trace],
-             layout=go.Layout(
-                title='Expert Co-Activation Network',
-                titlefont_size=16,
-                showlegend=False,
-                hovermode='closest',
-                margin=dict(b=20,l=5,r=5,t=40),
-                template="plotly_dark",
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
-                xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-                yaxis=dict(showgrid=False, zeroline=False, showticklabels=False))
-                )
-        st.plotly_chart(fig, use_container_width=True)
-        
-    else:
-        st.warning("No connectivity data found yet.")
 
 # -----------------------------------------------------------------------------
 # Page: Interactive Petri Dish

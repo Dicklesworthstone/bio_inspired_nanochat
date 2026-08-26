@@ -127,9 +127,13 @@ def _reduce_elig_norm(expert: SynapticExpert) -> float:
 
 
 def _weight_energy_util(energy: np.ndarray, fatigue: np.ndarray) -> np.ndarray:
+    """Health = utilization × energy — the SAME formula the split/merge
+    lifecycle controller uses (synaptic_splitmerge._health). ``fatigue`` is the
+    usage EMA (synaptic.py), NOT an availability measure: the previous
+    ``1 - fatigue`` here INVERTED health, making busy experts look dying and
+    dead experts look thriving in the v2 bio panels."""
     energy = np.clip(energy, 0.0, 1.0)
-    # fatigue is already ndarray here based on usage in _layer_metrics
-    util = 1.0 - np.clip(fatigue, 0.0, 1.0)
+    util = np.clip(fatigue, 0.0, 1.0)
     return energy * util
 
 
@@ -559,11 +563,14 @@ class NeuroVizManager:
         if self.tb is not None and step - self._last_tb >= self.cfg.tb_every:
             for name, moe in self.layers:
                 self._log_tb_layer(name, moe, step)
-            
-            # Log vitals to CSV frequently (same cadence as TB)
-            self._log_vitals(model, step, loss)
-            
             self._last_tb = step
+
+        # Vitals CSV is the dashboard's primary telemetry — keep it on its own
+        # cadence, decoupled from TensorBoard availability (write_tensorboard
+        # =False used to silently disable it).
+        if step - getattr(self, "_last_vitals", -(10**9)) >= self.cfg.tb_every:
+            self._log_vitals(model, step, loss)
+            self._last_vitals = step
 
         # Static images
         if self.cfg.save_pngs and step - self._last_img >= self.cfg.image_every:
@@ -681,18 +688,10 @@ class NeuroVizManager:
         self._plot_genetics(name, moe, step, outdir)
         self._plot_metabolism(name, moe, step, outdir)
         
-        # router decision breakdown
-        self._plot_router_decision(name, moe, step, outdir)
 
-    def _plot_router_decision(self, name: str, moe: SynapticMoE, step: int, outdir: str):
-        if not hasattr(moe, "last_ctx") or "decision_data" not in moe.last_ctx:
-            return
-            
-        d = moe.last_ctx["decision_data"]
-        # Convert to numpy
-        data = {k: _to_np(v) for k, v in d.items()}
-        
-        self._save_json(data, os.path.join(outdir, f"{name}_decision_{step:09d}.json"))
+        # NOTE: no "router decision breakdown" here — the old _plot_router_decision
+        # gated on last_ctx["decision_data"], a key NOTHING in the repo writes,
+        # so it could never emit an artifact (removed with its dead dashboard page).
 
     def _plot_genetics(self, name: str, moe: SynapticMoE, step: int, outdir: str):
         if not hasattr(moe, "Xi") or not hasattr(moe, "_get_phenotype"):
@@ -726,14 +725,21 @@ class NeuroVizManager:
         self._save_json(data, os.path.join(outdir, f"{name}_metabolism_{step:09d}.json"))
 
     def _save_json(self, data: Dict[str, Any], path: str):
+        # Atomic tmp+replace: the Streamlit dashboard re-reads these artifacts
+        # every ~2s in live mode; a mid-write read of the final path used to
+        # raise JSONDecodeError and kill the whole app.
+
         def default(obj):
             if isinstance(obj, (np.ndarray, np.generic)):
                 return obj.tolist()
             if isinstance(obj, torch.Tensor):
                 return obj.detach().cpu().tolist()
             return str(obj)
-        with open(path, 'w') as f:
+        tmp = path + ".tmp"
+        with open(tmp, "w") as f:
             json.dump(data, f, default=default)
+        os.replace(tmp, path)
+
 
     def _plot_presynaptic_dynamics(self, name: str, moe: SynapticMoE, step: int, outdir: str):
         # Simulate "Boredom": Attend to the same token repeatedly

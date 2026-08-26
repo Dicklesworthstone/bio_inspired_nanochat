@@ -89,7 +89,17 @@ def dispatch_accumulate_router_stats(
     num_experts: int,
     backend: Optional[Backend | str] = None,
 ) -> Tuple[Tensor, Tensor]:
-    """Dispatch MoE routing stats accumulation across Triton / Rust / PyTorch."""
+    """Dispatch MoE routing stats accumulation across Triton / Rust / PyTorch.
+
+    Semantics note (kernel audit): for indices containing DUPLICATES within one
+    token's top-k slots — impossible for true ``torch.topk`` output, but common
+    in synthetic tests — the backends disagree on ``counts``: Triton counts
+    per-edge OCCURRENCES while Rust/PyTorch count per-token PRESENCE
+    (``mask.any(dim=-1)``). ``gate_sums`` is occurrence-summed everywhere and
+    agrees. Production routing (top-k output) can never contain duplicates, so
+    the divergence is unreachable on the live path; if you feed synthetic
+    indices, pin one backend explicitly.
+    """
     resolved_backend = select_backend(gates.device, override=backend)
 
     if resolved_backend == Backend.TRITON and gates.is_cuda:
