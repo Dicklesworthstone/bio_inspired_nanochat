@@ -230,9 +230,20 @@ def run_capability_frontier_e2e(
         )
 
         budget_preserved = (budget.spent_atp <= cfg.atp_initial_budget) and (budget.remaining_atp >= 0)
+        # r00r.3 spec says "strictly more compute to high-uncertainty tokens".
+        # A no-op router (floor-pinned allocations for both tokens) satisfies
+        # every >= here, so require STRICT separation on at least one
+        # allocation axis in addition to the floor constraints.
+        strictly_more = (
+            plan_hard.mc_samples > plan_easy.mc_samples
+            or plan_hard.compute_units > plan_easy.compute_units
+            or plan_hard.depth_layers > plan_easy.depth_layers
+            or plan_hard.expert_top_k > plan_easy.expert_top_k
+        )
         compute_scaled = (
             plan_hard.mc_samples >= plan_easy.mc_samples
             and plan_hard.compute_units >= plan_easy.compute_units
+            and strictly_more
             and diff_hard.score > diff_easy.score
         )
         minimum_floor_respected = (plan_easy.depth_layers >= 1 and plan_easy.expert_top_k >= 1)

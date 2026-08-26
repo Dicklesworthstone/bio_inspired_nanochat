@@ -1279,7 +1279,9 @@ def evaluate_candidate(
         lce_target_steps=None,
         record_losses=False,
     )
-    return float(res.mean_last_loss)
+    # 74f.1: minimize the HELD-OUT objective when available — mean-last-k
+    # training loss is the seed-noise source this wrapper exists to avoid.
+    return float(res.objective)
 
 
 def _merge_allgathered_fitness(gathered: list[torch.Tensor]) -> list[float]:
@@ -1356,7 +1358,10 @@ def _distributed_worker_loop(
             if use_lce and res.lce_pred_loss is not None:
                 fitness[sol_idx] = float(res.lce_pred_loss)
             else:
-                fitness[sol_idx] = float(res.mean_last_loss)
+                # 74f.1: prefer the held-out objective (far less noisy than
+                # train-side mean-last-k); falls back automatically when the
+                # caller disables held-out batches.
+                fitness[sol_idx] = float(res.objective)
 
         gathered = [torch.empty_like(fitness) for _ in range(dist_info.world_size)]
         dist.all_gather(gathered, fitness)
@@ -1534,8 +1539,16 @@ def _cmd_proxy(
     for idx in range(int(args.candidates)):
         vec_vals: list[float] = []
         for spec in specs:
-            v = float(rng.uniform(spec.lower, spec.upper))
-            vec_vals.append(math.log(v) if spec.log_scale else v)
+            if spec.log_scale:
+                # Sample LOG-scale dims log-uniformly so proxy candidates cover
+                # the same distribution CMA-ES searches (it operates on encoded
+                # vectors). Linear-uniform-then-log piled candidates near the
+                # top of each range and validated only a sliver of the box.
+                lo = math.log(spec.lower)
+                hi = math.log(spec.upper)
+                vec_vals.append(float(rng.uniform(lo, hi)))
+            else:
+                vec_vals.append(float(rng.uniform(spec.lower, spec.upper)))
         x = np.asarray(vec_vals, dtype=np.float64)
 
         proxy_res = evaluate_candidate_detailed(
@@ -1594,20 +1607,29 @@ def _cmd_proxy(
             f"{err:.6f}",
         )
 
+    min_pearson = 0.8
     pearson = float("nan")
     if len(preds) >= 2 and np.std(preds) > 0 and np.std(fulls) > 0:
         pearson = float(np.corrcoef(np.asarray(preds), np.asarray(fulls))[0, 1])
     mae = float(np.mean(np.abs(np.asarray(preds) - np.asarray(fulls))))
     rmse = float(np.sqrt(np.mean((np.asarray(preds) - np.asarray(fulls)) ** 2)))
 
+    # Fail loud (mirroring _cmd_sanity): an ungated exit-0 let automation bless
+    # the cheap proxy objective even when correlation was NaN (degenerate
+    # candidates) or far below any trust threshold, before a multi-hour sweep
+    # that depends on it.
+    gate_ok = math.isfinite(pearson) and pearson >= min_pearson
+
     console.print(
         Panel.fit(
-            f"[bold cyan]Summary[/bold cyan]\npearson_r={pearson:.3f}  MAE={mae:.4f}  RMSE={rmse:.4f}",
+            f"[bold cyan]Summary[/bold cyan]\npearson_r={pearson:.3f}  MAE={mae:.4f}  RMSE={rmse:.4f}\n"
+            f"gate (pearson >= {min_pearson}): "
+            + ("[green]PASS[/green]" if gate_ok else "[red]FAIL[/red]"),
             border_style="cyan",
         )
     )
     console.print(table)
-    return 0
+    return 0 if gate_ok else 1
 
 
 def _cmd_optimize(
@@ -1827,7 +1849,9 @@ def _cmd_optimize(
                         if use_lce and res.lce_pred_loss is not None:
                             fitness[sol_idx] = float(res.lce_pred_loss)
                         else:
-                            fitness[sol_idx] = float(res.mean_last_loss)
+                            # 74f.1: prefer the held-out objective (see
+                            # _distributed_worker_loop note).
+                            fitness[sol_idx] = float(res.objective)
 
                     gathered = [
                         torch.empty_like(fitness) for _ in range(dist_info.world_size)
@@ -1859,7 +1883,9 @@ def _cmd_optimize(
                         if use_lce and res.lce_pred_loss is not None:
                             fitnesses.append(float(res.lce_pred_loss))
                         else:
-                            fitnesses.append(float(res.mean_last_loss))
+                            # 74f.1: prefer the held-out objective (see
+                            # _distributed_worker_loop note).
+                            fitnesses.append(float(res.objective))
 
                 es.tell(solutions, fitnesses)
 

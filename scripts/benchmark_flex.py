@@ -330,7 +330,10 @@ def _bench_ca_init() -> list[_RunResult]:
                             sims.append(_cosine_to_init(cur, init_snap[name]))
                             norms.append(float(cur.norm().item()))
                         sim_min = min(sims)
-                        if step_idx == 200:
+                        # Capture the FIRST logged step at/after 200: with
+                        # log_every not dividing 200 exactly, no logged step
+                        # equals 200 and the summary column silently read n/a.
+                        if step_idx >= 200 and sim_at_200 != sim_at_200:
                             sim_at_200 = sim_min
 
                         row: dict[str, object] = {

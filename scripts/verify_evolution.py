@@ -29,8 +29,9 @@ def main():
     parser = argparse.ArgumentParser(description="Verify Bio-Inspired Nanochat Evolution")
     parser.add_argument("--fused-genetics", action="store_true", default=None, help="Enable fused genetics")
     parser.add_argument("--no-fused-genetics", action="store_false", dest="fused_genetics", help="Disable fused genetics")
-    
+
     args = parser.parse_args()
+    failed = False  # any [FAIL] below must surface as a nonzero exit status
 
     # 1. Setup Config
     print("[*] Setting up Bio-Synaptic Model...")
@@ -86,9 +87,13 @@ def main():
     viz = NeuroVizManager(viz_cfg)
     viz.register_model(model)
     
-    # 4. Setup Split/Merge (to ensure hooks work)
+    # 4. Setup Split/Merge — constructed so its wiring stays exercised, but
+    # Lifecycle surgery DISABLED: split/merge clones rewrite Xi rows regardless
+    # of gradients, which confounded the genetic-drift check below (frozen
+    # genetics could 'pass' via clone noise alone). Drift must be attributable
+    # to SGD alone.
     sm_cfg = SplitMergeConfig(
-        enabled=True,
+        enabled=False,
         min_step_interval=50, # Fast cycle
         warmup_steps=10,
         verbose=True
@@ -157,7 +162,8 @@ def main():
 
     # 7. Verification
     print("\n[*] Verification Results:")
-    
+    failed = False
+
     # Check Genetics Divergence
     final_genes = genes.detach()
     diff = (final_genes - init_genes).abs().mean().item()
@@ -166,8 +172,10 @@ def main():
         print("  [SUCCESS] Genetics are evolving!")
     else:
         print("  [FAIL] Genetics are static. Check gradient flow.")
-        
+        failed = True
+
     # Check NeuroScore Stats
+    neuroscore_ok = False
     if viz.score:
         stats = viz.score.stats.get("moe_L0")
         if stats:
@@ -175,21 +183,26 @@ def main():
             spec = stats["specialization"].mean().item()
             print(f"  -> Mean Efficiency: {eff:.4f}")
             print(f"  -> Mean Specialization: {spec:.4f}")
-            
+
             if eff != 0 and spec != 0:
                 print("  [SUCCESS] NeuroScore metrics are active.")
+                neuroscore_ok = True
             else:
                 print("  [FAIL] NeuroScore metrics are zero.")
         else:
             print("  [FAIL] No NeuroScore stats found for Layer 0.")
-            
+    if not neuroscore_ok:
+        failed = True
+
     # Check TensorBoard logs
     if os.path.exists(log_dir):
         print(f"  [SUCCESS] TensorBoard logs written to {log_dir}")
     else:
         print("  [FAIL] No logs found.")
+        failed = True
 
     viz.close()
+    return 1 if failed else 0
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
