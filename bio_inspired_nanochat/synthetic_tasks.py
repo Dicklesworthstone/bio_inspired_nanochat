@@ -74,7 +74,11 @@ def _generator(seed: int | torch.Generator | None) -> torch.Generator:
 
 def control_tokens(vocab_size: int, n_special: int = 2) -> SimpleNamespace:
     """Reserve the top ``n_special`` ids as control tokens; content lives below them."""
-    assert vocab_size > n_special + 2, f"vocab_size {vocab_size} too small for {n_special} control tokens"
+    if vocab_size <= n_special + 2:
+        # Explicit check (asserts vanish under python -O).
+        raise ValueError(
+            f"vocab_size {vocab_size} too small for {n_special} control tokens"
+        )
     return SimpleNamespace(
         SEP=vocab_size - 1,
         QUERY=vocab_size - 2,

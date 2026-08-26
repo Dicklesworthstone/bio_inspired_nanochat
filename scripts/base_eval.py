@@ -10,6 +10,8 @@ torchrun --nproc_per_node=8 -m scripts.base_eval
 The script will print the CORE metric to the console.
 """
 import os
+from pathlib import Path
+
 import csv
 import time
 import json
@@ -63,6 +65,17 @@ def place_eval_bundle(file_path: str, *, eval_bundle_dir: str) -> None:
         return
     with tempfile.TemporaryDirectory() as tmpdir:
         with zipfile.ZipFile(file_path, 'r') as zip_ref:
+            # Defense-in-depth for an UNTRUSTED downloaded artifact: CPython
+            # strips `..`/absolute components during extract, but validate every
+            # member resolves inside the destination BEFORE touching disk so a
+            # crafted archive fails loudly instead of relying on stdlib behavior.
+            tmpdir_resolved = Path(tmpdir).resolve()
+            for member in zip_ref.namelist():
+                member_path = (tmpdir_resolved / member).resolve()
+                if not str(member_path).startswith(str(tmpdir_resolved)):
+                    raise ValueError(
+                        f"eval bundle zip contains an unsafe path: {member!r}"
+                    )
             zip_ref.extractall(tmpdir)
         extracted_bundle_dir = os.path.join(tmpdir, "eval_bundle")
         os.makedirs(os.path.dirname(eval_bundle_dir), exist_ok=True)
