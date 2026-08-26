@@ -184,7 +184,11 @@ def test_metriplectic_and_learnable_configs_still_rejected():
     """The genuinely dynamic-altering modes keep their hard rejection."""
     kernel = _rust_kernel()
     for flag in ("metriplectic_integrator", "learnable_kinetics"):
-        cfg = SynapticConfig(**{flag: True})
+        cfg = (
+            SynapticConfig(metriplectic_integrator=True)
+            if flag == "metriplectic_integrator"
+            else SynapticConfig(learnable_kinetics=True)
+        )
         with pytest.raises(ValueError, match="deterministic fixed-kinetics"):
             kernel(
                 np.ones((1, 1, 1, 2), dtype=np.float32),
