@@ -8,10 +8,10 @@ dary_heap = "0.3"
 indexmap = "2.2"
 fancy-regex = "0.16.1"
 log = "0.4.28"
-pyo3 = { version = "0.27.2", features = ["extension-module"] }
+pyo3 = { version = "0.29.1", features = ["extension-module"] }
 pyo3-log = "0.13.2"
 ahash = "0.8.12"
 rayon = "1.11.0"
 compact_str = "0.9.0"
-numpy = "0.27.1"
+numpy = "0.29.0"
 ndarray = { version = "0.16", features = ["rayon"] }
