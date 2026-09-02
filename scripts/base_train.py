@@ -845,8 +845,9 @@ while True:
         with autocast_ctx:
             # evaluate_bpb expects model(x, y, loss_reduction='none') which works for GPT
             # For GPTSynaptic, we need to wrap it
+            syn_model = cast(Any, model)  # GPTSynaptic.forward takes train_mode; GPT.forward does not
             if use_syn:
-                orig_forward = model.forward
+                orig_forward = syn_model.forward
 
                 def syn_forward_wrapper(
                     idx,
@@ -877,10 +878,10 @@ while True:
                         logits, _ = orig_forward(idx, None, kv_cache, train_mode=False)
                         return logits
 
-                model.forward = syn_forward_wrapper
+                syn_model.forward = syn_forward_wrapper
             val_bpb = evaluate_bpb(model, val_loader, eval_steps, token_bytes)
             if use_syn:
-                model.forward = orig_forward
+                syn_model.forward = orig_forward
         print0(f"Step {step:05d} | Validation bpb: {val_bpb:.4f}")
         min_val_bpb = min(min_val_bpb, val_bpb)
         wandb_run.log(

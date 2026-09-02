@@ -545,7 +545,7 @@ top of `scripts/base_train.py`, and any `SynapticConfig` field is reachable as
 ```bash
 uv run --no-sync python -m scripts.base_train --synapses=1 --depth=12 --splitmerge_every=1000 \
     --device_batch_size=32 --total_batch_size=524288 --num_iterations=50000 \
-    --syn_cfg.tau_rrp=60.0 --syn_cfg.bistable_latch=1
+    --syn_cfg.tau_rrp=60.0 --syn_cfg.bistable_latch=1 --model_tag=my_first_brain
 ```
 
 Model width is derived from `--depth` (the nanochat convention). For two GPUs use
@@ -577,12 +577,18 @@ tensorboard --logdir runs/neuroviz
 ### 4. Chat with Your Brain
 
 ```bash
-# Launch web chat interface
-uv run --no-sync python -m scripts.chat_web --source sft --port 8000
+# Talk to the base checkpoint step 3 wrote. A base model completes text; it is not instruction-tuned.
+uv run --no-sync python -m scripts.chat_cli -i base -g my_first_brain -p "The synapse"
+
+# Or serve it in the browser
+uv run --no-sync python -m scripts.chat_web --source base --model-tag my_first_brain --port 8000
 ```
 
-`--source` is `sft`, `mid`, or `rl`: the checkpoint produced by the full pipeline
-(`base_train` → `mid_train` → `chat_sft`). No trained bio checkpoint ships with the repository yet.
+`-i`/`--source` names the checkpoint directory: `base`, `mid`, `sft`, or `rl`. `sft` and `rl` are
+the conversational stages of the full pipeline (`base_train` → `mid_train` → `chat_sft`). No
+trained bio checkpoint ships with the repository yet. Steps 3 and 4 were run end to end on CPU on
+2026-09-01 (2 FineWeb shards, 4,096-token vocabulary, 8 steps, `--device_type=cpu`); the
+`torch.compile` call that had made `base_train` unrunnable on Python 3.14 is now gated.
 
 ### 5. Benchmark Bio vs Vanilla
 

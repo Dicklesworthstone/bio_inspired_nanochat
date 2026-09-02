@@ -20,6 +20,7 @@ Run:  pytest tests/test_presyn_rust_dispatch.py -v
 from __future__ import annotations
 
 import importlib
+from typing import Any
 
 import pytest
 import torch
@@ -190,7 +191,7 @@ def test_predicate_rejects_non_float32_and_learnable_kinetics():
     B, H, T_keys, K = 1, 1, 4, 2
     drive, _idx, _valid = _inputs(B, H, T_keys, K)
     state = _seeded_state(rust, 2, B, H, T_keys)
-    common = {
+    common: dict[str, Any] = {
         "train": False,
         "differentiable": False,
         "apply_barrier": False,
@@ -201,8 +202,10 @@ def test_predicate_rejects_non_float32_and_learnable_kinetics():
     with torch.no_grad():
         assert rust._can_use_native_presyn_cpu_decode(state, drive, **common)
         assert not rust._can_use_native_presyn_cpu_decode(state, drive.double(), **common)
-        assert not rust._can_use_native_presyn_cpu_decode(state, drive, **{**common, "active_key_count": 3})
-        assert not rust._can_use_native_presyn_cpu_decode(state, drive, **{**common, "apply_barrier": True})
+        partial_keys: dict[str, Any] = {**common, "active_key_count": 3}
+        assert not rust._can_use_native_presyn_cpu_decode(state, drive, **partial_keys)
+        barrier: dict[str, Any] = {**common, "apply_barrier": True}
+        assert not rust._can_use_native_presyn_cpu_decode(state, drive, **barrier)
     learnable = SynapticPresyn(d_head=8, cfg=SynapticConfig(native_presyn=True, learnable_kinetics=True))
     learnable.eval()
     with torch.no_grad():

@@ -38,6 +38,7 @@ import dataclasses
 import json
 import os
 import sys
+from typing import Any
 from pathlib import Path
 
 import numpy as np
@@ -221,7 +222,7 @@ def _state_into(d: dict, prefix: str, state: dict) -> None:
 
 
 def _state_from(z, prefix: str) -> dict:
-    state = {
+    state: dict[str, Any] = {
         k: torch.from_numpy(np.asarray(z[f"{prefix}_{k}"])).to(DT) for k in STATE_KEYS
     }
     delay = np.asarray(z[f"{prefix}_DELAY"])
