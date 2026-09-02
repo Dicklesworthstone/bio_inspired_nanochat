@@ -21,10 +21,17 @@ A full reality check against the README and plan documents (assessment published
 ### Kernels
 - `release_canonical` dispatches the Rust decode kernel (`rustbpe.presyn_release_canonical_cpu`) for eval-mode one-query CPU decode when `native_presyn=1`; release, advanced state, and DELAY-queue parity plus planted negatives locked in `tests/test_presyn_rust_dispatch.py`. Measured single-thread: 1.98× faster than PyTorch at 512 keys, 0.97× at 2,048, 0.75× at 4,096, so the toggle stays off by default (follow-up bead `ylo2`).
 
+### The headline-experiment harness
+- `SynapticConfig.neuromod_enabled` (default off) is registered in `ablation_registry` as the `neuromod` mechanism (requires presyn + hebbian), so the pre-registered matrix carries an `add_neuromod` column (17 screening columns). `neuromod.bus_for_config` is the single constructor both harnesses use.
+- `eval_matrix` accepts every matrix column, not just the ten named presets: the `synaptic_off` anchor and all `add_*` columns are materialised through `ablation_matrix.AblationConfig.build_syn_cfg()` (`eval_matrix.MATRIX_COLUMNS`), and the inline training loop instantiates the neuromodulatory bus when the flag is on, logging its levels and gains per step (`tests/test_neuromod_mechanism.py`).
+- Measured why the expert lifecycle is inert at 4 experts and merge-prone at 8 (utilization ≈ `top_k/E` against absolute thresholds; steady-state health ≈ `u(1−u)`), recorded in README, CLAIMS_AUDIT, and bead `sx1m`.
+
 ### Registry, CI, and gates
 - The test suite redirects the default results registry via `BIO_RESULTS_REGISTRY` (`tests/conftest.py`), and 43 rows whose artifacts were pytest temp directories were purged from `results/registry.jsonl`.
 - CI: `cargo fmt` on `rust_src/src/presyn.rs` (red since 2026-08-25, which skipped the wheel build and the 1,789-test suite); nightly validation gets `validate_all --timeout-scale 4`; nightly uncertainty creates its gitignored evidence directory; `release.yml` uses the real `dtolnay/rust-toolchain` action; duplicate `master` push trigger dropped; the quality gate's inner `uv run` is `--no-sync` so it cannot re-sync the environment to the CUDA torch build.
 - `SynapticConfig` schema validation moved from `certificate_bundle` to `ablation_registry`, so the training script no longer imports the certificate machinery through a two-function dependency.
+- `[tool.ruff.lint] select` pinned to the pre-0.16 policy (E4/E7/E9/F): the 2026-08-27 lock bump broadened ruff's defaults and left ~1,400 findings that made the changed-files quality gate a guaranteed failure; the six findings the pinned set still flagged are fixed and the repo is lint-clean under it. Five pre-existing `ty` errors in `eval_matrix` (a legacy `TypeVar` mixed with a PEP 695 type parameter) fixed.
+- Every workflow `uv run` passes `--no-sync` (a bare `uv run` re-resolved the environment to the CUDA torch build mid-job); the integration job enforces the coverage floor with `--cov`; `docs/epic_runbooks.md` commands corrected to the real CLIs.
 
 ### Documentation truth pass
 - README: Quick Start rewritten with the real flags and the data/tokenizer prerequisites; counts fixed (476 issues / 33 epics, 108 config fields, `rank_eligibility=8`); an "Evidence status" paragraph; the roadmap replaced with the actual open epics and a done/not-done table; calibration numbers labelled with their toy scale; BDNF toggle wording corrected.
