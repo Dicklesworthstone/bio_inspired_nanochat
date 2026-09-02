@@ -28,6 +28,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from bio_inspired_nanochat.results_registry import measurement_regime
 from bio_inspired_nanochat.eval_stats import (
     Aggregate,
     PairedResult,
@@ -286,6 +287,7 @@ class FastWeightBenchReport:
                 }
                 for name, arch in self.architectures.items()
             },
+            "measurement_regime": measurement_regime(),
             "comparisons_vs_vanilla": {
                 name: asdict(comp) for name, comp in self.comparisons_vs_vanilla.items()
             },

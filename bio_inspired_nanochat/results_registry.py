@@ -130,6 +130,22 @@ class RunRecord:
         return cls(**payload)
 
 
+def measurement_regime(*, read: str = "full-forward") -> dict[str, str]:
+    """How an evaluation artifact was measured; stamp it into every committed result (bridge plan G3).
+
+    Until 2026-09-01 ``GPTSynaptic.forward`` defaulted to ``train_mode=True``, so evaluators that did
+    not pass the flag scored a stochastic, self-modifying model. Artifacts without this field were
+    produced under that regime. ``read`` says how sequences were read: ``full-forward`` (one
+    teacher-forced pass, blind to within-sequence fast-weight writes) or ``chunked`` (KV-cache
+    chunks, ``synthetic_tasks.retrieval_accuracy(chunk_len=...)``).
+    """
+    return {
+        "eval_determinism": "module-training-flag (GPTSynaptic.forward train_mode defaults to self.training; commit 5cb1a90)",
+        "read": read,
+        "since": "2026-09-01",
+    }
+
+
 def _hardware_string() -> str:
     try:
         import torch

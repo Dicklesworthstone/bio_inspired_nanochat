@@ -30,6 +30,7 @@ import numpy as np
 from rich.console import Console
 from rich.table import Table
 
+from bio_inspired_nanochat.results_registry import measurement_regime
 from bio_inspired_nanochat.eval_stats import (
     Aggregate,
     PairedResult,
@@ -69,6 +70,12 @@ class StructuralNASEvaluationConfig:
     dormant_logit_bias: float = -12.0
     max_event_loss_spike: float = 0.02
     bootstrap_samples: int = 10_000
+    # sx1m / uta.8: which lifecycle health signal drives the events. 'product' is the
+    # preregistered util x energy signal with the absolute thresholds above; 'relative' scores
+    # utilization against the fair share top_k / num_experts, so its thresholds are in
+    # fair-share units (split above 1.5x, reset below 0.05x) and the split threshold above 1.0
+    # is the point.
+    health_mode: str = "product"
 
     def validate(self) -> None:
         if len(self.seeds) < 3 or len(set(self.seeds)) != len(self.seeds):
@@ -89,8 +96,14 @@ class StructuralNASEvaluationConfig:
             raise ValueError("dead_share_floor must be finite and strictly between zero and one")
         if not math.isfinite(self.reset_health_max) or not 0.0 <= self.reset_health_max < 1.0:
             raise ValueError("reset_health_max must be finite and in [0, 1)")
-        if not math.isfinite(self.split_health_min) or not 0.0 < self.split_health_min <= 1.0:
-            raise ValueError("split_health_min must be finite and in (0, 1]")
+        if self.health_mode not in ("product", "relative"):
+            raise ValueError("health_mode must be 'product' or 'relative'")
+        if not math.isfinite(self.split_health_min) or self.split_health_min <= 0.0:
+            raise ValueError("split_health_min must be finite and positive")
+        if self.health_mode == "product" and self.split_health_min > 1.0:
+            raise ValueError("split_health_min must be in (0, 1] for product health")
+        if self.health_mode == "relative" and self.split_health_min <= 1.0:
+            raise ValueError("split_health_min must exceed 1.0 (fair-share units) for relative health")
         if not math.isfinite(self.dormant_logit_bias) or self.dormant_logit_bias >= 0.0:
             raise ValueError("dormant_logit_bias must be finite and negative")
         if not math.isfinite(self.max_event_loss_spike) or self.max_event_loss_spike < 0.0:
@@ -171,7 +184,7 @@ class StructuralNASEvaluationReport:
     registry_path: str | None
 
     def to_dict(self) -> dict[str, Any]:
-        return _strict_json_payload(asdict(self))
+        return _strict_json_payload({**asdict(self), "measurement_regime": measurement_regime()})
 
     def assert_not_regression(self) -> None:
         if self.verdict == "regression":
@@ -246,6 +259,7 @@ def _lifecycle_config(config: StructuralNASEvaluationConfig) -> SplitMergeConfig
         growth_budget_pct=0.5,
         reset_health_max=config.reset_health_max,
         split_health_min=config.split_health_min,
+        health_mode=config.health_mode,
         use_neuroscore=True,
         neuroscore_weight=0.5,
     )
@@ -910,8 +924,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--seeds", nargs="+", type=int, default=None)
     parser.add_argument("--train-steps", type=int, default=None)
     parser.add_argument("--bootstrap-samples", type=int, default=None)
+    parser.add_argument(
+        "--health-mode", choices=["product", "relative"], default="product",
+        help="lifecycle health signal (sx1m); relative uses fair-share thresholds split 1.5 / reset 0.05",
+    )
+    parser.add_argument("--split-health-min", type=float, default=None)
     args = parser.parse_args(argv)
     config = StructuralNASEvaluationConfig()
+    if args.health_mode == "relative":
+        config = replace(config, health_mode="relative", split_health_min=1.5)
+    if args.split_health_min is not None:
+        config = replace(config, split_health_min=args.split_health_min)
     if args.seeds is not None:
         config = replace(config, seeds=tuple(args.seeds))
     if args.train_steps is not None:

@@ -60,6 +60,7 @@ from rich.panel import Panel
 from rich import box
 from rich.syntax import Syntax
 
+from bio_inspired_nanochat.results_registry import measurement_regime
 from bio_inspired_nanochat.checkpoint_manager import config_hash
 from bio_inspired_nanochat.results_registry import (
     DEFAULT_REGISTRY,
@@ -497,6 +498,7 @@ def _save_best_params(
         "best_params": {k: float(v) for k, v in best_params.items()},
         "generation": int(gen),
         "saved_at_unix": time.time(),
+        "measurement_regime": measurement_regime(),
     }
     best_params_json.write_text(
         json.dumps(payload, indent=2, sort_keys=True) + "\n",
