@@ -175,9 +175,11 @@ so `structural_columns()` provides `moe_fixed` (bio_all on `SynapticMoE`, fixed 
 lifecycle's effect. `--stage structural` launches the pair; the screening set stays at 20.
 Caveat from the 2026-09-02 CPU pilot (`results/structural_pair_pilot_2026-09-02.json`): with the
 default `moe_balance_loss=0.01` utilization stays within ±0.03 of the fair share and neither health
-signal ever fires, so the arm as specified would measure a no-op. Before D1 the arm needs a
-decision: a weaker balance loss in the structural pair, or a demand signal (loss- or
-NeuroScore-based) the balance loss does not flatten.
+signal ever fires, so the arm as specified would measure a no-op. Switching the balance loss off
+(`results/structural_pair_pilot_2026-09-02_balance0.json`) changed nothing: still zero events in
+every finished arm, because the utilization EMA is slow and a fresh router stays near uniform.
+Before D1 the arm needs a demand signal that is not a slow utilization average (loss- or
+NeuroScore-based), or a much longer warm-up than the pilot could afford.
 
 ---
 
