@@ -33,16 +33,30 @@ The synaptic fast-weight mechanism implemented in `bio_inspired_nanochat` is dir
 
 ## 3. Empirical Working-Memory Benchmark
 
-Evaluated across the standardized multi-seed working-memory suite (`scripts/e2e/fast_weight_comparison_bench.py`, audited in `results/fast_weight_comparison_evaluation.json`):
+`scripts/e2e/fast_weight_comparison_bench.py` scores four **untrained** 2-layer / 64-dim
+architectures on the working-memory suite (associative recall with 2/4/8 pairs, variable binding,
+NIAH at 16/64 tokens), 5 seeds, and records `results/fast_weight_comparison_evaluation.json`.
+Re-derived 2026-09-02 under deterministic evaluation (the file carries `measurement_regime`):
 
-| Architecture | Composite Score | 95% Confidence Interval | Recall Acc | Binding Acc | NIAH Acc |
+| Architecture | Composite | 95% CI | Recall | Binding | NIAH |
 |:---|:---:|:---:|:---:|:---:|:---:|
-| **Vanilla Transformer** | $1.7\%$ | $[0.9\%, 2.6\%]$ | $2.1\%$ | $1.4\%$ | $1.7\%$ |
-| **Outer-Product Fast Weights** | $1.7\%$ | $[-0.9\%, 4.3\%]$ | $2.8\%$ | $1.4\%$ | $1.0\%$ |
-| **DeltaNet Error-Correcting** | $1.5\%$ | $[-1.3\%, 4.3\%]$ | $2.8\%$ | $1.4\%$ | $0.3\%$ |
-| **Bio-Inspired Synaptic** | $1.7\%$ | $[-2.0\%, 5.5\%]$ | $0.7\%$ | $0.7\%$ | **$3.8\%$** |
+| Vanilla Transformer | 1.5% | [1.0%, 2.0%] | 1.7% | 0.8% | 2.1% |
+| Outer-Product Fast Weights | 1.1% | [-0.3%, 2.5%] | 1.7% | 0.8% | 0.8% |
+| DeltaNet Error-Correcting | 1.0% | [-0.4%, 2.3%] | 1.7% | 0.8% | 0.4% |
+| Bio-Inspired Synaptic | 1.5% | [-0.1%, 3.0%] | 0.8% | 0.8% | 2.7% |
 
-### Benchmark Analysis & Honest Verdict
+Chance for recall is 1/97 ≈ 1.0%. Paired against vanilla over the same seeds: bio-synaptic
+-0.07 pp (p = 0.91), outer-product -0.42 pp (p = 0.30), DeltaNet
+-0.56 pp (p = 0.18); bio vs DeltaNet +0.49 pp (p = 0.57).
 
-- **Where Bio-Synaptic Wins**: On the long-context **Needle-In-A-Haystack (NIAH)** task, `bio_synaptic` achieves $3.8\%$ retrieval accuracy (more than double vanilla at $1.7\%$ and far exceeding DeltaNet at $0.3\%$). The bistable CaMKII/PP1 latch protects needle memories from being eroded by intervening distractor tokens.
-- **Where DeltaNet / Outer-Product Wins**: On dense **multi-pair associative recall**, DeltaNet and outer-product layers achieve $2.8\%$ vs $0.7\%$, benefiting from direct unconstrained rank-1 writes that immediately capture immediate key-value bindings without waiting for calcium accumulation.
+### Honest verdict
+
+Every arm sits at chance because no arm is trained: the benchmark measures untrained architectures
+and therefore cannot rank them. The 2026-08 reading of this table ("bio wins NIAH at 3.8% vs
+1.7%", "DeltaNet wins recall at 2.8% vs 0.7%") was seed noise around 1%. Two further defects applied
+to those numbers: the reads were single full forwards, which cannot see within-sequence fast-weight
+writes (`docs/online_learning_status.md`), and evaluation ran with stochastic vesicle sampling on
+(fixed 2026-09-01). The informative comparison trains each arm under the chunked regime and reads
+with `chunk_len` (bead `hwxb.9`); until it runs, this page supports no claim about relative
+working-memory quality.
+

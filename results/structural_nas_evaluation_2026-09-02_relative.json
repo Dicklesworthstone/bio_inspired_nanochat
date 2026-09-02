@@ -40,23 +40,23 @@
         "std": 0.0
       },
       "nas": {
-        "ci_high": 0.0023532684355427242,
-        "ci_low": 0.0013421450347255253,
-        "mean": 0.0018477067351341248,
+        "ci_high": 9.264103149594845e-05,
+        "ci_low": -2.1413480989356647e-05,
+        "mean": 3.56137752532959e-05,
         "n": 8,
-        "sem": 0.0002138021294791589,
-        "std": 0.0006047237423473501
+        "sem": 2.4116836408253713e-05,
+        "std": 6.821271426017129e-05
       },
       "paired": {
-        "cohen_dz": 3.055455914401343,
-        "delta_ci_high": 0.0022956784814596176,
-        "delta_ci_low": 0.00157415340654552,
-        "mean_delta": 0.0018477067351341248,
+        "cohen_dz": 0.522098785242012,
+        "delta_ci_high": 8.556991815567017e-05,
+        "delta_ci_low": 3.7364661693573e-06,
+        "mean_delta": 3.56137752532959e-05,
         "n_favorable": 0,
         "n_pairs": 8,
-        "t_p_value": 5.5497048958208494e-05,
-        "t_stat": 8.642134386758933,
-        "wilcoxon_p_value": 0.0078125
+        "t_p_value": 0.18326715097439417,
+        "t_stat": 1.4767183659755427,
+        "wilcoxon_p_value": 0.125
       }
     },
     "final_loss": {
@@ -69,23 +69,23 @@
         "std": 0.005592465401467198
       },
       "nas": {
-        "ci_high": 0.15745914574956316,
-        "ci_low": 0.14972061816359145,
-        "mean": 0.1535898819565773,
+        "ci_high": 0.15524291427959458,
+        "ci_low": 0.14764372451077445,
+        "mean": 0.15144331939518452,
         "n": 8,
-        "sem": 0.0016363123191262005,
-        "std": 0.00462819014797289
+        "sem": 0.0016068493257864085,
+        "std": 0.004544856218434406
       },
       "paired": {
-        "cohen_dz": 1.5038152685791617,
-        "delta_ci_high": 0.004739090846851468,
-        "delta_ci_low": 0.0019369013607501984,
-        "mean_delta": 0.0032671093940734863,
-        "n_favorable": 0,
+        "cohen_dz": 0.5577748838734763,
+        "delta_ci_high": 0.002471053972840309,
+        "delta_ci_low": -9.432849474251269e-05,
+        "mean_delta": 0.0011205468326807022,
+        "n_favorable": 2,
         "n_pairs": 8,
-        "t_p_value": 0.003777087718440664,
-        "t_stat": 4.253431896256778,
-        "wilcoxon_p_value": 0.0078125
+        "t_p_value": 0.1586586044730036,
+        "t_stat": 1.5776256110498967,
+        "wilcoxon_p_value": 0.25
       }
     }
   },
@@ -93,6 +93,7 @@
     "bootstrap_samples": 10000,
     "dead_share_floor": 0.05,
     "dormant_logit_bias": -12.0,
+    "health_mode": "relative",
     "initial_experts": 4,
     "learning_rate": 0.002,
     "max_event_loss_spike": 0.02,
@@ -111,21 +112,21 @@
       641,
       661
     ],
-    "split_health_min": 0.18,
+    "split_health_min": 1.5,
     "top_k": 2,
     "train_steps": 20
   },
-  "events_path": "runs/e2e/structural_nas_evaluation/c6c7cd6b1a3e/events.jsonl",
+  "events_path": "runs/e2e/structural_nas_evaluation/37860c1e9a7a/events.jsonl",
   "invariants": {
     "all_outcomes_finite": true,
-    "equal_average_expert_count": true,
-    "exact_equal_model_work": true,
+    "equal_average_expert_count": false,
+    "exact_equal_model_work": false,
     "fixed_baseline_stays_at_four": true,
     "fixed_placebos_are_output_identical": true,
     "matched_initial_state": true,
     "nas_event_spike_within_gate": true,
     "optimizer_param_groups_synced": true,
-    "routing_credit_drives_4_3_5_4": true
+    "routing_credit_drives_4_3_5_4": false
   },
   "measurement_regime": {
     "eval_determinism": "module-training-flag (GPTSynaptic.forward train_mode defaults to self.training; commit 5cb1a90)",
@@ -134,7 +135,7 @@
   },
   "outcomes": [
     {
-      "average_expert_count": 4.0,
+      "average_expert_count": 3.0384615384615383,
       "dead_expert_fraction": 0.0,
       "events": [
         {
@@ -171,28 +172,19 @@
           "step": 0
         },
         {
-          "experts_after": 5,
+          "experts_after": 3,
           "experts_before": 3,
-          "loss_after": 0.1758616715669632,
+          "loss_after": 0.17630913853645325,
           "loss_before": 0.17630913853645325,
-          "loss_discontinuity": 0.00044746696949005127,
+          "loss_discontinuity": 0.0,
           "loss_spike": 0.0,
           "name": "midpoint_neurogenesis",
           "optimizer_synced": true,
-          "planned_operations": [
-            {
-              "kind": "grow",
-              "seed": 17823371549607297766,
-              "seed_idx": 0,
-              "target_E": 5
-            }
-          ],
+          "planned_operations": [],
           "routing_shares_after": [
-            0.1388888888888889,
-            0.16666666666666666,
-            0.16666666666666666,
             0.5,
-            0.027777777777777776
+            0.19444444444444445,
+            0.3055555555555556
           ],
           "routing_shares_before": [
             0.5,
@@ -202,37 +194,24 @@
           "step": 1
         },
         {
-          "experts_after": 4,
-          "experts_before": 5,
-          "loss_after": 0.16150611639022827,
-          "loss_before": 0.15989822149276733,
-          "loss_discontinuity": 0.0016078948974609375,
-          "loss_spike": 0.0016078948974609375,
+          "experts_after": 3,
+          "experts_before": 3,
+          "loss_after": 0.1596171110868454,
+          "loss_before": 0.1596171110868454,
+          "loss_discontinuity": 0.0,
+          "loss_spike": 0.0,
           "name": "final_apoptosis",
           "optimizer_synced": true,
-          "planned_operations": [
-            {
-              "alpha": 0.5,
-              "keeper": 3,
-              "kind": "shrink",
-              "seed": 11322422480752306053,
-              "victims": [
-                0
-              ]
-            }
-          ],
+          "planned_operations": [],
           "routing_shares_after": [
-            0.16666666666666666,
-            0.16666666666666666,
             0.5,
-            0.16666666666666666
+            0.19444444444444445,
+            0.3055555555555556
           ],
           "routing_shares_before": [
-            0.0,
-            0.16666666666666666,
-            0.16666666666666666,
             0.5,
-            0.16666666666666666
+            0.19444444444444445,
+            0.3055555555555556
           ],
           "step": 2
         }
@@ -251,37 +230,37 @@
         3,
         3,
         3,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        4
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
       ],
       "expert_dispatches": 936,
-      "final_expert_count": 4,
-      "final_loss": 0.16150611639022827,
+      "final_expert_count": 3,
+      "final_loss": 0.1596171110868454,
       "forward_calls": 26,
       "initial_loss": 0.192663311958313,
-      "max_event_loss_spike": 0.0016078948974609375,
+      "max_event_loss_spike": 4.121661186218262e-05,
       "method": "nas",
-      "moe_matmul_flops": 190080,
-      "router_width_token_units": 1872,
-      "routing_gini": 0.25,
+      "moe_matmul_flops": 180720,
+      "router_width_token_units": 1422,
+      "routing_gini": 0.20370370370370372,
       "seed": 503,
       "top_k": 2,
-      "total_event_loss_discontinuity": 0.0020965784788131714,
+      "total_event_loss_discontinuity": 4.121661186218262e-05,
       "train_forward_calls": 20,
-      "training_average_expert_count": 4.0,
-      "training_router_width_token_units": 1440,
-      "wall_time_seconds": 6.436366487992927
+      "training_average_expert_count": 3.0,
+      "training_router_width_token_units": 1080,
+      "wall_time_seconds": 7.692733586998656
     },
     {
       "average_expert_count": 4.0,
@@ -404,10 +383,10 @@
       "train_forward_calls": 20,
       "training_average_expert_count": 4.0,
       "training_router_width_token_units": 1440,
-      "wall_time_seconds": 5.507555331976619
+      "wall_time_seconds": 6.99627825798234
     },
     {
-      "average_expert_count": 4.0,
+      "average_expert_count": 3.0384615384615383,
       "dead_expert_fraction": 0.0,
       "events": [
         {
@@ -444,28 +423,19 @@
           "step": 0
         },
         {
-          "experts_after": 5,
+          "experts_after": 3,
           "experts_before": 3,
-          "loss_after": 0.17548921704292297,
+          "loss_after": 0.17594756186008453,
           "loss_before": 0.17594756186008453,
-          "loss_discontinuity": 0.00045834481716156006,
+          "loss_discontinuity": 0.0,
           "loss_spike": 0.0,
           "name": "midpoint_neurogenesis",
           "optimizer_synced": true,
-          "planned_operations": [
-            {
-              "kind": "grow",
-              "seed": 17823371549607297766,
-              "seed_idx": 0,
-              "target_E": 5
-            }
-          ],
+          "planned_operations": [],
           "routing_shares_after": [
-            0.05555555555555555,
-            0.16666666666666666,
-            0.16666666666666666,
             0.5,
-            0.1111111111111111
+            0.3055555555555556,
+            0.19444444444444445
           ],
           "routing_shares_before": [
             0.5,
@@ -475,37 +445,24 @@
           "step": 1
         },
         {
-          "experts_after": 4,
-          "experts_before": 5,
-          "loss_after": 0.15687817335128784,
-          "loss_before": 0.15533247590065002,
-          "loss_discontinuity": 0.0015456974506378174,
-          "loss_spike": 0.0015456974506378174,
+          "experts_after": 3,
+          "experts_before": 3,
+          "loss_after": 0.15474534034729004,
+          "loss_before": 0.15474534034729004,
+          "loss_discontinuity": 0.0,
+          "loss_spike": 0.0,
           "name": "final_apoptosis",
           "optimizer_synced": true,
-          "planned_operations": [
-            {
-              "alpha": 0.5,
-              "keeper": 3,
-              "kind": "shrink",
-              "seed": 11322422480752306053,
-              "victims": [
-                4
-              ]
-            }
-          ],
+          "planned_operations": [],
           "routing_shares_after": [
-            0.16666666666666666,
-            0.16666666666666666,
-            0.16666666666666666,
-            0.5
+            0.5,
+            0.3055555555555556,
+            0.19444444444444445
           ],
           "routing_shares_before": [
-            0.16666666666666666,
-            0.16666666666666666,
-            0.16666666666666666,
             0.5,
-            0.0
+            0.3055555555555556,
+            0.19444444444444445
           ],
           "step": 2
         }
@@ -524,37 +481,37 @@
         3,
         3,
         3,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        4
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
       ],
       "expert_dispatches": 936,
-      "final_expert_count": 4,
-      "final_loss": 0.15687817335128784,
+      "final_expert_count": 3,
+      "final_loss": 0.15474534034729004,
       "forward_calls": 26,
       "initial_loss": 0.19327065348625183,
-      "max_event_loss_spike": 0.0015456974506378174,
+      "max_event_loss_spike": 0.0,
       "method": "nas",
-      "moe_matmul_flops": 190080,
-      "router_width_token_units": 1872,
-      "routing_gini": 0.25,
+      "moe_matmul_flops": 180720,
+      "router_width_token_units": 1422,
+      "routing_gini": 0.20370370370370372,
       "seed": 521,
       "top_k": 2,
-      "total_event_loss_discontinuity": 0.002007618546485901,
+      "total_event_loss_discontinuity": 3.5762786865234375e-06,
       "train_forward_calls": 20,
-      "training_average_expert_count": 4.0,
-      "training_router_width_token_units": 1440,
-      "wall_time_seconds": 6.100428398989607
+      "training_average_expert_count": 3.0,
+      "training_router_width_token_units": 1080,
+      "wall_time_seconds": 7.3544596749707125
     },
     {
       "average_expert_count": 4.0,
@@ -677,10 +634,10 @@
       "train_forward_calls": 20,
       "training_average_expert_count": 4.0,
       "training_router_width_token_units": 1440,
-      "wall_time_seconds": 6.043428439006675
+      "wall_time_seconds": 7.09612035297323
     },
     {
-      "average_expert_count": 4.0,
+      "average_expert_count": 3.0384615384615383,
       "dead_expert_fraction": 0.0,
       "events": [
         {
@@ -717,28 +674,19 @@
           "step": 0
         },
         {
-          "experts_after": 5,
+          "experts_after": 3,
           "experts_before": 3,
-          "loss_after": 0.16986176371574402,
+          "loss_after": 0.17035776376724243,
           "loss_before": 0.17035776376724243,
-          "loss_discontinuity": 0.0004960000514984131,
+          "loss_discontinuity": 0.0,
           "loss_spike": 0.0,
           "name": "midpoint_neurogenesis",
           "optimizer_synced": true,
-          "planned_operations": [
-            {
-              "kind": "grow",
-              "seed": 17823371549607297766,
-              "seed_idx": 0,
-              "target_E": 5
-            }
-          ],
+          "planned_operations": [],
           "routing_shares_after": [
-            0.08333333333333333,
-            0.16666666666666666,
-            0.16666666666666666,
             0.5,
-            0.08333333333333333
+            0.25,
+            0.25
           ],
           "routing_shares_before": [
             0.5,
@@ -748,37 +696,24 @@
           "step": 1
         },
         {
-          "experts_after": 4,
-          "experts_before": 5,
-          "loss_after": 0.147830531001091,
-          "loss_before": 0.14639365673065186,
-          "loss_discontinuity": 0.001436874270439148,
-          "loss_spike": 0.001436874270439148,
+          "experts_after": 3,
+          "experts_before": 3,
+          "loss_after": 0.1463378369808197,
+          "loss_before": 0.1463378369808197,
+          "loss_discontinuity": 0.0,
+          "loss_spike": 0.0,
           "name": "final_apoptosis",
           "optimizer_synced": true,
-          "planned_operations": [
-            {
-              "alpha": 0.5,
-              "keeper": 3,
-              "kind": "shrink",
-              "seed": 11322422480752306053,
-              "victims": [
-                0
-              ]
-            }
-          ],
+          "planned_operations": [],
           "routing_shares_after": [
-            0.16666666666666666,
-            0.16666666666666666,
             0.5,
-            0.16666666666666666
+            0.25,
+            0.25
           ],
           "routing_shares_before": [
-            0.0,
-            0.16666666666666666,
-            0.16666666666666666,
             0.5,
-            0.16666666666666666
+            0.25,
+            0.25
           ],
           "step": 2
         }
@@ -797,37 +732,37 @@
         3,
         3,
         3,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        4
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
       ],
       "expert_dispatches": 936,
-      "final_expert_count": 4,
-      "final_loss": 0.147830531001091,
+      "final_expert_count": 3,
+      "final_loss": 0.1463378369808197,
       "forward_calls": 26,
       "initial_loss": 0.188146710395813,
-      "max_event_loss_spike": 0.001436874270439148,
+      "max_event_loss_spike": 0.0,
       "method": "nas",
-      "moe_matmul_flops": 190080,
-      "router_width_token_units": 1872,
-      "routing_gini": 0.25,
+      "moe_matmul_flops": 180720,
+      "router_width_token_units": 1422,
+      "routing_gini": 0.16666666666666666,
       "seed": 547,
       "top_k": 2,
-      "total_event_loss_discontinuity": 0.00193728506565094,
+      "total_event_loss_discontinuity": 4.410743713378906e-06,
       "train_forward_calls": 20,
-      "training_average_expert_count": 4.0,
-      "training_router_width_token_units": 1440,
-      "wall_time_seconds": 6.0856539540109225
+      "training_average_expert_count": 3.0,
+      "training_router_width_token_units": 1080,
+      "wall_time_seconds": 7.402448209002614
     },
     {
       "average_expert_count": 4.0,
@@ -950,10 +885,10 @@
       "train_forward_calls": 20,
       "training_average_expert_count": 4.0,
       "training_router_width_token_units": 1440,
-      "wall_time_seconds": 5.463679059990682
+      "wall_time_seconds": 7.386024215025827
     },
     {
-      "average_expert_count": 4.0,
+      "average_expert_count": 3.0384615384615383,
       "dead_expert_fraction": 0.0,
       "events": [
         {
@@ -990,28 +925,19 @@
           "step": 0
         },
         {
-          "experts_after": 5,
+          "experts_after": 3,
           "experts_before": 3,
-          "loss_after": 0.1744353175163269,
+          "loss_after": 0.17494195699691772,
           "loss_before": 0.17494195699691772,
-          "loss_discontinuity": 0.0005066394805908203,
+          "loss_discontinuity": 0.0,
           "loss_spike": 0.0,
           "name": "midpoint_neurogenesis",
           "optimizer_synced": true,
-          "planned_operations": [
-            {
-              "kind": "grow",
-              "seed": 17823371549607297766,
-              "seed_idx": 0,
-              "target_E": 5
-            }
-          ],
+          "planned_operations": [],
           "routing_shares_after": [
-            0.05555555555555555,
-            0.16666666666666666,
-            0.16666666666666666,
             0.5,
-            0.1111111111111111
+            0.25,
+            0.25
           ],
           "routing_shares_before": [
             0.5,
@@ -1021,37 +947,24 @@
           "step": 1
         },
         {
-          "experts_after": 4,
-          "experts_before": 5,
-          "loss_after": 0.14983779191970825,
-          "loss_before": 0.1480822116136551,
-          "loss_discontinuity": 0.0017555803060531616,
-          "loss_spike": 0.0017555803060531616,
+          "experts_after": 3,
+          "experts_before": 3,
+          "loss_after": 0.14759185910224915,
+          "loss_before": 0.14759185910224915,
+          "loss_discontinuity": 0.0,
+          "loss_spike": 0.0,
           "name": "final_apoptosis",
           "optimizer_synced": true,
-          "planned_operations": [
-            {
-              "alpha": 0.5,
-              "keeper": 3,
-              "kind": "shrink",
-              "seed": 11322422480752306053,
-              "victims": [
-                4
-              ]
-            }
-          ],
+          "planned_operations": [],
           "routing_shares_after": [
-            0.16666666666666666,
-            0.16666666666666666,
-            0.16666666666666666,
-            0.5
+            0.5,
+            0.25,
+            0.25
           ],
           "routing_shares_before": [
-            0.16666666666666666,
-            0.16666666666666666,
-            0.16666666666666666,
             0.5,
-            0.0
+            0.25,
+            0.25
           ],
           "step": 2
         }
@@ -1070,37 +983,37 @@
         3,
         3,
         3,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        4
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
       ],
       "expert_dispatches": 936,
-      "final_expert_count": 4,
-      "final_loss": 0.14983779191970825,
+      "final_expert_count": 3,
+      "final_loss": 0.14759185910224915,
       "forward_calls": 26,
       "initial_loss": 0.19362089037895203,
-      "max_event_loss_spike": 0.0017555803060531616,
+      "max_event_loss_spike": 2.98917293548584e-05,
       "method": "nas",
-      "moe_matmul_flops": 190080,
-      "router_width_token_units": 1872,
-      "routing_gini": 0.25,
+      "moe_matmul_flops": 180720,
+      "router_width_token_units": 1422,
+      "routing_gini": 0.16666666666666666,
       "seed": 569,
       "top_k": 2,
-      "total_event_loss_discontinuity": 0.0022921115159988403,
+      "total_event_loss_discontinuity": 2.98917293548584e-05,
       "train_forward_calls": 20,
-      "training_average_expert_count": 4.0,
-      "training_router_width_token_units": 1440,
-      "wall_time_seconds": 6.015119026007596
+      "training_average_expert_count": 3.0,
+      "training_router_width_token_units": 1080,
+      "wall_time_seconds": 7.513756490021478
     },
     {
       "average_expert_count": 4.0,
@@ -1223,10 +1136,10 @@
       "train_forward_calls": 20,
       "training_average_expert_count": 4.0,
       "training_router_width_token_units": 1440,
-      "wall_time_seconds": 5.651864239014685
+      "wall_time_seconds": 7.232180332008284
     },
     {
-      "average_expert_count": 4.0,
+      "average_expert_count": 3.0384615384615383,
       "dead_expert_fraction": 0.0,
       "events": [
         {
@@ -1263,28 +1176,19 @@
           "step": 0
         },
         {
-          "experts_after": 5,
+          "experts_after": 3,
           "experts_before": 3,
-          "loss_after": 0.1728161871433258,
+          "loss_after": 0.17329736053943634,
           "loss_before": 0.17329736053943634,
-          "loss_discontinuity": 0.00048117339611053467,
+          "loss_discontinuity": 0.0,
           "loss_spike": 0.0,
           "name": "midpoint_neurogenesis",
           "optimizer_synced": true,
-          "planned_operations": [
-            {
-              "kind": "grow",
-              "seed": 17823371549607297766,
-              "seed_idx": 0,
-              "target_E": 5
-            }
-          ],
+          "planned_operations": [],
           "routing_shares_after": [
-            0.1111111111111111,
-            0.16666666666666666,
-            0.16666666666666666,
             0.5,
-            0.05555555555555555
+            0.25,
+            0.25
           ],
           "routing_shares_before": [
             0.5,
@@ -1294,37 +1198,24 @@
           "step": 1
         },
         {
-          "experts_after": 4,
-          "experts_before": 5,
-          "loss_after": 0.15236438810825348,
-          "loss_before": 0.1507616937160492,
-          "loss_discontinuity": 0.0016026943922042847,
-          "loss_spike": 0.0016026943922042847,
+          "experts_after": 3,
+          "experts_before": 3,
+          "loss_after": 0.15037819743156433,
+          "loss_before": 0.15037819743156433,
+          "loss_discontinuity": 0.0,
+          "loss_spike": 0.0,
           "name": "final_apoptosis",
           "optimizer_synced": true,
-          "planned_operations": [
-            {
-              "alpha": 0.5,
-              "keeper": 3,
-              "kind": "shrink",
-              "seed": 11322422480752306053,
-              "victims": [
-                4
-              ]
-            }
-          ],
+          "planned_operations": [],
           "routing_shares_after": [
-            0.16666666666666666,
-            0.16666666666666666,
-            0.16666666666666666,
-            0.5
+            0.5,
+            0.25,
+            0.25
           ],
           "routing_shares_before": [
-            0.16666666666666666,
-            0.16666666666666666,
-            0.16666666666666666,
             0.5,
-            0.0
+            0.25,
+            0.25
           ],
           "step": 2
         }
@@ -1343,37 +1234,37 @@
         3,
         3,
         3,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        4
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
       ],
       "expert_dispatches": 936,
-      "final_expert_count": 4,
-      "final_loss": 0.15236438810825348,
+      "final_expert_count": 3,
+      "final_loss": 0.15037819743156433,
       "forward_calls": 26,
       "initial_loss": 0.19095678627490997,
-      "max_event_loss_spike": 0.0016026943922042847,
+      "max_event_loss_spike": 1.3977289199829102e-05,
       "method": "nas",
-      "moe_matmul_flops": 190080,
-      "router_width_token_units": 1872,
-      "routing_gini": 0.25,
+      "moe_matmul_flops": 180720,
+      "router_width_token_units": 1422,
+      "routing_gini": 0.16666666666666666,
       "seed": 593,
       "top_k": 2,
-      "total_event_loss_discontinuity": 0.0020978450775146484,
+      "total_event_loss_discontinuity": 1.3977289199829102e-05,
       "train_forward_calls": 20,
-      "training_average_expert_count": 4.0,
-      "training_router_width_token_units": 1440,
-      "wall_time_seconds": 6.238607064005919
+      "training_average_expert_count": 3.0,
+      "training_router_width_token_units": 1080,
+      "wall_time_seconds": 7.328163897967897
     },
     {
       "average_expert_count": 4.0,
@@ -1496,10 +1387,10 @@
       "train_forward_calls": 20,
       "training_average_expert_count": 4.0,
       "training_router_width_token_units": 1440,
-      "wall_time_seconds": 6.372986028029118
+      "wall_time_seconds": 7.390708578983322
     },
     {
-      "average_expert_count": 4.0,
+      "average_expert_count": 3.0384615384615383,
       "dead_expert_fraction": 0.0,
       "events": [
         {
@@ -1536,28 +1427,19 @@
           "step": 0
         },
         {
-          "experts_after": 5,
+          "experts_after": 3,
           "experts_before": 3,
-          "loss_after": 0.17098259925842285,
+          "loss_after": 0.1715005785226822,
           "loss_before": 0.1715005785226822,
-          "loss_discontinuity": 0.0005179792642593384,
+          "loss_discontinuity": 0.0,
           "loss_spike": 0.0,
           "name": "midpoint_neurogenesis",
           "optimizer_synced": true,
-          "planned_operations": [
-            {
-              "kind": "grow",
-              "seed": 17823371549607297766,
-              "seed_idx": 0,
-              "target_E": 5
-            }
-          ],
+          "planned_operations": [],
           "routing_shares_after": [
-            0.05555555555555555,
-            0.16666666666666666,
-            0.16666666666666666,
             0.5,
-            0.1111111111111111
+            0.2777777777777778,
+            0.2222222222222222
           ],
           "routing_shares_before": [
             0.5,
@@ -1567,37 +1449,24 @@
           "step": 1
         },
         {
-          "experts_after": 4,
-          "experts_before": 5,
-          "loss_after": 0.14940601587295532,
-          "loss_before": 0.14770743250846863,
-          "loss_discontinuity": 0.0016985833644866943,
-          "loss_spike": 0.0016985833644866943,
+          "experts_after": 3,
+          "experts_before": 3,
+          "loss_after": 0.14721490442752838,
+          "loss_before": 0.14721490442752838,
+          "loss_discontinuity": 0.0,
+          "loss_spike": 0.0,
           "name": "final_apoptosis",
           "optimizer_synced": true,
-          "planned_operations": [
-            {
-              "alpha": 0.5,
-              "keeper": 3,
-              "kind": "shrink",
-              "seed": 11322422480752306053,
-              "victims": [
-                4
-              ]
-            }
-          ],
+          "planned_operations": [],
           "routing_shares_after": [
-            0.16666666666666666,
-            0.16666666666666666,
-            0.16666666666666666,
-            0.5
+            0.5,
+            0.2777777777777778,
+            0.2222222222222222
           ],
           "routing_shares_before": [
-            0.16666666666666666,
-            0.16666666666666666,
-            0.16666666666666666,
             0.5,
-            0.0
+            0.2777777777777778,
+            0.2222222222222222
           ],
           "step": 2
         }
@@ -1616,37 +1485,37 @@
         3,
         3,
         3,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        4
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
       ],
       "expert_dispatches": 936,
-      "final_expert_count": 4,
-      "final_loss": 0.14940601587295532,
+      "final_expert_count": 3,
+      "final_loss": 0.14721490442752838,
       "forward_calls": 26,
       "initial_loss": 0.1897973269224167,
-      "max_event_loss_spike": 0.0016985833644866943,
+      "max_event_loss_spike": 0.0,
       "method": "nas",
-      "moe_matmul_flops": 190080,
-      "router_width_token_units": 1872,
-      "routing_gini": 0.25,
+      "moe_matmul_flops": 180720,
+      "router_width_token_units": 1422,
+      "routing_gini": 0.1851851851851852,
       "seed": 617,
       "top_k": 2,
-      "total_event_loss_discontinuity": 0.002221420407295227,
+      "total_event_loss_discontinuity": 4.857778549194336e-06,
       "train_forward_calls": 20,
-      "training_average_expert_count": 4.0,
-      "training_router_width_token_units": 1440,
-      "wall_time_seconds": 5.799458321009297
+      "training_average_expert_count": 3.0,
+      "training_router_width_token_units": 1080,
+      "wall_time_seconds": 7.739294758008327
     },
     {
       "average_expert_count": 4.0,
@@ -1769,10 +1638,10 @@
       "train_forward_calls": 20,
       "training_average_expert_count": 4.0,
       "training_router_width_token_units": 1440,
-      "wall_time_seconds": 4.9404219959978946
+      "wall_time_seconds": 6.828011199017055
     },
     {
-      "average_expert_count": 4.0,
+      "average_expert_count": 3.0384615384615383,
       "dead_expert_fraction": 0.0,
       "events": [
         {
@@ -1809,28 +1678,19 @@
           "step": 0
         },
         {
-          "experts_after": 5,
+          "experts_after": 3,
           "experts_before": 3,
-          "loss_after": 0.17309214174747467,
+          "loss_after": 0.17358514666557312,
           "loss_before": 0.17358514666557312,
-          "loss_discontinuity": 0.0004930049180984497,
+          "loss_discontinuity": 0.0,
           "loss_spike": 0.0,
           "name": "midpoint_neurogenesis",
           "optimizer_synced": true,
-          "planned_operations": [
-            {
-              "kind": "grow",
-              "seed": 17823371549607297766,
-              "seed_idx": 0,
-              "target_E": 5
-            }
-          ],
+          "planned_operations": [],
           "routing_shares_after": [
-            0.05555555555555555,
-            0.16666666666666666,
-            0.16666666666666666,
             0.5,
-            0.1111111111111111
+            0.2777777777777778,
+            0.2222222222222222
           ],
           "routing_shares_before": [
             0.5,
@@ -1840,37 +1700,24 @@
           "step": 1
         },
         {
-          "experts_after": 4,
-          "experts_before": 5,
-          "loss_after": 0.15416327118873596,
-          "loss_before": 0.15234321355819702,
-          "loss_discontinuity": 0.0018200576305389404,
-          "loss_spike": 0.0018200576305389404,
+          "experts_after": 3,
+          "experts_before": 3,
+          "loss_after": 0.15158310532569885,
+          "loss_before": 0.15158310532569885,
+          "loss_discontinuity": 0.0,
+          "loss_spike": 0.0,
           "name": "final_apoptosis",
           "optimizer_synced": true,
-          "planned_operations": [
-            {
-              "alpha": 0.5,
-              "keeper": 3,
-              "kind": "shrink",
-              "seed": 11322422480752306053,
-              "victims": [
-                4
-              ]
-            }
-          ],
+          "planned_operations": [],
           "routing_shares_after": [
-            0.16666666666666666,
-            0.16666666666666666,
-            0.16666666666666666,
-            0.5
+            0.5,
+            0.2777777777777778,
+            0.2222222222222222
           ],
           "routing_shares_before": [
-            0.16666666666666666,
-            0.16666666666666666,
-            0.16666666666666666,
             0.5,
-            0.0
+            0.2777777777777778,
+            0.2222222222222222
           ],
           "step": 2
         }
@@ -1889,37 +1736,37 @@
         3,
         3,
         3,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        4
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
       ],
       "expert_dispatches": 936,
-      "final_expert_count": 4,
-      "final_loss": 0.15416327118873596,
+      "final_expert_count": 3,
+      "final_loss": 0.15158310532569885,
       "forward_calls": 26,
       "initial_loss": 0.19100096821784973,
-      "max_event_loss_spike": 0.0018200576305389404,
+      "max_event_loss_spike": 0.00019982457160949707,
       "method": "nas",
-      "moe_matmul_flops": 190080,
-      "router_width_token_units": 1872,
-      "routing_gini": 0.25,
+      "moe_matmul_flops": 180720,
+      "router_width_token_units": 1422,
+      "routing_gini": 0.1851851851851852,
       "seed": 641,
       "top_k": 2,
-      "total_event_loss_discontinuity": 0.002512887120246887,
+      "total_event_loss_discontinuity": 0.00019982457160949707,
       "train_forward_calls": 20,
-      "training_average_expert_count": 4.0,
-      "training_router_width_token_units": 1440,
-      "wall_time_seconds": 6.499905086995568
+      "training_average_expert_count": 3.0,
+      "training_router_width_token_units": 1080,
+      "wall_time_seconds": 8.620394116966054
     },
     {
       "average_expert_count": 4.0,
@@ -2042,10 +1889,10 @@
       "train_forward_calls": 20,
       "training_average_expert_count": 4.0,
       "training_router_width_token_units": 1440,
-      "wall_time_seconds": 5.1511771740042605
+      "wall_time_seconds": 8.745757519965991
     },
     {
-      "average_expert_count": 4.0,
+      "average_expert_count": 3.0384615384615383,
       "dead_expert_fraction": 0.0,
       "events": [
         {
@@ -2082,28 +1929,19 @@
           "step": 0
         },
         {
-          "experts_after": 5,
+          "experts_after": 3,
           "experts_before": 3,
-          "loss_after": 0.17356517910957336,
+          "loss_after": 0.17401421070098877,
           "loss_before": 0.17401421070098877,
-          "loss_discontinuity": 0.0004490315914154053,
+          "loss_discontinuity": 0.0,
           "loss_spike": 0.0,
           "name": "midpoint_neurogenesis",
           "optimizer_synced": true,
-          "planned_operations": [
-            {
-              "kind": "grow",
-              "seed": 17823371549607297766,
-              "seed_idx": 0,
-              "target_E": 5
-            }
-          ],
+          "planned_operations": [],
           "routing_shares_after": [
-            0.027777777777777776,
-            0.16666666666666666,
-            0.16666666666666666,
             0.5,
-            0.1388888888888889
+            0.3055555555555556,
+            0.19444444444444445
           ],
           "routing_shares_before": [
             0.5,
@@ -2113,37 +1951,24 @@
           "step": 1
         },
         {
-          "experts_after": 4,
-          "experts_before": 5,
-          "loss_after": 0.15673276782035828,
-          "loss_before": 0.15341849625110626,
-          "loss_discontinuity": 0.003314271569252014,
-          "loss_spike": 0.003314271569252014,
+          "experts_after": 3,
+          "experts_before": 3,
+          "loss_after": 0.15407820045948029,
+          "loss_before": 0.15407820045948029,
+          "loss_discontinuity": 0.0,
+          "loss_spike": 0.0,
           "name": "final_apoptosis",
           "optimizer_synced": true,
-          "planned_operations": [
-            {
-              "alpha": 0.5,
-              "keeper": 3,
-              "kind": "shrink",
-              "seed": 11322422480752306053,
-              "victims": [
-                0
-              ]
-            }
-          ],
+          "planned_operations": [],
           "routing_shares_after": [
-            0.16666666666666666,
-            0.16666666666666666,
             0.5,
-            0.16666666666666666
+            0.3055555555555556,
+            0.19444444444444445
           ],
           "routing_shares_before": [
-            0.0,
-            0.16666666666666666,
-            0.16666666666666666,
             0.5,
-            0.16666666666666666
+            0.3055555555555556,
+            0.19444444444444445
           ],
           "step": 2
         }
@@ -2162,37 +1987,37 @@
         3,
         3,
         3,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        4
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
       ],
       "expert_dispatches": 936,
-      "final_expert_count": 4,
-      "final_loss": 0.15673276782035828,
+      "final_expert_count": 3,
+      "final_loss": 0.15407820045948029,
       "forward_calls": 26,
       "initial_loss": 0.19115574657917023,
-      "max_event_loss_spike": 0.003314271569252014,
+      "max_event_loss_spike": 0.0,
       "method": "nas",
-      "moe_matmul_flops": 190080,
-      "router_width_token_units": 1872,
-      "routing_gini": 0.25,
+      "moe_matmul_flops": 180720,
+      "router_width_token_units": 1422,
+      "routing_gini": 0.20370370370370372,
       "seed": 661,
       "top_k": 2,
-      "total_event_loss_discontinuity": 0.0037971287965774536,
+      "total_event_loss_discontinuity": 3.382563591003418e-05,
       "train_forward_calls": 20,
-      "training_average_expert_count": 4.0,
-      "training_router_width_token_units": 1440,
-      "wall_time_seconds": 6.165439276024699
+      "training_average_expert_count": 3.0,
+      "training_router_width_token_units": 1080,
+      "wall_time_seconds": 9.896884665999096
     },
     {
       "average_expert_count": 4.0,
@@ -2315,14 +2140,14 @@
       "train_forward_calls": 20,
       "training_average_expert_count": 4.0,
       "training_router_width_token_units": 1440,
-      "wall_time_seconds": 5.3950545730185695
+      "wall_time_seconds": 8.714476977998856
     }
   ],
-  "protocol_id": "a2307f21b18f",
+  "protocol_id": "83404f2fab93",
   "registry_path": "results/registry.jsonl",
   "registry_verdict": "invalidated",
-  "report_path": "results/structural_nas_evaluation_2026-09-02_product.json",
-  "run_id": "c6c7cd6b1a3e",
+  "report_path": "results/structural_nas_evaluation_2026-09-02_relative.json",
+  "run_id": "37860c1e9a7a",
   "schema_version": 1,
   "scope": "controlled synthetic routed-learning task; not language-model-scale evidence",
   "specialization": {
@@ -2335,14 +2160,14 @@
       "std": 0.010333664015872851
     },
     "nas": {
-      "ci_high": 0.25,
-      "ci_low": 0.25,
-      "mean": 0.25,
+      "ci_high": 0.19951861061250295,
+      "ci_low": 0.1708517597578674,
+      "mean": 0.18518518518518517,
       "n": 8,
-      "sem": 0.0,
-      "std": 0.0
+      "sem": 0.006061608062110903,
+      "std": 0.017144816662454668
     }
   },
   "verdict": "regression",
-  "verdict_reason": "NAS showed a statistically supported primary regression in: final_loss"
+  "verdict_reason": "equal-work/lifecycle/stability contract failed: exact_equal_model_work, equal_average_expert_count, routing_credit_drives_4_3_5_4"
 }
