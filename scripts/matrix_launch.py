@@ -14,11 +14,14 @@ Examples
 Print the screening pass for the D1 recipe (nothing runs):
 
     python -m scripts.matrix_launch --stage screening \
-        --recipe "--depth=10 --tie_embeddings=1 --device_batch_size=32 --total_batch_size=524288 --num_iterations=950"
+        --recipe="--depth=10 --tie_embeddings=1 --device_batch_size=32 --total_batch_size=524288 --num_iterations=950"
+
+(Write ``--recipe=...`` with the ``=``: the value starts with ``--``, and argparse would otherwise
+read a single flag such as ``--depth=10`` as an unknown option.)
 
 Run it on two GPUs, then score it:
 
-    python -m scripts.matrix_launch --stage screening --recipe "..." --nproc 2 --execute
+    python -m scripts.matrix_launch --stage screening --recipe="..." --nproc 2 --execute
     python -m scripts.eval_matrix batch --presets <printed list> --seeds 1337,1338 \
         --checkpoint-dir "<base_dir>/base_checkpoints/matrix_{preset}_s{seed}"
 
@@ -104,7 +107,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--recipe", default="",
         help="Shared base_train flags for every cell, as one shell-quoted string "
-        "(depth, batch, tokens, data, eval cadence, ...)",
+        "(depth, batch, tokens, data, eval cadence, ...). Write it as --recipe=\"--depth=10 ...\" "
+        "(with the =), since the value itself starts with --",
     )
     parser.add_argument("--nproc", type=int, default=1, help="GPUs per run; >1 uses torchrun")
     parser.add_argument("--execute", action="store_true", help="Run the commands sequentially (default: print only)")

@@ -154,7 +154,7 @@ commands that produce them are derived from this spec, never written by hand:
 ```bash
 # print the screening pass (nothing runs); add --execute to run it, --nproc 2 for torchrun
 uv run --no-sync python -m scripts.matrix_launch --stage screening \
-    --recipe "--depth=10 --tie_embeddings=1 --device_batch_size=32 --total_batch_size=524288 --num_iterations=950"
+    --recipe="--depth=10 --tie_embeddings=1 --device_batch_size=32 --total_batch_size=524288 --num_iterations=950"
 ```
 
 `ablation_matrix.base_train_argv(column, seed=…)` contributes `--synapses`, one

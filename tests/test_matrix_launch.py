@@ -105,7 +105,9 @@ def test_vanilla_column_refuses_synaptic_overrides():
 
 def test_launcher_prints_one_command_per_cell_and_the_scoring_command():
     proc = subprocess.run(
-        [sys.executable, "-m", "scripts.matrix_launch", "--stage", "structural", "--seeds", "1,2", "--recipe", "--depth=4 --num_iterations=3"],
+        # --recipe=... with the '=': the value starts with '--', and a single flag such as
+        # --depth=4 would otherwise be read by argparse as an unknown option.
+        [sys.executable, "-m", "scripts.matrix_launch", "--stage", "structural", "--seeds", "1,2", "--recipe=--depth=4 --num_iterations=3"],
         cwd=Path(__file__).resolve().parents[1],
         capture_output=True,
         text=True,
@@ -118,3 +120,10 @@ def test_launcher_prints_one_command_per_cell_and_the_scoring_command():
     assert all("--depth=4" in ln and "--num_iterations=3" in ln for ln in lines)
     assert "scripts.eval_matrix batch --presets moe_fixed,moe_splitmerge --seeds 1,2" in proc.stdout
     assert "matrix_{preset}_s{seed}" in proc.stdout
+    # A one-flag recipe must work too (the documented --recipe= form).
+    one = subprocess.run(
+        [sys.executable, "-m", "scripts.matrix_launch", "--stage", "structural", "--seeds", "1", "--recipe=--depth=4"],
+        cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True, timeout=300,
+    )
+    assert one.returncode == 0, one.stderr[-1000:]
+    assert sum("--depth=4" in ln and "--model_tag=" in ln for ln in one.stdout.splitlines()) == 2
