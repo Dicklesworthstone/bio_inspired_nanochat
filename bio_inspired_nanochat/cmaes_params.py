@@ -88,8 +88,7 @@ def parse_cmaes_params(path: str | Path) -> dict[str, float | int]:
             f"CMA-ES params file {str(p)!r} is not valid JSON (line {e.lineno}, col {e.colno}): {e.msg}"
         ) from e
     if not isinstance(doc, dict):
-
-        raise ValueError(  # noqa: TRY004
+        raise ValueError(  # noqa: TRY004 — file contract: ValueError for any malformed file
             f"CMA-ES params file {str(p)!r} must contain a JSON object mapping "
             f"SynapticConfig field names to numbers; got top-level {type(doc).__name__}"
         )
