@@ -76,6 +76,7 @@ run = "dummy"  # wandb run name default ("dummy" is special - we won't log to wa
 # Runtime
 device_type = ""  # cuda|cpu|mps (empty => autodetect good device type default, in order: CUDA > MPS > CPU)
 torch_compile = 1  # 0 => run the model eagerly. Auto-disabled on Python 3.14+, where torch.compile raises (torch 2.x)
+hebb_chunk_len = 0  # hwxb.8: >0 => read each batch this many tokens at a time through a KV cache so online Hebbian writes act within the sequence (truncated BPTT at chunk boundaries); 0 => ordinary full-sequence forward
 # Model architecture
 depth = (
     20  # the depth of the Transformer model to train, rest of the kwargs are derived
@@ -429,6 +430,13 @@ model_config_kwargs = {
 use_syn = bool((resume_meta or {}).get("synapses", synapses))
 if splitmerge_every > 0 and not use_syn:
     raise ValueError("splitmerge_every > 0 requires synapses=1")
+if hebb_chunk_len > 0 and not use_syn:
+    raise ValueError("hebb_chunk_len > 0 requires synapses=1 (the chunked regime exists for the online fast weights)")
+if hebb_chunk_len > 0 and ddp_world_size > 1:
+    raise ValueError(
+        "hebb_chunk_len > 0 is single-process for now: its per-chunk backward needs DDP no_sync handling "
+        "(hwxb.8 follow-up)"
+    )
 if use_syn:
     try:
         from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
@@ -1019,17 +1027,25 @@ while True:
     synchronize()
     t0 = time.time()
     for micro_step in range(grad_accum_steps):
-        with autocast_ctx:
-            result = model(x, y, train_mode=True) if use_syn else model(x, y)
-            if isinstance(result, tuple):
-                logits, loss = result
-            else:
-                loss = result
-        train_loss = loss.detach()  # for logging
-        loss = (
-            loss / grad_accum_steps
-        )  # each .backward() is a grad sum => normalize loss here
-        loss.backward()
+        if use_syn and hebb_chunk_len > 0:
+            # hwxb.8: chunked regime — forward+backward per chunk inside the model, scaled for
+            # gradient accumulation; returns the detached token-weighted loss.
+            with autocast_ctx:
+                train_loss = orig_model.chunked_train_step(
+                    x, y, chunk_len=hebb_chunk_len, loss_scale=1.0 / grad_accum_steps
+                )
+        else:
+            with autocast_ctx:
+                result = model(x, y, train_mode=True) if use_syn else model(x, y)
+                if isinstance(result, tuple):
+                    logits, loss = result
+                else:
+                    loss = result
+            train_loss = loss.detach()  # for logging
+            loss = (
+                loss / grad_accum_steps
+            )  # each .backward() is a grad sum => normalize loss here
+            loss.backward()
         x, y, dataloader_state_dict = next(
             train_loader
         )  # prefetch the next batch while the GPU is busy with forward/backward

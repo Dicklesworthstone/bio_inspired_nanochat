@@ -414,6 +414,86 @@ class GPTSynaptic(nn.Module):
         loss = ce + aux
         return logits, loss
 
+    def chunked_train_step(
+        self,
+        idx: Tensor,
+        targets: Tensor,
+        *,
+        chunk_len: int,
+        loss_scale: float = 1.0,
+    ) -> Tensor:
+        """One training step that reads the batch ``chunk_len`` tokens at a time (hwxb.8).
+
+        Why: the online Hebbian writes of a forward are deferred to the top of the NEXT forward
+        (autograd-safe, see ``SynapticLinear.forward``). Under ordinary full-sequence training the
+        next forward is the next *batch*, so nothing written while reading a sequence can influence
+        the same sequence, and the slow weights never learn to use the fast-weight scratchpad. Here
+        the sequence is forwarded chunk by chunk through a KV cache: the writes made on chunk ``c``
+        land before chunk ``c+1``'s matmuls, exactly as they do during token-by-token generation and
+        in ``synthetic_tasks.retrieval_accuracy(chunk_len=...)``.
+
+        Mechanics: per-chunk loss, weighted by that chunk's share of supervised tokens, is
+        back-propagated immediately (so no Parameter saved for backward is mutated in place before
+        its backward runs), then the cache is detached so later chunks treat earlier ones as
+        constants. That is truncated back-propagation at chunk boundaries: gradients through
+        attention across chunks are cut, which is the regime's cost. Stochastic release, dropout
+        and the presynaptic state behave as in a normal training forward; the presyn state travels
+        through ``cache.presyn_state``. Call ``optimizer.step()`` after this returns; gradient
+        accumulation works by passing ``loss_scale=1/grad_accum_steps``.
+
+        Returns the detached token-weighted loss over the whole sequence (for logging).
+        """
+        from bio_inspired_nanochat.engine import KVCache  # local import: engine reaches this module via checkpoint_manager
+
+        if chunk_len <= 0:
+            raise ValueError(f"chunk_len must be positive, got {chunk_len}")
+        if not self.training:
+            raise RuntimeError("chunked_train_step is a training step; call model.train() first")
+        if idx.shape != targets.shape:
+            raise ValueError(f"idx {tuple(idx.shape)} and targets {tuple(targets.shape)} must match")
+        batch, seq_len = idx.shape
+        cfg = self.config
+        cache = KVCache(
+            batch_size=batch,
+            num_heads=cfg.n_kv_head,
+            seq_len=seq_len,
+            head_dim=cfg.n_embd // cfg.n_head,
+            num_layers=cfg.n_layer,
+        )
+        n_valid_total = int((targets != -1).sum().item())
+        if n_valid_total == 0:
+            raise ValueError("chunked_train_step needs at least one supervised position")
+        total = torch.zeros((), device=idx.device, dtype=torch.float32)
+        for start in range(0, seq_len, chunk_len):
+            end = min(start + chunk_len, seq_len)
+            tgt = targets[:, start:end]
+            n_valid = int((tgt != -1).sum().item())
+            _logits, loss = self.forward(idx[:, start:end], tgt, kv_cache=cache, train_mode=True)
+            if n_valid > 0:
+                weight = n_valid / n_valid_total
+                (loss * (weight * loss_scale)).backward()
+                total = total + loss.detach().float() * weight
+            self._detach_cache(cache)
+        return total
+
+    @staticmethod
+    def _detach_cache(cache) -> None:
+        """Cut the autograd history held by a KV cache (keys/values and presynaptic state)."""
+        if cache.kv_cache is not None:
+            cache.kv_cache = cache.kv_cache.detach()
+        states = cache.presyn_state
+        if isinstance(states, dict):
+            states = [states]
+        if isinstance(states, list):
+            for state in states:
+                if not isinstance(state, dict):
+                    continue
+                for key, value in list(state.items()):
+                    if torch.is_tensor(value):
+                        state[key] = value.detach()
+                    elif isinstance(value, list):
+                        state[key] = [t.detach() if torch.is_tensor(t) else t for t in value]
+
     @torch.no_grad()
     def reset_sequence_state(
         self, *, reset_fast_weights: bool = False, reset_consolidation: bool = True

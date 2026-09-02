@@ -1074,6 +1074,7 @@ def _run_one(
     dead_expert_threshold: float = 0.01,
     continual_tasks: int = 3,
     continual_exposures: int = 4,
+    hebb_chunk_len: int = 0,
     init_type: str,
     use_moe: bool,
     num_experts: int,
@@ -1275,6 +1276,7 @@ def _run_one(
         "num_experts": num_experts,
         "moe_top_k": moe_top_k,
         "neuromod_enabled": neuromod_on,
+        "hebb_chunk_len": hebb_chunk_len,
     }
     registry_config = {
         key: value for key, value in run_config.items() if key != "checkpoint_metadata"
@@ -1323,6 +1325,13 @@ def _run_one(
                 t0 = time.perf_counter()
                 for _ in range(grad_accum_steps):
                     x, y = next(train_iter)
+                    if supports_train_mode and hebb_chunk_len > 0:
+                        # hwxb.8: chunked regime — forward+backward per chunk inside the model.
+                        step_logits = None
+                        loss = model.chunked_train_step(
+                            x, y, chunk_len=hebb_chunk_len, loss_scale=1.0 / grad_accum_steps
+                        )
+                        continue
                     result = model(x, y, train_mode=True) if supports_train_mode else model(x, y)
                     if isinstance(result, tuple):
                         step_logits, loss = result
@@ -1787,6 +1796,7 @@ def _run_batch(
                         dead_expert_threshold=args.dead_expert_threshold,
                         continual_tasks=args.continual_tasks,
                         continual_exposures=args.continual_exposures,
+                        hebb_chunk_len=args.hebb_chunk_len,
                         init_type=args.init_type,
                         use_moe=args.use_moe,
                         num_experts=args.num_experts,
@@ -1838,6 +1848,7 @@ def _run_batch(
                         dead_expert_threshold=args.dead_expert_threshold,
                         continual_tasks=args.continual_tasks,
                         continual_exposures=args.continual_exposures,
+                        hebb_chunk_len=args.hebb_chunk_len,
                         error=repr(e),
                     )
                     if ddp_rank == 0:
@@ -1967,6 +1978,11 @@ def main() -> int:
         p.add_argument("--use-moe", action="store_true")
         p.add_argument("--num-experts", type=int, default=8)
         p.add_argument("--moe-top-k", type=int, default=2)
+        p.add_argument(
+            "--hebb-chunk-len", type=int, default=0,
+            help="hwxb.8: >0 trains synaptic presets by reading each batch this many tokens at a time "
+            "through a KV cache so online Hebbian writes act within the sequence (0 = full forward)",
+        )
 
         # batch / opt
         p.add_argument("--device-batch-size", type=int, default=8)
