@@ -154,6 +154,22 @@ class SplitMergeConfig:
     homeostasis_guards: bool = False
     gate_ramp_forwards: int = 512
     energy_floor: float = 0.05
+    # HEALTH SIGNAL (sx1m). ``product`` is the legacy ``utilization * energy``. Measured
+    # 2026-09-01 on tiny MoE runs it is neither scale-free nor monotone: utilization is the
+    # routed-token fraction (~top_k/E for a uniformly used expert) while the thresholds
+    # above are absolute, so at E=4 nothing ever fires and at E=8 every expert is a merge
+    # candidate; and because energy relaxes toward 1-utilization, health ~= u(1-u) peaks at
+    # half the routing mass and an expert that monopolises routing reads as dead.
+    # ``relative`` measures LOAD relative to the fair share instead:
+    #     health = utilization / (top_k / num_experts)      (1.0 == fair share)
+    # so >1 is overworked (split), <1 is underused (merge), ~0 is dead (reset), at any E.
+    # In this mode the three thresholds are in fair-share units and __post_init__ refuses
+    # the product-mode defaults (0.80/0.25/0.02 would split every uniform expert): choose
+    # them explicitly, e.g. split_health_min=1.5, merge_health_max=0.35, reset_health_max=0.05.
+    # Energy is not folded in (it is a lagged function of utilization); the homeostasis
+    # energy floor above still applies. Whether lifecycle events HELP under either signal
+    # is the open question on bead sx1m, so the legacy mode stays the default.
+    health_mode: str = "product"
     # Logging
     verbose: bool = False
 
@@ -188,6 +204,23 @@ class SplitMergeConfig:
                 raise ValueError("gate_ramp_forwards must be >= 1")
             if not math.isfinite(self.energy_floor) or not 0.0 <= self.energy_floor <= 1.0:
                 raise ValueError("energy_floor must be finite and in [0, 1]")
+        if self.health_mode not in ("product", "relative"):
+            raise ValueError("health_mode must be 'product' or 'relative'")
+        if self.health_mode == "relative":
+            if not self.split_health_min > 1.0:
+                raise ValueError(
+                    "health_mode='relative': split_health_min is in fair-share units and must be "
+                    "> 1.0 (a uniformly used expert has health 1.0); the product-mode default 0.80 "
+                    "would split every expert"
+                )
+            if not 0.0 <= self.merge_health_max < 1.0:
+                raise ValueError(
+                    "health_mode='relative': merge_health_max must be in [0, 1) fair-share units"
+                )
+            if not 0.0 <= self.reset_health_max < self.merge_health_max:
+                raise ValueError(
+                    "health_mode='relative': reset_health_max must be in [0, merge_health_max)"
+                )
         StructuralGeometryMonitorConfig(
             persistence_ratio_threshold=self.topological_persistence_ratio_threshold,
             max_points=self.topological_max_points,
@@ -1306,10 +1339,16 @@ class SplitMergeController:
 
     @torch.no_grad()
     def _health(self, layer: SynapticMoE) -> Tensor:
-        # Higher is better: H = utilization * energy
-        util = layer.fatigue.clamp(0, 1)  # fatigue tracks EMA of utilization
+        # Higher is better. ``product``: H = utilization * energy (legacy, in [0,1]).
+        # ``relative``: H = utilization / fair share, fair share = top_k / num_experts, so a
+        # uniformly used expert scores 1.0 at any expert count (see SplitMergeConfig.health_mode).
+        util = layer.fatigue.clamp(0, 1)  # fatigue tracks the EMA of the routed-token fraction
         eng = layer.energy.clamp(0, 1)
-        health = util * eng  # [0,1]
+        if self.cfg.health_mode == "relative":
+            fair_share = float(layer.top_k) / float(max(int(layer.num_experts), 1))
+            health = util / max(fair_share, 1e-6)
+        else:
+            health = util * eng  # [0,1]
         # NeuroScore credit assignment (de5l): blend the per-expert fitness published by
         # NeuroScore.step into health, so Efficiency/Specialization/Resilience — not just
         # raw utilization*energy — drive split/merge/reset selection. Falls back to pure

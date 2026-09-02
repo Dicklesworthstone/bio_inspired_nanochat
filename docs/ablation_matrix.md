@@ -64,16 +64,20 @@ column turns on the whole prerequisite chain (e.g. `add_differentiable_recurrenc
 `learnable_kinetics` and `enable_presyn`); the isolated effect is then read against the matching
 prerequisite-only baseline.
 
-`add_bistable_latch` (needs `enable_hebbian`), `add_learnable_kinetics` (needs `enable_presyn`),
+Derived from the registry at import time — today nine columns: `add_glial_homeostasis`,
+`add_bistable_latch` (needs `enable_hebbian`), `add_stdp` (needs `enable_hebbian`),
+`add_native_presyn` (needs `enable_presyn`), `add_learnable_kinetics` (needs `enable_presyn`),
 `add_differentiable_recurrence` (needs `learnable_kinetics`, `enable_presyn`), `add_cusp_latch`
 (needs `bistable_latch`, `enable_hebbian`), `add_metriplectic_integrator` (needs
 `enable_presyn`), and `add_neuromod` (needs `enable_presyn`, `enable_hebbian`; the harness
-instantiates the DA/ACh/NE bus for it).
+instantiates the DA/ACh/NE bus for it). `python -c "from bio_inspired_nanochat import
+ablation_matrix as am; print([c.config_id for c in am.add_one_in()])"` prints the live list.
 
 Add-one-in is more interpretable for "which mechanism helps"; leave-one-out catches interactions.
 We run both where compute allows; the staging below keeps the cost bounded.
 
-**Total screening columns:** 3 anchors + 8 leave-one-out + 6 add-one-in = **17**.
+**Total screening columns:** 3 anchors + 8 leave-one-out + 9 add-one-in = **20** (locked by
+`tests/test_scaleup_ablation_e2e.py::test_module_enumerates_the_full_matrix`).
 
 ---
 

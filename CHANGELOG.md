@@ -22,9 +22,12 @@ A full reality check against the README and plan documents (assessment published
 - `release_canonical` dispatches the Rust decode kernel (`rustbpe.presyn_release_canonical_cpu`) for eval-mode one-query CPU decode when `native_presyn=1`; release, advanced state, and DELAY-queue parity plus planted negatives locked in `tests/test_presyn_rust_dispatch.py`. Measured single-thread: 1.98× faster than PyTorch at 512 keys, 0.97× at 2,048, 0.75× at 4,096, so the toggle stays off by default (follow-up bead `ylo2`).
 
 ### The headline-experiment harness
-- `SynapticConfig.neuromod_enabled` (default off) is registered in `ablation_registry` as the `neuromod` mechanism (requires presyn + hebbian), so the pre-registered matrix carries an `add_neuromod` column (17 screening columns). `neuromod.bus_for_config` is the single constructor both harnesses use.
+- `SynapticConfig.neuromod_enabled` (default off) is registered in `ablation_registry` as the `neuromod` mechanism (requires presyn + hebbian), so the pre-registered matrix carries an `add_neuromod` column (20 screening columns: 3 anchors, 8 leave-one-out, 9 add-one-in). `neuromod.bus_for_config` is the single constructor both harnesses use.
 - `eval_matrix` accepts every matrix column, not just the ten named presets: the `synaptic_off` anchor and all `add_*` columns are materialised through `ablation_matrix.AblationConfig.build_syn_cfg()` (`eval_matrix.MATRIX_COLUMNS`), and the inline training loop instantiates the neuromodulatory bus when the flag is on, logging its levels and gains per step (`tests/test_neuromod_mechanism.py`).
 - Measured why the expert lifecycle is inert at 4 experts and merge-prone at 8 (utilization ≈ `top_k/E` against absolute thresholds; steady-state health ≈ `u(1−u)`), recorded in README, CLAIMS_AUDIT, and bead `sx1m`.
+
+### Structural lifecycle
+- `SplitMergeConfig.health_mode="relative"` (default-off; `--sm_health_mode` in `base_train`) scores each expert by utilization relative to the fair share `top_k / num_experts`, so 1.0 means uniform at any expert count, >1 overworked, <1 underused; thresholds are then in fair-share units and the config refuses the product-mode defaults. Motivated by the measurement above; whether events help under either signal is still open (`sx1m`). `tests/test_lifecycle_health_relative.py`.
 
 ### Registry, CI, and gates
 - The test suite redirects the default results registry via `BIO_RESULTS_REGISTRY` (`tests/conftest.py`), and 43 rows whose artifacts were pytest temp directories were purged from `results/registry.jsonl`.
