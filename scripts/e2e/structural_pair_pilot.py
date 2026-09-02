@@ -81,11 +81,12 @@ def _batch(trans: torch.Tensor, g: torch.Generator, *, batch: int, seq: int) -> 
     return tokens[:, :-1], tokens[:, 1:]
 
 
-def _model(seed: int, *, seq: int) -> GPTSynaptic:
+def _model(seed: int, *, seq: int, balance_loss: float) -> GPTSynaptic:
     torch.manual_seed(seed)
     cfg = GPTSynapticConfig(
         sequence_len=seq, vocab_size=VOCAB, n_layer=2, n_head=4, n_kv_head=4, n_embd=64,
         synapses=True, syn_cfg=SynapticConfig(), use_moe=True, num_experts=8, moe_top_k=2,
+        moe_balance_loss=balance_loss,
     )
     model = GPTSynaptic(cfg)
     model.train()
@@ -111,8 +112,10 @@ def _util_spread(model: GPTSynaptic) -> list[float]:
     return [float(m.fatigue.detach().std()) for m in model.modules() if isinstance(m, SynapticMoE)]
 
 
-def run_arm(seed: int, arm: str, *, steps: int, every: int, warmup: int, lr: float, batch: int, seq: int) -> dict[str, Any]:
-    model = _model(seed, seq=seq)
+def run_arm(
+    seed: int, arm: str, *, steps: int, every: int, warmup: int, lr: float, batch: int, seq: int, balance_loss: float
+) -> dict[str, Any]:
+    model = _model(seed, seq=seq, balance_loss=balance_loss)
     log = _CountingLogger()
     controller = _controller(arm, model, every, warmup, log)
     opt = torch.optim.AdamW(model.parameters(), lr=lr)
@@ -155,12 +158,20 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--lr", type=float, default=3e-3)
     parser.add_argument("--batch", type=int, default=8)
     parser.add_argument("--seq", type=int, default=64)
+    parser.add_argument(
+        "--balance-loss", type=float, default=0.01,
+        help="GPTSynapticConfig.moe_balance_loss for every arm (default 0.01 = the model default; the 2026-09-02 "
+        "pilot showed it keeps utilization within ±0.03 of the fair share so no threshold ever fires)",
+    )
     parser.add_argument("--out", default=None, help="JSON path (default results/structural_pair_pilot_<date>.json)")
     args = parser.parse_args(argv)
     out_path = Path(args.out or f"results/structural_pair_pilot_{_dt.date.today().isoformat()}.json")
 
     rows = [
-        run_arm(s, arm, steps=args.steps, every=args.every, warmup=args.warmup, lr=args.lr, batch=args.batch, seq=args.seq)
+        run_arm(
+            s, arm, steps=args.steps, every=args.every, warmup=args.warmup, lr=args.lr, batch=args.batch, seq=args.seq,
+            balance_loss=args.balance_loss,
+        )
         for s in args.seeds
         for arm in ARMS
     ]
@@ -182,6 +193,7 @@ def main(argv: list[str] | None = None) -> int:
             "model": "GPTSynaptic 2L/64d, SynapticMoE 8 experts top-2, default SynapticConfig",
             "task": f"{DIALECTS}-dialect token-transition sequences, vocab {VOCAB}, seq {args.seq}, batch {args.batch}",
             "steps": args.steps, "controller_every": args.every, "warmup": args.warmup, "lr": args.lr,
+            "moe_balance_loss": args.balance_loss,
             "arms": {"none": "no controller", "product": "SplitMergeConfig defaults (util x energy)",
                      "relative": "health_mode=relative, split 1.5 / merge 0.35 / reset 0.05 fair-share units"},
             "question": "does the lifecycle fire under ordinary training, and what does firing cost in loss?",
