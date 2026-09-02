@@ -18,21 +18,22 @@ import inspect
 import json
 import math
 import time
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterator, Literal, Optional, Sequence, TypeVar, cast
+from typing import Any, Literal, TypeVar, cast
 
 from rich.console import Console
-from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeElapsedColumn,
+)
 from rich.table import Table
-
-from bio_inspired_nanochat.common import autodetect_device_type, compute_cleanup, compute_init
-from bio_inspired_nanochat.dataloader import tokenizing_distributed_data_loader
-from bio_inspired_nanochat.loss_eval import evaluate_bpb
-from bio_inspired_nanochat.torch_imports import F, Tensor, torch
-from bio_inspired_nanochat.tokenizer import get_token_bytes, get_tokenizer
 
 from bio_inspired_nanochat.ablation_registry import MECHANISMS, apply_preset
 from bio_inspired_nanochat.checkpoint_manager import (
@@ -40,8 +41,15 @@ from bio_inspired_nanochat.checkpoint_manager import (
     load_checkpoint,
     synaptic_config_from_meta,
 )
+from bio_inspired_nanochat.common import (
+    autodetect_device_type,
+    compute_cleanup,
+    compute_init,
+)
+from bio_inspired_nanochat.dataloader import tokenizing_distributed_data_loader
 from bio_inspired_nanochat.gpt import GPT, GPTConfig
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
+from bio_inspired_nanochat.loss_eval import evaluate_bpb
 from bio_inspired_nanochat.results_registry import (
     DEFAULT_REGISTRY,
     RunRecord,
@@ -49,7 +57,8 @@ from bio_inspired_nanochat.results_registry import (
     make_record,
 )
 from bio_inspired_nanochat.synaptic import SynapticConfig, SynapticMoE
-
+from bio_inspired_nanochat.tokenizer import get_token_bytes, get_tokenizer
+from bio_inspired_nanochat.torch_imports import F, Tensor, torch
 from scripts.base_eval import evaluate_model
 
 console = Console()
@@ -147,42 +156,42 @@ class HarnessRunSummary:
     train_tokens_processed: int
     walltime_sec: float
     tok_per_sec: float
-    train_loss_final: Optional[float]
+    train_loss_final: float | None
     val_loss: float
     val_ppl: float
-    val_bpb: Optional[float]
-    core_metric: Optional[float]
-    id_ece: Optional[float]
-    ood_auroc: Optional[float]
-    forgetting_rate: Optional[float]
-    moe_gini: Optional[float]
-    dead_expert_frac: Optional[float]
-    niah_acc: Optional[float]
+    val_bpb: float | None
+    core_metric: float | None
+    id_ece: float | None
+    ood_auroc: float | None
+    forgetting_rate: float | None
+    moe_gini: float | None
+    dead_expert_frac: float | None
+    niah_acc: float | None
     recall_by_length: dict[str, float]
     forgetting_by_task: dict[str, dict[str, float]]
 
 
 @dataclass(frozen=True)
 class RoutingMetricSummary:
-    moe_gini: Optional[float]
-    dead_expert_frac: Optional[float]
+    moe_gini: float | None
+    dead_expert_frac: float | None
     layers: dict[str, dict[str, Any]]
 
 
 @dataclass(frozen=True)
 class ContinualMetricSummary:
-    forgetting_rate: Optional[float]
+    forgetting_rate: float | None
     by_task: dict[str, dict[str, float]]
-    accuracy_matrix: list[list[Optional[float]]]
+    accuracy_matrix: list[list[float | None]]
     status: str
-    reason: Optional[str]
+    reason: str | None
 
 
 ComputeRuntime = tuple[bool, int, int, int, torch.device]
 _ListEntry = TypeVar("_ListEntry", int, str)
 
 
-def _require_unique(values: Sequence[_ListEntry], *, name: str) -> None:
+def _require_unique[ListEntry: (int, str)](values: Sequence[_ListEntry], *, name: str) -> None:
     seen: set[_ListEntry] = set()
     duplicates: list[_ListEntry] = []
     for value in values:
@@ -399,7 +408,7 @@ def _summarize_routing_counts(
 def _distributed_scores(scores: list[float], *, ddp: bool) -> list[float]:
     if not ddp or not torch.distributed.is_initialized():
         return scores
-    gathered: list[Optional[list[float]]] = [None] * torch.distributed.get_world_size()
+    gathered: list[list[float] | None] = [None] * torch.distributed.get_world_size()
     torch.distributed.all_gather_object(gathered, scores)
     return [score for rank_scores in gathered if rank_scores is not None for score in rank_scores]
 
@@ -412,7 +421,7 @@ def _force_synaptic_eval_forward(model: Any):
         return
     original_forward = model.forward
 
-    def eval_forward(idx: Tensor, targets: Optional[Tensor] = None, kv_cache=None, **kwargs: Any):
+    def eval_forward(idx: Tensor, targets: Tensor | None = None, kv_cache=None, **kwargs: Any):
         kwargs.pop("train_mode", None)
         return original_forward(idx, targets, kv_cache, train_mode=False, **kwargs)
 
@@ -433,7 +442,7 @@ def _val_loss_ppl_ece(
     ece_bins: int = 15,
     ood_seed: int = 0,
     dead_expert_threshold: float = 0.01,
-) -> tuple[float, float, Optional[float], float, RoutingMetricSummary]:
+) -> tuple[float, float, float | None, float, RoutingMetricSummary]:
     if ece_bins < 2:
         raise ValueError("ece_bins must be >= 2")
     model.train(False)
@@ -521,7 +530,7 @@ def _val_loss_ppl_ece(
     val_loss_f = float(val_loss.item())
     val_ppl = float(math.exp(val_loss_f)) if math.isfinite(val_loss_f) else float("inf")
 
-    ece: Optional[float]
+    ece: float | None
     if float(count.sum().item()) == 0.0:
         ece = None
     else:
@@ -691,7 +700,6 @@ def _load_base_train_checkpoint(
             moe_top_k=int(model_config.get("moe_top_k", 2)),
             moe_hidden_mult=int(model_config.get("moe_hidden_mult", 4)),
             moe_balance_loss=float(model_config.get("moe_balance_loss", 0.01)),
-            structural_every=int(model_config.get("structural_every", 0)),
             init_type=str(model_config.get("init_type", "baseline")),
             init_seed=int(model_config.get("init_seed", seed)),
             tie_embeddings=bool(model_config.get("tie_embeddings", False)),
@@ -719,7 +727,7 @@ def _load_base_train_checkpoint(
 
 def _checkpoint_recipe_stats(
     meta_data: dict[str, Any], checkpoint_step: int
-) -> tuple[int, int, float, float, Optional[float]]:
+) -> tuple[int, int, float, float, float | None]:
     """Extract truthful training facts from ``base_train`` JSON metadata."""
     user_config = meta_data.get("user_config") or {}
     loop_state = meta_data.get("loop_state") or {}
@@ -799,7 +807,7 @@ def _publish_success_summary(
 
 
 def _utc_stamp() -> str:
-    return datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    return datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
 
 
 def _error_row(
@@ -840,7 +848,7 @@ def _error_row(
         total_batch_size_tokens // tokens_per_micro if tokens_per_micro > 0 else None
     )
     steps = (
-        int(math.ceil(train_tokens_requested / total_batch_size_tokens))
+        math.ceil(train_tokens_requested / total_batch_size_tokens)
         if total_batch_size_tokens > 0
         else None
     )
@@ -931,7 +939,7 @@ def _masked_token_accuracy(model: Any, batch: Any) -> float:
 
 
 def _forgetting_rate_from_accuracy_matrix(
-    accuracy_matrix: Sequence[Sequence[Optional[float]]],
+    accuracy_matrix: Sequence[Sequence[float | None]],
 ) -> tuple[float, dict[str, dict[str, float]]]:
     """Standard continual-learning forgetting over a lower-triangular accuracy matrix.
 
@@ -993,7 +1001,7 @@ def _continual_forgetting_metric(
     reset = getattr(model, "reset_sequence_state", None)
     if callable(reset):
         reset(reset_fast_weights=True, reset_consolidation=True)
-    matrix: list[list[Optional[float]]] = [
+    matrix: list[list[float | None]] = [
         [None for _ in range(task_count)] for _ in range(task_count)
     ]
     try:
@@ -1170,7 +1178,7 @@ def _run_one(
                 f"{world_tokens_per_micro}"
             )
         grad_accum_steps: int | None = total_batch_size_tokens // world_tokens_per_micro
-        steps = max(1, int(math.ceil(train_tokens / total_batch_size_tokens)))
+        steps = max(1, math.ceil(train_tokens / total_batch_size_tokens))
         tokens_requested = train_tokens
         optimizers = model.setup_optimizers(
             unembedding_lr=unembedding_lr,
@@ -1333,7 +1341,7 @@ def _run_one(
         dead_expert_threshold=dead_expert_threshold,
     )
 
-    val_bpb: Optional[float] = None
+    val_bpb: float | None = None
     if eval_bpb:
         if tokenizer is None:
             val_bpb = None
@@ -1346,7 +1354,7 @@ def _run_one(
 
                 def _syn_forward_wrapper(
                     idx: Tensor,
-                    targets: Optional[Tensor] = None,
+                    targets: Tensor | None = None,
                     kv_cache=None,
                     loss_reduction: str = "mean",
                     **kwargs: Any,
@@ -1373,7 +1381,7 @@ def _run_one(
                 finally:
                     model.forward = orig_forward
 
-    core_metric: Optional[float] = None
+    core_metric: float | None = None
     if core_eval and ddp_rank == 0:
         if tokenizer is None:
             core_metric = None
@@ -1386,10 +1394,10 @@ def _run_one(
 
     # Needle-in-a-haystack long-context retrieval accuracy (74f.2): the key probe of
     # the fast-weight / long-context claim. Swept over length × needle depth.
-    niah_acc: Optional[float] = None
+    niah_acc: float | None = None
     recall_by_length: dict[str, float] = {}
     memory_status = "not_applicable"
-    memory_reason: Optional[str] = "no supported context lengths"
+    memory_reason: str | None = "no supported context lengths"
     try:
         from bio_inspired_nanochat.synthetic_tasks import niah_accuracy_by_length
 

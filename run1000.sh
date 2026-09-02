@@ -15,16 +15,16 @@ source .venv/bin/activate
 if [ -z "$WANDB_RUN" ]; then
     WANDB_RUN=dummy
 fi
-python -m nanochat.report reset
+python -m bio_inspired_nanochat.report reset
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 source "$HOME/.cargo/env"
-uv run maturin develop --release --manifest-path rustbpe/Cargo.toml
+uv run --no-sync maturin develop --release --manifest-path rust_src/Cargo.toml
 curl -L -o $NANOCHAT_BASE_DIR/identity_conversations.jsonl https://karpathy-public.s3.us-west-2.amazonaws.com/identity_conversations.jsonl
 
 # train tokenizer on ~4B characters and kick off download of the rest for pretraining
-python -m nanochat.dataset -n 16
+python -m bio_inspired_nanochat.dataset -n 16
 # start downloading the rest of the shards for a total of 800 (see below why 800)
-python -m nanochat.dataset -n 800 &
+python -m bio_inspired_nanochat.dataset -n 800 &
 # todo: download the rest of it
 python -m scripts.tok_train --max_chars=4000000000
 python -m scripts.tok_eval
@@ -88,7 +88,7 @@ torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.chat_sft -- --
 torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.chat_eval -- -i sft
 
 # generate final report
-python -m nanochat.report generate
+python -m bio_inspired_nanochat.report generate
 
 # talk to it
 python -m scripts.chat_web

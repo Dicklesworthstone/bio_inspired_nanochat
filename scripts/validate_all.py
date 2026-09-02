@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import datetime
 import json
+import math
 import subprocess
 import time
 from collections.abc import Sequence
@@ -195,17 +196,25 @@ VALIDATION_SUITES: dict[str, list[SubsystemCheck]] = {
 }
 
 
-def run_single_check(check: SubsystemCheck, *, verbose: bool = True) -> SubsystemCheck:
-    """Execute a single subsystem verification command."""
+def run_single_check(
+    check: SubsystemCheck, *, verbose: bool = True, timeout_scale: float = 1.0
+) -> SubsystemCheck:
+    """Execute a single subsystem verification command.
+
+    ``timeout_scale`` multiplies the per-check budget; the budgets were tuned on a fast
+    dev box and hosted CI runners are several times slower.
+    """
+    if not math.isfinite(timeout_scale) or timeout_scale <= 0:
+        raise ValueError(f"timeout_scale must be a positive finite number, got {timeout_scale!r}")
     cmd = ["uv", "run", "--no-sync"] + check.command
+    budget_sec = check.timeout_sec * timeout_scale
     t0 = time.perf_counter()
     try:
         proc = subprocess.run(
             cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
-            timeout=check.timeout_sec,
+            timeout=budget_sec,
             check=False,
         )
         duration = time.perf_counter() - t0
@@ -218,8 +227,8 @@ def run_single_check(check: SubsystemCheck, *, verbose: bool = True) -> Subsyste
         passed = False
         stdout = ""
         stderr = ""
-        error_msg = f"Command timed out after {check.timeout_sec:.1f}s"
-    except Exception as exc:
+        error_msg = f"Command timed out after {budget_sec:.1f}s"
+    except Exception as exc:  # noqa: BLE001 — a runner must turn ANY failure into a failed check
         duration = time.perf_counter() - t0
         passed = False
         stdout = ""
@@ -248,7 +257,7 @@ def generate_validation_report(
     out_path = Path(out_dir)
     out_path.mkdir(parents=True, exist_ok=True)
 
-    now_utc = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    now_utc = datetime.datetime.now(datetime.UTC).isoformat()
     run_id = f"val-{int(time.time())}"
     git_sha = _git_sha() or "unknown"
     hardware = _hardware_string()
@@ -323,7 +332,7 @@ def generate_validation_report(
     md_content = "\n".join(md_lines)
 
     # Save timestamped and latest markdown report
-    ts_compact = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    ts_compact = datetime.datetime.now(datetime.UTC).strftime("%Y%m%d_%H%M%S")
     ts_report_file = out_path / f"validation_report_{ts_compact}.md"
     latest_report_file = out_path / "validation_report_latest.md"
     latest_json_file = out_path / "validation_report_latest.json"
@@ -341,6 +350,7 @@ def run_validation(
     out_dir: Path | str = DEFAULT_REPORTS_DIR,
     fail_fast: bool = False,
     verbose: bool = True,
+    timeout_scale: float = 1.0,
 ) -> MasterValidationReport:
     """Run specified validation suite and generate audit report."""
     console = Console(quiet=not verbose)
@@ -362,7 +372,7 @@ def run_validation(
     executed_checks: list[SubsystemCheck] = []
     for check in selected_checks:
         console.print(f"  [dim]▶ Running: {check.name}...[/dim]")
-        res = run_single_check(check, verbose=verbose)
+        res = run_single_check(check, verbose=verbose, timeout_scale=timeout_scale)
         executed_checks.append(res)
         status_text = "[green]✓ PASS[/green]" if res.passed else f"[red]✗ FAIL ({res.error_message})[/red]"
         console.print(f"    {status_text} in {res.duration_sec:.2f}s")
@@ -412,6 +422,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="Stop on first check failure",
     )
+    parser.add_argument(
+        "--timeout-scale",
+        type=float,
+        default=1.0,
+        help="Multiply every per-check timeout (e.g. 4 on slow hosted CI runners)",
+    )
     args = parser.parse_args(argv)
 
     report = run_validation(
@@ -419,6 +435,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         out_dir=args.out_dir,
         fail_fast=args.fail_fast,
         verbose=True,
+        timeout_scale=args.timeout_scale,
     )
     return 0 if report.all_passed else 1
 

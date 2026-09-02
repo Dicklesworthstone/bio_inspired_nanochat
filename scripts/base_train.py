@@ -15,10 +15,10 @@ import math
 import os
 
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+import sys
 import time
 from contextlib import nullcontext
 from dataclasses import asdict
-
 from typing import Any, cast
 
 import torch.distributed as torch_dist
@@ -26,25 +26,20 @@ import wandb
 
 from bio_inspired_nanochat.checkpoint_manager import (
     capture_prefetched_batch,
+    capture_rng_state,
     checkpoint_model_config,
     config_provenance,
-    capture_rng_state,
     load_checkpoint,
     load_checkpoint_metadata,
     require_complete_checkpoint,
-    restore_rng_state,
-    restore_prefetched_batch,
     restore_optimizer_states,
+    restore_prefetched_batch,
     restore_rank_model_state,
+    restore_rng_state,
     save_checkpoint,
     synaptic_config_from_meta,
     synaptic_config_to_meta,
     validate_exact_resume_payload_step,
-)
-from bio_inspired_nanochat.dataloader import (
-    collate_dataloader_state_dicts,
-    tokenizing_distributed_data_loader,
-    tokenizing_distributed_data_loader_with_state,
 )
 from bio_inspired_nanochat.common import (
     DummyWandb,
@@ -55,14 +50,19 @@ from bio_inspired_nanochat.common import (
     print0,
     print_banner,
 )
+from bio_inspired_nanochat.dataloader import (
+    collate_dataloader_state_dicts,
+    tokenizing_distributed_data_loader,
+    tokenizing_distributed_data_loader_with_state,
+)
+from bio_inspired_nanochat.divergence_guard import GuardAction, build_divergence_guard
 from bio_inspired_nanochat.engine import Engine
 from bio_inspired_nanochat.gpt import GPT, GPTConfig
 from bio_inspired_nanochat.loss_eval import evaluate_bpb
 from bio_inspired_nanochat.report import get_report
-from bio_inspired_nanochat.tokenizer import get_token_bytes, get_tokenizer
-from bio_inspired_nanochat.divergence_guard import GuardAction, build_divergence_guard
-from bio_inspired_nanochat.torch_imports import F, torch
 from bio_inspired_nanochat.run_logging import TrainingTelemetry
+from bio_inspired_nanochat.tokenizer import get_token_bytes, get_tokenizer
+from bio_inspired_nanochat.torch_imports import F, torch
 from scripts.base_eval import evaluate_model
 
 dist = cast(Any, torch_dist)
@@ -101,6 +101,9 @@ sm_neuroscore_weight = 0.5  # blend weight in [0,1] when sm_use_neuroscore=1
 sm_function_preserving = 1  # Net2Net/firefly: make split/merge output-preserving (uta.3); 0=legacy noisy clone
 sm_fp_divergence_noise = 0.02  # relative (to weight RMS) antisymmetric fc1 noise for function-preserving split
 sm_verbose = 0  # verbose split/merge logging
+sm_homeostasis_guards = 0  # uta.6: routed-mass ramp + energy floor + row-wise moment warm restart after lifecycle events
+sm_gate_ramp_forwards = 512  # uta.6: training forwards over which a freshly seeded expert ramps in (needs sm_homeostasis_guards=1)
+sm_energy_floor = 0.05  # uta.6: per-expert energy floor after events (needs sm_homeostasis_guards=1)
 topological_nas = 0  # 0642.5: certificate-driven lifecycle; default-off, falls back to UTA
 uta4_variable_experts = 0  # uta.4: allow REAL expert-count growth/shrink under a budget
 uta4_min_experts = 2  # hard floor on per-layer expert count
@@ -146,6 +149,14 @@ neuroviz_image_every = 10000
 neuroviz_tb_every = 1000
 neuroviz_interactive_every = 25000
 
+# ``--syn_cfg.<field>=<value>`` overrides any SynapticConfig field from the command line
+# (the README's "Key Training Flags"). They are pulled out BEFORE the configurator runs
+# because it only knows the module-level settings above and would reject the dotted keys.
+# Values are typed and validated against the dataclass when the config is built below.
+from bio_inspired_nanochat.cmaes_params import extract_syn_cfg_cli_overrides
+
+sys.argv, syn_cfg_overrides = extract_syn_cfg_cli_overrides(sys.argv)
+
 # now allow CLI to override the settings via the configurator lol
 config_keys = [
     k
@@ -156,8 +167,15 @@ with open(
     os.path.join("bio_inspired_nanochat", "configurator.py"),
     encoding="utf-8",
 ) as f:
-    exec(f.read())  # nosec B102 # overrides from command line or config file
+    exec(f.read())  # noqa: S102  # nosec B102 # overrides from command line or config file
 user_config = {k: globals()[k] for k in config_keys}  # will be useful for logging
+user_config["syn_cfg_overrides"] = dict(syn_cfg_overrides)
+if syn_cfg_overrides and not synapses:
+    # Fail here, before the tokenizer/data/model setup, so a typo in the flags costs seconds.
+    raise ValueError(
+        f"--syn_cfg.* overrides ({sorted(syn_cfg_overrides)}) require synapses=1; "
+        "the vanilla GPT has no SynapticConfig"
+    )
 # -----------------------------------------------------------------------------
 
 # Compute init
@@ -398,15 +416,15 @@ print0(
 # Initialize the Model
 
 # Create a new model with random weights
-model_config_kwargs = dict(
-    sequence_len=max_seq_len,
-    vocab_size=vocab_size,
-    n_layer=num_layers,
-    n_head=num_heads,
-    n_kv_head=num_kv_heads,
-    n_embd=model_dim,
-    tie_embeddings=bool(resume_model_config.get("tie_embeddings", tie_embeddings)),
-)
+model_config_kwargs = {
+    "sequence_len": max_seq_len,
+    "vocab_size": vocab_size,
+    "n_layer": num_layers,
+    "n_head": num_heads,
+    "n_kv_head": num_kv_heads,
+    "n_embd": model_dim,
+    "tie_embeddings": bool(resume_model_config.get("tie_embeddings", tie_embeddings)),
+}
 use_syn = bool((resume_meta or {}).get("synapses", synapses))
 if splitmerge_every > 0 and not use_syn:
     raise ValueError("splitmerge_every > 0 requires synapses=1")
@@ -438,6 +456,17 @@ if use_syn:
 
         syn_cfg = apply_cmaes_params(syn_cfg, load_cmaes_params)
         print0(f"[config] overlaid CMA-ES params from {load_cmaes_params}")
+    if syn_cfg_overrides:
+        if resume_meta is not None:
+            raise ValueError(
+                "--syn_cfg.* overrides cannot be combined with --resume: the resumed run must "
+                "keep the SynapticConfig its checkpoint was trained with. Start a fresh run."
+            )
+        from bio_inspired_nanochat.cmaes_params import apply_syn_cfg_overrides
+
+        syn_cfg = apply_syn_cfg_overrides(syn_cfg, syn_cfg_overrides)
+        for _name in sorted(syn_cfg_overrides):
+            print0(f"[config] syn_cfg.{_name} = {getattr(syn_cfg, _name)!r}")
     model_config = GPTSynapticConfig(
         sequence_len=max_seq_len,
         vocab_size=vocab_size,
@@ -462,7 +491,6 @@ if use_syn:
         ),
         dropout=float(resume_model_config.get("dropout", 0.0)),
         moe_balance_loss=float(resume_model_config.get("moe_balance_loss", 0.01)),
-        structural_every=int(resume_model_config.get("structural_every", 0)),
         init_type=str(resume_model_config.get("init_type", init_type)),
         init_seed=int(resume_model_config.get("init_seed", init_seed)),
         tie_embeddings=bool(
@@ -631,6 +659,9 @@ if splitmerge_every > 0:
             min_experts=int(uta4_min_experts),
             max_experts=int(uta4_max_experts),
             growth_budget_pct=float(uta4_growth_budget_pct),
+            homeostasis_guards=bool(sm_homeostasis_guards),
+            gate_ramp_forwards=int(sm_gate_ramp_forwards),
+            energy_floor=float(sm_energy_floor),
             verbose=bool(sm_verbose),
             ddp_broadcast=True,
         )
@@ -836,8 +867,7 @@ while True:
             if use_syn:
                 model.forward = orig_forward
         print0(f"Step {step:05d} | Validation bpb: {val_bpb:.4f}")
-        if val_bpb < min_val_bpb:
-            min_val_bpb = val_bpb
+        min_val_bpb = min(min_val_bpb, val_bpb)
         wandb_run.log(
             {
                 "step": step,

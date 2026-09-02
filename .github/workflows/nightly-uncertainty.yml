@@ -33,6 +33,11 @@ jobs:
       - name: Sync CPU test dependencies
         run: uv sync --no-install-project --extra cpu --dev
 
+      - name: Create the gitignored evidence directory
+        # ``runs/`` is gitignored, so on a fresh checkout pytest's --basetemp parent
+        # does not exist and the fixture setup fails before any test runs.
+        run: mkdir -p runs/e2e/uncertainty_calibration/nightly
+
       - name: Run uncertainty/calibration E2E
         run: >-
           uv run --no-sync python -m pytest

@@ -17,9 +17,9 @@ import os
 import shlex
 import shutil
 import subprocess
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 
 from rich.console import Console
 from rich.panel import Panel
@@ -61,8 +61,7 @@ def _git_lines(cmd: list[str], *, cwd: Path) -> list[str]:
         ["git", *cmd],
         cwd=cwd,
         check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
     if proc.returncode != 0:
@@ -209,6 +208,9 @@ def run_quality_gate(*, mode: str, base: str, head: str) -> GateResult:
             [
                 "uv",
                 "run",
+                # A bare ``uv run`` re-syncs the environment to the default extras, which
+                # swaps a ``--extra cpu`` torch install for the CUDA build mid-gate.
+                "--no-sync",
                 "ruff",
                 "check",
                 "--fix",
