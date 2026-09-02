@@ -1030,6 +1030,7 @@ while True:
         if use_syn and hebb_chunk_len > 0:
             # hwxb.8: chunked regime — forward+backward per chunk inside the model, scaled for
             # gradient accumulation; returns the detached token-weighted loss.
+            logits = None  # no full-sequence logits in this regime
             with autocast_ctx:
                 train_loss = orig_model.chunked_train_step(
                     x, y, chunk_len=hebb_chunk_len, loss_scale=1.0 / grad_accum_steps
@@ -1091,7 +1092,7 @@ while True:
     # and broadcast the gains so they gate the NEXT step's plasticity/exploration/gain.
     if nm_bus is not None:
         # use_syn guarantees the model returned (logits, loss), so logits is defined here.
-        nm_entropy = nm_bus.entropy_from_logits(logits)
+        nm_entropy = nm_bus.entropy_from_logits(logits) if logits is not None else None
         nm_bus.update(loss=float(train_loss), entropy=nm_entropy)
         nm_bus.broadcast(orig_model)
         if neuromod_log_every and step % neuromod_log_every == 0:

@@ -44,8 +44,6 @@ logger = logging.getLogger("bio_inspired_nanochat.structural_pair_pilot")
 console = Console()
 
 VOCAB = 97
-SEQ = 64
-BATCH = 8
 DIALECTS = 4
 ARMS = ("none", "product", "relative")
 
@@ -73,20 +71,20 @@ def _dialect_transitions(seed: int) -> torch.Tensor:
     return torch.softmax(logits, dim=-1)
 
 
-def _batch(trans: torch.Tensor, g: torch.Generator) -> tuple[torch.Tensor, torch.Tensor]:
-    dialect = torch.randint(0, DIALECTS, (BATCH,), generator=g)
-    tokens = torch.empty(BATCH, SEQ + 1, dtype=torch.long)
-    tokens[:, 0] = torch.randint(0, VOCAB, (BATCH,), generator=g)
-    for t in range(SEQ):
+def _batch(trans: torch.Tensor, g: torch.Generator, *, batch: int, seq: int) -> tuple[torch.Tensor, torch.Tensor]:
+    dialect = torch.randint(0, DIALECTS, (batch,), generator=g)
+    tokens = torch.empty(batch, seq + 1, dtype=torch.long)
+    tokens[:, 0] = torch.randint(0, VOCAB, (batch,), generator=g)
+    for t in range(seq):
         probs = trans[dialect, tokens[:, t]]  # (BATCH, VOCAB)
         tokens[:, t + 1] = torch.multinomial(probs, 1, generator=g).squeeze(1)
     return tokens[:, :-1], tokens[:, 1:]
 
 
-def _model(seed: int) -> GPTSynaptic:
+def _model(seed: int, *, seq: int) -> GPTSynaptic:
     torch.manual_seed(seed)
     cfg = GPTSynapticConfig(
-        sequence_len=SEQ, vocab_size=VOCAB, n_layer=2, n_head=4, n_kv_head=4, n_embd=64,
+        sequence_len=seq, vocab_size=VOCAB, n_layer=2, n_head=4, n_kv_head=4, n_embd=64,
         synapses=True, syn_cfg=SynapticConfig(), use_moe=True, num_experts=8, moe_top_k=2,
     )
     model = GPTSynaptic(cfg)
@@ -97,12 +95,14 @@ def _model(seed: int) -> GPTSynaptic:
 def _controller(arm: str, model: GPTSynaptic, every: int, warmup: int, log: _CountingLogger):
     if arm == "none":
         return None
-    common = dict(enabled=True, function_preserving=True, min_step_interval=every, warmup_steps=warmup, ddp_broadcast=False)
     if arm == "product":
-        cfg = SplitMergeConfig(**common)
+        cfg = SplitMergeConfig(
+            enabled=True, function_preserving=True, min_step_interval=every, warmup_steps=warmup, ddp_broadcast=False
+        )
     else:
         cfg = SplitMergeConfig(
-            health_mode="relative", split_health_min=1.5, merge_health_max=0.35, reset_health_max=0.05, **common
+            enabled=True, function_preserving=True, min_step_interval=every, warmup_steps=warmup, ddp_broadcast=False,
+            health_mode="relative", split_health_min=1.5, merge_health_max=0.35, reset_health_max=0.05,
         )
     return SplitMergeController(model, cfg, logger=log)
 
@@ -111,8 +111,8 @@ def _util_spread(model: GPTSynaptic) -> list[float]:
     return [float(m.fatigue.detach().std()) for m in model.modules() if isinstance(m, SynapticMoE)]
 
 
-def run_arm(seed: int, arm: str, *, steps: int, every: int, warmup: int, lr: float) -> dict[str, Any]:
-    model = _model(seed)
+def run_arm(seed: int, arm: str, *, steps: int, every: int, warmup: int, lr: float, batch: int, seq: int) -> dict[str, Any]:
+    model = _model(seed, seq=seq)
     log = _CountingLogger()
     controller = _controller(arm, model, every, warmup, log)
     opt = torch.optim.AdamW(model.parameters(), lr=lr)
@@ -121,7 +121,7 @@ def run_arm(seed: int, arm: str, *, steps: int, every: int, warmup: int, lr: flo
     losses: list[float] = []
     t0 = time.perf_counter()
     for step in range(steps):
-        x, y = _batch(trans, g)
+        x, y = _batch(trans, g, batch=batch, seq=seq)
         _, loss = model(x, y, train_mode=True)
         if not torch.isfinite(loss):
             raise RuntimeError(f"seed={seed} arm={arm}: non-finite loss at step {step}")
@@ -153,11 +153,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--every", type=int, default=25, help="controller interval in optimizer steps")
     parser.add_argument("--warmup", type=int, default=50)
     parser.add_argument("--lr", type=float, default=3e-3)
+    parser.add_argument("--batch", type=int, default=8)
+    parser.add_argument("--seq", type=int, default=64)
     parser.add_argument("--out", default=None, help="JSON path (default results/structural_pair_pilot_<date>.json)")
     args = parser.parse_args(argv)
     out_path = Path(args.out or f"results/structural_pair_pilot_{_dt.date.today().isoformat()}.json")
 
-    rows = [run_arm(s, arm, steps=args.steps, every=args.every, warmup=args.warmup, lr=args.lr) for s in args.seeds for arm in ARMS]
+    rows = [
+        run_arm(s, arm, steps=args.steps, every=args.every, warmup=args.warmup, lr=args.lr, batch=args.batch, seq=args.seq)
+        for s in args.seeds
+        for arm in ARMS
+    ]
     by_seed = {s: {r["arm"]: r for r in rows if r["seed"] == s} for s in args.seeds}
     for s in args.seeds:
         base = by_seed[s]["none"]["final_loss"]
@@ -174,7 +180,7 @@ def main(argv: list[str] | None = None) -> int:
     payload = {
         "protocol": {
             "model": "GPTSynaptic 2L/64d, SynapticMoE 8 experts top-2, default SynapticConfig",
-            "task": f"{DIALECTS}-dialect token-transition sequences, vocab {VOCAB}, seq {SEQ}, batch {BATCH}",
+            "task": f"{DIALECTS}-dialect token-transition sequences, vocab {VOCAB}, seq {args.seq}, batch {args.batch}",
             "steps": args.steps, "controller_every": args.every, "warmup": args.warmup, "lr": args.lr,
             "arms": {"none": "no controller", "product": "SplitMergeConfig defaults (util x energy)",
                      "relative": "health_mode=relative, split 1.5 / merge 0.35 / reset 0.05 fair-share units"},

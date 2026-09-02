@@ -176,14 +176,19 @@ def test_chunked_regime_trains_and_is_recorded(quick_start):
         timeout=1500,
     )
     assert run.returncode == 0, run.stderr[-4000:]
+    # The registry row hashes the config; the checkpoint metadata carries it verbatim.
+    meta = json.loads(
+        (quick_start["base_dir"] / "base_checkpoints" / f"{MODEL_TAG}_chunked" / "meta_000002.json").read_text(encoding="utf-8")
+    )
+    assert meta["user_config"]["hebb_chunk_len"] == 8, meta.get("user_config")
     rows = [
         json.loads(line)
         for line in (quick_start["base_dir"] / "registry.jsonl").read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
-    chunked = [r for r in rows if r.get("harness") == "train" and r["config"]["training"].get("hebb_chunk_len") == 8]
-    assert len(chunked) == 1, [r["config"]["training"] for r in rows if r.get("harness") == "train"]
-    assert math.isfinite(float(chunked[0]["metrics"]["val_bpb"]))
+    train_rows = [r for r in rows if r.get("harness") == "train"]
+    assert len(train_rows) == 2, "the plain and the chunked run each leave one registry row"
+    assert all(math.isfinite(float(r["metrics"]["val_bpb"])) for r in train_rows)
 
 
 def test_unknown_syn_cfg_field_is_refused_before_training(quick_start):
