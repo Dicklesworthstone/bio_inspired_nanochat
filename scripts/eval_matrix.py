@@ -35,6 +35,7 @@ from rich.progress import (
 )
 from rich.table import Table
 
+from bio_inspired_nanochat.ablation_matrix import AblationConfig, screening_columns
 from bio_inspired_nanochat.ablation_registry import MECHANISMS, apply_preset
 from bio_inspired_nanochat.checkpoint_manager import (
     list_checkpoint_steps,
@@ -88,6 +89,15 @@ DEFAULT_ABLATION_PRESETS: tuple[PresetId, ...] = (
     "bio_no_bdnf",
     "bio_no_septin_barrier",
 )
+
+# The pre-registered matrix columns (docs/ablation_matrix.md) that are not named registry
+# presets: the synaptic_off anchor and the add-one-in columns. They are materialised through
+# ablation_matrix.AblationConfig.build_syn_cfg(), so this runner cannot drift from the spec.
+MATRIX_COLUMNS: dict[str, AblationConfig] = {
+    column.config_id: column
+    for column in screening_columns()
+    if column.config_id not in set(PresetId.__args__)
+}
 
 SUMMARY_FIELDS: tuple[str, ...] = (
     "status",
@@ -552,9 +562,22 @@ def _apply_syn_preset(preset: str, syn_cfg: SynapticConfig) -> None:
     apply_preset(preset, syn_cfg)
 
 
+def _syn_cfg_for_preset(preset: str) -> SynapticConfig:
+    """The SynapticConfig for a named registry preset or a pre-registered matrix column."""
+    column = MATRIX_COLUMNS.get(preset)
+    if column is not None:
+        built = column.build_syn_cfg()
+        if built is None:
+            raise ValueError(f"matrix column {preset!r} has no synaptic configuration")
+        return built
+    syn_cfg = SynapticConfig()
+    _apply_syn_preset(preset, syn_cfg)
+    return syn_cfg
+
+
 def _build_model(
     *,
-    preset: PresetId,
+    preset: str,  # a PresetId or a MATRIX_COLUMNS id
     seed: int,
     device: torch.device,
     sequence_len: int,
@@ -584,8 +607,7 @@ def _build_model(
         model.init_weights()
         return model
 
-    syn_cfg = SynapticConfig()
-    _apply_syn_preset(preset, syn_cfg)
+    syn_cfg = _syn_cfg_for_preset(preset)
     with torch.device("meta"):
         cfg = GPTSynapticConfig(
             sequence_len=sequence_len,
@@ -669,7 +691,7 @@ def _load_base_train_checkpoint(
 
     if is_synaptic:
         syn_cfg = synaptic_config_from_meta(meta_data)
-        expected_syn_cfg = apply_preset(preset, SynapticConfig())
+        expected_syn_cfg = _syn_cfg_for_preset(preset)
         mismatches = [
             mechanism.field
             for mechanism in MECHANISMS
@@ -1108,6 +1130,11 @@ def _run_one(
             num_experts = 0
             moe_top_k = 0
 
+    live_syn_cfg = getattr(getattr(model, "config", None), "syn_cfg", None)
+    neuromod_on = bool(
+        live_syn_cfg is not None and getattr(live_syn_cfg, "neuromod_enabled", False)
+    )
+
     stamp_payload = [_utc_stamp() if ddp_rank == 0 else ""]
     if ddp and torch.distributed.is_initialized():
         torch.distributed.broadcast_object_list(stamp_payload, src=0, device=device)
@@ -1243,6 +1270,7 @@ def _run_one(
         "use_moe": use_moe,
         "num_experts": num_experts,
         "moe_top_k": moe_top_k,
+        "neuromod_enabled": neuromod_on,
     }
     registry_config = {
         key: value for key, value in run_config.items() if key != "checkpoint_metadata"
@@ -1278,6 +1306,14 @@ def _run_one(
             torch.cuda.synchronize(device)
         t_start = time.perf_counter()
         supports_train_mode = "train_mode" in inspect.signature(model.forward).parameters
+        # hy8.1: the neuromodulatory bus is a training-harness object (as in base_train). It
+        # gates every synaptic layer after each optimizer step from this step's loss and
+        # predictive entropy; without it the neuromod_enabled flag would be a silent no-op here.
+        nm_bus = None
+        if neuromod_on:
+            from bio_inspired_nanochat.neuromod import NeuromodulatoryBus
+
+            nm_bus = NeuromodulatoryBus()
         with progress:
             for train_step in range(steps):
                 t0 = time.perf_counter()
@@ -1285,9 +1321,9 @@ def _run_one(
                     x, y = next(train_iter)
                     result = model(x, y, train_mode=True) if supports_train_mode else model(x, y)
                     if isinstance(result, tuple):
-                        _, loss = result
+                        step_logits, loss = result
                     else:
-                        loss = result
+                        step_logits, loss = None, result
                     if loss is None:
                         raise RuntimeError("Model returned loss=None during training")
                     (loss / grad_accum_steps).backward()
@@ -1295,6 +1331,16 @@ def _run_one(
                 for opt in optimizers:
                     opt.step()
                 model.zero_grad(set_to_none=True)
+                nm_telemetry: dict[str, float] = {}
+                if nm_bus is not None:
+                    entropy = (
+                        nm_bus.entropy_from_logits(step_logits)
+                        if step_logits is not None
+                        else None
+                    )
+                    nm_bus.update(loss=float(loss.detach().float().item()), entropy=entropy)
+                    nm_bus.broadcast(model)
+                    nm_telemetry = nm_bus.telemetry()
                 if device.type == "cuda":
                     torch.cuda.synchronize(device)
                 dt = time.perf_counter() - t0
@@ -1310,6 +1356,7 @@ def _run_one(
                             "loss": loss_f,
                             "dt_sec": dt,
                             "tok_per_sec": tok_per_sec,
+                            **nm_telemetry,
                         },
                     )
                 progress.update(train_task, advance=1)
@@ -1812,7 +1859,7 @@ def _run_batch(
 
 
 def _cmd_matrix(args: argparse.Namespace) -> int:
-    allowed = set(PresetId.__args__)
+    allowed = set(PresetId.__args__) | set(MATRIX_COLUMNS)
     presets_raw = _parse_str_list(args.presets)
     presets: list[PresetId] = []
     for preset in presets_raw:
@@ -1927,7 +1974,7 @@ def main() -> int:
 
     p_run = sub.add_parser("run", help="Run a single preset/seed")
     add_common(p_run)
-    p_run.add_argument("--preset", required=True, choices=list(PresetId.__args__))
+    p_run.add_argument("--preset", required=True, choices=[*PresetId.__args__, *MATRIX_COLUMNS])
     p_run.add_argument("--seed", type=int, default=1337)
     p_run.set_defaults(func=_cmd_run)
 

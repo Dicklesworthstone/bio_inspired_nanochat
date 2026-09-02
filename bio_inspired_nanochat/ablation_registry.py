@@ -135,6 +135,13 @@ MECHANISMS: tuple[MechanismFlag, ...] = (
         "Certified low-temperature hard-routing controller (0642.6.2.2); requires an explicit "
         "exact-affine score adapter and otherwise preserves the unchanged soft baseline.",
     ),
+    MechanismFlag(
+        "neuromod", "neuromod_enabled", False, False, False,
+        ("enable_presyn", "enable_hebbian"),
+        "Global DA/ACh/NE neuromodulatory bus (hy8.1): DA gates Hebbian consolidation, ACh the "
+        "stochastic-release fraction and input gain, NE the output gain. The training harness "
+        "instantiates the bus when this is on; it needs presyn + hebbian to have anything to gate.",
+    ),
 )
 
 _BY_FIELD: dict[str, MechanismFlag] = {m.field: m for m in MECHANISMS}

@@ -66,13 +66,14 @@ prerequisite-only baseline.
 
 `add_bistable_latch` (needs `enable_hebbian`), `add_learnable_kinetics` (needs `enable_presyn`),
 `add_differentiable_recurrence` (needs `learnable_kinetics`, `enable_presyn`), `add_cusp_latch`
-(needs `bistable_latch`, `enable_hebbian`), and `add_metriplectic_integrator` (needs
-`enable_presyn`).
+(needs `bistable_latch`, `enable_hebbian`), `add_metriplectic_integrator` (needs
+`enable_presyn`), and `add_neuromod` (needs `enable_presyn`, `enable_hebbian`; the harness
+instantiates the DA/ACh/NE bus for it).
 
 Add-one-in is more interpretable for "which mechanism helps"; leave-one-out catches interactions.
 We run both where compute allows; the staging below keeps the cost bounded.
 
-**Total screening columns:** 3 anchors + 8 leave-one-out + 5 add-one-in = **16**.
+**Total screening columns:** 3 anchors + 8 leave-one-out + 6 add-one-in = **17**.
 
 ---
 
@@ -128,12 +129,12 @@ direction-aware (improvement = bpb down).
 
 ## 6) How to run it
 
-The columns map to `eval_matrix` runs. Existing named presets (`vanilla`, `bio_all`, `bio_no_*`) run
-directly; the new columns (`synaptic_off`, the `add_*` set) are carried as explicit field overrides on
-their base anchor by `ablation_matrix.AblationConfig.build_syn_cfg()`. The dry-run bead (`hwxb.7.4`)
-exercises the full screen→gate→confirm orchestration on tiny models to validate the machinery before
-the real run (`hwxb.5.2`); promoting the new columns to named `ABLATION_PRESETS` entries is a small
-optional follow-up that keeps this matrix decoupled from the registry in the meantime.
+Every column maps to an `eval_matrix` run and is accepted by `--preset` / `--presets`: the named
+registry presets (`vanilla`, `bio_all`, `bio_no_*`) go through `ablation_registry.apply_preset`, and
+the remaining columns (`synaptic_off`, the `add_*` set) are materialised by
+`ablation_matrix.AblationConfig.build_syn_cfg()` (`eval_matrix.MATRIX_COLUMNS`), so the spec and the
+runner cannot drift. The dry-run bead (`hwxb.7.4`) exercises the full screen→gate→confirm
+orchestration on tiny models to validate the machinery before the real run (`hwxb.5.2`).
 
 ```python
 from bio_inspired_nanochat import ablation_matrix as am
@@ -147,10 +148,10 @@ conf = am.confirmation_columns(survivors)            # anchors + survivors
 
 ## 7) Known gaps (honest scope)
 
-- **Global neuromodulation (`hy8.1`) and NeuroScore are not yet registered ablation mechanisms**, so
-  they are **not** in this matrix even though the README describes them. Registering them in
-  `ablation_registry.MECHANISMS` (with their prerequisites) is the prerequisite for an `add_neuromod`
-  / `bio_no_neuromod` column. Tracked as a follow-up under the `hwxb.5` phase.
+- **Global neuromodulation (`hy8.1`) is a registered mechanism since 2026-09-01** (`neuromod_enabled`,
+  requires presyn + hebbian), so the matrix carries an `add_neuromod` column and `eval_matrix`
+  instantiates the bus for it. **NeuroScore** is still a `SplitMergeConfig`-level knob, not a
+  `SynapticConfig` mechanism, so it has no column yet.
 - **Structural lifecycle** (split/merge) is toggled at the *training-script* level
   (`--splitmerge_every`), not via a `SynapticConfig` mechanism flag; `enable_metabolism` covers the
   per-expert energy dynamics. A dedicated lifecycle on/off column should be added once the runner

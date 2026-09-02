@@ -466,6 +466,10 @@ if use_syn:
         syn_cfg = apply_syn_cfg_overrides(syn_cfg, syn_cfg_overrides)
         for _name in sorted(syn_cfg_overrides):
             print0(f"[config] syn_cfg.{_name} = {getattr(syn_cfg, _name)!r}")
+    if neuromod_enabled:
+        # The bus is a training-loop object, but the model config records that it was on so
+        # checkpoints and eval_matrix see the same flag (--syn_cfg.neuromod_enabled=1 also works).
+        syn_cfg.neuromod_enabled = True
     model_config = GPTSynapticConfig(
         sequence_len=max_seq_len,
         vocab_size=vocab_size,
@@ -681,7 +685,7 @@ if splitmerge_every > 0:
 
 # Neuromodulatory bus (hy8.1): only for synaptic models, opt-in. Default-neutral when off.
 nm_bus = None
-if neuromod_enabled and use_syn:
+if use_syn and (neuromod_enabled or syn_cfg.neuromod_enabled):
     from bio_inspired_nanochat.neuromod import NeuromodulatoryBus
 
     nm_bus = NeuromodulatoryBus()

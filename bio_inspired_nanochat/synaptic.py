@@ -404,6 +404,14 @@ class SynapticConfig:
     # explicit exact-affine adapter and certificate before hard routing is allowed.
     tropical_skeleton: bool = False
 
+    # hy8.1: global DA/ACh/NE neuromodulatory bus. Default-off. When on, the training
+    # harnesses (scripts/base_train.py, scripts/eval_matrix.py) instantiate a
+    # NeuromodulatoryBus and broadcast its gains onto the synaptic layers after every
+    # optimizer step; every consumer reads those gains default-neutrally (1.0), so the flag
+    # itself changes nothing in the forward. The gains are runtime module attributes, not
+    # checkpointed weights.
+    neuromod_enabled: bool = False
+
     # Native kernel toggles. Both are default-off so unsupported hardware/modes retain
     # the canonical Python implementation exactly.
     # jyb.2: the live presyn Triton kernel is deliberately narrow until jyb.3 supplies
