@@ -51,7 +51,13 @@ console = Console()
 STAGES = ("screening", "confirmation", "structural", "all")
 
 
-def columns_for_stage(stage: str, survivors: Sequence[str] = ()) -> list[am.AblationConfig]:
+def columns_for_stage(stage: str, survivors: Sequence[str] = (), columns: Sequence[str] = ()) -> list[am.AblationConfig]:
+    if columns:
+        known = {c.config_id: c for c in am.screening_columns() + am.structural_columns()}
+        unknown = [c for c in columns if c not in known]
+        if unknown:
+            raise ValueError(f"unknown column id(s) {unknown}; known: {sorted(known)}")
+        return [known[c] for c in columns]
     if stage == "screening":
         return am.screening_columns()
     if stage == "confirmation":
@@ -100,6 +106,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--stage", choices=STAGES, default="screening")
     parser.add_argument("--survivors", default="", help="Comma-separated column ids kept after screening")
+    parser.add_argument("--columns", default="", help="Comma-separated explicit column ids (overrides --stage; for re-running single cells)")
     parser.add_argument(
         "--seeds", default="",
         help="Comma-separated init seeds (default: the stage's pre-registered seeds)",
@@ -115,7 +122,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     survivors = [s for s in args.survivors.split(",") if s]
-    columns = columns_for_stage(args.stage, survivors)
+    explicit = [c for c in args.columns.split(",") if c]
+    columns = columns_for_stage(args.stage, survivors, explicit)
     if args.seeds:
         seeds = [int(s) for s in args.seeds.split(",") if s]
     else:
