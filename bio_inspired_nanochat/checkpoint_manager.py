@@ -11,17 +11,16 @@ import re
 import subprocess
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, fields
-from typing import TYPE_CHECKING, Any, Optional, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from bio_inspired_nanochat.torch_imports import torch
 
 if TYPE_CHECKING:
     from bio_inspired_nanochat.synaptic import SynapticConfig
 
-from bio_inspired_nanochat.common import get_base_dir
+from bio_inspired_nanochat.common import get_base_dir, setup_default_logging
 from bio_inspired_nanochat.gpt import GPT, GPTConfig
 from bio_inspired_nanochat.tokenizer import get_tokenizer
-from bio_inspired_nanochat.common import setup_default_logging
 
 # Set up logging
 setup_default_logging()
@@ -29,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 def log0(message):
-    if int(os.environ.get('RANK', 0)) == 0:
+    if int(os.environ.get("RANK", "0")) == 0:
         logger.info(message)
 
 
@@ -46,7 +45,7 @@ def synaptic_config_to_meta(syn_cfg) -> dict:
     return asdict(syn_cfg)
 
 
-def synaptic_config_from_meta(meta_data) -> "SynapticConfig":
+def synaptic_config_from_meta(meta_data) -> SynapticConfig:
     """Rebuild a SynapticConfig from checkpoint meta_data.
 
     Unknown saved fields are ignored and new schema fields take their defaults (forward/back
@@ -85,7 +84,6 @@ def checkpoint_model_config(model, base_config: dict[str, Any]) -> dict[str, Any
         "moe_top_k",
         "moe_hidden_mult",
         "moe_balance_loss",
-        "structural_every",
         "init_type",
         "init_seed",
         "tie_embeddings",
@@ -136,7 +134,7 @@ def config_hash(cfg_dict: dict) -> str:
     return hashlib.sha256(blob).hexdigest()[:16]
 
 
-def _git_sha() -> Optional[str]:
+def _git_sha() -> str | None:
     try:
         out = subprocess.check_output(
             ["git", "rev-parse", "HEAD"],
@@ -420,7 +418,7 @@ def validate_exact_resume_payload_step(
         )
 
 
-def restore_rng_state(state: Optional[dict]) -> None:
+def restore_rng_state(state: dict | None) -> None:
     """Restore RNGs saved by :func:`capture_rng_state` (no-op on None / missing keys)."""
     if not state:
         return
@@ -553,7 +551,7 @@ def save_checkpoint(checkpoint_dir, step, model_data, optimizer_data, meta_data,
             # rebuild that failed the strict load with a confusing key dump.
             synaptic_keys = [
                 k
-                for k in model_data.keys()
+                for k in model_data
                 if any(x in k for x in ("pre.", "post.", "u_buf", "v_buf", "w_fast"))
             ]
             if synaptic_keys:
@@ -586,7 +584,7 @@ def save_checkpoint(checkpoint_dir, step, model_data, optimizer_data, meta_data,
         )
 
 
-def _world_size_or_none() -> Optional[int]:
+def _world_size_or_none() -> int | None:
     if torch.distributed.is_available() and torch.distributed.is_initialized():
         return int(torch.distributed.get_world_size())
     return None
@@ -796,7 +794,7 @@ def list_checkpoint_steps(checkpoint_dir: str) -> list[int]:
     return sorted(steps)
 
 
-def prune_checkpoints(checkpoint_dir: str, keep_last: int, *, best_step: Optional[int] = None) -> list[int]:
+def prune_checkpoints(checkpoint_dir: str, keep_last: int, *, best_step: int | None = None) -> list[int]:
     """Rotate checkpoints: keep the ``keep_last`` most recent steps + ``best_step``.
 
     Disk on a long run is finite; without rotation a multi-day run fills the volume and
@@ -849,7 +847,7 @@ def build_model(checkpoint_dir, step, device, phase):
     """
     if phase not in {"train", "eval"}:
         raise ValueError(f"phase must be 'train' or 'eval', got {phase!r}")
-    model_data, optimizer_data, meta_data = load_checkpoint(checkpoint_dir, step, device, load_optimizer=False)
+    model_data, _optimizer_data, meta_data = load_checkpoint(checkpoint_dir, step, device, load_optimizer=False)
     if device.type in {"cpu", "mps"}:
         # Convert bfloat16 tensors to float for CPU inference
         model_data = {
@@ -894,7 +892,6 @@ def build_model(checkpoint_dir, step, device, phase):
             moe_top_k=model_config_kwargs.get("moe_top_k", 2),
             moe_hidden_mult=model_config_kwargs.get("moe_hidden_mult", 4),
             moe_balance_loss=model_config_kwargs.get("moe_balance_loss", 0.01),
-            structural_every=model_config_kwargs.get("structural_every", 0),
             init_type=model_config_kwargs.get("init_type", "baseline"),
             init_seed=int(model_config_kwargs.get("init_seed", 42)),
             tie_embeddings=bool(model_config_kwargs.get("tie_embeddings", False)),  # hwxb.2.9

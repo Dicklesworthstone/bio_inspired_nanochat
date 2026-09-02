@@ -18,6 +18,7 @@ ablation". This module makes that discipline explicit and enforceable:
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, fields
 from typing import Any
 
@@ -90,7 +91,8 @@ MECHANISMS: tuple[MechanismFlag, ...] = (
     ),
     MechanismFlag(
         "native_presyn", "native_presyn", False, False, False, ("enable_presyn",),
-        "Fused Triton deterministic FP32 decode at the configured top-k width.",
+        "Native deterministic FP32 one-query decode: the Triton kernel on CUDA, the Rust "
+        "(rustbpe) kernel on CPU; every other case stays on the PyTorch path.",
     ),
     MechanismFlag(
         "native_genetics", "native_genetics", False, False, False, ("enable_metabolism",),
@@ -345,3 +347,59 @@ def _registry_self_check() -> None:
 
 
 _registry_self_check()
+
+
+# --------------------------------------------------------------------------- #
+# SynapticConfig schema validation. Shared by the CLI / JSON overlays in
+# ``cmaes_params`` and by ``certificate_bundle`` (where it lived until 2026-09;
+# importing it from there dragged the whole certificate machinery into the
+# training script's import closure).
+# --------------------------------------------------------------------------- #
+MAX_SAFE_INTEGER = 2**53 - 1
+SUPPORTED_SYNAPTIC_GRANULARITIES = frozenset(member.value for member in SynapticGranularity)
+SUPPORTED_STOCHASTIC_MODES = frozenset({"gumbel_sigmoid_ste", "straight_through", "normal_reparam"})
+
+
+def synaptic_config_schema_errors(cfg: SynapticConfig) -> list[str]:
+    """Type/domain errors for every field of ``cfg``, judged against the dataclass defaults.
+
+    This is the low-level "is every field even the right kind of value" check that overlays
+    run after ``setattr``-ing user-supplied values; :func:`validate_config` is the higher-level
+    mechanism-prerequisite and knob-range check. Returns an empty list for a valid config.
+    """
+    errors: list[str] = []
+    for config_field in fields(cfg):
+        value = getattr(cfg, config_field.name)
+        default = config_field.default
+        if type(default) is bool:
+            valid = type(value) is bool
+            expected = "bool"
+        elif type(default) is int:
+            valid = type(value) is int and 0 <= value <= MAX_SAFE_INTEGER
+            expected = f"non-negative int <= {MAX_SAFE_INTEGER}"
+        elif type(default) is float:
+            valid = type(value) in (int, float)
+            if valid and type(value) is int:
+                valid = abs(value) <= MAX_SAFE_INTEGER
+            if valid:
+                try:
+                    valid = math.isfinite(float(value))
+                except (OverflowError, ValueError):
+                    valid = False
+            expected = f"finite float or safe integer <= {MAX_SAFE_INTEGER}"
+        elif isinstance(default, SynapticGranularity):
+            valid = type(value) is SynapticGranularity or (
+                type(value) is str and value in SUPPORTED_SYNAPTIC_GRANULARITIES
+            )
+            expected = "one of " + ", ".join(sorted(SUPPORTED_SYNAPTIC_GRANULARITIES))
+        elif type(default) is str:
+            valid = type(value) is str
+            expected = "string"
+        else:  # pragma: no cover - schema additions must select an explicit policy
+            valid = False
+            expected = f"unsupported schema type {type(default).__name__}"
+        if not valid:
+            errors.append(f"{config_field.name} must be {expected}")
+    if type(cfg.stochastic_mode) is str and cfg.stochastic_mode not in SUPPORTED_STOCHASTIC_MODES:
+        errors.append("stochastic_mode is not a supported literal")
+    return errors

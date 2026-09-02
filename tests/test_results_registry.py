@@ -17,6 +17,7 @@ import pytest
 from bio_inspired_nanochat.metrics_schema import UnknownMetricError
 from bio_inspired_nanochat.results_registry import (
     DEFAULT_REGISTRY,
+    TRACKED_REGISTRY,
     RunRecord,
     _main,
     append_record,
@@ -111,7 +112,11 @@ def test_make_record_rejects_ambiguous_config_and_empty_run_id():
 
 @pytest.mark.unit
 def test_default_registry_is_a_committable_results_path():
-    assert DEFAULT_REGISTRY == "results/registry.jsonl"
+    # Outside the test suite the harnesses append to the tracked corpus; under pytest the
+    # conftest redirects the default (BIO_RESULTS_REGISTRY) so tests never pollute it.
+    assert TRACKED_REGISTRY == "results/registry.jsonl"
+    assert DEFAULT_REGISTRY != TRACKED_REGISTRY
+    assert DEFAULT_REGISTRY.endswith("registry.jsonl")
 
 
 @pytest.mark.unit

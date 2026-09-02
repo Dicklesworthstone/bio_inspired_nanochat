@@ -9,14 +9,14 @@ from __future__ import annotations
 
 import random
 import time
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
-import torch.nn as nn
 from rich.console import Console
 from rich.table import Table
-
+from torch import nn
 
 
 @dataclass(frozen=True)
@@ -26,25 +26,21 @@ class DiscreteConfig:
     stochastic_mode: str = "normal_reparam"  # "normal_reparam", "bernoulli", "gumbel"
     rank_eligibility: int = 8                # 4, 8, 16
     attn_topk: int = 32                      # 16, 32, 64
-    structural_every: int = 0                # 0, 2, 4
 
     def mutate(self, rng: random.Random) -> DiscreteConfig:
         """Apply random discrete point mutations."""
         modes = ["normal_reparam", "bernoulli", "gumbel"]
         ranks = [4, 8, 16]
         topks = [16, 32, 64]
-        structs = [0, 2, 4]
 
         new_mode = rng.choice(modes) if rng.random() < 0.3 else self.stochastic_mode
         new_rank = rng.choice(ranks) if rng.random() < 0.3 else self.rank_eligibility
         new_topk = rng.choice(topks) if rng.random() < 0.3 else self.attn_topk
-        new_struct = rng.choice(structs) if rng.random() < 0.3 else self.structural_every
 
         return DiscreteConfig(
             stochastic_mode=new_mode,
             rank_eligibility=new_rank,
             attn_topk=new_topk,
-            structural_every=new_struct,
         )
 
 
@@ -58,10 +54,10 @@ class BilevelResult:
     generations_run: int
     population_size: int
     inner_steps: int
-    history: List[Dict[str, Any]]
+    history: list[dict[str, Any]]
     wall_time_ms: float
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "best_discrete": asdict(self.best_discrete),
             "best_val_loss": float(self.best_val_loss),
@@ -102,7 +98,7 @@ class HybridBilevelOptimizer:
 
         # Initialize population with default and mutations
         default_cfg = DiscreteConfig()
-        population: List[DiscreteConfig] = [default_cfg]
+        population: list[DiscreteConfig] = [default_cfg]
         for _ in range(self.pop_size - 1):
             population.append(default_cfg.mutate(self.rng))
 
@@ -112,11 +108,11 @@ class HybridBilevelOptimizer:
 
         best_loss = init_loss
         best_cfg = default_cfg
-        history: List[Dict[str, Any]] = []
+        history: list[dict[str, Any]] = []
 
         for gen in range(1, self.generations + 1):
             t_gen_0 = time.perf_counter()
-            gen_evals: List[Tuple[DiscreteConfig, float]] = []
+            gen_evals: list[tuple[DiscreteConfig, float]] = []
 
             for cand in population:
                 model = self.model_factory(cand)
@@ -162,7 +158,7 @@ class HybridBilevelOptimizer:
             wall_time_ms=total_dt,
         )
 
-    def log_results(self, result: BilevelResult, console: Optional[Console] = None) -> None:
+    def log_results(self, result: BilevelResult, console: Console | None = None) -> None:
         """Render a formatted Rich table of bilevel optimization progress."""
         c = console or Console()
         c.rule("[bold cyan]Hybrid Bilevel Optimization Summary (SGD + Evolution)[/bold cyan]")

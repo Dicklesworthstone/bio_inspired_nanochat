@@ -23,17 +23,24 @@ import math
 import numbers
 import os
 import platform
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field, is_dataclass
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Any
 
 from rich.console import Console
 
 from bio_inspired_nanochat.checkpoint_manager import _git_sha, config_hash
+from bio_inspired_nanochat.common import decouple_config
 from bio_inspired_nanochat.metrics_schema import Direction, get_metric, validate_metrics
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_REGISTRY = os.path.join("results", "registry.jsonl")
+# The tracked corpus is the default. ``BIO_RESULTS_REGISTRY`` (``.env`` or environment)
+# redirects every harness that does not pass an explicit path — the test suite points it
+# at a throwaway directory so pytest runs can never append to the committed registry
+# (the 2026-08 pollution: 41 rows whose artifact paths were pytest temp dirs).
+TRACKED_REGISTRY = os.path.join("results", "registry.jsonl")
+DEFAULT_REGISTRY = str(decouple_config("BIO_RESULTS_REGISTRY", default=TRACKED_REGISTRY))
 _HARNESSES = ("train", "eval", "tune")
 
 
@@ -41,15 +48,15 @@ _HARNESSES = ("train", "eval", "tune")
 class RunRecord:
     run_id: str
     harness: str
-    metrics: Dict[str, float]
-    git_sha: Optional[str] = None
-    config_hash: Optional[str] = None
-    seed: Optional[int] = None
-    hardware: Optional[str] = None
-    dataset_shards: List[str] = field(default_factory=list)
-    timestamp: Optional[float] = None
+    metrics: dict[str, float]
+    git_sha: str | None = None
+    config_hash: str | None = None
+    seed: int | None = None
+    hardware: str | None = None
+    dataset_shards: list[str] = field(default_factory=list)
+    timestamp: float | None = None
     notes: str = ""
-    verdict: Optional[str] = None
+    verdict: str | None = None
     eligible_for_best: bool = True
 
     def __post_init__(self) -> None:
@@ -103,7 +110,7 @@ class RunRecord:
         return asdict(self)
 
     @classmethod
-    def from_json(cls, d: Mapping[str, Any]) -> "RunRecord":
+    def from_json(cls, d: Mapping[str, Any]) -> RunRecord:
         if not isinstance(d, Mapping):
             raise TypeError("registry record must be a JSON object")
         known = set(cls.__dataclass_fields__)
@@ -141,11 +148,11 @@ def make_record(
     run_id: str,
     config: Any = None,
     syn_cfg: Any = None,
-    seed: Optional[int] = None,
-    dataset_shards: Optional[List[str]] = None,
-    timestamp: Optional[float] = None,
+    seed: int | None = None,
+    dataset_shards: list[str] | None = None,
+    timestamp: float | None = None,
     notes: str = "",
-    verdict: Optional[str] = None,
+    verdict: str | None = None,
     eligible_for_best: bool = True,
 ) -> RunRecord:
     """Build a provenance-stamped, schema-valid RunRecord.
@@ -202,7 +209,7 @@ def append_record(record: RunRecord, path: str = DEFAULT_REGISTRY) -> None:
         f.write(encoded + "\n")
 
 
-def _strict_json_object(pairs: List[tuple[str, Any]]) -> dict[str, Any]:
+def _strict_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     """Build a JSON object while rejecting ambiguous duplicate field names."""
     result: dict[str, Any] = {}
     for key, value in pairs:
@@ -217,10 +224,10 @@ def _reject_json_constant(value: str) -> None:
     raise ValueError(f"non-standard JSON constant {value!r}")
 
 
-def read_records(path: str = DEFAULT_REGISTRY) -> List[RunRecord]:
+def read_records(path: str = DEFAULT_REGISTRY) -> list[RunRecord]:
     if not os.path.exists(path):
         return []
-    out: List[RunRecord] = []
+    out: list[RunRecord] = []
     with open(path, encoding="utf-8") as f:
         for line_number, line in enumerate(f, start=1):
             line = line.strip()
@@ -244,7 +251,7 @@ def read_records(path: str = DEFAULT_REGISTRY) -> List[RunRecord]:
     return out
 
 
-def best_record(records: List[RunRecord], metric: str) -> Optional[RunRecord]:
+def best_record(records: list[RunRecord], metric: str) -> RunRecord | None:
     """The record optimizing `metric` per its schema direction (lower/higher better)."""
     spec = get_metric(metric)
     if spec is None:
@@ -264,7 +271,7 @@ def best_record(records: List[RunRecord], metric: str) -> Optional[RunRecord]:
     return sorted(have, key=lambda r: r.metrics[metric], reverse=reverse)[0]
 
 
-def summarize(records: List[RunRecord], *, harness: Optional[str] = None, limit: int = 20) -> str:
+def summarize(records: list[RunRecord], *, harness: str | None = None, limit: int = 20) -> str:
     for record in records:
         if not isinstance(record, RunRecord):
             raise TypeError("records must contain only RunRecord instances")
@@ -281,7 +288,7 @@ def summarize(records: List[RunRecord], *, harness: Optional[str] = None, limit:
     return "\n".join(lines)
 
 
-def _main(argv: Optional[List[str]] = None) -> int:
+def _main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Query the bio_inspired_nanochat results registry.")
     ap.add_argument("command", choices=["list", "best"])
     ap.add_argument("--path", default=DEFAULT_REGISTRY)

@@ -24,18 +24,27 @@ import hmac
 import json
 import math
 import re
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, field, fields, replace
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Mapping, Protocol, Sequence, cast
+from typing import Any, Protocol, cast
 
 import numpy as np
 from rich.console import Console
 from rich.table import Table
 
-from bio_inspired_nanochat.ablation_registry import validate_config
+from bio_inspired_nanochat.ablation_registry import (
+    MAX_SAFE_INTEGER,
+    SUPPORTED_SYNAPTIC_GRANULARITIES,
+    synaptic_config_schema_errors,
+    validate_config,
+)
 from bio_inspired_nanochat.checkpoint_manager import config_hash
-from bio_inspired_nanochat.composition import composition_eligibility, pairwise_compatible
+from bio_inspired_nanochat.composition import (
+    composition_eligibility,
+    pairwise_compatible,
+)
 from bio_inspired_nanochat.cusp_certificate import certify_retention
 from bio_inspired_nanochat.eval_stats import (
     bootstrap_ci,
@@ -75,9 +84,6 @@ _REQUIRED_GATE_KEYS = (
     "composition",
 )
 _SUPPORTED_PREDICTIVE_MODES = frozenset({"straight_through", "gumbel_sigmoid_ste"})
-_SUPPORTED_SYNAPTIC_GRANULARITIES = frozenset(
-    member.value for member in SynapticGranularity
-)
 _PREDICTIVE_ALPHA = 0.05
 _PREDICTIVE_BOOTSTRAP_SAMPLES = 10_000
 _PREDICTIVE_BOOTSTRAP_SEED = 20260824
@@ -96,7 +102,6 @@ _LIVE_TUR_SCOPE = (
 )
 _MAX_CUSP_EPS = SynapticConfig().cusp_eps_max
 _MAX_COMPOSITION_EPS = 0.5
-_MAX_SAFE_INTEGER = 2**53 - 1
 _MAX_EVIDENCE_BYTES = 16 * 1024 * 1024
 _HEX_16_RE = re.compile(r"^[0-9a-f]{16}$")
 _HEX_40_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -157,7 +162,7 @@ def _required_int(
     name: str,
     *,
     minimum: int = 0,
-    maximum: int = _MAX_SAFE_INTEGER,
+    maximum: int = MAX_SAFE_INTEGER,
 ) -> int:
     if type(value) is not int:
         raise TypeError(f"{name} must be a JSON integer")
@@ -178,10 +183,10 @@ def _required_finite_float(
 ) -> float:
     if type(value) not in (int, float):
         raise TypeError(f"{name} must be a JSON number")
-    if type(value) is int and abs(value) > _MAX_SAFE_INTEGER:
+    if type(value) is int and abs(value) > MAX_SAFE_INTEGER:
         raise ValueError(
             f"{name} integer input must lie within "
-            f"[-{_MAX_SAFE_INTEGER}, {_MAX_SAFE_INTEGER}]"
+            f"[-{MAX_SAFE_INTEGER}, {MAX_SAFE_INTEGER}]"
         )
     try:
         result = float(cast(float | int, value))
@@ -206,10 +211,10 @@ def _numeric_or_none(value: object, name: str) -> None:
     """Validate an in-process measurement while allowing non-finite refusal evidence."""
     if value is not None and type(value) not in (int, float):
         raise TypeError(f"{name} must be a number or None")
-    if type(value) is int and abs(value) > _MAX_SAFE_INTEGER:
+    if type(value) is int and abs(value) > MAX_SAFE_INTEGER:
         raise ValueError(
             f"{name} integer input must lie within "
-            f"[-{_MAX_SAFE_INTEGER}, {_MAX_SAFE_INTEGER}]"
+            f"[-{MAX_SAFE_INTEGER}, {MAX_SAFE_INTEGER}]"
         )
 
 
@@ -501,7 +506,7 @@ class ModelIdentity:
             raise ValueError("git_sha must be a full 40-character lowercase revision digest")
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, Any]) -> "ModelIdentity":
+    def from_dict(cls, payload: Mapping[str, Any]) -> ModelIdentity:
         _exact_keys(
             payload,
             {
@@ -569,7 +574,7 @@ class StabilityObservation:
         monitor: LyapunovMonitor,
         *,
         thresholds: GuardThresholds | None = None,
-    ) -> "StabilityObservation":
+    ) -> StabilityObservation:
         summary = monitor.summary()
         free_energy = [record.F for record in monitor.records]
         free_energy_deltas = [
@@ -610,7 +615,7 @@ class StabilityObservation:
         records: Sequence[TorchStepRecord],
         *,
         thresholds: GuardThresholds | None = None,
-    ) -> "StabilityObservation":
+    ) -> StabilityObservation:
         """Aggregate records captured from the actual torch-native guarded recurrence."""
         threshold = thresholds or GuardThresholds()
         steps = 0
@@ -665,7 +670,7 @@ class StabilityObservation:
         }
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, Any]) -> "StabilityObservation":
+    def from_dict(cls, payload: Mapping[str, Any]) -> StabilityObservation:
         _exact_keys(
             payload,
             {
@@ -762,14 +767,14 @@ class PredictiveSeedObservation:
     @classmethod
     def from_evidence(
         cls, evidence: PredictiveThermoEvidence
-    ) -> "PredictiveSeedObservation":
+    ) -> PredictiveSeedObservation:
         return cls(
             evidence=evidence,
             artifact_sha256=_canonical_digest(asdict(evidence)),
         )
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, Any]) -> "PredictiveSeedObservation":
+    def from_dict(cls, payload: Mapping[str, Any]) -> PredictiveSeedObservation:
         _exact_keys(payload, {"evidence", "artifact_sha256"}, "predictive seed")
         return cls(
             evidence=_predictive_evidence_from_dict(
@@ -874,7 +879,7 @@ class TargetCalibrationObservation:
         mc_dropout_ece: float,
         mc_dropout_ood_auroc: float,
         passed: bool,
-    ) -> "TargetCalibrationObservation":
+    ) -> TargetCalibrationObservation:
         values = {
             "target_artifact_sha256": target_artifact_sha256,
             "target_run_id": target_provenance.run_id,
@@ -916,7 +921,7 @@ class TargetCalibrationObservation:
         cls,
         report: Any,
         target: PredictiveSeedObservation,
-    ) -> "TargetCalibrationObservation":
+    ) -> TargetCalibrationObservation:
         thermo = report.methods["thermo_uq"]
         softmax = report.methods["softmax_entropy"]
         mc_dropout = report.methods["mc_dropout"]
@@ -949,7 +954,7 @@ class TargetCalibrationObservation:
         )
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, Any]) -> "TargetCalibrationObservation":
+    def from_dict(cls, payload: Mapping[str, Any]) -> TargetCalibrationObservation:
         expected = {data_field.name for data_field in fields(cls)}
         _exact_keys(payload, expected, "target calibration")
         return cls(
@@ -1105,7 +1110,7 @@ class PredictiveMetricComparisonObservation:
     @classmethod
     def from_dict(
         cls, payload: Mapping[str, Any]
-    ) -> "PredictiveMetricComparisonObservation":
+    ) -> PredictiveMetricComparisonObservation:
         expected = {field.name for field in fields(cls)}
         _exact_keys(payload, expected, "predictive metric comparison")
         return cls(
@@ -1177,7 +1182,7 @@ class LiveCrooksPointObservation:
             _required_finite_float(getattr(self, name), f"live Crooks {name}")
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, Any]) -> "LiveCrooksPointObservation":
+    def from_dict(cls, payload: Mapping[str, Any]) -> LiveCrooksPointObservation:
         expected = {data_field.name for data_field in fields(cls)}
         _exact_keys(payload, expected, "live Crooks point")
         return cls(
@@ -1341,7 +1346,7 @@ class LiveFTSeedObservation:
         _required_bool(self.passed, "live FT passed")
 
     @classmethod
-    def from_experiment_report(cls, report: Any) -> "LiveFTSeedObservation":
+    def from_experiment_report(cls, report: Any) -> LiveFTSeedObservation:
         """Adapt one canonical experiment report using only producer-owned provenance."""
         result = report.live_release_ft
         provenance = report.predictive_thermo_evidence.provenance
@@ -1385,7 +1390,7 @@ class LiveFTSeedObservation:
         )
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, Any]) -> "LiveFTSeedObservation":
+    def from_dict(cls, payload: Mapping[str, Any]) -> LiveFTSeedObservation:
         expected = {data_field.name for data_field in fields(cls)}
         _exact_keys(payload, expected, "live FT seed")
         curve = payload.get("crooks_curve")
@@ -1552,7 +1557,7 @@ class LiveTURObservation:
         _required_bool(self.satisfied, "live TUR satisfied")
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, Any]) -> "LiveTURObservation":
+    def from_dict(cls, payload: Mapping[str, Any]) -> LiveTURObservation:
         expected = {data_field.name for data_field in fields(cls)}
         _exact_keys(payload, expected, "live TUR")
         return cls(
@@ -1719,7 +1724,7 @@ class MatchedSeedStatisticsObservation:
         alpha: float = _PREDICTIVE_ALPHA,
         fixed_policy_applied: bool,
         passed: bool,
-    ) -> "MatchedSeedStatisticsObservation":
+    ) -> MatchedSeedStatisticsObservation:
         """Construct a digest-bound source report from its complete raw policy inputs."""
         comparison_tuple = tuple(comparisons)
         live_ft_tuple = tuple(live_ft_seeds)
@@ -1768,7 +1773,7 @@ class MatchedSeedStatisticsObservation:
         )
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, Any]) -> "MatchedSeedStatisticsObservation":
+    def from_dict(cls, payload: Mapping[str, Any]) -> MatchedSeedStatisticsObservation:
         expected = {field.name for field in fields(cls)}
         _exact_keys(payload, expected, "predictive statistics")
         comparisons = payload.get("comparisons")
@@ -1916,7 +1921,7 @@ class PredictiveCalibrationObservation:
         target_calibration: TargetCalibrationObservation,
         expected_sites: Sequence[tuple[str, int]],
         statistics: MatchedSeedStatisticsObservation,
-    ) -> "PredictiveCalibrationObservation":
+    ) -> PredictiveCalibrationObservation:
         return cls(
             identity=identity,
             expected_sites=tuple(expected_sites),
@@ -1933,7 +1938,7 @@ class PredictiveCalibrationObservation:
         report: Any,
         *,
         target_report: Any,
-    ) -> "PredictiveCalibrationObservation":
+    ) -> PredictiveCalibrationObservation:
         """Adapt explicit target and cohort producer reports into live-bound evidence."""
         reports = tuple(sorted(report.reports, key=lambda item: item.config.seed))
         if len(reports) < 2:
@@ -2157,7 +2162,7 @@ class PredictiveCalibrationObservation:
     @classmethod
     def from_dict(
         cls, payload: Mapping[str, Any]
-    ) -> "PredictiveCalibrationObservation":
+    ) -> PredictiveCalibrationObservation:
         _exact_keys(
             payload,
             {
@@ -2284,7 +2289,7 @@ class RobustnessRecordObservation:
     @classmethod
     def from_record(
         cls, record: TropicalCertificateRecord
-    ) -> "RobustnessRecordObservation":
+    ) -> RobustnessRecordObservation:
         values = {
             "step": record.step,
             "scope": record.certificate_scope.value,
@@ -2334,7 +2339,7 @@ class RobustnessRecordObservation:
         )
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, Any]) -> "RobustnessRecordObservation":
+    def from_dict(cls, payload: Mapping[str, Any]) -> RobustnessRecordObservation:
         expected = {field.name for field in fields(cls)}
         _exact_keys(payload, expected, "robustness record")
         readout = payload.get("readout_certified")
@@ -2428,7 +2433,7 @@ class RobustnessObservation:
     @classmethod
     def from_monitor(
         cls, identity: ModelIdentity, monitor: TropicalCertificateMonitor
-    ) -> "RobustnessObservation":
+    ) -> RobustnessObservation:
         observation = cls(
             identity=identity,
             records=tuple(
@@ -2448,7 +2453,7 @@ class RobustnessObservation:
         }
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, Any]) -> "RobustnessObservation":
+    def from_dict(cls, payload: Mapping[str, Any]) -> RobustnessObservation:
         _exact_keys(payload, {"identity", "records"}, "robustness")
         records = payload.get("records")
         if not isinstance(records, list):
@@ -2566,10 +2571,10 @@ class GuaranteeBundle:
             f"- Declared Git revision: {_markdown_text(self.identity.git_sha)}",
             f"- Generated: {_markdown_text(self.generated_at)}",
             "",
-            "This card is not a general model-safety guarantee. It composes narrow runtime "
+            ("This card is not a general model-safety guarantee. It composes narrow runtime "
             "certificates and does not promote a selection "
             "radius into an output guarantee, a local release theorem into predictive calibration, "
-            "or a fallback-covered step into a structure-preserving proof.",
+            "or a fallback-covered step into a structure-preserving proof."),
             "",
             "| Gate | Verdict | Claim | Fallback |",
             "| --- | --- | --- | --- |",
@@ -2659,52 +2664,6 @@ def _markdown_cell(value: str) -> str:
     return _markdown_text(value)
 
 
-def _synaptic_config_schema_errors(cfg: SynapticConfig) -> list[str]:
-    errors: list[str] = []
-    for config_field in fields(cfg):
-        value = getattr(cfg, config_field.name)
-        default = config_field.default
-        if type(default) is bool:
-            valid = type(value) is bool
-            expected = "bool"
-        elif type(default) is int:
-            valid = (
-                type(value) is int
-                and 0 <= value <= _MAX_SAFE_INTEGER
-            )
-            expected = f"non-negative int <= {_MAX_SAFE_INTEGER}"
-        elif type(default) is float:
-            valid = type(value) in (int, float)
-            if valid and type(value) is int:
-                valid = abs(value) <= _MAX_SAFE_INTEGER
-            if valid:
-                try:
-                    valid = math.isfinite(float(value))
-                except (OverflowError, ValueError):
-                    valid = False
-            expected = f"finite float or safe integer <= {_MAX_SAFE_INTEGER}"
-        elif isinstance(default, SynapticGranularity):
-            valid = type(value) is SynapticGranularity or (
-                type(value) is str and value in _SUPPORTED_SYNAPTIC_GRANULARITIES
-            )
-            expected = "one of " + ", ".join(sorted(_SUPPORTED_SYNAPTIC_GRANULARITIES))
-        elif type(default) is str:
-            valid = type(value) is str
-            expected = "string"
-        else:  # pragma: no cover - schema additions must select an explicit policy
-            valid = False
-            expected = f"unsupported schema type {type(default).__name__}"
-        if not valid:
-            errors.append(f"{config_field.name} must be {expected}")
-    if type(cfg.stochastic_mode) is str and cfg.stochastic_mode not in {
-        "gumbel_sigmoid_ste",
-        "straight_through",
-        "normal_reparam",
-    }:
-        errors.append("stochastic_mode is not a supported literal")
-    return errors
-
-
 def _certificate_config_errors(cfg: SynapticConfig) -> list[str]:
     """Domains required by the cusp and composition certificate calculations."""
     errors: list[str] = []
@@ -2763,7 +2722,7 @@ def _synaptic_config_from_dict(payload: Mapping[str, Any]) -> SynapticConfig:
             try:
                 values[name] = SynapticGranularity(raw)
             except ValueError as exc:
-                expected = ", ".join(sorted(_SUPPORTED_SYNAPTIC_GRANULARITIES))
+                expected = ", ".join(sorted(SUPPORTED_SYNAPTIC_GRANULARITIES))
                 raise ValueError(
                     f"synaptic_config.{name} must be one of {expected}"
                 ) from exc
@@ -2772,7 +2731,7 @@ def _synaptic_config_from_dict(payload: Mapping[str, Any]) -> SynapticConfig:
         else:  # pragma: no cover - fail closed on future unsupported fields
             raise TypeError(f"unsupported SynapticConfig schema field {name}")
     cfg = SynapticConfig(**values)
-    schema_errors = _synaptic_config_schema_errors(cfg)
+    schema_errors = synaptic_config_schema_errors(cfg)
     if schema_errors:
         raise ValueError("invalid SynapticConfig schema: " + "; ".join(schema_errors))
     domain_errors = _certificate_config_errors(cfg)
@@ -2787,7 +2746,7 @@ def _identity_gate(
     observations: Sequence[ModelIdentity],
 ) -> GateResult:
     normalized_hash = config_hash(asdict(cfg))
-    schema_errors = _synaptic_config_schema_errors(cfg)
+    schema_errors = synaptic_config_schema_errors(cfg)
     if schema_errors:
         config_errors, config_warnings = schema_errors, []
     else:
@@ -3957,7 +3916,7 @@ def build_guarantee_bundle(
     generated_at: str | None = None,
 ) -> GuaranteeBundle:
     """Compose all required gates without silently weakening any source certificate."""
-    schema_errors = _synaptic_config_schema_errors(config)
+    schema_errors = synaptic_config_schema_errors(config)
     if schema_errors:
         raise ValueError("invalid SynapticConfig schema: " + "; ".join(schema_errors))
     domain_errors = _certificate_config_errors(config)
@@ -3986,7 +3945,7 @@ def build_guarantee_bundle(
     return GuaranteeBundle(
         identity=identity,
         generated_at=generated_at
-        or datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        or datetime.now(UTC).isoformat(timespec="seconds"),
         gates=gates,
     )
 

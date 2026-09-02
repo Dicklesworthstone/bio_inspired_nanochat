@@ -1,8 +1,9 @@
 """Tests for Hybrid Bilevel Optimizer (bead `hea.4`)."""
 
 import random
+
 import torch
-import torch.nn as nn
+from torch import nn
 
 from bio_inspired_nanochat.hybrid_optimizer import (
     BilevelResult,
@@ -34,7 +35,6 @@ def test_discrete_config_mutation():
     assert mutated.stochastic_mode in ["normal_reparam", "bernoulli", "gumbel"]
     assert mutated.rank_eligibility in [4, 8, 16]
     assert mutated.attn_topk in [16, 32, 64]
-    assert mutated.structural_every in [0, 2, 4]
 
 
 def test_bilevel_optimization_progress():
@@ -83,8 +83,8 @@ def test_rich_table_logging():
         population_size=4,
         inner_steps=5,
         history=[
-            {"generation": 1, "best_loss": 1.10, "mean_loss": 1.30, "best_cfg": {"stochastic_mode": "normal_reparam", "rank_eligibility": 8, "attn_topk": 32, "structural_every": 0}, "wall_time_ms": 10.0},
-            {"generation": 2, "best_loss": 0.75, "mean_loss": 0.90, "best_cfg": {"stochastic_mode": "normal_reparam", "rank_eligibility": 16, "attn_topk": 32, "structural_every": 0}, "wall_time_ms": 10.0},
+            {"generation": 1, "best_loss": 1.10, "mean_loss": 1.30, "best_cfg": {"stochastic_mode": "normal_reparam", "rank_eligibility": 8, "attn_topk": 32}, "wall_time_ms": 10.0},
+            {"generation": 2, "best_loss": 0.75, "mean_loss": 0.90, "best_cfg": {"stochastic_mode": "normal_reparam", "rank_eligibility": 16, "attn_topk": 32}, "wall_time_ms": 10.0},
         ],
         wall_time_ms=25.0,
     )

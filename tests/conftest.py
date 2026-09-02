@@ -16,7 +16,19 @@ Conventions (see TESTING.md):
 
 from __future__ import annotations
 
+import os
+import tempfile
 from pathlib import Path
+
+# Redirect the results registry BEFORE anything imports ``results_registry`` (which
+# resolves its default path at import time) and before any harness subprocess is
+# spawned (children inherit the environment). Tests that exercise the registry pass an
+# explicit ``tmp_path`` anyway; this guard is for every code path that does not, so a
+# pytest run can never append rows to the committed ``results/registry.jsonl``.
+os.environ.setdefault(
+    "BIO_RESULTS_REGISTRY",
+    os.path.join(tempfile.mkdtemp(prefix="bio-nanochat-test-registry-"), "registry.jsonl"),
+)
 
 import pytest
 import torch
