@@ -1713,6 +1713,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
             dead_expert_threshold=args.dead_expert_threshold,
             continual_tasks=args.continual_tasks,
             continual_exposures=args.continual_exposures,
+            hebb_chunk_len=args.hebb_chunk_len,
             init_type=args.init_type,
             use_moe=args.use_moe,
             num_experts=args.num_experts,
@@ -1848,7 +1849,6 @@ def _run_batch(
                         dead_expert_threshold=args.dead_expert_threshold,
                         continual_tasks=args.continual_tasks,
                         continual_exposures=args.continual_exposures,
-                        hebb_chunk_len=args.hebb_chunk_len,
                         error=repr(e),
                     )
                     if ddp_rank == 0:

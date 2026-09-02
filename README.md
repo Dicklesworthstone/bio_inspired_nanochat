@@ -558,6 +558,7 @@ Model width is derived from `--depth` (the nanochat convention). For two GPUs us
 - `--syn_cfg.<field>=<value>` - Override any of the 109 `SynapticConfig` fields; values are typed from the dataclass and validated, so a typo or an opt-in mechanism enabled without its prerequisite fails before training starts. Examples: `--syn_cfg.stochastic_train_frac=0.25`, `--syn_cfg.stochastic_mode=gumbel_sigmoid_ste`, `--syn_cfg.stochastic_tau=0.5`, `--syn_cfg.bdnf_scale=0` (ablate BDNF), `--syn_cfg.bistable_latch=1`
 - `--load_cmaes_params=best_params.json` - Overlay a CMA-ES result file instead
 - `--splitmerge_every=N` - Expert lifecycle interval (0 = disable; any N > 0 switches the MLPs to `SynapticMoE`)
+- `--hebb_chunk_len=N` - Chunked training regime for the online fast weights (0 = off): each batch is read N tokens at a time through a cache so the Hebbian writes made on earlier tokens are in force for later ones, as during generation; truncated back-propagation at chunk boundaries. Single-process only for now. Whether it lets the fast weights help is the open experiment (bead `hwxb.9`)
 - `--sm_homeostasis_guards=1` - Ramp freshly seeded experts in and floor their energy after lifecycle events (`uta.6`)
 - `--neuromod_enabled=1` - Turn on the DA/ACh/NE bus
 

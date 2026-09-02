@@ -153,6 +153,39 @@ def test_chat_cli_generates_from_the_base_checkpoint(quick_start):
     assert reply, "the base checkpoint must generate at least one token"
 
 
+def test_chunked_regime_trains_and_is_recorded(quick_start):
+    """--hebb_chunk_len (bead hwxb.8) runs through the real script and lands in the registry row."""
+    run = _run(
+        [
+            "scripts.base_train",
+            "--synapses=1",
+            "--depth=2",
+            "--max_seq_len=64",
+            "--device_batch_size=2",
+            "--total_batch_size=128",
+            "--num_iterations=2",
+            "--eval_every=2",
+            "--eval_tokens=128",
+            "--core_metric_every=-1",
+            "--sample_every=-1",
+            "--device_type=cpu",
+            f"--model_tag={MODEL_TAG}_chunked",
+            "--hebb_chunk_len=8",
+        ],
+        quick_start["env"],
+        timeout=1500,
+    )
+    assert run.returncode == 0, run.stderr[-4000:]
+    rows = [
+        json.loads(line)
+        for line in (quick_start["base_dir"] / "registry.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    chunked = [r for r in rows if r.get("harness") == "train" and r["config"]["training"].get("hebb_chunk_len") == 8]
+    assert len(chunked) == 1, [r["config"]["training"] for r in rows if r.get("harness") == "train"]
+    assert math.isfinite(float(chunked[0]["metrics"]["val_bpb"]))
+
+
 def test_unknown_syn_cfg_field_is_refused_before_training(quick_start):
     bad = _run(
         [

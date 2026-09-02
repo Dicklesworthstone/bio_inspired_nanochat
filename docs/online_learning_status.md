@@ -56,8 +56,10 @@ stability regression in `tests/test_e2e_train_bio.py`.
    a third factor turns "amplify whatever I output" into "amplify what reduces loss".
 2. **A chunked-sequence training/eval regime** so fast-weights carry _within_ a sequence across
    forwards (single-forward-per-batch gives attention, not fast-weights, the cross-context job).
-   _2026-09-01: the evaluation half exists (`retrieval_accuracy(chunk_len=…)`, see below); the
-   training half is bridge-plan item G2._
+   _2026-09-01: the evaluation half exists (`retrieval_accuracy(chunk_len=…)`, see below).
+   2026-09-02: the training half exists too — `GPTSynaptic.chunked_train_step` behind
+   `--hebb_chunk_len` in `base_train`/`eval_matrix` (bead hwxb.8); the deciding ON-vs-OFF
+   experiment under it is bead hwxb.9._
 3. **Trained-model e2e validation** on the working-memory suite — bead **eqyk.9**.
 
 ## Ordering note for the team
