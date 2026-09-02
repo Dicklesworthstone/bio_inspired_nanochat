@@ -50,6 +50,7 @@ from bio_inspired_nanochat.common import (
     print0,
     print_banner,
 )
+from bio_inspired_nanochat.cmaes_params import extract_syn_cfg_cli_overrides
 from bio_inspired_nanochat.dataloader import (
     collate_dataloader_state_dicts,
     tokenizing_distributed_data_loader,
@@ -153,8 +154,6 @@ neuroviz_interactive_every = 25000
 # (the README's "Key Training Flags"). They are pulled out BEFORE the configurator runs
 # because it only knows the module-level settings above and would reject the dotted keys.
 # Values are typed and validated against the dataclass when the config is built below.
-from bio_inspired_nanochat.cmaes_params import extract_syn_cfg_cli_overrides
-
 sys.argv, syn_cfg_overrides = extract_syn_cfg_cli_overrides(sys.argv)
 
 # now allow CLI to override the settings via the configurator lol
@@ -840,7 +839,13 @@ while True:
                 orig_forward = model.forward
 
                 def syn_forward_wrapper(
-                    idx, targets=None, kv_cache=None, loss_reduction="mean", **kwargs
+                    idx,
+                    targets=None,
+                    kv_cache=None,
+                    loss_reduction="mean",
+                    *,
+                    orig_forward=orig_forward,  # bind now: this closure is rebuilt every eval
+                    **kwargs,
                 ):
                     if targets is not None:
                         logits, loss = orig_forward(

@@ -46,7 +46,8 @@ Input: Discrete search space Z, Population size P, Generations G, Inner SGD step
 | `stochastic_mode` (`normal`, `gumbel`, `bernoulli`) | **Outer Loop: NES / CMA-ES** | Categorical choice, non-differentiable |
 | `attn_topk` ($k \in \{16, 32, 64\}$) | **Outer Loop: NES / CMA-ES** | Discrete sorting threshold |
 | `rank_eligibility` ($r \in \{4, 8, 16\}$) | **Outer Loop: NES / CMA-ES** | Discrete matrix rank dimension |
-| `structural_every` ($N \in \{0, 2, 4, 8\}$) | **Outer Loop: NES / CMA-ES** | Discrete hook execution cadence |
+
+(A fourth knob, `structural_every`, was removed on 2026-09-01: the hook it scheduled was an empty block, so it never affected the model.)
 
 ---
 

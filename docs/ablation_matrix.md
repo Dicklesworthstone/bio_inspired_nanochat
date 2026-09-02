@@ -151,8 +151,8 @@ conf = am.confirmation_columns(survivors)            # anchors + survivors
   they are **not** in this matrix even though the README describes them. Registering them in
   `ablation_registry.MECHANISMS` (with their prerequisites) is the prerequisite for an `add_neuromod`
   / `bio_no_neuromod` column. Tracked as a follow-up under the `hwxb.5` phase.
-- **Structural lifecycle** (split/merge) is toggled at the *model* level (`structural_every` /
-  `splitmerge_every`), not via a `SynapticConfig` mechanism flag; `enable_metabolism` covers the
+- **Structural lifecycle** (split/merge) is toggled at the *training-script* level
+  (`--splitmerge_every`), not via a `SynapticConfig` mechanism flag; `enable_metabolism` covers the
   per-expert energy dynamics. A dedicated lifecycle on/off column should be added once the runner
   exposes the model-level toggle to the matrix.
 - The **feasible mechanism set** and the **final token budget** are pinned by `hwxb.4.5`; this spec is

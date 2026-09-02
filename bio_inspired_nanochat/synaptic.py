@@ -631,7 +631,7 @@ _PRESYN_RUNTIME_BUFFER_NAMES = (
 )
 
 
-def _runtime_buffer(presyn: SynapticPresyn, name: str) -> Tensor:
+def _runtime_buffer(presyn: "SynapticPresyn", name: str) -> Tensor:
     value = getattr(presyn, name)
     if not torch.is_tensor(value):
         raise TypeError(f"presyn runtime buffer {name!r} must be a tensor")
@@ -671,7 +671,7 @@ def _unflatten_presyn_state(
     return state
 
 
-def _runtime_buffer_snapshot(presyn: SynapticPresyn) -> tuple[Tensor, ...]:
+def _runtime_buffer_snapshot(presyn: "SynapticPresyn") -> tuple[Tensor, ...]:
     return tuple(
         _runtime_buffer(presyn, name).detach().clone()
         for name in _PRESYN_RUNTIME_BUFFER_NAMES
@@ -1020,7 +1020,7 @@ def _copy_presyn_state_prefix_(state: dict[str, Any], prefix: dict[str, Any]) ->
 
 
 def _release_recurrence_group(
-    presyn: SynapticPresyn,
+    presyn: "SynapticPresyn",
     state: dict[str, Any],
     drive: Tensor,
     idx: Tensor,
@@ -1264,7 +1264,7 @@ def _release_recurrence_group(
 
 
 def _checkpoint_recurrence_segment(
-    presyn: SynapticPresyn,
+    presyn: "SynapticPresyn",
     state: dict[str, Any],
     drives: list[Tensor],
     idxs: list[Tensor],
@@ -1400,7 +1400,7 @@ def _checkpoint_recurrence_segment(
 
 
 def chunked_recurrence(
-    presyn: SynapticPresyn,
+    presyn: "SynapticPresyn",
     state: dict[str, Any],
     drives: list[Tensor],
     idxs: list[Tensor],

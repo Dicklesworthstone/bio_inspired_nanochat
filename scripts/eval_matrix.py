@@ -23,7 +23,7 @@ from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal, TypeVar, cast
+from typing import Any, Literal, cast
 
 from rich.console import Console
 from rich.progress import (
@@ -188,12 +188,11 @@ class ContinualMetricSummary:
 
 
 ComputeRuntime = tuple[bool, int, int, int, torch.device]
-_ListEntry = TypeVar("_ListEntry", int, str)
 
 
-def _require_unique[ListEntry: (int, str)](values: Sequence[_ListEntry], *, name: str) -> None:
-    seen: set[_ListEntry] = set()
-    duplicates: list[_ListEntry] = []
+def _require_unique[ListEntry: (int, str)](values: Sequence[ListEntry], *, name: str) -> None:
+    seen: set[ListEntry] = set()
+    duplicates: list[ListEntry] = []
     for value in values:
         if value in seen and value not in duplicates:
             duplicates.append(value)

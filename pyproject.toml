@@ -49,6 +49,16 @@ dev = [
     "pytest-cov>=5.0.0",
 ]
 
+[tool.ruff.lint]
+# Pin the rule set the codebase is actually held to. The repo never declared one, so it
+# inherited ruff's defaults; the 2026-08-27 lock bump (0.14 -> 0.16) broadened those
+# defaults and left ~1,400 new findings repo-wide, which turned the changed-files quality
+# gate into a guaranteed failure for any push touching an older file. This is the set
+# that was in force before the bump (pyflakes + the pycodestyle error classes). Broaden
+# it deliberately, one rule family at a time, with the corresponding cleanup in the same
+# change.
+select = ["E4", "E7", "E9", "F"]
+
 [tool.pytest.ini_options]
 # Marker taxonomy (eqyk.1). Use markers to scope CI runs:
 #   unit  - fast, deterministic, no GPU/network/data downloads (PR gate)
