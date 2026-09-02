@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from typing import Dict, Optional, Tuple
 
 from bio_inspired_nanochat.torch_imports import torch, nn, Tensor
-from bio_inspired_nanochat.synaptic import SynapticLinear, SynapticPresyn
+from bio_inspired_nanochat.synaptic import SynapticConfig, SynapticLinear, SynapticPresyn
 
 
 @dataclass
@@ -179,3 +179,17 @@ class NeuromodulatoryBus(nn.Module):
         out = {f"nm/{k}": v for k, v in self.levels().items()}
         out.update({f"nm/gain_{k}": v for k, v in self.gains().items()})
         return out
+
+
+def bus_for_config(
+    syn_cfg: SynapticConfig, cfg: Optional[NeuromodConfig] = None
+) -> Optional[NeuromodulatoryBus]:
+    """The training-harness hook behind ``SynapticConfig.neuromod_enabled``.
+
+    Returns a fresh :class:`NeuromodulatoryBus` when the synaptic config asks for one and
+    ``None`` otherwise, so ``scripts/base_train.py`` and ``scripts/eval_matrix.py`` build the
+    bus from the same flag instead of each re-deriving it.
+    """
+    if not bool(syn_cfg.neuromod_enabled):
+        return None
+    return NeuromodulatoryBus(cfg)

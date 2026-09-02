@@ -2,7 +2,7 @@
 
 > **Generated** by `scripts/param_census.py` (bead `bio_inspired_nanochat-8j9.6`). Do not hand-edit; re-run `uv run python -m scripts.param_census`. Machine-readable companion: [`parameter_census.json`](./parameter_census.json).
 
-`SynapticConfig` has **109 fields** — **108 LIVE** (read by runtime code) and **1 DEAD** (declared, read by nothing). This is the ground truth behind the README's *“48-parameter genome”* framing, which conflated three different counts.
+`SynapticConfig` has **109 fields** — **109 LIVE** (read by runtime code) and **0 DEAD** (declared, read by nothing). This is the ground truth behind the README's *“48-parameter genome”* framing, which conflated three different counts.
 
 ## What the counts actually are
 
@@ -10,14 +10,13 @@
 
 - **The wired search space is 10 params**, not 48. CMA-ES Phase 1 (`TOP10_PARAM_SPECS` in `scripts/tune_bio_params.py`) tunes: `alpha_ca`, `complexin_bias`, `doc2_gain`, `lambda_loge`, `nsf_recover`, `prime_rate`, `syt_fast_kd`, `syt_slow_kd`, `tau_c`, `unprime_per_release`. The 48-/82-parameter figures are the *aspirational* two-phase plan, not shipping code.
 
-- **The config surface is 109 hyperparameters**, of which 1 are dead (see prune task `8j9.5`).
+- **The config surface is 109 hyperparameters**, every one of which is read by runtime code — `8j9.5` pruned the last dead fields (`enabled`, `camkii_down`, `router_sim_threshold`, `native_metrics`, `native_plasticity`); `jyb.2` later reintroduced `native_presyn` only after wiring it to live decode.
 
 
 ## Dead fields (read by nothing)
 
-| Field | Subsystem | Default | Note |
-|---|---|---|---|
-| `neuromod_enabled` | toggle | `False` | — |
+None — every `SynapticConfig` field is read on some runtime path (invariant enforced by `tests/test_param_census.py`).
+
 
 ## Full census by subsystem
 
@@ -173,7 +172,7 @@
 |---|---|---|---|---|
 | `xi_dim` | `4` | LIVE |  | bio_inspired_nanochat/ablation_registry.py:230 |
 
-### `toggle` (5/6 live)
+### `toggle` (6/6 live)
 
 | Field | Default | Status | Tuned | Read at |
 |---|---|---|---|---|
@@ -182,7 +181,7 @@
 | `enable_metabolism` | `True` | LIVE |  | bio_inspired_nanochat/hf_bio_adapter.py:164 |
 | `use_flex_attention` | `False` | LIVE |  | bio_inspired_nanochat/ablation_registry.py:300 |
 | `tropical_skeleton` | `False` | LIVE |  | bio_inspired_nanochat/ablation_registry.py:232 |
-| `neuromod_enabled` | `False` | DEAD |  | scripts only |
+| `neuromod_enabled` | `False` | LIVE |  | bio_inspired_nanochat/neuromod.py:193 |
 
 ### `native_toggle` (2/2 live)
 

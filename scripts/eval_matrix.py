@@ -1310,10 +1310,10 @@ def _run_one(
         # gates every synaptic layer after each optimizer step from this step's loss and
         # predictive entropy; without it the neuromod_enabled flag would be a silent no-op here.
         nm_bus = None
-        if neuromod_on:
-            from bio_inspired_nanochat.neuromod import NeuromodulatoryBus
+        if live_syn_cfg is not None:
+            from bio_inspired_nanochat.neuromod import bus_for_config
 
-            nm_bus = NeuromodulatoryBus()
+            nm_bus = bus_for_config(live_syn_cfg)
         with progress:
             for train_step in range(steps):
                 t0 = time.perf_counter()

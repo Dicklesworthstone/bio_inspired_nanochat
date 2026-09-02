@@ -197,6 +197,17 @@ def test_eval_matrix_without_the_flag_has_no_bus_telemetry(tmp_path):
 def test_base_train_records_and_honours_the_flag():
     src = Path("scripts/base_train.py").read_text(encoding="utf-8")
     assert "syn_cfg.neuromod_enabled = True" in src, "the CLI flag must be recorded on the model config"
-    assert "if use_syn and (neuromod_enabled or syn_cfg.neuromod_enabled):" in src, (
-        "either spelling must instantiate the bus"
+    assert "nm_bus = bus_for_config(syn_cfg)" in src, (
+        "the bus must come from the config flag, so either spelling instantiates it"
+    )
+
+
+def test_bus_for_config_follows_the_flag():
+    from bio_inspired_nanochat.neuromod import NeuromodulatoryBus, bus_for_config
+
+    assert bus_for_config(SynapticConfig()) is None
+    bus = bus_for_config(SynapticConfig(neuromod_enabled=True))
+    assert isinstance(bus, NeuromodulatoryBus)
+    assert bus.gains() == {"plasticity": 1.0, "explore": 1.0, "attend": 1.0, "global": 1.0}, (
+        "a fresh bus is neutral until its first update"
     )

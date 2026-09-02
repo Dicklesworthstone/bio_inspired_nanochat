@@ -2,8 +2,8 @@
   "generated_by": "scripts/param_census.py (bead bio_inspired_nanochat-8j9.6)",
   "config_class": "bio_inspired_nanochat.synaptic.SynapticConfig",
   "field_count": 109,
-  "live_count": 108,
-  "dead_count": 1,
+  "live_count": 109,
+  "dead_count": 0,
   "tuned_phase1_count": 10,
   "tuned_phase1_params": [
     "alpha_ca",
@@ -2100,20 +2100,20 @@
       "subsystem": "toggle",
       "type": "bool",
       "default": false,
-      "status": "DEAD",
+      "status": "LIVE",
       "tuned_phase1": false,
-      "runtime_read_sites": [],
+      "runtime_read_sites": [
+        "bio_inspired_nanochat/neuromod.py:193"
+      ],
       "rust_read_sites": [],
       "script_sites": [
-        "scripts/base_train.py:472",
-        "scripts/base_train.py:688"
+        "scripts/base_train.py:472"
       ],
       "test_sites": [
         "tests/test_neuromod_mechanism.py:47",
         "tests/test_neuromod_mechanism.py:63",
         "tests/test_neuromod_mechanism.py:101",
-        "tests/test_neuromod_mechanism.py:199",
-        "tests/test_neuromod_mechanism.py:200"
+        "tests/test_neuromod_mechanism.py:199"
       ],
       "note": ""
     },

@@ -685,11 +685,12 @@ if splitmerge_every > 0:
 
 # Neuromodulatory bus (hy8.1): only for synaptic models, opt-in. Default-neutral when off.
 nm_bus = None
-if use_syn and (neuromod_enabled or syn_cfg.neuromod_enabled):
-    from bio_inspired_nanochat.neuromod import NeuromodulatoryBus
+if use_syn:
+    from bio_inspired_nanochat.neuromod import bus_for_config
 
-    nm_bus = NeuromodulatoryBus()
-    if resuming:
+    # --neuromod_enabled=1 was folded into syn_cfg.neuromod_enabled above, so one flag rules.
+    nm_bus = bus_for_config(syn_cfg)
+    if nm_bus is not None and resuming:
         nm_state = train_state.get("neuromod") if train_state is not None else None
         if nm_state is None:
             raise ValueError("exact resume requires neuromodulator state when enabled")
