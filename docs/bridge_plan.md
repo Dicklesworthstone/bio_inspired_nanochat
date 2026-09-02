@@ -179,8 +179,10 @@ the NAS evaluation re-run under G3 with both health modes.
 - [x] The `moe_splitmerge` command carries `--splitmerge_every=100 --sm_health_mode=relative
   --split_health_min=1.5 --merge_health_max=0.35` and both columns share `bio_all`'s
   `SynapticConfig` (`tests/test_matrix_launch.py`).
-- [ ] CPU pilot of the pair at 2L/64d, 300 steps, 3 seeds: events fire (≥1 split, ≥1 merge) under
-  `relative` health during ordinary training, loss finite.
+- [x] CPU pilot done 2026-09-02 (2 seeds, 120 steps): **zero events under either signal**; the
+  balance loss keeps utilization within ±0.03 of the fair share, so a utilization-triggered
+  lifecycle never fires in healthy training. The finding replaces the criterion: the D1 structural
+  arm needs a demand signal the balance loss does not flatten, or a weaker balance loss.
 - [ ] `structural_nas_evaluation` re-run (8 seeds) under `relative` health: report final-loss delta
   with CI. If still worse, split/merge stays opt-in and the README says so in the lifecycle section.
 - [ ] `sx1m` closed with the numbers, whichever way they fall.

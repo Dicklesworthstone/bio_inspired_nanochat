@@ -169,6 +169,11 @@ so `structural_columns()` provides `moe_fixed` (bio_all on `SynapticMoE`, fixed 
 `moe_splitmerge` (the same plus `--splitmerge_every=100 --sm_health_mode=relative
 --split_health_min=1.5 --merge_health_max=0.35`); `moe_splitmerge − moe_fixed` is the
 lifecycle's effect. `--stage structural` launches the pair; the screening set stays at 20.
+Caveat from the 2026-09-02 CPU pilot (`results/structural_pair_pilot_2026-09-02.json`): with the
+default `moe_balance_loss=0.01` utilization stays within ±0.03 of the fair share and neither health
+signal ever fires, so the arm as specified would measure a no-op. Before D1 the arm needs a
+decision: a weaker balance loss in the structural pair, or a demand signal (loss- or
+NeuroScore-based) the balance loss does not flatten.
 
 ---
 

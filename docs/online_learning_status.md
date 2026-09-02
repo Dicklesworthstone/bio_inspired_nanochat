@@ -103,6 +103,28 @@ chunked training; script kept out of the repo until the G2 training regime exist
 Hebbian off is bit-identical between the two read regimes, as it must be; Hebbian on differs by at
 most 0.005, inside seed noise (±0.04); ON and OFF are indistinguishable (means 0.207 vs 0.212).
 
+## 2026-09-02 — pilot of the chunked TRAINING regime (bead hwxb.9; no decision)
+
+`scripts/e2e/hebbian_chunked_regime.py --budget pilot` (2 discovery seeds, 300 steps, pairs 2–8,
+chunk 4; `results/hebbian_chunked_regime_2026-09-02_pilot.json`). Recall accuracy at 8 pairs,
+chance ≈ 0.010:
+
+| Training | Read | Hebbian on (s0 / s1) | Hebbian off (s0 / s1) |
+|---|---|---|---|
+| chunked (chunk 4) | chunked | 0.000 / 0.125 | 0.016 / 0.047 |
+| chunked (chunk 4) | full | 0.000 / 0.125 | 0.016 / 0.047 |
+| full | full | 0.188 / 0.172 | 0.188 / 0.063 |
+| full | chunked | 0.172 / 0.156 | 0.188 / 0.063 |
+
+Effect at 8 pairs under chunked training and reading: +0.031 (ON − OFF), against a 3σ minimum
+detectable effect of 0.047 from the OFF arm's seed spread — not detectable at this budget. Chunked
+training costs 2.1× the step time and +0.29 final loss (truncated back-propagation at chunk
+boundaries). Controls: the planted witness is visible (ON |Δlogit| ≥ 0.80), the OFF arm's read
+regimes agree to ≤ 4e-6 (the pilot predates the 1e-4 tolerance now in the script; its JSON flag
+reflects the old `== 0` rule), and the attention baseline reads 0.45 at 2 pairs. The pilot triggers
+no decision by design; the pre-registered run (5 seeds, 2,000 steps, pairs to 16, chunk 8) was
+started 2026-09-02 14:25 UTC and its artifact will carry the decision.
+
 A model trained with full forwards never sees its own writes during training, so its slow weights
 have no reason to exploit them at read time; the chunked read changes nothing. That is the expected
 result of this probe and it is **not** the experiment that decides the claim. The deciding experiment
