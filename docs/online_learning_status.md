@@ -1,6 +1,6 @@
 # Online fast-weight learning — status & characterization (bead sax.1)
 
-_Last updated: 2026-06-11 (OrangeMill)._
+_Last updated: 2026-09-01 (measurement-regime update below; original note 2026-06-11, OrangeMill)._
 
 This note records what the online Hebbian fast-weight ("fast-weight programmer") mechanism
 **does** and **does not** do today, with measured numbers, so downstream beads build on facts
@@ -56,6 +56,8 @@ stability regression in `tests/test_e2e_train_bio.py`.
    a third factor turns "amplify whatever I output" into "amplify what reduces loss".
 2. **A chunked-sequence training/eval regime** so fast-weights carry _within_ a sequence across
    forwards (single-forward-per-batch gives attention, not fast-weights, the cross-context job).
+   _2026-09-01: the evaluation half exists (`retrieval_accuracy(chunk_len=…)`, see below); the
+   training half is bridge-plan item G2._
 3. **Trained-model e2e validation** on the working-memory suite — bead **eqyk.9**.
 
 ## Ordering note for the team
@@ -64,3 +66,39 @@ sax.1's behavioral acceptance effectively depends on hy8.2, but the graph curren
 depending on sax.1. sax.1's _mechanism_ pieces (this note + the normalized write + reset) are the
 right substrate for hy8.2; the "improves next-token prediction" validation should land with hy8.2 /
 eqyk.9, not be claimed here.
+
+## 2026-09-01 update — the measurement was blind, and noisy
+
+Two defects in how the mechanism was *measured* were found while wiring the chunked probe. Neither
+changes the mechanism; both change what the numbers above and in `hwxb.4.4` mean.
+
+**1. Every probe read the sequence in one forward, so it could not see the writes.** In a single
+teacher-forced forward the Hebbian writes are deferred (training) or applied after the matmuls
+(inference), so nothing written while the key/value pairs are read can influence the query position
+of the same forward. `retrieval_accuracy`, the working-memory suite, `fast_weight_comparison_bench`
+and the held-out-loss comparison in `hwxb.4.4` all ran in this regime. Their ON = OFF result is
+therefore not evidence about the mechanism. `synthetic_tasks.retrieval_accuracy(..., chunk_len=k)`
+and the suite now read the sequence through a KV cache `k` tokens at a time, the regime in which
+generation actually runs; `tests/test_working_memory_chunked_eval.py` shows the write routine runs
+once per chunk per synaptic linear and changes later logits.
+
+**2. Every probe ran with stochastic vesicle sampling on.** `GPTSynaptic.forward(train_mode=True)`
+was the default and also enabled stochastic release; two identical eval-mode forwards differed by up
+to 0.067 in logits. The default now follows the module's training flag, and the probes read with
+`train_mode=False, update_mem=True` (deterministic, plasticity live).
+
+**First numbers under the fixed regime** (one seed, CPU, 2 layers × 64 dims, associative recall
+with 2/4/8 pairs, batch 64 per pair count; read-only probe, no chunked training):
+
+| Model | full-forward read | `chunk_len=1` read |
+|---|---|---|
+| untrained, Hebbian on | 0.005 (chance ≈ 0.010) | 0.005 |
+| trained 300 steps under full forwards, Hebbian on | 0.224 | 0.219 |
+
+A model trained with full forwards never sees its own writes during training, so its slow weights
+have no reason to exploit them at read time; the chunked read changes nothing. That is the expected
+result of this probe and it is **not** the experiment that decides the claim. The deciding experiment
+(bridge plan G2) trains under the chunked regime — the loss is accumulated over `k`-token chunks with
+the deferred writes landing between them — and compares Hebbian ON vs OFF under chunked reading, with
+the throughput cost beside the effect. Until that runs, the "infinite local context" claim is
+**unmeasured**, not null.
