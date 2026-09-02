@@ -877,7 +877,7 @@ def test_tropical_routing_config_rejects_malformed_schedules() -> None:
     with pytest.raises(ValueError, match="tau_min"):
         TropicalRoutingConfig(tau_start=0.1, tau_min=0.2)
     with pytest.raises(ValueError, match="anneal_steps"):
-        TropicalRoutingConfig(anneal_steps=1.5)  # type: ignore[arg-type]
+        TropicalRoutingConfig(anneal_steps=1.5)  # type: ignore[arg-type]  # ty: ignore[invalid-argument-type]
     with pytest.raises(ValueError, match="barrier_end"):
         TropicalRoutingConfig(barrier_end=math.nan)
     with pytest.raises(ValueError, match="entry_windows"):

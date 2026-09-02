@@ -33,7 +33,6 @@ def _tiny_gpt2() -> GPT2LMHeadModel:
         GPT2Config(
             vocab_size=41,
             n_positions=24,
-            n_ctx=24,
             n_embd=16,
             n_layer=1,
             n_head=2,

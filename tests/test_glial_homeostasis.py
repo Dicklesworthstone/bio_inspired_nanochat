@@ -211,7 +211,7 @@ def test_toggle_and_glial_ranges_are_validated() -> None:
     )
 
     invalid = (
-        SynapticConfig(glial_homeostasis=1),  # type: ignore[arg-type]
+        SynapticConfig(glial_homeostasis=1),  # type: ignore[arg-type]  # ty: ignore[invalid-argument-type]
         SynapticConfig(glial_group_size=0),
         SynapticConfig(glial_ema_rate=0.0),
         SynapticConfig(glial_feedback_rate=1.1),

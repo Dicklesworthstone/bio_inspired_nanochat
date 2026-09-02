@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import pyarrow as pa
@@ -433,7 +434,7 @@ def test_collated_multi_rank_state_resume(sample_parquet_dir: Path) -> None:
     steps = 6
     cut_step = 2
 
-    rank_states = {}
+    rank_states: dict[int | str, dict[str, Any]] = {}
     ground_truth = {0: [], 1: []}
 
     for rank in range(world_size):

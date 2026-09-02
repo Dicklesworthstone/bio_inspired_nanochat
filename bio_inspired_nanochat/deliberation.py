@@ -609,6 +609,7 @@ class DeliberationController:
                 b_count = np.zeros(batch_size, dtype=np.int64)
             elif calcium.shape[0] != batch_size:
                 return None
+            assert c_sum is not None and b_sum is not None and c_count is not None and b_count is not None
             calcium_mean = calcium.mean(dim=1).detach().cpu().numpy()
             calcium_valid = np.isfinite(calcium_mean)
             c_sum[calcium_valid] += calcium_mean[calcium_valid]

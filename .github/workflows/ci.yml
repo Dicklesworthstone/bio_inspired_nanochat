@@ -132,6 +132,9 @@ jobs:
             uv run --no-sync python -m scripts.quality_gate --mode branch --base "$BASE" --head "${{ github.sha }}"
           fi
 
+      - name: Type check (whole tree)
+        run: uv run --no-sync ty check
+
   # ============================================================
   # Lean ↔ Python Proof Feedback
   # ============================================================

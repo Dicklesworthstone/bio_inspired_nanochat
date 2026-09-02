@@ -15,7 +15,6 @@ from bio_inspired_nanochat.gpt import (
     CausalSelfAttention as GPTAttention,
     GPT,
     GPTConfig,
-    MLP as GPTMLP,
 )
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
 from bio_inspired_nanochat.synaptic import SynapticLinear, SynapticMoE
@@ -61,7 +60,7 @@ def test_retrofit_copies_pretrained_tensors_into_slow_path(tmp_path):
 
     source_block = cast(GPTBlock, source.blocks[0])
     source_attention = cast(GPTAttention, source_block.attn)
-    source_mlp = cast(GPTMLP, source_block.mlp)
+    source_mlp = source_block.mlp
     target_block = model.h[0]
     target_dense = target_block.mlp.mlp
     assert torch.equal(model.wte.weight, source.wte.weight)
@@ -109,7 +108,7 @@ def test_retrofit_can_clone_dense_mlp_into_identical_moe_experts(tmp_path):
     assert report.expert_copies == 3
     assert torch.count_nonzero(moe.router.weight) == 0
     source_block = cast(GPTBlock, source.blocks[0])
-    source_mlp = cast(GPTMLP, source_block.mlp)
+    source_mlp = source_block.mlp
     for expert in moe.experts:
         assert torch.equal(expert.fc1.w_slow, source_mlp.c_fc.weight.T)
         assert torch.equal(expert.fc2.w_slow, source_mlp.c_proj.weight.T)

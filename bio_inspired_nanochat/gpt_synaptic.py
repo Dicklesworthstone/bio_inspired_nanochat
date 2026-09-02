@@ -648,13 +648,13 @@ class GPTSynaptic(nn.Module):
             ]
             if embedding_params:  # empty when tied (shared weight sits in the lm_head group)
                 adam_groups.append({"params": embedding_params, "lr": embedding_lr * dmodel_lr_scale})
-            adamw_kwargs = {"betas": (0.8, 0.95), "eps": 1e-10, "weight_decay": weight_decay}
+            adamw_kwargs: dict[str, Any] = {"betas": (0.8, 0.95), "eps": 1e-10, "weight_decay": weight_decay}
             adam_params = embedding_params + lm_head_params + other_params
             use_fused = (not ddp) and any(p.is_cuda for p in adam_params)
             AdamWFactory = DistAdamW if ddp else partial(torch.optim.AdamW, fused=use_fused)
             adamw_optimizer = AdamWFactory(adam_groups, **adamw_kwargs)
 
-            muon_kwargs = {"lr": matrix_lr, "momentum": 0.95}
+            muon_kwargs: dict[str, Any] = {"lr": matrix_lr, "momentum": 0.95}
             MuonFactory = DistMuon if ddp else Muon
             muon_optimizer = MuonFactory(matrix_params, **muon_kwargs)
             optimizers = [adamw_optimizer, muon_optimizer]

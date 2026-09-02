@@ -925,6 +925,60 @@
       "mathlib_revision": "a3a10db0e9d66acbebf76c5e6a135066525ac900",
       "build_command": "rch exec -- lake build",
       "build_result": "attempted-2026-08-25-rch-refused-non-compilation-command-local-fallback-lake-permission-denied"
+    },
+    {
+      "cycle_id": "reality-check-runtime-refresh-2026-09-02",
+      "frog_id": "bio_inspired_nanochat-reality-check",
+      "theorem_ids": [
+        "BioInspiredNanochat.Metriplectic.poisson_entropy_degeneracy",
+        "BioInspiredNanochat.Metriplectic.friction_energy_degeneracy",
+        "BioInspiredNanochat.Metriplectic.energyRate_zero",
+        "BioInspiredNanochat.Metriplectic.entropyRate_nonnegative",
+        "BioInspiredNanochat.Metriplectic.freeEnergyRate_nonpositive",
+        "BioInspiredNanochat.Metriplectic.freeEnergy_nonincreasing",
+        "BioInspiredNanochat.Metriplectic.trajectory_energy_constant",
+        "BioInspiredNanochat.Metriplectic.trajectory_entropy_from_start",
+        "BioInspiredNanochat.Metriplectic.trajectory_freeEnergy_nonincreasing",
+        "BioInspiredNanochat.Metriplectic.trajectory_component_bounds"
+      ],
+      "route": "runtime-first-proof-preserving",
+      "proof_friction_class": "documentation-drift",
+      "runtime_defect_found": false,
+      "artifact_hash": "sha256:831498bc2853d86701250ea89024ab5f5f6190d2e3a5a9ae66f93a7d5d42d963",
+      "hash_scope": "formal/lean/BioInspiredNanochat.lean",
+      "sorry_or_admit_present": false,
+      "axioms": [
+        "propext",
+        "Classical.choice",
+        "Quot.sound"
+      ],
+      "assurance": {
+        "exact_real_algebra": "E-unchanged",
+        "live_torch_regressions": "B",
+        "floating_point_refinement": "dtype-aware-guarded-runtime-gap"
+      },
+      "conformance": {
+        "statement_parity": "pass-reduced-core",
+        "state_parity": "pass-live-C-B-HEAT-core",
+        "transition_parity": "pass-closed-form-implicit-midpoint-vs-numpy-reference"
+      },
+      "change_scope": "Runtime hash refresh after the 2026-09-02 type-checker cleanup (bead fkyw): comment/annotation-only edits in two mapped test files. (1) tests/test_ablation_registry.py - one planted-invalid-argument assertion gained a `# ty: ignore[invalid-argument-type]` comment (type-checker cleanup, bead fkyw); no assertion changed; (2) tests/test_formal_feedback.py - a test fixture dict gained the annotation dict[str, object] (type-checker cleanup, bead fkyw); no assertion changed. The Lean file hash is re-read at HEAD (unchanged theorems, no sorry/admit). All mapped regressions for the touched files were re-executed on 2026-09-02 (251 passed; the one failure was this stale hash).",
+      "runtime_mapping": [
+        {
+          "path": "tests/test_ablation_registry.py",
+          "sha256": "b92e4f3895c9dc8b268f96f88fb2e826eac71a11fa87a2e51b8c13fcb6f3fe7f"
+        },
+        {
+          "path": "tests/test_formal_feedback.py",
+          "sha256": "34c86b705b93c89e3427f36bf53b494c8b0bfa10e1d11d359f95d1f6572b351f"
+        }
+      ],
+      "regression_command": "uv run python -m pytest tests/test_metriplectic_theory.py tests/test_metriplectic_integrator.py tests/test_metriplectic_runtime.py tests/test_stdp.py tests/test_mc_ensemble.py tests/test_flex_canonical.py tests/test_ablation_registry.py -q",
+      "regression_result": "112 passed, 1 skipped (2026-08-25)",
+      "lean_toolchain": "leanprover/lean4:v4.27.0",
+      "mathlib_revision": "a3a10db0e9d66acbebf76c5e6a135066525ac900",
+      "build_command": "rch exec -- lake build",
+      "build_result": "attempted-2026-08-25-rch-refused-non-compilation-command-local-fallback-lake-permission-denied"
     }
   ]
 }

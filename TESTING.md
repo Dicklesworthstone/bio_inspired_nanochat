@@ -136,7 +136,8 @@ never lowered**. CI passes `--cov` on every push (the integration-tests job), so
 
 - **`ci.yml` — every push to `main` and every PR:** `cargo fmt --check`, `cargo clippy -D warnings`,
   `cargo test`; the Python quality gate (`scripts/quality_gate.py`: `ruff --fix --unsafe-fixes`
-  on changed files and fails if it had to rewrite them, `ty check`, UBS resource-lifecycle scan);
+  on changed files and fails if it had to rewrite them, `ty check`, UBS resource-lifecycle scan), then
+  `uv run ty check` on the whole tree (zero diagnostics since 2026-09-02, bead `fkyw`);
   the Lean formal-feedback audit (`scripts/formal_feedback.py`); a `maturin build` wheel; then
   `maturin develop` + `pytest -m "not slow" --cov` + `validate_all --suite fast`. The wheel and test
   jobs depend on the Rust format job, so one unformatted hunk skips the whole suite.

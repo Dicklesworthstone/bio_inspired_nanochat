@@ -150,7 +150,7 @@ def test_patch_clamp_plot_and_request_validation() -> None:
         electrode.record_forward(torch.ones((1, 2)))
     with pytest.raises(ValueError, match="finite, non-negative"):
         electrode.record_generation(
-            torch.ones((1, 2), dtype=torch.long), temperature="warm"  # type: ignore[arg-type]
+            torch.ones((1, 2), dtype=torch.long), temperature="warm"  # type: ignore[arg-type]  # ty: ignore[invalid-argument-type]
         )
 
 

@@ -7,6 +7,8 @@ evaluating measurements against committed baseline thresholds.
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 import json
 import time
 from collections.abc import Sequence
@@ -212,7 +214,7 @@ class PerfRegressionHarness:
             if callable(reset_sequence_state):
                 reset_sequence_state()
             engine = Engine(model, tokenizer=None)
-            model_cfg = model.config
+            model_cfg = cast(Any, model).config  # nn.Module attribute access types as Tensor | Module
             continuation = torch.randint(
                 0,
                 cfg.vocab_size,

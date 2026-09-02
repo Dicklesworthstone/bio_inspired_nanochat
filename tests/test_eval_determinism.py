@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 import torch
@@ -70,7 +71,7 @@ def test_core_eval_forward_path_is_idempotent():
 
 def test_working_memory_suite_repeats_exactly():
     model = make_tiny_synaptic(seed=2)
-    kw = dict(vocab_size=VOCAB, recall_pairs=(2,), binding_distractors=(0,), niah_lengths=(8,), batch=8, seed=3)
+    kw: dict[str, Any] = dict(vocab_size=VOCAB, recall_pairs=(2,), binding_distractors=(0,), niah_lengths=(8,), batch=8, seed=3)
     first = working_memory_suite(model, **kw)
     second = working_memory_suite(model, **kw)
     assert first["recall"] == second["recall"]

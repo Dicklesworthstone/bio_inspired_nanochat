@@ -90,7 +90,7 @@ def test_presynaptic_state_is_physically_pooled_and_live(granularity, expected_s
 
 @pytest.mark.unit
 def test_invalid_direct_granularity_fails_closed():
-    cfg = SynapticConfig(granularity="per_synapse")  # type: ignore[arg-type]
+    cfg = SynapticConfig(granularity="per_synapse")  # type: ignore[arg-type]  # ty: ignore[invalid-argument-type]
     with pytest.raises(ValueError, match="granularity must be one of"):
         build_presyn_state(1, 4, 2, "cpu", torch.float32, cfg)
 

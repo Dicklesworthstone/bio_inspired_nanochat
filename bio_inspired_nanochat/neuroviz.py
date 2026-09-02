@@ -933,10 +933,10 @@ class NeuroVizManager:
             if e.fc2.w_fast is not None:
                 f += e.fc2.w_fast.norm().item()
             # Add Hebbian trace norm if available
-            if getattr(e.fc1, "u_buf", None) is not None and getattr(e.fc1, "v_buf", None) is not None:
-                f += e.fc1.u_buf.norm().item() + e.fc1.v_buf.norm().item()
-            if getattr(e.fc2, "u_buf", None) is not None and getattr(e.fc2, "v_buf", None) is not None:
-                f += e.fc2.u_buf.norm().item() + e.fc2.v_buf.norm().item()
+            for lin in (e.fc1, e.fc2):
+                u_buf, v_buf = getattr(lin, "u_buf", None), getattr(lin, "v_buf", None)
+                if u_buf is not None and v_buf is not None:
+                    f += u_buf.norm().item() + v_buf.norm().item()
                 
             slow_norms.append(s)
             fast_norms.append(f)

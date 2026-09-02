@@ -14,7 +14,7 @@ Notable features:
 import math
 from functools import partial
 from dataclasses import dataclass
-from typing import cast
+from typing import Any, cast
 
 import torch
 import torch.nn as nn
@@ -484,12 +484,12 @@ class GPT(nn.Module):
         ]
         if embedding_params:  # empty when tied (the shared weight sits in the lm_head group)
             adam_groups.append(dict(params=embedding_params, lr=embedding_lr * dmodel_lr_scale))
-        adamw_kwargs = dict(betas=(0.8, 0.95), eps=1e-10, weight_decay=weight_decay)
+        adamw_kwargs: dict[str, Any] = dict(betas=(0.8, 0.95), eps=1e-10, weight_decay=weight_decay)
         use_fused = (not ddp) and any(p.is_cuda for p in (embedding_params + lm_head_params))
         AdamWFactory = DistAdamW if ddp else partial(torch.optim.AdamW, fused=use_fused)
         adamw_optimizer = AdamWFactory(adam_groups, **adamw_kwargs)
         # Create the Muon optimizer for the linear layers
-        muon_kwargs = dict(lr=matrix_lr, momentum=0.95)
+        muon_kwargs: dict[str, Any] = dict(lr=matrix_lr, momentum=0.95)
         MuonFactory = DistMuon if ddp else Muon
         muon_optimizer = MuonFactory(matrix_params, **muon_kwargs)
         # Combine them the two optimizers into one list

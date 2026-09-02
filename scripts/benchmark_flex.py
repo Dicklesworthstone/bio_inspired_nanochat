@@ -616,12 +616,12 @@ def _recommend_backend(
     ]
     if not successful:
         return None
-    best = max(successful, key=lambda row: float(row["tokens_per_second"]))
+    best = max(successful, key=lambda row: float(cast(float, row["tokens_per_second"])))
     baseline_row = next((row for row in successful if row["case"] == baseline), None)
     delta_pct = None
     if baseline_row is not None:
-        baseline_rate = float(baseline_row["tokens_per_second"])
-        delta_pct = 100.0 * (float(best["tokens_per_second"]) / baseline_rate - 1.0)
+        baseline_rate = float(cast(float, baseline_row["tokens_per_second"]))
+        delta_pct = 100.0 * (float(cast(float, best["tokens_per_second"])) / baseline_rate - 1.0)
     return {
         "model_path": model_path,
         "recommended_case": best["case"],

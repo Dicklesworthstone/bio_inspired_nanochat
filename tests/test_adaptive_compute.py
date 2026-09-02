@@ -331,12 +331,12 @@ def test_quality_floor_config_rejects_invalid_confidence_thresholds():
 def test_uncertainty_policy_config_is_default_off_and_rejects_invalid_controls():
     assert not UncertaintyDecodingConfig().enabled
     with pytest.raises(ValueError, match="enabled must be a bool"):
-        UncertaintyDecodingConfig(enabled=1)  # type: ignore[arg-type]
+        UncertaintyDecodingConfig(enabled=1)  # type: ignore[arg-type]  # ty: ignore[invalid-argument-type]
     for value in (-0.01, float("inf"), float("nan")):
         with pytest.raises(ValueError, match="max_predictive_entropy_nats"):
             UncertaintyDecodingConfig(max_predictive_entropy_nats=value)
     with pytest.raises(ValueError, match="terminal_action"):
-        UncertaintyDecodingConfig(terminal_action="guess")  # type: ignore[arg-type]
+        UncertaintyDecodingConfig(terminal_action="guess")  # type: ignore[arg-type]  # ty: ignore[invalid-argument-type]
     with pytest.raises(ValueError, match="clarification_prompt"):
         UncertaintyDecodingConfig(clarification_prompt="  ")
 

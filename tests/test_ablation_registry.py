@@ -93,7 +93,7 @@ def test_out_of_range_knobs_are_errors():
     assert validate_config(SynapticConfig(bistable_latch=True, latch_pp1_basal=2.0))[0]
     # latch_ltd_thr must sit below camkii_thr (neutral zone for the BCM curve).
     assert validate_config(SynapticConfig(bistable_latch=True, latch_ltd_thr=1.5))[0]
-    assert validate_config(SynapticConfig(tropical_skeleton=1))[0]  # type: ignore[arg-type]
+    assert validate_config(SynapticConfig(tropical_skeleton=1))[0]  # type: ignore[arg-type]  # ty: ignore[invalid-argument-type]
 
 
 def test_is_mechanism_on_reads_off_value():

@@ -101,7 +101,7 @@ def test_latest_occurrence_wins_for_proof_and_runtime_paths(tmp_path):
 
 def test_explicit_retirement_allows_absent_historical_paths(tmp_path):
     proof, runtime, manifest = _contract(tmp_path)
-    old = {
+    old: dict[str, object] = {
         "cycle_id": "old",
         "theorem_ids": ["BioInspiredNanochat.Deleted.obsolete"],
         "artifact_hash": f"sha256:{'0' * 64}",

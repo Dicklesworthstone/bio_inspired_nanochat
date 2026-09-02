@@ -60,6 +60,7 @@ def test_structural_falsification_is_equal_work_and_auditable(tmp_path):
         assert treatment.spectral_bound_holds
         assert treatment.persistence_stability_holds
         assert treatment.ot_merge_optimal
+        assert treatment.max_child_condition_number is not None and treatment.kappa_bound is not None
         assert treatment.max_child_condition_number <= treatment.kappa_bound
 
     for fallback in report.fallback_outcomes:
