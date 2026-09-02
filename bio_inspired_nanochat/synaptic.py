@@ -408,7 +408,10 @@ class SynapticConfig:
     # the canonical Python implementation exactly.
     # jyb.2: the live presyn Triton kernel is deliberately narrow until jyb.3 supplies
     # autograd: deterministic FP32 CUDA decode only (one query, no grad/MC/learnable kinetics/
-    # metriplectic integration). Every other shape/mode falls back to release_canonical.
+    # metriplectic integration). On CPU the same toggle dispatches the Rust mirror
+    # (rustbpe.presyn_release_canonical_cpu) for the same slice; measured 2026-09-01 it is
+    # ~2x faster than PyTorch at <=512 keys and not faster at 2k+ keys (bead ylo2), which is
+    # why it is not on by default. Every other shape/mode falls back to release_canonical.
     native_presyn: bool = decouple_config("BIO_FUSED_PRESYN", default=False, cast=bool)
     native_genetics: bool = decouple_config("BIO_FUSED_GENETICS", default=False, cast=bool)
 
