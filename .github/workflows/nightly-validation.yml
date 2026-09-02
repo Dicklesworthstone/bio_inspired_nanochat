@@ -48,6 +48,9 @@ jobs:
         run: |
           uv run --no-sync python -m scripts.perf_regression_gate --mode check --tolerance 0.45 --record-registry
 
+      - name: Matrix pipeline end to end (spec -> base_train -> eval_matrix -> eval_stats, toy scale)
+        run: uv run --no-sync python -m pytest tests/test_e2e_matrix_pipeline.py -q -m slow
+
       - name: Upload Master Validation Reports & Artifacts
         if: always()
         uses: actions/upload-artifact@v4

@@ -162,7 +162,11 @@ uv run --no-sync python -m scripts.matrix_launch --stage screening \
 `eval_matrix` checks the checkpoint against) and `--model_tag=matrix_<column>_s<seed>`; the
 launcher prints the matching `eval_matrix batch … --checkpoint-dir
 "<base_dir>/base_checkpoints/matrix_{preset}_s{seed}"` command. `tests/test_matrix_launch.py`
-round-trips every column through `base_train`'s own override parser.
+round-trips every column through `base_train`'s own override parser, and
+`tests/test_e2e_matrix_pipeline.py` runs the whole chain as subprocesses at toy scale — launcher
+(`--columns vanilla,synaptic_off`, two seeds) → `base_train` checkpoints → `eval_matrix matrix
+--checkpoint-dir` scoring from the checkpoints' own metadata → `eval_stats` pairing — so a broken
+link fails there before it burns GPU hours (about four minutes on CPU; nightly).
 
 **Structural arm (opt-in, not pre-registered).** The expert lifecycle is a training-loop knob,
 so `structural_columns()` provides `moe_fixed` (bio_all on `SynapticMoE`, fixed experts) and
