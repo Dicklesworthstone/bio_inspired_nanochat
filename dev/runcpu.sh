@@ -21,13 +21,13 @@ if [ -z "$WANDB_RUN" ]; then
 fi
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 source "$HOME/.cargo/env"
-uv run maturin develop --release --manifest-path rustbpe/Cargo.toml
+uv run --no-sync maturin develop --release --manifest-path rust_src/Cargo.toml
 
 # wipe the report
-python -m nanochat.report reset
+python -m bio_inspired_nanochat.report reset
 
 # train tokenizer on ~1B characters
-python -m nanochat.dataset -n 4
+python -m bio_inspired_nanochat.dataset -n 4
 python -m scripts.tok_train --max_chars=1000000000
 python -m scripts.tok_eval
 
@@ -74,4 +74,4 @@ python -m scripts.chat_sft \
 # Chat Web
 # python -m scripts.chat_web
 
-python -m nanochat.report generate
+python -m bio_inspired_nanochat.report generate

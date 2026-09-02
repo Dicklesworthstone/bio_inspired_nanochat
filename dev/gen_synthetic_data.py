@@ -35,7 +35,7 @@ import copy
 import random
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from nanochat.common import get_base_dir
+from bio_inspired_nanochat.common import get_base_dir
 
 api_key = open("openroutertoken.txt", "r", encoding="utf-8").read().strip()
 
