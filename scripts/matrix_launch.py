@@ -127,8 +127,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         table.add_row(column.config_id, str(seed), " ".join(cmd[len(launcher_prefix(args.nproc)) + len(recipe):]))
     console.print(table)
     for _column, _seed, cmd in commands:
-        console.print(shlex.join(cmd), highlight=False)
-    console.print("\n[bold]score with:[/bold] " + eval_matrix_hint(columns, seeds), highlight=False)
+        # Plain print on purpose: these lines are meant to be copied or piped, so they must stay
+        # one physical line each regardless of terminal width (rich re-wraps at the console width).
+        print(shlex.join(cmd))
+    console.print("\n[bold]score with:[/bold]")
+    print(eval_matrix_hint(columns, seeds))
 
     if not args.execute:
         return 0
