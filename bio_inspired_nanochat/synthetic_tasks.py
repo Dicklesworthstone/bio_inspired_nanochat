@@ -311,16 +311,53 @@ def make_task(name: str, **kwargs: Any):
 # --------------------------------------------------------------------------- #
 # Retrieval evaluation (bead 74f.2) — run a model on a task and score the answer
 # --------------------------------------------------------------------------- #
+def _logits_for(model: Any, inputs: Tensor, *, chunk_len: int | None) -> Tensor:
+    """Logits for ``inputs``, either from one full-sequence forward or read incrementally.
+
+    ``chunk_len`` feeds the sequence through a KV cache in chunks so that per-sequence
+    plasticity performed while reading earlier chunks (online Hebbian fast-weight writes) is
+    in force when later chunks are processed — exactly how token-by-token generation behaves.
+    """
+    total = int(inputs.shape[1])
+    if chunk_len is None or chunk_len <= 0 or chunk_len >= total:
+        out = model(inputs)
+        return out[0] if isinstance(out, (tuple, list)) else out
+    from bio_inspired_nanochat.engine import KVCache
+
+    cfg = model.config
+    cache = KVCache(
+        batch_size=int(inputs.shape[0]),
+        num_heads=int(cfg.n_kv_head),
+        seq_len=total,
+        head_dim=int(cfg.n_embd) // int(cfg.n_head),
+        num_layers=int(cfg.n_layer),
+    )
+    pieces: list[Tensor] = []
+    for start in range(0, total, chunk_len):
+        out = model(inputs[:, start : start + chunk_len], kv_cache=cache)
+        pieces.append(out[0] if isinstance(out, (tuple, list)) else out)
+    return torch.cat(pieces, dim=1)
+
+
 @torch.no_grad()
-def retrieval_accuracy(model: Any, batch: SyntheticBatch) -> float:
+def retrieval_accuracy(
+    model: Any, batch: SyntheticBatch, *, chunk_len: int | None = None
+) -> float:
     """Fraction of rows where the model's argmax at ``answer_pos`` equals the gold answer.
 
     Works for any task whose ``meta`` carries ``answer_pos`` + ``answers`` (niah,
     associative_recall, variable_binding). The models are no-shift — ``logits[:, t]``
     predicts ``targets[:, t]`` — so the prediction is read directly at ``answer_pos``.
+
+    ``chunk_len`` (sax.1 / sx1m, 2026-09-01): evaluate INCREMENTALLY through a KV cache in
+    chunks of that many tokens. A single full-sequence forward (the default) can never show a
+    within-sequence fast-weight effect — the online Hebbian writes land after the matmuls that
+    would have to read them — so every earlier measurement of the "infinite local context" claim
+    through this function was structurally blind to the mechanism it was testing. With chunked
+    reading, associations written while the key/value pairs are read are in force when the query
+    arrives. Models without per-sequence plasticity give identical numbers either way.
     """
-    out = model(batch.inputs)
-    logits = out[0] if isinstance(out, (tuple, list)) else out
+    logits = _logits_for(model, batch.inputs, chunk_len=chunk_len)
     ap = int(batch.meta["answer_pos"])
     pred = logits[:, ap, :].argmax(dim=-1)
     gold = batch.meta["answers"].to(pred.device)
@@ -337,6 +374,7 @@ def niah_accuracy_by_length(
     batch: int = 32,
     seed: int = 0,
     device: Any = None,
+    chunk_len: int | None = None,
 ) -> dict[str, Any]:
     """Needle-in-a-haystack accuracy swept over haystack length × needle depth.
 
@@ -364,7 +402,7 @@ def niah_accuracy_by_length(
             # Fresh fast-weights per batch so the needle can't leak across evals.
             if hasattr(model, "reset_sequence_state"):
                 model.reset_sequence_state(reset_fast_weights=True)
-            accs.append(retrieval_accuracy(model, b))
+            accs.append(retrieval_accuracy(model, b, chunk_len=chunk_len))
         by_length[length] = sum(accs) / len(accs)
     if was_training and hasattr(model, "train"):
         model.train()
@@ -402,6 +440,7 @@ def recall_accuracy_by_pairs(
     batch: int = 32,
     seed: int = 0,
     device: Any = None,
+    chunk_len: int | None = None,
 ) -> dict[str, Any]:
     """Associative-recall accuracy swept over the number of key→value pairs (memory load).
 
@@ -419,7 +458,7 @@ def recall_accuracy_by_pairs(
         if device is not None:
             b = b.to(device)
         _reset_fast_state(model)
-        by_pairs[n] = retrieval_accuracy(model, b)
+        by_pairs[n] = retrieval_accuracy(model, b, chunk_len=chunk_len)
     overall = sum(by_pairs.values()) / len(by_pairs) if by_pairs else float("nan")
     return {"by_pairs": by_pairs, "overall": overall}
 
@@ -434,6 +473,7 @@ def binding_accuracy_by_distractors(
     batch: int = 32,
     seed: int = 0,
     device: Any = None,
+    chunk_len: int | None = None,
 ) -> dict[str, Any]:
     """Variable-binding accuracy swept over the number of DISTRACTOR tokens between the binding
     and the query — the "infinite local context" stress test.
@@ -455,7 +495,7 @@ def binding_accuracy_by_distractors(
         if device is not None:
             b = b.to(device)
         _reset_fast_state(model)
-        by_distractors[n] = retrieval_accuracy(model, b)
+        by_distractors[n] = retrieval_accuracy(model, b, chunk_len=chunk_len)
     overall = sum(by_distractors.values()) / len(by_distractors) if by_distractors else float("nan")
     return {"by_distractors": by_distractors, "overall": overall}
 
@@ -471,6 +511,7 @@ def working_memory_suite(
     batch: int = 32,
     seed: int = 0,
     device: Any = None,
+    chunk_len: int | None = None,
 ) -> dict[str, Any]:
     """The working-memory evaluation suite (sax.4): a single entry point that tests the
     "infinite local context" claim with clean, by-difficulty curves.
@@ -490,18 +531,20 @@ def working_memory_suite(
         model.eval()
 
     recall = recall_accuracy_by_pairs(
-        model, vocab_size=vocab_size, num_pairs=recall_pairs, batch=batch, seed=seed, device=device
+        model, vocab_size=vocab_size, num_pairs=recall_pairs, batch=batch, seed=seed, device=device,
+        chunk_len=chunk_len,
     )
     binding = binding_accuracy_by_distractors(
         model, vocab_size=vocab_size, num_distractors=binding_distractors,
-        batch=batch, seed=seed, device=device,
+        batch=batch, seed=seed, device=device, chunk_len=chunk_len,
     )
     # NIAH generates a needle+query around the haystack (sequence length = L + 2), so keep only the
     # lengths that fit the model context.
     context = _model_context(model)
     niah_fit = tuple(L for L in niah_lengths if context is None or L + 2 <= int(context))
     niah = niah_accuracy_by_length(
-        model, vocab_size=vocab_size, lengths=niah_fit, batch=batch, seed=seed, device=device
+        model, vocab_size=vocab_size, lengths=niah_fit, batch=batch, seed=seed, device=device,
+        chunk_len=chunk_len,
     )
 
     if was_training and hasattr(model, "train"):
