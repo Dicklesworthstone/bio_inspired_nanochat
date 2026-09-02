@@ -1,0 +1,179 @@
+{
+  "protocol": {
+    "model": "GPTSynaptic 2L/64d, SynapticMoE 8 experts top-2, default SynapticConfig",
+    "task": "4-dialect token-transition sequences, vocab 97, seq 32, batch 4",
+    "steps": 120,
+    "controller_every": 10,
+    "warmup": 20,
+    "lr": 0.003,
+    "moe_balance_loss": 0.0,
+    "arms": {
+      "none": "no controller",
+      "product": "SplitMergeConfig defaults (util x energy)",
+      "relative": "health_mode=relative, split 1.5 / merge 0.35 / reset 0.05 fair-share units"
+    },
+    "question": "does the lifecycle fire under ordinary training, and what does firing cost in loss?"
+  },
+  "measurement_regime": {
+    "eval_determinism": "module-training-flag (GPTSynaptic.forward train_mode defaults to self.training; commit 5cb1a90)",
+    "read": "full-forward",
+    "since": "2026-09-01"
+  },
+  "runs": [
+    {
+      "seed": 0,
+      "arm": "none",
+      "events": {
+        "split": 0,
+        "merge": 0,
+        "reset": 0
+      },
+      "final_loss": 3.50306693315506,
+      "first_loss": 4.310594522953034,
+      "util_spread_per_layer": [
+        0.029402777552604675,
+        0.036767516285181046
+      ],
+      "experts_per_layer": [
+        8,
+        8
+      ],
+      "wall_s": 4965.0,
+      "loss_delta_vs_none": 0.0
+    },
+    {
+      "seed": 0,
+      "arm": "product",
+      "events": {
+        "split": 0,
+        "merge": 0,
+        "reset": 0
+      },
+      "final_loss": 3.503066885471344,
+      "first_loss": 4.310594534873962,
+      "util_spread_per_layer": [
+        0.02940276451408863,
+        0.03676756098866463
+      ],
+      "experts_per_layer": [
+        8,
+        8
+      ],
+      "wall_s": 5232.6,
+      "loss_delta_vs_none": -4.7683716086766026e-08
+    },
+    {
+      "seed": 0,
+      "arm": "relative",
+      "events": {
+        "split": 0,
+        "merge": 0,
+        "reset": 0
+      },
+      "final_loss": 3.503066885471344,
+      "first_loss": 4.310594534873962,
+      "util_spread_per_layer": [
+        0.02940276451408863,
+        0.03676756098866463
+      ],
+      "experts_per_layer": [
+        8,
+        8
+      ],
+      "wall_s": 5013.1,
+      "loss_delta_vs_none": -4.7683716086766026e-08
+    },
+    {
+      "seed": 1,
+      "arm": "none",
+      "events": {
+        "split": 0,
+        "merge": 0,
+        "reset": 0
+      },
+      "final_loss": 3.44476033449173,
+      "first_loss": 4.320812594890595,
+      "util_spread_per_layer": [
+        0.029005656018853188,
+        0.0398484542965889
+      ],
+      "experts_per_layer": [
+        8,
+        8
+      ],
+      "wall_s": 4908.5,
+      "loss_delta_vs_none": 0.0
+    },
+    {
+      "seed": 1,
+      "arm": "product",
+      "events": {
+        "split": 0,
+        "merge": 0,
+        "reset": 0
+      },
+      "final_loss": 3.44476033449173,
+      "first_loss": 4.320812594890595,
+      "util_spread_per_layer": [
+        0.029005656018853188,
+        0.0398484542965889
+      ],
+      "experts_per_layer": [
+        8,
+        8
+      ],
+      "wall_s": 3336.6,
+      "loss_delta_vs_none": 0.0
+    },
+    {
+      "seed": 1,
+      "arm": "relative",
+      "events": {
+        "split": 0,
+        "merge": 0,
+        "reset": 0
+      },
+      "final_loss": 3.44476033449173,
+      "first_loss": 4.320812594890595,
+      "util_spread_per_layer": [
+        0.029005656018853188,
+        0.0398484542965889
+      ],
+      "experts_per_layer": [
+        8,
+        8
+      ],
+      "wall_s": 2734.6,
+      "loss_delta_vs_none": 0.0
+    }
+  ],
+  "summary": {
+    "none": {
+      "events_total": {
+        "split": 0,
+        "merge": 0,
+        "reset": 0
+      },
+      "mean_loss_delta_vs_none": 0.0,
+      "seeds_with_any_event": 0
+    },
+    "product": {
+      "events_total": {
+        "split": 0,
+        "merge": 0,
+        "reset": 0
+      },
+      "mean_loss_delta_vs_none": -2.3841858043383013e-08,
+      "seeds_with_any_event": 0
+    },
+    "relative": {
+      "events_total": {
+        "split": 0,
+        "merge": 0,
+        "reset": 0
+      },
+      "mean_loss_delta_vs_none": -2.3841858043383013e-08,
+      "seeds_with_any_event": 0
+    }
+  }
+}
