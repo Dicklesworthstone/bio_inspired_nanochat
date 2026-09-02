@@ -165,6 +165,56 @@ class Block(nn.Module):
         return x, st
 
 
+
+class _ChunkedTrainingCache:
+    """KV cache for chunked TRAINING (hwxb.8).
+
+    The inference ``engine.KVCache`` keeps one buffer for every layer and writes each layer's keys
+    into it in place; the views it hands back are saved for backward, and the next layer's write
+    bumps the shared buffer's version, so autograd rejects the step. Here every layer keeps its own
+    detached past and each insert returns a fresh concatenation: nothing saved for backward is ever
+    mutated, gradients flow into the current chunk's keys/values only (truncated back-propagation
+    at chunk boundaries), and the interface the synaptic attention uses (``get_pos``,
+    ``insert_kv``, ``kv_shape``, ``presyn_state``) is unchanged.
+    """
+
+    def __init__(self, *, num_layers: int, batch_size: int, num_heads: int, seq_len: int, head_dim: int):
+        self.kv_shape = (num_layers, 2, batch_size, num_heads, seq_len, head_dim)
+        self.num_layers = num_layers
+        self._past: list[tuple[Tensor, Tensor] | None] = [None] * num_layers
+        self.presyn_state = None
+        self.pos = 0
+
+    def get_pos(self) -> int:
+        return self.pos
+
+    def insert_kv(self, layer_idx: int, k: Tensor, v: Tensor) -> tuple[Tensor, Tensor]:
+        past = self._past[layer_idx]
+        if past is None:
+            k_full, v_full = k, v
+        else:
+            k_full = torch.cat([past[0], k], dim=2)
+            v_full = torch.cat([past[1], v], dim=2)
+        self._past[layer_idx] = (k_full.detach(), v_full.detach())
+        if layer_idx == self.num_layers - 1:
+            self.pos += int(k.size(2))
+        return k_full, v_full
+
+    def detach_(self) -> None:
+        """Cut the autograd history held by the presynaptic state (keys/values already are)."""
+        states = self.presyn_state
+        if isinstance(states, dict):
+            states = [states]
+        if isinstance(states, list):
+            for state in states:
+                if not isinstance(state, dict):
+                    continue
+                for key, value in list(state.items()):
+                    if torch.is_tensor(value):
+                        state[key] = value.detach()
+                    elif isinstance(value, list):
+                        state[key] = [t.detach() if torch.is_tensor(t) else t for t in value]
+
 # -----------------------------------------------------------------------------
 # Model
 # -----------------------------------------------------------------------------
@@ -438,13 +488,13 @@ class GPTSynaptic(nn.Module):
         constants. That is truncated back-propagation at chunk boundaries: gradients through
         attention across chunks are cut, which is the regime's cost. Stochastic release, dropout
         and the presynaptic state behave as in a normal training forward; the presyn state travels
-        through ``cache.presyn_state``. Call ``optimizer.step()`` after this returns; gradient
+        through the cache's ``presyn_state``. The cache is a training-only variant (see
+        ``_ChunkedTrainingCache``): the inference cache mutates a shared buffer in place, which
+        autograd rejects. Call ``optimizer.step()`` after this returns; gradient
         accumulation works by passing ``loss_scale=1/grad_accum_steps``.
 
         Returns the detached token-weighted loss over the whole sequence (for logging).
         """
-        from bio_inspired_nanochat.engine import KVCache  # local import: engine reaches this module via checkpoint_manager
-
         if chunk_len <= 0:
             raise ValueError(f"chunk_len must be positive, got {chunk_len}")
         if not self.training:
@@ -453,12 +503,12 @@ class GPTSynaptic(nn.Module):
             raise ValueError(f"idx {tuple(idx.shape)} and targets {tuple(targets.shape)} must match")
         batch, seq_len = idx.shape
         cfg = self.config
-        cache = KVCache(
+        cache = _ChunkedTrainingCache(
+            num_layers=cfg.n_layer,
             batch_size=batch,
             num_heads=cfg.n_kv_head,
             seq_len=seq_len,
             head_dim=cfg.n_embd // cfg.n_head,
-            num_layers=cfg.n_layer,
         )
         n_valid_total = int((targets != -1).sum().item())
         if n_valid_total == 0:
@@ -473,26 +523,8 @@ class GPTSynaptic(nn.Module):
                 weight = n_valid / n_valid_total
                 (loss * (weight * loss_scale)).backward()
                 total = total + loss.detach().float() * weight
-            self._detach_cache(cache)
+            cache.detach_()
         return total
-
-    @staticmethod
-    def _detach_cache(cache) -> None:
-        """Cut the autograd history held by a KV cache (keys/values and presynaptic state)."""
-        if cache.kv_cache is not None:
-            cache.kv_cache = cache.kv_cache.detach()
-        states = cache.presyn_state
-        if isinstance(states, dict):
-            states = [states]
-        if isinstance(states, list):
-            for state in states:
-                if not isinstance(state, dict):
-                    continue
-                for key, value in list(state.items()):
-                    if torch.is_tensor(value):
-                        state[key] = value.detach()
-                    elif isinstance(value, list):
-                        state[key] = [t.detach() if torch.is_tensor(t) else t for t in value]
 
     @torch.no_grad()
     def reset_sequence_state(
