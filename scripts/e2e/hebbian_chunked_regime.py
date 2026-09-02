@@ -26,9 +26,13 @@ the OFF arm under the same read (NC-7). Minimum detectable effect = 3 sigma / sq
 
 Controls, run every time (NC-1 / NC-2 — an apparatus that has never reported "nothing" and never
 detected a planted witness has shown nothing):
-- negative: OFF models read chunked == read full, bit-identical (nothing to see -> nothing reported);
-- planted witness: for ON models, max |logits_chunked - logits_full| > 0 on an eval batch (the writes
-  are visible to the chunked read); recorded per model, together with the smallest value seen;
+- negative: OFF models read chunked == read full up to float32 reassociation noise
+  (max |Δlogit| <= NEGATIVE_CONTROL_TOL); nothing to see -> nothing reported;
+- planted witness: for ON models, max |logits_chunked - logits_full| >= WITNESS_MIN on an eval batch
+  (the writes are visible to the chunked read, far above numerical noise); recorded per model,
+  together with the smallest value seen;
+  Tolerances set 2026-09-02 after the first pilot rows (discovery seed 0 only, pilot budget) showed
+  3e-6 float32 noise in the OFF arm and >1.0 in the ON arm; no confirmation seed had been run.
 - attention baseline: OFF/full-train accuracy above chance (1/97) at 2 pairs shows the probe measures
   recall at all.
 Countermetric: seconds per training step, chunked / full; final training loss for both regimes.
@@ -80,6 +84,8 @@ DISCOVERY_SEEDS = (0, 1)
 CONFIRMATION_SEEDS = (2, 3, 4)
 PREREGISTERED = {"steps": 2000, "chunk_len": 8, "max_pairs": 16, "lr": 3e-3}
 CHANCE = 1.0 / VOCAB
+NEGATIVE_CONTROL_TOL = 1e-4  # float32 reassociation between one matmul and per-token matmuls
+WITNESS_MIN = 1e-2  # a planted write must move logits far above that noise
 
 
 def _model(seed: int, *, hebbian: bool) -> GPTSynaptic:
@@ -203,9 +209,10 @@ def main(argv: list[str] | None = None) -> int:
     conf = [r for r in runs if r["set"] == "confirmation"]
     controls = {
         "negative_off_reads_identical": all(
-            r["eval"]["max_abs_logit_diff_chunked_vs_full"] == 0.0 for r in runs if not r["hebbian"]),
+            r["eval"]["max_abs_logit_diff_chunked_vs_full"] <= NEGATIVE_CONTROL_TOL for r in runs if not r["hebbian"]),
+        "max_off_diff": max((r["eval"]["max_abs_logit_diff_chunked_vs_full"] for r in runs if not r["hebbian"]), default=None),
         "planted_witness_on_writes_visible": all(
-            r["eval"]["max_abs_logit_diff_chunked_vs_full"] > 0.0 for r in runs if r["hebbian"]),
+            r["eval"]["max_abs_logit_diff_chunked_vs_full"] >= WITNESS_MIN for r in runs if r["hebbian"]),
         "min_visible_diff_on": min((r["eval"]["max_abs_logit_diff_chunked_vs_full"] for r in runs if r["hebbian"]), default=None),
         "attention_baseline_above_chance": (lambda v: v is not None and v > 2 * CHANCE)(
             _mean(acc(runs, False, "full", "full", pairs=str(eval_pairs[0])))),
@@ -221,7 +228,7 @@ def main(argv: list[str] | None = None) -> int:
     conf_summary = summarize(conf)
     decision = "pilot: no decision (budget != preregistered)"
     if args.budget == "preregistered" and conf_summary["n_seeds"] == len(CONFIRMATION_SEEDS):
-        passes = all(v for k, v in controls.items() if k != "min_visible_diff_on")
+        passes = all(v for k, v in controls.items() if k not in ("min_visible_diff_on", "max_off_diff"))
         eff, mde = conf_summary["effect_at_top_pairs"], conf_summary["minimum_detectable_effect_3sigma"]
         if not passes:
             decision = "controls failed: the apparatus is not trusted; no decision"
