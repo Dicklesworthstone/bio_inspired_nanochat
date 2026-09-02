@@ -127,9 +127,9 @@ jobs:
           BASE="${{ steps.diff.outputs.base }}"
           if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
             echo "No usable base sha; running gate on whole repo."
-            uv run python -m scripts.quality_gate --mode all
+            uv run --no-sync python -m scripts.quality_gate --mode all
           else
-            uv run python -m scripts.quality_gate --mode branch --base "$BASE" --head "${{ github.sha }}"
+            uv run --no-sync python -m scripts.quality_gate --mode branch --base "$BASE" --head "${{ github.sha }}"
           fi
 
   # ============================================================
@@ -249,13 +249,15 @@ jobs:
       - name: Install dependencies and build extension
         run: |
           uv sync --extra cpu --dev
-          uv run maturin develop --release
+          uv run --no-sync maturin develop --release
 
-      - name: Run fast unit & integration tests
-        run: uv run pytest -v -m "not slow"
+      # --no-sync: a bare `uv run` re-resolves to the default extras and swaps the CPU torch
+      # wheel for the CUDA build mid-job. --cov enforces the fail_under floor in pyproject.toml.
+      - name: Run fast unit & integration tests (with the coverage floor)
+        run: uv run --no-sync pytest -v -m "not slow" --cov
 
       - name: Run master validation fast suite
-        run: uv run python -m scripts.validate_all --suite fast
+        run: uv run --no-sync python -m scripts.validate_all --suite fast
 
       - name: Upload validation report artifact
         if: always()

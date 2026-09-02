@@ -128,7 +128,7 @@ Commit the resulting `tests/golden/*.npy` files.
 `bio_inspired_nanochat` and enforces `fail_under` **only when `--cov` is passed**
 (so the default fast `pytest` stays lightweight). The floor is **25%** (the suite
 measured ≈34% when the floor was set in 2026-06) and should be **ratcheted upward,
-never lowered**. CI does not pass `--cov` today; run it locally before raising the floor.
+never lowered**. CI passes `--cov` on every push (the integration-tests job), so the floor is enforced there.
 
 ---
 
@@ -138,7 +138,7 @@ never lowered**. CI does not pass `--cov` today; run it locally before raising t
   `cargo test`; the Python quality gate (`scripts/quality_gate.py`: `ruff --fix --unsafe-fixes`
   on changed files and fails if it had to rewrite them, `ty check`, UBS resource-lifecycle scan);
   the Lean formal-feedback audit (`scripts/formal_feedback.py`); a `maturin build` wheel; then
-  `maturin develop` + `pytest -m "not slow"` + `validate_all --suite fast`. The wheel and test
+  `maturin develop` + `pytest -m "not slow" --cov` + `validate_all --suite fast`. The wheel and test
   jobs depend on the Rust format job, so one unformatted hunk skips the whole suite.
 - **`nightly-validation.yml` — 04:30 UTC:** `validate_all --suite all --timeout-scale 4` and the
   perf-regression gate, uploading `reports/` and the registry as artifacts.

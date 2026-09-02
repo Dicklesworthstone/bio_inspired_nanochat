@@ -36,17 +36,17 @@ jobs:
       - name: Install dependencies and build extension
         run: |
           uv sync --extra cpu --dev
-          uv run maturin develop --release
+          uv run --no-sync maturin develop --release
 
       - name: Run Full Master Validation Battery
         # Hosted runners are several times slower than the dev box the per-check
         # budgets were tuned on; two e2e checks timed out at the default budget.
         run: |
-          uv run python -m scripts.validate_all --suite all --timeout-scale 4
+          uv run --no-sync python -m scripts.validate_all --suite all --timeout-scale 4
 
       - name: Run Performance Regression Gates
         run: |
-          uv run python -m scripts.perf_regression_gate --mode check --tolerance 0.45 --record-registry
+          uv run --no-sync python -m scripts.perf_regression_gate --mode check --tolerance 0.45 --record-registry
 
       - name: Upload Master Validation Reports & Artifacts
         if: always()

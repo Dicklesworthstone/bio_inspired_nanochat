@@ -92,7 +92,7 @@ jobs:
         shell: bash
         run: |
           uv sync --extra cpu --dev
-          uv run maturin build --release --target ${{ matrix.target }}
+          uv run --no-sync maturin build --release --target ${{ matrix.target }}
 
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4
@@ -118,7 +118,7 @@ jobs:
       - name: Build sdist
         run: |
           uv sync --extra cpu --dev
-          uv run maturin sdist
+          uv run --no-sync maturin sdist
 
       - name: Upload sdist artifact
         uses: actions/upload-artifact@v4

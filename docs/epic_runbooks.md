@@ -40,10 +40,12 @@ Each epic section specifies:
 - **Prerequisites**: Fast synthetic or tokenized shards, `cmaes` optimizer module.
 - **Execution Commands**:
   ```bash
-  # Optimize bio parameters
-  uv run --no-sync python -m scripts.tune_bio_params optimize --seed 42 --max-evals 50
-  # Validate optimized candidate configuration
-  uv run --no-sync python -m scripts.tune_bio_params validate --params runs/cmaes/best_params.json
+  # Sanity gate (toy convergence + objective smoke), then optimize the 10-D Phase-1 space
+  uv run --no-sync python -m scripts.tune_bio_params sanity --seed 42 --device cpu
+  uv run --no-sync python -m scripts.tune_bio_params optimize --seed 42 --generations 50 --popsize 10 --run-dir runs/cmaes/top10
+  # Evaluate one candidate deterministically; train with the result via --load_cmaes_params
+  uv run --no-sync python -m scripts.tune_bio_params eval --seed 42 --device cpu
+  uv run --no-sync python -m scripts.base_train --synapses=1 --load_cmaes_params=runs/cmaes/top10/best_params.json
   ```
 - **Produced Artifacts**: `runs/cmaes/best_params.json`, `docs/cmaes_params.md`.
 - **Success Criteria**: Monotonically non-increasing surrogate loss without NaN/Inf parameter exploration.
@@ -58,7 +60,7 @@ Each epic section specifies:
 - **Execution Commands**:
   ```bash
   # Check VRAM headroom and memory budget
-  uv run --no-sync python -m scripts.scale_memory --profile dev_tiny --synapses
+  uv run --no-sync python -m scripts.scale_memory --depth 12 --seq 2048 --batch 8 --world-size 2 --synapses --vram-gb 24
   # Run multi-GPU performance benchmark
   uv run --no-sync python -m pytest tests/test_perf_regression.py tests/test_scaleup_ddp.py -v
   ```
@@ -74,10 +76,10 @@ Each epic section specifies:
 - **Prerequisites**: Pre-tokenized FineWeb shards, validation benchmarks.
 - **Execution Commands**:
   ```bash
-  # Run full evaluation matrix on checkpoint
-  uv run --no-sync python -m scripts.eval_matrix --checkpoint runs/checkpoints/model.pt --output runs/eval_summary.jsonl
-  # Compute statistical significance with paired tests and bootstrap CIs
-  uv run --no-sync python -m bio_inspired_nanochat.eval_stats runs/eval_summary.jsonl --baseline vanilla_baseline --alpha 0.05
+  # Run the preset matrix (writes summary CSV/JSONL under --out-dir; add --eval-bpb once tokenizer artifacts exist)
+  uv run --no-sync python -m scripts.eval_matrix matrix --presets vanilla,bio_all --seeds 1337,1338 --out-dir runs/eval_matrix
+  # Compute statistical significance with paired tests and bootstrap CIs on the summary CSV
+  uv run --no-sync python -m bio_inspired_nanochat.eval_stats runs/eval_matrix/summary.csv --baseline vanilla --alpha 0.05
   ```
 - **Produced Artifacts**: `runs/eval_summary.jsonl`, statistical markdown/JSON report.
 - **Success Criteria**: Statistically significant delta ($p < 0.05$, Holm-Bonferroni corrected) across 3 seeds.
@@ -92,7 +94,7 @@ Each epic section specifies:
 - **Execution Commands**:
   ```bash
   # Launch pedagogical storybook and render interactive HTML
-  uv run --no-sync python -m scripts.bio_storybook --html docs/bio_storybook.html
+  uv run --no-sync python -m scripts.bio_storybook --export-html docs/bio_storybook.html
   # Verify visualization test suite
   uv run --no-sync python -m pytest tests/test_run_logging.py tests/test_neuroviz_v2.py tests/test_bio_storybook.py -v
   ```
