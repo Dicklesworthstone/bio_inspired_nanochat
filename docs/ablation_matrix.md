@@ -182,5 +182,9 @@ lifecycle's effect. `--stage structural` launches the pair; the screening set st
   (`--splitmerge_every`), not via a `SynapticConfig` mechanism flag, so it is not one of the 20
   pre-registered columns; `enable_metabolism` covers the per-expert energy dynamics. Since
   2026-09-01 the opt-in `structural_columns()` pair (§6) is how the lifecycle gets evidence.
+- **Roadmap features vs. columns** (2026-09-02, `74f.9`): README §Roadmap lists per feature whether a
+  D1 column measures it (six do), whether it is unimplemented (Rab/SNARE), a recipe knob (CA init),
+  or a research module off the live path (gauge, simplicial, ultrametric). Off-path modules cannot be
+  ablated and get no column.
 - The **feasible mechanism set** and the **final token budget** are pinned by `hwxb.4.5`; this spec is
   parametric in both.

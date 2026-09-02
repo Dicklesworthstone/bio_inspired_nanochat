@@ -50,7 +50,7 @@ would this gap close? **Yes / Partial / No (NO BEAD)**.
 | G6 | Kernels: exact causal recurrence 12× slower (`l7c9`), Triton decode kernel never on a GPU (`3bnd`), fused training kernel (`jyb.2/3`), Rust row-parallel (`ylo2`) | 9, 10 | PARTIAL | Major | Yes | L–XL |
 | G7 | Neuromodulation efficacy and the RL sample-efficiency study | 7 | UNPROVEN | Major | Yes — `hwxb.4.2`, `hy8.3` (GPU) | L |
 | G8 | CMA-ES against a language-model objective | 11 | PARTIAL | Major | Yes — `idh4` | L |
-| G9 | Eleven roadmap toggles have no evidence path: only 9 add-one-in columns exist | 18 | UNPROVEN | Major | NO BEAD | M |
+| G9 | Roadmap features without an evidence path | 18 | RESOLVED 2026-09-02 (`74f.9`): 6 of 11 already have D1 columns; 1 is unimplemented, 1 a recipe knob, 3 are off-path research modules — README carries the table | Major | closed | M |
 | G10 | Selective decoding / calibrated abstention unreachable from serving | 8 | PARTIAL | Major | Yes — `wmel` | M |
 | G11 | Dual-4090 performance program (utilization, NCCL, precision, cudagraphs, guardrails) | 13 | NOT STARTED (GPU) | Major | Yes — `6pj`, `j9i`, `2fh`, `4nk`, `5rh`, `94r`, `h4j`, `vwl` | XL |
 | G12 | Quick Start step 4 documented `--source sft` only; the working post-`base_train` command was undocumented | 14 | DONE this evening (README §4, CLI help) | Minor | closed by commit | S |
@@ -245,7 +245,14 @@ D1 small config (GPU), with the 74f.1 readiness gate.
 README §CMA-ES cites it. **Dependencies.** G3; G1 for the LM objective. **Size.** L. **Vision.** 11.
 **Beads?** Yes — `idh4`.
 
-### G9 · Roadmap toggles with no evidence path — UNPROVEN → DECIDED
+### G9 · Roadmap toggles with no evidence path — DECIDED (2026-09-02)
+
+*Outcome:* the premise was half wrong. Six of the eleven roadmap features are registered mechanisms
+with D1 columns (stochastic release, septin barrier, Doc2, Xi genome, the bistable latch, and the
+endocytosis queue through `bio_no_presyn`); Rab/SNARE routing is not implemented; CA init is a
+training-recipe knob; gauge-reversible, simplicial and ultrametric are research modules `GPTSynaptic`
+does not import. README §Roadmap now carries the per-feature evidence table. No new columns were
+added: nothing off the live path can be ablated. The original analysis follows for the record.
 
 **Current state.** Endocytosis buffer, septin, Rab/SNARE, Doc2, Xi genome, CA init, gauge-reversible,
 simplicial, ultrametric, tropical skeleton, topological NAS exist as config fields; nine mechanisms

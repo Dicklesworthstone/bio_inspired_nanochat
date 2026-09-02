@@ -171,10 +171,30 @@ Beyond the core mechanisms, we're systematically implementing 11 additional biol
 10. **Simplicial/Higher-Order Attention** - k-body interactions beyond pairwise
 11. **Ultrametric Routing** - Hierarchical expert organization
 
+
+**Evidence path per feature** (checked against `ablation_registry.MECHANISMS` and the import graph,
+2026-09-02; bead `74f.9`). A D1 column means the pre-registered matrix (`docs/ablation_matrix.md`)
+measures the feature's effect once the GPU run happens; "exploratory" means no efficacy evidence is
+planned and none should be inferred.
+
+| # | Feature | Switch | Evidence path |
+|---|---|---|---|
+| 1 | Stochastic vesicle release | `SynapticConfig.stochastic_train_frac` (mechanism `stochastic_release`, default on) | D1 leave-one-out column `bio_no_stochastic_release` |
+| 2 | Endocytosis ring buffer | the DELAY queue inside the presynaptic recurrence; no separate switch. Rab5/7 staging is not implemented | only through `bio_no_presyn` (inseparable from presyn) |
+| 3 | Septin-style lateral inhibition | `SynapticConfig.barrier_strength` (mechanism `septin_barrier`, default on); implemented as a global distance barrier, not a windowed inhibition | D1 column `bio_no_septin_barrier` |
+| 4 | Rab/SNARE code-based routing | not implemented (no code) | none — roadmap only |
+| 5 | Doc2 dual sync/async channels | `SynapticConfig.doc2_gain` (mechanism `doc2`, default on) | D1 column `bio_no_doc2` |
+| 6 | Synaptic genome embedding (Xi) | `SynapticConfig.xi_dim` (mechanism `genome`, default on) | D1 column `bio_no_genome` |
+| 7 | CaMKII/PP1 bistable latch | `SynapticConfig.bistable_latch` (opt-in) | D1 column `add_bistable_latch` |
+| 8 | Cellular-automata initialization | `--init_type` in `base_train` / `--init-type` in `eval_matrix` (a training-recipe knob, not a mechanism) | exploratory; the numbers in `docs/ca_init_decision.md` cite artifacts that are not in the repository |
+| 9 | Gauge-reversible cross-pollination | research modules (`separation_gauge.py`, `ultrametric_memory.py`) that `GPTSynaptic` does not import | exploratory, off the live path |
+| 10 | Simplicial / higher-order attention | research modules (`mgr_variants.py`, `xpoll.py`) that `GPTSynaptic` does not import | exploratory, off the live path |
+| 11 | Ultrametric routing | `ultrametric_memory.py`, not imported by `GPTSynaptic` | exploratory, off the live path |
+
 Each feature is:
 - 📝 **Documented** with biological rationale, implementation plan, and success criteria
 - 🧪 **Testable** via ablation studies and statistical validation
-- ⚙️ **Toggleable** via `SynapticConfig` flags, with a registry + validator (`bio_inspired_nanochat/ablation_registry.py`) that defines every mechanism's ablation knob and rejects silently-broken configs (e.g. an opt-in mechanism enabled without its prerequisite)
+- ⚙️ **Toggleable** via `SynapticConfig` flags where a flag exists (items 1–3 and 5–7 above; item 4 is unimplemented, 8 is a recipe knob, 9–11 are research modules off the live path), with a registry + validator (`bio_inspired_nanochat/ablation_registry.py`) that defines every mechanism's ablation knob and rejects silently-broken configs (e.g. an opt-in mechanism enabled without its prerequisite)
 - 📊 **Benchmarked** against vanilla transformers with rigorous metrics
 
 See [NEW_RADICALLY_NEW_BIO_INSPIRED_FEATURES_TO_ADD_IN_MODULAR_WAY.md](NEW_RADICALLY_NEW_BIO_INSPIRED_FEATURES_TO_ADD_IN_MODULAR_WAY.md) for detailed specifications.
