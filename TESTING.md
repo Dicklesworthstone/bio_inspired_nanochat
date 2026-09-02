@@ -140,6 +140,9 @@ never lowered**. CI passes `--cov` on every push (the integration-tests job), so
   the Lean formal-feedback audit (`scripts/formal_feedback.py`); a `maturin build` wheel; then
   `maturin develop` + `pytest -m "not slow" --cov` + `validate_all --suite fast`. The wheel and test
   jobs depend on the Rust format job, so one unformatted hunk skips the whole suite.
+  `tests/test_e2e_quick_start.py` is part of that run: it executes the README Quick Start as
+  subprocesses (tokenizer, `base_train --synapses=1 --syn_cfg.…`, `chat_cli -i base`, and an
+  unknown `--syn_cfg` field as the planted negative), so a script that cannot start fails CI.
 - **`nightly-validation.yml` — 04:30 UTC:** `validate_all --suite all --timeout-scale 4` and the
   perf-regression gate, uploading `reports/` and the registry as artifacts.
 - **`nightly-uncertainty.yml` — 05:17 UTC:** `tests/test_e2e_uncertainty.py` with its evidence

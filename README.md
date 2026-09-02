@@ -367,7 +367,7 @@ We're implementing systematic bio vs vanilla evaluation with statistical rigor:
 
 ### Experimental Design
 
-- **Configs**: Vanilla GPT, bio-all, per-feature toggles (11 ablations)
+- **Configs**: the 20 pre-registered columns of `docs/ablation_matrix.md` (3 anchors, 8 leave-one-out, 9 add-one-in) plus the opt-in structural pair (`moe_fixed` vs `moe_splitmerge`); `python -m scripts.matrix_launch` derives every cell's `base_train` command from the spec and `eval_matrix` scores the checkpoints
 - **Seeds**: 2 matched seeds for pipeline smoke, 3 for research estimates, and at least 6 non-zero matched pairs before a two-sided exact-Wilcoxon-backed directional claim (5 pairs cannot reach `p < 0.05`)
 - **Tests**: paired-bootstrap CI + paired t-test + Wilcoxon signed-rank with Holm correction, Student-t 95% aggregate CIs, and explicit supported/null/regression/insufficient-evidence verdicts — implemented in `bio_inspired_nanochat/eval_stats.py` (run `uv run python -m bio_inspired_nanochat.eval_stats <summary.csv>` on an `eval_matrix` output)
 - **Budget**: Fixed token budget per run (~10B tokens for small-scale)

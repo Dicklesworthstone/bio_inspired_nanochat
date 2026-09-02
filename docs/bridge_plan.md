@@ -45,15 +45,15 @@ would this gap close? **Yes / Partial / No (NO BEAD)**.
 | G1 | The headline experiment: bio vs vanilla at scale, with statistics | 12, 13, 19 | NOT STARTED (blocked: GPU host) | Critical | Yes — `hwxb.2.5→2.6→3.x→5.2→5.3→6.x`, `4fw`, `rwg`, `gzm` | XL |
 | G2 | Online fast-weight efficacy: never shown; the probes were blind until today; no training regime lets the model learn to use the writes | 3 | UNPROVEN | Critical | Partial — `sx1m`, `hwxb.4.4`; the chunked training regime has NO BEAD | L |
 | G3 | Evaluation determinism: `GPTSynaptic.forward` defaults to `train_mode=True` (stochastic release + plasticity), so every unwrapped evaluator scores a noisy, self-modifying model | 1, 2, 11, 12 | REGRESSED (contaminates past CPU results and future GPU evals) | Critical | NO BEAD | S |
-| G4 | Structural lifecycle efficacy: defaults inert; NAS regressed on 8/8 seeds; `relative` health exists but is unmeasured in the matrix harness | 5, 6 | UNPROVEN | Major | Partial — `sx1m`, `hwxb.4.3`, `uta.2`; eval_matrix wiring has NO BEAD | M |
-| G5 | A real end-to-end gate for the training scripts (the test that would have caught G-torch.compile) | 14, 23 | NO TEST | Major | NO BEAD | S |
+| G4 | Structural lifecycle efficacy: defaults inert; NAS regressed on 8/8 seeds; `relative` health exists but no run has measured it | 5, 6 | UNPROVEN (evidence path built this evening: `structural_columns()`) | Major | Partial — `sx1m`, `hwxb.4.3`, `uta.2`; the NAS re-run has NO BEAD | M |
+| G5 | A real end-to-end gate for the training scripts (the test that would have caught the `torch.compile` crash) | 14, 23 | DONE this evening — `tests/test_e2e_quick_start.py` | Major | closed by commit | S |
 | G6 | Kernels: exact causal recurrence 12× slower (`l7c9`), Triton decode kernel never on a GPU (`3bnd`), fused training kernel (`jyb.2/3`), Rust row-parallel (`ylo2`) | 9, 10 | PARTIAL | Major | Yes | L–XL |
 | G7 | Neuromodulation efficacy and the RL sample-efficiency study | 7 | UNPROVEN | Major | Yes — `hwxb.4.2`, `hy8.3` (GPU) | L |
 | G8 | CMA-ES against a language-model objective | 11 | PARTIAL | Major | Yes — `idh4` | L |
 | G9 | Eleven roadmap toggles have no evidence path: only 9 add-one-in columns exist | 18 | UNPROVEN | Major | NO BEAD | M |
 | G10 | Selective decoding / calibrated abstention unreachable from serving | 8 | PARTIAL | Major | Yes — `wmel` | M |
 | G11 | Dual-4090 performance program (utilization, NCCL, precision, cudagraphs, guardrails) | 13 | NOT STARTED (GPU) | Major | Yes — `6pj`, `j9i`, `2fh`, `4nk`, `5rh`, `94r`, `h4j`, `vwl` | XL |
-| G12 | Quick Start step 4 documents `--source sft` only; the working post-`base_train` command is undocumented and the CLIs' help omits `base` | 14 | PARTIAL | Minor | NO BEAD | S |
+| G12 | Quick Start step 4 documented `--source sft` only; the working post-`base_train` command was undocumented | 14 | DONE this evening (README §4, CLI help) | Minor | closed by commit | S |
 | G13 | TensorBoard tags the README promises (`calcium_mean`, `rrp_mean`, `fast_weight_norm`) are not emitted | 17 | PARTIAL | Minor | NO BEAD | S |
 | G14 | Ship a usable checkpoint, demo, write-up; the 2025 publication milestone | 19, 20 | NOT STARTED (GPU) | Critical (it is the product) | Yes — `hwxb.6.1/6.2/6.3`, `vap.6` | L |
 | G15 | CI/nightlies green **verified**, not just fixed | 23 | UNVERIFIED | Minor | NO BEAD | S |
@@ -83,7 +83,8 @@ scored in this regime.
 
 **Target state.** An `nn.Module` in eval mode is deterministic by default. `train_mode: bool | None =
 None` resolves to `self.training`; explicit callers are unchanged (`base_train` passes `True` in the
-loop, `False` in eval). Generation keeps adapting only where the Engine says so.
+loop, `False` in eval). Generation keeps adapting only where the Engine says so. *Landed this
+evening (`5cb1a90`); the audit re-runs below are still open.*
 
 **Success criteria.**
 - [ ] `tests/test_eval_determinism.py`: for every evaluator entry point above, two calls on the same
@@ -105,7 +106,10 @@ suite; fix any test that relied on eval-mode plasticity by passing `update_mem=T
 ### G1 · The headline experiment — NOT STARTED → WORKING
 
 **Current state.** Harness complete (`eval_matrix`, `eval_stats`, pre-registered D1 matrix with
-synaptic-off anchor, registry, checkpoint manager, DDP path). Zero GPU runs. `trj` unreachable.
+synaptic-off anchor, registry, checkpoint manager, DDP path). Since this evening the commands that
+produce every cell's checkpoint are derived from the spec (`scripts/matrix_launch.py`,
+`ablation_matrix.base_train_argv`); before that nothing turned a column into a training run.
+Zero GPU runs. `trj` unreachable.
 
 **Target state.** D1 as pre-registered in `docs/ablation_matrix.md`: depth 10, ~91M tied params,
 500M FineWeb-Edu tokens, 3 seeds, 20 columns, on 2×4090; verdict written by `eval_stats` with
@@ -161,23 +165,28 @@ problem, `hwxb.4.4` is GPU-scale; the regime itself has NO BEAD.
 
 **Current state.** Controller wired in `base_train` (`--splitmerge_every`, `--sm_health_mode`);
 product health peaks at half the routing mass so uniform experts read as dying; `relative` mode
-measured on sx1m (separates a real straggler at E=16). `eval_matrix`'s inline loop has no
-controller, so the D1 MoE columns cannot test structural plasticity. The one NAS evaluation
-regressed (p=0.0036) and was scored under the G3 regime.
+measured on sx1m (separates a real straggler at E=16). The lifecycle is a `base_train` knob, not a
+`SynapticConfig` field, so until this evening no matrix column could carry it;
+`ablation_matrix.structural_columns()` now defines the opt-in pair `moe_fixed` vs `moe_splitmerge`
+(bio_all on `SynapticMoE`; split/merge every 100 steps under `relative` health) and
+`scripts/matrix_launch.py --stage structural` emits their `base_train` commands. The one NAS
+evaluation regressed (p=0.0036) and was scored under the G3 regime.
 
-**Target state.** `eval_matrix run --splitmerge-every N --sm-health-mode relative --sm-thresholds …`
-drives the controller in the inline loop, logs events, and records the config in `run_config`; the
-NAS evaluation re-run under G3 with both health modes.
+**Target state.** The pair trained and scored like any other cell (screening budget, 2 seeds), and
+the NAS evaluation re-run under G3 with both health modes.
 
 **Success criteria.**
-- [ ] Test: with forced thresholds the inline loop fires ≥1 split and ≥1 merge in 20 steps and the
-  loss stays finite; with the flag off, `run_config.splitmerge_every == 0` and no events.
+- [x] The `moe_splitmerge` command carries `--splitmerge_every=100 --sm_health_mode=relative
+  --split_health_min=1.5 --merge_health_max=0.35` and both columns share `bio_all`'s
+  `SynapticConfig` (`tests/test_matrix_launch.py`).
+- [ ] CPU pilot of the pair at 2L/64d, 300 steps, 3 seeds: events fire (≥1 split, ≥1 merge) under
+  `relative` health during ordinary training, loss finite.
 - [ ] `structural_nas_evaluation` re-run (8 seeds) under `relative` health: report final-loss delta
   with CI. If still worse, split/merge stays opt-in and the README says so in the lifecycle section.
 - [ ] `sx1m` closed with the numbers, whichever way they fall.
 
 **Dependencies.** G3. **Size.** M. **Vision goals.** 5, 6. **Beads?** Partial — `sx1m`, `hwxb.4.3`,
-`uta.2`; the harness wiring has NO BEAD.
+`uta.2`; the NAS re-run has NO BEAD.
 
 ### G5 · A real end-to-end gate for the training scripts — NO TEST → WORKING
 
@@ -363,10 +372,11 @@ which defaults the GPU run should carry.
 ## 4. Would finishing the open beads close the vision?
 
 For the headline question: **yes, once a GPU exists** — the `hwxb` chain is the pre-registered
-experiment and the harness is done. For the vision as written: **no.** Eight gaps have no bead
-(G3, G5, G9, G12, G13, G15, G16, G17), two are only partially covered (G2's training regime,
-G4's harness wiring), and one is a policy decision (G18). Phase 3a should create beads for exactly
-those eleven items; the rest already have correct beads and need no new tracker entries.
+experiment and the harness is done. For the vision as written: **no.** Six open gaps have no bead
+(G3's audit re-runs, G9, G13, G15, G16, G17; G5 and G12 were closed by commit this evening), two
+are only partially covered (G2's training regime, G4's NAS re-run), and one is a policy decision
+(G18). Phase 3a should create beads for exactly those nine items; the rest already have correct
+beads and need no new tracker entries.
 
 ## 5. Verification plan (how each vision item is proven when the plan is done)
 

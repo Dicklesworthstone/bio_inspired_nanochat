@@ -29,6 +29,20 @@ A full reality check against the README and plan documents (assessment published
 ### Structural lifecycle
 - `SplitMergeConfig.health_mode="relative"` (default-off; `--sm_health_mode` in `base_train`) scores each expert by utilization relative to the fair share `top_k / num_experts`, so 1.0 means uniform at any expert count, >1 overworked, <1 underused; thresholds are then in fair-share units and the config refuses the product-mode defaults. Motivated by the measurement above; whether events help under either signal is still open (`sx1m`). `tests/test_lifecycle_health_relative.py`.
 
+### Training scripts on Python 3.14
+- `base_train` and `mid_train` called `torch.compile` unconditionally; torch 2.x raises on Python 3.14, the project's only supported interpreter, so neither script could start. Both now try the compile and fall back to eager with a logged note (`--torch_compile=0` skips the attempt). The README Quick Start then ran end to end on CPU (two FineWeb shards, 4,096-token vocabulary, 8 steps): the first `base_train` record in `results/registry.jsonl`, a checkpoint, and `chat_cli -i base` generating from it. `tests/test_e2e_quick_start.py` runs the same commands as subprocesses, with an unknown `--syn_cfg` field as the planted negative.
+
+### Measurement regime (why every earlier fast-weight null was blind)
+- `synthetic_tasks.retrieval_accuracy` and the working-memory suite take `chunk_len`: the sequence is read through a KV cache in chunks so online Hebbian writes made on earlier chunks are in force for later ones. A single full forward, the only regime used until now, applies the writes after the matmuls that would need them, so the recorded ON = OFF nulls (`sax.1`, `hwxb.4.4`) say nothing about the mechanism. `tests/test_working_memory_chunked_eval.py` locks that writes run once per chunk per synaptic linear and change later logits.
+- `GPTSynaptic.forward(train_mode=...)` defaulted to `True`, which also switched on stochastic vesicle sampling; two identical eval-mode forwards differed by up to 0.067 in logits. `train_mode` now defaults to the module's own training flag, so an eval-mode model is deterministic unless a caller asks otherwise, and a separate `update_mem` flag lets a probe keep plasticity live while reading deterministically. Callers that passed `train_mode` explicitly (`base_train`, `eval_matrix`, the Engine) are unchanged; unwrapped evaluators (`base_eval`/CORE, the e2e comparison scripts, the CMA-ES proxy) had been scoring a stochastic, self-modifying model.
+
+### Matrix launcher
+- `ablation_matrix.base_train_argv(column, seed=…)` emits the exact `scripts.base_train` arguments for one matrix cell and `scripts/matrix_launch.py` prints or runs a whole stage plus the `eval_matrix` scoring command; until now nothing turned a column into a training run. Every screening column round-trips through `base_train`'s own override parser (`tests/test_matrix_launch.py`).
+- `ablation_matrix.structural_columns()`: the opt-in pair `moe_fixed` vs `moe_splitmerge` (bio_all on `SynapticMoE`; split/merge every 100 steps under the `relative` health signal) gives the expert lifecycle an evidence path without touching the pre-registered 20-column set.
+
+### Plan
+- `docs/bridge_plan.md`: Phase 2 of the reality check, one resolution per gap with success criteria and bead coverage. README Quick Start step 4 shows the base-checkpoint chat command that works right after step 3.
+
 ### Registry, CI, and gates
 - The test suite redirects the default results registry via `BIO_RESULTS_REGISTRY` (`tests/conftest.py`), and 43 rows whose artifacts were pytest temp directories were purged from `results/registry.jsonl`.
 - CI: `cargo fmt` on `rust_src/src/presyn.rs` (red since 2026-08-25, which skipped the wheel build and the 1,789-test suite); nightly validation gets `validate_all --timeout-scale 4`; nightly uncertainty creates its gitignored evidence directory; `release.yml` uses the real `dtolnay/rust-toolchain` action; duplicate `master` push trigger dropped; the quality gate's inner `uv run` is `--no-sync` so it cannot re-sync the environment to the CUDA torch build.

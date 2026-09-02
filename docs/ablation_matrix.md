@@ -142,11 +142,33 @@ orchestration on tiny models to validate the machinery before the real run (`hwx
 
 ```python
 from bio_inspired_nanochat import ablation_matrix as am
-cols = am.screening_columns()                      # the 13 columns
+cols = am.screening_columns()                      # the 20 columns
 hours = am.estimate_gpu_hours(cols, am.SCREENING_SEEDS, am.SCREENING_TOKENS, tok_per_sec=measured)
 gate = am.go_no_go(survivors, tok_per_sec=measured)  # gate the confirmation pass
 conf = am.confirmation_columns(survivors)            # anchors + survivors
 ```
+
+**Producing the checkpoints.** `eval_matrix` scores finished `base_train` checkpoints; the
+commands that produce them are derived from this spec, never written by hand:
+
+```bash
+# print the screening pass (nothing runs); add --execute to run it, --nproc 2 for torchrun
+uv run --no-sync python -m scripts.matrix_launch --stage screening \
+    --recipe "--depth=10 --tie_embeddings=1 --device_batch_size=32 --total_batch_size=524288 --num_iterations=950"
+```
+
+`ablation_matrix.base_train_argv(column, seed=…)` contributes `--synapses`, one
+`--syn_cfg.<field>=<value>` per field the column sets, the seed as `--init_seed` (what
+`eval_matrix` checks the checkpoint against) and `--model_tag=matrix_<column>_s<seed>`; the
+launcher prints the matching `eval_matrix batch … --checkpoint-dir
+"<base_dir>/base_checkpoints/matrix_{preset}_s{seed}"` command. `tests/test_matrix_launch.py`
+round-trips every column through `base_train`'s own override parser.
+
+**Structural arm (opt-in, not pre-registered).** The expert lifecycle is a training-loop knob,
+so `structural_columns()` provides `moe_fixed` (bio_all on `SynapticMoE`, fixed experts) and
+`moe_splitmerge` (the same plus `--splitmerge_every=100 --sm_health_mode=relative
+--split_health_min=1.5 --merge_health_max=0.35`); `moe_splitmerge − moe_fixed` is the
+lifecycle's effect. `--stage structural` launches the pair; the screening set stays at 20.
 
 ---
 
@@ -157,8 +179,8 @@ conf = am.confirmation_columns(survivors)            # anchors + survivors
   instantiates the bus for it. **NeuroScore** is still a `SplitMergeConfig`-level knob, not a
   `SynapticConfig` mechanism, so it has no column yet.
 - **Structural lifecycle** (split/merge) is toggled at the *training-script* level
-  (`--splitmerge_every`), not via a `SynapticConfig` mechanism flag; `enable_metabolism` covers the
-  per-expert energy dynamics. A dedicated lifecycle on/off column should be added once the runner
-  exposes the model-level toggle to the matrix.
+  (`--splitmerge_every`), not via a `SynapticConfig` mechanism flag, so it is not one of the 20
+  pre-registered columns; `enable_metabolism` covers the per-expert energy dynamics. Since
+  2026-09-01 the opt-in `structural_columns()` pair (§6) is how the lifecycle gets evidence.
 - The **feasible mechanism set** and the **final token budget** are pinned by `hwxb.4.5`; this spec is
   parametric in both.
