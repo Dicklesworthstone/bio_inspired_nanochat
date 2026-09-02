@@ -189,7 +189,7 @@ planned and none should be inferred.
 | 8 | Cellular-automata initialization | `--init_type` in `base_train` / `--init-type` in `eval_matrix` (a training-recipe knob, not a mechanism) | exploratory; the numbers in `docs/ca_init_decision.md` cite artifacts that are not in the repository |
 | 9 | Gauge-reversible cross-pollination | research modules (`separation_gauge.py`, `ultrametric_memory.py`) that `GPTSynaptic` does not import | exploratory, off the live path |
 | 10 | Simplicial / higher-order attention | research modules (`mgr_variants.py`, `xpoll.py`) that `GPTSynaptic` does not import | exploratory, off the live path |
-| 11 | Ultrametric routing | `ultrametric_memory.py`, not imported by `GPTSynaptic` | exploratory, off the live path |
+| 11 | Ultrametric routing | opt-in `attention_type="ultrametric"` on the vanilla `GPT` (`gpt.py`); not part of `GPTSynaptic` | exploratory; no bio-matrix column (it is not a synaptic mechanism) |
 
 Each feature is:
 - 📝 **Documented** with biological rationale, implementation plan, and success criteria

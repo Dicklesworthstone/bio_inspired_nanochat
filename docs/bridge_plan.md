@@ -250,8 +250,8 @@ README §CMA-ES cites it. **Dependencies.** G3; G1 for the LM objective. **Size.
 *Outcome:* the premise was half wrong. Six of the eleven roadmap features are registered mechanisms
 with D1 columns (stochastic release, septin barrier, Doc2, Xi genome, the bistable latch, and the
 endocytosis queue through `bio_no_presyn`); Rab/SNARE routing is not implemented; CA init is a
-training-recipe knob; gauge-reversible, simplicial and ultrametric are research modules `GPTSynaptic`
-does not import. README §Roadmap now carries the per-feature evidence table. No new columns were
+training-recipe knob; gauge-reversible and simplicial are research modules `GPTSynaptic` does not
+import, and ultrametric attention is an opt-in on the vanilla `GPT` only. README §Roadmap now carries the per-feature evidence table. No new columns were
 added: nothing off the live path can be ablated. The original analysis follows for the record.
 
 **Current state.** Endocytosis buffer, septin, Rab/SNARE, Doc2, Xi genome, CA init, gauge-reversible,
