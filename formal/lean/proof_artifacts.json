@@ -863,6 +863,68 @@
       "mathlib_revision": "a3a10db0e9d66acbebf76c5e6a135066525ac900",
       "build_command": "rch exec -- lake build",
       "build_result": "attempted-2026-08-25-rch-refused-non-compilation-command-local-fallback-lake-permission-denied"
+    },
+    {
+      "cycle_id": "reality-check-runtime-refresh-2026-09-01",
+      "frog_id": "bio_inspired_nanochat-reality-check",
+      "theorem_ids": [
+        "BioInspiredNanochat.Metriplectic.poisson_entropy_degeneracy",
+        "BioInspiredNanochat.Metriplectic.friction_energy_degeneracy",
+        "BioInspiredNanochat.Metriplectic.energyRate_zero",
+        "BioInspiredNanochat.Metriplectic.entropyRate_nonnegative",
+        "BioInspiredNanochat.Metriplectic.freeEnergyRate_nonpositive",
+        "BioInspiredNanochat.Metriplectic.freeEnergy_nonincreasing",
+        "BioInspiredNanochat.Metriplectic.trajectory_energy_constant",
+        "BioInspiredNanochat.Metriplectic.trajectory_entropy_from_start",
+        "BioInspiredNanochat.Metriplectic.trajectory_freeEnergy_nonincreasing",
+        "BioInspiredNanochat.Metriplectic.trajectory_component_bounds"
+      ],
+      "route": "runtime-first-proof-preserving",
+      "proof_friction_class": "documentation-drift",
+      "runtime_defect_found": false,
+      "artifact_hash": "sha256:831498bc2853d86701250ea89024ab5f5f6190d2e3a5a9ae66f93a7d5d42d963",
+      "hash_scope": "formal/lean/BioInspiredNanochat.lean",
+      "sorry_or_admit_present": false,
+      "axioms": [
+        "propext",
+        "Classical.choice",
+        "Quot.sound"
+      ],
+      "assurance": {
+        "exact_real_algebra": "E-unchanged",
+        "live_torch_regressions": "B",
+        "floating_point_refinement": "dtype-aware-guarded-runtime-gap"
+      },
+      "conformance": {
+        "statement_parity": "pass-reduced-core",
+        "state_parity": "pass-live-C-B-HEAT-core",
+        "transition_parity": "pass-closed-form-implicit-midpoint-vs-numpy-reference"
+      },
+      "change_scope": "Runtime hash refresh after the 2026-09-01 reality-check fix rounds (commits b95f574..5eddd54). (1) synaptic.py - (a) release_canonical dispatches the Rust CPU decode kernel (rustbpe.presyn_release_canonical_cpu) for eval-mode one-query CPU decode when native_presyn=1, parity-tested against the Python reference (tests/test_presyn_rust_dispatch.py); (b) new SynapticConfig.neuromod_enabled flag; (c) the comment on the Hebbian write path now states that update_mem defaults to train_mode, which defaults to the module's training flag (GPTSynaptic, commit 5cb1a90), so eval forwards are deterministic; no release_canonical dynamics, thermodynamic functions, or Lean-mapped statements touched; (2) ablation_registry.py - registers neuromod_enabled as the `neuromod` mechanism (requires presyn + hebbian) and hosts the SynapticConfig schema validator that cmaes_params and certificate_bundle borrow (moved out of certificate_bundle); registry semantics for every existing mechanism unchanged; (3) ablation_matrix.py - AblationConfig gains train_overrides (base_train globals a column needs); base_train_argv/matrix_model_tag derive each cell's scripts.base_train command; structural_columns() adds the opt-in moe_fixed/moe_splitmerge pair; the 20 pre-registered screening columns and every build_syn_cfg() result are unchanged (tests/test_matrix_launch.py round-trips them); (4) tests/test_scaleup_ablation_e2e.py - the pinned screening-column count moved from 19 to 20 when neuromod joined the add-one-in set; no other assertion changed. The Lean file hash is re-read at HEAD (unchanged theorems, no sorry/admit). All mapped regressions were re-executed in the full `-m \"not slow\"` suite on 2026-09-01/02 (1889 passed; the five failures were this refresh and four callers of the new deterministic-evaluation default, fixed in 5eddd54).",
+      "runtime_mapping": [
+        {
+          "path": "bio_inspired_nanochat/synaptic.py",
+          "sha256": "a024c57a305a0d86a991baa75aa3e44376d8db2317be69720adca6216402504c"
+        },
+        {
+          "path": "bio_inspired_nanochat/ablation_registry.py",
+          "sha256": "659d1b1203cf38bc29ea60b02fb6029fc1a2cc9d20234e2d2d19eb5fcbf82c9d"
+        },
+        {
+          "path": "bio_inspired_nanochat/ablation_matrix.py",
+          "sha256": "106640eb7b2b286628e19e3faf769036d230e16b732698d0807a16a1ce7e1157"
+        },
+        {
+          "path": "tests/test_scaleup_ablation_e2e.py",
+          "sha256": "5e51b0b57d0400265d50722b7bfc6ac7b005cfedfe4e98715c801eba4984b0da"
+        }
+      ],
+      "regression_command": "uv run python -m pytest tests/test_metriplectic_theory.py tests/test_metriplectic_integrator.py tests/test_metriplectic_runtime.py tests/test_stdp.py tests/test_mc_ensemble.py tests/test_flex_canonical.py tests/test_ablation_registry.py -q",
+      "regression_result": "112 passed, 1 skipped (2026-08-25)",
+      "lean_toolchain": "leanprover/lean4:v4.27.0",
+      "mathlib_revision": "a3a10db0e9d66acbebf76c5e6a135066525ac900",
+      "build_command": "rch exec -- lake build",
+      "build_result": "attempted-2026-08-25-rch-refused-non-compilation-command-local-fallback-lake-permission-denied"
     }
   ]
 }
