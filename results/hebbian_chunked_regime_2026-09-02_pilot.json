@@ -1,0 +1,258 @@
+{
+  "protocol_id": "hebbian-chunked-regime-v1-2026-09-02",
+  "budget": {
+    "label": "pilot",
+    "steps": 300,
+    "chunk_len": 4,
+    "max_pairs": 8,
+    "lr": 0.003,
+    "seeds": [
+      0,
+      1
+    ],
+    "eval_pairs": [
+      2,
+      4,
+      8
+    ],
+    "preregistered": {
+      "steps": 2000,
+      "chunk_len": 8,
+      "max_pairs": 16,
+      "lr": 0.003
+    },
+    "discovery_seeds": [
+      0,
+      1
+    ],
+    "confirmation_seeds": [
+      2,
+      3,
+      4
+    ]
+  },
+  "git_sha": "16a2914538dc7c3d81e3eedcdb9706d79b0e6470",
+  "measurement_regime": {
+    "eval_determinism": "module-training-flag (GPTSynaptic.forward train_mode defaults to self.training; commit 5cb1a90)",
+    "read": "both",
+    "since": "2026-09-01"
+  },
+  "evidence_class": "EMPIRICAL_PATTERN (toy scale, CPU)",
+  "controls": {
+    "negative_off_reads_identical": false,
+    "planted_witness_on_writes_visible": true,
+    "min_visible_diff_on": 0.8035182952880859,
+    "attention_baseline_above_chance": true
+  },
+  "countermetric": {
+    "sec_per_step_chunked": 7.372401988864974,
+    "sec_per_step_full": 3.553323316692501,
+    "final_loss_chunked": 3.546035587787628,
+    "final_loss_full": 3.2575671881437303
+  },
+  "summary": {
+    "discovery": {
+      "n_seeds": 2,
+      "acc_on_chunked_train_chunked_read": 0.0625,
+      "acc_off_chunked_train_chunked_read": 0.03125,
+      "effect_at_top_pairs": 0.03125,
+      "null_sigma_off_arm": 0.02209708691207961,
+      "minimum_detectable_effect_3sigma": 0.046875,
+      "acc_on_chunked_train_full_read": 0.0625,
+      "acc_on_full_train_chunked_read": 0.1640625,
+      "acc_off_full_train_full_read": 0.125,
+      "acc_off_full_train_2pairs_full_read": 0.4453125
+    },
+    "confirmation": {
+      "n_seeds": 0,
+      "acc_on_chunked_train_chunked_read": null,
+      "acc_off_chunked_train_chunked_read": null,
+      "effect_at_top_pairs": null,
+      "null_sigma_off_arm": null,
+      "minimum_detectable_effect_3sigma": null,
+      "acc_on_chunked_train_full_read": null,
+      "acc_on_full_train_chunked_read": null,
+      "acc_off_full_train_full_read": null,
+      "acc_off_full_train_2pairs_full_read": null
+    }
+  },
+  "decision": "pilot: no decision (budget != preregistered)",
+  "runs": [
+    {
+      "seed": 0,
+      "hebbian": true,
+      "train_regime": "chunked",
+      "set": "discovery",
+      "final_loss": 3.587704598903656,
+      "first_loss": 4.3612354636192325,
+      "sec_per_step": 12.307388668770049,
+      "eval": {
+        "full": {
+          "2": 0.234375,
+          "4": 0.125,
+          "8": 0.0
+        },
+        "chunked": {
+          "2": 0.234375,
+          "4": 0.125,
+          "8": 0.0
+        },
+        "max_abs_logit_diff_chunked_vs_full": 1.5410609245300293
+      }
+    },
+    {
+      "seed": 0,
+      "hebbian": true,
+      "train_regime": "full",
+      "set": "discovery",
+      "final_loss": 3.3610412955284117,
+      "first_loss": 4.373696649074555,
+      "sec_per_step": 3.2674821122566935,
+      "eval": {
+        "full": {
+          "2": 0.484375,
+          "4": 0.15625,
+          "8": 0.1875
+        },
+        "chunked": {
+          "2": 0.46875,
+          "4": 0.15625,
+          "8": 0.171875
+        },
+        "max_abs_logit_diff_chunked_vs_full": 1.0876826047897339
+      }
+    },
+    {
+      "seed": 0,
+      "hebbian": false,
+      "train_regime": "chunked",
+      "set": "discovery",
+      "final_loss": 3.5868821144104004,
+      "first_loss": 4.353963947296142,
+      "sec_per_step": 2.9999410102399997,
+      "eval": {
+        "full": {
+          "2": 0.203125,
+          "4": 0.09375,
+          "8": 0.015625
+        },
+        "chunked": {
+          "2": 0.203125,
+          "4": 0.09375,
+          "8": 0.015625
+        },
+        "max_abs_logit_diff_chunked_vs_full": 2.86102294921875e-06
+      }
+    },
+    {
+      "seed": 0,
+      "hebbian": false,
+      "train_regime": "full",
+      "set": "discovery",
+      "final_loss": 3.288614296913147,
+      "first_loss": 4.3538110733032225,
+      "sec_per_step": 3.2674081367067993,
+      "eval": {
+        "full": {
+          "2": 0.40625,
+          "4": 0.203125,
+          "8": 0.1875
+        },
+        "chunked": {
+          "2": 0.40625,
+          "4": 0.203125,
+          "8": 0.1875
+        },
+        "max_abs_logit_diff_chunked_vs_full": 3.814697265625e-06
+      }
+    },
+    {
+      "seed": 1,
+      "hebbian": true,
+      "train_regime": "chunked",
+      "set": "discovery",
+      "final_loss": 3.4487871885299684,
+      "first_loss": 4.395010256767273,
+      "sec_per_step": 9.975859599713198,
+      "eval": {
+        "full": {
+          "2": 0.28125,
+          "4": 0.171875,
+          "8": 0.125
+        },
+        "chunked": {
+          "2": 0.28125,
+          "4": 0.15625,
+          "8": 0.125
+        },
+        "max_abs_logit_diff_chunked_vs_full": 0.8035182952880859
+      }
+    },
+    {
+      "seed": 1,
+      "hebbian": true,
+      "train_regime": "full",
+      "set": "discovery",
+      "final_loss": 3.209806740283966,
+      "first_loss": 4.397649073600769,
+      "sec_per_step": 4.915065518703195,
+      "eval": {
+        "full": {
+          "2": 0.453125,
+          "4": 0.296875,
+          "8": 0.171875
+        },
+        "chunked": {
+          "2": 0.453125,
+          "4": 0.296875,
+          "8": 0.15625
+        },
+        "max_abs_logit_diff_chunked_vs_full": 0.9832754135131836
+      }
+    },
+    {
+      "seed": 1,
+      "hebbian": false,
+      "train_regime": "chunked",
+      "set": "discovery",
+      "final_loss": 3.560768449306488,
+      "first_loss": 4.396434307098389,
+      "sec_per_step": 4.206418676736648,
+      "eval": {
+        "full": {
+          "2": 0.1875,
+          "4": 0.15625,
+          "8": 0.046875
+        },
+        "chunked": {
+          "2": 0.1875,
+          "4": 0.15625,
+          "8": 0.046875
+        },
+        "max_abs_logit_diff_chunked_vs_full": 2.384185791015625e-06
+      }
+    },
+    {
+      "seed": 1,
+      "hebbian": false,
+      "train_regime": "full",
+      "set": "discovery",
+      "final_loss": 3.170806419849396,
+      "first_loss": 4.396489691734314,
+      "sec_per_step": 2.763337499103315,
+      "eval": {
+        "full": {
+          "2": 0.484375,
+          "4": 0.203125,
+          "8": 0.0625
+        },
+        "chunked": {
+          "2": 0.484375,
+          "4": 0.203125,
+          "8": 0.0625
+        },
+        "max_abs_logit_diff_chunked_vs_full": 3.337860107421875e-06
+      }
+    }
+  ]
+}
