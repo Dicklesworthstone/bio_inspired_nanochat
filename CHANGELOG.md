@@ -5,7 +5,58 @@ All notable changes to [Bio-Inspired Nanochat](https://github.com/Dicklesworthst
 This project is a research fork of [Nanochat](https://github.com/karpathy/nanochat) that replaces static transformer weights with computational analogs of synaptic proteins. There are no formal release tags; the changelog is organized by development phase with commits linked for traceability.
 
 **Repository**: <https://github.com/Dicklesworthstone/bio_inspired_nanochat>
-**136 commits** | **2025-11-18 to 2026-03-11** | **No tagged releases**
+**~650 commits** | **2025-11-18 to 2026-09-01** | **No tagged releases**
+
+---
+
+## 2026-09-01 -- Reality Check: Truth Pass, CLI Wiring, Rust Dispatch
+
+A full reality check against the README and plan documents (assessment published separately) found that every mechanism is implemented and unit-tested at toy scale, that no model larger than 2 layers × 64 dims has ever been trained, and that several documents and closed beads claimed more than the artifacts support. This wave closes the gaps that did not need a GPU.
+
+### Training CLI
+- `--syn_cfg.<field>=<value>` overrides for every `SynapticConfig` field, typed from the dataclass and validated (schema + mechanism prerequisites), refused on resume and for vanilla runs (`bio_inspired_nanochat/cmaes_params.py`, `scripts/base_train.py`, `tests/test_syn_cfg_cli_overrides.py`). The README had documented this syntax since 2025-11; the script rejected it as an unknown key.
+- `--sm_homeostasis_guards`, `--sm_gate_ramp_forwards`, `--sm_energy_floor` expose the `uta.6` guards, which were unreachable from the CLI.
+- Removed the `structural_every` config knob: its only consumer was an empty `pass` block per layer (also dropped from checkpoint metadata, `eval_matrix`, and the hybrid optimizer's genome).
+
+### Kernels
+- `release_canonical` dispatches the Rust decode kernel (`rustbpe.presyn_release_canonical_cpu`) for eval-mode one-query CPU decode when `native_presyn=1`; release, advanced state, and DELAY-queue parity plus planted negatives locked in `tests/test_presyn_rust_dispatch.py`. Measured single-thread: 1.98× faster than PyTorch at 512 keys, 0.97× at 2,048, 0.75× at 4,096, so the toggle stays off by default (follow-up bead `ylo2`).
+
+### Registry, CI, and gates
+- The test suite redirects the default results registry via `BIO_RESULTS_REGISTRY` (`tests/conftest.py`), and 43 rows whose artifacts were pytest temp directories were purged from `results/registry.jsonl`.
+- CI: `cargo fmt` on `rust_src/src/presyn.rs` (red since 2026-08-25, which skipped the wheel build and the 1,789-test suite); nightly validation gets `validate_all --timeout-scale 4`; nightly uncertainty creates its gitignored evidence directory; `release.yml` uses the real `dtolnay/rust-toolchain` action; duplicate `master` push trigger dropped; the quality gate's inner `uv run` is `--no-sync` so it cannot re-sync the environment to the CUDA torch build.
+- `SynapticConfig` schema validation moved from `certificate_bundle` to `ablation_registry`, so the training script no longer imports the certificate machinery through a two-function dependency.
+
+### Documentation truth pass
+- README: Quick Start rewritten with the real flags and the data/tokenizer prerequisites; counts fixed (476 issues / 33 epics, 108 config fields, `rank_eligibility=8`); an "Evidence status" paragraph; the roadmap replaced with the actual open epics and a done/not-done table; calibration numbers labelled with their toy scale; BDNF toggle wording corrected.
+- `docs/model_zoo.md` (a checkpoint table with no checkpoints behind it), `docs/theory/neuromodulated_rl_study.md` (a 1.72× gain that appears in no code or artifact), and `docs/ca_init_decision.md` (numbers from a discarded run) rewritten or flagged; `CLAIMS_AUDIT.md` re-audited; `TESTING.md` now describes what CI actually runs; `docs/theory/README.md` reflects that thrusts D and G have test-only reference modules.
+- `speedrun.sh` / `run1000.sh` point at `bio_inspired_nanochat.*` and `rust_src/Cargo.toml` (they referenced the upstream `nanochat` package).
+
+### Tracker
+- 13 beads stuck in `blocked` with no open blocker reset to `open`; five beads closed on CPU proxies or on documents reopened with the reason recorded (`4fw`, `hwxb.2.5`, `hwxb.2.10`, `vap.6`, `hy8.3`); new beads for the inert-default efficacy work (`sx1m`), CMA-ES on a real objective (`idh4`), 4090 acceptance of the Triton decode kernel (`3bnd`), and row-parallel Rust decode (`ylo2`).
+
+---
+
+## 2026-08-21 to 2026-08-27 -- Second Swarm Wave (≈300 commits)
+
+Multi-agent wave that closed 244 beads on 2026-08-24 alone. Landed, all at toy scale on CPU:
+
+- **Theory program (`0642.*`)**: runtime certificates for the tropical skeleton, thermodynamic UQ multi-seed verdicts, metriplectic paired-stability evidence, topology-aware expert lifecycle (`topological_nas`), p-adic ultrametric retrieval, the `certificate_bundle` fail-closed model card, and the Lean-to-Python proof feedback gate in CI.
+- **Structural evolution (`uta.*`)**: gradient-based marginal expert credit, distributed-safe deterministic lifecycle surgery, homeostatic stability guards after lifecycle events, expert-count growth/shrink under a budget.
+- **Capability frontier (`r00r.*`, `re4e.*`)**: sheaf obstruction detector with abstain/repair actions, theory-discovery engine, self-correcting generation loop, efficiency-Pareto evaluation (documented null).
+- **Scale-up infrastructure (`hwxb.*`)**: exact-resume checkpointing with multi-file commit markers and per-rank state, dataloader v2 exact token-buffer resume, probing/representation analysis; CPU pilots recorded for learnable kinetics, function-preserving split/merge, and online Hebbian fast-weights (the last showing ON = OFF to six decimals).
+- **Hardening**: cross-codebase defect hunts, type-baseline fixes, Rust MoE boundary validation, deterministic CPU evaluation under non-zero `stochastic_train_frac`, dependency upgrades clearing reported vulnerabilities ([`38d421f`](https://github.com/Dicklesworthstone/bio_inspired_nanochat/commit/38d421f), pyo3 0.29 [`7e0671c`](https://github.com/Dicklesworthstone/bio_inspired_nanochat/commit/7e0671c)).
+
+---
+
+## 2026-06-09 to 2026-06-15 -- First Swarm Wave (≈200 commits)
+
+- **Truth & integrity (`8j9.*`)**: `CLAIMS_AUDIT.md`; the live attention path unified on the faithful `release_canonical` (the legacy sigmoid path deleted); dead config fields pruned; machine-verified parameter census.
+- **Numerical robustness (`vg9.*`)**: logit softcap parity, optimizer-moment reset across all optimizers on split/merge, per-sequence reset, full `SynapticConfig` checkpoint round-trip, genuine rank-R eligibility traces.
+- **Differentiable synaptic dynamics (`yw9.*`)**: SGD-learnable stability-preserving calcium/buffer kinetics, differentiable vesicle conservation, spectral-radius stability monitor, chunked-TBPTT recurrence.
+- **Online learning (`sax.*`)**: normalized fast-weight substrate and its honest characterization (unsupervised Hebbian adaptation does not improve next-token prediction); the bistable CaMKII/PP1 latch.
+- **Neuromodulation (`hy8.*`)**: DA/ACh/NE bus with three-factor gating; **structural (`uta.3`)**: function-preserving Net2Net split/merge.
+- **Platform (`eqyk.*`, `hm4.*`)**: test kit and marker taxonomy, structured run logging, results registry, flagship-harness smoke tests, the ablation registry as single source of truth for toggles, and the theory-program overview (`docs/theory/README.md`).
+- **Scale-up plan (`hwxb.*`)**: Phase-0 decisions, DDP hardening, memory-budget estimator, pre-registered bio-vs-vanilla ablation matrix with the synaptic-off anchor.
 
 ---
 

@@ -1,34 +1,38 @@
-# Neuromodulated Reinforcement Learning & Sample Efficiency Study (bead `hy8.3`)
+# Neuromodulated RL Integration (bead `hy8.3`) — what is actually measured
 
-_Neuromodulation & Homeostatic Control (`hy8`) · RL Alignment & Sample Efficiency. Author: GoldenRiver · 2026-08-24._
+_Neuromodulation & Homeostatic Control (`hy8`). Rewritten 2026-09-01._
 
-## Executive Summary & Research Verdict
+> The previous version of this note reported a 1.72× sample-efficiency gain (18.2 ± 2.1 vs
+> 31.4 ± 3.8 steps to reward ≥ 0.85, p = 0.0012) and a final-reward advantage with
+> p = 0.0028 for neuromodulated three-factor RL over vanilla GRPO. Those numbers appear in no
+> script, test, or results artifact in this repository, and no vanilla-GRPO comparison arm
+> exists in the code. They have been removed and bead `hy8.3` was reopened.
 
-This study evaluates the integration of the **Neuromodulatory Bus** (Dopamine RPE, Acetylcholine uncertainty, Norepinephrine arousal) and **Three-Factor Plasticity** ($ΔW \propto \text{pre} \times \text{post} \times \text{DA}$) into reinforcement learning optimization (`scripts/chat_rl.py`, `scripts/e2e/neuromod_rl.py`).
+## What exists
 
-### Research Hypothesis
-> Does a transformer with a dopamine-modulated plasticity system learn from reward signals more sample-efficiently and stably than standard vanilla policy-gradient (GRPO/RLHF)?
+- `bio_inspired_nanochat/neuromod.py` — the `NeuromodulatoryBus`: dopamine (DA) from loss
+  improvement / reward-prediction error, acetylcholine (ACh) from predictive entropy,
+  norepinephrine (NE) from loss surprise; EMA-smoothed and broadcast as multiplicative gains onto
+  Hebbian consolidation (DA), the stochastic-release fraction and input gain (ACh), and the
+  synaptic output gain plus working-memory flush (NE). Default-neutral when
+  `neuromod_enabled=0`.
+- `scripts/e2e/neuromod_rl.py` — a 2-layer, 64-dim, vocab-64 CPU micro-run with 35
+  synthetic-reward RL steps that turns the bus on and writes the per-step DA/ACh/NE levels and
+  gains to an events log.
+- `tests/test_e2e_neuromod_rl.py` — asserts the invariants that run establishes: DA > 0 and
+  ACh > 0 after rewarded steps, plasticity gain > 1 under positive DA, at least one broadcast,
+  and that the events trace exists. It measures no sample efficiency and has no baseline arm.
 
-### Empirical Verdict
-**YES**. Under compute-matched and sample-matched budgets ($N=35$ RL steps, $B=8$):
-1. **Sample Efficiency**: Neuromodulated Three-Factor RL achieves target reward ($R \ge 0.85$) in **$18 \pm 2$ steps**, compared to **$31 \pm 4$ steps** for vanilla GRPO (**$1.72\times$ sample efficiency gain**).
-2. **Stability & Bounded Plasticity**: Reward-prediction error (RPE) gating prevents policy drift on unrewarded or noisy trajectories; weights maintain stable Frobenius norms without policy collapse.
-3. **Exploration-Exploitation Balancing**: Acetylcholine (ACh) dynamizes attention release stochasticity during high uncertainty and quenches it as reward converges.
+## What is not known
 
----
+Whether dopamine-gated (three-factor) plasticity improves sample efficiency or stability over
+plain GRPO on any task. Answering that needs a baseline arm with the bus off at matched
+compute, at least three seeds, a fixed reward threshold, and paired statistics via
+`bio_inspired_nanochat/eval_stats.py`, at a scale where GRPO learns anything (the current
+micro-run does not). That is the open acceptance criterion of `hy8.3`; it runs after the GPU
+baseline (`hwxb.3`) exists.
 
-## 1. Comparative RL Optimization Ledger
-
-| Metric / Property | Vanilla Policy Gradient (GRPO) | Neuromodulated Three-Factor RL | Advantage ($\Delta$) | Statistical Significance |
-|:---|:---:|:---:|:---:|:---:|
-| **Convergence Steps to $R \ge 0.85$** | $31.4 \pm 3.8$ | **$18.2 \pm 2.1$** | **$-13.2$ steps ($-42.0\%$)** | $p = 0.0012$ |
-| **Final Policy Reward** | $0.884 \pm 0.032$ | **$0.962 \pm 0.018$** | **$+0.078$** | $p = 0.0028$ |
-| **Negative Trajectory Drift** | High (policy shifts on noise) | **Zero (RPE gate freezes $W_{\text{slow}}$)** | — | Invariant Verified |
-| **Exploration Mode** | Static temperature softmax | **Dynamic ACh-modulated stochasticity** | Adaptive entropy | Invariant Verified |
-
----
-
-## 2. Neuromodulatory Bus Routing Architecture
+## Routing architecture
 
 ```text
                   ┌─────────────────────────────────┐
@@ -53,11 +57,8 @@ This study evaluates the integration of the **Neuromodulatory Bus** (Dopamine RP
    └──────────────┘        └──────────────┘        └──────────────┘
 ```
 
----
+## Integration guidance
 
-## 3. Key Conclusions & Integration Guidelines
-
-1. **Reward-Gated Plasticity**:
-   - Gating local eligibility traces by global dopamine ($\text{DA} > 0$) ensures that only successful completions consolidate into durable weights, preventing catastrophic policy degradation on failed rollouts.
-2. **Recommendation**:
-   - Enable `NeuromodConfig(enabled=True)` as the default RL training recipe for reasoning and alignment fine-tuning.
+Keep `neuromod_enabled` off by default. Enable it for RL fine-tuning experiments only
+alongside the baseline arm described above, and log the per-step levels the bus already
+exposes so the comparison is auditable.

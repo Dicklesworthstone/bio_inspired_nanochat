@@ -12,33 +12,37 @@ GPU CI, and emit enough diagnostics that a failure tells you *why*.
 ## TL;DR — running tests
 
 ```bash
-# One-time: install deps WITHOUT building the optional Rust extension.
-# (The pure-Python package imports fine without it; rustbpe tests auto-skip.)
-uv sync --no-install-project --extra cpu        # or --extra gpu on a CUDA box
+# One-time: install deps AND build the Rust extension (rustbpe). Name the torch flavour
+# explicitly; this is what CI does.
+uv sync --extra cpu --dev                        # or --extra gpu on a CUDA box
+# Shortcut without Rust (rustbpe-dependent tests skip):
+uv sync --no-install-project --extra cpu --dev
 
-# Fast unit gate (what CI runs on every PR):
-.venv/bin/python -m pytest -m "unit" -q
+# What CI runs on every push / PR:
+uv run --no-sync python -m pytest -m "not slow" -q
 
-# Everything except slow tests:
-.venv/bin/python -m pytest -m "not slow" -q
+# The fast unit subset:
+uv run --no-sync python -m pytest -m "unit" -q
 
-# With coverage gate (CI / nightly):
-.venv/bin/python -m pytest -m "not slow" --cov
+# With the opt-in coverage gate (fail_under in pyproject.toml):
+uv run --no-sync python -m pytest -m "not slow" --cov
 
 # A single file, verbose:
-.venv/bin/python -m pytest tests/test_framework_smoke.py -v
+uv run --no-sync python -m pytest tests/test_framework_smoke.py -v
 ```
 
 `pyproject.toml` sets `pythonpath = ["."]`, so `import bio_inspired_nanochat …`
-resolves **without** a full editable/`maturin` install. You do not need to build
-`rustbpe` to run the suite.
+resolves **without** an installed wheel; the maturin build only adds `rustbpe`.
 
-> **Why `--no-install-project`?** The project uses `maturin` as its build backend
-> for the `rustbpe` Rust extension. A plain `uv sync`/`uv run` tries to build it
-> and currently fails on a `python-source`/module-name config quirk (tracked
-> separately — see bead `jyb.8` *Build and ship the Rust extension in CI*). Until
-> that's fixed, install deps with `--no-install-project` and run via
-> `.venv/bin/python -m pytest`. To get the Rust paths, run `uv run maturin develop`.
+> **Always pass `--no-sync` (or the same `--extra`) to `uv run`.** A bare `uv run`
+> re-syncs the environment to the default extras, which silently swaps a
+> `--extra cpu` torch install for the CUDA build.
+>
+> **The suite cannot pollute the results registry.** `tests/conftest.py` sets
+> `BIO_RESULTS_REGISTRY` to a throwaway path before anything imports
+> `results_registry`, so no test — in-process or subprocess — can append to the
+> committed `results/registry.jsonl`. (41 rows of pytest temp-dir pollution were
+> purged from it in 2026-09.)
 
 ---
 
@@ -46,13 +50,14 @@ resolves **without** a full editable/`maturin` install. You do not need to build
 
 Registered in `pyproject.toml`; `--strict-markers` makes a typo'd marker an error.
 
-| Marker     | Meaning                                                        | Where it runs       |
-|------------|----------------------------------------------------------------|---------------------|
-| `unit`     | Fast, deterministic, no GPU/network/data downloads             | **PR gate**         |
-| `e2e`      | End-to-end run exercising a whole flow                         | Nightly             |
-| `slow`     | Long-running (`-m "not slow"` to skip)                         | Nightly             |
-| `gpu`      | Requires CUDA; **auto-skipped** on CPU-only hosts              | GPU CI              |
-| `golden`   | Compares against committed golden artifacts (`tests/golden/`)  | PR gate + nightly   |
+| Marker     | Meaning                                                        | Where it runs                          |
+|------------|----------------------------------------------------------------|----------------------------------------|
+| `unit`     | Fast, deterministic, no GPU/network/data downloads             | every push (`-m "not slow"`)           |
+| `e2e`      | End-to-end run exercising a whole flow                         | every push + nightly `validate_all`    |
+| `slow`     | Long-running (`-m "not slow"` to skip)                         | nightly only                           |
+| `gpu`      | Requires CUDA; **auto-skipped** on CPU-only hosts              | a GPU host (none in CI today)          |
+| `golden`   | Compares against committed golden artifacts (`tests/golden/`)  | every push                             |
+| `smoke`    | In-process smoke of the flagship harnesses (`pytest -m smoke`) | every push                             |
 
 `gpu`-marked tests are skipped automatically when `torch.cuda.is_available()` is
 False (see `tests/conftest.py::pytest_collection_modifyitems`), so the same suite
@@ -121,15 +126,21 @@ Commit the resulting `tests/golden/*.npy` files.
 
 `[tool.coverage]` in `pyproject.toml` measures branch coverage of
 `bio_inspired_nanochat` and enforces `fail_under` **only when `--cov` is passed**
-(so the default fast `pytest` stays lightweight). The floor starts at **25%**
-(current suite ≈ 34%) and should be **ratcheted upward, never lowered**, as beads
-add their tests. CI runs `pytest -m "not slow" --cov`.
+(so the default fast `pytest` stays lightweight). The floor is **25%** (the suite
+measured ≈34% when the floor was set in 2026-06) and should be **ratcheted upward,
+never lowered**. CI does not pass `--cov` today; run it locally before raising the floor.
 
 ---
 
-## What CI should run (see bead `eqyk.17`)
+## What CI actually runs (`.github/workflows/`)
 
-- **PR (fast):** `pytest -m "unit" --cov` + the coverage gate + `ruff` + `ty`.
-- **Nightly (full):** `pytest -m "not slow"`, the e2e umbrellas
-  (`eqyk.18`–`eqyk.22`), parity (`eqyk.13`), property (`eqyk.14`), perf-regression
-  (`eqyk.15`), and the **validation report** (`eqyk.16`), uploading logs as artifacts.
+- **`ci.yml` — every push to `main` and every PR:** `cargo fmt --check`, `cargo clippy -D warnings`,
+  `cargo test`; the Python quality gate (`scripts/quality_gate.py`: `ruff --fix --unsafe-fixes`
+  on changed files and fails if it had to rewrite them, `ty check`, UBS resource-lifecycle scan);
+  the Lean formal-feedback audit (`scripts/formal_feedback.py`); a `maturin build` wheel; then
+  `maturin develop` + `pytest -m "not slow"` + `validate_all --suite fast`. The wheel and test
+  jobs depend on the Rust format job, so one unformatted hunk skips the whole suite.
+- **`nightly-validation.yml` — 04:30 UTC:** `validate_all --suite all --timeout-scale 4` and the
+  perf-regression gate, uploading `reports/` and the registry as artifacts.
+- **`nightly-uncertainty.yml` — 05:17 UTC:** `tests/test_e2e_uncertainty.py` with its evidence
+  directory uploaded.

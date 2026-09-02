@@ -4,6 +4,13 @@
 > **Mechanism**: Cellular Automata (Game of Life / 1D Rule 30 / 110) Morphogenetic Weight Initialization.  
 > **Scope**: Pre-training linear & attention projection weight matrices.
 
+> **Evidence status (2026-09-01).** The figures below came from a micro-benchmark (bead `4uq`)
+> whose CSV and plots were written to the gitignored `runs/ca_init_microbench/` and were not
+> preserved; nothing under `results/` reproduces them. Treat them as unverified. The decision
+> stands on its own terms: CA init remains opt-in via `--init_type=ca_rule30|ca_rule116` on
+> `scripts/base_train.py`, and anyone re-evaluating it should commit the outcome under
+> `results/` before citing numbers again.
+
 ---
 
 ## 1. Executive Summary & Decision

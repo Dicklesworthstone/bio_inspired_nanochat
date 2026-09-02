@@ -32,8 +32,13 @@ that the strata are decoupled enough for the thrusts to compose without interfer
 3. **The composition keystone** (`0642.10`) — the timescale-separation certificate that licenses
    composing everything else.
 4. **Thrust E** (thermo UQ), **Thrust B** (ultrametric memory), then **Thrust C** (topological NAS).
-5. **Thrust H** theory/runtime and held-out falsification are complete. **D** (gauge)
-   and **G** (sheaf) remain planned.
+5. **Thrust H** theory/runtime and held-out falsification are complete. **D** (gauge) and
+   **G** (sheaf) have theory notes and reference modules that only their unit tests exercise;
+   neither touches the live model.
+
+> **Evidence status (2026-09-01).** Every thrust below is default-off and validated on
+> synthetic tensors or 1–2 layer toy models on CPU. None has been evaluated on a trained
+> language model; the falsification beads that need one wait on the GPU baseline (hwxb.3).
 
 ## Thrust map
 
@@ -45,8 +50,8 @@ that the strata are decoupled enough for the thrusts to compose without interfer
 | **B** | slow_weights | Ultrametric / RSB + p-adic | ✅ theory + reference | [ultrametric_memory.md](ultrametric_memory.md) | `ultrametric_memory.py` | p-adic LCP kernel + tree-ness gauge + capacity certificate |
 | **C** | structure | Free probability + TDA + optimal transport | ✅ theory + reference | [structural_geometry.md](structural_geometry.md) | `structural_geometry.py` | spectral-conditioning + H0 coverage + OT-barycenter merge |
 | **H** | attention / routing | Tropical / max-plus geometry | ✅ theory + runtime + held-out falsification | [tropical.md](tropical.md) | positive on held-out exact-affine families | active-face fingerprint + dual-norm radius + guarded fallback |
-| **D** | — | Gauge theory | 🔮 planned | — | — | — |
-| **G** | — | Sheaf theory | 🔮 planned | — | — | — |
+| **D** | slow_weights / consolidation | Gauge theory | ✅ theory + reference (test-only) | [gauge_consolidation.md](gauge_consolidation.md) | `gauge_consolidation.py` | see the note's obligation ledger |
+| **G** | binding / composition | Operadic / sheaf theory | ✅ theory + reference (test-only) | [sheaf_binding.md](sheaf_binding.md) | `sheaf_binding.py`, `sheaf_obstruction.py` | obstruction detector + default-off abstain/repair action |
 
 **Capability layer (built on the theory):**
 
