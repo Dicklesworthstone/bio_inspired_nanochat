@@ -107,7 +107,9 @@ When `use_neuroscore` is enabled, NeuroScore fitness (below) is blended into tha
 
 When `homeostasis_guards` is enabled (`SplitMergeConfig`, default off, `uta.6`), every lifecycle event additionally stabilizes the touched experts: a freshly seeded slot ramps its routed mass in from ~zero over `gate_ramp_forwards` training forwards with exact pair-mass compensation (the dense-regime output stays preserved throughout the transient, not just at the event), per-expert energy is held at or above `energy_floor` so a collapsed metabolism cannot produce winner-take-all routing, and optimizer moments are reset only for the *changed rows* of the shared router/genome tensors — a short warm restart for touched experts that leaves everyone else's AdamW/Muon state intact.
 
-**The Effect**: **Neural Architecture Search**. The model starts small and *grows* capacity exactly where the data complexity demands it.
+**The Effect (intended)**: **Neural Architecture Search**. The model starts small and *grows* capacity exactly where the data complexity demands it.
+
+**Measured (2026-09-01, toy scale):** the health signal does not yet support that story. Utilization is the routed-token fraction, so a uniformly used expert sits at `top_k / num_experts`, while the thresholds are absolute: at 4 experts nothing ever fires (health ≈ 0.3 sits between the merge and split thresholds), and at the 8-expert default every expert is a merge candidate on every check. Because energy relaxes toward `1 − utilization`, health ≈ `u(1 − u)` at steady state and peaks at half the routing mass, so a monopolising expert reads as *dead* and the split threshold of 0.80 is unreachable for any expert count. Fixing the signal and re-running the lifecycle-vs-fixed evaluation is bead `sx1m`; until then treat the lifecycle as an opt-in study, not a working capacity allocator.
 
 ```mermaid
 graph TD
