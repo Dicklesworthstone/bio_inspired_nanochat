@@ -54,7 +54,7 @@ would this gap close? **Yes / Partial / No (NO BEAD)**.
 | G10 | Selective decoding / calibrated abstention unreachable from serving | 8 | PARTIAL | Major | Yes — `wmel` | M |
 | G11 | Dual-4090 performance program (utilization, NCCL, precision, cudagraphs, guardrails) | 13 | NOT STARTED (GPU) | Major | Yes — `6pj`, `j9i`, `2fh`, `4nk`, `5rh`, `94r`, `h4j`, `vwl` | XL |
 | G12 | Quick Start step 4 documented `--source sft` only; the working post-`base_train` command was undocumented | 14 | DONE this evening (README §4, CLI help) | Minor | closed by commit | S |
-| G13 | TensorBoard tags the README promises (`calcium_mean`, `rrp_mean`, `fast_weight_norm`) are not emitted | 17 | PARTIAL | Minor | NO BEAD | S |
+| G13 | TensorBoard tags the README promised (`calcium_mean`, `rrp_mean`, `fast_weight_norm`) were not emitted | 17 | CLOSED by the morning docs pass — README now lists only the tags NeuroViz emits | Minor | closed | S |
 | G14 | Ship a usable checkpoint, demo, write-up; the 2025 publication milestone | 19, 20 | NOT STARTED (GPU) | Critical (it is the product) | Yes — `hwxb.6.1/6.2/6.3`, `vap.6` | L |
 | G15 | CI/nightlies green **verified**, not just fixed | 23 | UNVERIFIED | Minor | NO BEAD | S |
 | G16 | Type-check debt: 51 `ty` diagnostics, none in the changed-files gate | 23 | DEBT | Minor | NO BEAD | S |
@@ -286,14 +286,14 @@ off the output is unchanged. **Dependencies.** None. **Size.** M. **Vision.** 8.
 form) with the note that a base model completes text rather than chats; help strings list `base`.
 **Success criteria.** Covered by the G5 e2e test. **Dependencies.** None. **Size.** S. **Beads?** NO BEAD.
 
-### G13 · TensorBoard tags — PARTIAL → WORKING
+### G13 · TensorBoard tags — CLOSED
 
-**Current state.** NeuroViz emits energy, health, utilization, CaMKII, dead-expert fraction,
-lineage; README promises `calcium_mean`, `rrp_mean`, `fast_weight_norm`.
-**Target state.** Emit the three from `GPTSynaptic._last_presyn_state` (C, RRP means) and
-`SynapticLinear.w_fast.norm()`, or delete them from the README. Emitting is a 30-line change.
-**Success criteria.** `test_neuroviz_*` asserts the tags exist after one logged step.
-**Dependencies.** None. **Size.** S. **Vision.** 17. **Beads?** NO BEAD.
+Re-checked against HEAD: the README's "Key metrics to watch" already names only the tags
+NeuroViz emits (`<layer>/energy_mean`, `health_mean`, `util_mean`, `dead_expert_frac`,
+`camkii_mean`); the morning docs pass removed the three promised-but-missing names. Emitting
+calcium/RRP means and the fast-weight norm from `GPTSynaptic._last_presyn_state` and
+`SynapticLinear.w_fast` would be a 30-line addition if anyone wants the channels; nothing is
+promised that is not delivered. **Vision.** 17.
 
 ### G14 · Ship it — NOT STARTED → SHIPPED
 
@@ -360,7 +360,7 @@ flowchart TD
   G17[G17 footprint] -.-> G14
 ```
 
-**Phase A′ (CPU, this week, in this order):** G3 → G5 → G12 → G2 → G4 → G9 → G13 → G6.1 → G18 → G10
+**Phase A′ (CPU, this week, in this order):** G3 → G5 → G12 → G2 → G4 → G9 → G6.1 → G18 → G10
 → G16 → G17. Everything here is doable on this host; G2 and G4 produce the numbers that decide
 which defaults the GPU run should carry.
 
@@ -372,11 +372,11 @@ which defaults the GPU run should carry.
 ## 4. Would finishing the open beads close the vision?
 
 For the headline question: **yes, once a GPU exists** — the `hwxb` chain is the pre-registered
-experiment and the harness is done. For the vision as written: **no.** Six open gaps have no bead
-(G3's audit re-runs, G9, G13, G15, G16, G17; G5 and G12 were closed by commit this evening), two
-are only partially covered (G2's training regime, G4's NAS re-run), and one is a policy decision
-(G18). Phase 3a should create beads for exactly those nine items; the rest already have correct
-beads and need no new tracker entries.
+experiment and the harness is done. For the vision as written: **no.** Five open gaps have no bead
+(G3's audit re-runs, G9, G15, G16, G17; G5, G12 and G13 are closed), two are only partially
+covered (G2's training regime, G4's NAS re-run), and one is a policy decision (G18). Phase 3a
+should create beads for exactly those eight items; the rest already have correct beads and need
+no new tracker entries.
 
 ## 5. Verification plan (how each vision item is proven when the plan is done)
 
@@ -391,7 +391,7 @@ beads and need no new tracker entries.
 | 12 Bio vs vanilla with statistics | `eval_stats` verdict table on D1, committed |
 | 13 Dual-4090 performance | GPU rows in `perf_baselines.json`; guardrail in CI |
 | 14 Quick Start | G5 subprocess test in CI |
-| 17 TensorBoard vitals | G13 test |
+| 17 TensorBoard vitals | README lists only emitted tags (checked at HEAD, 2026-09-01) |
 | 18 Roadmap features | Evidence column: D1 column or "exploratory" |
 | 19–20 Checkpoint + write-up | `chat_cli` reproduces the documented sample on a fresh clone |
 | 22–23 Docs and CI | green run links in TESTING.md; `ty check` exit 0 |
