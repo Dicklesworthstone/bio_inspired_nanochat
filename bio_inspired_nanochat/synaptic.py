@@ -3212,10 +3212,13 @@ class SynapticLinear(nn.Module):
             # `not torch.is_grad_enabled()`, so the headline "online learning" NEVER ran during
             # training. It now runs as a DETACHED fast-adaptation update during inference
             # (no_grad) AND during training (when plasticity_during_training is set).
-            # 9mxi: update_mem is threaded from GPTSynaptic.forward(train_mode=...) down
-            # through Block -> MLP/MoE -> Expert, so the EVALUATION path (model.eval() +
-            # no_grad + train_mode=False) never adapts: validation cannot contaminate the
-            # model and val_bpb stays idempotent. Generation keeps adapting (default True).
+            # 9mxi: update_mem is threaded from GPTSynaptic.forward(update_mem=..., default
+            # train_mode, default the module's own training flag) down through Block ->
+            # MLP/MoE -> Expert, so the EVALUATION path (model.eval() + no_grad) never adapts:
+            # validation cannot contaminate the model and val_bpb stays idempotent. The
+            # Engine passes train_mode=False, so generation does not adapt either; a probe
+            # that wants online adaptation while reading deterministically passes
+            # train_mode=False, update_mem=True (synthetic_tasks._logits_for).
             grad_on = torch.is_grad_enabled()
             run_plasticity = update_mem and (
                 not grad_on or (self.training and self.cfg.plasticity_during_training)

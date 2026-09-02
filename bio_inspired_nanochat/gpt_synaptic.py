@@ -243,12 +243,22 @@ class GPTSynaptic(nn.Module):
         self,
         idx: Tensor,
         kv_cache=None,
-        train_mode: bool = True,
+        train_mode: bool | None = None,
         max_layers: int | None = None,
         structural_training: bool = False,
         update_mem: bool | None = None,
     ) -> tuple[Tensor, int]:
-        """Run the synaptic transformer trunk without applying the language head."""
+        """Run the synaptic transformer trunk without applying the language head.
+
+        ``train_mode`` (stochastic vesicle sampling, persistent presyn normalizer updates,
+        and — unless ``update_mem`` says otherwise — per-sequence plasticity) defaults to
+        ``self.training``: an eval-mode model is deterministic and self-consistent unless a
+        caller asks for adaptation explicitly. Until 2026-09-01 the default was ``True``, so
+        every evaluator that did not pass ``train_mode=False`` (CORE eval, base_eval, the
+        e2e comparison scripts, the CMA-ES proxy) scored a noisy, self-modifying model.
+        """
+        if train_mode is None:
+            train_mode = bool(self.training)
         _B, T = idx.size()
         active_layers = self.config.n_layer if max_layers is None else max_layers
         if (
@@ -366,7 +376,7 @@ class GPTSynaptic(nn.Module):
         idx: Tensor,
         targets: Tensor | None = None,
         kv_cache=None,
-        train_mode: bool = True,
+        train_mode: bool | None = None,
         max_layers: int | None = None,
         update_mem: bool | None = None,
     ):
