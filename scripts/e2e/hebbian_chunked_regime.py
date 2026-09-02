@@ -183,7 +183,8 @@ def main(argv: list[str] | None = None) -> int:
         off = acc(rows, False, "chunked", "chunked")
         sigma = _std(off)
         n = len(on)
-        effect = (_mean(on) - _mean(off)) if on and off else None
+        m_on, m_off = _mean(on), _mean(off)
+        effect = (m_on - m_off) if (m_on is not None and m_off is not None) else None
         mde = (3 * sigma / (n ** 0.5)) if (sigma is not None and n) else None
         return {
             "n_seeds": n,
