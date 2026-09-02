@@ -3,25 +3,22 @@
 from __future__ import annotations
 
 # GPT with Synaptic Attention/MLP and optional Synaptic MoE + structural hooks
-
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
-
-from bio_inspired_nanochat.torch_imports import torch, nn, F, Tensor
+from typing import Any
 
 from bio_inspired_nanochat.common import ca_init_weight_
+from bio_inspired_nanochat.torch_imports import F, Tensor, nn, torch
 
 from .synaptic import (
     PostsynapticHebb,
-    SynapticCausalSelfAttention,
-    SynapticMLP,
-    SynapticConfig,
-    SynapticMoE,
-    SynapticLinear,
-    SynapticPresyn,
     StructuralPlasticity,
+    SynapticCausalSelfAttention,
+    SynapticConfig,
+    SynapticLinear,
+    SynapticMLP,
+    SynapticMoE,
+    SynapticPresyn,
 )
-
 
 # -----------------------------------------------------------------------------
 # Config
@@ -50,11 +47,10 @@ class GPTSynapticConfig:
     num_experts: int = 8
     # Checkpointed post-lifecycle topology. ``None`` uses ``num_experts`` for
     # every layer; a tuple preserves heterogeneous counts after true births/deaths.
-    moe_experts_per_layer: Optional[tuple[int, ...]] = None
+    moe_experts_per_layer: tuple[int, ...] | None = None
     moe_top_k: int = 2
     moe_hidden_mult: int = 4
     moe_balance_loss: float = 0.01
-    structural_every: int = 0  # 0 → off; >0 → run hooks every N blocks
     # Weight initialization
     init_type: str = "baseline"  # "baseline" | "ca_rule30" | "ca_rule116"
     init_seed: int = 42
@@ -184,7 +180,7 @@ class GPTSynaptic(nn.Module):
         self._last_presyn_state: list[dict[str, Any] | None] | None = None
         self.wte: nn.Embedding = nn.Embedding(c.vocab_size, c.n_embd)
         self.h: nn.ModuleList[Block] = nn.ModuleList()
-        self.transformer = nn.ModuleDict(dict(wte=self.wte, h=self.h))
+        self.transformer = nn.ModuleDict({"wte": self.wte, "h": self.h})
         self.lm_head = nn.Linear(c.n_embd, c.vocab_size, bias=False)
         self.drop = nn.Dropout(c.dropout)
         nn.init.trunc_normal_(self.lm_head.weight, std=0.02)
@@ -305,13 +301,7 @@ class GPTSynaptic(nn.Module):
             layer_state = presyn_states[li]
             x, layer_state = block(x, kv_cache, layer_state, train_mode)
             presyn_states[li] = layer_state
-            if self.config.structural_every and structural_training:
-                if (li + 1) % self.config.structural_every == 0 and hasattr(
-                    block.mlp, "experts"
-                ):
-                    # Hook point for split/merge (kept as a callable point on purpose)
-                    pass
-        
+
         # Save presyn_state back to kv_cache
         if kv_cache is not None:
             # We attach it dynamically if it doesn't exist in __init__ yet (though we should add it there too)
@@ -364,7 +354,7 @@ class GPTSynaptic(nn.Module):
     def forward(
         self,
         idx: Tensor,
-        targets: Optional[Tensor] = None,
+        targets: Tensor | None = None,
         kv_cache=None,
         train_mode: bool = True,
         max_layers: int | None = None,
@@ -385,10 +375,10 @@ class GPTSynaptic(nn.Module):
         if targets is None:
             return logits, None
         aux = sum(
-            (
+            
                 getattr(b, "last_aux_loss", torch.tensor(0.0, device=logits.device))
                 for b in self.h[:active_layers]
-            )
+            
         )
         logits = logits.float()  # fp32 logits for the loss (parity with GPT)
         logits_flat = logits.reshape(-1, logits.size(-1))
@@ -430,9 +420,9 @@ class GPTSynaptic(nn.Module):
     def bio_telemetry(
         self,
         *,
-        presyn_state: Optional[Any] = None,
+        presyn_state: Any | None = None,
         include_routing: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Collect the latest bio-state snapshot as a schema-valid dictionary.
 
         When ``presyn_state`` is omitted, attention telemetry comes from the
@@ -483,13 +473,14 @@ class GPTSynaptic(nn.Module):
             return [opt]  # Return as list for compatibility
         else:
             # GPT-style signature (for compatibility with existing training scripts)
-            from bio_inspired_nanochat.common import get_dist_info
-            from bio_inspired_nanochat.muon import Muon, DistMuon
-            from bio_inspired_nanochat.adamw import DistAdamW
             from functools import partial
 
+            from bio_inspired_nanochat.adamw import DistAdamW
+            from bio_inspired_nanochat.common import get_dist_info
+            from bio_inspired_nanochat.muon import DistMuon, Muon
+
             model_dim = self.config.n_embd
-            ddp, rank, local_rank, world_size = get_dist_info()
+            ddp, rank, _local_rank, _world_size = get_dist_info()
             
             # Separate matrix params (2D) for Muon from other params (1D/0D) for AdamW
             matrix_params = []
@@ -518,18 +509,18 @@ class GPTSynaptic(nn.Module):
 
             # AdamW gets embedding, lm_head, and all 1D/0D params from blocks (biases, layernorms)
             adam_groups = [
-                dict(params=lm_head_params, lr=unembedding_lr * dmodel_lr_scale),
-                dict(params=other_params, lr=embedding_lr * dmodel_lr_scale), # Use embedding LR scale for other params? Or maybe just matrix_lr? Usually AdamW params get higher LR.
+                {"params": lm_head_params, "lr": unembedding_lr * dmodel_lr_scale},
+                {"params": other_params, "lr": embedding_lr * dmodel_lr_scale}, # Use embedding LR scale for other params? Or maybe just matrix_lr? Usually AdamW params get higher LR.
             ]
             if embedding_params:  # empty when tied (shared weight sits in the lm_head group)
-                adam_groups.append(dict(params=embedding_params, lr=embedding_lr * dmodel_lr_scale))
-            adamw_kwargs = dict(betas=(0.8, 0.95), eps=1e-10, weight_decay=weight_decay)
+                adam_groups.append({"params": embedding_params, "lr": embedding_lr * dmodel_lr_scale})
+            adamw_kwargs = {"betas": (0.8, 0.95), "eps": 1e-10, "weight_decay": weight_decay}
             adam_params = embedding_params + lm_head_params + other_params
             use_fused = (not ddp) and any(p.is_cuda for p in adam_params)
             AdamWFactory = DistAdamW if ddp else partial(torch.optim.AdamW, fused=use_fused)
             adamw_optimizer = AdamWFactory(adam_groups, **adamw_kwargs)
 
-            muon_kwargs = dict(lr=matrix_lr, momentum=0.95)
+            muon_kwargs = {"lr": matrix_lr, "momentum": 0.95}
             MuonFactory = DistMuon if ddp else Muon
             muon_optimizer = MuonFactory(matrix_params, **muon_kwargs)
             optimizers = [adamw_optimizer, muon_optimizer]
@@ -637,7 +628,7 @@ class GPTSynaptic(nn.Module):
                 module.reset_parameters()
 
         # 2) Optional CA override for selected matrices (keeps embeddings/head baseline).
-        if init_type.startswith("ca_") or init_type.startswith("ca"):
+        if init_type.startswith(("ca_", "ca")):
             rule = 116 if "116" in init_type else 30
             max_ca_fan_out = 8192
 

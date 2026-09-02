@@ -129,9 +129,7 @@ pub fn presyn_release_canonical_cpu<'py>(
     // caller to remember `.item()` — which would add a device sync per step.
     let ema_e = match ema_e.extract::<f64>() {
         Ok(value) => value as f32,
-        Err(_) => ema_e
-            .call_method0("item")?
-            .extract::<f64>()? as f32,
+        Err(_) => ema_e.call_method0("item")?.extract::<f64>()? as f32,
     };
     if !ema_e.is_finite() || ema_e < 0.0 {
         return Err(pyo3::exceptions::PyValueError::new_err(

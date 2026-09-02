@@ -19,16 +19,21 @@
 # This file is intentionally verbose and highly instrumented for clarity.
 
 import contextlib
+import functools
+import importlib
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional, Tuple, List, Dict, Literal, cast, Any
+from typing import Any, Literal, cast
 
-from bio_inspired_nanochat.torch_imports import torch, nn, F, Tensor
 from bio_inspired_nanochat.common import decouple_config
 from bio_inspired_nanochat.glial_homeostasis import GlialHomeostasis
-from bio_inspired_nanochat.metriplectic_integrator import TorchStepRecord, torch_guarded_step
+from bio_inspired_nanochat.metriplectic_integrator import (
+    TorchStepRecord,
+    torch_guarded_step,
+)
+from bio_inspired_nanochat.torch_imports import F, Tensor, nn, torch
 
 try:
     from .flex_synaptic import SynapticFlexAttention
@@ -88,8 +93,8 @@ def _sample_binomial_counts(
     tau: float,
     mode: Literal["gumbel_sigmoid_ste", "straight_through", "normal_reparam"],
     eps: float = 1e-6,
-    generator: Optional[torch.Generator] = None,
-    normal_draw_width: Optional[int] = None,
+    generator: torch.Generator | None = None,
+    normal_draw_width: int | None = None,
 ) -> Tensor:
     """Sample Binomial(total_count, probs) counts with a cheap, GPU-friendly estimator.
 
@@ -408,6 +413,20 @@ class SynapticConfig:
     native_genetics: bool = decouple_config("BIO_FUSED_GENETICS", default=False, cast=bool)
 
 
+@functools.lru_cache(maxsize=1)
+def _rust_presyn_kernel() -> Any:
+    """The compiled ``rustbpe.presyn_release_canonical_cpu`` entry point, or ``None``.
+
+    ``rustbpe`` is the optional maturin extension (``uv sync --extra cpu --dev`` builds it).
+    Cached so the CPU decode predicate does not pay an import lookup per token.
+    """
+    try:
+        module = importlib.import_module("rustbpe")
+    except ModuleNotFoundError:
+        return None
+    return getattr(module, "presyn_release_canonical_cpu", None)
+
+
 def _resolve_synaptic_granularity(cfg: SynapticConfig) -> SynapticGranularity:
     """Return the closed granularity enum, rejecting invalid direct config construction."""
     raw = cfg.granularity.value if isinstance(cfg.granularity, SynapticGranularity) else cfg.granularity
@@ -452,7 +471,7 @@ def _presyn_state_shape(
 # -----------------------------------------------------------------------------
 
 
-def affine_scan_sequential(a: Tensor, b: Tensor, x0: Optional[Tensor] = None) -> Tensor:
+def affine_scan_sequential(a: Tensor, b: Tensor, x0: Tensor | None = None) -> Tensor:
     """Reference (sequential) affine scan: x_t = a_t * x_{t-1} + b_t, t = 0..T-1.
 
     The scan runs along dim 0. ``a``, ``b`` are ``(T, *batch)`` and broadcast against each other;
@@ -469,7 +488,7 @@ def affine_scan_sequential(a: Tensor, b: Tensor, x0: Optional[Tensor] = None) ->
     return torch.stack(outs, dim=0)
 
 
-def affine_scan(a: Tensor, b: Tensor, x0: Optional[Tensor] = None) -> Tensor:
+def affine_scan(a: Tensor, b: Tensor, x0: Tensor | None = None) -> Tensor:
     """Differentiable PARALLEL associative scan of x_t = a_t * x_{t-1} + b_t (yw9.2.1).
 
     Hillis-Steele inclusive scan over the affine monoid — each affine map f_i(x) = a_i x + b_i
@@ -519,14 +538,14 @@ def _soft_min(x: Tensor, c: float, beta: float) -> Tensor:
 def vesicle_depletion_refill(
     rrp: Tensor,
     res: Tensor,
-    delay: List[Tensor],
+    delay: list[Tensor],
     released: Tensor,
     *,
     prime_rate: float,
     rec_rate: float,
     rrp_cap: float = 30.0,
     beta: float = 50.0,
-) -> Tuple[Tensor, Tensor, List[Tensor], Dict[str, Tensor]]:
+) -> tuple[Tensor, Tensor, list[Tensor], dict[str, Tensor]]:
     """One DIFFERENTIABLE, conservation-accurate step of the vesicle-pool dynamics (yw9.2.2).
 
     Mirrors the (currently `no_grad`, hard-clamped) RRP/RES/DELAY update inside
@@ -588,7 +607,7 @@ def vesicle_depletion_refill(
 
 
 @torch.no_grad()
-def _detach_presyn_state(state: Dict[str, Any]) -> None:
+def _detach_presyn_state(state: dict[str, Any]) -> None:
     """Detach every tensor in a presyn state dict IN PLACE (truncates the gradient graph but
     keeps the values). Used at chunk boundaries for truncated BPTT (yw9.2.3)."""
     for k, v in list(state.items()):
@@ -609,14 +628,14 @@ _PRESYN_RUNTIME_BUFFER_NAMES = (
 )
 
 
-def _runtime_buffer(presyn: "SynapticPresyn", name: str) -> Tensor:
+def _runtime_buffer(presyn: SynapticPresyn, name: str) -> Tensor:
     value = getattr(presyn, name)
     if not torch.is_tensor(value):
         raise TypeError(f"presyn runtime buffer {name!r} must be a tensor")
     return value
 
 
-def _flatten_presyn_state(state: Dict[str, Any]) -> tuple[tuple[Tensor, ...], int, bool]:
+def _flatten_presyn_state(state: dict[str, Any]) -> tuple[tuple[Tensor, ...], int, bool]:
     """Flatten tensor/list state for a non-reentrant checkpoint boundary."""
     delay = state["DELAY"]
     if not isinstance(delay, list) or not all(torch.is_tensor(item) for item in delay):
@@ -636,27 +655,27 @@ def _flatten_presyn_state(state: Dict[str, Any]) -> tuple[tuple[Tensor, ...], in
 
 def _unflatten_presyn_state(
     tensors: tuple[Tensor, ...], *, delay_len: int, has_heat: bool
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Rebuild the canonical state shape without mutating the caller's dictionary."""
     base_count = len(_PRESYN_STATE_KEYS)
     expected = base_count + delay_len + int(has_heat)
     if len(tensors) != expected:
         raise ValueError(f"expected {expected} flattened state tensors, got {len(tensors)}")
-    state: Dict[str, Any] = dict(zip(_PRESYN_STATE_KEYS, tensors[:base_count]))
+    state: dict[str, Any] = dict(zip(_PRESYN_STATE_KEYS, tensors[:base_count]))
     state["DELAY"] = list(tensors[base_count : base_count + delay_len])
     if has_heat:
         state["HEAT"] = tensors[-1]
     return state
 
 
-def _runtime_buffer_snapshot(presyn: "SynapticPresyn") -> tuple[Tensor, ...]:
+def _runtime_buffer_snapshot(presyn: SynapticPresyn) -> tuple[Tensor, ...]:
     return tuple(
         _runtime_buffer(presyn, name).detach().clone()
         for name in _PRESYN_RUNTIME_BUFFER_NAMES
     )
 
 
-def _runtime_buffer_mapping(tensors: tuple[Tensor, ...]) -> Dict[str, Tensor]:
+def _runtime_buffer_mapping(tensors: tuple[Tensor, ...]) -> dict[str, Tensor]:
     if len(tensors) != len(_PRESYN_RUNTIME_BUFFER_NAMES):
         raise ValueError(
             f"expected {len(_PRESYN_RUNTIME_BUFFER_NAMES)} runtime buffers, got {len(tensors)}"
@@ -674,13 +693,13 @@ def _scripted_detached_presyn_scan_cpu(
     clamp: torch.Tensor,
     energy: torch.Tensor,
     amplitude: torch.Tensor,
-    delay: List[torch.Tensor],
+    delay: list[torch.Tensor],
     drive: torch.Tensor,
     idx: torch.Tensor,
     valid: torch.Tensor,
     first_active_key_count: int,
     ema_e: torch.Tensor,
-    generator: Optional[torch.Generator],
+    generator: torch.Generator | None,
     train: bool,
     stochastic_frac: float,
     normal_draw_width: int,
@@ -703,7 +722,7 @@ def _scripted_detached_presyn_scan_cpu(
     energy_fill: float,
     energy_max: float,
     energy_use: float,
-) -> Tuple[
+) -> tuple[
     torch.Tensor,
     torch.Tensor,
     torch.Tensor,
@@ -713,7 +732,7 @@ def _scripted_detached_presyn_scan_cpu(
     torch.Tensor,
     torch.Tensor,
     torch.Tensor,
-    List[torch.Tensor],
+    list[torch.Tensor],
     torch.Tensor,
 ]:
     """TorchScript loop for the ordinary detached CPU recurrence."""
@@ -726,7 +745,7 @@ def _scripted_detached_presyn_scan_cpu(
     energy = energy.detach().clone()
     delay = [item.detach().clone() for item in delay]
     ema_e = ema_e.detach().clone()
-    outputs = torch.jit.annotate(List[torch.Tensor], [])
+    outputs = torch.jit.annotate(list[torch.Tensor], [])
     batch = int(drive.size(0))
     heads = int(drive.size(1))
     query_count = int(drive.size(2))
@@ -921,7 +940,7 @@ def _scripted_detached_presyn_scan_cpu(
     )
 
 
-def _presyn_state_prefix(state: Dict[str, Any], key_count: int) -> Dict[str, Any]:
+def _presyn_state_prefix(state: dict[str, Any], key_count: int) -> dict[str, Any]:
     """Return a view-backed state containing only the materialized key prefix."""
     flat_state, delay_len, has_heat = _flatten_presyn_state(state)
     return _unflatten_presyn_state(
@@ -932,8 +951,8 @@ def _presyn_state_prefix(state: Dict[str, Any], key_count: int) -> Dict[str, Any
 
 
 def _grow_presyn_state_prefix(
-    state: Dict[str, Any], source: Dict[str, Any], key_count: int
-) -> Dict[str, Any]:
+    state: dict[str, Any], source: dict[str, Any], key_count: int
+) -> dict[str, Any]:
     """Append newly materialized source slots to a recurrent state prefix."""
     flat_state, delay_len, has_heat = _flatten_presyn_state(state)
     flat_source, source_delay_len, source_has_heat = _flatten_presyn_state(source)
@@ -957,7 +976,7 @@ def _grow_presyn_state_prefix(
 
 
 def _commit_presyn_state_prefix(
-    state: Dict[str, Any], prefix: Dict[str, Any], source: Dict[str, Any]
+    state: dict[str, Any], prefix: dict[str, Any], source: dict[str, Any]
 ) -> None:
     """Merge an updated materialized prefix with untouched future state exactly once."""
     flat_prefix, delay_len, has_heat = _flatten_presyn_state(prefix)
@@ -984,7 +1003,7 @@ def _commit_presyn_state_prefix(
 
 
 @torch.no_grad()
-def _copy_presyn_state_prefix_(state: Dict[str, Any], prefix: Dict[str, Any]) -> None:
+def _copy_presyn_state_prefix_(state: dict[str, Any], prefix: dict[str, Any]) -> None:
     """Commit a detached recurrent prefix into its full-capacity backing tensors in place."""
     flat_state, delay_len, has_heat = _flatten_presyn_state(state)
     flat_prefix, prefix_delay_len, prefix_has_heat = _flatten_presyn_state(prefix)
@@ -998,16 +1017,16 @@ def _copy_presyn_state_prefix_(state: Dict[str, Any], prefix: Dict[str, Any]) ->
 
 
 def _release_recurrence_group(
-    presyn: "SynapticPresyn",
-    state: Dict[str, Any],
+    presyn: SynapticPresyn,
+    state: dict[str, Any],
     drive: Tensor,
     idx: Tensor,
-    valid: Optional[Tensor],
+    valid: Tensor | None,
     *,
     train: bool,
     differentiable: bool,
-    active_key_count: Optional[int],
-    runtime_buffers: Optional[Dict[str, Tensor]] = None,
+    active_key_count: int | None,
+    runtime_buffers: dict[str, Tensor] | None = None,
 ) -> Tensor:
     """Advance one graph/checkpoint group while preserving per-query causal values."""
     query_count = int(drive.size(2))
@@ -1038,7 +1057,7 @@ def _release_recurrence_group(
     if _resolve_synaptic_granularity(presyn.cfg) is not SynapticGranularity.PER_CONNECTION:
         drives = drive.split(1, dim=2)
         idxs = idx.split(1, dim=2)
-        valids: Sequence[Optional[Tensor]] = (
+        valids: Sequence[Tensor | None] = (
             [None] * query_count if valid is None else valid.split(1, dim=2)
         )
         return torch.cat(
@@ -1169,7 +1188,7 @@ def _release_recurrence_group(
             drives = drive.split(1, dim=2)
             idxs = idx.split(1, dim=2)
             valids = valid.split(1, dim=2)
-            outputs: List[Tensor] = []
+            outputs: list[Tensor] = []
             for offset, (step_drive, step_idx, step_valid) in enumerate(
                 zip(drives, idxs, valids)
             ):
@@ -1195,7 +1214,7 @@ def _release_recurrence_group(
         drives = drive.split(1, dim=2)
         idxs = idx.split(1, dim=2)
         valids = valid.split(1, dim=2)
-        outputs: List[Tensor] = []
+        outputs: list[Tensor] = []
         for offset, (step_drive, step_idx, step_valid) in enumerate(
             zip(drives, idxs, valids)
         ):
@@ -1220,7 +1239,7 @@ def _release_recurrence_group(
 
     drives = drive.split(1, dim=2)
     idxs = idx.split(1, dim=2)
-    valids: Sequence[Optional[Tensor]] = (
+    valids: Sequence[Tensor | None] = (
         [None] * query_count if valid is None else valid.split(1, dim=2)
     )
     outputs = [
@@ -1242,15 +1261,15 @@ def _release_recurrence_group(
 
 
 def _checkpoint_recurrence_segment(
-    presyn: "SynapticPresyn",
-    state: Dict[str, Any],
-    drives: List[Tensor],
-    idxs: List[Tensor],
-    valids: List[Optional[Tensor]],
-    active_key_counts: List[Optional[int]],
+    presyn: SynapticPresyn,
+    state: dict[str, Any],
+    drives: list[Tensor],
+    idxs: list[Tensor],
+    valids: list[Tensor | None],
+    active_key_counts: list[int | None],
     *,
     train: bool,
-) -> List[Tensor]:
+) -> list[Tensor]:
     """Checkpoint one full-BPTT window with explicit functional runtime state."""
     from torch.utils.checkpoint import checkpoint
 
@@ -1378,18 +1397,18 @@ def _checkpoint_recurrence_segment(
 
 
 def chunked_recurrence(
-    presyn: "SynapticPresyn",
-    state: Dict[str, Any],
-    drives: List[Tensor],
-    idxs: List[Tensor],
+    presyn: SynapticPresyn,
+    state: dict[str, Any],
+    drives: list[Tensor],
+    idxs: list[Tensor],
     *,
     chunk_len: int,
     checkpoint_len: int = 0,
     train: bool = False,
-    valids: Optional[List[Optional[Tensor]]] = None,
-    active_key_counts: Optional[List[Optional[int]]] = None,
+    valids: list[Tensor | None] | None = None,
+    active_key_counts: list[int | None] | None = None,
     differentiable: bool = True,
-) -> List[Tensor]:
+) -> list[Tensor]:
     """Run the DIFFERENTIABLE presynaptic recurrence over a sequence of steps with truncated
     BPTT (yw9.2.3) or exact-gradient checkpoint/replay (0642.1.2.6).
 
@@ -1433,7 +1452,7 @@ def chunked_recurrence(
         [None] * len(drives) if active_key_counts is None else active_key_counts
     )
     if checkpoint_len > 0 and differentiable and torch.is_grad_enabled():
-        checkpointed_outputs: List[Tensor] = []
+        checkpointed_outputs: list[Tensor] = []
         for start in range(0, len(drives), checkpoint_len):
             stop = start + checkpoint_len
             checkpointed_outputs.extend(
@@ -1449,7 +1468,7 @@ def chunked_recurrence(
             )
         return checkpointed_outputs
 
-    outs: List[Tensor] = []
+    outs: list[Tensor] = []
     for t, (drive, idx, active_key_count) in enumerate(
         zip(drives, idxs, normalized_active_key_counts)
     ):
@@ -1527,7 +1546,7 @@ class LearnableKinetics(nn.Module):
     EXACTLY — turning ``learnable_kinetics`` on is a no-op until SGD moves them.
     """
 
-    def __init__(self, cfg: "SynapticConfig"):
+    def __init__(self, cfg: SynapticConfig):
         super().__init__()
         rho_c0 = math.exp(-1.0 / cfg.tau_c)
         rho_b0 = math.exp(-1.0 / cfg.tau_buf)
@@ -1558,7 +1577,7 @@ class LearnableKinetics(nn.Module):
         return _ABUF_MAX * torch.sigmoid(self.theta_alpha_buf_off)
 
     @torch.no_grad()
-    def values(self) -> Dict[str, float]:
+    def values(self) -> dict[str, float]:
         """Current constrained kinetic values (for telemetry / tests)."""
         return {
             "rho_c": float(self.rho_c),
@@ -1653,7 +1672,7 @@ class SynapticPresyn(nn.Module):
 
     def _train_sampling_generator(
         self, device: torch.device
-    ) -> Optional[torch.Generator]:
+    ) -> torch.Generator | None:
         """Return a private CPU/CUDA RNG; other backends retain their global RNG fallback."""
         if device.type not in {"cpu", "cuda"}:
             # PyTorch does not expose torch.Generator for every accelerator backend (notably MPS
@@ -1728,7 +1747,7 @@ class SynapticPresyn(nn.Module):
 
     @staticmethod
     def _reduce_metriplectic_step(
-        record: TorchStepRecord, active_mask: Optional[Tensor]
+        record: TorchStepRecord, active_mask: Tensor | None
     ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
         """Reduce guard evidence over materialized state slots only."""
         if active_mask is None:
@@ -1756,7 +1775,7 @@ class SynapticPresyn(nn.Module):
 
     @torch.no_grad()
     def _record_metriplectic_step(
-        self, record: TorchStepRecord, active_mask: Optional[Tensor] = None
+        self, record: TorchStepRecord, active_mask: Tensor | None = None
     ) -> None:
         """Retain compact live guard/ledger evidence without holding the autograd graph."""
         steps, fallbacks, energy_drift, entropy_production, free_energy_delta = (
@@ -1772,7 +1791,7 @@ class SynapticPresyn(nn.Module):
             free_energy_delta.to(torch.float32)
         )
 
-    def get_metriplectic_metrics(self) -> Dict[str, float | int]:
+    def get_metriplectic_metrics(self) -> dict[str, float | int]:
         """Return the live conservation/entropy ledger for structured telemetry."""
         return {
             "steps": int(self.metriplectic_steps.item()),
@@ -1798,8 +1817,8 @@ class SynapticPresyn(nn.Module):
         alpha_buf_on: float | Tensor,
         alpha_buf_off: float | Tensor,
         record_metrics: bool = False,
-        runtime_buffers: Optional[Dict[str, Tensor]] = None,
-        metric_active_mask: Optional[Tensor] = None,
+        runtime_buffers: dict[str, Tensor] | None = None,
+        metric_active_mask: Tensor | None = None,
     ) -> tuple[Tensor, Tensor, Tensor]:
         """Advance the live calcium/buffer subsystem or its exact guarded fallback.
 
@@ -1885,13 +1904,13 @@ class SynapticPresyn(nn.Module):
 
     def _can_use_native_presyn_decode(
         self,
-        state: Dict[str, Any],
+        state: dict[str, Any],
         drive: Tensor,
         *,
         train: bool,
         differentiable: bool,
         apply_barrier: bool,
-        q_pos: Optional[Tensor],
+        q_pos: Tensor | None,
     ) -> bool:
         """Whether jyb.2's exact one-kernel deterministic decode slice is legal.
 
@@ -1923,19 +1942,109 @@ class SynapticPresyn(nn.Module):
             and q_pos is None
         )
 
+    def _can_use_native_presyn_cpu_decode(
+        self,
+        state: dict[str, Any],
+        drive: Tensor,
+        *,
+        train: bool,
+        differentiable: bool,
+        apply_barrier: bool,
+        q_pos: Tensor | None,
+        active_key_count: int | None,
+        runtime_buffers: dict[str, Tensor] | None,
+    ) -> bool:
+        """Whether the Rust mirror of the one-query decode step may run (``native_presyn`` on CPU).
+
+        The same deterministic slice as :meth:`_can_use_native_presyn_decode` — eval-mode, no
+        grad, one query, per-connection granularity, fixed kinetics — for CPU float32 tensors,
+        served by ``rustbpe.presyn_release_canonical_cpu`` (``rust_src/src/presyn.rs``). That
+        kernel mirrors this method's gather → release → duplicate-safe scatter → state
+        advancement order and returns the release already divided by the frozen ``ema_e``, so the
+        contract seen by the attention layer is unchanged (locked by
+        ``tests/test_presyn_rust_dispatch.py``). Anything grad-enabled, stochastic,
+        differentiable, metriplectic, or windowed (``active_key_count``/``runtime_buffers``)
+        stays on the PyTorch path.
+        """
+        return bool(
+            self.cfg.enable_presyn
+            and self.cfg.native_presyn
+            and drive.device.type == "cpu"
+            and _rust_presyn_kernel() is not None
+            and _resolve_synaptic_granularity(self.cfg)
+            is SynapticGranularity.PER_CONNECTION
+            and drive.dtype == torch.float32
+            and state["C"].dtype == torch.float32
+            and drive.ndim == 4
+            and drive.shape[2] == 1
+            and not torch.is_grad_enabled()
+            and not train
+            and not differentiable
+            and not self.cfg.differentiable_recurrence
+            and not self.cfg.use_flex_attention
+            and not bool(getattr(self, "_mc_sampling", False))
+            and self.kinetics is None
+            and not self.use_metriplectic_integrator()
+            and "HEAT" not in state
+            and not apply_barrier
+            and q_pos is None
+            and active_key_count is None
+            and runtime_buffers is None
+        )
+
+    def _release_canonical_rust_cpu(
+        self,
+        state: dict[str, Any],
+        drive: Tensor,
+        idx: Tensor,
+        valid: Tensor | None,
+    ) -> Tensor:
+        """Run one deterministic decode step in the Rust kernel and write the advanced state back.
+
+        Only called when :meth:`_can_use_native_presyn_cpu_decode` is true. The kernel validates
+        shapes and rejects configs it cannot mirror (learnable kinetics, metriplectic), so a
+        contract drift surfaces as an exception rather than a silent numeric difference. The
+        per-step telemetry the PyTorch path records through ``_advance_calcium_buffer`` is not
+        produced on this path.
+        """
+        kernel = _rust_presyn_kernel()
+        if kernel is None:  # pragma: no cover - guarded by the predicate
+            raise RuntimeError("rustbpe presyn kernel is not available")
+        B, H, T, K = drive.shape
+        valid_mask = (
+            valid if valid is not None else torch.ones(drive.shape, dtype=torch.bool)
+        )
+        np_state: dict[str, Any] = {
+            key: state[key].detach().contiguous().numpy()
+            for key in ("C", "BUF", "RRP", "RES", "PR", "CL", "AMP", "E")
+        }
+        np_state["DELAY"] = [t.detach().contiguous().numpy() for t in state["DELAY"]]
+        release, next_state = kernel(
+            drive.detach().contiguous().numpy(),
+            idx.detach().contiguous().to(torch.int64).numpy(),
+            valid_mask.detach().contiguous().numpy(),
+            np_state,
+            self.cfg,
+            self.ema_e,
+        )
+        for key in ("C", "BUF", "RRP", "RES", "PR", "CL", "E"):
+            state[key] = torch.from_numpy(next_state[key])
+        state["DELAY"] = [torch.from_numpy(entry) for entry in next_state["DELAY"]]
+        return torch.from_numpy(release).reshape(B, H, T, K)
+
     def release_canonical(
         self,
-        state: Dict[str, Any],
+        state: dict[str, Any],
         drive: Tensor,
         idx: Tensor,
         train: bool,
-        valid: Optional[Tensor] = None,
-        q_pos: Optional[Tensor] = None,
+        valid: Tensor | None = None,
+        q_pos: Tensor | None = None,
         apply_barrier: bool = False,
         differentiable: bool = False,
-        logits: Optional[Tensor] = None,
-        runtime_buffers: Optional[Dict[str, Tensor]] = None,
-        active_key_count: Optional[int] = None,
+        logits: Tensor | None = None,
+        runtime_buffers: dict[str, Tensor] | None = None,
+        active_key_count: int | None = None,
     ) -> Tensor:
         """CANONICAL unified presynaptic release — the single, faithful, differentiable
         source of truth (8j9.2).
@@ -1994,6 +2103,17 @@ class SynapticPresyn(nn.Module):
                 "in-kernel logit augmentation was requested outside the supported native "
                 "deterministic decode path"
             )
+        if self._can_use_native_presyn_cpu_decode(
+            state,
+            drive,
+            train=train,
+            differentiable=differentiable,
+            apply_barrier=apply_barrier,
+            q_pos=q_pos,
+            active_key_count=active_key_count,
+            runtime_buffers=runtime_buffers,
+        ):
+            return self._release_canonical_rust_cpu(state, drive, idx, valid)
 
         cfg = self.cfg
         B, H, T, K = drive.shape
@@ -2107,11 +2227,11 @@ class SynapticPresyn(nn.Module):
             ach_frac = min(1.0, max(0.0, float(getattr(self, "_mc_frac", 1.0))))
         evidence_sink = getattr(self, "_mc_evidence_sink", None) if mc_sampling else None
         mc_generator = getattr(self, "_mc_generator", None) if mc_sampling else None
-        sample_pool_sizes: Optional[Tensor] = None
+        sample_pool_sizes: Tensor | None = None
         sampled_mask = (
             torch.zeros_like(p, dtype=torch.bool) if evidence_sink is not None else None
         )
-        train_generator: Optional[torch.Generator] = None
+        train_generator: torch.Generator | None = None
         if (train or mc_sampling) and ach_frac > 0:
             sampling_generator = (
                 mc_generator
@@ -2354,10 +2474,10 @@ class SynapticPresyn(nn.Module):
         q: Tensor,
         k: Tensor,
         logits: Tensor,
-        state: Dict[str, Tensor],
-        mask: Optional[Tensor] = None,
+        state: dict[str, Tensor],
+        mask: Tensor | None = None,
         train_mode: bool = False,
-    ) -> Tuple[Tensor, Dict[str, Tensor]]:
+    ) -> tuple[Tensor, dict[str, Tensor]]:
         """
         Full (B, H, T, T) presynaptic dynamics reference (sequential, causal).
 
@@ -2365,7 +2485,7 @@ class SynapticPresyn(nn.Module):
         Rust/Triton backend contract is the sparse Tq=1 `release_canonical` path; this
         method intentionally retains a distinct sequential execution model.
         """
-        B, H, T, D = q.shape
+        _B, _H, T, D = q.shape
         cfg = self.cfg
 
         # State (clone so we can write in-place without mutating the caller).
@@ -2545,7 +2665,7 @@ class PostsynapticHebb(nn.Module):
         return v * diag + v @ (self.U @ self.V)
 
     @torch.no_grad()
-    def update(self, y: Tensor, ca_proxy: Tensor, *, genes: Optional[Tensor] = None) -> None:
+    def update(self, y: Tensor, ca_proxy: Tensor, *, genes: Tensor | None = None) -> None:
         """Update CaMKII, PP1, and BDNF state based on activity.
 
         When bdnf_hebb_accumulate=False (legacy mode):
@@ -2731,7 +2851,7 @@ class PostsynapticHebb(nn.Module):
         if reset_fast_weights:
             self.fast.zero_()
 
-    def get_bdnf_metrics(self) -> Dict[str, float]:
+    def get_bdnf_metrics(self) -> dict[str, float]:
         """Get BDNF-related metrics for logging/monitoring.
 
         Returns dict with:
@@ -2753,15 +2873,15 @@ class PostsynapticHebb(nn.Module):
 class SynapticLinear(nn.Module):
     cfg: SynapticConfig
     use_input_ln: bool
-    bias: Optional[nn.Parameter]
-    input_ln: Optional[nn.LayerNorm]
+    bias: nn.Parameter | None
+    input_ln: nn.LayerNorm | None
     w_slow: nn.Parameter
-    w_fast: Optional[nn.Parameter]
-    post: Optional[PostsynapticHebb]
-    u_buf: Optional[Tensor]
-    v_buf: Optional[Tensor]
-    proj_in: Optional[Tensor]
-    proj_out: Optional[Tensor]
+    w_fast: nn.Parameter | None
+    post: PostsynapticHebb | None
+    u_buf: Tensor | None
+    v_buf: Tensor | None
+    proj_in: Tensor | None
+    proj_out: Tensor | None
 
     def __init__(
         self,
@@ -2827,9 +2947,9 @@ class SynapticLinear(nn.Module):
         # before those Parameters are used. _plasticity_pending flags a deferred write; the
         # eligibility traces (u_buf/v_buf) init to zero so the first application is a no-op.
         self._plasticity_pending: bool = False
-        self._last_gate_scale: Optional[Tensor] = None
+        self._last_gate_scale: Tensor | None = None
 
-    def _update_hebb_traces(self, x: Tensor, y: Tensor, genes: Optional[Tensor]) -> None:
+    def _update_hebb_traces(self, x: Tensor, y: Tensor, genes: Tensor | None) -> None:
         """Update eligibility traces (u_buf/v_buf) + CaMKII/PP1/BDNF state from activations.
 
         Touches ONLY buffers (never a Parameter used in the live forward graph), so it is
@@ -2906,7 +3026,7 @@ class SynapticLinear(nn.Module):
             ca_vec = y.abs().reshape(-1, y.shape[-1]).mean(0).clamp(0, 10.0)
             self.post.update(y, ca_vec, genes=genes)
 
-    def _apply_hebb_weight_writes(self, gate_scale: Optional[Tensor]) -> None:
+    def _apply_hebb_weight_writes(self, gate_scale: Tensor | None) -> None:
         """Apply the Hebbian Parameter writes (w_fast/w_slow + post.fast/post.slow) from the
         current eligibility traces.
 
@@ -2992,7 +3112,7 @@ class SynapticLinear(nn.Module):
             )
 
     def forward(
-        self, x: Tensor, calcium: Tensor, energy: Tensor, update_mem: bool = True, genes: Optional[Tensor] = None
+        self, x: Tensor, calcium: Tensor, energy: Tensor, update_mem: bool = True, genes: Tensor | None = None
     ):
         if self.input_ln is not None:
             x = self.input_ln(x)
@@ -3024,7 +3144,7 @@ class SynapticLinear(nn.Module):
             self._plasticity_pending = False
 
         # Linear pass (separate slow/fast for calcium/energy gating)
-        fast_gate: Optional[Tensor] = None
+        fast_gate: Tensor | None = None
         if self.cfg.enable_hebbian and self.w_fast is not None:
             y_slow = x @ self.w_slow
             y_fast = x @ self.w_fast
@@ -3207,7 +3327,7 @@ class SynapticCausalSelfAttention(nn.Module):
 
     def _chunked_release_bias(
         self,
-        presyn_state: Dict[str, Any],
+        presyn_state: dict[str, Any],
         vals: Tensor,
         idx: Tensor,
         valid: Tensor,
@@ -3231,7 +3351,7 @@ class SynapticCausalSelfAttention(nn.Module):
         drives = list(vals.split(block, dim=2))
         idxs = list(idx.split(block, dim=2))
         valids = list(valid.split(block, dim=2))
-        active_key_counts: List[Optional[int]] = []
+        active_key_counts: list[int | None] = []
         active_key_count = int(prefix_len)
         for drive in drives:
             active_key_count += int(drive.size(2))
@@ -3548,7 +3668,7 @@ class SynapticMLP(nn.Module):
         self.register_buffer("E0", torch.tensor(0.8))
 
     def forward(self, x: Tensor, update_mem: bool = True):
-        B, T, C = x.shape
+        B, T, _C = x.shape
         c0 = self.C0
         e0 = self.E0
         c = c0.expand(B, T)
@@ -3581,7 +3701,7 @@ class SynapticExpert(nn.Module):
         self.fc2 = SynapticLinear(h, n_embd, cfg, bias=True, use_input_ln=False)
         self.drop = nn.Dropout(dropout)
 
-    def forward(self, x: Tensor, energy_override: Optional[Tensor] = None, genes: Optional[Tensor] = None, update_mem: bool = True) -> Tensor:
+    def forward(self, x: Tensor, energy_override: Tensor | None = None, genes: Tensor | None = None, update_mem: bool = True) -> Tensor:
         # x: (N, C)
         N = x.size(0)
         device = x.device
@@ -3707,7 +3827,7 @@ class SynapticGenomeDecoder(nn.Module):
         ]
         return torch.stack(values, dim=-1)
 
-    def kinetics(self, xi: Tensor) -> Dict[str, Tensor]:
+    def kinetics(self, xi: Tensor) -> dict[str, Tensor]:
         """Decode named kinetics, including positive time constants derived from EMA rates."""
         phenotype = self(xi)
         alpha_energy = phenotype[..., 1]
@@ -3728,18 +3848,18 @@ class SynapticMoE(nn.Module):
     num_experts: int
     top_k: int
     cfg: SynapticConfig
-    last_aux_loss: Optional[Tensor]
-    last_ctx: Dict[str, Tensor]
-    last_neuroscore: Optional[Tensor]
-    glial: Optional[GlialHomeostasis]
+    last_aux_loss: Tensor | None
+    last_ctx: dict[str, Tensor]
+    last_neuroscore: Tensor | None
+    glial: GlialHomeostasis | None
     router: nn.Linear
     experts: nn.ModuleList
     router_embeddings: nn.Parameter
     router_logit_bias: Tensor
     fatigue: Tensor
     energy: Tensor
-    Xi: Optional[nn.Parameter]
-    kinetics_decoder: Optional[nn.Module]
+    Xi: nn.Parameter | None
+    kinetics_decoder: nn.Module | None
     """Top-k sparse Synaptic MoE with router embeddings, expert fatigue/energy,
     contrastive router-embedding updates, and split/merge structural hooks."""
 
@@ -3820,11 +3940,11 @@ class SynapticMoE(nn.Module):
         """Decode Xi to bounded biological kinetics (kept for telemetry callers)."""
         return self.genome_decoder(xi)
 
-    def genome_kinetics(self) -> Dict[str, Tensor]:
+    def genome_kinetics(self) -> dict[str, Tensor]:
         """Return the live, named per-expert kinetics for telemetry and evaluation."""
         return self.genome_decoder.kinetics(self.Xi)
 
-    def forward(self, x: Tensor, update_mem: bool = True) -> Tuple[Tensor, Tensor]:
+    def forward(self, x: Tensor, update_mem: bool = True) -> tuple[Tensor, Tensor]:
         B, T, C = x.shape
         E = self.num_experts
         device = x.device
@@ -4010,7 +4130,7 @@ class StructuralPlasticity(nn.Module):
 
 
 def structural_plasticity_step(
-    expert_states: List[nn.Module], cfg: SynapticConfig, global_step: int
+    expert_states: list[nn.Module], cfg: SynapticConfig, global_step: int
 ):
     if cfg.structural_interval < 1 or global_step % cfg.structural_interval != 0:
         return
