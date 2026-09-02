@@ -195,7 +195,9 @@ def test_model_fast_weights_adapt_within_sequence_and_reset_between():
     model.reset_sequence_state(reset_fast_weights=True)
     with torch.no_grad():
         for _ in range(4):
-            model(seq)
+            # An eval-mode forward is deterministic and inert by default (2026-09-01); online
+            # adaptation is opted into with update_mem=True, which is what this test exercises.
+            model(seq, update_mem=True)
     adapted = max(lin.w_fast.norm().item() for lin in lins)
     assert adapted > 0.05, "fast weights must adapt within a sequence"
 

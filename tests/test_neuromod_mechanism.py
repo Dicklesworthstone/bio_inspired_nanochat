@@ -75,7 +75,9 @@ def test_eval_matrix_accepts_every_matrix_column():
 
     assert "synaptic_off" in MATRIX_COLUMNS and "add_neuromod" in MATRIX_COLUMNS
     assert not (set(MATRIX_COLUMNS) & set(PresetId.__args__)), "columns must not shadow presets"
-    assert set(MATRIX_COLUMNS) | set(PresetId.__args__) == {c.config_id for c in am.screening_columns()}
+    assert set(MATRIX_COLUMNS) | set(PresetId.__args__) == {
+        c.config_id for c in am.screening_columns() + am.structural_columns()
+    }
 
     off = _syn_cfg_for_preset("synaptic_off")
     for m in MECHANISMS:

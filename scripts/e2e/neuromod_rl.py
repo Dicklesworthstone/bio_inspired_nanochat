@@ -212,7 +212,10 @@ def run_neuromod_rl_e2e(
 
             with torch.no_grad():
                 for _ in range(3):
-                    model(batch_task.inputs, targets=batch_task.targets)
+                    # This battery measures DA-gated online consolidation, so plasticity must
+                    # run: since 2026-09-01 an eval-mode forward is deterministic and inert
+                    # unless update_mem=True is passed (bridge plan G3).
+                    model(batch_task.inputs, targets=batch_task.targets, update_mem=True)
 
             # Compute total drift in W_slow
             drift = 0.0
