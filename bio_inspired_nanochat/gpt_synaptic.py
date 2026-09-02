@@ -143,14 +143,23 @@ class Block(nn.Module):
             else MLP(n_embd, syn_cfg, dropout)
         )
 
-    def forward(self, x, kv_cache=None, presyn_state=None, train_mode=True):
+    def forward(
+        self, x, kv_cache=None, presyn_state=None, train_mode=True, update_mem: bool | None = None
+    ):
+        # ``train_mode`` drives the attention path (stochastic vesicle sampling, persistent
+        # presyn normalizer updates); ``update_mem`` drives the per-sequence plasticity in the
+        # MLP/MoE (Hebbian traces + writes, fatigue/energy). They default to the same value; a
+        # working-memory probe passes train_mode=False, update_mem=True to read the sequence
+        # deterministically while the online mechanism under test stays live (sax.1 / sx1m).
+        if update_mem is None:
+            update_mem = train_mode
         a, st = self.attn(self.norm1(x), kv_cache, presyn_state, train_mode)
         x = x + a
         if self.use_moe:
-            y, aux = self.mlp(self.norm2(x), update_mem=train_mode)
+            y, aux = self.mlp(self.norm2(x), update_mem=update_mem)
             self.last_aux_loss = self.balance_loss * aux
         else:
-            y = self.mlp(self.norm2(x), update_mem=train_mode)
+            y = self.mlp(self.norm2(x), update_mem=update_mem)
             self.last_aux_loss = torch.tensor(0.0, device=x.device)
         x = x + y
         return x, st
@@ -237,6 +246,7 @@ class GPTSynaptic(nn.Module):
         train_mode: bool = True,
         max_layers: int | None = None,
         structural_training: bool = False,
+        update_mem: bool | None = None,
     ) -> tuple[Tensor, int]:
         """Run the synaptic transformer trunk without applying the language head."""
         _B, T = idx.size()
@@ -299,7 +309,7 @@ class GPTSynaptic(nn.Module):
             if li >= active_layers:
                 break
             layer_state = presyn_states[li]
-            x, layer_state = block(x, kv_cache, layer_state, train_mode)
+            x, layer_state = block(x, kv_cache, layer_state, train_mode, update_mem)
             presyn_states[li] = layer_state
 
         # Save presyn_state back to kv_cache
@@ -358,6 +368,7 @@ class GPTSynaptic(nn.Module):
         kv_cache=None,
         train_mode: bool = True,
         max_layers: int | None = None,
+        update_mem: bool | None = None,
     ):
         x, active_layers = self._forward_hidden(
             idx,
@@ -365,6 +376,7 @@ class GPTSynaptic(nn.Module):
             train_mode=train_mode,
             max_layers=max_layers,
             structural_training=targets is not None,
+            update_mem=update_mem,
         )
 
         # Logit softcap (parity with vanilla GPT) — bound logits on BOTH the inference

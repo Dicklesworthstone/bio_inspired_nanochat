@@ -27,6 +27,7 @@ Quick use
 
 from __future__ import annotations
 
+import inspect
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any, Callable
@@ -319,8 +320,14 @@ def _logits_for(model: Any, inputs: Tensor, *, chunk_len: int | None) -> Tensor:
     in force when later chunks are processed — exactly how token-by-token generation behaves.
     """
     total = int(inputs.shape[1])
+    # Synaptic models are READ deterministically (train_mode=False: no stochastic vesicle
+    # sampling, no persistent normalizer updates) with the per-sequence plasticity kept live
+    # (update_mem=True) — that plasticity is the mechanism the probes score. Models whose
+    # forward takes neither keyword (vanilla GPT) are called plainly.
+    params = inspect.signature(model.forward).parameters
+    fw = {k: v for k, v in (('train_mode', False), ('update_mem', True)) if k in params}
     if chunk_len is None or chunk_len <= 0 or chunk_len >= total:
-        out = model(inputs)
+        out = model(inputs, **fw)
         return out[0] if isinstance(out, (tuple, list)) else out
     from bio_inspired_nanochat.engine import KVCache
 
@@ -334,7 +341,7 @@ def _logits_for(model: Any, inputs: Tensor, *, chunk_len: int | None) -> Tensor:
     )
     pieces: list[Tensor] = []
     for start in range(0, total, chunk_len):
-        out = model(inputs[:, start : start + chunk_len], kv_cache=cache)
+        out = model(inputs[:, start : start + chunk_len], kv_cache=cache, **fw)
         pieces.append(out[0] if isinstance(out, (tuple, list)) else out)
     return torch.cat(pieces, dim=1)
 

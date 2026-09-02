@@ -79,6 +79,7 @@ dist = cast(_DistributedApi, torch_dist)
 # -----------------------------------------------------------------------------
 run = "dummy" # wandb run name default ("dummy" is special - we won't log to wandb)
 device_type = "" # cuda|cpu|mps (empty => autodetect)
+torch_compile = 1 # 0 => run the model eagerly. Auto-disabled on Python 3.14+, where torch.compile raises (torch 2.x)
 model_tag = None # model tag to load the model from (base model or midtrained model)
 step = None # step to load the model from (base model or midtrained model)
 resume_model_tag = None # mid-checkpoint model tag to resume (None => infer largest)
@@ -219,7 +220,11 @@ else:
         )
 
 orig_model = model
-model = torch.compile(model, dynamic=False)
+if torch_compile:
+    try:
+        model = torch.compile(model, dynamic=False)
+    except RuntimeError as e:  # torch 2.x refuses on Python 3.14+; train eagerly rather than die (--torch_compile=0 skips the attempt)
+        print0(f"torch.compile unavailable ({e}); running the model eagerly")
 use_syn = bool(getattr(model.config, "synapses", False))
 num_flops_per_token = model.estimate_flops()
 tokens_per_fwdbwd = device_batch_size * max_seq_len # tokens per iteration for a single rank

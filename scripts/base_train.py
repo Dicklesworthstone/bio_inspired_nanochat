@@ -75,6 +75,7 @@ print_banner()
 run = "dummy"  # wandb run name default ("dummy" is special - we won't log to wandb)
 # Runtime
 device_type = ""  # cuda|cpu|mps (empty => autodetect good device type default, in order: CUDA > MPS > CPU)
+torch_compile = 1  # 0 => run the model eagerly. Auto-disabled on Python 3.14+, where torch.compile raises (torch 2.x)
 # Model architecture
 depth = (
     20  # the depth of the Transformer model to train, rest of the kwargs are derived
@@ -561,9 +562,11 @@ if resuming:
     # wte/lm_head tie — re-establish it so the shared weight trains as one on resume.
     model.tie_weights()
 orig_model = model  # original, uncompiled model, for saving raw model state_dict and for inference/evaluation (because the shapes may change shape)
-model = torch.compile(
-    model, dynamic=False
-)  # the inputs to model will never change shape so dynamic=False is safe
+if torch_compile:
+    try:
+        model = torch.compile(model, dynamic=False)  # the inputs to model will never change shape so dynamic=False is safe
+    except RuntimeError as e:  # torch 2.x refuses on Python 3.14+; train eagerly rather than die (--torch_compile=0 skips the attempt)
+        print0(f"torch.compile unavailable ({e}); running the model eagerly")
 num_params = sum(p.numel() for p in model.parameters())
 print0(f"Number of parameters: {num_params:,}")
 num_flops_per_token = model.estimate_flops()
