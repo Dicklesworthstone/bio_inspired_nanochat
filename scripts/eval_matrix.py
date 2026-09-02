@@ -35,7 +35,11 @@ from rich.progress import (
 )
 from rich.table import Table
 
-from bio_inspired_nanochat.ablation_matrix import AblationConfig, screening_columns
+from bio_inspired_nanochat.ablation_matrix import (
+    AblationConfig,
+    screening_columns,
+    structural_columns,
+)
 from bio_inspired_nanochat.ablation_registry import MECHANISMS, apply_preset
 from bio_inspired_nanochat.checkpoint_manager import (
     list_checkpoint_steps,
@@ -95,7 +99,7 @@ DEFAULT_ABLATION_PRESETS: tuple[PresetId, ...] = (
 # ablation_matrix.AblationConfig.build_syn_cfg(), so this runner cannot drift from the spec.
 MATRIX_COLUMNS: dict[str, AblationConfig] = {
     column.config_id: column
-    for column in screening_columns()
+    for column in screening_columns() + structural_columns()
     if column.config_id not in set(PresetId.__args__)
 }
 

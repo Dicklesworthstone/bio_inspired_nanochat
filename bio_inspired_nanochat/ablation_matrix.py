@@ -119,8 +119,11 @@ class AblationConfig:
     config_id: str
     base: Base
     overrides: dict[str, Any]  # SynapticConfig field -> value, applied on top of `base`
-    role: str                  # "anchor" | "leave_one_out" | "add_one_in"
+    role: str                  # "anchor" | "leave_one_out" | "add_one_in" | "structural"
     rationale: str
+    # base_train globals this column needs beyond SynapticConfig (e.g. use_moe, splitmerge_every);
+    # emitted by base_train_argv as plain --key=value flags. Empty for the config-only matrix.
+    train_overrides: dict[str, Any] = dataclasses.field(default_factory=dict)
 
     def build_syn_cfg(self) -> Optional[SynapticConfig]:
         """Materialize the SynapticConfig for this column (``None`` for the vanilla GPT baseline).
@@ -231,6 +234,97 @@ def add_one_in() -> list[AblationConfig]:
 def screening_columns() -> list[AblationConfig]:
     """Cheap first pass: all anchors + both ablation directions (drop non-helpers here)."""
     return anchors() + leave_one_out() + add_one_in()
+
+
+# --------------------------------------------------------------------------- #
+# Structural arm (sx1m / uta). The expert lifecycle is a base_train training-loop knob, not a
+# SynapticConfig field, so the config-only matrix above cannot exercise it. These two columns are
+# NOT part of the pre-registered screening set (its size is locked by the tests); they are the
+# opt-in pair that gives the lifecycle an evidence path: MoE with a fixed expert population vs the
+# same MoE with split/merge under the scale-free `relative` health signal.
+# --------------------------------------------------------------------------- #
+STRUCTURAL_SPLITMERGE_EVERY: int = 100  # optimizer steps between lifecycle calls in the structural arm
+STRUCTURAL_TRAIN_OVERRIDES: dict[str, Any] = {
+    "use_moe": 1,
+    "splitmerge_every": STRUCTURAL_SPLITMERGE_EVERY,
+    "sm_health_mode": "relative",
+    "split_health_min": 1.5,
+    "merge_health_max": 0.35,
+}
+
+
+def structural_columns() -> list[AblationConfig]:
+    """The MoE lifecycle pair: fixed experts vs split/merge (relative health). Opt-in; not screening."""
+    return [
+        AblationConfig(
+            "moe_fixed", Base.BIO_ALL, {}, "structural",
+            "bio_all on SynapticMoE blocks with a fixed expert population; the control for the "
+            "lifecycle arm (same architecture, no structural events).",
+            {"use_moe": 1},
+        ),
+        AblationConfig(
+            "moe_splitmerge", Base.BIO_ALL, {}, "structural",
+            f"bio_all on SynapticMoE blocks with the split/merge controller every "
+            f"{STRUCTURAL_SPLITMERGE_EVERY} steps under the scale-free relative health signal "
+            f"(split above 1.5x fair share, merge below 0.35x); (moe_splitmerge - moe_fixed) is the "
+            f"lifecycle's effect.",
+            dict(STRUCTURAL_TRAIN_OVERRIDES),
+        ),
+    ]
+
+
+# --------------------------------------------------------------------------- #
+# From a column to a base_train command line (hwxb.5.2). eval_matrix's scientific rows load the
+# finished base_train checkpoint of each (column, seed); this is the only code that says how those
+# checkpoints are produced, so the spec and the runs cannot drift.
+# --------------------------------------------------------------------------- #
+MATRIX_CHECKPOINT_TEMPLATE: str = "matrix_{preset}_s{seed}"  # eval_matrix --checkpoint-dir template
+
+
+def matrix_model_tag(config_id: str, seed: int) -> str:
+    """The base_train ``--model_tag`` for one matrix cell; eval_matrix resolves the same name."""
+    return MATRIX_CHECKPOINT_TEMPLATE.format(preset=config_id, seed=int(seed))
+
+
+def _cli_value(value: Any) -> str:
+    if isinstance(value, bool):
+        return "1" if value else "0"
+    if isinstance(value, Enum):
+        return str(value.value)
+    return str(value)
+
+
+def base_train_argv(
+    column: AblationConfig, *, seed: int, recipe: tuple[str, ...] | list[str] = ()
+) -> list[str]:
+    """The ``scripts.base_train`` arguments that train one matrix cell.
+
+    ``recipe`` carries the shared, column-independent flags (depth, batch, tokens, data). The column
+    contributes ``--synapses``, one ``--syn_cfg.<field>=<value>`` per field the column sets (the
+    synaptic-off anchor's neutralisation plus the column's own overrides, later values winning),
+    its ``train_overrides`` as plain ``--key=value`` base_train globals, the seed as ``--init_seed``
+    (the field eval_matrix checks the checkpoint against), and the cell's model tag.
+    """
+    argv: list[str] = list(recipe)
+    if column.base is Base.VANILLA:
+        if column.overrides:
+            raise ValueError(
+                f"{column.config_id}: a vanilla column cannot carry SynapticConfig overrides"
+            )
+        argv.append("--synapses=0")
+    else:
+        argv.append("--synapses=1")
+        merged: dict[str, Any] = {}
+        if column.base is Base.SYNAPTIC_OFF:
+            merged.update(SYNAPTIC_OFF_OVERRIDES)
+        merged.update(column.overrides)
+        for field_name, value in merged.items():
+            argv.append(f"--syn_cfg.{field_name}={_cli_value(value)}")
+    for key, value in column.train_overrides.items():
+        argv.append(f"--{key}={_cli_value(value)}")
+    argv.append(f"--init_seed={int(seed)}")
+    argv.append(f"--model_tag={matrix_model_tag(column.config_id, seed)}")
+    return argv
 
 
 def confirmation_columns(survivors: list[str]) -> list[AblationConfig]:
