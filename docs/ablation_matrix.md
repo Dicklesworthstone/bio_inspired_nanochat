@@ -95,6 +95,11 @@ We run both where compute allows; the staging below keeps the cost bounded.
 
 ---
 
+**Throughput budget (proposed 2026-09-03, bead `74f.10.1`; owner to confirm):** `tok_per_sec` and
+`peak_mem_gb` are not only recorded — at D1 scale `bio_all` must reach ≥ 1/2.0 of the param-matched
+vanilla's training tokens/s and ≤ 1.5× its decode latency on the same host/batch/sequence, or the
+quality effect is judged at equal compute and the mechanism is a candidate for pruning (`hwxb.6.1`).
+
 ## 4) Staged compute + the go/no-go gate
 
 Running all 13 columns × 3 seeds at full budget is wasteful if half the mechanisms do nothing.

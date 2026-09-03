@@ -385,6 +385,8 @@ We're implementing systematic bio vs vanilla evaluation with statistical rigor:
 - **Training** - Tokens/sec, GPU utilization, peak memory
 - **Inference** - Latency (prompt + decode), throughput, KV cache efficiency
 
+**Accepted throughput budget (proposed 2026-09-03, bead `74f.10.1`; the owner confirms or replaces the numbers):** at D1 scale, `bio_all` must train at no less than 1/2.0 of the param-matched vanilla's tokens per second and decode at no more than 1.5× its latency, measured by `bio_inspired_nanochat/perf_regression.py` on the same host, batch and sequence length. A mechanism whose quality gain does not survive equal-compute accounting is pruned in `hwxb.6.1`. Today's measured toy-scale ratios are 4–18× training and 12× decode (`results/perf_baselines.json`, bead `l7c9`), so the gate that enforces the budget (`74f.10.2`) waits for the recurrence work.
+
 ### Experimental Design
 
 - **Configs**: the 20 pre-registered columns of `docs/ablation_matrix.md` (3 anchors, 8 leave-one-out, 9 add-one-in) plus the opt-in structural pair (`moe_fixed` vs `moe_splitmerge`); `python -m scripts.matrix_launch` derives every cell's `base_train` command from the spec and `eval_matrix` scores the checkpoints
