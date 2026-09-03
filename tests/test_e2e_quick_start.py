@@ -153,6 +153,17 @@ def test_chat_cli_generates_from_the_base_checkpoint(quick_start):
     assert reply, "the base checkpoint must generate at least one token"
 
 
+def test_chat_cli_selective_decoding_abstains_at_a_zero_threshold(quick_start):
+    """--selective (wmel.2) reaches the engine's abstention path from the real CLI."""
+    chat = _run(
+        ["scripts.chat_cli", "-i", "base", "-g", MODEL_TAG, "-p", "The synapse", "--device-type", "cpu", "-d", "float32",
+         "--selective", "--max-entropy", "0.0"],
+        quick_start["env"], timeout=600,
+    )
+    assert chat.returncode == 0, chat.stderr[-3000:]
+    assert "[abstain: predictive entropy" in chat.stdout, chat.stdout[-500:]
+
+
 def test_chunked_regime_trains_and_is_recorded(quick_start):
     """--hebb_chunk_len (bead hwxb.8) runs through the real script and lands in the registry row."""
     run = _run(

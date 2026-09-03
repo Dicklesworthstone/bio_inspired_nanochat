@@ -20,6 +20,8 @@ parser.add_argument('-t', '--temperature', type=float, default=0.6, help='Temper
 parser.add_argument('-k', '--top-k', type=int, default=50, help='Top-k sampling parameter')
 parser.add_argument('--device-type', type=str, default='', choices=['cuda', 'cpu', 'mps'], help='Device type for evaluation: cuda|cpu|mps. empty => autodetect')
 parser.add_argument('-d', '--dtype', type=str, default='bfloat16', choices=['float32', 'bfloat16'])
+parser.add_argument('--selective', action='store_true', help='Selective decoding (wmel): abstain when a step\'s predictive entropy exceeds --max-entropy')
+parser.add_argument('--max-entropy', type=float, default=1.0, help='Predictive-entropy threshold in nats for --selective (UncertaintyDecodingConfig.max_predictive_entropy_nats)')
 args = parser.parse_args()
 
 # Init the model and tokenizer
@@ -85,12 +87,22 @@ while True:
         "temperature": args.temperature,
         "top_k": args.top_k,
     }
+    if args.selective:
+        generate_kwargs["selective"] = {"max_predictive_entropy_nats": args.max_entropy}
+        generate_kwargs["yield_metrics"] = True
     response_tokens = []
     print("\nAssistant: ", end="", flush=True)
     with autocast_ctx:
-        for token_column, token_masks in engine.generate(conversation_tokens, **generate_kwargs):
+        for step in engine.generate(conversation_tokens, **generate_kwargs):
+            token_column = step[0]
+            metrics = step[2] if len(step) > 2 else None
             token = token_column[0] # pop the batch dimension (num_samples=1)
             response_tokens.append(token)
+            events = metrics.get("selective", {}).get("events") if metrics else None
+            if events:  # the policy ended the row instead of emitting a token; say so
+                ev = events[0]
+                print(f"\n[{ev['action']}: predictive entropy {ev['entropy_nats']:.2f} nats > {ev['threshold_nats']:.2f}]", end="", flush=True)
+                continue
             token_text = tokenizer.decode([token])
             print(token_text, end="", flush=True)
     print()

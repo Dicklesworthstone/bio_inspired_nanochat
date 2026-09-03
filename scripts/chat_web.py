@@ -164,6 +164,9 @@ class ChatRequest(BaseModel):
     temperature: Optional[float] = None
     max_tokens: Optional[int] = None
     top_k: Optional[int] = None
+    # wmel.2: selective decoding — abstain when a step's predictive entropy exceeds the threshold (nats)
+    selective: Optional[bool] = None
+    max_entropy_nats: Optional[float] = None
 
 def validate_chat_request(request: ChatRequest):
     """Validate chat request to prevent abuse."""
@@ -203,6 +206,11 @@ def validate_chat_request(request: ChatRequest):
                 status_code=400,
                 detail=f"Message {i} has invalid role. Must be 'user', 'assistant', or 'system'"
             )
+
+    # Validate the selective-decoding threshold
+    if request.max_entropy_nats is not None:
+        if not (0.0 <= request.max_entropy_nats <= 20.0):
+            raise HTTPException(status_code=400, detail="max_entropy_nats must be between 0 and 20 (nats)")
 
     # Validate temperature
     if request.temperature is not None:
@@ -288,15 +296,27 @@ async def generate_stream(
     last_clean_text = ""
 
     with worker.autocast_ctx:
-        for token_column, token_masks in worker.engine.generate(
+        selective_cfg = (
+            {"max_predictive_entropy_nats": request.max_entropy_nats if request.max_entropy_nats is not None else 1.0}
+            if request.selective else None
+        )
+        for step in worker.engine.generate(
             tokens,
             num_samples=1,
             max_tokens=max_new_tokens,
             temperature=temperature,
             top_k=top_k,
-            seed=random.randint(0, 2**31 - 1)
+            seed=random.randint(0, 2**31 - 1),
+            selective=selective_cfg,
+            yield_metrics=selective_cfg is not None,
         ):
+            token_column = step[0]
+            metrics = step[2] if len(step) > 2 else None
             token = token_column[0]
+            events = metrics.get("selective", {}).get("events") if metrics else None
+            if events:  # wmel.2: the policy ended the row; tell the client why
+                yield f"data: {json.dumps({'abstain': events[0], 'gpu': worker.gpu_id})}\n\n"
+                break
 
             # Stopping criteria
             if token == assistant_end or token == bos:

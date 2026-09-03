@@ -144,6 +144,8 @@ Default-neutral (gains 1.0) when off, so it's a no-op unless enabled; telemetry 
 
 The default-off `UncertaintyDecodingConfig` turns that measured entropy into an action. `quality_guarded_predict` first routes an uncertain cheap prediction to the reserved full-compute path; if the served distribution remains above a threshold calibrated in nats, it returns an auditable `abstain` or `clarify` directive instead of a token. Every decision logs the adaptive/served entropy, threshold crossings, action trace, bounded predictive-distribution summary, compute plan, and exact ATP debits. On the tiny canonical selective-prediction artifact, the first ≥80%-coverage point per seed retained 770/960 predictions while reducing served errors from two to zero; this is a deterministic demo, not a portable production threshold.
 
+Reachable from serving since 2026-09-03 (beads `wmel.1`/`wmel.2`): `Engine.generate(selective=...)` ends the row and reports an abstention when a step's predictive entropy exceeds the threshold; `python -m scripts.chat_cli -i base -g <tag> -p "..." --selective --max-entropy 1.0` prints `[abstain: predictive entropy X nats > 1.00]`, and `chat_web` accepts `{"selective": true, "max_entropy_nats": 1.0}` in the request and streams an `abstain` event. The entropy is the deterministic-release softmax entropy (the calibration artifact found MC-vesicle entropy indistinguishable from it at toy scale); the threshold is a calibration contract, not a correctness guarantee.
+
 See `docs/theory/stochastic_thermodynamics.md` §§7.4–7.5 and `results/calibration-selective-prediction-86aad7037a51.json` for the full statistical and risk-coverage evidence.
 
 ---
