@@ -349,6 +349,17 @@ class KVCache:
 
 # -----------------------------------------------------------------------------
 @torch.inference_mode()
+def predictive_entropy_nats(logits):
+    """Shannon entropy (nats) of softmax(logits) per row: the uncertainty selective decoding acts on.
+
+    On the synaptic model this is the deterministic-release predictive entropy; the committed
+    calibration artifact found it indistinguishable from MC-vesicle entropy at toy scale
+    (delta ECE 4e-6), so one forward is used rather than an MC ensemble.
+    """
+    log_p = torch.log_softmax(logits.float(), dim=-1)
+    return -(log_p.exp() * log_p).sum(dim=-1)
+
+
 def sample_next_token(logits, rng, temperature=1.0, top_k=None):
     """Sample a single next token from given logits of shape (B, vocab_size). Returns (B, 1)."""
     if logits.ndim != 2 or logits.shape[0] < 1 or logits.shape[1] < 1:
@@ -417,7 +428,7 @@ class Engine:
 
     @torch.inference_mode()
     def generate(self, tokens, num_samples=1, max_tokens=None, temperature=1.0, top_k=None, seed=42,
-                 yield_metrics=False, deliberation=None, self_correction=None):
+                 yield_metrics=False, deliberation=None, self_correction=None, selective=None):
         """Same as generate, but does single prefill and then clones the KV cache.
 
         ``deliberation`` (bead r00r.1.2): an optional ``DeliberationConfig`` (or a prebuilt
@@ -543,6 +554,27 @@ class Engine:
                     break
             return
 
+        # wmel.1: selective decoding. ``selective`` is an UncertaintyDecodingConfig (or True / a dict
+        # of its fields). When the predictive entropy of a step exceeds
+        # ``max_predictive_entropy_nats`` the policy refuses to emit that token: the row ends with
+        # <|assistant_end|> and the event (row, action, entropy, threshold) is reported in the
+        # metrics of that step (``yield_metrics=True``). ``None``/``False`` leaves generation
+        # byte-identical. Not combined with self_correction (that path returns above).
+        selective_cfg = None
+        if selective is not None and selective is not False:
+            from bio_inspired_nanochat.adaptive_compute import UncertaintyDecodingConfig
+
+            if isinstance(selective, UncertaintyDecodingConfig):
+                selective_cfg = selective if selective.enabled else None
+            elif isinstance(selective, bool):
+                selective_cfg = UncertaintyDecodingConfig(enabled=True)
+            elif isinstance(selective, dict):
+                selective_cfg = UncertaintyDecodingConfig(**{"enabled": True, **selective})
+            else:
+                raise TypeError(
+                    "selective must be an UncertaintyDecodingConfig, True, or a dict of its fields, "
+                    f"got {type(selective).__name__}"
+                )
         # Build the deliberation controller (None ⟹ baseline single-step decode). Lazy import keeps
         # the metriplectic/numpy stack off engine.py's import path unless deliberation is requested.
         deliberation_controller = None
@@ -690,6 +722,17 @@ class Engine:
                 )  # (B, 1)
                 sampled_tokens = next_ids[:, 0].tolist()
 
+            # wmel.1: predictive entropy of the logits that produced this step's samples.
+            selective_actions = None
+            selective_events = []
+            if selective_cfg is not None:
+                ent = predictive_entropy_nats(logits)
+                if ent.numel() == 1 and num_samples > 1:
+                    ent = ent.expand(num_samples)
+                selective_actions = [
+                    (float(ent[i]), bool(float(ent[i]) > selective_cfg.max_predictive_entropy_nats))
+                    for i in range(num_samples)
+                ]
             # Process each row: choose the next token, update state, optional tool use
             token_column = [] # contains the next token id along each row
             token_masks = [] # contains the mask (was it sampled (1) or forced (0)?) along each row
@@ -698,6 +741,16 @@ class Engine:
                 is_forced = len(state.forced_tokens) > 0 # are there tokens waiting to be forced in deque?
                 token_masks.append(0 if is_forced else 1) # mask is 0 if forced, 1 if sampled
                 next_token = state.forced_tokens.popleft() if is_forced else sampled_tokens[i]
+                if selective_actions is not None and not is_forced and selective_actions[i][1]:
+                    # The policy refuses a token this uncertain: end the row and report why.
+                    next_token = assistant_end
+                    token_masks[-1] = 0
+                    selective_events.append({
+                        "row": i,
+                        "action": selective_cfg.terminal_action,
+                        "entropy_nats": selective_actions[i][0],
+                        "threshold_nats": selective_cfg.max_predictive_entropy_nats,
+                    })
                 token_column.append(next_token)
                 # Update the state of this row to include the next token
                 state.current_tokens.append(next_token)
@@ -751,6 +804,12 @@ class Engine:
                                         "indices": indices.cpu().numpy().tolist()
                                     })
                 metrics['moe'] = moe_stats
+                if selective_cfg is not None:
+                    metrics['selective'] = {
+                        "entropy_nats": [a[0] for a in (selective_actions or [])],
+                        "threshold_nats": selective_cfg.max_predictive_entropy_nats,
+                        "events": selective_events,
+                    }
                 
                 # 2. Presynaptic Stats (RRP, C)
                 presyn_state = kv_cache_decode.presyn_state
