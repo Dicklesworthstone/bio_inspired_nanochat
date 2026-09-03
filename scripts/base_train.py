@@ -107,7 +107,7 @@ sm_verbose = 0  # verbose split/merge logging
 sm_homeostasis_guards = 0  # uta.6: routed-mass ramp + energy floor + row-wise moment warm restart after lifecycle events
 sm_gate_ramp_forwards = 512  # uta.6: training forwards over which a freshly seeded expert ramps in (needs sm_homeostasis_guards=1)
 sm_energy_floor = 0.05  # uta.6: per-expert energy floor after events (needs sm_homeostasis_guards=1)
-sm_health_mode = "product"  # sx1m: 'product' (legacy util*energy) or 'relative' (util / fair share; set the three thresholds in fair-share units, e.g. 1.5 / 0.35 / 0.05)
+sm_health_mode = "product"  # sx1m: 'product' (legacy util*energy), 'relative' (util / fair share; thresholds in fair-share units, e.g. 1.5 / 0.35 / 0.05), or 'credit' (uta.9: NeuroScore gradient credit relative to the mean; same threshold units; NeuroViz steps NeuroScore for synaptic runs)
 topological_nas = 0  # 0642.5: certificate-driven lifecycle; default-off, falls back to UTA
 uta4_variable_experts = 0  # uta.4: allow REAL expert-count growth/shrink under a budget
 uta4_min_experts = 2  # hard floor on per-layer expert count

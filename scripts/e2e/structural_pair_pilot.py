@@ -36,6 +36,7 @@ from rich.console import Console
 from rich.table import Table
 
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
+from bio_inspired_nanochat.neuroscore import NeuroScore, NeuroScoreConfig
 from bio_inspired_nanochat.results_registry import measurement_regime
 from bio_inspired_nanochat.synaptic import SynapticConfig, SynapticMoE
 from bio_inspired_nanochat.synaptic_splitmerge import SplitMergeConfig, SplitMergeController
@@ -45,7 +46,7 @@ console = Console()
 
 VOCAB = 97
 DIALECTS = 4
-ARMS = ("none", "product", "relative")
+ARMS = ("none", "product", "relative", "credit")
 
 
 class _CountingLogger:
@@ -100,10 +101,10 @@ def _controller(arm: str, model: GPTSynaptic, every: int, warmup: int, log: _Cou
         cfg = SplitMergeConfig(
             enabled=True, function_preserving=True, min_step_interval=every, warmup_steps=warmup, ddp_broadcast=False
         )
-    else:
+    else:  # relative or credit: the same thresholds in their own units (1.0 = an average expert)
         cfg = SplitMergeConfig(
             enabled=True, function_preserving=True, min_step_interval=every, warmup_steps=warmup, ddp_broadcast=False,
-            health_mode="relative", split_health_min=1.5, merge_health_max=0.35, reset_health_max=0.05,
+            health_mode=arm, split_health_min=1.5, merge_health_max=0.35, reset_health_max=0.05,
         )
     return SplitMergeController(model, cfg, logger=log)
 
@@ -118,6 +119,8 @@ def run_arm(
     model = _model(seed, seq=seq, balance_loss=balance_loss)
     log = _CountingLogger()
     controller = _controller(arm, model, every, warmup, log)
+    # The credit arm needs NeuroScore's gradient credit published after every backward.
+    score = NeuroScore(NeuroScoreConfig(enabled=True, update_every=1)) if arm == "credit" else None
     opt = torch.optim.AdamW(model.parameters(), lr=lr)
     trans = _dialect_transitions(seed)
     g = torch.Generator().manual_seed(10_000 + seed)
@@ -132,6 +135,8 @@ def run_arm(
         loss.backward()
         opt.step()
         losses.append(float(loss))
+        if score is not None:
+            score.step(model, loss.detach(), step)
         if controller is not None:
             controller.step(global_step=step, optimizer=opt)
     experts = [int(m.num_experts) for m in model.modules() if isinstance(m, SynapticMoE)]
@@ -164,8 +169,13 @@ def main(argv: list[str] | None = None) -> int:
         "pilot showed it keeps utilization within ±0.03 of the fair share so no threshold ever fires)",
     )
     parser.add_argument("--out", default=None, help="JSON path (default results/structural_pair_pilot_<date>.json)")
+    parser.add_argument("--arms", default=",".join(ARMS), help=f"Comma-separated subset of {ARMS}")
     args = parser.parse_args(argv)
     out_path = Path(args.out or f"results/structural_pair_pilot_{_dt.date.today().isoformat()}.json")
+    arms = tuple(a for a in args.arms.split(",") if a)
+    unknown = [a for a in arms if a not in ARMS]
+    if unknown or "none" not in arms:
+        raise SystemExit(f"--arms must be a subset of {ARMS} and include 'none' (the control); got {arms}")
 
     rows = [
         run_arm(
@@ -173,12 +183,12 @@ def main(argv: list[str] | None = None) -> int:
             balance_loss=args.balance_loss,
         )
         for s in args.seeds
-        for arm in ARMS
+        for arm in arms
     ]
     by_seed = {s: {r["arm"]: r for r in rows if r["seed"] == s} for s in args.seeds}
     for s in args.seeds:
         base = by_seed[s]["none"]["final_loss"]
-        for arm in ARMS:
+        for arm in arms:
             by_seed[s][arm]["loss_delta_vs_none"] = by_seed[s][arm]["final_loss"] - base
     summary = {
         arm: {
@@ -186,7 +196,7 @@ def main(argv: list[str] | None = None) -> int:
             "mean_loss_delta_vs_none": statistics.fmean(by_seed[s][arm]["loss_delta_vs_none"] for s in args.seeds),
             "seeds_with_any_event": sum(1 for s in args.seeds if sum(by_seed[s][arm]["events"].values()) > 0),
         }
-        for arm in ARMS
+        for arm in arms
     }
     payload = {
         "protocol": {
@@ -195,7 +205,8 @@ def main(argv: list[str] | None = None) -> int:
             "steps": args.steps, "controller_every": args.every, "warmup": args.warmup, "lr": args.lr,
             "moe_balance_loss": args.balance_loss,
             "arms": {"none": "no controller", "product": "SplitMergeConfig defaults (util x energy)",
-                     "relative": "health_mode=relative, split 1.5 / merge 0.35 / reset 0.05 fair-share units"},
+                     "relative": "health_mode=relative, split 1.5 / merge 0.35 / reset 0.05 fair-share units",
+                     "credit": "health_mode=credit (uta.9): NeuroScore gradient credit relative to the mean, same thresholds; NeuroScore stepped every step"},
             "question": "does the lifecycle fire under ordinary training, and what does firing cost in loss?",
         },
         "measurement_regime": measurement_regime(),

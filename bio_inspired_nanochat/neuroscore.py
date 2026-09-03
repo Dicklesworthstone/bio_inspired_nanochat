@@ -347,6 +347,14 @@ class NeuroScore:
             st["efficiency"], st["specialization"], st["resilience"]
         )
         object.__setattr__(module, "last_neuroscore", comp)
+        # uta.9: the raw per-expert credit relative to the mean (1.0 = an average expert), for
+        # SplitMergeConfig.health_mode="credit". Unlike the min-max composite above it keeps the
+        # absolute spread, so a uniform population reads 1.0 everywhere and nothing fires; only
+        # a genuinely disproportionate or useless expert crosses a threshold.
+        contrib = st["loss_contrib"].detach().float()
+        scale = float(contrib.abs().mean()) + 1e-12
+        object.__setattr__(module, "last_credit", contrib / scale)
+        object.__setattr__(module, "last_credit_source", str(st.get("credit_source", "unknown")))
 
     def _update_specialization(self, st, x, indices, num_experts):
         """

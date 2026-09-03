@@ -169,6 +169,13 @@ class SplitMergeConfig:
     # Energy is not folded in (it is a lagged function of utilization); the homeostasis
     # energy floor above still applies. Whether lifecycle events HELP under either signal
     # is the open question on bead sx1m, so the legacy mode stays the default.
+    # "credit" (uta.9): H = the expert's NeuroScore gradient credit relative to the layer mean
+    # (1.0 = an average expert; 0 = contributes nothing; a harmful expert is clamped to 0), with
+    # the three thresholds in those units like "relative". Measured 2026-09-02: every utilization
+    # signal stays within ±15% of the fair share in healthy training (with or without the balance
+    # loss), so nothing utilization-based can fire; credit is loss-derived and per step. Needs
+    # NeuroScore stepped after each backward (base_train does so via NeuroVizManager.step); the
+    # controller fails loudly if the signal is missing or is only the routing proxy.
     health_mode: str = "product"
     # Logging
     verbose: bool = False
@@ -204,22 +211,23 @@ class SplitMergeConfig:
                 raise ValueError("gate_ramp_forwards must be >= 1")
             if not math.isfinite(self.energy_floor) or not 0.0 <= self.energy_floor <= 1.0:
                 raise ValueError("energy_floor must be finite and in [0, 1]")
-        if self.health_mode not in ("product", "relative"):
-            raise ValueError("health_mode must be 'product' or 'relative'")
-        if self.health_mode == "relative":
+        if self.health_mode not in ("product", "relative", "credit"):
+            raise ValueError("health_mode must be 'product', 'relative' or 'credit'")
+        if self.health_mode in ("relative", "credit"):
+            unit = "fair-share" if self.health_mode == "relative" else "mean-credit"
             if not self.split_health_min > 1.0:
                 raise ValueError(
-                    "health_mode='relative': split_health_min is in fair-share units and must be "
-                    "> 1.0 (a uniformly used expert has health 1.0); the product-mode default 0.80 "
+                    f"health_mode={self.health_mode!r}: split_health_min is in {unit} units and must be "
+                    "> 1.0 (an average expert has health 1.0); the product-mode default 0.80 "
                     "would split every expert"
                 )
             if not 0.0 <= self.merge_health_max < 1.0:
                 raise ValueError(
-                    "health_mode='relative': merge_health_max must be in [0, 1) fair-share units"
+                    f"health_mode={self.health_mode!r}: merge_health_max must be in [0, 1) {unit} units"
                 )
             if not 0.0 <= self.reset_health_max < self.merge_health_max:
                 raise ValueError(
-                    "health_mode='relative': reset_health_max must be in [0, merge_health_max)"
+                    f"health_mode={self.health_mode!r}: reset_health_max must be in [0, merge_health_max)"
                 )
         StructuralGeometryMonitorConfig(
             persistence_ratio_threshold=self.topological_persistence_ratio_threshold,
@@ -1344,6 +1352,22 @@ class SplitMergeController:
         # uniformly used expert scores 1.0 at any expert count (see SplitMergeConfig.health_mode).
         util = layer.fatigue.clamp(0, 1)  # fatigue tracks the EMA of the routed-token fraction
         eng = layer.energy.clamp(0, 1)
+        if self.cfg.health_mode == "credit":
+            credit = getattr(layer, "last_credit", None)
+            source = getattr(layer, "last_credit_source", None)
+            if credit is None or tuple(credit.shape) != tuple(util.shape):
+                raise RuntimeError(
+                    "health_mode='credit' needs NeuroScore stepped on this layer (it publishes "
+                    "last_credit); nothing usable was published. Step NeuroScore after each backward "
+                    "(base_train does this through NeuroVizManager.step)."
+                )
+            if source != "gradient":
+                raise RuntimeError(
+                    f"health_mode='credit' needs gradient credit; NeuroScore published {source!r} "
+                    "(the routing proxy is utilization again). Use credit_mode='gradient' and step "
+                    "NeuroScore after the backward pass."
+                )
+            return credit.to(util.device, util.dtype).clamp(min=0.0)
         if self.cfg.health_mode == "relative":
             fair_share = float(layer.top_k) / float(max(int(layer.num_experts), 1))
             health = util / max(fair_share, 1e-6)
