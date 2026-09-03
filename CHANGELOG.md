@@ -9,6 +9,27 @@ This project is a research fork of [Nanochat](https://github.com/karpathy/nanoch
 
 ---
 
+## 2026-09-02/03 -- Bridge-plan execution: pipeline proof, pilots, credit health, selective decoding
+
+The Phase 2 bridge plan (`docs/bridge_plan.md`) became beads (Phase 3a: 30 beads with dependencies; every GPU-gated bead now depends on the provisioning bead `hwxb.10`) and the CPU-doable ones were executed.
+
+### Proven machinery
+- `tests/test_e2e_matrix_pipeline.py` runs the D1 chain as subprocesses at toy scale: `matrix_launch --execute` → `base_train` checkpoints → `eval_matrix matrix --checkpoint-dir` → `eval_stats` (nightly). `matrix_launch --columns` selects single cells. A toy-scale real-text screening of the three anchors (2L/128d, 600k tokens, 2 seeds) was launched through it; its artifacts land under `results/toy_screening_2026-09-02_*` (bead `74f.11`).
+
+### Measurements (all toy scale, CPU)
+- Chunked-regime pilot (`results/hebbian_chunked_regime_2026-09-02_pilot.json`, 2 seeds): Hebbian on vs off +0.03 at 8 pairs against a minimum detectable effect of 0.05; chunked training costs 2.1× step time and +0.29 loss. The pre-registered 5-seed run needs a GPU or idle box (`hwxb.9.1`).
+- Structural pilots (`results/structural_pair_pilot_2026-09-02*.json`): zero lifecycle events under product and relative health, with and without the balance loss; utilization stays within ±15% of the fair share, so no utilization-based signal can fire in healthy training.
+
+### Lifecycle
+- `SplitMergeConfig.health_mode="credit"` (`uta.9`): NeuroScore publishes each expert's gradient credit relative to the layer mean (`last_credit`) and the controller can drive splits/resets from it; loud failure when NeuroScore was not stepped or only the routing proxy is available. `structural_pair_pilot.py` gains `--arms`, `--balance-loss` and a credit arm.
+
+### Serving
+- Selective decoding is reachable (`wmel`): `Engine.generate(selective=…)` ends a row and reports an abstention when a step's predictive entropy exceeds the threshold; `chat_cli --selective --max-entropy`, `chat_web` `selective`/`max_entropy_nats` request fields; e2e test on the quick-start checkpoint.
+
+### Policy and docs
+- Throughput budget proposed (README §Performance, matrix spec §3; `74f.10.1`): bio_all ≥ 1/2.0 of vanilla training tok/s and ≤ 1.5× decode latency at D1 scale, owner to confirm; the enforcing gate waits for the recurrence work.
+- README roadmap table gives every feature's evidence path; the artifacts' `measurement_regime` stamp; the CI queue was diagnosed as account-side (`u0fl.1`).
+
 ## 2026-09-01 -- Reality Check: Truth Pass, CLI Wiring, Rust Dispatch
 
 A full reality check against the README and plan documents (assessment published separately) found that every mechanism is implemented and unit-tested at toy scale, that no model larger than 2 layers × 64 dims has ever been trained, and that several documents and closed beads claimed more than the artifacts support. This wave closes the gaps that did not need a GPU.

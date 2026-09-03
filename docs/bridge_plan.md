@@ -51,7 +51,7 @@ would this gap close? **Yes / Partial / No (NO BEAD)**.
 | G7 | Neuromodulation efficacy and the RL sample-efficiency study | 7 | UNPROVEN | Major | Yes — `hwxb.4.2`, `hy8.3` (GPU) | L |
 | G8 | CMA-ES against a language-model objective | 11 | PARTIAL | Major | Yes — `idh4` | L |
 | G9 | Roadmap features without an evidence path | 18 | RESOLVED 2026-09-02 (`74f.9`): 6 of 11 already have D1 columns; 1 is unimplemented, 1 a recipe knob, 3 are off-path research modules — README carries the table | Major | closed | M |
-| G10 | Selective decoding / calibrated abstention unreachable from serving | 8 | PARTIAL | Major | Yes — `wmel` | M |
+| G10 | Selective decoding / calibrated abstention unreachable from serving | 8 | DONE 2026-09-03 (`wmel.1`, `wmel.2`): `Engine.generate(selective=…)`, `chat_cli --selective`, `chat_web` request fields; calibration quality still toy-scale | Major | closed | M |
 | G11 | Dual-4090 performance program (utilization, NCCL, precision, cudagraphs, guardrails) | 13 | NOT STARTED (GPU) | Major | Yes — `6pj`, `j9i`, `2fh`, `4nk`, `5rh`, `94r`, `h4j`, `vwl` | XL |
 | G12 | Quick Start step 4 documented `--source sft` only; the working post-`base_train` command was undocumented | 14 | DONE this evening (README §4, CLI help) | Minor | closed by commit | S |
 | G13 | TensorBoard tags the README promised (`calcium_mean`, `rrp_mean`, `fast_weight_norm`) were not emitted | 17 | CLOSED by the morning docs pass — README now lists only the tags NeuroViz emits | Minor | closed | S |
@@ -59,7 +59,7 @@ would this gap close? **Yes / Partial / No (NO BEAD)**.
 | G15 | CI/nightlies green **verified**, not just fixed | 23 | UNVERIFIED | Minor | NO BEAD | S |
 | G16 | Type-check debt: 51 `ty` diagnostics, none in the changed-files gate | 23 | DEBT | Minor | NO BEAD | S |
 | G17 | Package footprint: 27 test-only modules, dead `kernels/dispatcher.py`, orphan `metrics_fused.py` | 22 | DEBT | Minor | NO BEAD (deletion needs written permission) | M |
-| G18 | Throughput cost: bio path 4–18× slower than vanilla at toy scale; no declared budget or gate | 9, 13 | UNBOUNDED | Major | Partial — `l7c9`, `6pj` | M |
+| G18 | Throughput cost: bio path 4–18× slower than vanilla at toy scale; budget proposed 2026-09-03 (`74f.10.1`, owner to confirm), gate waits for l7c9 (`74f.10.2`) | 9, 13 | DECLARED, NOT ENFORCED | Major | Partial — `l7c9`, `6pj` | M |
 
 Working and not in the register: 1, 2, 4 (presyn dynamics, stochastic release, bistable latch),
 15 (retrofit), 16 (registry hygiene), 21 (docs current as of today).
