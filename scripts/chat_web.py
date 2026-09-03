@@ -280,7 +280,9 @@ async def generate_stream(
     tokens,
     temperature=None,
     max_new_tokens=None,
-    top_k=None
+    top_k=None,
+    selective: bool = False,
+    max_entropy_nats: Optional[float] = None,
 ) -> AsyncGenerator[str, None]:
     """Generate assistant response with streaming."""
     temperature = temperature if temperature is not None else args.temperature
@@ -297,8 +299,8 @@ async def generate_stream(
 
     with worker.autocast_ctx:
         selective_cfg = (
-            {"max_predictive_entropy_nats": request.max_entropy_nats if request.max_entropy_nats is not None else 1.0}
-            if request.selective else None
+            {"max_predictive_entropy_nats": max_entropy_nats if max_entropy_nats is not None else 1.0}
+            if selective else None
         )
         for step in worker.engine.generate(
             tokens,
@@ -408,7 +410,9 @@ async def chat_completions(request: ChatRequest):
                     conversation_tokens,
                     temperature=request.temperature,
                     max_new_tokens=request.max_tokens,
-                    top_k=request.top_k
+                    top_k=request.top_k,
+                    selective=bool(request.selective),
+                    max_entropy_nats=request.max_entropy_nats,
                 ):
                     # Accumulate response for logging
                     try:
