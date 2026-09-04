@@ -1,0 +1,98 @@
+{
+  "alpha": 0.05,
+  "baseline": "vanilla",
+  "canonical_recipe_evidence": true,
+  "data_sources": [
+    "fineweb"
+  ],
+  "decision_rule": {
+    "insufficient_evidence": "fewer than min_pairs matched seeds",
+    "multiple_comparison_correction": "holm",
+    "null": "sufficient matched seeds, but neither directional support rule passed",
+    "supported_gain": "at least min_pairs matched seeds; mean delta and paired-bootstrap 95% CI favorable; Holm-adjusted paired-t and Wilcoxon p-values both <= alpha",
+    "supported_regression": "at least min_pairs matched seeds; mean delta and paired-bootstrap 95% CI adverse; Holm-adjusted paired-t and Wilcoxon p-values both <= alpha"
+  },
+  "lower_is_better": true,
+  "metric": "val_bpb",
+  "min_pairs": 2,
+  "presets": {
+    "bio_all": {
+      "aggregate": {
+        "ci_high": 62.24237661711568,
+        "ci_low": -48.285689328377075,
+        "mean": 6.978343644369301,
+        "n": 2,
+        "sem": 4.349373720967148,
+        "std": 6.150943304020875
+      },
+      "better": false,
+      "ci_adverse": true,
+      "ci_favorable": false,
+      "evidence_sufficient": true,
+      "paired_t_p_adjusted": 0.47827519822722714,
+      "paired_vs_baseline": {
+        "cohen_dz": 0.7570923303164286,
+        "delta_ci_high": 9.006205720652545,
+        "delta_ci_low": 0.30745827871824893,
+        "mean_delta": 4.656831999685397,
+        "n_favorable": 0,
+        "n_pairs": 2,
+        "t_p_value": 0.47827519822722714,
+        "t_stat": 1.0706902415021446,
+        "wilcoxon_p_value": 0.5
+      },
+      "significant": false,
+      "supported_gain": false,
+      "supported_regression": false,
+      "tests_pass": false,
+      "verdict": "null",
+      "wilcoxon_p_adjusted": 1.0
+    },
+    "synaptic_off": {
+      "aggregate": {
+        "ci_high": 2.437509133454342,
+        "ci_low": 2.437509133454342,
+        "mean": 2.437509133454342,
+        "n": 2,
+        "sem": 0.0,
+        "std": 0.0
+      },
+      "better": false,
+      "ci_adverse": true,
+      "ci_favorable": false,
+      "evidence_sufficient": true,
+      "paired_t_p_adjusted": 0.0,
+      "paired_vs_baseline": {
+        "cohen_dz": null,
+        "delta_ci_high": 0.11599748877043847,
+        "delta_ci_low": 0.11599748877043847,
+        "mean_delta": 0.11599748877043847,
+        "n_favorable": 0,
+        "n_pairs": 2,
+        "t_p_value": 0.0,
+        "t_stat": null,
+        "wilcoxon_p_value": 0.5
+      },
+      "significant": false,
+      "supported_gain": false,
+      "supported_regression": false,
+      "tests_pass": false,
+      "verdict": "null",
+      "wilcoxon_p_adjusted": 1.0
+    },
+    "vanilla": {
+      "aggregate": {
+        "ci_high": 2.3215116446839037,
+        "ci_low": 2.3215116446839037,
+        "mean": 2.3215116446839037,
+        "n": 2,
+        "sem": 0.0,
+        "std": 0.0
+      }
+    }
+  },
+  "recipe_sources": [
+    "base_train_checkpoint"
+  ],
+  "scope_warning": null
+}

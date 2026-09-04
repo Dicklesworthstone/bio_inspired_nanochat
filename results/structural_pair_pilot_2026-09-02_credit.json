@@ -1,0 +1,129 @@
+{
+  "protocol": {
+    "model": "GPTSynaptic 2L/64d, SynapticMoE 8 experts top-2, default SynapticConfig",
+    "task": "4-dialect token-transition sequences, vocab 97, seq 32, batch 4",
+    "steps": 120,
+    "controller_every": 10,
+    "warmup": 20,
+    "lr": 0.003,
+    "moe_balance_loss": 0.01,
+    "arms": {
+      "none": "no controller",
+      "product": "SplitMergeConfig defaults (util x energy)",
+      "relative": "health_mode=relative, split 1.5 / merge 0.35 / reset 0.05 fair-share units",
+      "credit": "health_mode=credit (uta.9): NeuroScore gradient credit relative to the mean, same thresholds; NeuroScore stepped every step"
+    },
+    "question": "does the lifecycle fire under ordinary training, and what does firing cost in loss?"
+  },
+  "measurement_regime": {
+    "eval_determinism": "module-training-flag (GPTSynaptic.forward train_mode defaults to self.training; commit 5cb1a90)",
+    "read": "full-forward",
+    "since": "2026-09-01"
+  },
+  "runs": [
+    {
+      "seed": 0,
+      "arm": "none",
+      "events": {
+        "split": 0,
+        "merge": 0,
+        "reset": 0
+      },
+      "final_loss": 3.5535515666007997,
+      "first_loss": 4.355557119846344,
+      "util_spread_per_layer": [
+        0.0234179999679327,
+        0.032636143267154694
+      ],
+      "experts_per_layer": [
+        8,
+        8
+      ],
+      "wall_s": 5442.8,
+      "loss_delta_vs_none": 0.0
+    },
+    {
+      "seed": 0,
+      "arm": "credit",
+      "events": {
+        "split": 0,
+        "merge": 0,
+        "reset": 0
+      },
+      "final_loss": 3.5534581542015076,
+      "first_loss": 4.355557143688202,
+      "util_spread_per_layer": [
+        0.026388175785541534,
+        0.02963261306285858
+      ],
+      "experts_per_layer": [
+        8,
+        8
+      ],
+      "wall_s": 5090.5,
+      "loss_delta_vs_none": -9.341239929216982e-05
+    },
+    {
+      "seed": 1,
+      "arm": "none",
+      "events": {
+        "split": 0,
+        "merge": 0,
+        "reset": 0
+      },
+      "final_loss": 3.4849231600761414,
+      "first_loss": 4.362448573112488,
+      "util_spread_per_layer": [
+        0.022500213235616684,
+        0.02683403342962265
+      ],
+      "experts_per_layer": [
+        8,
+        8
+      ],
+      "wall_s": 4488.2,
+      "loss_delta_vs_none": 0.0
+    },
+    {
+      "seed": 1,
+      "arm": "credit",
+      "events": {
+        "split": 0,
+        "merge": 0,
+        "reset": 0
+      },
+      "final_loss": 3.4849231600761414,
+      "first_loss": 4.362448573112488,
+      "util_spread_per_layer": [
+        0.022500213235616684,
+        0.02683403342962265
+      ],
+      "experts_per_layer": [
+        8,
+        8
+      ],
+      "wall_s": 4815.8,
+      "loss_delta_vs_none": 0.0
+    }
+  ],
+  "summary": {
+    "none": {
+      "events_total": {
+        "split": 0,
+        "merge": 0,
+        "reset": 0
+      },
+      "mean_loss_delta_vs_none": 0.0,
+      "seeds_with_any_event": 0
+    },
+    "credit": {
+      "events_total": {
+        "split": 0,
+        "merge": 0,
+        "reset": 0
+      },
+      "mean_loss_delta_vs_none": -4.670619964608491e-05,
+      "seeds_with_any_event": 0
+    }
+  }
+}
