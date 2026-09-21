@@ -3,11 +3,7 @@
   "verdict": "AUDITED_FACTORIAL_COMPLETE",
   "summary": "Factorial multi-seed evaluation verified independent additive dynamics between presynaptic and postsynaptic plasticity, with mild sub-additivity observed under combined homeostatic gating.",
   "config": {
-    "seeds": [
-      201,
-      203,
-      207
-    ],
+    "seeds": [201, 203, 207],
     "train_steps": 3,
     "eval_batches": 2,
     "batch_size": 8,
@@ -30,10 +26,7 @@
         "glial": false
       },
       "loss_mean": 4.164602677027385,
-      "loss_ci": [
-        4.15239487958733,
-        4.176810474467439
-      ],
+      "loss_ci": [4.15239487958733, 4.176810474467439],
       "acc_mean": 0.018229166666666668,
       "losses": {
         "201": 4.162052869796753,
@@ -54,10 +47,7 @@
         "glial": false
       },
       "loss_mean": 4.166150649388631,
-      "loss_ci": [
-        4.156033168361204,
-        4.176268130416058
-      ],
+      "loss_ci": [4.156033168361204, 4.176268130416058],
       "acc_mean": 0.018229166666666668,
       "losses": {
         "201": 4.165014266967773,
@@ -78,10 +68,7 @@
         "glial": false
       },
       "loss_mean": 4.164106210072835,
-      "loss_ci": [
-        4.149589577477374,
-        4.178622842668296
-      ],
+      "loss_ci": [4.149589577477374, 4.178622842668296],
       "acc_mean": 0.01953125,
       "losses": {
         "201": 4.163855791091919,
@@ -102,10 +89,7 @@
         "glial": false
       },
       "loss_mean": 4.164106210072835,
-      "loss_ci": [
-        4.149589577477374,
-        4.178622842668296
-      ],
+      "loss_ci": [4.149589577477374, 4.178622842668296],
       "acc_mean": 0.01953125,
       "losses": {
         "201": 4.163855791091919,
@@ -126,10 +110,7 @@
         "glial": true
       },
       "loss_mean": 4.164602677027385,
-      "loss_ci": [
-        4.15239487958733,
-        4.176810474467439
-      ],
+      "loss_ci": [4.15239487958733, 4.176810474467439],
       "acc_mean": 0.018229166666666668,
       "losses": {
         "201": 4.162052869796753,
@@ -150,10 +131,7 @@
         "glial": false
       },
       "loss_mean": 4.165714263916016,
-      "loss_ci": [
-        4.151621117207288,
-        4.179807410624743
-      ],
+      "loss_ci": [4.151621117207288, 4.179807410624743],
       "acc_mean": 0.018229166666666668,
       "losses": {
         "201": 4.1669862270355225,
@@ -174,10 +152,7 @@
         "glial": false
       },
       "loss_mean": 4.165714263916016,
-      "loss_ci": [
-        4.151621117207288,
-        4.179807410624743
-      ],
+      "loss_ci": [4.151621117207288, 4.179807410624743],
       "acc_mean": 0.018229166666666668,
       "losses": {
         "201": 4.1669862270355225,
@@ -198,10 +173,7 @@
         "glial": true
       },
       "loss_mean": 4.166150649388631,
-      "loss_ci": [
-        4.156033168361204,
-        4.176268130416058
-      ],
+      "loss_ci": [4.156033168361204, 4.176268130416058],
       "acc_mean": 0.018229166666666668,
       "losses": {
         "201": 4.165014266967773,
@@ -222,10 +194,7 @@
         "glial": false
       },
       "loss_mean": 4.164106210072835,
-      "loss_ci": [
-        4.149589577477374,
-        4.178622842668296
-      ],
+      "loss_ci": [4.149589577477374, 4.178622842668296],
       "acc_mean": 0.01953125,
       "losses": {
         "201": 4.163855791091919,
@@ -246,10 +215,7 @@
         "glial": true
       },
       "loss_mean": 4.164106210072835,
-      "loss_ci": [
-        4.149589577477374,
-        4.178622842668296
-      ],
+      "loss_ci": [4.149589577477374, 4.178622842668296],
       "acc_mean": 0.01953125,
       "losses": {
         "201": 4.163855791091919,
@@ -270,10 +236,7 @@
         "glial": true
       },
       "loss_mean": 4.164106210072835,
-      "loss_ci": [
-        4.149589577477374,
-        4.178622842668296
-      ],
+      "loss_ci": [4.149589577477374, 4.178622842668296],
       "acc_mean": 0.01953125,
       "losses": {
         "201": 4.163855791091919,
@@ -294,10 +257,7 @@
         "glial": true
       },
       "loss_mean": 4.165714263916016,
-      "loss_ci": [
-        4.151621117207288,
-        4.179807410624743
-      ],
+      "loss_ci": [4.151621117207288, 4.179807410624743],
       "acc_mean": 0.018229166666666668,
       "losses": {
         "201": 4.1669862270355225,
@@ -370,32 +330,23 @@
   },
   "synergies": [
     {
-      "pair": [
-        "presyn",
-        "hebbian"
-      ],
+      "pair": ["presyn", "hebbian"],
       "delta_a": 0.0015479723612461527,
       "delta_b": -0.0004964669545497458,
       "delta_combined": 0.0011115868886308888,
-      "synergy_index": 6.008148193448193e-05,
+      "synergy_index": 6.008148193448193e-5,
       "interpretation": "Independent (Additive)"
     },
     {
-      "pair": [
-        "presyn",
-        "latch"
-      ],
+      "pair": ["presyn", "latch"],
       "delta_a": 0.0015479723612461527,
       "delta_b": -0.0004964669545497458,
       "delta_combined": 0.0011115868886308888,
-      "synergy_index": 6.008148193448193e-05,
+      "synergy_index": 6.008148193448193e-5,
       "interpretation": "Independent (Additive)"
     },
     {
-      "pair": [
-        "presyn",
-        "glial"
-      ],
+      "pair": ["presyn", "glial"],
       "delta_a": 0.0015479723612461527,
       "delta_b": 0.0,
       "delta_combined": 0.0015479723612461527,
@@ -403,10 +354,7 @@
       "interpretation": "Independent (Additive)"
     },
     {
-      "pair": [
-        "hebbian",
-        "latch"
-      ],
+      "pair": ["hebbian", "latch"],
       "delta_a": -0.0004964669545497458,
       "delta_b": -0.0004964669545497458,
       "delta_combined": -0.0004964669545497458,
@@ -414,10 +362,7 @@
       "interpretation": "Diminishing Returns (Redundant / Sub-additive)"
     },
     {
-      "pair": [
-        "hebbian",
-        "glial"
-      ],
+      "pair": ["hebbian", "glial"],
       "delta_a": -0.0004964669545497458,
       "delta_b": 0.0,
       "delta_combined": -0.0004964669545497458,
@@ -425,10 +370,7 @@
       "interpretation": "Independent (Additive)"
     },
     {
-      "pair": [
-        "latch",
-        "glial"
-      ],
+      "pair": ["latch", "glial"],
       "delta_a": -0.0004964669545497458,
       "delta_b": 0.0,
       "delta_combined": -0.0004964669545497458,

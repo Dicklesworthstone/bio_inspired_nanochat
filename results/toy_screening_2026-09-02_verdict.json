@@ -2,9 +2,7 @@
   "alpha": 0.05,
   "baseline": "vanilla",
   "canonical_recipe_evidence": true,
-  "data_sources": [
-    "fineweb"
-  ],
+  "data_sources": ["fineweb"],
   "decision_rule": {
     "insufficient_evidence": "fewer than min_pairs matched seeds",
     "multiple_comparison_correction": "holm",
@@ -91,8 +89,6 @@
       }
     }
   },
-  "recipe_sources": [
-    "base_train_checkpoint"
-  ],
+  "recipe_sources": ["base_train_checkpoint"],
   "scope_warning": null
 }

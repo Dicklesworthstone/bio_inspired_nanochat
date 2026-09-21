@@ -6,30 +6,16 @@
     "chunk_len": 4,
     "max_pairs": 8,
     "lr": 0.003,
-    "seeds": [
-      0,
-      1
-    ],
-    "eval_pairs": [
-      2,
-      4,
-      8
-    ],
+    "seeds": [0, 1],
+    "eval_pairs": [2, 4, 8],
     "preregistered": {
       "steps": 2000,
       "chunk_len": 8,
       "max_pairs": 16,
       "lr": 0.003
     },
-    "discovery_seeds": [
-      0,
-      1
-    ],
-    "confirmation_seeds": [
-      2,
-      3,
-      4
-    ]
+    "discovery_seeds": [0, 1],
+    "confirmation_seeds": [2, 3, 4]
   },
   "git_sha": "16a2914538dc7c3d81e3eedcdb9706d79b0e6470",
   "measurement_regime": {
@@ -141,7 +127,7 @@
           "4": 0.09375,
           "8": 0.015625
         },
-        "max_abs_logit_diff_chunked_vs_full": 2.86102294921875e-06
+        "max_abs_logit_diff_chunked_vs_full": 2.86102294921875e-6
       }
     },
     {
@@ -163,7 +149,7 @@
           "4": 0.203125,
           "8": 0.1875
         },
-        "max_abs_logit_diff_chunked_vs_full": 3.814697265625e-06
+        "max_abs_logit_diff_chunked_vs_full": 3.814697265625e-6
       }
     },
     {
@@ -229,7 +215,7 @@
           "4": 0.15625,
           "8": 0.046875
         },
-        "max_abs_logit_diff_chunked_vs_full": 2.384185791015625e-06
+        "max_abs_logit_diff_chunked_vs_full": 2.384185791015625e-6
       }
     },
     {
@@ -251,7 +237,7 @@
           "4": 0.203125,
           "8": 0.0625
         },
-        "max_abs_logit_diff_chunked_vs_full": 3.337860107421875e-06
+        "max_abs_logit_diff_chunked_vs_full": 3.337860107421875e-6
       }
     }
   ]

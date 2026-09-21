@@ -35,12 +35,7 @@
       "id": "parity_backends",
       "name": "Cross-Backend Parity (Triton/Rust/Python Reference) (eqyk.13)",
       "category": "Parity & Invariants",
-      "command": [
-        "pytest",
-        "tests/test_presyn_backend_parity.py",
-        "-v",
-        "--tb=short"
-      ],
+      "command": ["pytest", "tests/test_presyn_backend_parity.py", "-v", "--tb=short"],
       "timeout_sec": 60.0,
       "passed": true,
       "duration_sec": 9.126715541817248,
@@ -53,12 +48,7 @@
       "id": "property_invariants",
       "name": "Property-Based Metamorphic Invariants Suite (eqyk.14)",
       "category": "Parity & Invariants",
-      "command": [
-        "pytest",
-        "tests/test_property_invariants.py",
-        "-v",
-        "--tb=short"
-      ],
+      "command": ["pytest", "tests/test_property_invariants.py", "-v", "--tb=short"],
       "timeout_sec": 60.0,
       "passed": true,
       "duration_sec": 3.876923920586705,
@@ -71,12 +61,7 @@
       "id": "theory_certificates",
       "name": "Formal Theory Certificates & Lyapunov Invariants (eqyk.18)",
       "category": "Theory & Proofs",
-      "command": [
-        "pytest",
-        "tests/test_e2e_theory_artifacts.py",
-        "-v",
-        "--tb=short"
-      ],
+      "command": ["pytest", "tests/test_e2e_theory_artifacts.py", "-v", "--tb=short"],
       "timeout_sec": 45.0,
       "passed": true,
       "duration_sec": 3.1537059945985675,

@@ -3,11 +3,7 @@
   "verdict": "AUDITED_STDP_ABLATION_COMPLETE",
   "summary": "Spike-Timing-Dependent Plasticity (STDP) evaluated across sequence transitions against rate-Hebbian plasticity and vanilla baseline with multi-seed paired bootstrap testing.",
   "config": {
-    "seeds": [
-      401,
-      403,
-      407
-    ],
+    "seeds": [401, 403, 407],
     "train_steps": 3,
     "eval_batches": 4,
     "batch_size": 8,
@@ -26,10 +22,7 @@
   "arms": {
     "vanilla": {
       "loss_mean": 4.101006309191386,
-      "loss_ci": [
-        4.091346407334627,
-        4.110666211048145
-      ],
+      "loss_ci": [4.091346407334627, 4.110666211048145],
       "acc_mean": 0.05342741935483871,
       "losses": {
         "401": 4.099318146705627,
@@ -44,10 +37,7 @@
     },
     "rate_hebbian": {
       "loss_mean": 4.093007763226827,
-      "loss_ci": [
-        4.084437807649976,
-        4.101577718803678
-      ],
+      "loss_ci": [4.084437807649976, 4.101577718803678],
       "acc_mean": 0.059475806451612906,
       "losses": {
         "401": 4.090454816818237,
@@ -62,10 +52,7 @@
     },
     "stdp_sequence": {
       "loss_mean": 4.093007763226827,
-      "loss_ci": [
-        4.084437807649976,
-        4.101577718803678
-      ],
+      "loss_ci": [4.084437807649976, 4.101577718803678],
       "acc_mean": 0.059475806451612906,
       "losses": {
         "401": 4.090454816818237,

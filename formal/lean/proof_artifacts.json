@@ -22,11 +22,7 @@
       "artifact_hash": "sha256:bdb0393688c516db055de922802216e621d30a8b1ccd3d5accb042779d42f3d9",
       "hash_scope": "formal/lean/BioInspiredNanochat.lean",
       "sorry_or_admit_present": false,
-      "axioms": [
-        "propext",
-        "Classical.choice",
-        "Quot.sound"
-      ],
+      "axioms": ["propext", "Classical.choice", "Quot.sound"],
       "assurance": {
         "exact_real_algebra": "E",
         "runtime_regressions": "B",
@@ -88,11 +84,7 @@
       "artifact_hash": "sha256:831498bc2853d86701250ea89024ab5f5f6190d2e3a5a9ae66f93a7d5d42d963",
       "hash_scope": "formal/lean/BioInspiredNanochat.lean",
       "sorry_or_admit_present": false,
-      "axioms": [
-        "propext",
-        "Classical.choice",
-        "Quot.sound"
-      ],
+      "axioms": ["propext", "Classical.choice", "Quot.sound"],
       "assurance": {
         "constructed_cusp_algebra": "E",
         "conditional_driven_tur_algebra": "E",
@@ -186,11 +178,7 @@
       "artifact_hash": "sha256:831498bc2853d86701250ea89024ab5f5f6190d2e3a5a9ae66f93a7d5d42d963",
       "hash_scope": "formal/lean/BioInspiredNanochat.lean",
       "sorry_or_admit_present": false,
-      "axioms": [
-        "propext",
-        "Classical.choice",
-        "Quot.sound"
-      ],
+      "axioms": ["propext", "Classical.choice", "Quot.sound"],
       "assurance": {
         "exact_real_algebra": "E",
         "live_torch_regressions": "B",
@@ -251,11 +239,7 @@
       "artifact_hash": "sha256:831498bc2853d86701250ea89024ab5f5f6190d2e3a5a9ae66f93a7d5d42d963",
       "hash_scope": "formal/lean/BioInspiredNanochat.lean",
       "sorry_or_admit_present": false,
-      "axioms": [
-        "propext",
-        "Classical.choice",
-        "Quot.sound"
-      ],
+      "axioms": ["propext", "Classical.choice", "Quot.sound"],
       "change_scope": "Documentation-only clarification: the full-sequence Python reference is distinct from the canonical sparse Tq=1 Rust/Triton backend contract; no mapped dynamics changed. This record also repairs the inherited stale stochastic-thermo test hash left by the preceding runtime-hash refresh.",
       "runtime_mapping": [
         {
@@ -289,11 +273,7 @@
       "artifact_hash": "sha256:831498bc2853d86701250ea89024ab5f5f6190d2e3a5a9ae66f93a7d5d42d963",
       "hash_scope": "formal/lean/BioInspiredNanochat.lean",
       "sorry_or_admit_present": false,
-      "axioms": [
-        "propext",
-        "Classical.choice",
-        "Quot.sound"
-      ],
+      "axioms": ["propext", "Classical.choice", "Quot.sound"],
       "change_scope": "Theory-only derivation of the continuous constant-L inverse and the matching L-only midpoint/Cayley inverse, plus an explicit activation-memory budget, dissipative/fallback checkpoint boundaries, and the gradcheck/falsification contract for the dependent implementation bead. The current runtime remains a combined guarded L+M midpoint step using ordinary autograd; neither the Lean theorem source nor mapped runtime dynamics changed. This append-only record also refreshes the inherited stochastic-thermodynamics test hash after the concurrently landed u2t.2 evidence update.",
       "runtime_mapping": [
         {
@@ -327,11 +307,7 @@
       "artifact_hash": "sha256:831498bc2853d86701250ea89024ab5f5f6190d2e3a5a9ae66f93a7d5d42d963",
       "hash_scope": "formal/lean/BioInspiredNanochat.lean",
       "sorry_or_admit_present": false,
-      "axioms": [
-        "propext",
-        "Classical.choice",
-        "Quot.sound"
-      ],
+      "axioms": ["propext", "Classical.choice", "Quot.sound"],
       "assurance": {
         "exact_real_algebra": "E",
         "live_torch_regressions": "B",
@@ -389,11 +365,7 @@
       "artifact_hash": "sha256:831498bc2853d86701250ea89024ab5f5f6190d2e3a5a9ae66f93a7d5d42d963",
       "hash_scope": "formal/lean/BioInspiredNanochat.lean",
       "sorry_or_admit_present": false,
-      "axioms": [
-        "propext",
-        "Classical.choice",
-        "Quot.sound"
-      ],
+      "axioms": ["propext", "Classical.choice", "Quot.sound"],
       "assurance": {
         "exact_real_algebra": "E",
         "live_torch_regressions": "B",
@@ -477,11 +449,7 @@
       "artifact_hash": "sha256:831498bc2853d86701250ea89024ab5f5f6190d2e3a5a9ae66f93a7d5d42d963",
       "hash_scope": "formal/lean/BioInspiredNanochat.lean",
       "sorry_or_admit_present": false,
-      "axioms": [
-        "propext",
-        "Classical.choice",
-        "Quot.sound"
-      ],
+      "axioms": ["propext", "Classical.choice", "Quot.sound"],
       "assurance": {
         "exact_real_algebra": "E-unchanged",
         "predictive_provenance_regressions": "B",
@@ -539,11 +507,7 @@
       "artifact_hash": "sha256:831498bc2853d86701250ea89024ab5f5f6190d2e3a5a9ae66f93a7d5d42d963",
       "hash_scope": "formal/lean/BioInspiredNanochat.lean",
       "sorry_or_admit_present": false,
-      "axioms": [
-        "propext",
-        "Classical.choice",
-        "Quot.sound"
-      ],
+      "axioms": ["propext", "Classical.choice", "Quot.sound"],
       "assurance": {
         "exact_real_algebra": "E-unchanged",
         "live_causal_regressions": "B",
@@ -641,11 +605,7 @@
       "artifact_hash": "sha256:831498bc2853d86701250ea89024ab5f5f6190d2e3a5a9ae66f93a7d5d42d963",
       "hash_scope": "formal/lean/BioInspiredNanochat.lean",
       "sorry_or_admit_present": false,
-      "axioms": [
-        "propext",
-        "Classical.choice",
-        "Quot.sound"
-      ],
+      "axioms": ["propext", "Classical.choice", "Quot.sound"],
       "assurance": {
         "exact_real_algebra": "E-unchanged",
         "physical_fallback_regressions": "B",
@@ -715,11 +675,7 @@
       "artifact_hash": "sha256:831498bc2853d86701250ea89024ab5f5f6190d2e3a5a9ae66f93a7d5d42d963",
       "hash_scope": "formal/lean/BioInspiredNanochat.lean",
       "sorry_or_admit_present": false,
-      "axioms": [
-        "propext",
-        "Classical.choice",
-        "Quot.sound"
-      ],
+      "axioms": ["propext", "Classical.choice", "Quot.sound"],
       "assurance": {
         "exact_real_algebra": "E-unchanged",
         "live_torch_regressions": "B",
@@ -885,11 +841,7 @@
       "artifact_hash": "sha256:831498bc2853d86701250ea89024ab5f5f6190d2e3a5a9ae66f93a7d5d42d963",
       "hash_scope": "formal/lean/BioInspiredNanochat.lean",
       "sorry_or_admit_present": false,
-      "axioms": [
-        "propext",
-        "Classical.choice",
-        "Quot.sound"
-      ],
+      "axioms": ["propext", "Classical.choice", "Quot.sound"],
       "assurance": {
         "exact_real_algebra": "E-unchanged",
         "live_torch_regressions": "B",
@@ -947,11 +899,7 @@
       "artifact_hash": "sha256:831498bc2853d86701250ea89024ab5f5f6190d2e3a5a9ae66f93a7d5d42d963",
       "hash_scope": "formal/lean/BioInspiredNanochat.lean",
       "sorry_or_admit_present": false,
-      "axioms": [
-        "propext",
-        "Classical.choice",
-        "Quot.sound"
-      ],
+      "axioms": ["propext", "Classical.choice", "Quot.sound"],
       "assurance": {
         "exact_real_algebra": "E-unchanged",
         "live_torch_regressions": "B",

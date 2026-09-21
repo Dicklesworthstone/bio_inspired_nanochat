@@ -3,13 +3,7 @@
   "verdict": "AUDITED_BENCHMARK_COMPLETE",
   "summary": "Apples-to-apples working-memory suite comparison evaluated Vanilla Transformer, Classical Outer-Product Fast Weights, DeltaNet Error-Correcting Fast Weights, and Bio-Inspired Synaptic Transformers across multi-pair associative recall, distractor binding, and NIAH.",
   "config": {
-    "seeds": [
-      301,
-      303,
-      307,
-      309,
-      311
-    ],
+    "seeds": [301, 303, 307, 309, 311],
     "vocab_size": 97,
     "sequence_len": 160,
     "n_embd": 64,
@@ -17,30 +11,16 @@
     "n_head": 2,
     "n_kv_head": 2,
     "batch_size": 16,
-    "recall_pairs": [
-      2,
-      4,
-      8
-    ],
-    "binding_distractors": [
-      0,
-      8,
-      32
-    ],
-    "niah_lengths": [
-      16,
-      64
-    ],
+    "recall_pairs": [2, 4, 8],
+    "binding_distractors": [0, 8, 32],
+    "niah_lengths": [16, 64],
     "device": "cpu",
     "bootstrap_samples": 2000
   },
   "architectures": {
     "vanilla": {
       "composite_mean": 0.015277777777777776,
-      "composite_ci": [
-        0.010362101468811558,
-        0.020193454086743994
-      ],
+      "composite_ci": [0.010362101468811558, 0.020193454086743994],
       "recall_mean": 0.016666666666666666,
       "binding_mean": 0.008333333333333333,
       "niah_mean": 0.020833333333333332,
@@ -54,10 +34,7 @@
     },
     "outer_product_fw": {
       "composite_mean": 0.01111111111111111,
-      "composite_ci": [
-        -0.002991628591281952,
-        0.02521385081350417
-      ],
+      "composite_ci": [-0.002991628591281952, 0.02521385081350417],
       "recall_mean": 0.016666666666666666,
       "binding_mean": 0.008333333333333333,
       "niah_mean": 0.008333333333333333,
@@ -71,10 +48,7 @@
     },
     "deltanet_fw": {
       "composite_mean": 0.00972222222222222,
-      "composite_ci": [
-        -0.0037053491164868516,
-        0.023149793560931293
-      ],
+      "composite_ci": [-0.0037053491164868516, 0.023149793560931293],
       "recall_mean": 0.016666666666666666,
       "binding_mean": 0.008333333333333333,
       "niah_mean": 0.004166666666666667,
@@ -88,10 +62,7 @@
     },
     "bio_synaptic": {
       "composite_mean": 0.014583333333333332,
-      "composite_ci": [
-        -0.0007809908375541637,
-        0.029947657504220827
-      ],
+      "composite_ci": [-0.0007809908375541637, 0.029947657504220827],
       "recall_mean": 0.008333333333333333,
       "binding_mean": 0.008333333333333333,
       "niah_mean": 0.02708333333333333,

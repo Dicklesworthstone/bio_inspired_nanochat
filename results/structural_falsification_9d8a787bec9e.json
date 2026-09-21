@@ -97,16 +97,7 @@
     "num_experts": 4,
     "perturb_epsilon": 0.001,
     "points_per_cluster": 4,
-    "seeds": [
-      307,
-      331,
-      353,
-      379,
-      401,
-      431,
-      457,
-      487
-    ],
+    "seeds": [307, 331, 353, 379, 401, 431, 457, 487],
     "top_k": 2,
     "train_steps": 12
   },
@@ -213,10 +204,7 @@
           "kappa_bound": 1.0202020202020203,
           "layer_index": 0,
           "merge_cost_ratio": 0.0,
-          "merge_pair": [
-            0,
-            1
-          ],
+          "merge_pair": [0, 1],
           "mode": "topological",
           "persistence_ratio": 49.37299088375588,
           "reason": "persistent_uncovered_h0_gap",
@@ -307,10 +295,7 @@
           "kappa_bound": 1.0202020202020203,
           "layer_index": 0,
           "merge_cost_ratio": 0.0,
-          "merge_pair": [
-            0,
-            1
-          ],
+          "merge_pair": [0, 1],
           "mode": "topological",
           "persistence_ratio": 57.314253551107385,
           "reason": "persistent_uncovered_h0_gap",
@@ -391,7 +376,7 @@
       "ot_merge_optimal": true,
       "persistence_ratio": 46.6429805964553,
       "persistence_stability_bound": 0.0020000001,
-      "persistence_stability_delta": 1.1849352348214381e-05,
+      "persistence_stability_delta": 1.1849352348214381e-5,
       "persistence_stability_holds": true,
       "planned_operations": [
         {
@@ -401,10 +386,7 @@
           "kappa_bound": 1.0202020202020203,
           "layer_index": 0,
           "merge_cost_ratio": 0.0,
-          "merge_pair": [
-            0,
-            1
-          ],
+          "merge_pair": [0, 1],
           "mode": "topological",
           "persistence_ratio": 46.6429805964553,
           "reason": "persistent_uncovered_h0_gap",
@@ -495,10 +477,7 @@
           "kappa_bound": 1.0202020202020203,
           "layer_index": 0,
           "merge_cost_ratio": 0.0,
-          "merge_pair": [
-            0,
-            1
-          ],
+          "merge_pair": [0, 1],
           "mode": "topological",
           "persistence_ratio": 30.1063038436385,
           "reason": "persistent_uncovered_h0_gap",
@@ -579,7 +558,7 @@
       "ot_merge_optimal": true,
       "persistence_ratio": 41.79772433197104,
       "persistence_stability_bound": 0.0020000001,
-      "persistence_stability_delta": 2.431592704965624e-05,
+      "persistence_stability_delta": 2.431592704965624e-5,
       "persistence_stability_holds": true,
       "planned_operations": [
         {
@@ -589,10 +568,7 @@
           "kappa_bound": 1.0202020202020203,
           "layer_index": 0,
           "merge_cost_ratio": 0.0,
-          "merge_pair": [
-            0,
-            1
-          ],
+          "merge_pair": [0, 1],
           "mode": "topological",
           "persistence_ratio": 41.79772433197104,
           "reason": "persistent_uncovered_h0_gap",
@@ -683,10 +659,7 @@
           "kappa_bound": 1.0202020202020203,
           "layer_index": 0,
           "merge_cost_ratio": 0.0,
-          "merge_pair": [
-            0,
-            1
-          ],
+          "merge_pair": [0, 1],
           "mode": "topological",
           "persistence_ratio": 46.62659349503115,
           "reason": "persistent_uncovered_h0_gap",
@@ -767,7 +740,7 @@
       "ot_merge_optimal": true,
       "persistence_ratio": 33.250106592408756,
       "persistence_stability_bound": 0.0020000001,
-      "persistence_stability_delta": 6.693710438820943e-05,
+      "persistence_stability_delta": 6.693710438820943e-5,
       "persistence_stability_holds": true,
       "planned_operations": [
         {
@@ -777,10 +750,7 @@
           "kappa_bound": 1.0202020202020203,
           "layer_index": 0,
           "merge_cost_ratio": 0.0,
-          "merge_pair": [
-            0,
-            1
-          ],
+          "merge_pair": [0, 1],
           "mode": "topological",
           "persistence_ratio": 33.250106592408756,
           "reason": "persistent_uncovered_h0_gap",
@@ -871,10 +841,7 @@
           "kappa_bound": 1.0202020202020203,
           "layer_index": 0,
           "merge_cost_ratio": 0.0,
-          "merge_pair": [
-            0,
-            1
-          ],
+          "merge_pair": [0, 1],
           "mode": "topological",
           "persistence_ratio": 37.64334201001414,
           "reason": "persistent_uncovered_h0_gap",
