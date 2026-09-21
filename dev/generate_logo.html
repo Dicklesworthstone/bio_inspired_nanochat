@@ -14,12 +14,12 @@
     const r = 120;
     let path = '';
     for(let i = 0; i < 24; i += 2) {
-      let a1 = i * Math.PI / 12;
-      let a2 = (i + 1) * Math.PI / 12;
-      let x2 = 200 + Math.cos(a2) * r;
-      let y2 = 200 + Math.sin(a2) * r;
-      let x3 = 200 + Math.cos(a2) * (r - 90);
-      let y3 = 200 + Math.sin(a2) * (r - 90);
+      const a1 = i * Math.PI / 12;
+      const a2 = (i + 1) * Math.PI / 12;
+      const x2 = 200 + Math.cos(a2) * r;
+      const y2 = 200 + Math.sin(a2) * r;
+      const x3 = 200 + Math.cos(a2) * (r - 90);
+      const y3 = 200 + Math.sin(a2) * (r - 90);
       path += `M${x2},${y2} L${x3},${y3} `;
     }
     svg.innerHTML += `<path d="${path}" stroke="url(#g)" stroke-width="6" stroke-linecap="round" fill="none"/>`;

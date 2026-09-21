@@ -329,7 +329,7 @@
 
         // P5.js Sketch for Synapse
         const synapseSketch = (p) => {
-            let particles = [];
+            const particles = [];
             const maxParticles = 100; // Visual scaling
             
             p.setup = () => {
@@ -370,14 +370,14 @@
 
                 // Draw Calcium Glow
                 if (window.bioState.calcium > 0.1) {
-                    let alpha = p.map(window.bioState.calcium, 0, 2, 0, 100);
+                    const alpha = p.map(window.bioState.calcium, 0, 2, 0, 100);
                     p.noStroke();
                     p.fill(251, 191, 36, alpha); // Amber
                     p.rect(0, 0, p.width, p.height);
                 }
 
                 // Update and Draw Particles
-                for (let part of particles) {
+                for (const part of particles) {
                     part.update();
                     part.show();
                 }
@@ -437,7 +437,7 @@
                 const avgCamkii = ref(0);
 
                 // 3D Plot Data
-                let expertZ = []; 
+                const expertZ = []; 
 
                 onMounted(async () => {
                     lucide.createIcons();
