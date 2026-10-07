@@ -20,6 +20,7 @@ import signal
 import inspect
 from contextlib import contextmanager
 from collections import deque
+from typing import Any
 from bio_inspired_nanochat.common import (
     autodetect_device_type,
     compute_init,
@@ -569,7 +570,9 @@ class Engine:
             elif isinstance(selective, bool):
                 selective_cfg = UncertaintyDecodingConfig(enabled=True)
             elif isinstance(selective, dict):
-                selective_cfg = UncertaintyDecodingConfig(**{"enabled": True, **selective})
+                fields: dict[str, Any] = {"enabled": True}
+                fields.update(selective)
+                selective_cfg = UncertaintyDecodingConfig(**fields)
             else:
                 raise TypeError(
                     "selective must be an UncertaintyDecodingConfig, True, or a dict of its fields, "
@@ -741,7 +744,12 @@ class Engine:
                 is_forced = len(state.forced_tokens) > 0 # are there tokens waiting to be forced in deque?
                 token_masks.append(0 if is_forced else 1) # mask is 0 if forced, 1 if sampled
                 next_token = state.forced_tokens.popleft() if is_forced else sampled_tokens[i]
-                if selective_actions is not None and not is_forced and selective_actions[i][1]:
+                if (
+                    selective_cfg is not None
+                    and selective_actions is not None
+                    and not is_forced
+                    and selective_actions[i][1]
+                ):
                     # The policy refuses a token this uncertain: end the row and report why.
                     next_token = assistant_end
                     token_masks[-1] = 0
