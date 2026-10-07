@@ -581,6 +581,7 @@ class GPTSynaptic(nn.Module):
         weight_decay=0.0,
         lr=None,
         wd=None,
+        scalar_lr=0.01,
     ):
         # Support both old GPT-style signature and new simple signature
         # If GPT-style args are provided (defaults), use GPT-style optimizer setup
@@ -641,10 +642,17 @@ class GPTSynaptic(nn.Module):
                     f"Scaling the LR for the AdamW parameters ∝1/√({model_dim}/768) = {dmodel_lr_scale:.6f}"
                 )
 
-            # AdamW gets embedding, lm_head, and all 1D/0D params from blocks (biases, layernorms)
+            # AdamW gets embedding, lm_head, and all 1D/0D block params. Those are multiplicative
+            # gains and offsets (LayerNorm weight/bias, linear biases, PostsynapticHebb.fast/slow
+            # in y = v * (1 + fast + slow)), so they take their own small LR. They used to share
+            # the embedding LR, 0.2 * (d/768)^-0.5 = 0.49 at d=128: every gain moved ~0.5 per
+            # step and bio_all diverged within 20 steps on real text (NaN at 2L/128d; the
+            # 2026-09-02 toy screening's seed 1338 ended at train loss 26.9). Sweep at 2L/128d,
+            # 300 steps: 0.003 / 0.01 / 0.04 -> val bpb 2.093 / 2.089 / 2.120, legacy NaN
+            # (results/scalar_lr_sweep_2026-10-07.json).
             adam_groups = [
                 {"params": lm_head_params, "lr": unembedding_lr * dmodel_lr_scale},
-                {"params": other_params, "lr": embedding_lr * dmodel_lr_scale}, # Use embedding LR scale for other params? Or maybe just matrix_lr? Usually AdamW params get higher LR.
+                {"params": other_params, "lr": float(scalar_lr)},
             ]
             if embedding_params:  # empty when tied (shared weight sits in the lm_head group)
                 adam_groups.append({"params": embedding_params, "lr": embedding_lr * dmodel_lr_scale})

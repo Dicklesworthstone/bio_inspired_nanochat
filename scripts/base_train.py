@@ -127,6 +127,7 @@ embedding_lr = 0.2  # learning rate for the embedding parameters (Adam)
 unembedding_lr = 0.004  # learning rate for the unembedding parameters (Adam)
 weight_decay = 0.0  # weight decay for the embedding/unembedding parameters (Adam)
 matrix_lr = 0.02  # learning rate for the matrix parameters (Muon)
+scalar_lr = 0.01  # synaptic model only: AdamW LR of the 1-D block params (norm gains, biases, post.fast/slow)
 grad_clip = 1.0  # gradient clipping value (0.0 = disabled)
 warmup_ratio = 0.0  # ratio of iterations for LR warmup
 warmdown_ratio = 0.2  # ratio of iterations for LR warmdown
@@ -135,13 +136,13 @@ resume_from_step = (
     -1
 )  # resume training from this step of the optimization (-1 = disable)
 # Evaluation
-eval_every = 250  # every how many steps to evaluate the model for val bpb
+eval_every = 250  # every how many steps to evaluate the model for val bpb (-1 = only at the end)
 eval_tokens = 20 * 524288  # number of tokens to evaluate val loss on
 core_metric_every = (
     2000  # every how many steps to evaluate the core metric (-1 = disable)
 )
 core_metric_max_per_task = 500  # examples per task in estimating the core metric
-sample_every = 2000  # every how many steps to sample from the model
+sample_every = 2000  # every how many steps to sample from the model (-1 = only at the end)
 save_every = -1  # every how many steps to save model checkpoints (-1 = disable, and save only at the end of the run)
 # Output
 model_tag = (
@@ -621,6 +622,7 @@ optimizers = model.setup_optimizers(
     embedding_lr=embedding_lr,
     matrix_lr=matrix_lr,
     weight_decay=weight_decay,
+    **({"scalar_lr": scalar_lr} if use_syn else {}),
 )
 if len(optimizers) == 2:
     adamw_optimizer, muon_optimizer = optimizers
@@ -853,7 +855,9 @@ while True:
     replaying_checkpoint_boundary = resuming and step == resume_from_step
 
     # once in a while: evaluate the val bpb (all ranks participate)
-    if not replaying_checkpoint_boundary and (last_step or step % eval_every == 0):
+    # A non-positive period means "only at the end": Python's step % -1 is always 0, so -1 used to
+    # evaluate (and sample) on every step, which is what the matrix recipes asked to switch off.
+    if not replaying_checkpoint_boundary and (last_step or (eval_every > 0 and step % eval_every == 0)):
         model.eval()
         val_loader = build_val_loader()
         eval_steps = eval_tokens // (device_batch_size * max_seq_len * ddp_world_size)
@@ -939,7 +943,7 @@ while True:
     if (
         not replaying_checkpoint_boundary
         and master_process
-        and (last_step or (step > 0 and step % sample_every == 0))
+        and (last_step or (sample_every > 0 and step > 0 and step % sample_every == 0))
     ):
         model.eval()
         prompts = [
