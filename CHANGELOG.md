@@ -38,6 +38,9 @@ This project is a research fork of [Nanochat](https://github.com/karpathy/nanoch
 - `GPTSynaptic` handed the raw pre-norm residual stream to its language head; vanilla `GPT` applies `norm(x)` first. `GPTSynapticConfig.final_norm` (default True) adds the same parameter-free RMSNorm at the end of the trunk, so `get_hidden_states` returns the normalized stream too. Diagnosis at the screening recipe, monkeypatched variants around an unmodified `base_train` (`results/scaffold_diagnosis_2026-10-07.json`): synaptic_off as shipped 2.084 val bpb vs vanilla 1.997 (seed 1338: +0.087); with the final norm 1.963 / 1.951 / 1.963 vs vanilla 2.010 / 1.997 / 1.985 (−0.038 mean, every seed). Embedding norm, vanilla's zero-init, parameter-free RMSNorm blocks, no biases, vanilla linear init and Muon orientation were screened on top; none helped. Checkpoints without the field rebuild with `final_norm=False`. Tests in `tests/test_logit_softcap.py`; the legacy-scalar-LR planted negative now stalls (loss 5.9 vs 3.6 at step 10) instead of spiking, because the normalized head absorbs the gain blow-up.
 - Every synaptic number above was measured on the unnormalized head.
 
+### CMA-ES can score candidates on real text
+- `tune_bio_params {eval,optimize} --objective lm` (`idh4`): every candidate trains on the same fixed windows of the base_train train split (`--lm-train-tokens`, `--lm-seq-len`) with base_train's optimizer recipe from `init_weights`, and its fitness is bits per byte on a fixed held-out stream (`--lm-eval-tokens`), computed locally so distributed workers never all-reduce across candidates. The run config records the task, and the registry row names the parquet splits. `--objective copy` remains the default. Tests: on a learnable stream, 40 steps move the objective from 3.00 to 0.62 bits/byte, against a 0.5 entropy floor, and reproduce exactly.
+
 ### Types
 - `uv run ty check` and `uv run ruff check` exit 0 on the whole tree (`716cacb`).
 

@@ -29,6 +29,11 @@ Usage:
     uv run python -m scripts.tune_bio_params optimize --seed 1337 --run-dir runs/cmaes/top10 \\
         --steps 200 --proxy-steps 50 --proxy-generations 10 --proxy-mode lce
 
+    # Score candidates on real text instead of the copy task (idh4): every candidate trains on the
+    # same token windows with the base_train optimizer recipe and is scored by held-out bits/byte:
+    uv run python -m scripts.tune_bio_params optimize --objective lm --steps 300 --batch-size 8 \\
+        --run-dir runs/cmaes/lm
+
     # Distributed (multi-GPU) population eval via torchrun (rank0 controller):
     uv run torchrun --standalone --nproc_per_node=8 -m scripts.tune_bio_params \\
         optimize --distributed --seed 1337 --device cuda --run-dir runs/cmaes/top10
@@ -37,6 +42,8 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import contextlib
+import io
 import json
 import math
 import os
@@ -69,6 +76,7 @@ from bio_inspired_nanochat.results_registry import (
 )
 from bio_inspired_nanochat.synaptic import SynapticConfig
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
+from bio_inspired_nanochat.torch_imports import F
 
 
 class _CmaApi(Protocol):
@@ -364,6 +372,113 @@ def generate_batch(
     y[:, half - 1 : seq_len - 1] = x[:, half:seq_len]
 
     return x, y
+
+
+# -----------------------------------------------------------------------------
+# Language-model objective (idh4)
+# -----------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class LMTask:
+    """Fixed real-text token streams for the language-model objective (idh4).
+
+    The copy task never trains within the proxy budget: every candidate of the 2026-10-07 rerun
+    sat at ~ln(vocab), so the fitness differences were seed noise
+    (results/cmaes_phase1_rerun_2026-10-07.json). Here every candidate trains on the SAME token
+    windows in the same order, with base_train's optimizer recipe, and is scored by bits per byte
+    on the same held-out stream, which is the ablation matrix's primary metric.
+    """
+
+    train_tokens: torch.Tensor  # (N,) int64, from the train split
+    val_tokens: torch.Tensor  # (M,) int64, from the held-out val split
+    token_bytes: torch.Tensor  # (vocab,) UTF-8 bytes per token id, 0 for special tokens
+    vocab_size: int
+    seq_len: int
+
+    def describe(self) -> dict[str, int]:
+        return {
+            "train_tokens": int(self.train_tokens.numel()),
+            "val_tokens": int(self.val_tokens.numel()),
+            "vocab_size": int(self.vocab_size),
+            "seq_len": int(self.seq_len),
+        }
+
+
+def _read_split_tokens(split: str, n_tokens: int, tokenizer: Any) -> torch.Tensor:
+    """The first ``n_tokens`` of ``split``, documents in file order, each BOS-prefixed.
+
+    Reads every row group (no rank striding), so all distributed workers see identical data.
+    """
+    from bio_inspired_nanochat.dataset import parquets_iter_batched
+
+    bos = tokenizer.get_bos_token_id()
+    ids: list[int] = []
+    for texts in parquets_iter_batched(split=split):
+        for row in tokenizer.encode(texts, prepend=bos):
+            ids.extend(row)
+        if len(ids) >= n_tokens:
+            break
+    if len(ids) < n_tokens:
+        raise ValueError(f"the {split} split holds {len(ids)} tokens, fewer than the {n_tokens} requested")
+    return torch.tensor(ids[:n_tokens], dtype=torch.long)
+
+
+def load_lm_task(*, train_tokens: int, eval_tokens: int, seq_len: int) -> LMTask:
+    """Tokenize the fixed train/held-out streams with the base_train tokenizer."""
+    from bio_inspired_nanochat.tokenizer import get_token_bytes, get_tokenizer
+
+    if seq_len <= 0 or train_tokens <= seq_len or eval_tokens <= seq_len:
+        raise ValueError("--lm-train-tokens and --lm-eval-tokens must exceed --lm-seq-len > 0")
+    tokenizer = get_tokenizer()
+    return LMTask(
+        train_tokens=_read_split_tokens("train", int(train_tokens) + 1, tokenizer),
+        val_tokens=_read_split_tokens("val", int(eval_tokens) + 1, tokenizer),
+        token_bytes=get_token_bytes(device="cpu"),
+        vocab_size=int(tokenizer.get_vocab_size()),
+        seq_len=int(seq_len),
+    )
+
+
+def lm_train_batch(task: LMTask, step: int, batch_size: int) -> tuple[torch.Tensor, torch.Tensor]:
+    """Step ``step``'s (inputs, targets): consecutive seq_len windows, cycling through the stream."""
+    t = task.seq_len
+    n_windows = (task.train_tokens.numel() - 1) // t
+    starts = [((step * batch_size + b) % n_windows) * t for b in range(batch_size)]
+    windows = torch.stack([task.train_tokens[s : s + t + 1] for s in starts])
+    return windows[:, :-1], windows[:, 1:]
+
+
+@torch.no_grad()
+def lm_held_out_bpb(model: GPTSynaptic, task: LMTask, batch_size: int, device: str) -> float:
+    """Bits per byte over every whole seq_len window of the held-out stream (local, no all-reduce:
+    distributed workers score different candidates)."""
+    t = task.seq_len
+    n_windows = (task.val_tokens.numel() - 1) // t
+    token_bytes = task.token_bytes.to(device)
+    total_nats, total_bytes = 0.0, 0
+    for first in range(0, n_windows, batch_size):
+        starts = range(first * t, min(first + batch_size, n_windows) * t, t)
+        windows = torch.stack([task.val_tokens[s : s + t + 1] for s in starts]).to(device)
+        x, y = windows[:, :-1], windows[:, 1:].reshape(-1)
+        logits, _ = model(x)
+        nats = F.cross_entropy(logits.float().reshape(-1, logits.size(-1)), y, reduction="none")
+        num_bytes = token_bytes[y]
+        total_nats += float((nats * (num_bytes > 0)).sum().item())
+        total_bytes += int(num_bytes.sum().item())
+    if total_bytes == 0:
+        raise ValueError("the held-out stream has no countable bytes")
+    return total_nats / (math.log(2) * total_bytes)
+
+
+def _lm_task_from_args(args: argparse.Namespace) -> LMTask | None:
+    if getattr(args, "objective", "copy") != "lm":
+        return None
+    return load_lm_task(
+        train_tokens=int(args.lm_train_tokens),
+        eval_tokens=int(args.lm_eval_tokens),
+        seq_len=int(args.lm_seq_len),
+    )
 
 
 # -----------------------------------------------------------------------------
@@ -972,12 +1087,18 @@ def evaluate_candidate_detailed(
     reset_state: bool = True,
     held_out_batches: int = 8,
     held_out_seed: int = 12345,
+    lm_task: LMTask | None = None,
 ) -> CandidateEvalResult:
     """
     Instantiates a model with specific bio-parameters and runs a short training loop.
 
     Returns a structured result that can optionally include an LCE prediction and/or
     the full per-step loss curve.
+
+    With ``lm_task`` (idh4) the candidate trains on that task's fixed real-text windows with
+    base_train's optimizer recipe (``setup_optimizers``: AdamW + Muon, so ``lr`` and
+    ``weight_decay`` are unused) from ``init_weights``, the model takes the task's vocabulary
+    and sequence length, and ``held_out_loss`` is bits per byte on the task's held-out stream.
     """
     steps_i = max(0, int(steps))
     mean_last_i = max(1, min(int(mean_last), steps_i if steps_i > 0 else 1))
@@ -997,17 +1118,29 @@ def evaluate_candidate_detailed(
             # 2) Build config
             syn_cfg = _build_synaptic_config(param_dict)
             model_cfg = replace(model_config, syn_cfg=syn_cfg)
+            if lm_task is not None:
+                model_cfg = replace(
+                    model_cfg, vocab_size=lm_task.vocab_size, sequence_len=lm_task.seq_len
+                )
 
             # 3) Build model
             _seed_everything(seed)
             model = GPTSynaptic(model_cfg).to(device)
+            if lm_task is not None:
+                model.init_weights()
             model.train()
             can_reset = reset_state and hasattr(model, "reset_sequence_state")
 
             # 4) Optimizer
-            optim = torch.optim.AdamW(
-                model.parameters(), lr=float(lr), weight_decay=float(weight_decay)
-            )
+            if lm_task is not None:
+                with contextlib.redirect_stdout(io.StringIO()):  # its per-call LR-scale banner
+                    optimizers = list(model.setup_optimizers())
+            else:
+                optimizers = [
+                    torch.optim.AdamW(
+                        model.parameters(), lr=float(lr), weight_decay=float(weight_decay)
+                    )
+                ]
 
             # 5) Train loop
             mean_window: deque[float] = deque(maxlen=mean_last_i)
@@ -1037,19 +1170,24 @@ def evaluate_candidate_detailed(
                 # PENALTY_LOSS, which is a major reason the objective was uninformative.
                 if can_reset:
                     model.reset_sequence_state(reset_fast_weights=True)
-                x, y = generate_batch(
-                    batch_size, model_cfg.sequence_len, model_cfg.vocab_size, device
-                )
+                if lm_task is not None:
+                    x, y = lm_train_batch(lm_task, step_idx, batch_size)
+                    x, y = x.to(device), y.to(device)
+                else:
+                    x, y = generate_batch(
+                        batch_size, model_cfg.sequence_len, model_cfg.vocab_size, device
+                    )
                 _logits, loss = model(x, y)
                 if not torch.isfinite(loss):
                     raise FloatingPointError(
                         "Non-finite loss encountered during evaluation"
                     )
 
-                optim.zero_grad(set_to_none=True)
+                model.zero_grad(set_to_none=True)
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-                optim.step()
+                for optim in optimizers:
+                    optim.step()
 
                 loss_val = float(loss.item())
                 mean_window.append(loss_val)
@@ -1070,7 +1208,13 @@ def evaluate_candidate_detailed(
             # (identical across all candidates), which is far less noisy than the last-k
             # training loss and is the objective the optimizer should actually minimize.
             held_out_loss: float | None = None
-            if held_out_batches > 0:
+            if lm_task is not None:
+                model.eval()
+                if can_reset:
+                    model.reset_sequence_state(reset_fast_weights=True)
+                bpb = lm_held_out_bpb(model, lm_task, batch_size, device)
+                held_out_loss = bpb if math.isfinite(bpb) else PENALTY_LOSS
+            elif held_out_batches > 0:
                 model.eval()
                 ho_losses: list[float] = []
                 with torch.no_grad():
@@ -1260,10 +1404,11 @@ def evaluate_candidate(
     timeout_seconds: float | None,
     max_retries: int,
     raise_on_error: bool,
+    lm_task: LMTask | None = None,
 ) -> float:
     """
     Instantiates a model with specific bio-parameters and runs a short training loop.
-    Returns: Final Validation Loss (lower is better).
+    Returns: Final Validation Loss (lower is better; held-out bits/byte under ``lm_task``).
     """
     res = evaluate_candidate_detailed(
         solution_vector,
@@ -1280,6 +1425,7 @@ def evaluate_candidate(
         mean_last=10,
         lce_target_steps=None,
         record_losses=False,
+        lm_task=lm_task,
     )
     # 74f.1: minimize the HELD-OUT objective when available — mean-last-k
     # training loss is the seed-noise source this wrapper exists to avoid.
@@ -1313,6 +1459,7 @@ def _distributed_worker_loop(
     cmd_stop = 0
     cmd_eval = 1
     mode_lce = 1
+    lm_task = _lm_task_from_args(args)
 
     while True:
         ctrl = torch.empty((ctrl_len,), dtype=torch.int64, device=comm_device)
@@ -1356,6 +1503,7 @@ def _distributed_worker_loop(
                 lce_tail_points=int(args.lce_tail_points),
                 lce_stride=int(args.lce_stride),
                 record_losses=False,
+                lm_task=lm_task,
             )
             if use_lce and res.lce_pred_loss is not None:
                 fitness[sol_idx] = float(res.lce_pred_loss)
@@ -1396,6 +1544,7 @@ def _cmd_eval(
         timeout_seconds=None,
         max_retries=0,
         raise_on_error=True,
+        lm_task=_lm_task_from_args(args),
     )
     decoded = decode_params(x, specs)
 
@@ -1406,7 +1555,10 @@ def _cmd_eval(
     table.add_row("Device", args.device)
     table.add_row("Steps", str(args.steps))
     table.add_row("Batch", str(args.batch_size))
-    table.add_row("Final Loss (mean last 10)", f"{loss:.6f}")
+    table.add_row("Objective", str(args.objective))
+    table.add_row(
+        "Held-out bits/byte" if args.objective == "lm" else "Held-out loss", f"{loss:.6f}"
+    )
     console.print(table)
     console.print(
         Panel(
@@ -1686,15 +1838,23 @@ def _cmd_optimize(
     if artifacts is not None:
         console.print(f"[dim]Run {run_id} dir: {artifacts.run_dir}[/dim]")
 
+    lm_task = _lm_task_from_args(args)
+    model_config = (
+        MODEL_CONFIG
+        if lm_task is None
+        else replace(MODEL_CONFIG, vocab_size=lm_task.vocab_size, sequence_len=lm_task.seq_len)
+    )
     run_config = {
         "arguments": {
             key: value
             for key, value in vars(args).items()
             if key not in {"registry_path", "run_dir", "save_best"}
         },
-        "model": asdict(MODEL_CONFIG),
+        "model": asdict(model_config),
         "search_space": [asdict(spec) for spec in specs],
     }
+    if lm_task is not None:
+        run_config["lm_task"] = lm_task.describe()
 
     defaults = SynapticConfig()
     x0 = encode_params(defaults, specs)
@@ -1847,6 +2007,7 @@ def _cmd_optimize(
                             lce_tail_points=int(args.lce_tail_points),
                             lce_stride=int(args.lce_stride),
                             record_losses=False,
+                            lm_task=lm_task,
                         )
                         if use_lce and res.lce_pred_loss is not None:
                             fitness[sol_idx] = float(res.lce_pred_loss)
@@ -1881,6 +2042,7 @@ def _cmd_optimize(
                             lce_tail_points=int(args.lce_tail_points),
                             lce_stride=int(args.lce_stride),
                             record_losses=False,
+                            lm_task=lm_task,
                         )
                         if use_lce and res.lce_pred_loss is not None:
                             fitnesses.append(float(res.lce_pred_loss))
@@ -2145,7 +2307,11 @@ def _cmd_optimize(
             run_id=run_id,
             config=run_config,
             seed=int(args.seed),
-            dataset_shards=["synthetic:associative_recall"],
+            dataset_shards=(
+                ["parquet:train", "parquet:val"]
+                if lm_task is not None
+                else ["synthetic:associative_recall"]
+            ),
             timestamp=time.time(),
             notes=f"artifact_dir={artifact_note}; best_params={len(best_params)}",
         ),
@@ -2154,6 +2320,20 @@ def _cmd_optimize(
     console.print(f"[dim]Appended {run_id} to {args.registry_path}[/dim]")
 
     return 0
+
+
+def _add_objective_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--objective",
+        choices=["copy", "lm"],
+        default="copy",
+        help="copy: the synthetic copy task with plain AdamW; lm: real text (the base_train "
+        "data and tokenizer) with base_train's optimizer recipe, scored by held-out bits/byte "
+        "(--lr/--weight-decay unused)",
+    )
+    parser.add_argument("--lm-train-tokens", type=int, default=614_400)
+    parser.add_argument("--lm-eval-tokens", type=int, default=65_536)
+    parser.add_argument("--lm-seq-len", type=int, default=256)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -2184,6 +2364,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     eval_p.add_argument("--batch-size", type=int, default=BATCH_SIZE)
     eval_p.add_argument("--lr", type=float, default=1e-3)
     eval_p.add_argument("--weight-decay", type=float, default=1e-2)
+    _add_objective_args(eval_p)
 
     sanity_p = sub.add_parser(
         "sanity",
@@ -2282,6 +2463,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     opt_p.add_argument("--batch-size", type=int, default=BATCH_SIZE)
     opt_p.add_argument("--lr", type=float, default=1e-3)
     opt_p.add_argument("--weight-decay", type=float, default=1e-2)
+    _add_objective_args(opt_p)
     opt_p.add_argument(
         "--gpu-cost-per-hour",
         type=float,
