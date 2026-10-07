@@ -354,3 +354,264 @@ pub fn presyn_release_canonical_cpu<'py>(
         out.to_owned(),
     ))
 }
+
+/// (edge release, recorded edge constants, stochastic mask) of `presyn_detached_scan_cpu`.
+type ScanOutputs<'py> = (
+    Bound<'py, PyArrayDyn<f32>>,
+    Bound<'py, PyArrayDyn<f32>>,
+    Bound<'py, PyArrayDyn<bool>>,
+);
+
+/// Exact detached causal scan of a whole query block on CPU (l7c9 / jyb.9).
+///
+/// The same contract as the Triton `presyn_detached_scan_kernel` and op-for-op the release and
+/// state blocks of `synaptic._scripted_detached_presyn_scan`: for each query `t`, gather the
+/// pre-update state of its top-k keys, release (deterministic, or the normal-reparameterised
+/// stochastic branch from the caller's draws), then advance every key of the active prefix
+/// `first_active + t` (duplicates accumulate like `scatter_add_`, invalid edges contribute
+/// nothing). Rows (batch x head) are independent and run in parallel.
+///
+/// `state` is the (7, N, T_key) slab [C, BUF, RRP, RES, PR, CL, E] and `delay` the
+/// (D, N, T_key) endocytosis queue; both are advanced in place. Returns the un-normalised edge
+/// release `qamp * released` (N, T, K) (the cross-row EMA normaliser is applied by the caller),
+/// and, when `record`, the gathered pre-update edge constants (6, N, T, K) in the order
+/// [calcium, buffer, primed, clamp, rrp, energy] plus the stochastic mask (N, T, K).
+#[pyfunction]
+#[allow(clippy::too_many_arguments)]
+pub fn presyn_detached_scan_cpu<'py>(
+    py: Python<'py>,
+    mut state: numpy::PyReadwriteArrayDyn<'py, f32>,
+    mut delay: numpy::PyReadwriteArrayDyn<'py, f32>,
+    drive: PyReadonlyArrayDyn<'py, f32>,
+    idx: PyReadonlyArrayDyn<'py, i64>,
+    valid: PyReadonlyArrayDyn<'py, bool>,
+    uniform: PyReadonlyArrayDyn<'py, f32>,
+    noise: PyReadonlyArrayDyn<'py, f32>,
+    cfg_obj: Bound<'py, PyAny>,
+    first_active: usize,
+    stochastic_frac: f32,
+    count_cap: f32,
+    record: bool,
+) -> PyResult<ScanOutputs<'py>> {
+    use ndarray::{Array3, Axis, Ix2, Ix3, Zip};
+
+    let cfg = CanonicalConfig::from_py(&cfg_obj)?;
+    let rank = |name: &str, error: ndarray::ShapeError| {
+        pyo3::exceptions::PyValueError::new_err(format!("{name} has the wrong rank: {error}"))
+    };
+    let mut state = state
+        .as_array_mut()
+        .into_dimensionality::<Ix3>()
+        .map_err(|e| rank("state", e))?;
+    let mut delay = delay
+        .as_array_mut()
+        .into_dimensionality::<Ix3>()
+        .map_err(|e| rank("delay", e))?;
+    let drive = drive
+        .as_array()
+        .into_dimensionality::<Ix3>()
+        .map_err(|e| rank("drive", e))?;
+    let idx = idx
+        .as_array()
+        .into_dimensionality::<Ix3>()
+        .map_err(|e| rank("idx", e))?;
+    let valid = valid
+        .as_array()
+        .into_dimensionality::<Ix3>()
+        .map_err(|e| rank("valid", e))?;
+    let (n_rows, queries, topk) = drive.dim();
+    ensure_shape("idx", idx.shape(), drive.shape())?;
+    ensure_shape("valid", valid.shape(), drive.shape())?;
+    if state.shape()[0] != 7 || state.shape()[1] != n_rows {
+        return Err(pyo3::exceptions::PyValueError::new_err(format!(
+            "state must be (7, {n_rows}, T_key), got {:?}",
+            state.shape()
+        )));
+    }
+    let key_count = state.shape()[2];
+    ensure_shape("delay", &delay.shape()[1..], &[n_rows, key_count])?;
+    if delay.shape()[0] != cfg.endo_delay {
+        return Err(pyo3::exceptions::PyValueError::new_err(format!(
+            "delay must hold endo_delay={} planes, got {}",
+            cfg.endo_delay,
+            delay.shape()[0]
+        )));
+    }
+    if first_active < 1 || first_active + queries - 1 > key_count {
+        return Err(pyo3::exceptions::PyValueError::new_err(format!(
+            "queries [{first_active}, {}] exceed the key-state extent {key_count}",
+            first_active + queries - 1
+        )));
+    }
+    for (&selected, &ok) in idx.iter().zip(valid.iter()) {
+        if ok && (selected < 0 || selected as usize >= key_count) {
+            return Err(pyo3::exceptions::PyIndexError::new_err(format!(
+                "valid idx value {selected} is outside [0, {key_count})"
+            )));
+        }
+    }
+    let stochastic = stochastic_frac > 0.0;
+    let uniform = if stochastic {
+        let u = uniform
+            .as_array()
+            .into_dimensionality::<Ix2>()
+            .map_err(|e| rank("uniform", e))?;
+        ensure_shape("uniform", u.shape(), &[n_rows, queries])?;
+        Some(u)
+    } else {
+        None
+    };
+    let noise = if stochastic {
+        let z = noise
+            .as_array()
+            .into_dimensionality::<Ix3>()
+            .map_err(|e| rank("noise", e))?;
+        ensure_shape("noise", z.shape(), drive.shape())?;
+        Some(z)
+    } else {
+        None
+    };
+
+    let mut e_raw = Array3::<f32>::zeros((n_rows, queries, topk));
+    let (rq, rk) = if record { (queries, topk) } else { (0, 0) };
+    let mut rec = ndarray::Array4::<f32>::zeros((6, n_rows, rq, rk));
+    let mut mask = Array3::<bool>::from_elem((n_rows, rq, rk), false);
+    let delay_len = cfg.endo_delay;
+
+    py.detach(|| {
+        Zip::indexed(state.axis_iter_mut(Axis(1)))
+            .and(delay.axis_iter_mut(Axis(1)))
+            .and(e_raw.axis_iter_mut(Axis(0)))
+            .and(rec.axis_iter_mut(Axis(1)))
+            .and(mask.axis_iter_mut(Axis(0)))
+            .par_for_each(|row, mut st, mut dl, mut out, mut rc, mut mk| {
+                let mut release_sum = vec![0.0f32; key_count];
+                let mut drive_sum = vec![0.0f32; key_count];
+                let mut access = vec![0.0f32; key_count];
+                let mut keys = vec![0usize; topk];
+                let mut released = vec![0.0f32; topk];
+                let mut drives = vec![0.0f32; topk];
+                let mut oks = vec![false; topk];
+                for t in 0..queries {
+                    let active = first_active + t;
+                    let draw = uniform.as_ref().map(|u| u[[row, t]]);
+                    for k in 0..topk {
+                        let ok = valid[[row, t, k]];
+                        let key = if ok { idx[[row, t, k]] as usize } else { 0 };
+                        let edge_drive = drive[[row, t, k]];
+                        let c_edge = st[[0, key]];
+                        let buf_edge = st[[1, key]];
+                        let rrp_edge = st[[2, key]];
+                        let pr_edge = st[[4, key]];
+                        let cl_edge = st[[5, key]];
+                        let energy_edge = st[[6, key]];
+                        if record {
+                            rc[[0, t, k]] = c_edge;
+                            rc[[1, t, k]] = buf_edge;
+                            rc[[2, t, k]] = pr_edge;
+                            rc[[3, t, k]] = cl_edge;
+                            rc[[4, t, k]] = rrp_edge;
+                            rc[[5, t, k]] = energy_edge;
+                        }
+                        let calcium = (cfg.rho_c * c_edge + cfg.alpha_ca * softplus(edge_drive)
+                            - cfg.alpha_buf_on * c_edge * (1.0 - buf_edge)
+                            + cfg.alpha_buf_off * buf_edge)
+                            .max(0.0);
+                        let fast = calcium / (calcium + cfg.syt_fast_kd);
+                        let slow = calcium / (calcium + cfg.syt_slow_kd);
+                        let sensor = 0.7 * fast
+                            + 0.3 * slow
+                            + cfg.doc2_gain * sigmoid(4.0 * (calcium - 0.12));
+                        let fuse_base = sigmoid(
+                            3.0 * sensor + 2.0 * pr_edge - 2.0 * (cl_edge + cfg.complexin_bias),
+                        );
+                        let probability = (fuse_base * sigmoid(edge_drive)).clamp(0.0, 1.0);
+                        let mut rel = probability * rrp_edge;
+                        if let (Some(u), Some(z)) = (draw, noise.as_ref()) {
+                            let sampled_edge = ok && u < stochastic_frac;
+                            if sampled_edge {
+                                let count = rrp_edge.round_ties_even().clamp(0.0, count_cap);
+                                let p32 = probability.clamp(1e-6, 1.0 - 1e-6);
+                                let deviation = (count * p32 * (1.0 - p32) + 1e-6).sqrt();
+                                rel = (count * p32 + deviation * z[[row, t, k]])
+                                    .max(0.0)
+                                    .min(count);
+                            }
+                            if record {
+                                mk[[t, k]] = sampled_edge;
+                            }
+                        }
+                        if !ok {
+                            rel = 0.0;
+                        }
+                        let qamp = sigmoid(cfg.q_beta * (energy_edge - 0.5)) * cfg.qmax;
+                        out[[t, k]] = rel * qamp;
+                        keys[k] = key;
+                        released[k] = rel;
+                        drives[k] = if ok { edge_drive } else { 0.0 };
+                        oks[k] = ok;
+                    }
+                    for k in 0..topk {
+                        release_sum[keys[k]] += released[k];
+                        drive_sum[keys[k]] += drives[k];
+                        if oks[k] {
+                            access[keys[k]] += 1.0;
+                        }
+                    }
+                    for key in 0..active {
+                        let release_k = release_sum[key];
+                        let c_prev = st[[0, key]];
+                        let buf_prev = st[[1, key]];
+                        let influx = if access[key] > 0.0 {
+                            cfg.alpha_ca * softplus(drive_sum[key])
+                        } else {
+                            0.0
+                        };
+                        st[[0, key]] = (cfg.rho_c * c_prev + influx
+                            - cfg.alpha_buf_on * c_prev * (1.0 - buf_prev)
+                            + cfg.alpha_buf_off * buf_prev)
+                            .max(0.0);
+                        st[[1, key]] = (cfg.rho_b * buf_prev
+                            + cfg.alpha_buf_on * c_prev * (1.0 - buf_prev)
+                            - cfg.alpha_buf_off * buf_prev)
+                            .clamp(0.0, 1.0);
+                        let rrp_depleted = (st[[2, key]] - release_k).max(0.0);
+                        let mut reserve = st[[3, key]];
+                        if delay_len > 0 {
+                            reserve += dl[[0, key]];
+                            for slot in 0..delay_len - 1 {
+                                dl[[slot, key]] = dl[[slot + 1, key]];
+                            }
+                            dl[[delay_len - 1, key]] = release_k * cfg.rec_rate;
+                        }
+                        let take = reserve.min(1.0);
+                        st[[3, key]] = (reserve - cfg.prime_rate * take).max(0.0);
+                        st[[2, key]] = (rrp_depleted + cfg.prime_rate * take).clamp(0.0, 30.0);
+                        let pr_prev = st[[4, key]];
+                        st[[4, key]] = (pr_prev * (1.0 - cfg.unprime_per_release * release_k)
+                            + cfg.nsf_recover * (1.0 - pr_prev))
+                            .clamp(0.0, 1.0);
+                        st[[5, key]] = (st[[5, key]] * 0.995 + 0.005
+                            - cfg.unprime_per_release * release_k)
+                            .clamp(0.0, 1.0);
+                        let energy_prev = st[[6, key]];
+                        st[[6, key]] = (energy_prev
+                            + cfg.energy_fill * (cfg.energy_max - energy_prev)
+                            - cfg.energy_use * release_k)
+                            .clamp(0.0, cfg.energy_max);
+                    }
+                    for &key in &keys {
+                        release_sum[key] = 0.0;
+                        drive_sum[key] = 0.0;
+                        access[key] = 0.0;
+                    }
+                }
+            });
+    });
+
+    Ok((
+        e_raw.into_dyn().into_pyarray(py).to_owned(),
+        rec.into_dyn().into_pyarray(py).to_owned(),
+        mask.into_dyn().into_pyarray(py).to_owned(),
+    ))
+}

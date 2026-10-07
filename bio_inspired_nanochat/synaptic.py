@@ -27,6 +27,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Literal, cast
 
+import numpy as np
+
 from bio_inspired_nanochat.common import decouple_config
 from bio_inspired_nanochat.glial_homeostasis import GlialHomeostasis
 from bio_inspired_nanochat.metriplectic_integrator import (
@@ -436,6 +438,16 @@ def _rust_presyn_kernel() -> Any:
     except ModuleNotFoundError:
         return None
     return getattr(module, "presyn_release_canonical_cpu", None)
+
+
+@functools.lru_cache(maxsize=1)
+def _rust_detached_scan_kernel() -> Any:
+    """The compiled ``rustbpe.presyn_detached_scan_cpu`` multi-query scan, or ``None``."""
+    try:
+        module = importlib.import_module("rustbpe")
+    except ModuleNotFoundError:
+        return None
+    return getattr(module, "presyn_detached_scan_cpu", None)
 
 
 def _resolve_synaptic_granularity(cfg: SynapticConfig) -> SynapticGranularity:
@@ -1254,6 +1266,23 @@ def _release_recurrence_group(
         needs_drive_grad = torch.is_grad_enabled() and drive.requires_grad
         # Low-precision attention logits (CUDA autocast) drive the float32 state in float32.
         drive = drive.float()
+        if (
+            drive.device.type == "cpu"
+            and cfg.native_presyn
+            and _rust_detached_scan_kernel() is not None
+        ):
+            return _rust_detached_scan(
+                presyn,
+                state,
+                drive,
+                idx,
+                valid,
+                train=train,
+                first_active_key_count=first_active_key_count,
+                stochastic_frac=train_stochastic_frac,
+                generator=train_generator,
+                needs_drive_grad=needs_drive_grad,
+            )
         if drive.is_cuda and cfg.native_presyn:
             return _fused_detached_scan(
                 presyn,
@@ -1475,6 +1504,108 @@ def _fused_detached_scan(
     if needs_drive_grad:
         return _DetachedScanReleaseGrad.apply(drive, output, valid, cfg, *edges)
     return output
+
+
+def _rust_detached_scan(
+    presyn: "SynapticPresyn",
+    state: dict[str, Any],
+    drive: Tensor,
+    idx: Tensor,
+    valid: Tensor,
+    *,
+    train: bool,
+    first_active_key_count: int,
+    stochastic_frac: float,
+    generator: torch.Generator | None,
+    needs_drive_grad: bool,
+) -> Tensor:
+    """The scripted scan's contract in one Rust call, rows in parallel (CPU, ``native_presyn``).
+
+    The stochastic draws are taken from the private train RNG in exactly the scripted loop's
+    order (one uniform per query; one normal draw on the queries that sample, when the count
+    cap is positive), so the two CPU paths consume the same stream and agree to float32
+    rounding. The EMA normalizer advances query by query in float32 like the scripted loop.
+    """
+    cfg = presyn.cfg
+    batch, heads, queries, topk = drive.shape
+    rows = batch * heads
+    stochastic = train and stochastic_frac > 0.0
+    uniform = torch.empty((rows, 0))
+    noise = torch.zeros((batch, heads, queries, topk))
+    if stochastic:
+        uniforms = []
+        for offset in range(queries):
+            step_uniform = torch.rand(
+                (batch, heads, 1), device=drive.device, dtype=torch.float32, generator=generator
+            )
+            uniforms.append(step_uniform)
+            sampled = (step_uniform.unsqueeze(-1) < stochastic_frac) & valid[:, :, offset : offset + 1]
+            if int(cfg.stochastic_count_cap) > 0 and bool(sampled.any()):
+                noise[:, :, offset : offset + 1] = torch.randn(
+                    (batch, heads, 1, int(cfg.attn_topk)),
+                    device=drive.device,
+                    dtype=torch.float32,
+                    generator=generator,
+                )[..., :topk]
+        uniform = torch.cat(uniforms, dim=2).reshape(rows, queries)
+        if generator is not None:
+            presyn._commit_train_sampling_generator(generator)
+
+    names = ("C", "BUF", "RRP", "RES", "PR", "CL", "E")
+    key_count = int(state["C"].shape[2])
+    slab = torch.stack([state[name].detach().reshape(rows, key_count) for name in names]).contiguous()
+    delay = list(state.get("DELAY", []))
+    delay_slab = (
+        torch.stack([entry.detach().reshape(rows, key_count) for entry in delay]).contiguous()
+        if delay
+        else torch.zeros((0, rows, key_count))
+    )
+    with torch.no_grad():
+        e_raw, recorded, sampled_mask = _rust_detached_scan_kernel()(
+            slab.numpy(),
+            delay_slab.numpy(),
+            drive.detach().reshape(rows, queries, topk).contiguous().numpy(),
+            idx.reshape(rows, queries, topk).contiguous().numpy(),
+            valid.reshape(rows, queries, topk).contiguous().numpy(),
+            uniform.contiguous().numpy(),
+            noise.reshape(rows, queries, topk).contiguous().numpy(),
+            cfg,
+            int(first_active_key_count),
+            float(stochastic_frac) if stochastic else 0.0,
+            float(max(0, int(cfg.stochastic_count_cap))),
+            bool(needs_drive_grad),
+        )
+        shape = (batch, heads, key_count)
+        state.update({name: slab[i].view(shape) for i, name in enumerate(names)})
+        if delay:
+            state["DELAY"] = [delay_slab[i].view(shape) for i in range(len(delay))]
+        edge_release = torch.from_numpy(e_raw).view(batch, heads, queries, topk)
+        if train:
+            weight = valid.to(edge_release.dtype)
+            scales = (
+                (edge_release.abs() * weight).sum(dim=(0, 1, 3))
+                / weight.sum(dim=(0, 1, 3)).clamp_min(1)
+            ).clamp_min(1e-3).numpy()
+            ema = np.float32(presyn.ema_e.detach().reshape(()).item())
+            normalizers = np.empty(queries, dtype=np.float32)
+            for offset in range(queries):  # float32 scalars: the scripted loop's mul_/add_
+                ema = np.float32(ema * np.float32(0.99)) + np.float32(np.float32(0.01) * scales[offset])
+                normalizers[offset] = ema
+            ema_view = torch.from_numpy(normalizers).reshape(1, 1, queries, 1)
+            presyn.ema_e.fill_(float(ema))
+        else:
+            ema_view = presyn.ema_e.detach().reshape(1, 1, 1, 1).expand(1, 1, queries, 1)
+        output = edge_release / (ema_view + 1e-6)
+    if not needs_drive_grad:
+        return output
+    recorded_t = torch.from_numpy(recorded).view(6, batch, heads, queries, topk)
+    mask_t = (
+        torch.from_numpy(sampled_mask).view(batch, heads, queries, topk)
+        if stochastic
+        else torch.zeros(drive.shape, dtype=torch.bool)
+    )
+    edges = [recorded_t[i] for i in range(6)] + [mask_t, noise, ema_view]
+    return _DetachedScanReleaseGrad.apply(drive, output, valid, cfg, *edges)
 
 
 def _checkpoint_recurrence_segment(

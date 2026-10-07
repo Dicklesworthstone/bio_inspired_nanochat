@@ -120,9 +120,8 @@ def test_scan_kernel_matches_the_scripted_recurrence_under_the_interpreter():
     assert completed.stdout.strip().endswith("ok")
 
 
-@pytest.mark.unit
-def test_cpu_training_with_native_presyn_stays_on_the_scripted_scan():
-    """native_presyn selects the kernel only for CUDA tensors; CPU keeps the scripted scan."""
+def _recurrence_case(native: bool, *, train: bool, frac: float, grad: bool):
+    import math
     from dataclasses import replace
 
     from bio_inspired_nanochat.synaptic import (
@@ -132,18 +131,53 @@ def test_cpu_training_with_native_presyn_stays_on_the_scripted_scan():
         build_presyn_state,
     )
 
-    cfg = replace(SynapticConfig(attn_topk=4), native_presyn=True)
+    torch.manual_seed(0)
+    batch, heads, queries, topk, first = 2, 3, 40, 8, 5
+    cfg = replace(SynapticConfig(attn_topk=topk, stochastic_train_frac=frac), native_presyn=native)
     presyn = SynapticPresyn(8, cfg)
-    state = build_presyn_state(1, 6, 2, torch.device("cpu"), torch.float32, cfg)
-    drive = torch.randn(1, 2, 6, 4, requires_grad=True)
-    idx = torch.randint(0, 6, (1, 2, 6, 4))
-    valid = idx <= torch.arange(6).view(1, 1, 6, 1)
-    out = _release_recurrence_group(
-        presyn, state, drive, idx, valid, train=True, differentiable=False, active_key_count=6
-    )
-    assert type(out.grad_fn).__name__ == "_DetachedScanReleaseGradBackward"
-    out.sum().backward()
-    assert drive.grad is not None and torch.isfinite(drive.grad).all()
+    presyn._presyn_train_rng_seed.fill_(1234)
+    t_key = first + queries - 1
+    state = build_presyn_state(batch, t_key, heads, torch.device("cpu"), torch.float32, cfg)
+    gen = torch.Generator().manual_seed(1)
+    dots = torch.randn(batch, heads, queries, t_key, generator=gen)
+    future = torch.arange(t_key).view(1, t_key) >= (first + torch.arange(queries)).view(queries, 1)
+    vals, idx = torch.topk(dots.masked_fill(future, -math.inf), topk, dim=-1)
+    drive = vals.clone().requires_grad_(grad)
+    with torch.set_grad_enabled(grad):
+        out = _release_recurrence_group(
+            presyn, state, drive, idx, torch.isfinite(vals), train=train,
+            differentiable=False, active_key_count=t_key,
+        )
+    if grad:
+        (out * torch.linspace(-1, 1, out.numel()).view_as(out)).sum().backward()
+    return out.detach(), drive.grad, state, presyn
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("train", "frac", "grad"), [(True, 0.3, True), (True, 0.0, True), (False, 0.0, False)]
+)
+def test_rust_scan_matches_the_scripted_scan(train: bool, frac: float, grad: bool):
+    """native_presyn on CPU runs the whole block in rustbpe.presyn_detached_scan_cpu (jyb.9).
+
+    Same RNG stream as the scripted loop (the private generator ends in the same state), values
+    and state to float32 rounding, the same one-pass drive gradient, the same EMA.
+    """
+    from bio_inspired_nanochat.synaptic import _rust_detached_scan_kernel
+
+    if _rust_detached_scan_kernel() is None:
+        pytest.skip("rustbpe extension without presyn_detached_scan_cpu (maturin develop)")
+    ref_out, ref_grad, ref_state, ref_pre = _recurrence_case(False, train=train, frac=frac, grad=grad)
+    out, drive_grad, state, pre = _recurrence_case(True, train=train, frac=frac, grad=grad)
+    torch.testing.assert_close(out, ref_out, rtol=1e-5, atol=1e-6)
+    for name in ("C", "BUF", "RRP", "RES", "PR", "CL", "E"):
+        torch.testing.assert_close(state[name], ref_state[name], rtol=1e-5, atol=1e-6, msg=name)
+    for got, want in zip(state["DELAY"], ref_state["DELAY"]):
+        torch.testing.assert_close(got, want, rtol=1e-5, atol=1e-6)
+    torch.testing.assert_close(pre.ema_e, ref_pre.ema_e, rtol=1e-6, atol=1e-7)
+    assert torch.equal(pre._presyn_train_cpu_rng_state, ref_pre._presyn_train_cpu_rng_state)
+    if grad:
+        torch.testing.assert_close(drive_grad, ref_grad, rtol=1e-5, atol=1e-7)
 
 
 @pytest.mark.gpu
