@@ -126,7 +126,7 @@ def test_confirmation_keeps_anchors_and_only_survivors():
     ids = {c.config_id for c in cols}
     assert {"vanilla", "synaptic_off", "bio_all"} <= ids
     assert "bio_no_presyn" in ids and "add_learnable_kinetics" in ids
-    assert "bio_no_hebbian" not in ids, "a non-survivor must be dropped from confirmation"
+    assert "bio_no_doc2" not in ids, "a non-survivor must be dropped from confirmation"
 
 
 def test_seeds_are_research_grade():

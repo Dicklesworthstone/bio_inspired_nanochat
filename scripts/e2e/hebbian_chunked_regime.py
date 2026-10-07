@@ -138,6 +138,20 @@ def evaluate(model: GPTSynaptic, *, eval_pairs: tuple[int, ...]) -> dict[str, An
     return out
 
 
+def _run_cell(cell: tuple[int, bool, str, int, int, int, float, tuple[int, ...], int]) -> dict[str, Any]:
+    """Train and read one (seed, Hebbian, regime) model; the unit a --jobs worker executes."""
+    seed, hebbian, regime, steps, chunk_len, max_pairs, lr, eval_pairs, threads = cell
+    if threads > 0:
+        torch.set_num_threads(threads)
+    model = _model(seed, hebbian=hebbian)
+    tr = train(model, seed=seed, regime=regime, steps=steps, chunk_len=chunk_len, max_pairs=max_pairs, lr=lr)
+    ev = evaluate(model, eval_pairs=eval_pairs)
+    row = {"seed": seed, "hebbian": hebbian, "train_regime": regime, "set": "discovery" if seed in DISCOVERY_SEEDS else "confirmation", **tr, "eval": ev}
+    logger.info("[regime] seed=%d hebbian=%s train=%s loss=%.3f s/step=%.2f read_full=%s read_chunked=%s diff=%.2e",
+                seed, hebbian, regime, tr["final_loss"], tr["sec_per_step"], ev["full"], ev["chunked"], ev["max_abs_logit_diff_chunked_vs_full"])
+    return row
+
+
 def _mean(xs: list[float]) -> float | None:
     return statistics.fmean(xs) if xs else None
 
@@ -155,6 +169,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-pairs", type=int, default=PREREGISTERED["max_pairs"])
     parser.add_argument("--lr", type=float, default=PREREGISTERED["lr"])
     parser.add_argument("--out", default=None)
+    parser.add_argument("--jobs", type=int, default=1,
+                        help="train the independent (seed, arm) models in this many worker processes, one thread each; "
+                             "protocol numbers and outputs are unchanged, s/step is then measured under that contention")
     args = parser.parse_args(argv)
     if args.budget == "preregistered":
         declared = {"steps": args.steps, "chunk_len": args.chunk_len, "max_pairs": args.max_pairs, "lr": args.lr}
@@ -167,17 +184,20 @@ def main(argv: list[str] | None = None) -> int:
     except OSError:
         git_sha = ""
 
-    runs: list[dict[str, Any]] = []
-    for seed in args.seeds:
-        for hebbian in (True, False):
-            for regime in ("chunked", "full"):
-                model = _model(seed, hebbian=hebbian)
-                tr = train(model, seed=seed, regime=regime, steps=args.steps, chunk_len=args.chunk_len, max_pairs=args.max_pairs, lr=args.lr)
-                ev = evaluate(model, eval_pairs=eval_pairs)
-                row = {"seed": seed, "hebbian": hebbian, "train_regime": regime, "set": "discovery" if seed in DISCOVERY_SEEDS else "confirmation", **tr, "eval": ev}
-                runs.append(row)
-                logger.info("[regime] seed=%d hebbian=%s train=%s loss=%.3f s/step=%.2f read_full=%s read_chunked=%s diff=%.2e",
-                            seed, hebbian, regime, tr["final_loss"], tr["sec_per_step"], ev["full"], ev["chunked"], ev["max_abs_logit_diff_chunked_vs_full"])
+    cells = [
+        (seed, hebbian, regime, args.steps, args.chunk_len, args.max_pairs, args.lr, eval_pairs, 1 if args.jobs > 1 else 0)
+        for seed in args.seeds
+        for hebbian in (True, False)
+        for regime in ("chunked", "full")
+    ]
+    if args.jobs > 1:
+        import multiprocessing
+        from concurrent.futures import ProcessPoolExecutor
+
+        with ProcessPoolExecutor(max_workers=args.jobs, mp_context=multiprocessing.get_context("spawn")) as pool:
+            runs: list[dict[str, Any]] = list(pool.map(_run_cell, cells))
+    else:
+        runs = [_run_cell(cell) for cell in cells]
 
     top = str(eval_pairs[-1])
 
@@ -240,6 +260,7 @@ def main(argv: list[str] | None = None) -> int:
     payload = {
         "protocol_id": PROTOCOL_ID,
         "budget": {"label": args.budget, "steps": args.steps, "chunk_len": args.chunk_len, "max_pairs": args.max_pairs, "lr": args.lr,
+                   "jobs": args.jobs,
                    "seeds": args.seeds, "eval_pairs": list(eval_pairs), "preregistered": PREREGISTERED,
                    "discovery_seeds": list(DISCOVERY_SEEDS), "confirmation_seeds": list(CONFIRMATION_SEEDS)},
         "git_sha": git_sha,

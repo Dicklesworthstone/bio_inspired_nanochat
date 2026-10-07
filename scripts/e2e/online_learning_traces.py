@@ -116,7 +116,7 @@ def _build_model(cfg: OnlineLearningConfig, *, hebbian: bool, latch: bool = Fals
     from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
     from bio_inspired_nanochat.synaptic import SynapticConfig
 
-    syn = SynapticConfig(bistable_latch=latch)
+    syn = SynapticConfig(enable_hebbian=True, bistable_latch=latch)
     overrides = cfg.syn_overrides_bio if hebbian else cfg.syn_overrides_control
     for k, v in overrides.items():
         setattr(syn, k, v)

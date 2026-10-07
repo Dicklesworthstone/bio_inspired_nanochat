@@ -13,7 +13,8 @@ from bio_inspired_nanochat.e2e_harness import E2EConfig, run_e2e
 
 @pytest.mark.e2e
 def test_e2e_synaptic_known_good_passes_all_invariants(tmp_path):
-    cfg = E2EConfig(synapses=True, steps=80, seed=1234)
+    # The full stack, including online Hebbian plasticity (opt-in since hwxb.9).
+    cfg = E2EConfig(synapses=True, steps=80, seed=1234, syn_overrides={"enable_hebbian": True})
     report = run_e2e(cfg, run_dir=tmp_path, verbose=False)
     # Every invariant should pass on a healthy synaptic run.
     failures = [r.name for r in report.invariants if not r.passed]
@@ -43,17 +44,22 @@ def test_e2e_vanilla_known_good_passes(tmp_path):
 
 @pytest.mark.e2e
 def test_e2e_mechanism_engaged_is_load_bearing(tmp_path):
-    """With Hebbian disabled, mechanism_engaged must FAIL while everything else passes.
+    """With Hebbian on but its training-time writes disabled, mechanism_engaged must FAIL.
 
     This is the test that proves the invariant actually measures the online Hebbian
-    mechanism (the eligibility buffers stay zero when enable_hebbian=False) rather than
-    the gradient-trained w_fast weights (which AdamW moves regardless).
+    mechanism (the eligibility buffers never move when plasticity_during_training=False)
+    rather than the gradient-trained w_fast weights (which AdamW moves regardless). With
+    Hebbian off altogether the harness asserts the opposite, that the state stays exactly put
+    (``mechanism_off_is_inert``, tests/test_scaleup_ablation_e2e.py).
     """
-    cfg = E2EConfig(synapses=True, steps=80, seed=1234, syn_overrides={"enable_hebbian": False})
+    cfg = E2EConfig(
+        synapses=True, steps=80, seed=1234,
+        syn_overrides={"enable_hebbian": True, "plasticity_during_training": False},
+    )
     report = run_e2e(cfg, run_dir=tmp_path, verbose=False)
     failed = {r.name for r in report.failures()}
     assert "mechanism_engaged" in failed, (
-        "mechanism_engaged should fail when Hebbian is off — otherwise it is not "
+        "mechanism_engaged should fail when the Hebbian writes never run — otherwise it is not "
         "actually measuring the mechanism. Failures: " + str(failed)
     )
     # The rest of the run is still healthy (SGD still trains the slow weights).

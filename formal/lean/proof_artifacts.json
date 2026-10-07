@@ -927,6 +927,80 @@
       "mathlib_revision": "a3a10db0e9d66acbebf76c5e6a135066525ac900",
       "build_command": "rch exec -- lake build",
       "build_result": "attempted-2026-08-25-rch-refused-non-compilation-command-local-fallback-lake-permission-denied"
+    },
+    {
+      "cycle_id": "runtime-refresh-2026-10-07",
+      "frog_id": "bio_inspired_nanochat-reality-check",
+      "theorem_ids": [
+        "BioInspiredNanochat.Metriplectic.poisson_entropy_degeneracy",
+        "BioInspiredNanochat.Metriplectic.friction_energy_degeneracy",
+        "BioInspiredNanochat.Metriplectic.energyRate_zero",
+        "BioInspiredNanochat.Metriplectic.entropyRate_nonnegative",
+        "BioInspiredNanochat.Metriplectic.freeEnergyRate_nonpositive",
+        "BioInspiredNanochat.Metriplectic.freeEnergy_nonincreasing",
+        "BioInspiredNanochat.Metriplectic.trajectory_energy_constant",
+        "BioInspiredNanochat.Metriplectic.trajectory_entropy_from_start",
+        "BioInspiredNanochat.Metriplectic.trajectory_freeEnergy_nonincreasing",
+        "BioInspiredNanochat.Metriplectic.trajectory_component_bounds"
+      ],
+      "route": "runtime-first-proof-preserving",
+      "proof_friction_class": "documentation-drift",
+      "runtime_defect_found": false,
+      "artifact_hash": "sha256:831498bc2853d86701250ea89024ab5f5f6190d2e3a5a9ae66f93a7d5d42d963",
+      "hash_scope": "formal/lean/BioInspiredNanochat.lean",
+      "sorry_or_admit_present": false,
+      "axioms": [
+        "propext",
+        "Classical.choice",
+        "Quot.sound"
+      ],
+      "assurance": {
+        "exact_real_algebra": "E-unchanged",
+        "live_torch_regressions": "B",
+        "floating_point_refinement": "dtype-aware-guarded-runtime-gap"
+      },
+      "conformance": {
+        "statement_parity": "pass-reduced-core",
+        "state_parity": "pass-live-C-B-HEAT-core",
+        "transition_parity": "pass-closed-form-implicit-midpoint-vs-numpy-reference"
+      },
+      "change_scope": "Runtime hash refresh after the 2026-10-07 work (commits 636e955..HEAD); no Lean-mapped statement, thermodynamic function or metriplectic integrator code touched. (1) synaptic.py - the multi-query detached presyn scan now runs under no_grad and records per-query edge constants; _DetachedScanReleaseGrad attaches the drive gradient from presyn_edge_release (forward values bit-identical); the TorchScript scan accepts pre-drawn uniforms/normals; CUDA (Triton) and CPU (Rust) block scans dispatch behind native_presyn; presyn state is allocated in float32; SynapticConfig.enable_hebbian defaults to False per the hwxb.9 pre-registered decision; (2) ablation_registry.py - hebbian and bdnf become add-one-in (default_on False), bio_no_hebbian/bio_no_bdnf presets removed, the validator skips dependent knobs left at their defaults and reports a backend toggle (native_presyn) with an ablated prerequisite as a warning; (3) ablation_matrix.py - the structural arm uses sm_health_mode=credit; the 20-column screening set now carries add_hebbian/add_bdnf instead of bio_no_hebbian/bio_no_bdnf; (4) mapped tests updated for those contracts (test_ablation_registry, test_ablation_matrix, test_scaleup_ablation_e2e) and test_e2e_decode_parity gained the one-pass grad_fn assertion. The Lean file hash is re-read at HEAD (unchanged theorems, no sorry/admit).",
+      "runtime_mapping": [
+        {
+          "path": "bio_inspired_nanochat/ablation_matrix.py",
+          "sha256": "4b6420f488a7cf4f8a20713567c2465732e4ddbdcdbe2b48e5a84b978e02b757"
+        },
+        {
+          "path": "bio_inspired_nanochat/ablation_registry.py",
+          "sha256": "62ff0747f7c1381f67ccaf3de401fb616abd4e59e1e3dc15c56400a71e1be98e"
+        },
+        {
+          "path": "bio_inspired_nanochat/synaptic.py",
+          "sha256": "6c19d10e9fe3a1dc4b553e948b15321f19488364e039d9f11d2130a15ff934da"
+        },
+        {
+          "path": "tests/test_ablation_matrix.py",
+          "sha256": "399cbc1f3d33eef0176f6a502653b8a746245704d1d60e722f201644e04b42b4"
+        },
+        {
+          "path": "tests/test_ablation_registry.py",
+          "sha256": "1f86211f91173d3593503e5a15ba8639574d5950fef8798017c0b1d7e996e4ae"
+        },
+        {
+          "path": "tests/test_e2e_decode_parity.py",
+          "sha256": "6ee79feff3abe0ba66edd8972e1480a3ac9f9e6aa28aade4f5e95d10b7b7b5d9"
+        },
+        {
+          "path": "tests/test_scaleup_ablation_e2e.py",
+          "sha256": "9c9056c181cc9a707c5860b4614924eaaa2866ace6ecd3773d5d33cccd80ad57"
+        }
+      ],
+      "regression_command": "uv run --no-sync python -m scripts.formal_feedback --run-tests",
+      "regression_result": "283 passed, 3 skipped via scripts.formal_feedback --run-tests (2026-10-07); the full -m \"not slow\" suite was re-run on the same tree",
+      "lean_toolchain": "leanprover/lean4:v4.27.0",
+      "mathlib_revision": "a3a10db0e9d66acbebf76c5e6a135066525ac900",
+      "build_command": "rch exec -- lake build",
+      "build_result": "attempted-2026-08-25-rch-refused-non-compilation-command-local-fallback-lake-permission-denied"
     }
   ]
 }

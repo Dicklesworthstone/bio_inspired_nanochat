@@ -121,7 +121,7 @@ def _build_bio_model(cfg: BioE2EConfig):
     from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
     from bio_inspired_nanochat.synaptic import SynapticConfig
 
-    syn = SynapticConfig()  # enable_presyn / enable_hebbian / enable_metabolism default ON
+    syn = SynapticConfig(enable_hebbian=True)  # the full stack: presyn + metabolism default ON, Hebbian opt-in
     for k, v in cfg.syn_overrides.items():
         setattr(syn, k, v)
     gcfg = GPTSynapticConfig(
@@ -393,7 +393,7 @@ def _expected_ranges(cfg: BioE2EConfig) -> dict[str, tuple[float, float]]:
     and sign/runaway bugs)."""
     from bio_inspired_nanochat.synaptic import SynapticConfig
 
-    syn = SynapticConfig()
+    syn = SynapticConfig(enable_hebbian=True)  # mirrors build_model: the full stack
     for k, v in cfg.syn_overrides.items():
         setattr(syn, k, v)
     eps = 1e-4

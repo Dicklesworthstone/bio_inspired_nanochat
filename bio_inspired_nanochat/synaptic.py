@@ -397,7 +397,11 @@ class SynapticConfig:
 
     # Feature Toggles (Modular Control)
     enable_presyn: bool = True
-    enable_hebbian: bool = True
+    # Online Hebbian fast/slow plasticity is opt-in since 2026-10-07: the pre-registered deciding
+    # experiment (bead hwxb.9, results/hebbian_chunked_regime_2026-10-07_preregistered.json) did
+    # not demonstrate a recall benefit (ON - OFF +0.010 vs a 0.016 minimum detectable effect), so
+    # by its decision rule the mechanism moves from bio_all's default stack to an add-one-in column.
+    enable_hebbian: bool = False
     enable_metabolism: bool = True
     use_flex_attention: bool = False
     # 0642.6.2.2: authorize the standalone tropical routing controller. Default-off and

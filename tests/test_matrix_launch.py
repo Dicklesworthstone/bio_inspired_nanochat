@@ -82,7 +82,7 @@ def test_structural_pair_is_opt_in_and_carries_the_lifecycle_globals():
     sm_argv = am.base_train_argv(structural[1], seed=7)
     assert "--use_moe=1" in fixed_argv and not any(a.startswith("--splitmerge_every") for a in fixed_argv)
     assert f"--splitmerge_every={am.STRUCTURAL_SPLITMERGE_EVERY}" in sm_argv
-    assert "--sm_health_mode=relative" in sm_argv
+    assert "--sm_health_mode=credit" in sm_argv
     assert "--split_health_min=1.5" in sm_argv and "--merge_health_max=0.35" in sm_argv
     # Both share bio_all's SynapticConfig: the contrast is purely structural.
     assert structural[0].build_syn_cfg() == structural[1].build_syn_cfg() == SynapticConfig()

@@ -8,7 +8,7 @@ import torch
 from bio_inspired_nanochat import persistent_memory as persistent_memory_module
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
 from bio_inspired_nanochat.persistent_memory import PersistentLifelongMemoryManager
-from bio_inspired_nanochat.synaptic import SynapticLinear
+from bio_inspired_nanochat.synaptic import SynapticConfig, SynapticLinear
 
 
 def _make_model() -> GPTSynaptic:
@@ -20,6 +20,7 @@ def _make_model() -> GPTSynaptic:
         n_kv_head=2,
         n_embd=16,
         synapses=True,
+        syn_cfg=SynapticConfig(enable_hebbian=True),  # these probes act on the Hebbian state (opt-in since hwxb.9)
         use_moe=False,
     )
     return GPTSynaptic(cfg)

@@ -45,8 +45,9 @@ def test_full_default_config_round_trips():
 @pytest.mark.unit
 def test_missing_config_falls_back_to_defaults():
     # pre-vg9.6 checkpoints (no persisted config) must not crash; they fall back to defaults.
-    assert synaptic_config_from_meta({"synapses": True}) == SynapticConfig()
-    assert synaptic_config_from_meta(None) == SynapticConfig()
+    # They predate hwxb.9, so the fallback keeps Hebbian on (their w_fast/post.* tensors must load).
+    assert synaptic_config_from_meta({"synapses": True}) == SynapticConfig(enable_hebbian=True)
+    assert synaptic_config_from_meta(None) == SynapticConfig(enable_hebbian=True)
 
 
 @pytest.mark.unit

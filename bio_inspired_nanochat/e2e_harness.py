@@ -427,13 +427,26 @@ def _invariant_battery(
     ))
 
     if cfg.synapses:
+        # Engagement is asserted only for runs that turn the (opt-in since hwxb.9) Hebbian
+        # plasticity on; a run with it off must leave the state exactly where it started.
+        from bio_inspired_nanochat.synaptic import SynapticConfig
+
+        hebbian_on = bool(cfg.syn_overrides.get("enable_hebbian", SynapticConfig().enable_hebbian))
         delta = abs(fp_end - fp_start)
-        engaged = delta > 1e-9
-        out.append(InvariantResult(
-            "mechanism_engaged", engaged, delta,
-            f"online Hebbian state grew by {delta:.3e}" if engaged
-            else "online Hebbian state did not move (enable_hebbian off, or mechanism inert)",
-        ))
+        if hebbian_on:
+            engaged = delta > 1e-9
+            out.append(InvariantResult(
+                "mechanism_engaged", engaged, delta,
+                f"online Hebbian state grew by {delta:.3e}" if engaged
+                else "online Hebbian state did not move (mechanism inert)",
+            ))
+        else:
+            quiet = delta == 0.0
+            out.append(InvariantResult(
+                "mechanism_off_is_inert", quiet, delta,
+                "Hebbian off: online state unchanged" if quiet
+                else f"Hebbian off but the online state moved by {delta:.3e}",
+            ))
         stable = math.isfinite(max_abs) and max_abs <= cfg.param_absmax_bound
         out.append(InvariantResult(
             "mechanism_stable", stable, max_abs,

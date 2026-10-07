@@ -11,7 +11,7 @@ from bio_inspired_nanochat.optogenetic_stimulation import (
     OptogeneticStimulator,
     SynapticClamp,
 )
-from bio_inspired_nanochat.synaptic import SynapticLinear
+from bio_inspired_nanochat.synaptic import SynapticConfig, SynapticLinear
 
 
 def _make_model() -> GPTSynaptic:
@@ -23,6 +23,7 @@ def _make_model() -> GPTSynaptic:
         n_kv_head=2,
         n_embd=16,
         synapses=True,
+        syn_cfg=SynapticConfig(enable_hebbian=True),  # these probes act on the Hebbian state (opt-in since hwxb.9)
         use_moe=False,
     )
     return GPTSynaptic(cfg)
@@ -85,6 +86,7 @@ def test_layer_targeted_clamping():
         n_kv_head=2,
         n_embd=16,
         synapses=True,
+        syn_cfg=SynapticConfig(enable_hebbian=True),  # these probes act on the Hebbian state (opt-in since hwxb.9)
         use_moe=False,
     )
     model = GPTSynaptic(cfg)
@@ -123,6 +125,7 @@ def test_site_type_filtering():
         n_kv_head=2,
         n_embd=16,
         synapses=True,
+        syn_cfg=SynapticConfig(enable_hebbian=True),  # these probes act on the Hebbian state (opt-in since hwxb.9)
         use_moe=False,
     )
     model = GPTSynaptic(cfg)

@@ -17,7 +17,7 @@ from bio_inspired_nanochat.gpt import (
     GPTConfig,
 )
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
-from bio_inspired_nanochat.synaptic import SynapticLinear, SynapticMoE
+from bio_inspired_nanochat.synaptic import SynapticConfig, SynapticLinear, SynapticMoE
 from scripts.enable_synapses import build_synaptic, retrofit_checkpoint
 
 
@@ -56,7 +56,10 @@ def test_retrofit_copies_pretrained_tensors_into_slow_path(tmp_path):
     source_dir, source, _ = _source_checkpoint(tmp_path)
     output_dir = tmp_path / "synaptic"
 
-    model, report = retrofit_checkpoint(source_dir, output_dir, source_step=-1)
+    # Hebbian is opt-in (hwxb.9); turn it on so the fast-weight half of the retrofit is exercised.
+    model, report = retrofit_checkpoint(
+        source_dir, output_dir, source_step=-1, syn_cfg=SynapticConfig(enable_hebbian=True)
+    )
 
     source_block = cast(GPTBlock, source.blocks[0])
     source_attention = cast(GPTAttention, source_block.attn)
@@ -152,6 +155,7 @@ def test_retrofit_brief_finetune_activates_dynamics_and_roundtrips(tmp_path):
     model, report = retrofit_checkpoint(
         source_dir,
         output_dir,
+        syn_cfg=SynapticConfig(enable_hebbian=True),
         finetune_steps=3,
         finetune_lr=1e-4,
         finetune_seed=23,
@@ -170,7 +174,7 @@ def test_retrofit_brief_finetune_activates_dynamics_and_roundtrips(tmp_path):
     saved_state, _, _ = load_checkpoint(
         str(output_dir), 0, torch.device("cpu"), load_optimizer=False
     )
-    rebuilt = build_synaptic(config)
+    rebuilt = build_synaptic(config, syn_cfg=SynapticConfig(enable_hebbian=True))
     rebuilt.load_state_dict(saved_state, strict=True)
     rebuilt.eval()
     with torch.no_grad():

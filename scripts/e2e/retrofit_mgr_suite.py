@@ -153,6 +153,7 @@ def run_retrofit_mgr_e2e(
             src_ckpt_dir,
             dst_ckpt_dir,
             syn_cfg=SynapticConfig(
+                enable_hebbian=True,
                 post_fast_lr=0.02,
                 post_fast_decay=0.9,
                 post_trace_decay=0.9,
@@ -198,7 +199,7 @@ def run_retrofit_mgr_e2e(
 
         adapter_report = inject_bio_adapters(
             toy_ffn,
-            SynapticConfig(post_fast_lr=0.01, post_fast_decay=0.9, post_trace_decay=0.9),
+            SynapticConfig(enable_hebbian=True, post_fast_lr=0.01, post_fast_decay=0.9, post_trace_decay=0.9),
             target_patterns=["mlp.c_fc", "mlp.c_proj"],
         )
 

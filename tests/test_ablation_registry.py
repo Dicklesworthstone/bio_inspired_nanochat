@@ -32,8 +32,12 @@ def test_registry_defaults_match_synaptic_config():
             f"registry default for {m.field} ({m.default}) != SynapticConfig default "
             f"({getattr(cfg, m.field)})"
         )
-        assert (m.default != m.off_value) == m.default_on, (
-            f"{m.field}: default_on={m.default_on} inconsistent with default/off values"
+        # "On in a default config" = the knob is at an on-value AND every prerequisite is on
+        # (bdnf_scale defaults to its gain 1.0 but acts only through the opt-in Hebbian path).
+        by_field = {flag.field: flag for flag in MECHANISMS}
+        effective_on = (m.default != m.off_value) and all(by_field[p].default_on for p in m.requires)
+        assert effective_on == m.default_on, (
+            f"{m.field}: default_on={m.default_on} inconsistent with default/off values and prerequisites"
         )
 
 
@@ -107,13 +111,17 @@ def test_is_mechanism_on_reads_off_value():
     assert is_mechanism_on(SynapticConfig(tropical_skeleton=True), "tropical_skeleton") is True
 
 
-def test_native_presyn_is_registered_default_off_and_requires_presyn():
+def test_native_presyn_is_a_default_off_backend_valid_in_every_column():
+    """The fused-backend toggle may be set process-wide (BIO_FUSED_PRESYN=1) for a whole matrix
+    run, so a column that ablates presyn (synaptic_off, bio_no_presyn) must stay valid with it on;
+    it simply has nothing to accelerate there."""
     cfg = SynapticConfig()
     assert not cfg.native_presyn
     assert not is_mechanism_on(cfg, "native_presyn")
     assert is_mechanism_on(SynapticConfig(native_presyn=True), "native_presyn")
-    errors, _ = validate_config(SynapticConfig(native_presyn=True, enable_presyn=False))
-    assert any("native_presyn" in error and "enable_presyn" in error for error in errors)
+    errors, warnings = validate_config(SynapticConfig(native_presyn=True, enable_presyn=False))
+    assert not any("native_presyn" in error for error in errors), errors
+    assert any("native_presyn" in warning and "enable_presyn" in warning for warning in warnings)
 
 
 def test_unknown_preset_raises():

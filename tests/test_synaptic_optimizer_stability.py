@@ -29,7 +29,9 @@ def _model() -> GPTSynaptic:
     torch.manual_seed(1338)
     cfg = GPTSynapticConfig(
         sequence_len=SEQ, vocab_size=VOCAB, n_layer=2, n_head=1, n_kv_head=1, n_embd=128,
-        synapses=True, syn_cfg=SynapticConfig(),
+        # The full stack, Hebbian included (opt-in since hwxb.9): its post.fast/slow gains are
+        # the multiplicative 1-D parameters most exposed to the scalar LR.
+        synapses=True, syn_cfg=SynapticConfig(enable_hebbian=True),
     )
     model = GPTSynaptic(cfg)
     model.init_weights()

@@ -163,7 +163,8 @@ def test_kinetics_stay_contractive_throughout_training():
 def test_online_fast_weights_adapt_and_stay_bounded_only_when_hebbian_on():
     from bio_inspired_nanochat.e2e_harness import E2EConfig, run_e2e
 
-    on = run_e2e(E2EConfig(synapses=True, steps=40), verbose=False)
+    on = run_e2e(E2EConfig(synapses=True, steps=40, syn_overrides={"enable_hebbian": True}),
+                 verbose=False)
     off = run_e2e(E2EConfig(synapses=True, steps=40, syn_overrides={"enable_hebbian": False}),
                   verbose=False)
 
@@ -174,10 +175,11 @@ def test_online_fast_weights_adapt_and_stay_bounded_only_when_hebbian_on():
     (stable,) = [r for r in on.invariants if r.name == "mechanism_stable"]
     assert stable.passed, "online fast-weights must stay bounded"
 
-    # OFF: no online adaptation, and the ONLY thing the harness flags is "mechanism not engaged" —
-    # every other health invariant still passes (the mechanism is cleanly off, not broken).
+    # OFF: no online adaptation, and every health invariant passes (the mechanism is cleanly
+    # off, not broken), including the check that the online state did not move at all.
     assert off.summary["hebbian_delta"] == 0.0, "no online adaptation when hebbian is off"
-    assert {r.name for r in off.failures()} == {"mechanism_engaged"}, off.failures()
+    assert off.passed, off.failures()
+    assert "mechanism_off_is_inert" in {r.name for r in off.invariants}
 
 
 # --------------------------------------------------------------------------- #

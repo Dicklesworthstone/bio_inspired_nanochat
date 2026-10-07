@@ -169,11 +169,16 @@ TINY = dict(sequence_len=32, vocab_size=97, n_layer=2, n_head=4, n_kv_head=4, n_
 def make_tiny_synaptic(seed: int = 0, *, train: bool = False, **overrides):
     """Build a tiny ``GPTSynaptic`` model on CPU. Returns the model (eval by default).
 
-    ``overrides`` patch the :class:`GPTSynapticConfig` fields (e.g. ``n_layer=1``).
+    ``overrides`` patch the :class:`GPTSynapticConfig` fields (e.g. ``n_layer=1``). This is the
+    mechanism fixture, so unless ``syn_cfg`` is given it runs the full plasticity stack: online
+    Hebbian plasticity is switched on explicitly, as it has been opt-in in ``SynapticConfig``
+    since the hwxb.9 decision (2026-10-07).
     """
     from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
+    from bio_inspired_nanochat.synaptic import SynapticConfig
 
     set_seed(seed)
+    overrides.setdefault("syn_cfg", SynapticConfig(enable_hebbian=True))
     # ty cannot statically match **dict unpacking to the dataclass fields here.
     cfg = GPTSynapticConfig(**{**TINY, **overrides})  # ty: ignore[invalid-argument-type]
     model = GPTSynaptic(cfg)

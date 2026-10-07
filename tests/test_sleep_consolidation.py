@@ -15,7 +15,7 @@ from bio_inspired_nanochat.sleep_consolidation import (
     consolidate_sleep_replay,
     homeostatic_downscale,
 )
-from bio_inspired_nanochat.synaptic import SynapticLinear
+from bio_inspired_nanochat.synaptic import SynapticConfig, SynapticLinear
 
 
 def test_replay_buffer_capacity_and_sampling():
@@ -38,6 +38,7 @@ def test_replay_buffer_capacity_and_sampling():
 def test_sleep_consolidation_transfers_fast_to_slow():
     """Verify that offline sleep phase transfers W_fast into W_slow and resets W_fast."""
     model_cfg = GPTSynapticConfig(
+        syn_cfg=SynapticConfig(enable_hebbian=True),  # Hebbian is opt-in since hwxb.9
         sequence_len=8,
         vocab_size=32,
         n_layer=1,
@@ -75,6 +76,7 @@ def test_sleep_consolidation_transfers_fast_to_slow():
 def test_shy_homeostatic_downscaling():
     """Verify that SHY homeostatic downscaling caps the Frobenius norm of slow weights."""
     model_cfg = GPTSynapticConfig(
+        syn_cfg=SynapticConfig(enable_hebbian=True),  # Hebbian is opt-in since hwxb.9
         sequence_len=8,
         vocab_size=32,
         n_layer=1,
@@ -101,6 +103,7 @@ def test_shy_homeostatic_downscaling():
 def test_sleep_phase_restores_training_modes_on_success_and_error():
     """Offline replay must not silently change the caller's training configuration."""
     model_cfg = GPTSynapticConfig(
+        syn_cfg=SynapticConfig(enable_hebbian=True),  # Hebbian is opt-in since hwxb.9
         sequence_len=8,
         vocab_size=32,
         n_layer=1,
@@ -166,6 +169,7 @@ def test_sleep_controller_rejects_invalid_configuration(kwargs, match):
 def test_sleep_execution_rejects_invalid_loop_and_dream_parameters():
     model = GPTSynaptic(
         GPTSynapticConfig(
+            syn_cfg=SynapticConfig(enable_hebbian=True),  # Hebbian is opt-in since hwxb.9
             sequence_len=8,
             vocab_size=32,
             n_layer=1,
@@ -193,6 +197,7 @@ def test_sleep_execution_rejects_invalid_loop_and_dream_parameters():
 def test_sleep_phase_crops_mixed_length_replay_without_fabricating_padding():
     model = GPTSynaptic(
         GPTSynapticConfig(
+            syn_cfg=SynapticConfig(enable_hebbian=True),  # Hebbian is opt-in since hwxb.9
             sequence_len=8,
             vocab_size=32,
             n_layer=1,
@@ -289,6 +294,7 @@ def test_legacy_replay_buffer_validates_inputs_and_stores_snapshots():
 def test_legacy_sleep_helpers_reject_invalid_downscaling_and_pass_counts():
     model = GPTSynaptic(
         GPTSynapticConfig(
+            syn_cfg=SynapticConfig(enable_hebbian=True),  # Hebbian is opt-in since hwxb.9
             sequence_len=8,
             vocab_size=32,
             n_layer=1,
@@ -310,6 +316,7 @@ def test_legacy_sleep_helpers_reject_invalid_downscaling_and_pass_counts():
 def test_sleep_uses_scaled_native_slow_delta_without_clearing_fast(monkeypatch):
     model = GPTSynaptic(
         GPTSynapticConfig(
+            syn_cfg=SynapticConfig(enable_hebbian=True),  # Hebbian is opt-in since hwxb.9
             sequence_len=8,
             vocab_size=32,
             n_layer=1,
@@ -348,6 +355,7 @@ def test_sleep_uses_scaled_native_slow_delta_without_clearing_fast(monkeypatch):
 def test_sleep_flushes_pending_wake_write_once_and_clears_traces():
     model = GPTSynaptic(
         GPTSynapticConfig(
+            syn_cfg=SynapticConfig(enable_hebbian=True),  # Hebbian is opt-in since hwxb.9
             sequence_len=8,
             vocab_size=32,
             n_layer=1,
@@ -385,6 +393,7 @@ def test_sleep_flushes_pending_wake_write_once_and_clears_traces():
 def test_sleep_failure_rolls_back_partial_synaptic_mutation(monkeypatch):
     model = GPTSynaptic(
         GPTSynapticConfig(
+            syn_cfg=SynapticConfig(enable_hebbian=True),  # Hebbian is opt-in since hwxb.9
             sequence_len=8,
             vocab_size=32,
             n_layer=1,

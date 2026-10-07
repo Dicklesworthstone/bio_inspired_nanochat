@@ -39,7 +39,11 @@ from _bio_testkit import make_tiny_synaptic, random_tokens, set_seed
 # Helpers
 # --------------------------------------------------------------------------- #
 def _syn_cfg(**overrides) -> SynapticConfig:
-    return SynapticConfig(**overrides)
+    # Plasticity isolation needs the plasticity on: Hebbian is opt-in since hwxb.9 (2026-10-07).
+    cfg = SynapticConfig(enable_hebbian=True)
+    for name, value in overrides.items():
+        setattr(cfg, name, value)
+    return cfg
 
 def _plasticity_snapshot(model: torch.nn.Module) -> dict[str, torch.Tensor]:
     """Clone every persistent tensor of the model: all buffers + parameters

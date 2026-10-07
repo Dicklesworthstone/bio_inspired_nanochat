@@ -60,9 +60,9 @@ def test_all_ablation_presets_apply_and_validate_clean():
 def test_apply_preset_sets_the_expected_field():
     """apply_preset writes exactly the preset's overrides (spot-check a few)."""
     base = SynapticConfig()
-    if "bio_no_hebbian" in ABLATION_PRESETS:
-        cfg = apply_preset("bio_no_hebbian", SynapticConfig())
-        assert cfg.enable_hebbian is False and base.enable_hebbian is True
+    if "bio_no_doc2" in ABLATION_PRESETS:
+        cfg = apply_preset("bio_no_doc2", SynapticConfig())
+        assert cfg.doc2_gain == 0.0 and base.doc2_gain > 0.0
     if "bio_no_presyn" in ABLATION_PRESETS:
         cfg = apply_preset("bio_no_presyn", SynapticConfig())
         assert cfg.enable_presyn is False

@@ -19,6 +19,7 @@ import torch
 from rich.console import Console
 
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
+from bio_inspired_nanochat.synaptic import SynapticConfig
 from bio_inspired_nanochat.run_logging import RunLogger
 from bio_inspired_nanochat.synaptic import SynapticLinear
 from bio_inspired_nanochat.working_memory_api import (
@@ -87,6 +88,7 @@ def _tiny_model(seed: int) -> GPTSynaptic:
             n_embd=16,
             logit_softcap=0.0,
             synapses=True,
+            syn_cfg=SynapticConfig(enable_hebbian=True),  # the fast weights are the working memory
             use_moe=False,
         )
     )

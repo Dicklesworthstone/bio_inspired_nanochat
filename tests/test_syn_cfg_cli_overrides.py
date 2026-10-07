@@ -126,11 +126,12 @@ def test_coerce_unknown_field_lists_closest_names():
 def test_apply_overlays_typed_values_and_keeps_other_defaults():
     cfg = apply_syn_cfg_overrides(
         SynapticConfig(),
-        {"tau_rrp": "100.0", "energy_cost_rel": "0.05", "bistable_latch": "1", "rank_eligibility": "16"},
+        {"tau_rrp": "100.0", "energy_cost_rel": "0.05", "enable_hebbian": "1", "bistable_latch": "1",
+         "rank_eligibility": "16"},
     )
     assert cfg.tau_rrp == 100.0
     assert cfg.energy_cost_rel == 0.05
-    assert cfg.bistable_latch is True
+    assert cfg.enable_hebbian is True and cfg.bistable_latch is True
     assert cfg.rank_eligibility == 16
     assert cfg.camkii_up == SynapticConfig().camkii_up
 
@@ -145,8 +146,13 @@ def test_apply_rejects_opt_in_mechanism_without_prerequisite():
     # silent no-op, which is exactly the foot-gun the validator exists to catch.
     with pytest.raises(ValueError, match="prerequisite"):
         apply_syn_cfg_overrides(SynapticConfig(), {"cusp_latch": "1"})
-    # The same pair enabled together is legal.
-    cfg = apply_syn_cfg_overrides(SynapticConfig(), {"cusp_latch": "1", "bistable_latch": "1"})
+    # The latch itself needs the (opt-in since hwxb.9) Hebbian path.
+    with pytest.raises(ValueError, match="prerequisite"):
+        apply_syn_cfg_overrides(SynapticConfig(), {"cusp_latch": "1", "bistable_latch": "1"})
+    # The whole chain enabled together is legal.
+    cfg = apply_syn_cfg_overrides(
+        SynapticConfig(), {"cusp_latch": "1", "bistable_latch": "1", "enable_hebbian": "1"}
+    )
     assert cfg.cusp_latch is True and cfg.bistable_latch is True
 
 

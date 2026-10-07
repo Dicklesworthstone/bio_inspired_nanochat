@@ -57,7 +57,7 @@ def test_signal_changes_priority_but_not_preregistered_endpoint():
     baseline = generate_hypotheses(
         [],
         results_digest=digest,
-        selected_mechanisms=["bdnf", "presyn"],
+        selected_mechanisms=["doc2", "presyn"],
         limit=2,
         registered_at="2026-08-24T00:00:00+00:00",
     )
@@ -73,12 +73,12 @@ def test_signal_changes_priority_but_not_preregistered_endpoint():
                 source_id="probe-17",
             )
         ],
-        selected_mechanisms=["bdnf", "presyn"],
+        selected_mechanisms=["doc2", "presyn"],
         limit=2,
         registered_at="2026-08-24T00:00:00+00:00",
     )
 
-    assert baseline[0].mechanism == "bdnf"  # deterministic alphabetical tie break
+    assert baseline[0].mechanism == "doc2"  # two default-on mechanisms tie; alphabetical break
     assert signaled[0].mechanism == "presyn"
     baseline_presyn = next(item for item in baseline if item.mechanism == "presyn")
     signaled_presyn = next(item for item in signaled if item.mechanism == "presyn")
@@ -92,7 +92,7 @@ def test_signal_changes_priority_but_not_preregistered_endpoint():
     repeated_later = generate_hypotheses(
         [],
         results_digest=digest,
-        selected_mechanisms=["bdnf", "presyn"],
+        selected_mechanisms=["doc2", "presyn"],
         limit=2,
         registered_at="2026-08-25T00:00:00+00:00",
     )

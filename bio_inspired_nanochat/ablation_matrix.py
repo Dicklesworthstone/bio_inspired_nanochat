@@ -247,7 +247,7 @@ STRUCTURAL_SPLITMERGE_EVERY: int = 100  # optimizer steps between lifecycle call
 STRUCTURAL_TRAIN_OVERRIDES: dict[str, Any] = {
     "use_moe": 1,
     "splitmerge_every": STRUCTURAL_SPLITMERGE_EVERY,
-    "sm_health_mode": "relative",
+    "sm_health_mode": "credit",
     "split_health_min": 1.5,
     "merge_health_max": 0.35,
 }

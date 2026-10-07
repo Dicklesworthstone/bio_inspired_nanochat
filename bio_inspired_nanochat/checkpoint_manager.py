@@ -60,7 +60,9 @@ def synaptic_config_from_meta(meta_data) -> SynapticConfig:
             "[checkpoint] no 'synaptic_config' in meta_data; rebuilding with SynapticConfig() "
             "DEFAULTS (pre-vg9.6 checkpoint — bio kinetics may NOT match the trained model)."
         )
-        return SynapticConfig()
+        # Such checkpoints predate hwxb.9 (2026-10-07), when online Hebbian plasticity was on by
+        # default; without it their w_fast/post.* tensors would not load.
+        return SynapticConfig(enable_hebbian=True)
     known = {f.name for f in fields(SynapticConfig)}
     unknown = sorted(set(saved) - known)
     if unknown:

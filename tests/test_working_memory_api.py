@@ -9,7 +9,7 @@ import torch
 
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
 from bio_inspired_nanochat.run_logging import RunLogger, read_run_events
-from bio_inspired_nanochat.synaptic import SynapticLinear
+from bio_inspired_nanochat.synaptic import SynapticConfig, SynapticLinear
 from bio_inspired_nanochat.working_memory_api import (
     WORKING_MEMORY_SCHEMA,
     WorkingMemoryPolicy,
@@ -21,6 +21,7 @@ from scripts.e2e.working_memory_api_demo import run_demo
 
 def _make_model() -> GPTSynaptic:
     cfg = GPTSynapticConfig(
+        syn_cfg=SynapticConfig(enable_hebbian=True),  # Hebbian is opt-in since hwxb.9
         sequence_len=8,
         vocab_size=32,
         n_layer=1,

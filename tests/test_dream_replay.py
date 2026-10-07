@@ -4,7 +4,7 @@ import torch
 
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
 from bio_inspired_nanochat.sleep_consolidation import SleepConsolidationController
-from bio_inspired_nanochat.synaptic import SynapticLinear
+from bio_inspired_nanochat.synaptic import SynapticConfig, SynapticLinear
 
 
 def _make_model() -> GPTSynaptic:
@@ -16,6 +16,7 @@ def _make_model() -> GPTSynaptic:
         n_kv_head=2,
         n_embd=16,
         synapses=True,
+        syn_cfg=SynapticConfig(enable_hebbian=True),
         use_moe=False,
     )
     return GPTSynaptic(cfg)

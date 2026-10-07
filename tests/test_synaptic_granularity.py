@@ -24,9 +24,9 @@ from scripts.eval_synaptic_granularity import (
 @pytest.mark.unit
 def test_granularity_buffer_allocation_scales_appropriately():
     """Verify eligibility and molecular state allocation follows the configured granularity."""
-    cfg_conn = SynapticConfig(granularity=SynapticGranularity.PER_CONNECTION, rank_eligibility=8)
-    cfg_neur = SynapticConfig(granularity=SynapticGranularity.PER_NEURON, rank_eligibility=8)
-    cfg_exp = SynapticConfig(granularity=SynapticGranularity.PER_EXPERT, rank_eligibility=8)
+    cfg_conn = SynapticConfig(granularity=SynapticGranularity.PER_CONNECTION, rank_eligibility=8, enable_hebbian=True)
+    cfg_neur = SynapticConfig(granularity=SynapticGranularity.PER_NEURON, rank_eligibility=8, enable_hebbian=True)
+    cfg_exp = SynapticConfig(granularity=SynapticGranularity.PER_EXPERT, rank_eligibility=8, enable_hebbian=True)
 
     gpt_conn = GPTSynaptic(GPTSynapticConfig(sequence_len=8, vocab_size=32, n_layer=1, n_head=2, n_kv_head=2, n_embd=16, synapses=True, syn_cfg=cfg_conn))
     gpt_neur = GPTSynaptic(GPTSynapticConfig(sequence_len=8, vocab_size=32, n_layer=1, n_head=2, n_kv_head=2, n_embd=16, synapses=True, syn_cfg=cfg_neur))

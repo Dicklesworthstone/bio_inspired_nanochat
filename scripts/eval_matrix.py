@@ -72,12 +72,10 @@ PresetId = Literal[
     "vanilla",
     "bio_all",
     "bio_no_presyn",
-    "bio_no_hebbian",
     "bio_no_metabolism",
     "bio_no_genome",
     "bio_no_stochastic_release",
     "bio_no_doc2",
-    "bio_no_bdnf",
     "bio_no_septin_barrier",
 ]
 
@@ -85,12 +83,10 @@ DEFAULT_ABLATION_PRESETS: tuple[PresetId, ...] = (
     "vanilla",
     "bio_all",
     "bio_no_presyn",
-    "bio_no_hebbian",
     "bio_no_metabolism",
     "bio_no_genome",
     "bio_no_stochastic_release",
     "bio_no_doc2",
-    "bio_no_bdnf",
     "bio_no_septin_barrier",
 )
 

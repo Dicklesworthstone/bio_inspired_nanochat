@@ -717,7 +717,9 @@ def run_live_release_ft(config: ExperimentConfig) -> LiveReleaseFTResult:
 
 
 def _make_model(config: ExperimentConfig) -> GPTSynaptic:
-    synaptic = SynapticConfig(stochastic_mode="straight_through")
+    # Hebbian stays on: the committed UQ artifacts were measured with it (it was default-on until
+    # the hwxb.9 decision of 2026-10-07).
+    synaptic = SynapticConfig(stochastic_mode="straight_through", enable_hebbian=True)
     model_config = GPTSynapticConfig(
         sequence_len=config.seq_len,
         vocab_size=config.vocab_size,

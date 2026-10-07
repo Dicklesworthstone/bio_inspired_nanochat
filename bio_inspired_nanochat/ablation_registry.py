@@ -46,8 +46,8 @@ MECHANISMS: tuple[MechanismFlag, ...] = (
         "Presynaptic vesicle release augmenting the attention logits.",
     ),
     MechanismFlag(
-        "hebbian", "enable_hebbian", True, False, True, (),
-        "Postsynaptic Hebbian fast/slow plasticity.",
+        "hebbian", "enable_hebbian", False, False, False, (),
+        "Postsynaptic Hebbian fast/slow plasticity (opt-in since the hwxb.9 decision, 2026-10-07).",
     ),
     MechanismFlag(
         "metabolism", "enable_metabolism", True, False, True, (),
@@ -74,8 +74,9 @@ MECHANISMS: tuple[MechanismFlag, ...] = (
         "Septin-like distance barrier in the attention logits.",
     ),
     MechanismFlag(
-        "bdnf", "bdnf_scale", 1.0, 0.0, True, ("enable_hebbian",),
-        "BDNF metaplasticity scaling of the slow-weight learning rate.",
+        "bdnf", "bdnf_scale", 1.0, 0.0, False, ("enable_hebbian",),
+        "BDNF metaplasticity scaling of the slow-weight learning rate; its default gain applies "
+        "whenever Hebbian plasticity is turned on.",
     ),
     MechanismFlag(
         "bistable_latch", "bistable_latch", False, False, False, ("enable_hebbian",),
@@ -91,8 +92,8 @@ MECHANISMS: tuple[MechanismFlag, ...] = (
     ),
     MechanismFlag(
         "native_presyn", "native_presyn", False, False, False, ("enable_presyn",),
-        "Native deterministic FP32 one-query decode: the Triton kernel on CUDA, the Rust "
-        "(rustbpe) kernel on CPU; every other case stays on the PyTorch path.",
+        "Fused presyn backends: the multi-query scan (Triton on CUDA, Rust on CPU) for training "
+        "and prefill, and the one-query deterministic decode; other cases stay on PyTorch.",
     ),
     MechanismFlag(
         "native_genetics", "native_genetics", False, False, False, ("enable_metabolism",),
@@ -146,6 +147,11 @@ MECHANISMS: tuple[MechanismFlag, ...] = (
 
 _BY_FIELD: dict[str, MechanismFlag] = {m.field: m for m in MECHANISMS}
 
+# Backend selections rather than biology. They may be switched on process-wide (native_presyn
+# reads BIO_FUSED_PRESYN) for a whole matrix run, so one left on in a column that ablates its
+# prerequisite (synaptic_off, bio_no_presyn) is a warning, not a configuration error.
+BACKEND_TOGGLES: frozenset[str] = frozenset({"native_presyn"})
+
 # Canonical ablation presets: preset id -> {SynapticConfig field: override value}.
 # `bio_all` is the unmodified default; `vanilla` is handled at the model level
 # (GPTSynapticConfig.synapses=False) and applies no synaptic overrides.
@@ -153,12 +159,10 @@ ABLATION_PRESETS: dict[str, dict[str, Any]] = {
     "vanilla": {},
     "bio_all": {},
     "bio_no_presyn": {"enable_presyn": False},
-    "bio_no_hebbian": {"enable_hebbian": False},
     "bio_no_metabolism": {"enable_metabolism": False},
     "bio_no_genome": {"xi_dim": 0},
     "bio_no_stochastic_release": {"stochastic_train_frac": 0.0},
     "bio_no_doc2": {"doc2_gain": 0.0},
-    "bio_no_bdnf": {"bdnf_scale": 0.0},
     "bio_no_septin_barrier": {"barrier_strength": 0.0},
     "granularity_per_neuron": {"granularity": SynapticGranularity.PER_NEURON},
     "granularity_per_expert": {"granularity": SynapticGranularity.PER_EXPERT},
@@ -197,13 +201,21 @@ def validate_config(cfg: SynapticConfig) -> tuple[list[str], list[str]]:
 
     # 1. Prerequisite checks. An OPT-IN mechanism (default-off) that the user explicitly
     #    enabled without its prerequisite is a foot-gun -> error. A DEFAULT-ON dependent
-    #    whose prerequisite was ablated (e.g. bio_no_presyn also silences doc2/stochastic,
-    #    or bio_no_hebbian silences bdnf) is the EXPECTED ablation consequence, not an error.
+    #    whose prerequisite was ablated (e.g. bio_no_presyn also silences doc2/stochastic)
+    #    is the EXPECTED ablation consequence, not an error, and so is a dependent knob left at
+    #    its default value while its opt-in prerequisite is off (bdnf_scale=1.0 is the gain
+    #    Hebbian plasticity uses once it is enabled).
     for m in MECHANISMS:
         if m.default_on or not is_mechanism_on(cfg, m.field):
             continue
+        if getattr(cfg, m.field) == m.default:
+            continue
         for prereq in m.requires:
-            if not is_mechanism_on(cfg, prereq):
+            if not is_mechanism_on(cfg, prereq) and m.field in BACKEND_TOGGLES:
+                warnings.append(
+                    f"backend {m.field!r} is on but {prereq!r} is off; it has nothing to accelerate here"
+                )
+            elif not is_mechanism_on(cfg, prereq):
                 errors.append(
                     f"{m.mechanism!r} is enabled ({m.field}={getattr(cfg, m.field)!r}) but "
                     f"its prerequisite {prereq!r} is off — it will silently do nothing. "

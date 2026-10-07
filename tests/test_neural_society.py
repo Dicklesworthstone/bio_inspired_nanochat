@@ -11,7 +11,7 @@ from bio_inspired_nanochat.neural_society import (
     NeuralSociety,
     SharedSynapticMemoryBus,
 )
-from bio_inspired_nanochat.synaptic import SynapticLinear
+from bio_inspired_nanochat.synaptic import SynapticConfig, SynapticLinear
 
 
 def _make_agent() -> GPTSynaptic:
@@ -23,6 +23,7 @@ def _make_agent() -> GPTSynaptic:
         n_kv_head=2,
         n_embd=16,
         synapses=True,
+        syn_cfg=SynapticConfig(enable_hebbian=True),  # agents share fast weights (Hebbian opt-in)
         use_moe=False,
     )
     return GPTSynaptic(cfg)

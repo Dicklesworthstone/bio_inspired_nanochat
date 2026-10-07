@@ -51,7 +51,10 @@ def test_neuromod_is_registered_default_off_with_its_modulated_layers_as_prerequ
     # validator exists for.
     errors, _ = validate_config(SynapticConfig(neuromod_enabled=True, enable_hebbian=False))
     assert any("neuromod" in e and "enable_hebbian" in e for e in errors)
+    # Hebbian is opt-in since hwxb.9, so the bus needs it switched on explicitly.
     errors, _ = validate_config(SynapticConfig(neuromod_enabled=True))
+    assert any("neuromod" in e and "enable_hebbian" in e for e in errors)
+    errors, _ = validate_config(SynapticConfig(neuromod_enabled=True, enable_hebbian=True))
     assert errors == []
 
 

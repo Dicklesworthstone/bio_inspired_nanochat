@@ -97,6 +97,7 @@ def quick_start(tmp_path_factory):
             "--device_type=cpu",
             f"--model_tag={MODEL_TAG}",
             "--syn_cfg.tau_rrp=60.0",
+            "--syn_cfg.enable_hebbian=1",
             "--syn_cfg.bistable_latch=1",
         ],
         env,
@@ -115,6 +116,7 @@ def test_tokenizer_is_trained_into_the_base_dir(quick_start):
 def test_base_train_applies_the_syn_cfg_overrides_and_writes_a_checkpoint(quick_start):
     out = quick_start["train"].stdout
     assert "[config] syn_cfg.tau_rrp = 60.0" in out
+    assert "[config] syn_cfg.enable_hebbian = True" in out
     assert "[config] syn_cfg.bistable_latch = True" in out
     ckpt = quick_start["base_dir"] / "base_checkpoints" / MODEL_TAG
     assert (ckpt / "model_000002.pt").exists(), sorted(p.name for p in ckpt.iterdir())
