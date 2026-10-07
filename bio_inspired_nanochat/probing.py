@@ -409,14 +409,14 @@ def optogenetic_clamp(
             handles.append(_MethodPatch(module, "release_canonical", _clamped_release_ca))
 
     if target in ("rrp", "calcium") and hasattr(
-        _synaptic_module, "_scripted_detached_presyn_scan_cpu"
+        _synaptic_module, "_scripted_detached_presyn_scan"
     ):
-        # The fused CPU scan bypasses release_canonical entirely; clamp its
+        # The scripted scan bypasses release_canonical entirely; clamp its
         # returned state too so EVERY execution path stays pinned. Return tuple
-        # order: (out, C, BUF, RRP, RES, PR, CL, E, AMP, DELAY, ema_e).
+        # order: (out, C, BUF, RRP, RES, PR, CL, E, AMP, DELAY, ema_e, edges).
         state_index = 3 if target == "rrp" else 1
 
-        def _scan_clamp(*args, _orig=_synaptic_module._scripted_detached_presyn_scan_cpu,
+        def _scan_clamp(*args, _orig=_synaptic_module._scripted_detached_presyn_scan,
                         _idx=state_index, _v=float(value), **kwargs):
             result = _orig(*args, **kwargs)
             tensor = result[_idx]
@@ -425,7 +425,7 @@ def optogenetic_clamp(
             return result
 
         handles.append(
-            _MethodPatch(_synaptic_module, "_scripted_detached_presyn_scan_cpu", _scan_clamp)
+            _MethodPatch(_synaptic_module, "_scripted_detached_presyn_scan", _scan_clamp)
         )
 
     try:

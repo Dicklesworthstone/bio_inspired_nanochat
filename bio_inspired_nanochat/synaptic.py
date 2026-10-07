@@ -695,7 +695,7 @@ def _runtime_buffer_mapping(tensors: tuple[Tensor, ...]) -> dict[str, Tensor]:
 
 
 @torch.jit.script
-def _scripted_detached_presyn_scan_cpu(
+def _scripted_detached_presyn_scan(
     calcium: torch.Tensor,
     buffer: torch.Tensor,
     rrp: torch.Tensor,
@@ -733,6 +733,7 @@ def _scripted_detached_presyn_scan_cpu(
     energy_fill: float,
     energy_max: float,
     energy_use: float,
+    record_edges: bool = False,
 ) -> tuple[
     torch.Tensor,
     torch.Tensor,
@@ -745,8 +746,17 @@ def _scripted_detached_presyn_scan_cpu(
     torch.Tensor,
     list[torch.Tensor],
     torch.Tensor,
+    list[torch.Tensor],
 ]:
-    """TorchScript loop for the ordinary detached CPU recurrence."""
+    """TorchScript loop for the ordinary detached recurrence (CPU and CUDA).
+
+    ``record_edges`` additionally returns, per query, everything the release of that query
+    depends on besides its own drive: the gathered PRE-update edge state (calcium, buffer,
+    primed, clamp, RRP, energy), the stochastic mask and normal draw, and the post-update EMA
+    normalizer. Because the state recurrence is detached, those are constants with respect to
+    the drive, so ``_DetachedScanReleaseGrad`` can evaluate the gradient of every query at once
+    instead of autograd recording this loop (see ``presyn_edge_release``).
+    """
     calcium = calcium.detach().clone()
     buffer = buffer.detach().clone()
     rrp = rrp.detach().clone()
@@ -757,6 +767,15 @@ def _scripted_detached_presyn_scan_cpu(
     delay = [item.detach().clone() for item in delay]
     ema_e = ema_e.detach().clone()
     outputs = torch.jit.annotate(list[torch.Tensor], [])
+    rec_calcium = torch.jit.annotate(list[torch.Tensor], [])
+    rec_buffer = torch.jit.annotate(list[torch.Tensor], [])
+    rec_primed = torch.jit.annotate(list[torch.Tensor], [])
+    rec_clamp = torch.jit.annotate(list[torch.Tensor], [])
+    rec_rrp = torch.jit.annotate(list[torch.Tensor], [])
+    rec_energy = torch.jit.annotate(list[torch.Tensor], [])
+    rec_mask = torch.jit.annotate(list[torch.Tensor], [])
+    rec_noise = torch.jit.annotate(list[torch.Tensor], [])
+    rec_ema = torch.jit.annotate(list[torch.Tensor], [])
     batch = int(drive.size(0))
     heads = int(drive.size(1))
     query_count = int(drive.size(2))
@@ -782,6 +801,15 @@ def _scripted_detached_presyn_scan_cpu(
         clamp_edge = clamp_prefix.gather(2, flat_idx).view_as(step_drive)
         rrp_edge = rrp_prefix.gather(2, flat_idx).view_as(step_drive)
         energy_edge = energy_prefix.gather(2, flat_idx).view_as(step_drive)
+        if record_edges:
+            rec_calcium.append(calcium_edge)
+            rec_buffer.append(buffer_edge)
+            rec_primed.append(primed_edge)
+            rec_clamp.append(clamp_edge)
+            rec_rrp.append(rrp_edge)
+            rec_energy.append(energy_edge)
+        step_mask = torch.zeros_like(step_valid)
+        step_noise = torch.zeros_like(step_drive)
 
         influx = alpha_ca * F.softplus(step_drive)
         calcium_edge = (
@@ -817,6 +845,7 @@ def _scripted_detached_presyn_scan_cpu(
             if not bool(stochastic_mask.any()):
                 released = released_deterministic
             else:
+                step_mask = stochastic_mask
                 if stochastic_count_cap <= 0:
                     sampled = torch.zeros_like(probability)
                 else:
@@ -842,6 +871,7 @@ def _scripted_detached_presyn_scan_cpu(
                         dtype=mean.dtype,
                         generator=generator,
                     )[..., : mean.size(-1)]
+                    step_noise = noise
                     sampled = (mean + deviation * noise).clamp(min=0.0)
                     sampled = torch.minimum(sampled, count_float).to(
                         probability.dtype
@@ -935,7 +965,24 @@ def _scripted_detached_presyn_scan_cpu(
             ema_e.mul_(0.99)
             ema_e.add_(0.01 * scale)
         outputs.append(edge_release / (ema_e + 1e-6))
+        if record_edges:
+            rec_mask.append(step_mask)
+            rec_noise.append(step_noise)
+            rec_ema.append(ema_e.clone())
 
+    edges = torch.jit.annotate(list[torch.Tensor], [])
+    if record_edges:
+        edges = [
+            torch.cat(rec_calcium, dim=2),
+            torch.cat(rec_buffer, dim=2),
+            torch.cat(rec_primed, dim=2),
+            torch.cat(rec_clamp, dim=2),
+            torch.cat(rec_rrp, dim=2),
+            torch.cat(rec_energy, dim=2),
+            torch.cat(rec_mask, dim=2),
+            torch.cat(rec_noise, dim=2),
+            torch.stack(rec_ema).reshape(1, 1, query_count, 1),
+        ]
     return (
         torch.cat(outputs, dim=2),
         calcium,
@@ -948,7 +995,75 @@ def _scripted_detached_presyn_scan_cpu(
         amplitude,
         delay,
         ema_e,
+        edges,
     )
+
+
+def presyn_edge_release(
+    drive: Tensor,
+    edges: Sequence[Tensor],
+    valid: Tensor,
+    cfg: "SynapticConfig",
+) -> Tensor:
+    """The release of every query from its own drive and its recorded edge constants.
+
+    Elementwise over (B, H, T, K) and op-for-op the release block of
+    ``_scripted_detached_presyn_scan``, so its autograd gradient with respect to ``drive``
+    is the gradient the scan's per-query outputs carry: with the state recurrence detached, a
+    query's release depends on the drive only through this expression.
+    """
+    calcium_prev, buffer_prev, primed, clamp, rrp, energy, mask, noise, ema = edges
+    rho_c = math.exp(-1.0 / cfg.tau_c)
+    influx = cfg.alpha_ca * F.softplus(drive)
+    calcium = (
+        rho_c * calcium_prev
+        + influx
+        - cfg.alpha_buf_on * calcium_prev * (1.0 - buffer_prev)
+        + cfg.alpha_buf_off * buffer_prev
+    ).clamp(min=0.0)
+    fast = calcium / (calcium + cfg.syt_fast_kd)
+    slow = calcium / (calcium + cfg.syt_slow_kd)
+    sensor = 0.7 * fast + 0.3 * slow + cfg.doc2_gain * torch.sigmoid(4.0 * (calcium - 0.12))
+    fuse_base = torch.sigmoid(3.0 * sensor + 2.0 * primed - 2.0 * (clamp + cfg.complexin_bias))
+    probability = (fuse_base * torch.sigmoid(drive)).clamp(0.0, 1.0)
+    released = probability * rrp
+    if bool(mask.any()):
+        if cfg.stochastic_count_cap <= 0:
+            sampled = torch.zeros_like(probability)
+        else:
+            count = torch.clamp(rrp.round(), 0.0, float(cfg.stochastic_count_cap)).to(torch.float32)
+            p32 = probability.to(torch.float32).clamp(1e-6, 1.0 - 1e-6)
+            deviation = torch.sqrt(count * p32 * (1.0 - p32) + 1e-6)
+            sampled = (count * p32 + deviation * noise).clamp(min=0.0)
+            sampled = torch.minimum(sampled, count).to(probability.dtype)
+        released = torch.where(mask, sampled, released)
+    released = released * valid.to(released.dtype)
+    qamp = torch.sigmoid(cfg.q_beta * (energy - 0.5)) * cfg.qmax
+    return released * qamp / (ema + 1e-6)
+
+
+class _DetachedScanReleaseGrad(torch.autograd.Function):
+    """Attach the drive gradient to the values a no-grad detached scan already produced.
+
+    Forward returns the scan's output unchanged (bit-identical values); backward re-evaluates
+    ``presyn_edge_release`` for all queries at once and differentiates it. This replaces an
+    autograd graph of ~50 nodes per query per layer with one elementwise pass.
+    """
+
+    @staticmethod
+    def forward(ctx, drive, scan_output, valid, cfg, *edges):  # type: ignore[override]
+        ctx.cfg = cfg
+        ctx.save_for_backward(drive, valid, *edges)
+        return scan_output.view_as(scan_output)
+
+    @staticmethod
+    def backward(ctx, grad_output):  # type: ignore[override]
+        drive, valid, *edges = ctx.saved_tensors
+        with torch.enable_grad():
+            leaf = drive.detach().requires_grad_(True)
+            release = presyn_edge_release(leaf, edges, valid, ctx.cfg)
+            (grad_drive,) = torch.autograd.grad(release, leaf, grad_output)
+        return (grad_drive, None, None, None, *([None] * len(edges)))
 
 
 def _presyn_state_prefix(state: dict[str, Any], key_count: int) -> dict[str, Any]:
@@ -1107,8 +1222,9 @@ def _release_recurrence_group(
         valid is not None
         and query_count > 1
         and cfg.enable_presyn
-        and drive.device.type == "cpu"
-        and drive.dtype == torch.float32
+        and drive.device.type in ("cpu", "cuda")
+        and drive.dtype in (torch.float32, torch.bfloat16, torch.float16)
+        and state["C"].dtype == torch.float32
         and (train or not torch.is_grad_enabled())
         and not differentiable
         and runtime_buffers is None
@@ -1124,45 +1240,52 @@ def _release_recurrence_group(
             if train and train_stochastic_frac > 0.0
             else None
         )
-        scripted = _scripted_detached_presyn_scan_cpu(
-            state["C"],
-            state["BUF"],
-            state["RRP"],
-            state["RES"],
-            state["PR"],
-            state["CL"],
-            state["E"],
-            state["AMP"],
-            state["DELAY"],
-            drive,
-            idx,
-            valid,
-            first_active_key_count,
-            presyn.ema_e,
-            train_generator,
-            train,
-            train_stochastic_frac,
-            int(cfg.attn_topk),
-            int(cfg.stochastic_count_cap),
-            math.exp(-1.0 / cfg.tau_c),
-            math.exp(-1.0 / cfg.tau_buf),
-            cfg.alpha_ca,
-            cfg.alpha_buf_on,
-            cfg.alpha_buf_off,
-            cfg.syt_fast_kd,
-            cfg.syt_slow_kd,
-            cfg.doc2_gain,
-            cfg.complexin_bias,
-            cfg.q_beta,
-            cfg.qmax,
-            cfg.rec_rate,
-            cfg.prime_rate,
-            cfg.unprime_per_release,
-            cfg.nsf_recover,
-            cfg.energy_fill,
-            cfg.energy_max,
-            cfg.energy_use,
-        )
+        # Run the scan without recording autograd; the drive gradient is attached afterwards
+        # from the recorded per-query edge constants (one elementwise pass, not a T-step graph).
+        needs_drive_grad = torch.is_grad_enabled() and drive.requires_grad
+        # Low-precision attention logits (CUDA autocast) drive the float32 state in float32.
+        drive = drive.float()
+        with torch.no_grad():
+            scripted = _scripted_detached_presyn_scan(
+                state["C"],
+                state["BUF"],
+                state["RRP"],
+                state["RES"],
+                state["PR"],
+                state["CL"],
+                state["E"],
+                state["AMP"],
+                state["DELAY"],
+                drive,
+                idx,
+                valid,
+                first_active_key_count,
+                presyn.ema_e,
+                train_generator,
+                train,
+                train_stochastic_frac,
+                int(cfg.attn_topk),
+                int(cfg.stochastic_count_cap),
+                math.exp(-1.0 / cfg.tau_c),
+                math.exp(-1.0 / cfg.tau_buf),
+                cfg.alpha_ca,
+                cfg.alpha_buf_on,
+                cfg.alpha_buf_off,
+                cfg.syt_fast_kd,
+                cfg.syt_slow_kd,
+                cfg.doc2_gain,
+                cfg.complexin_bias,
+                cfg.q_beta,
+                cfg.qmax,
+                cfg.rec_rate,
+                cfg.prime_rate,
+                cfg.unprime_per_release,
+                cfg.nsf_recover,
+                cfg.energy_fill,
+                cfg.energy_max,
+                cfg.energy_use,
+                needs_drive_grad,
+            )
         if train_generator is not None:
             presyn._commit_train_sampling_generator(train_generator)
         state.update(
@@ -1181,6 +1304,8 @@ def _release_recurrence_group(
         if train:
             with torch.no_grad():
                 presyn.ema_e.copy_(scripted[10])
+        if needs_drive_grad:
+            return _DetachedScanReleaseGrad.apply(drive, scripted[0], valid, cfg, *scripted[11])
         return scripted[0]
 
     # Invalid top-k entries can point into the preallocated future suffix. When an explicit valid
@@ -3406,8 +3531,6 @@ class SynapticCausalSelfAttention(nn.Module):
         H = self.n_head
         D = self.head_dim
         device = x.device
-        dtype = x.dtype
-
         # Projections (MQA/GQA: K/V may have fewer heads than Q)
         q = self.q_proj(x)
         k = self.k_proj(x)
@@ -3426,7 +3549,9 @@ class SynapticCausalSelfAttention(nn.Module):
 
         # Expand presynaptic state to cover all key positions (prefix + current).
         if presyn_state is None:
-            presyn_state = build_presyn_state(B, Tk, H, device, dtype, self.cfg)
+            # Recurrent state stays float32 under bf16/fp16 autocast: slow relaxations such as
+            # CL*0.995 + 0.005 and RRP refill increments are below bf16 resolution near 1.0.
+            presyn_state = build_presyn_state(B, Tk, H, device, torch.float32, self.cfg)
         else:
             # Fill in missing keys from older caches/checkpoints and extend along time as needed.
             if "C" not in presyn_state:

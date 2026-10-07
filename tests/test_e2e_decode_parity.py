@@ -373,6 +373,9 @@ def test_scripted_cpu_scan_matches_stochastic_reference_values_state_and_gradien
     reference_output = torch.cat(reference_outputs, dim=2)
 
     assert torch.equal(scripted_output, reference_output)
+    # The scan itself runs without autograd; the drive gradient comes from one elementwise
+    # re-evaluation over all queries, not from a recorded per-query graph.
+    assert type(scripted_output.grad_fn).__name__ == "_DetachedScanReleaseGradBackward"
     assert torch.equal(scripted_presyn.ema_e, reference_presyn.ema_e)
     for key in scripted_state:
         scripted_values = (
