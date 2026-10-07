@@ -266,9 +266,23 @@ class NeuroScore:
                     if self._uses_gradient_credit()
                     else None
                 )
+                # The proxy (gate mass, ~top_k/E per expert) and the gradient credit (loss units,
+                # orders of magnitude smaller) must never share one EMA: the first step after hook
+                # installation has no stash and seeded the EMA with proxy mass, which then swamped
+                # every gradient update for hundreds of steps, so "credit" read back the step-0
+                # routing proxy (measured: relative credit unchanged to 2-3 decimals over 60 steps)
+                # and health_mode="credit" could not fire. The first gradient observation restarts
+                # the EMA in loss units; once gradient credit is established a step without a
+                # stash leaves it untouched instead of mixing proxy mass back in.
+                established_gradient = st.get("credit_source") == "gradient"
+                restart_contrib = False
+                contrib_update: Optional[Tensor]
                 if grad_credit is not None:
                     contrib_update = grad_credit
+                    restart_contrib = not established_gradient
                     st["credit_source"] = "gradient"
+                elif established_gradient:
+                    contrib_update = None
                 else:
                     contrib_update = torch.zeros_like(st["loss_contrib"])
                     contrib_update.index_add_(0, indices_flat.cpu(), gates_flat.float().cpu())
@@ -285,7 +299,11 @@ class NeuroScore:
                 freq_update /= batch_size
 
                 # EMA update
-                st["loss_contrib"].mul_(self.cfg.decay).add_(contrib_update * (1 - self.cfg.decay))
+                if restart_contrib and contrib_update is not None:
+                    st["loss_contrib"].copy_(contrib_update)
+                    st["prev_contrib"].copy_(contrib_update)
+                elif contrib_update is not None:
+                    st["loss_contrib"].mul_(self.cfg.decay).add_(contrib_update * (1 - self.cfg.decay))
                 st["routing_freq"].mul_(self.cfg.decay).add_(freq_update * (1 - self.cfg.decay))
 
                 # 3. Efficiency = Contribution / (Energy + epsilon)

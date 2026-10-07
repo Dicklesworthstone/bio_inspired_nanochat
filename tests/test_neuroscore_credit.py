@@ -127,9 +127,10 @@ def test_gradient_credit_matches_manual_formula():
     loss.backward()
     score.step(moe, loss.detach(), 1)
 
-    st_now = score.stats[""]["loss_contrib"]
-    decay = score.cfg.decay
-    update = (st_now - decay * warmup) / (1 - decay)
+    # The first gradient observation restarts the EMA in loss units (the warmup step held
+    # routing-proxy mass, which must not be mixed with gradient credit), so it IS the update.
+    update = score.stats[""]["loss_contrib"]
+    assert not torch.allclose(update, warmup)
 
     ctx = moe.last_ctx
     gates, idx = ctx["gates"], ctx["indices"]
@@ -190,8 +191,9 @@ def test_gradient_credit_tracks_true_loss_impact():
     loss = (y - tgts[1]).pow(2).mean()
     loss.backward()
     score.step(moe, loss.detach(), 1)
-    st_now = score.stats[""]["loss_contrib"]
-    credit = (st_now - score.cfg.decay * warmup) / (1 - score.cfg.decay)
+    assert score.stats[""]["credit_source"] == "gradient"
+    credit = score.stats[""]["loss_contrib"].clone()  # restarted in loss units, not mixed with warmup
+    assert not torch.allclose(credit, warmup)
 
     proxy_score = NeuroScore(
         NeuroScoreConfig(enabled=True, update_every=1000, credit_mode="proxy"), neuroviz=None
@@ -245,7 +247,8 @@ def test_no_gradients_falls_back_to_legacy_proxy_exactly():
 def test_repeated_step_without_new_backward_falls_back_cleanly():
     """Hooks install lazily during the first step call, and consuming empties the stash:
     step 1 = proxy (hooks not yet installed when its backward fired), step 2 = gradient,
-    a third step with no new forward/backward must fall back without double-counting."""
+    a third step with no new forward/backward must neither double-count nor mix routing-proxy
+    mass into the established gradient credit: the credit is left exactly as it was."""
     moe = _moe(num_experts=4)
     score = NeuroScore(NeuroScoreConfig(enabled=True, update_every=1000), neuroviz=None)
     x = torch.randn(2, 6, 8)
@@ -260,8 +263,10 @@ def test_repeated_step_without_new_backward_falls_back_cleanly():
     score.step(moe, torch.tensor(1.0), 1)
     assert score.stats[""]["credit_source"] == "gradient"
 
+    established = score.stats[""]["loss_contrib"].clone()
     score.step(moe, torch.tensor(1.0), 2)  # no new forward/backward in between
-    assert score.stats[""]["credit_source"] == "proxy"
+    assert score.stats[""]["credit_source"] == "gradient"
+    assert torch.equal(score.stats[""]["loss_contrib"], established)
 
 
 
@@ -309,3 +314,30 @@ def test_published_fitness_finite_under_gradient_credit():
 
     ctrl = SplitMergeController(moe, SplitMergeConfig(use_neuroscore=True, neuroscore_weight=1.0))
     assert torch.isfinite(ctrl._health(moe)).all()
+
+
+def test_published_credit_is_gradient_credit_not_the_warmup_routing_proxy():
+    """health_mode='credit' reads ``last_credit``; it must reflect the loss, not step-0 routing.
+
+    The warmup step (no stash yet) seeded the shared EMA with routing-proxy mass (~top_k/E per
+    expert), orders of magnitude above loss-unit credit, so for hundreds of steps the published
+    relative credit was the step-0 proxy (measured on the structural pilot: unchanged to 2-3
+    decimals over 60 steps) and the lifecycle could not fire.
+    """
+    moe = _moe(num_experts=4)
+    score = NeuroScore(NeuroScoreConfig(enabled=True, update_every=1000), neuroviz=None)
+    gen = torch.Generator().manual_seed(5)
+    y, _aux = moe(torch.randn(2, 6, 8, generator=gen))
+    y.pow(2).mean().backward()
+    score.step(moe, torch.tensor(1.0), 0)
+    assert moe.last_credit_source == "proxy"
+    proxy_relative = moe.last_credit.clone()
+
+    moe.zero_grad(set_to_none=True)
+    y, _aux = moe(torch.randn(2, 6, 8, generator=gen))
+    (y * torch.randn(8, generator=gen)).sum().backward()
+    score.step(moe, torch.tensor(1.0), 1)
+    grad = score.stats[""]["loss_contrib"]
+    assert moe.last_credit_source == "gradient"
+    torch.testing.assert_close(moe.last_credit, grad / (grad.abs().mean() + 1e-12))
+    assert (moe.last_credit - proxy_relative).abs().max() > 0.1
