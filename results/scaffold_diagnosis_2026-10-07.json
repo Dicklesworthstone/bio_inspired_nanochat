@@ -1,0 +1,30 @@
+{
+  "question": "Why does the GPTSynaptic scaffold with every bio mechanism off (the synaptic_off anchor) lose to vanilla GPT by +0.069 val bpb in the 2026-10-07 toy screening?",
+  "finding": "GPTSynaptic handed the raw pre-norm residual stream to its language head; vanilla GPT applies norm(x) (parameter-free RMSNorm) first. Adding that final norm alone moves synaptic_off from +0.087 behind vanilla to 0.038 ahead of it, on all three seeds. Five other scaffold differences were tested on top and none helped: embedding norm, zero-initialized residual outputs and head, parameter-free RMSNorm in place of LayerNorm, no biases, vanilla init, and Muon aspect-ratio orientation. GPTSynapticConfig.final_norm now defaults to True; checkpoints that predate the field rebuild with False.",
+  "protocol": {
+    "recipe": "scripts.base_train --depth=2 --max_seq_len=256 --device_batch_size=8 --total_batch_size=2048 --num_iterations=300 --eval_every=-1 --eval_tokens=32768 --core_metric_every=-1 --sample_every=-1 --device_type=cpu (the toy-screening recipe), synaptic arms with the synaptic_off anchor's --syn_cfg overrides (enable_presyn=0, enable_metabolism=0, xi_dim=0, stochastic_train_frac=0, doc2_gain=0, barrier_strength=0)",
+    "metric": "base_train's final val bpb on 32,768 held-out tokens (min over the single end-of-run evaluation)",
+    "variants": "each variant was monkeypatched into GPTSynaptic around an unmodified scripts.base_train run: final_norm = F.rms_norm before lm_head; embed_norm = F.rms_norm after wte; zero_init = zero lm_head, o_proj and MLP proj weights (vanilla's init); rmsnorm = parameter-free RMSNorm for both block norms and no MLP input LayerNorm; single_norm = drop only the MLP input LayerNorm; no_bias = no SynapticLinear biases; vanilla_init = vanilla's 1/sqrt(fan_in)*min(1, sqrt(fan_out/fan_in)) linear init; muon_orient = Muon's aspect-ratio scale computed on the (out, in) orientation that nn.Linear uses",
+    "data": "WikiText-2 (pytorch/examples copy) as parquet shards, train / valid+test, 4,096-token tokenizer; FineWeb-Edu unreachable from this host",
+    "hardware": "cpu:x86_64, 4 cores, four runs concurrently at one thread each",
+    "seeds": [1337, 1338, 1339],
+    "selection": "the decisive contrast (final_norm vs vanilla) has three matched seeds; the add-on variants are single-seed (1338) screens, read only as 'no gain on top of final_norm'"
+  },
+  "git_sha_at_measurement": "6082c6fd7df3dcd692420fbb64a1cd6061a124a5",
+  "results_val_bpb": {
+    "vanilla": {"1337": 2.0097, "1338": 1.9969, "1339": 1.9846, "mean": 1.9971},
+    "synaptic_off_as_shipped": {"1338": 2.0836},
+    "synaptic_off_final_norm": {"1337": 1.9625, "1338": 1.9513, "1339": 1.9626, "mean": 1.9588},
+    "final_norm+embed_norm": {"1338": 1.9586},
+    "final_norm+zero_init": {"1338": 1.9693},
+    "final_norm+single_norm": {"1338": 1.9494},
+    "final_norm+embed_norm+zero_init": {"1338": 1.9701},
+    "final_norm+embed_norm+zero_init+rmsnorm+no_bias+vanilla_init+muon_orient": {"1338": 1.9941}
+  },
+  "paired_deltas_vs_vanilla": {
+    "synaptic_off_as_shipped": {"1338": 0.0867},
+    "synaptic_off_final_norm": {"1337": -0.0472, "1338": -0.0456, "1339": -0.0220, "mean": -0.0383}
+  },
+  "decision": "Ship final_norm=True as the GPTSynaptic default (checkpoint_manager restores False for checkpoints without the field). The add-ons are not adopted: none beat final_norm alone by more than single-seed noise, and zero_init / the full vanilla bundle were worse. Every synaptic number measured before this change (the 2026-10-07 toy screening, the scalar-LR sweep, the Hebbian and structural pilots, the CMA-ES rerun) was taken on the unnormalized head; the toy screening is re-run on the fixed scaffold.",
+  "caveat": "2 layers x 128 dims x 614k tokens on WikiText-2. It shows that the head defect is the scaffold's whole toy-scale deficit; it says nothing about the sign of synaptic_off - vanilla at D1."
+}

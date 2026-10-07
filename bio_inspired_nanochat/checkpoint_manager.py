@@ -89,6 +89,7 @@ def checkpoint_model_config(model, base_config: dict[str, Any]) -> dict[str, Any
         "init_type",
         "init_seed",
         "tie_embeddings",
+        "final_norm",
         # Attention-architecture surface: without these, a checkpoint saved
         # through this metadata path rebuilt as attention_type="standard" and
         # the strict load failed on the unexpected ultrametric projection keys.
@@ -897,6 +898,9 @@ def build_model(checkpoint_dir, step, device, phase):
             init_type=model_config_kwargs.get("init_type", "baseline"),
             init_seed=int(model_config_kwargs.get("init_seed", 42)),
             tie_embeddings=bool(model_config_kwargs.get("tie_embeddings", False)),  # hwxb.2.9
+            # Absent in checkpoints saved before 2026-10-07: those heads were trained on the
+            # unnormalized residual stream.
+            final_norm=bool(model_config_kwargs.get("final_norm", False)),
         )
         with torch.device("meta"):
             model = GPTSynaptic(model_config)

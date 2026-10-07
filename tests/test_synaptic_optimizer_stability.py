@@ -6,7 +6,9 @@ biases, ``PostsynapticHebb.fast``/``slow`` in ``y = v * (1 + fast + slow)``) the
 20 steps on real text (results/scalar_lr_sweep_2026-10-07.json) and the 2026-09-02 toy screening's
 seed 1338 ended at train loss 26.9. These tests pin the separate scalar LR from the outside: the
 optimizer group it lands in, and a short base_train-recipe run whose loss must never rise above
-its starting value, with the legacy LR as the planted negative that does.
+its starting value, with the legacy LR as the planted negative. Since the head reads the
+RMS-normalized stream (GPTSynapticConfig.final_norm, 2026-10-07) the legacy LR no longer spikes
+within these 10 steps; it stalls instead (loss 5.9 against 3.6 for the default recipe).
 
 Run:  pytest tests/test_synaptic_optimizer_stability.py -v
 """
@@ -84,6 +86,6 @@ def test_default_recipe_never_rises_above_its_initial_loss():
     assert losses[-1] < losses[0] - 1.0, losses
 
 
-def test_planted_negative_legacy_scalar_lr_spikes_above_the_initial_loss():
-    losses = _losses(scalar_lr=LEGACY_SCALAR_LR)
-    assert max(losses[1:]) > losses[0] + 1.0, losses
+def test_planted_negative_legacy_scalar_lr_stalls_far_behind_the_default_recipe():
+    legacy, default = _losses(scalar_lr=LEGACY_SCALAR_LR), _losses()
+    assert legacy[-1] > default[-1] + 1.0, (legacy, default)

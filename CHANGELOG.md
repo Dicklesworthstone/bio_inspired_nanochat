@@ -34,6 +34,10 @@ This project is a research fork of [Nanochat](https://github.com/karpathy/nanoch
 ### Toy screening re-run
 - The three anchors through the real D1 chain (`matrix_launch` → `base_train` → `eval_matrix` → `eval_stats`), 2L/128d, 600k WikiText-2 tokens, seeds 1337–1339 (`results/toy_screening_2026-10-07_*`; FineWeb was unreachable from this host): vanilla 1.958 val bpb, synaptic_off 2.028 (+0.069), bio_all 2.038 (+0.080; Hebbian still on in this run), every seed in the same direction, `null` under the pre-registered rule because a 3-pair Wilcoxon cannot reach significance. Training throughput on one CPU thread: 2,871 / 2,629 / 1,382 tok/s. Supersedes the 2026-09-02 screening (identical seeds, diverged bio_all); its registry rows are marked `invalidated`.
 
+### The scaffold's deficit was a missing final norm
+- `GPTSynaptic` handed the raw pre-norm residual stream to its language head; vanilla `GPT` applies `norm(x)` first. `GPTSynapticConfig.final_norm` (default True) adds the same parameter-free RMSNorm at the end of the trunk, so `get_hidden_states` returns the normalized stream too. Diagnosis at the screening recipe, monkeypatched variants around an unmodified `base_train` (`results/scaffold_diagnosis_2026-10-07.json`): synaptic_off as shipped 2.084 val bpb vs vanilla 1.997 (seed 1338: +0.087); with the final norm 1.963 / 1.951 / 1.963 vs vanilla 2.010 / 1.997 / 1.985 (−0.038 mean, every seed). Embedding norm, vanilla's zero-init, parameter-free RMSNorm blocks, no biases, vanilla linear init and Muon orientation were screened on top; none helped. Checkpoints without the field rebuild with `final_norm=False`. Tests in `tests/test_logit_softcap.py`; the legacy-scalar-LR planted negative now stalls (loss 5.9 vs 3.6 at step 10) instead of spiking, because the normalized head absorbs the gain blow-up.
+- Every synaptic number above was measured on the unnormalized head.
+
 ### Types
 - `uv run ty check` and `uv run ruff check` exit 0 on the whole tree (`716cacb`).
 

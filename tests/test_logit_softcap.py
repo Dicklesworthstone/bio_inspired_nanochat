@@ -1,11 +1,17 @@
 """
-Logit softcap parity for GPTSynaptic (bead vg9.1).
+Language-head parity for GPTSynaptic: the logit softcap (bead vg9.1) and the final norm.
 
 The vanilla GPT head bounds logits via ``softcap*tanh(logits/softcap)`` (softcap=15);
 GPTSynaptic previously did not, leaving logits unbounded — a stability regression made
 worse by the synaptic attention's unbounded ``log(ε+release)`` bias. These tests pin
 the parity behavior: logits are bounded on both the inference and the loss paths, and
 the cap is cleanly toggleable (``logit_softcap=0`` disables it for ablation).
+
+The vanilla head also reads ``norm(x)``, the RMS-normalized final residual stream. GPTSynaptic
+fed the raw pre-norm stream to its head until 2026-10-07; at 2L/128d that cost +0.13 val bpb
+and made the mechanisms-off scaffold lose to vanilla (results/scaffold_diagnosis_2026-10-07.json).
+The final-norm tests pin the normalization, its toggle, and that checkpoints saved before the
+field existed rebuild without it.
 
 Run:  pytest tests/test_logit_softcap.py -v
 """
@@ -15,6 +21,12 @@ from __future__ import annotations
 import pytest
 import torch
 
+import bio_inspired_nanochat.checkpoint_manager as cm
+from bio_inspired_nanochat.checkpoint_manager import (
+    checkpoint_model_config,
+    save_checkpoint,
+    synaptic_config_to_meta,
+)
 from bio_inspired_nanochat.gpt_synaptic import GPTSynapticConfig
 
 from _bio_testkit import assert_finite, make_tiny_synaptic, random_tokens
@@ -77,3 +89,70 @@ def test_softcap_formula_is_bounded_monotone_and_near_identity_at_zero():
     assert capped.diff()[len(z) // 2] > 0                           # strictly increasing through 0
     small = torch.linspace(-0.5, 0.5, 11)
     assert torch.allclose(SOFTCAP * torch.tanh(small / SOFTCAP), small, atol=2e-3)  # ~identity near 0
+
+
+def _rms(x: torch.Tensor) -> torch.Tensor:
+    return x.float().pow(2).mean(dim=-1).sqrt()
+
+
+@pytest.mark.unit
+def test_head_reads_the_rms_normalized_final_stream_by_default():
+    m = make_tiny_synaptic(seed=0)
+    assert m.config.final_norm is True
+    x = random_tokens(2, 16)
+    hidden = m.get_hidden_states(x)
+    torch.testing.assert_close(_rms(hidden), torch.ones(hidden.shape[:-1]), rtol=1e-4, atol=1e-4)
+    logits, _ = m(x)
+    torch.testing.assert_close(m.hidden_to_logits(hidden), logits)
+
+
+@pytest.mark.unit
+def test_final_norm_off_hands_the_raw_stream_to_the_head():
+    m = make_tiny_synaptic(seed=0, final_norm=False)
+    hidden = m.get_hidden_states(random_tokens(2, 16))
+    # The N(0, 1) embedding plus the residual branches: nowhere near unit RMS.
+    assert (_rms(hidden) - 1.0).abs().max().item() > 0.05
+
+
+def _round_trip(tmp_path, monkeypatch, model, *, drop_final_norm: bool):
+    cfg = model.config
+    architecture = checkpoint_model_config(
+        model,
+        {k: getattr(cfg, k) for k in ("sequence_len", "vocab_size", "n_layer", "n_head", "n_kv_head", "n_embd")},
+    )
+    if drop_final_norm:  # what a checkpoint saved before the field existed looks like
+        architecture.pop("final_norm")
+    save_checkpoint(
+        str(tmp_path), 1, model.state_dict(), None,
+        {"model_config": architecture, "synapses": True, "synaptic_config": synaptic_config_to_meta(cfg.syn_cfg)},
+    )
+
+    class _Tokenizer:
+        @staticmethod
+        def get_vocab_size():
+            return cfg.vocab_size
+
+    monkeypatch.setattr(cm, "get_tokenizer", lambda: _Tokenizer())
+    loaded, _, _ = cm.build_model(str(tmp_path), 1, torch.device("cpu"), "eval")
+    return loaded
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("final_norm", [True, False])
+def test_checkpoint_round_trips_final_norm(tmp_path, monkeypatch, final_norm):
+    model = make_tiny_synaptic(seed=0, final_norm=final_norm)
+    model.init_weights()
+    loaded = _round_trip(tmp_path, monkeypatch, model, drop_final_norm=False)
+    assert loaded.config.final_norm is final_norm
+    x = random_tokens(1, 16)
+    torch.testing.assert_close(loaded(x)[0], model(x)[0])
+
+
+@pytest.mark.unit
+def test_checkpoint_without_the_field_rebuilds_the_unnormalized_head(tmp_path, monkeypatch):
+    legacy = make_tiny_synaptic(seed=0, final_norm=False)
+    legacy.init_weights()
+    loaded = _round_trip(tmp_path, monkeypatch, legacy, drop_final_norm=True)
+    assert loaded.config.final_norm is False
+    x = random_tokens(1, 16)
+    torch.testing.assert_close(loaded(x)[0], legacy(x)[0])

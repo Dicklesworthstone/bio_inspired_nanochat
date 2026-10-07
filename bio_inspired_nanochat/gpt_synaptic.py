@@ -39,6 +39,13 @@ class GPTSynapticConfig:
     # synaptic attention injects an unbounded log(ε+release) bias into the logits,
     # so without a cap logits can run away. 15.0 matches GPT; set 0 to disable.
     logit_softcap: float = 15.0
+    # Parameter-free RMSNorm on the final residual stream before the language head (parity with
+    # the vanilla GPT's ``norm(x)``). The blocks are pre-norm, so without it the head reads the
+    # raw residual stream, whose scale is set by the N(0, 1) embedding and grows with depth: at
+    # 2L/128d that alone cost +0.13 val bpb and made the mechanisms-off scaffold lose to vanilla
+    # (results/scaffold_diagnosis_2026-10-07.json). Checkpoints saved before the field existed
+    # load with False, since their heads were trained on the unnormalized stream.
+    final_norm: bool = True
     synapses: bool = True
     syn_cfg: SynapticConfig = field(default_factory=SynapticConfig)
     dropout: float = 0.0
@@ -300,6 +307,9 @@ class GPTSynaptic(nn.Module):
     ) -> tuple[Tensor, int]:
         """Run the synaptic transformer trunk without applying the language head.
 
+        Returns the final residual stream, RMS-normalized when ``config.final_norm`` is set, so
+        ``hidden_to_logits(get_hidden_states(idx))`` equals the forward's logits.
+
         ``train_mode`` (stochastic vesicle sampling, persistent presyn normalizer updates,
         and — unless ``update_mem`` says otherwise — per-sequence plasticity) defaults to
         ``self.training``: an eval-mode model is deterministic and self-consistent unless a
@@ -392,6 +402,8 @@ class GPTSynaptic(nn.Module):
             for state in presyn_states
         ]
 
+        if self.config.final_norm:
+            x = F.rms_norm(x, (x.size(-1),))
         return x, active_layers
 
     def get_hidden_states(
