@@ -168,9 +168,19 @@ def _on_value(field: str) -> Any:
 
 
 def _switch_on(field: str) -> dict[str, Any]:
-    """Overrides that turn ``field``'s mechanism on together with its prerequisites."""
+    """Overrides that turn ``field``'s mechanism on together with its prerequisites, and nothing else.
+
+    An opt-in mechanism whose default value is already its on-value (``bdnf_scale=1.0``) switches on
+    implicitly once its prerequisites are on. It is set to its off-value unless it is ``field`` or one
+    of its prerequisites: otherwise ``add_hebbian`` would carry BDNF and ``add_bdnf`` would build the
+    same config (the 2026-10-07 toy screening scored them identically on every seed).
+    """
     overrides: dict[str, Any] = {prereq: _on_value(prereq) for prereq in _prereq_closure(field)}
     overrides[field] = _on_value(field)
+    for m in MECHANISMS:
+        implicit = not m.default_on and m.default != m.off_value
+        if implicit and m.field not in overrides and all(r in overrides for r in m.requires):
+            overrides[m.field] = m.off_value
     return overrides
 
 

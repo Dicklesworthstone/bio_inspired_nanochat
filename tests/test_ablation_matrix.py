@@ -197,3 +197,29 @@ def test_go_no_go_blocks_statistically_infeasible_design():
 def test_decision_rule_primary_metric_is_a_declared_metric():
     assert am.DECISION_PRIMARY_METRIC in am.METRICS
     assert 0.0 < am.DECISION_CONFIDENCE < 1.0
+
+
+def test_every_matrix_column_builds_a_distinct_model():
+    """No two columns may train the same thing: a duplicate (add_bdnf == add_hebbian while the BDNF
+    gain switched on implicitly with Hebbian) silently spends a column's compute on a repeat."""
+    import dataclasses
+
+    def key(c):
+        cfg = c.build_syn_cfg()
+        fields = None if cfg is None else tuple(sorted(dataclasses.asdict(cfg).items(), key=lambda kv: kv[0]))
+        return (c.base is am.Base.VANILLA, repr(fields), tuple(sorted(c.train_overrides.items())))
+
+    columns = am.screening_columns() + am.structural_columns()
+    seen: dict[tuple, str] = {}
+    for c in columns:
+        k = key(c)
+        assert k not in seen, f"{c.config_id} builds the same model as {seen[k]}"
+        seen[k] = c.config_id
+
+
+def test_add_one_in_adds_exactly_one_mechanism_chain():
+    by_id = {c.config_id: c.build_syn_cfg() for c in am.add_one_in()}
+    assert by_id["add_hebbian"].enable_hebbian and by_id["add_hebbian"].bdnf_scale == 0.0
+    assert by_id["add_bdnf"].enable_hebbian and by_id["add_bdnf"].bdnf_scale == 1.0
+    for cid in ("add_bistable_latch", "add_stdp", "add_cusp_latch", "add_neuromod"):
+        assert by_id[cid].bdnf_scale == 0.0, cid

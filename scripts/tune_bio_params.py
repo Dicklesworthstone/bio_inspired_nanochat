@@ -1283,6 +1283,7 @@ def multi_seed_objective(
     weight_decay: float = 0.0,
     model_config: GPTSynapticConfig = MODEL_CONFIG,
     held_out_batches: int = 8,
+    lm_task: LMTask | None = None,
 ) -> dict[str, Any]:
     """Held-out objective averaged over several TRAINING seeds (74f.1).
 
@@ -1306,6 +1307,7 @@ def multi_seed_objective(
             raise_on_error=False,
             model_config=model_config,
             held_out_batches=held_out_batches,
+            lm_task=lm_task,
         )
         per_seed[int(s)] = res.objective
     vals = np.array(list(per_seed.values()), dtype=np.float64)

@@ -43,6 +43,7 @@ This project is a research fork of [Nanochat](https://github.com/karpathy/nanoch
 
 ### Matrix: the MoE-only mechanisms leave the dense screening
 - `metabolism`, `genome` (`xi_dim`) and `glial_homeostasis` act only inside `SynapticMoE`; the screening and D1 recipes use dense MLP blocks. In the toy screening on the fixed scaffold `bio_no_metabolism` and `bio_no_genome` reproduced `bio_all` to every printed digit on all three seeds, so three of the 20 D1 screening columns would have measured nothing. `MechanismFlag.moe_only` records the scope. The contrasts now live in the MoE stage (`--stage structural`) against `moe_fixed`: `moe_no_metabolism`, `moe_no_genome` and `moe_add_glial_homeostasis`. The dense screening has 17 columns (3 anchors + 4 leave-one-out + 10 add-one-in). `base_train` warns when a MoE-only mechanism is on with `use_moe=0`, and on resume it keeps the checkpoint's `final_norm`.
+- `add_bdnf` built the same model as `add_hebbian`: the BDNF gain defaults to 1.0 and acts whenever Hebbian plasticity is on, so turning Hebbian on already turned BDNF on, and the toy screening scored the two columns identically. Add-one-in columns now switch on exactly their mechanism chain (implicitly-on dependents set off): `add_hebbian` is plain Hebbian, `add_bdnf − add_hebbian` is BDNF's increment, and the latch/STDP/neuromod columns carry no BDNF. A test rejects any two matrix columns that build the same model.
 
 ### Types
 - `uv run ty check` and `uv run ruff check` exit 0 on the whole tree (`716cacb`).

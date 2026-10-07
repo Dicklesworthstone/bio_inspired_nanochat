@@ -71,7 +71,13 @@ acts through it) to add-one-in.
 does X buy on its own, on the clean architecture anchor?" Because some mechanisms require others, the
 column turns on the whole prerequisite chain (e.g. `add_differentiable_recurrence` also enables
 `learnable_kinetics` and `enable_presyn`); the isolated effect is then read against the matching
-prerequisite-only baseline.
+prerequisite-only baseline. Each column switches on exactly that chain: an opt-in mechanism whose
+default value is already its on-value (the BDNF gain `bdnf_scale=1.0`, which acts whenever Hebbian
+plasticity is on) is set to its off-value in every other column. So `add_hebbian` is plain Hebbian
+plasticity, `add_bdnf − add_hebbian` is BDNF's increment, and the latch/STDP/neuromod columns carry
+no BDNF (plan change 2026-10-07: before it `add_bdnf` built the same config as `add_hebbian`, and
+the toy screening scored the two identically on every seed; `tests/test_ablation_matrix.py` now
+rejects any two columns that build the same model).
 
 Derived from the registry at import time — today ten columns: `add_hebbian`, `add_bdnf` (needs
 `enable_hebbian`), `add_bistable_latch` (needs `enable_hebbian`), `add_stdp` (needs `enable_hebbian`),
