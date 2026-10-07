@@ -29,6 +29,13 @@ Design (honoring the bead's pinned review comments):
    on the survivors plus the anchors. Commit the GPU-hour estimate and pass the gate before the
    confirmation pass — never burn days of 4090 time blindly.
 
+4. **MoE-only mechanisms live in the MoE stage.** ``metabolism``, ``genome`` and
+   ``glial_homeostasis`` act only inside ``SynapticMoE`` (``MechanismFlag.moe_only``). The screening
+   recipe uses dense MLP blocks, where they are inert: on the 2026-10-07 toy screening
+   ``bio_no_metabolism`` and ``bio_no_genome`` reproduced ``bio_all`` to every printed digit on every
+   seed. Their contrasts are therefore taken on MoE blocks against ``moe_fixed``
+   (``structural_columns()``), and the dense screening has 17 columns.
+
 The mechanism set is the authoritative ``ablation_registry.MECHANISMS`` list. ``flex_attention``,
 ``native_genetics``, ``tropical_skeleton``, and ``recurrence_checkpoint`` are EXCLUDED from the
 science matrix: they are performance/runtime toggles, not standalone biological mechanisms (flex
@@ -160,6 +167,13 @@ def _on_value(field: str) -> Any:
     raise ValueError(f"cannot infer an on-value for {field!r} (default == off_value == {m.off_value!r})")
 
 
+def _switch_on(field: str) -> dict[str, Any]:
+    """Overrides that turn ``field``'s mechanism on together with its prerequisites."""
+    overrides: dict[str, Any] = {prereq: _on_value(prereq) for prereq in _prereq_closure(field)}
+    overrides[field] = _on_value(field)
+    return overrides
+
+
 def _prereq_closure(field: str) -> set[str]:
     """All prerequisite fields that must be ON for ``field`` to do anything (transitive)."""
     out: set[str] = set()
@@ -197,7 +211,7 @@ def leave_one_out() -> list[AblationConfig]:
     """``bio_all`` minus each DEFAULT-ON biological mechanism (marginal contribution)."""
     out: list[AblationConfig] = []
     for m in MECHANISMS:
-        if not m.default_on or m.mechanism in MATRIX_EXCLUDED_MECHANISMS:
+        if not m.default_on or m.moe_only or m.mechanism in MATRIX_EXCLUDED_MECHANISMS:
             continue
         out.append(AblationConfig(
             f"bio_no_{m.mechanism}", Base.BIO_ALL, {m.field: m.off_value}, "leave_one_out",
@@ -211,14 +225,9 @@ def add_one_in() -> list[AblationConfig]:
     """``synaptic_off`` plus each OPT-IN biological mechanism (+ its prerequisites): standalone effect."""
     out: list[AblationConfig] = []
     for m in MECHANISMS:
-        if m.default_on or m.mechanism in MATRIX_EXCLUDED_MECHANISMS:
+        if m.default_on or m.moe_only or m.mechanism in MATRIX_EXCLUDED_MECHANISMS:
             continue
-        overrides: dict[str, Any] = {}
-        # Turn the mechanism's prerequisites back ON (they were neutralized by synaptic_off).
-        for prereq in _prereq_closure(m.field):
-            overrides[prereq] = _on_value(prereq)
-        # Turn the mechanism itself ON.
-        overrides[m.field] = _on_value(m.field)
+        overrides = _switch_on(m.field)
         prereq_note = (
             f" with its prerequisite(s) {sorted(_prereq_closure(m.field))} also on"
             if _prereq_closure(m.field) else ""
@@ -237,11 +246,12 @@ def screening_columns() -> list[AblationConfig]:
 
 
 # --------------------------------------------------------------------------- #
-# Structural arm (sx1m / uta). The expert lifecycle is a base_train training-loop knob, not a
-# SynapticConfig field, so the config-only matrix above cannot exercise it. These two columns are
-# NOT part of the pre-registered screening set (its size is locked by the tests); they are the
-# opt-in pair that gives the lifecycle an evidence path: MoE with a fixed expert population vs the
-# same MoE with split/merge under the scale-free `relative` health signal.
+# MoE stage (sx1m / uta; `--stage structural`). Everything that acts only on SynapticMoE blocks is
+# contrasted here against `moe_fixed` (bio_all on MoE, fixed expert population), never on the dense
+# screening recipe where it is inert. The expert lifecycle is a base_train training-loop knob, not a
+# SynapticConfig field: `moe_splitmerge` is the same MoE with split/merge under the credit health
+# signal. The MoE-only registry mechanisms get the two ablation directions on the same base:
+# `moe_no_<m>` for default-on ones, `moe_add_<m>` for opt-in ones. Opt-in, not part of screening.
 # --------------------------------------------------------------------------- #
 STRUCTURAL_SPLITMERGE_EVERY: int = 100  # optimizer steps between lifecycle calls in the structural arm
 STRUCTURAL_TRAIN_OVERRIDES: dict[str, Any] = {
@@ -253,8 +263,30 @@ STRUCTURAL_TRAIN_OVERRIDES: dict[str, Any] = {
 }
 
 
+def moe_mechanism_columns() -> list[AblationConfig]:
+    """The MoE-only mechanisms' contrasts against ``moe_fixed`` (same base, MoE blocks)."""
+    out: list[AblationConfig] = []
+    for m in MECHANISMS:
+        if not m.moe_only or m.mechanism in MATRIX_EXCLUDED_MECHANISMS:
+            continue
+        if m.default_on:
+            out.append(AblationConfig(
+                f"moe_no_{m.mechanism}", Base.BIO_ALL, {m.field: m.off_value}, "moe_leave_one_out",
+                f"moe_fixed with {m.mechanism} ablated ({m.field}={m.off_value!r}); its marginal "
+                f"contribution where it acts (SynapticMoE blocks).",
+                {"use_moe": 1},
+            ))
+        else:
+            out.append(AblationConfig(
+                f"moe_add_{m.mechanism}", Base.BIO_ALL, _switch_on(m.field), "moe_add_one_in",
+                f"moe_fixed plus {m.mechanism}; its effect where it acts (SynapticMoE blocks).",
+                {"use_moe": 1},
+            ))
+    return out
+
+
 def structural_columns() -> list[AblationConfig]:
-    """The MoE lifecycle pair: fixed experts vs split/merge (relative health). Opt-in; not screening."""
+    """The MoE stage: ``moe_fixed``, the lifecycle arm, and the MoE-only mechanisms. Not screening."""
     return [
         AblationConfig(
             "moe_fixed", Base.BIO_ALL, {}, "structural",
@@ -265,11 +297,12 @@ def structural_columns() -> list[AblationConfig]:
         AblationConfig(
             "moe_splitmerge", Base.BIO_ALL, {}, "structural",
             f"bio_all on SynapticMoE blocks with the split/merge controller every "
-            f"{STRUCTURAL_SPLITMERGE_EVERY} steps under the scale-free relative health signal "
-            f"(split above 1.5x fair share, merge below 0.35x); (moe_splitmerge - moe_fixed) is the "
+            f"{STRUCTURAL_SPLITMERGE_EVERY} steps under the gradient-credit health signal "
+            f"(split above 1.5x the layer mean, merge below 0.35x); (moe_splitmerge - moe_fixed) is the "
             f"lifecycle's effect.",
             dict(STRUCTURAL_TRAIN_OVERRIDES),
         ),
+        *moe_mechanism_columns(),
     ]
 
 

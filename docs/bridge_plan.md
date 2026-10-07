@@ -127,7 +127,7 @@ produce every cell's checkpoint are derived from the spec (`scripts/matrix_launc
 Zero GPU runs. `trj` unreachable.
 
 **Target state.** D1 as pre-registered in `docs/ablation_matrix.md`: depth 10, ~91M tied params,
-500M FineWeb-Edu tokens, 3 seeds, 20 columns, on 2×4090; verdict written by `eval_stats` with
+500M FineWeb-Edu tokens, 3 seeds, 17 dense columns (20 until the MoE-only ones moved to the MoE stage, 2026-10-07), on 2×4090; verdict written by `eval_stats` with
 paired tests and Holm correction; checkpoints and curves in the registry.
 
 **Success criteria.**

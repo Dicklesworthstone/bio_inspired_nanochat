@@ -53,9 +53,14 @@ performance toggles, not biology.
 ### Leave-one-out — marginal contribution (primary)
 `bio_all` minus each **default-on** mechanism. Answers "what do we lose by removing X, given the rest?"
 
-`bio_no_presyn`, `bio_no_metabolism`, `bio_no_stochastic_release`, `bio_no_doc2`,
-`bio_no_septin_barrier`, `bio_no_genome` (sets `xi_dim=0`, retaining one learned shared phenotype
-while removing per-expert kinetic specialization). Plan change 2026-10-07: `bio_no_hebbian` and
+`bio_no_presyn`, `bio_no_stochastic_release`, `bio_no_doc2`, `bio_no_septin_barrier`. Plan
+change 2026-10-07 (MoE-only mechanisms): `bio_no_metabolism` and `bio_no_genome` moved to the MoE
+stage (§6) as `moe_no_metabolism` and `moe_no_genome` (the latter sets `xi_dim=0`, retaining one
+learned shared phenotype while removing per-expert kinetic specialization). Both mechanisms act only
+inside `SynapticMoE` (`MechanismFlag.moe_only`), and the screening recipe uses dense MLP blocks: in
+the 2026-10-07 toy screening both columns reproduced `bio_all`'s validation bpb to every printed
+digit on every seed, so on the dense D1 recipe they would have spent GPU time measuring nothing.
+`base_train` now warns when a MoE-only mechanism is on with `use_moe=0`. Plan change 2026-10-07: `bio_no_hebbian` and
 `bio_no_bdnf` left this set because the pre-registered deciding experiment for online Hebbian
 plasticity (bead `hwxb.9`, `results/hebbian_chunked_regime_2026-10-07_preregistered.json`) did not
 demonstrate a benefit, and its decision rule moves `enable_hebbian` (with the BDNF gain that only
@@ -68,21 +73,22 @@ column turns on the whole prerequisite chain (e.g. `add_differentiable_recurrenc
 `learnable_kinetics` and `enable_presyn`); the isolated effect is then read against the matching
 prerequisite-only baseline.
 
-Derived from the registry at import time — today eleven columns: `add_hebbian`, `add_bdnf` (needs
-`enable_hebbian`), `add_glial_homeostasis`,
-`add_bistable_latch` (needs `enable_hebbian`), `add_stdp` (needs `enable_hebbian`),
+Derived from the registry at import time — today ten columns: `add_hebbian`, `add_bdnf` (needs
+`enable_hebbian`), `add_bistable_latch` (needs `enable_hebbian`), `add_stdp` (needs `enable_hebbian`),
 `add_native_presyn` (needs `enable_presyn`), `add_learnable_kinetics` (needs `enable_presyn`),
 `add_differentiable_recurrence` (needs `learnable_kinetics`, `enable_presyn`), `add_cusp_latch`
 (needs `bistable_latch`, `enable_hebbian`), `add_metriplectic_integrator` (needs
 `enable_presyn`), and `add_neuromod` (needs `enable_presyn`, `enable_hebbian`; the harness
 instantiates the DA/ACh/NE bus for it). `python -c "from bio_inspired_nanochat import
 ablation_matrix as am; print([c.config_id for c in am.add_one_in()])"` prints the live list.
+`add_glial_homeostasis` is MoE-only too and became the MoE stage's `moe_add_glial_homeostasis`.
 
 Add-one-in is more interpretable for "which mechanism helps"; leave-one-out catches interactions.
 We run both where compute allows; the staging below keeps the cost bounded.
 
-**Total screening columns:** 3 anchors + 6 leave-one-out + 11 add-one-in = **20** (locked by
-`tests/test_scaleup_ablation_e2e.py::test_module_enumerates_the_full_matrix`).
+**Total screening columns:** 3 anchors + 4 leave-one-out + 10 add-one-in = **17** (locked by
+`tests/test_scaleup_ablation_e2e.py::test_module_enumerates_the_full_matrix`; 20 until the three
+MoE-only columns moved to the MoE stage on 2026-10-07).
 
 ---
 
@@ -152,7 +158,7 @@ orchestration on tiny models to validate the machinery before the real run (`hwx
 
 ```python
 from bio_inspired_nanochat import ablation_matrix as am
-cols = am.screening_columns()                      # the 20 columns
+cols = am.screening_columns()                      # the 17 dense columns
 hours = am.estimate_gpu_hours(cols, am.SCREENING_SEEDS, am.SCREENING_TOKENS, tok_per_sec=measured)
 gate = am.go_no_go(survivors, tok_per_sec=measured)  # gate the confirmation pass
 conf = am.confirmation_columns(survivors)            # anchors + survivors
@@ -190,7 +196,9 @@ uses the one-launch presyn scan.
 so `structural_columns()` provides `moe_fixed` (bio_all on `SynapticMoE`, fixed experts) and
 `moe_splitmerge` (the same plus `--splitmerge_every=100 --sm_health_mode=credit
 --split_health_min=1.5 --merge_health_max=0.35`); `moe_splitmerge − moe_fixed` is the
-lifecycle's effect. `--stage structural` launches the pair; the screening set stays at 20.
+lifecycle's effect. `--stage structural` launches the MoE stage: the pair plus the MoE-only
+mechanisms' contrasts against `moe_fixed` (`moe_no_metabolism`, `moe_no_genome`,
+`moe_add_glial_homeostasis`; §2). None of it is part of the screening set.
 History of the demand signal: under utilization-based health (product or relative) the 2026-09-02
 pilots fired zero events with and without the balance loss (`results/structural_pair_pilot_2026-09-02.json`,
 `_balance0.json`), so the arm measured a no-op. The credit signal (NeuroScore gradient credit, bead
@@ -210,9 +218,9 @@ toy scale it costs loss, mostly through frequent merges driven by noisy first-or
   instantiates the bus for it. **NeuroScore** is still a `SplitMergeConfig`-level knob, not a
   `SynapticConfig` mechanism, so it has no column yet.
 - **Structural lifecycle** (split/merge) is toggled at the *training-script* level
-  (`--splitmerge_every`), not via a `SynapticConfig` mechanism flag, so it is not one of the 20
-  pre-registered columns; `enable_metabolism` covers the per-expert energy dynamics. Since
-  2026-09-01 the opt-in `structural_columns()` pair (§6) is how the lifecycle gets evidence.
+  (`--splitmerge_every`), not via a `SynapticConfig` mechanism flag, so it is not one of the
+  pre-registered columns; `enable_metabolism` covers the per-expert energy dynamics (MoE stage).
+  Since 2026-09-01 the opt-in `structural_columns()` pair (§6) is how the lifecycle gets evidence.
 - **Roadmap features vs. columns** (2026-09-02, `74f.9`): README §Roadmap lists per feature whether a
   D1 column measures it (six do), whether it is unimplemented (Rab/SNARE), a recipe knob (CA init),
   or a research module off the live path (gauge, simplicial, ultrametric). Off-path modules cannot be

@@ -440,6 +440,7 @@ if hebb_chunk_len > 0 and ddp_world_size > 1:
     )
 if use_syn:
     try:
+        from bio_inspired_nanochat.ablation_registry import moe_only_mechanisms_on
         from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
         from bio_inspired_nanochat.synaptic import SynapticConfig
     except Exception as e:
@@ -510,9 +511,17 @@ if use_syn:
         tie_embeddings=bool(
             resume_model_config.get("tie_embeddings", tie_embeddings)
         ),
+        # A resumed checkpoint keeps the head it was trained with: one saved before the field
+        # existed fed lm_head the unnormalized stream.
+        final_norm=bool(resume_model_config.get("final_norm", not resuming)),
     )
     if syn_cfg.topological_nas and splitmerge_every <= 0:
         raise ValueError("topological_nas=1 requires splitmerge_every > 0")
+    if not model_config.use_moe and (inert := moe_only_mechanisms_on(syn_cfg)):
+        print0(
+            f"[config] WARNING: {', '.join(inert)} act only on SynapticMoE blocks and are inert "
+            "with use_moe=0 (their ablations belong to the MoE stage)"
+        )
     with torch.device("meta"):
         model = GPTSynaptic(model_config)
 else:

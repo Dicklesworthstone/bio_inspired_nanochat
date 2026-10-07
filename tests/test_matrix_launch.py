@@ -75,9 +75,10 @@ def test_model_tags_are_unique_and_match_the_eval_matrix_template():
 def test_structural_pair_is_opt_in_and_carries_the_lifecycle_globals():
     screening_ids = {c.config_id for c in am.screening_columns()}
     structural = am.structural_columns()
-    assert [c.config_id for c in structural] == ["moe_fixed", "moe_splitmerge"]
-    assert not screening_ids & {c.config_id for c in structural}, "the pre-registered set is unchanged"
-    assert len(am.screening_columns()) == 20
+    assert [c.config_id for c in structural[:2]] == ["moe_fixed", "moe_splitmerge"]
+    assert [c.config_id for c in structural[2:]] == [c.config_id for c in am.moe_mechanism_columns()]
+    assert not screening_ids & {c.config_id for c in structural}, "the MoE stage is not screening"
+    assert len(am.screening_columns()) == 17
     fixed_argv = am.base_train_argv(structural[0], seed=7)
     sm_argv = am.base_train_argv(structural[1], seed=7)
     assert "--use_moe=1" in fixed_argv and not any(a.startswith("--splitmerge_every") for a in fixed_argv)
@@ -92,7 +93,7 @@ def test_eval_matrix_knows_the_structural_presets():
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from scripts.eval_matrix import MATRIX_COLUMNS
 
-    assert {"moe_fixed", "moe_splitmerge"} <= set(MATRIX_COLUMNS)
+    assert {"moe_fixed", "moe_splitmerge", "moe_no_genome", "moe_add_glial_homeostasis"} <= set(MATRIX_COLUMNS)
     # Leave-one-out columns are named registry presets and live in PRESETS, not here.
     assert "synaptic_off" in MATRIX_COLUMNS and "bio_no_presyn" not in MATRIX_COLUMNS
 
@@ -116,9 +117,10 @@ def test_launcher_prints_one_command_per_cell_and_the_scoring_command():
     )
     assert proc.returncode == 0, proc.stderr[-2000:]
     lines = [ln for ln in proc.stdout.splitlines() if "scripts.base_train" in ln and "--model_tag=" in ln]
-    assert len(lines) == 4, proc.stdout
+    stage = [c.config_id for c in am.structural_columns()]
+    assert len(lines) == 2 * len(stage), proc.stdout
     assert all("--depth=4" in ln and "--num_iterations=3" in ln for ln in lines)
-    assert "scripts.eval_matrix batch --presets moe_fixed,moe_splitmerge --seeds 1,2" in proc.stdout
+    assert f"scripts.eval_matrix batch --presets {','.join(stage)} --seeds 1,2" in proc.stdout
     assert "matrix_{preset}_s{seed}" in proc.stdout
     # A one-flag recipe must work too (the documented --recipe= form).
     one = subprocess.run(
@@ -126,4 +128,4 @@ def test_launcher_prints_one_command_per_cell_and_the_scoring_command():
         cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True, timeout=300,
     )
     assert one.returncode == 0, one.stderr[-1000:]
-    assert sum("--depth=4" in ln and "--model_tag=" in ln for ln in one.stdout.splitlines()) == 2
+    assert sum("--depth=4" in ln and "--model_tag=" in ln for ln in one.stdout.splitlines()) == len(stage)

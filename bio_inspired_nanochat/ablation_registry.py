@@ -36,6 +36,9 @@ class MechanismFlag:
     default_on: bool        # is the mechanism ON in a default config?
     requires: tuple[str, ...]  # fields that must themselves be "on" for this to do anything
     description: str
+    # Acts only inside SynapticMoE (routing, per-expert kinetics, expert lifecycle); on dense MLP
+    # blocks (base_train --use_moe=0, the D1 recipe) it is inert whatever its field says.
+    moe_only: bool = False
 
 
 # Every bio mechanism with a documented ablation knob. `requires` references the
@@ -52,14 +55,17 @@ MECHANISMS: tuple[MechanismFlag, ...] = (
     MechanismFlag(
         "metabolism", "enable_metabolism", True, False, True, (),
         "MoE expert fatigue/energy metabolism bias.",
+        moe_only=True,
     ),
     MechanismFlag(
         "glial_homeostasis", "glial_homeostasis", False, False, False, (),
         "Slow group-pooled activity/energy feedback that prevents MoE routing collapse.",
+        moe_only=True,
     ),
     MechanismFlag(
         "genome", "xi_dim", 4, 0, True, (),
         "Low-dimensional per-expert Xi decoded to bounded kinetics; xi_dim=0 shares kinetics.",
+        moe_only=True,
     ),
     MechanismFlag(
         "stochastic_release", "stochastic_train_frac", 0.12, 0.0, True, ("enable_presyn",),
@@ -98,6 +104,7 @@ MECHANISMS: tuple[MechanismFlag, ...] = (
     MechanismFlag(
         "native_genetics", "native_genetics", False, False, False, ("enable_metabolism",),
         "Fused Rust metabolism/genetics kernel (CUDA).",
+        moe_only=True,
     ),
     MechanismFlag(
         "learnable_kinetics", "learnable_kinetics", False, False, False, ("enable_presyn",),
@@ -130,6 +137,7 @@ MECHANISMS: tuple[MechanismFlag, ...] = (
         "topological_nas", "topological_nas", False, False, False, (),
         "Certificate-driven MoE split/merge/birth using spectral conditioning, H0 persistence, "
         "and optimal transport (0642.5.2.2); deterministically falls back to UTA.",
+        moe_only=True,
     ),
     MechanismFlag(
         "tropical_skeleton", "tropical_skeleton", False, False, False, (),
@@ -167,6 +175,11 @@ ABLATION_PRESETS: dict[str, dict[str, Any]] = {
     "granularity_per_neuron": {"granularity": SynapticGranularity.PER_NEURON},
     "granularity_per_expert": {"granularity": SynapticGranularity.PER_EXPERT},
 }
+
+
+def moe_only_mechanisms_on(cfg: SynapticConfig) -> list[str]:
+    """The mechanisms ``cfg`` switches on that act only inside SynapticMoE blocks."""
+    return [m.mechanism for m in MECHANISMS if m.moe_only and is_mechanism_on(cfg, m.field)]
 
 
 def is_mechanism_on(cfg: SynapticConfig, field: str) -> bool:

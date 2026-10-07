@@ -58,10 +58,10 @@ def test_every_column_validates_clean():
             assert cfg is not None
 
 
-def test_leave_one_out_covers_exactly_the_default_on_science_mechanisms():
+def test_leave_one_out_covers_exactly_the_default_on_dense_science_mechanisms():
     expected = {
         m.mechanism for m in MECHANISMS
-        if m.default_on and m.mechanism not in am.MATRIX_EXCLUDED_MECHANISMS
+        if m.default_on and not m.moe_only and m.mechanism not in am.MATRIX_EXCLUDED_MECHANISMS
     }
     got = {c.config_id.removeprefix("bio_no_") for c in am.leave_one_out()}
     assert got == expected
@@ -79,18 +79,38 @@ def test_leave_one_out_actually_turns_the_mechanism_off():
 
 
 def test_genome_ablation_uses_shared_kinetics():
-    (column,) = [c for c in am.leave_one_out() if c.config_id == "bio_no_genome"]
+    (column,) = [c for c in am.moe_mechanism_columns() if c.config_id == "moe_no_genome"]
     cfg = column.build_syn_cfg()
     assert cfg is not None and cfg.xi_dim == 0
 
 
-def test_add_one_in_covers_exactly_the_optin_science_mechanisms():
+def test_add_one_in_covers_exactly_the_optin_dense_science_mechanisms():
     expected = {
         m.mechanism for m in MECHANISMS
-        if not m.default_on and m.mechanism not in am.MATRIX_EXCLUDED_MECHANISMS
+        if not m.default_on and not m.moe_only and m.mechanism not in am.MATRIX_EXCLUDED_MECHANISMS
     }
     got = {c.config_id.removeprefix("add_") for c in am.add_one_in()}
     assert got == expected
+
+
+def test_moe_only_mechanisms_are_contrasted_on_moe_blocks_never_in_the_dense_screening():
+    """metabolism, genome and glial homeostasis act only inside SynapticMoE. On the dense
+    screening recipe their columns were bit-identical to the baseline on every seed (2026-10-07
+    toy screening), so they belong to the MoE stage, against moe_fixed."""
+    moe_only = {
+        m.mechanism for m in MECHANISMS if m.moe_only and m.mechanism not in am.MATRIX_EXCLUDED_MECHANISMS
+    }
+    assert moe_only == {"metabolism", "genome", "glial_homeostasis"}
+    dense_ids = {c.config_id for c in am.screening_columns()}
+    assert not any(c.endswith(tuple(moe_only)) for c in dense_ids), dense_ids
+    moe = {c.config_id: c for c in am.moe_mechanism_columns()}
+    assert set(moe) == {"moe_no_metabolism", "moe_no_genome", "moe_add_glial_homeostasis"}
+    (moe_fixed,) = [c for c in am.structural_columns() if c.config_id == "moe_fixed"]
+    for column in moe.values():
+        assert column.train_overrides == moe_fixed.train_overrides == {"use_moe": 1}
+        assert column.base is moe_fixed.base
+    assert moe["moe_no_metabolism"].build_syn_cfg().enable_metabolism is False
+    assert moe["moe_add_glial_homeostasis"].build_syn_cfg().glial_homeostasis is True
 
 
 def test_add_one_in_enables_mechanism_and_its_prerequisites():

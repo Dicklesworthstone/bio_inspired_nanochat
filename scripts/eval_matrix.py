@@ -68,12 +68,12 @@ from scripts.base_eval import evaluate_model
 
 console = Console()
 
+# The dense leave-one-out presets. The MoE-only mechanisms' ablations (metabolism, genome) are MoE
+# stage columns (moe_no_*), materialised through MATRIX_COLUMNS like every non-preset column.
 PresetId = Literal[
     "vanilla",
     "bio_all",
     "bio_no_presyn",
-    "bio_no_metabolism",
-    "bio_no_genome",
     "bio_no_stochastic_release",
     "bio_no_doc2",
     "bio_no_septin_barrier",
@@ -83,8 +83,6 @@ DEFAULT_ABLATION_PRESETS: tuple[PresetId, ...] = (
     "vanilla",
     "bio_all",
     "bio_no_presyn",
-    "bio_no_metabolism",
-    "bio_no_genome",
     "bio_no_stochastic_release",
     "bio_no_doc2",
     "bio_no_septin_barrier",

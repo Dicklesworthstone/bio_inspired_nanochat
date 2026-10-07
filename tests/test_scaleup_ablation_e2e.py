@@ -106,11 +106,12 @@ def test_verdict_table_renders_all_presets(dryrun):
 
 def test_module_enumerates_the_full_matrix():
     # The reduced test runs a slice; assert the module still defines the full screening matrix.
-    # 20 = 3 anchors + 8 leave-one-out + 9 add-one-in (neuromod joined the opt-in set on
-    # 2026-09-01). Infrastructure toggles and controller-driven topological_nas remain
-    # excluded from this config-only matrix.
+    # 17 = 3 anchors + 4 leave-one-out + 10 add-one-in. Infrastructure toggles and
+    # controller-driven topological_nas are excluded from this config-only matrix, and the
+    # MoE-only mechanisms (metabolism, genome, glial homeostasis) moved to the MoE stage on
+    # 2026-10-07: on dense blocks their columns reproduced the baseline exactly.
     expected = len(am.anchors()) + len(am.leave_one_out()) + len(am.add_one_in())
-    assert len(am.screening_columns()) == expected == 20
+    assert len(am.screening_columns()) == expected == 17
 
 
 # --------------------------------------------------------------------------- #
