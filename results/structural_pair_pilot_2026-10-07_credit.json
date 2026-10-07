@@ -1,0 +1,184 @@
+{
+  "protocol": {
+    "model": "GPTSynaptic 2L/64d, SynapticMoE 8 experts top-2, default SynapticConfig",
+    "task": "4-dialect token-transition sequences, vocab 97, seq 32, batch 4",
+    "steps": 120,
+    "controller_every": 10,
+    "warmup": 20,
+    "lr": 0.003,
+    "moe_balance_loss": 0.01,
+    "arms": {
+      "none": "no controller",
+      "product": "SplitMergeConfig defaults (util x energy)",
+      "relative": "health_mode=relative, split 1.5 / merge 0.35 / reset 0.05 fair-share units",
+      "credit": "health_mode=credit (uta.9): NeuroScore gradient credit relative to the mean, same thresholds; NeuroScore stepped every step"
+    },
+    "question": "does the lifecycle fire under ordinary training, and what does firing cost in loss?",
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "note": "Re-run of the 2026-09-02 credit pilot after the NeuroScore EMA fix (aeaf162): the step-0 routing proxy no longer freezes the gradient credit. Three seeds, one process per seed (one thread each), BIO_FUSED_PRESYN=1 (Rust presyn scan)."
+  },
+  "measurement_regime": {
+    "eval_determinism": "module-training-flag (GPTSynaptic.forward train_mode defaults to self.training; commit 5cb1a90)",
+    "read": "full-forward",
+    "since": "2026-09-01"
+  },
+  "runs": [
+    {
+      "seed": 0,
+      "arm": "none",
+      "events": {
+        "split": 0,
+        "merge": 0,
+        "reset": 0
+      },
+      "final_loss": 3.555661606788635,
+      "first_loss": 4.355557096004486,
+      "util_spread_per_layer": [
+        0.026587486267089844,
+        0.03018723987042904
+      ],
+      "experts_per_layer": [
+        8,
+        8
+      ],
+      "wall_s": 20.4,
+      "loss_delta_vs_none": 0.0
+    },
+    {
+      "seed": 0,
+      "arm": "credit",
+      "events": {
+        "split": 3,
+        "merge": 15,
+        "reset": 3
+      },
+      "final_loss": 3.595140838623047,
+      "first_loss": 4.355557096004486,
+      "util_spread_per_layer": [
+        0.11529349535703659,
+        0.10679072141647339
+      ],
+      "experts_per_layer": [
+        8,
+        8
+      ],
+      "wall_s": 21.4,
+      "loss_delta_vs_none": 0.03947923183441171
+    },
+    {
+      "seed": 1,
+      "arm": "none",
+      "events": {
+        "split": 0,
+        "merge": 0,
+        "reset": 0
+      },
+      "final_loss": 3.4849231004714967,
+      "first_loss": 4.362448620796203,
+      "util_spread_per_layer": [
+        0.022500211372971535,
+        0.026834025979042053
+      ],
+      "experts_per_layer": [
+        8,
+        8
+      ],
+      "wall_s": 20.7,
+      "loss_delta_vs_none": 0.0
+    },
+    {
+      "seed": 1,
+      "arm": "credit",
+      "events": {
+        "split": 6,
+        "merge": 14,
+        "reset": 2
+      },
+      "final_loss": 3.534668004512787,
+      "first_loss": 4.362448620796203,
+      "util_spread_per_layer": [
+        0.1392824500799179,
+        0.1559092402458191
+      ],
+      "experts_per_layer": [
+        8,
+        8
+      ],
+      "wall_s": 19.9,
+      "loss_delta_vs_none": 0.04974490404129028
+    },
+    {
+      "seed": 2,
+      "arm": "none",
+      "events": {
+        "split": 0,
+        "merge": 0,
+        "reset": 0
+      },
+      "final_loss": 3.485548758506775,
+      "first_loss": 4.362699472904206,
+      "util_spread_per_layer": [
+        0.015097134746611118,
+        0.026266973465681076
+      ],
+      "experts_per_layer": [
+        8,
+        8
+      ],
+      "wall_s": 20.3,
+      "loss_delta_vs_none": 0.0
+    },
+    {
+      "seed": 2,
+      "arm": "credit",
+      "events": {
+        "split": 6,
+        "merge": 15,
+        "reset": 8
+      },
+      "final_loss": 3.5151166796684263,
+      "first_loss": 4.362699472904206,
+      "util_spread_per_layer": [
+        0.12516972422599792,
+        0.10601291805505753
+      ],
+      "experts_per_layer": [
+        8,
+        8
+      ],
+      "wall_s": 20.4,
+      "loss_delta_vs_none": 0.029567921161651523
+    }
+  ],
+  "summary": {
+    "credit_events_per_seed": [
+      {
+        "split": 3,
+        "merge": 15,
+        "reset": 3
+      },
+      {
+        "split": 6,
+        "merge": 14,
+        "reset": 2
+      },
+      {
+        "split": 6,
+        "merge": 15,
+        "reset": 8
+      }
+    ],
+    "credit_final_loss_delta_vs_none": [
+      0.03947923183441171,
+      0.04974490404129028,
+      0.029567921161651523
+    ],
+    "seeds_where_credit_lowered_loss": 0,
+    "reading": "the credit signal fires (3-6 splits, 14-15 merges, 2-8 resets in 120 steps) and every seed ends with higher loss than the no-controller arm (+0.030..+0.050); firing is not yet helping at this scale"
+  },
+  "git_sha": "716cacb7bd582f445c13adf97a45569d2732b613"
+}

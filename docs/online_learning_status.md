@@ -1,6 +1,37 @@
 # Online fast-weight learning — status & characterization (bead sax.1)
 
-_Last updated: 2026-09-01 (measurement-regime update below; original note 2026-06-11, OrangeMill)._
+_Last updated: 2026-10-07 (pre-registered decision below; measurement-regime update 2026-09-01; original note 2026-06-11, OrangeMill)._
+
+## Decision (2026-10-07): not demonstrated; online Hebbian plasticity is now opt-in
+
+The pre-registered deciding experiment ran to completion (`scripts/e2e/hebbian_chunked_regime.py
+--budget preregistered --jobs 4`, protocol `hebbian-chunked-regime-v1-2026-09-02`, artifact
+`results/hebbian_chunked_regime_2026-10-07_preregistered.json`): 2L/64d, associative recall with 2–16
+pairs, 5 seeds × {Hebbian on, off} × {chunked (chunk 8), full} training, 2,000 AdamW steps each.
+
+| Contrast (recall at 16 pairs, chance 0.010) | ON | OFF | ON − OFF |
+|---|---:|---:|---:|
+| **Pre-registered:** chunked train, chunked read, confirmation seeds 2–4 | 0.031 | 0.021 | **+0.010** (MDE 0.016) |
+| Chunked train, chunked read, discovery seeds 0–1 | 0.039 | 0.063 | −0.023 |
+| Full train, full read, confirmation seeds | 0.912 | 0.838 | +0.073 |
+| Full train, full read, all 5 seeds (paired) | | | +0.034 ± 0.101 (exploratory, n.s.) |
+
+Controls: OFF models read chunked = read full to 1.1e-5 (tolerance 1e-4); ON models' writes move the
+logits by ≥ 0.67 (witness threshold 0.01); the OFF/full attention baseline reaches 0.995 at 2 pairs.
+Countermetric: chunked training 0.132 s/step vs 0.122 full, final loss **3.24 vs 0.35**.
+
+By the pre-registered rule the claim is **not demonstrated**: README demotes "infinite local context"
+to a hypothesis and `enable_hebbian` moved from bio_all's default stack to the add-one-in set
+(`SynapticConfig.enable_hebbian=False`; the D1 matrix tests it as `add_hebbian` and BDNF, which acts
+only through it, as `add_bdnf`).
+
+What the run teaches about the design: chunked truncated-BPTT training at chunk 8 never learned the
+task in either arm (loss stayed near 3.2 while full-forward training reached 0.35), because each
+chunk's loss cannot reach the keys and values of earlier chunks once the cache is detached. The
+regime therefore could not have shown a fast-weight benefit even if one exists. A fair test needs a
+chunked regime that back-propagates through the earlier chunks' attention (or a task whose retrieval
+span fits inside one chunk), not a bigger budget of the same design.
+
 
 This note records what the online Hebbian fast-weight ("fast-weight programmer") mechanism
 **does** and **does not** do today, with measured numbers, so downstream beads build on facts

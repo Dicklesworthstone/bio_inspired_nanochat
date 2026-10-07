@@ -1,0 +1,100 @@
+{
+  "question": "Re-run of CMA-ES Phase 1 (bead 74f.8 / idh4) under the deterministic evaluation default: does tuning the 10 presynaptic parameters beat seed noise on the proxy objective?",
+  "command": "BIO_FUSED_PRESYN=1 OMP_NUM_THREADS=1 uv run --no-sync torchrun --standalone --nproc_per_node 4 -m scripts.tune_bio_params optimize --distributed --seed 1337 --device cpu --generations 8 --popsize 8 --run-dir runs/cmaes/rerun_2026-10-07",
+  "proxy": "GPTSynaptic 2L/128d, seq 256, vocab 1024, batch 16, 100 AdamW steps per candidate on the synthetic copy task (second half repeats the first), fitness = mean of the last training losses; stochastic release off",
+  "code": "716cacb (online Hebbian still default-on in the proxy model)",
+  "generations": [
+    {
+      "generation": 1,
+      "best_loss": 6.950695872306824,
+      "mean_loss": 6.951006807386875,
+      "min_loss": 6.950695872306824,
+      "elapsed_s": 424.28064693000033
+    },
+    {
+      "generation": 2,
+      "best_loss": 6.95041286945343,
+      "mean_loss": 6.950707167387009,
+      "min_loss": 6.95041286945343,
+      "elapsed_s": 449.28112504100045
+    },
+    {
+      "generation": 3,
+      "best_loss": 6.9502416253089905,
+      "mean_loss": 6.950573697686195,
+      "min_loss": 6.9502416253089905,
+      "elapsed_s": 440.1606593480001
+    },
+    {
+      "generation": 4,
+      "best_loss": 6.950228273868561,
+      "mean_loss": 6.950313873589039,
+      "min_loss": 6.950228273868561,
+      "elapsed_s": 449.4011323069999
+    },
+    {
+      "generation": 5,
+      "best_loss": 6.950228273868561,
+      "mean_loss": 6.950336180627346,
+      "min_loss": 6.9502673745155334,
+      "elapsed_s": 455.42218043899993
+    },
+    {
+      "generation": 6,
+      "best_loss": 6.950228273868561,
+      "mean_loss": 6.950483128428459,
+      "min_loss": 6.95023500919342,
+      "elapsed_s": 435.7074606240003
+    },
+    {
+      "generation": 7,
+      "best_loss": 6.950228273868561,
+      "mean_loss": 6.9503761902451515,
+      "min_loss": 6.950283765792847,
+      "elapsed_s": 369.7400735480005
+    },
+    {
+      "generation": 8,
+      "best_loss": 6.950228273868561,
+      "mean_loss": 6.950340673327446,
+      "min_loss": 6.950270891189575,
+      "elapsed_s": 450.2446656810007
+    }
+  ],
+  "best": {
+    "best_loss": 6.950228273868561,
+    "best_params": {
+      "alpha_ca": 0.5132455956280034,
+      "complexin_bias": 0.05206265361993251,
+      "doc2_gain": 0.3419566896324185,
+      "lambda_loge": 0.0993633235396954,
+      "nsf_recover": 0.11523199061513893,
+      "prime_rate": 0.14716005796095846,
+      "syt_fast_kd": 0.3618402951059929,
+      "syt_slow_kd": 0.8255730967697851,
+      "tau_c": 7.316591250769031,
+      "unprime_per_release": 0.07023221979756472
+    },
+    "generation": 4,
+    "measurement_regime": {
+      "eval_determinism": "module-training-flag (GPTSynaptic.forward train_mode defaults to self.training; commit 5cb1a90)",
+      "read": "full-forward",
+      "since": "2026-09-01"
+    },
+    "run_id": "tune-5eee893e99ba8275",
+    "saved_at_unix": 1791351782.6775079
+  },
+  "gain_vs_first_generation_mean": 0.0007785335183143616,
+  "seed_noise_floor_reference": {
+    "value": 0.0021,
+    "source": "the 2025-12-18 Phase-1 run (docs/cmaes_params.md)"
+  },
+  "uniform_loss_ln_vocab": 6.931471805599453,
+  "verdict": "No-go",
+  "diagnosis": "Every candidate scores 6.950-6.951, essentially the uniform-prediction loss ln(1024)=6.931: in 100 steps the proxy model never learns the copy task, so the fitness cannot rank parameter settings and the 7.8e-4 'gain' is below the 2.1e-3 seed-noise floor. The search is optimising noise. A meaningful Phase 1 needs an objective the proxy actually learns (e.g. held-out val bpb on real text after a few hundred steps, which the toy screening shows separates arms at the 1e-2 level), not more generations of this one.",
+  "measurement_regime": {
+    "eval_determinism": "module-training-flag (GPTSynaptic.forward train_mode defaults to self.training; commit 5cb1a90)",
+    "read": "full-forward",
+    "since": "2026-09-01"
+  }
+}

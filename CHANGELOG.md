@@ -9,6 +9,34 @@ This project is a research fork of [Nanochat](https://github.com/karpathy/nanoch
 
 ---
 
+## 2026-10-07 -- Valid seeds, a stable synaptic recipe, the training-scan unlock, and two decisions
+
+### Harness validity (every multi-seed result before this was compromised)
+- `base_train` never applied `--init_seed` to weight init (`compute_init` seeds a constant 42; only the CA initializer read the field), so every matrix "seed" trained the same model: the 2026-09-02 toy screening's vanilla and synaptic_off losses are equal to 16 digits across seeds and `eval_stats` paired zero variance. Fixed (`636e955`); `tests/test_e2e_quick_start.py::test_init_seed_is_the_matrix_seed_axis`.
+- `SynapticPresyn._presyn_train_rng_seed` is a `full(-1)` buffer that `to_empty()` leaves uninitialized and `init_weights` never reset, so the stochastic-release RNG of every meta-constructed model was seeded from freed memory: no synaptic run was reproducible (`636e955`; `test_meta_constructed_training_forward_is_reproducible`).
+- `--eval_every=-1` / `--sample_every=-1` evaluated and sampled on *every* step (`step % -1 == 0`); they now mean "only at the end".
+- The three `base_train` rows of the 2026-09-02 screening are marked `invalidated` in `results/registry.jsonl`.
+
+### Stability: bio_all no longer diverges
+- Root cause of bio_all's divergence (screening seed 1338 ended at train loss 26.9; reproduced: NaN by step 12): `GPTSynaptic.setup_optimizers` gave every 1-D block parameter — LayerNorm gains and biases, linear biases, and `PostsynapticHebb.fast/slow`, multiplicative gains in `y = v·(1 + fast + slow)` — the embedding AdamW LR `0.2·(d/768)^-0.5 = 0.49` at d=128. They now take `scalar_lr=0.01` (`--scalar_lr` in `base_train`). Sweep at the screening recipe (`results/scalar_lr_sweep_2026-10-07.json`, seed 1338, WikiText-2): bio_all 0.003 / 0.01 / 0.04 → val bpb 2.093 / 2.089 / 2.120 (legacy NaN); synaptic_off 2.140 → 2.080; vanilla 2.002. `tests/test_synaptic_optimizer_stability.py` with the legacy LR as planted negative (`8d1a3d0`).
+
+### Presynaptic recurrence: training no longer records the scan
+- With the state recurrence detached, a query's release depends on its drive only through an elementwise function of that drive and the gathered pre-update edge state. The scan now runs without autograd and records those constants; `_DetachedScanReleaseGrad` returns the scan's values bit-identically and differentiates `presyn_edge_release` for all queries at once (`b5325a1`). This removes the "every grad-enabled call must stay on Python until a backward kernel exists" restriction.
+- `kernels/presyn_fused.presyn_detached_scan_kernel`: one Triton launch per query block for training and prefill (one program per batch×head row), interpreter-verified against the scripted scan (`tests/test_presyn_scan_kernel.py`; no GPU here) (`3956cc3`).
+- `rustbpe.presyn_detached_scan_cpu`: the same block contract in Rust with rayon over rows, on the scripted scan's RNG stream; training-capable (`85905ad`). Measured one thread: 64-query block fwd+bwd 60 → 18 ms; bio_all 2L/128d step 1633 (before the one-pass gradient) → 1262 → 925 ms. Both fused paths sit behind `native_presyn` / `BIO_FUSED_PRESYN=1`, which the validator now accepts process-wide (a warning, not an error, in columns that ablate presyn).
+- Presynaptic state is allocated in float32 regardless of the residual dtype (bf16 cannot represent the slow relaxations near 1.0).
+
+### Decisions from the deciding experiments (both ran to completion on an idle CPU box)
+- **Online Hebbian plasticity: not demonstrated → opt-in.** The pre-registered run of `hwxb.9` (`results/hebbian_chunked_regime_2026-10-07_preregistered.json`; 5 seeds × 4 arms × 2,000 steps; `--jobs 4` added to run the independent cells in parallel) gave ON − OFF = +0.010 against a 0.016 minimum detectable effect with all controls passing. Per its rule `SynapticConfig.enable_hebbian` defaults to False and the matrix carries `add_hebbian` / `add_bdnf` instead of `bio_no_hebbian` / `bio_no_bdnf` (still 20 columns). Chunked truncated-BPTT training did not learn the task in either arm (loss 3.24 vs 0.35), which is the design lesson for any re-test. `tests/_bio_testkit.make_tiny_synaptic` enables Hebbian explicitly so mechanism tests keep exercising it.
+- **CMA-ES Phase 1 re-run: No-go, objective uninformative.** 8 generations × 8 candidates on 4 gloo workers (`results/cmaes_phase1_rerun_2026-10-07.json`): gain 7.8e-4 against a 2.1e-3 seed-noise floor, with every candidate at ≈ ln(1024) because the 100-step proxy never learns its copy task.
+- **Expert lifecycle under credit health: fires, costs loss.** The credit signal had been frozen at the step-0 routing proxy (one EMA mixing gate mass with loss-unit credit; `aeaf162`). After the fix the pilot (`results/structural_pair_pilot_2026-10-07_credit.json`, 3 seeds) fires 3–6 splits, 14–15 merges and 2–8 resets per 120 steps and ends +0.030 to +0.050 above the no-controller loss on every seed. The D1 structural arm (`moe_splitmerge`) now uses `--sm_health_mode=credit`.
+
+### Toy screening re-run
+- The three anchors through the real D1 chain (`matrix_launch` → `base_train` → `eval_matrix` → `eval_stats`), 2L/128d, 600k WikiText-2 tokens, seeds 1337–1339 (`results/toy_screening_2026-10-07_*`; FineWeb was unreachable from this host): vanilla 1.958 val bpb, synaptic_off 2.028 (+0.069), bio_all 2.038 (+0.080; Hebbian still on in this run), every seed in the same direction, `null` under the pre-registered rule because a 3-pair Wilcoxon cannot reach significance. Training throughput on one CPU thread: 2,871 / 2,629 / 1,382 tok/s. Supersedes the 2026-09-02 screening (identical seeds, diverged bio_all); its registry rows are marked `invalidated`.
+
+### Types
+- `uv run ty check` and `uv run ruff check` exit 0 on the whole tree (`716cacb`).
+
 ## 2026-09-02/03 -- Bridge-plan execution: pipeline proof, pilots, credit health, selective decoding
 
 The Phase 2 bridge plan (`docs/bridge_plan.md`) became beads (Phase 3a: 30 beads with dependencies; every GPU-gated bead now depends on the provisioning bead `hwxb.10`) and the CPU-doable ones were executed.

@@ -13,6 +13,21 @@ result; nothing here creates a dashboard, certificate, or matrix that no code br
 
 ---
 
+## Status 2026-10-07 (read first)
+
+| Gap | Moved to | Evidence |
+|---|---|---|
+| G1 harness validity | **three blocking defects fixed** — seeds never reached weight init, the presyn RNG was seeded from uninitialized memory, bio_all diverged from a 0.49 scalar LR | `636e955`, `8d1a3d0`, `results/scalar_lr_sweep_2026-10-07.json` |
+| G1 toy anchors | **first valid run**: vanilla 1.958, synaptic_off 2.028, bio_all 2.038 val bpb (2L/128d, WikiText-2, 3 seeds; `null` at n = 3) | `results/toy_screening_2026-10-07_verdict.md` |
+| G2 online fast weights | **DECIDED: not demonstrated** → `enable_hebbian` opt-in, matrix columns `add_hebbian`/`add_bdnf` | `results/hebbian_chunked_regime_2026-10-07_preregistered.json` |
+| G4 lifecycle | **credit signal fixed and firing; costs +0.03–0.05 loss** at toy scale; D1 structural arm uses it | `aeaf162`, `results/structural_pair_pilot_2026-10-07_credit.json` |
+| G6.1 / G18 recurrence cost | **training no longer records the scan** (one-pass gradient); Rust block scan on CPU (step 1633 → 925 ms); Triton block scan interpreter-verified, GPU acceptance open | `b5325a1`, `85905ad`, `3956cc3` |
+| G8 CMA-ES re-run | **No-go again, and the reason found**: candidates all score ≈ ln(1024); the 100-step proxy never learns its task, so the objective cannot rank settings | `results/cmaes_phase1_rerun_2026-10-07.json` |
+| G16 type debt | **clean**: `ty check` and `ruff check` exit 0 on the whole tree | `716cacb` |
+
+Still true: nothing has run on a GPU. For the D1 run, pass the GPU-marked kernel tests first and then
+export `BIO_FUSED_PRESYN=1`.
+
 ## 0. What Phase A closed today (so the plan starts from the real state)
 
 Commits `b95f574…e3f3ec4`, `5e88689…fb9762e`, `72a960f`, `c9659f1`, `871abfe`, all on `main`.

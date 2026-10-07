@@ -53,9 +53,13 @@ performance toggles, not biology.
 ### Leave-one-out — marginal contribution (primary)
 `bio_all` minus each **default-on** mechanism. Answers "what do we lose by removing X, given the rest?"
 
-`bio_no_presyn`, `bio_no_hebbian`, `bio_no_metabolism`, `bio_no_stochastic_release`, `bio_no_doc2`,
-`bio_no_septin_barrier`, `bio_no_bdnf`, `bio_no_genome` (sets `xi_dim=0`, retaining one learned
-shared phenotype while removing per-expert kinetic specialization).
+`bio_no_presyn`, `bio_no_metabolism`, `bio_no_stochastic_release`, `bio_no_doc2`,
+`bio_no_septin_barrier`, `bio_no_genome` (sets `xi_dim=0`, retaining one learned shared phenotype
+while removing per-expert kinetic specialization). Plan change 2026-10-07: `bio_no_hebbian` and
+`bio_no_bdnf` left this set because the pre-registered deciding experiment for online Hebbian
+plasticity (bead `hwxb.9`, `results/hebbian_chunked_regime_2026-10-07_preregistered.json`) did not
+demonstrate a benefit, and its decision rule moves `enable_hebbian` (with the BDNF gain that only
+acts through it) to add-one-in.
 
 ### Add-one-in — standalone effect (secondary)
 `synaptic_off` plus each **opt-in** mechanism (with its prerequisites turned back on). Answers "what
@@ -64,7 +68,8 @@ column turns on the whole prerequisite chain (e.g. `add_differentiable_recurrenc
 `learnable_kinetics` and `enable_presyn`); the isolated effect is then read against the matching
 prerequisite-only baseline.
 
-Derived from the registry at import time — today nine columns: `add_glial_homeostasis`,
+Derived from the registry at import time — today eleven columns: `add_hebbian`, `add_bdnf` (needs
+`enable_hebbian`), `add_glial_homeostasis`,
 `add_bistable_latch` (needs `enable_hebbian`), `add_stdp` (needs `enable_hebbian`),
 `add_native_presyn` (needs `enable_presyn`), `add_learnable_kinetics` (needs `enable_presyn`),
 `add_differentiable_recurrence` (needs `learnable_kinetics`, `enable_presyn`), `add_cusp_latch`
@@ -76,7 +81,7 @@ ablation_matrix as am; print([c.config_id for c in am.add_one_in()])"` prints th
 Add-one-in is more interpretable for "which mechanism helps"; leave-one-out catches interactions.
 We run both where compute allows; the staging below keeps the cost bounded.
 
-**Total screening columns:** 3 anchors + 8 leave-one-out + 9 add-one-in = **20** (locked by
+**Total screening columns:** 3 anchors + 6 leave-one-out + 11 add-one-in = **20** (locked by
 `tests/test_scaleup_ablation_e2e.py::test_module_enumerates_the_full_matrix`).
 
 ---
@@ -173,18 +178,28 @@ round-trips every column through `base_train`'s own override parser, and
 --checkpoint-dir` scoring from the checkpoints' own metadata → `eval_stats` pairing — so a broken
 link fails there before it burns GPU hours (about four minutes on CPU; nightly).
 
+**Toy-scale dry run on real text (2026-10-07).** The three anchors ran through this exact chain
+at 2L/128d, 600k WikiText-2 tokens, seeds 1337–1339 (`results/toy_screening_2026-10-07_verdict.md`):
+vanilla 1.958, synaptic_off 2.028, bio_all 2.038 val bpb, the same sign on every seed and `null` under
+the support rule at n = 3. It is the first run of the chain whose seeds are real (`--init_seed`
+reaches weight init since `636e955`) and whose bio arm trains stably (scalar LR, `8d1a3d0`). For
+the D1 run set `BIO_FUSED_PRESYN=1` after the GPU-marked kernel tests pass, so every synaptic column
+uses the one-launch presyn scan.
+
 **Structural arm (opt-in, not pre-registered).** The expert lifecycle is a training-loop knob,
 so `structural_columns()` provides `moe_fixed` (bio_all on `SynapticMoE`, fixed experts) and
-`moe_splitmerge` (the same plus `--splitmerge_every=100 --sm_health_mode=relative
+`moe_splitmerge` (the same plus `--splitmerge_every=100 --sm_health_mode=credit
 --split_health_min=1.5 --merge_health_max=0.35`); `moe_splitmerge − moe_fixed` is the
 lifecycle's effect. `--stage structural` launches the pair; the screening set stays at 20.
-Caveat from the 2026-09-02 CPU pilot (`results/structural_pair_pilot_2026-09-02.json`): with the
-default `moe_balance_loss=0.01` utilization stays within ±0.03 of the fair share and neither health
-signal ever fires, so the arm as specified would measure a no-op. Switching the balance loss off
-(`results/structural_pair_pilot_2026-09-02_balance0.json`) changed nothing: still zero events in
-every finished arm, because the utilization EMA is slow and a fresh router stays near uniform.
-Before D1 the arm needs a demand signal that is not a slow utilization average (loss- or
-NeuroScore-based), or a much longer warm-up than the pilot could afford.
+History of the demand signal: under utilization-based health (product or relative) the 2026-09-02
+pilots fired zero events with and without the balance loss (`results/structural_pair_pilot_2026-09-02.json`,
+`_balance0.json`), so the arm measured a no-op. The credit signal (NeuroScore gradient credit, bead
+`uta.9`) first also fired nothing, but that was a defect: the credit EMA was seeded with the step-0
+routing proxy and stayed frozen (fixed 2026-10-07, `aeaf162`). Re-run on three seeds
+(`results/structural_pair_pilot_2026-10-07_credit.json`, 120 steps, controller every 10): 3–6
+splits, 14–15 merges and 2–8 resets per run, and the final loss **higher** than the no-controller
+arm on every seed (+0.030 to +0.050). The D1 pair therefore now measures a lifecycle that acts; at
+toy scale it costs loss, mostly through frequent merges driven by noisy first-order credit.
 
 ---
 
