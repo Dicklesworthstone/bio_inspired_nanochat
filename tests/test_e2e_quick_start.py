@@ -202,6 +202,54 @@ def test_chunked_regime_trains_and_is_recorded(quick_start):
     assert all(math.isfinite(float(r["metrics"]["val_bpb"])) for r in train_rows)
 
 
+def _train_one_step(quick_start, tag: str, seed: int, *, synapses: int) -> dict:
+    import torch
+
+    env = {**quick_start["env"], "BIO_RESULTS_REGISTRY": str(quick_start["base_dir"] / "seed_registry.jsonl")}
+    run = _run(
+        [
+            "scripts.base_train",
+            f"--synapses={synapses}",
+            "--depth=1",
+            "--max_seq_len=64",
+            "--device_batch_size=2",
+            "--total_batch_size=128",
+            "--num_iterations=1",
+            "--eval_every=1",
+            "--eval_tokens=128",
+            "--core_metric_every=-1",
+            "--sample_every=-1",
+            "--device_type=cpu",
+            f"--init_seed={seed}",
+            f"--model_tag={tag}",
+        ],
+        env,
+        timeout=900,
+    )
+    assert run.returncode == 0, run.stderr[-4000:]
+    ckpt = quick_start["base_dir"] / "base_checkpoints" / tag / "model_000001.pt"
+    return torch.load(ckpt, map_location="cpu", weights_only=True)
+
+
+@pytest.mark.parametrize("synapses", [0, 1])
+def test_init_seed_is_the_matrix_seed_axis(quick_start, synapses):
+    """--init_seed must change the trained model and nothing else may (the D1 seed axis).
+
+    compute_init seeds the global RNG with a constant and only the CA initializer read init_seed,
+    so the 2026-09-02 toy screening's vanilla and synaptic_off "seeds" 1337/1338 were the same
+    run to 16 digits; every paired statistic over them was computed on zero variance.
+    """
+    import torch
+
+    a = _train_one_step(quick_start, f"seed_axis_{synapses}_a", 1337, synapses=synapses)
+    a_again = _train_one_step(quick_start, f"seed_axis_{synapses}_a2", 1337, synapses=synapses)
+    b = _train_one_step(quick_start, f"seed_axis_{synapses}_b", 1338, synapses=synapses)
+    float_keys = [k for k, v in a.items() if torch.is_tensor(v) and v.is_floating_point() and v.numel() > 1]
+    assert float_keys
+    assert all(torch.equal(a[k], a_again[k]) for k in float_keys), "same seed must reproduce the run"
+    assert any(not torch.equal(a[k], b[k]) for k in float_keys), "a different seed must give a different model"
+
+
 def test_unknown_syn_cfg_field_is_refused_before_training(quick_start):
     bad = _run(
         [

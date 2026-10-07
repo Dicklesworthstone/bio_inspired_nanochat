@@ -531,6 +531,15 @@ else:
         )
         model = GPT(model_config)
 model.to_empty(device=device)
+# The matrix's seed axis is init_seed. compute_init seeds the global RNGs with a constant 42 and
+# only the CA initializer read init_seed, so every baseline-init "seed" of a matrix cell trained
+# the identical model (toy screening 2026-09-02: vanilla and synaptic_off losses equal to 16
+# digits across seeds 1337/1338). Reseed here so weight init, and the presynaptic sampling RNG
+# that is lazily seeded from the global RNG on the first training forward, follow init_seed.
+# Every rank uses the same seed so DDP replicas start identical.
+torch.manual_seed(int(model_config.init_seed))
+if device_type == "cuda":
+    torch.cuda.manual_seed_all(int(model_config.init_seed))
 model.init_weights()
 
 # hwxb.7.1: unified telemetry — structured JSONL (queryable; consumed by the Phase-4

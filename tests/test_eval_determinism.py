@@ -99,3 +99,47 @@ def test_eval_forward_leaves_fast_weights_alone_but_explicit_update_mem_may_move
     assert torch.equal(layer.w_fast.detach(), before), "a plain eval forward must not adapt"
     _logits(model, x, train_mode=False, update_mem=True)
     assert not torch.equal(layer.w_fast.detach(), before), "an explicit update_mem read applies the writes"
+
+
+def _meta_built_synaptic(seed: int, junk: float):
+    """Build the way base_train and checkpoint_manager do: meta device, to_empty, init_weights."""
+    from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
+    from bio_inspired_nanochat.synaptic import SynapticConfig
+
+    cfg = GPTSynapticConfig(
+        sequence_len=32, vocab_size=VOCAB, n_layer=1, n_head=1, n_kv_head=1, n_embd=32,
+        synapses=True, syn_cfg=SynapticConfig(), init_seed=seed,
+    )
+    with torch.device("meta"):
+        model = GPTSynaptic(cfg)
+    # Recycle allocator blocks holding a known pattern so uninitialized storage is visible.
+    scratch = [torch.full((1 << 14,), junk) for _ in range(32)]
+    del scratch
+    model.to_empty(device=torch.device("cpu"))
+    torch.manual_seed(seed)
+    model.init_weights()
+    return model
+
+
+def test_meta_constructed_training_forward_is_reproducible():
+    """The stochastic-release RNG seed must come from the seeded global RNG, not freed memory.
+
+    ``to_empty`` left ``SynapticPresyn._presyn_train_rng_seed`` uninitialized and init_weights
+    never reset it, so two base_train runs with the same --init_seed sampled different vesicles
+    (the 2026-09-02 toy screening's two bio_all "seeds" shared every weight at init and still
+    ended at train loss 6.3 and 26.9).
+    """
+    a = _meta_built_synaptic(1337, 7.0)
+    b = _meta_built_synaptic(1337, -3.0)
+    for (name, buf_a), (_, buf_b) in zip(a.named_buffers(), b.named_buffers()):
+        assert torch.equal(buf_a, buf_b), name
+    x = _tokens()
+    a.train()
+    b.train()
+    torch.manual_seed(0)
+    la = a(x, targets=x)
+    torch.manual_seed(0)
+    lb = b(x, targets=x)
+    la = la[0] if isinstance(la, tuple) else la
+    lb = lb[0] if isinstance(lb, tuple) else lb
+    assert torch.equal(la.detach(), lb.detach())

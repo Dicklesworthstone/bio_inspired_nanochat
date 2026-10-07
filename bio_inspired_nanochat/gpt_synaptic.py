@@ -728,6 +728,14 @@ class GPTSynaptic(nn.Module):
                 module.metriplectic_last_energy_drift.zero_()
                 module.metriplectic_last_entropy_production.zero_()
                 module.metriplectic_last_free_energy_delta.zero_()
+                # The private stochastic-release RNG is seeded lazily from the global RNG when
+                # this buffer reads -1. ``to_empty`` leaves it as uninitialized memory, so without
+                # this reset every meta-constructed model (base_train, checkpoint_manager) sampled
+                # its vesicles from a garbage seed and no synaptic run was reproducible.
+                module._presyn_train_rng_seed.fill_(-1)
+                module._presyn_train_cpu_rng_state.resize_(0)
+                module._presyn_train_cuda_rng_state.resize_(0)
+                module.__dict__.pop("_presyn_train_generator", None)
                 continue
 
             if isinstance(module, SynapticMLP):
