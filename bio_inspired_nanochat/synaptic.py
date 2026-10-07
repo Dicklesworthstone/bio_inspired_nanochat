@@ -734,6 +734,8 @@ def _scripted_detached_presyn_scan(
     energy_max: float,
     energy_use: float,
     record_edges: bool = False,
+    pre_uniform: torch.Tensor | None = None,
+    pre_noise: torch.Tensor | None = None,
 ) -> tuple[
     torch.Tensor,
     torch.Tensor,
@@ -756,6 +758,9 @@ def _scripted_detached_presyn_scan(
     normalizer. Because the state recurrence is detached, those are constants with respect to
     the drive, so ``_DetachedScanReleaseGrad`` can evaluate the gradient of every query at once
     instead of autograd recording this loop (see ``presyn_edge_release``).
+
+    ``pre_uniform`` (B, H, T) and ``pre_noise`` (B, H, T, K) replace the per-query draws from
+    ``generator`` when given, so a fused kernel fed the same draws can be checked against this loop.
     """
     calcium = calcium.detach().clone()
     buffer = buffer.detach().clone()
@@ -831,15 +836,16 @@ def _scripted_detached_presyn_scan(
         probability = (fuse_base * torch.sigmoid(step_drive)).clamp(0.0, 1.0)
         released_deterministic = probability * rrp_edge
         if train and stochastic_frac > 0.0:
-            do_stochastic = (
-                torch.rand(
+            if pre_uniform is not None:
+                uniform = pre_uniform[:, :, offset : offset + 1]
+            else:
+                uniform = torch.rand(
                     probability[..., 0].shape,
                     device=probability.device,
                     dtype=torch.float32,
                     generator=generator,
                 )
-                < stochastic_frac
-            )
+            do_stochastic = uniform < stochastic_frac
             stochastic_mask = do_stochastic.unsqueeze(-1).expand_as(probability)
             stochastic_mask = stochastic_mask & step_valid
             if not bool(stochastic_mask.any()):
@@ -860,17 +866,20 @@ def _scripted_detached_presyn_scan(
                         count_float * probability_float * (1.0 - probability_float)
                     )
                     deviation = torch.sqrt(variance + 1e-6)
-                    noise = torch.randn(
-                        (
-                            mean.size(0),
-                            mean.size(1),
-                            mean.size(2),
-                            normal_draw_width,
-                        ),
-                        device=mean.device,
-                        dtype=mean.dtype,
-                        generator=generator,
-                    )[..., : mean.size(-1)]
+                    if pre_noise is not None:
+                        noise = pre_noise[:, :, offset : offset + 1, :]
+                    else:
+                        noise = torch.randn(
+                            (
+                                mean.size(0),
+                                mean.size(1),
+                                mean.size(2),
+                                normal_draw_width,
+                            ),
+                            device=mean.device,
+                            dtype=mean.dtype,
+                            generator=generator,
+                        )[..., : mean.size(-1)]
                     step_noise = noise
                     sampled = (mean + deviation * noise).clamp(min=0.0)
                     sampled = torch.minimum(sampled, count_float).to(
@@ -1245,6 +1254,19 @@ def _release_recurrence_group(
         needs_drive_grad = torch.is_grad_enabled() and drive.requires_grad
         # Low-precision attention logits (CUDA autocast) drive the float32 state in float32.
         drive = drive.float()
+        if drive.is_cuda and cfg.native_presyn:
+            return _fused_detached_scan(
+                presyn,
+                state,
+                drive,
+                idx,
+                valid,
+                train=train,
+                first_active_key_count=first_active_key_count,
+                stochastic_frac=train_stochastic_frac,
+                generator=train_generator,
+                needs_drive_grad=needs_drive_grad,
+            )
         with torch.no_grad():
             scripted = _scripted_detached_presyn_scan(
                 state["C"],
@@ -1394,6 +1416,65 @@ def _release_recurrence_group(
         )
     ]
     return torch.cat(outputs, dim=2)
+
+
+def _fused_detached_scan(
+    presyn: "SynapticPresyn",
+    state: dict[str, Any],
+    drive: Tensor,
+    idx: Tensor,
+    valid: Tensor,
+    *,
+    train: bool,
+    first_active_key_count: int,
+    stochastic_frac: float,
+    generator: torch.Generator | None,
+    needs_drive_grad: bool,
+) -> Tensor:
+    """The scripted scan's contract in one Triton launch (CUDA, ``native_presyn``; l7c9/jyb.2).
+
+    The stochastic draws for the whole block come from the private train RNG in two calls
+    (uniform (B,H,T), normal (B,H,T,attn_topk)), so on this path the RNG stream is defined per
+    block rather than per query; same-backend checkpoints still resume exactly.
+    """
+    from bio_inspired_nanochat.kernels.presyn_fused import presyn_detached_scan
+
+    cfg = presyn.cfg
+    batch, heads, queries, topk = drive.shape
+    stochastic = train and stochastic_frac > 0.0
+    uniform = noise = None
+    if stochastic:
+        uniform = torch.rand(
+            (batch, heads, queries), device=drive.device, dtype=torch.float32, generator=generator
+        )
+        noise = torch.randn(
+            (batch, heads, queries, int(cfg.attn_topk)),
+            device=drive.device,
+            dtype=torch.float32,
+            generator=generator,
+        )[..., :topk]
+        if generator is not None:
+            presyn._commit_train_sampling_generator(generator)
+    with torch.no_grad():
+        output, ema_after, edges = presyn_detached_scan(
+            state,
+            drive.detach(),
+            idx,
+            valid,
+            cfg,
+            ema_e=presyn.ema_e,
+            train=train,
+            first_active_key_count=first_active_key_count,
+            stochastic_frac=stochastic_frac,
+            uniform=uniform,
+            noise=noise,
+            record_edges=needs_drive_grad,
+        )
+        if train:
+            presyn.ema_e.copy_(ema_after)
+    if needs_drive_grad:
+        return _DetachedScanReleaseGrad.apply(drive, output, valid, cfg, *edges)
+    return output
 
 
 def _checkpoint_recurrence_segment(
