@@ -69,8 +69,8 @@ class SynapticGranularity(str, Enum):
 # -----------------------------------------------------------------------------
 
 
-def _rmsnorm(x: Tensor, eps=1e-6) -> Tensor:
-    return torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + eps) * x
+def _rmsnorm(x: Tensor, eps: float = 1e-6) -> Tensor:
+    return F.rms_norm(x, (x.size(-1),), eps=eps)
 
 
 def _tri(T: int, device: torch.device, dtype: torch.dtype) -> Tensor:
@@ -423,9 +423,10 @@ class SynapticConfig:
     # jyb.2: the live presyn Triton kernel is deliberately narrow until jyb.3 supplies
     # autograd: deterministic FP32 CUDA decode only (one query, no grad/MC/learnable kinetics/
     # metriplectic integration). On CPU the same toggle dispatches the Rust mirror
-    # (rustbpe.presyn_release_canonical_cpu) for the same slice; measured 2026-09-01 it is
-    # ~2x faster than PyTorch at <=512 keys and not faster at 2k+ keys (bead ylo2), which is
-    # why it is not on by default. Every other shape/mode falls back to release_canonical.
+    # (rustbpe.presyn_release_canonical_cpu) for the same slice; after bead ylo2 (2026-10-13,
+    # results/presyn_rust_decode_bench_2026-10-13.json) it is 3.5x-7.1x faster than PyTorch across
+    # T_keys=256..4096 (up to 13x faster than the pre-ylo2 Rust kernel at 4096 keys). Every other
+    # shape/mode falls back to release_canonical.
     native_presyn: bool = decouple_config("BIO_FUSED_PRESYN", default=False, cast=bool)
     native_genetics: bool = decouple_config("BIO_FUSED_GENETICS", default=False, cast=bool)
 
@@ -1067,12 +1068,100 @@ def presyn_edge_release(
     return released * qamp / (ema + 1e-6)
 
 
+@torch.jit.script
+def _scripted_presyn_edge_release_grad(
+    drive: torch.Tensor,
+    grad_output: torch.Tensor,
+    valid: torch.Tensor,
+    calcium_prev: torch.Tensor,
+    buffer_prev: torch.Tensor,
+    primed: torch.Tensor,
+    clamp_t: torch.Tensor,
+    rrp: torch.Tensor,
+    energy: torch.Tensor,
+    mask: torch.Tensor,
+    noise: torch.Tensor,
+    ema: torch.Tensor,
+    rho_c: float,
+    alpha_ca: float,
+    alpha_buf_on: float,
+    alpha_buf_off: float,
+    syt_fast_kd: float,
+    syt_slow_kd: float,
+    doc2_gain: float,
+    complexin_bias: float,
+    stochastic_count_cap: int,
+    q_beta: float,
+    qmax: float,
+) -> torch.Tensor:
+    sig_drive = torch.sigmoid(drive)
+    influx = alpha_ca * F.softplus(drive)
+    calcium_raw = (
+        rho_c * calcium_prev
+        + influx
+        - alpha_buf_on * calcium_prev * (1.0 - buffer_prev)
+        + alpha_buf_off * buffer_prev
+    )
+    calcium = calcium_raw.clamp(min=0.0)
+    fast_denom = calcium + syt_fast_kd
+    slow_denom = calcium + syt_slow_kd
+    fast = calcium / fast_denom
+    slow = calcium / slow_denom
+    doc2_sig = torch.sigmoid(4.0 * (calcium - 0.12))
+    sensor = 0.7 * fast + 0.3 * slow + doc2_gain * doc2_sig
+    fuse_base = torch.sigmoid(3.0 * sensor + 2.0 * primed - 2.0 * (clamp_t + complexin_bias))
+    prob_raw = fuse_base * sig_drive
+    probability = prob_raw.clamp(0.0, 1.0)
+
+    qamp = torch.sigmoid(q_beta * (energy - 0.5)) * qmax
+    scale = grad_output * valid.to(drive.dtype) * qamp / (ema + 1e-6)
+
+    d_rel_d_prob = rrp
+    if bool(mask.any()):
+        if stochastic_count_cap <= 0:
+            d_sampled_d_prob = torch.zeros_like(probability)
+        else:
+            count = torch.clamp(rrp.round(), 0.0, float(stochastic_count_cap)).to(torch.float32)
+            p32 = probability.to(torch.float32).clamp(1e-6, 1.0 - 1e-6)
+            dev = torch.sqrt(count * p32 * (1.0 - p32) + 1e-6)
+            sampled_raw = count * p32 + dev * noise
+            in_bounds = (
+                (sampled_raw >= 0.0)
+                & (sampled_raw <= count)
+                & (probability >= 1e-6)
+                & (probability <= 1.0 - 1e-6)
+            )
+            d_dev = count * (1.0 - 2.0 * p32) / (2.0 * dev)
+            d_sampled_d_prob = torch.where(
+                in_bounds, count + noise * d_dev, torch.zeros_like(p32)
+            ).to(probability.dtype)
+        d_rel_d_prob = torch.where(mask, d_sampled_d_prob, d_rel_d_prob)
+
+    prob_mask = (prob_raw >= 0.0) & (prob_raw <= 1.0)
+    d_prob = torch.where(prob_mask, scale * d_rel_d_prob, torch.zeros_like(scale))
+
+    d_sensor_d_ca = (
+        0.7 * syt_fast_kd / (fast_denom * fast_denom)
+        + 0.3 * syt_slow_kd / (slow_denom * slow_denom)
+        + 4.0 * doc2_gain * doc2_sig * (1.0 - doc2_sig)
+    )
+    d_fuse_d_ca = 3.0 * fuse_base * (1.0 - fuse_base) * d_sensor_d_ca
+    d_ca_d_drive = torch.where(
+        calcium_raw >= 0.0, alpha_ca * sig_drive, torch.zeros_like(sig_drive)
+    )
+
+    grad_drive = d_prob * (
+        d_fuse_d_ca * d_ca_d_drive * sig_drive
+        + fuse_base * sig_drive * (1.0 - sig_drive)
+    )
+    return grad_drive
+
+
 class _DetachedScanReleaseGrad(torch.autograd.Function):
     """Attach the drive gradient to the values a no-grad detached scan already produced.
 
-    Forward returns the scan's output unchanged (bit-identical values); backward re-evaluates
-    ``presyn_edge_release`` for all queries at once and differentiates it. This replaces an
-    autograd graph of ~50 nodes per query per layer with one elementwise pass.
+    Forward returns the scan's output unchanged (bit-identical values); backward evaluates
+    the exact closed-form derivative of ``presyn_edge_release`` for all queries at once.
     """
 
     @staticmethod
@@ -1084,11 +1173,47 @@ class _DetachedScanReleaseGrad(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output):  # type: ignore[override]
         drive, valid, *edges = ctx.saved_tensors
-        with torch.enable_grad():
-            leaf = drive.detach().requires_grad_(True)
-            release = presyn_edge_release(leaf, edges, valid, ctx.cfg)
-            (grad_drive,) = torch.autograd.grad(release, leaf, grad_output)
+        cfg = ctx.cfg
+        grad_drive = _scripted_presyn_edge_release_grad(
+            drive,
+            grad_output,
+            valid,
+            edges[0],
+            edges[1],
+            edges[2],
+            edges[3],
+            edges[4],
+            edges[5],
+            edges[6],
+            edges[7],
+            edges[8],
+            math.exp(-1.0 / cfg.tau_c),
+            float(cfg.alpha_ca),
+            float(cfg.alpha_buf_on),
+            float(cfg.alpha_buf_off),
+            float(cfg.syt_fast_kd),
+            float(cfg.syt_slow_kd),
+            float(cfg.doc2_gain),
+            float(cfg.complexin_bias),
+            int(cfg.stochastic_count_cap),
+            float(cfg.q_beta),
+            float(cfg.qmax),
+        )
         return (grad_drive, None, None, None, *([None] * len(edges)))
+
+
+class _PrecomputedReleaseGrad(torch.autograd.Function):
+    """Attach a precomputed closed-form drive derivative to a detached scan's output."""
+
+    @staticmethod
+    def forward(ctx, drive, scan_output, d_output_d_drive):  # type: ignore[override]
+        ctx.save_for_backward(d_output_d_drive)
+        return scan_output.view_as(scan_output)
+
+    @staticmethod
+    def backward(ctx, grad_output):  # type: ignore[override]
+        (d_output_d_drive,) = ctx.saved_tensors
+        return grad_output * d_output_d_drive, None, None
 
 
 def _presyn_state_prefix(state: dict[str, Any], key_count: int) -> dict[str, Any]:
@@ -1510,6 +1635,52 @@ def _fused_detached_scan(
     return output
 
 
+@torch.jit.script
+def _scripted_rust_scan_rng(
+    valid: torch.Tensor,
+    generator: torch.Generator | None,
+    batch: int,
+    heads: int,
+    queries: int,
+    topk: int,
+    attn_topk: int,
+    stochastic_frac: float,
+    count_cap: int,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    rows = batch * heads
+    all_rows_have_valid = bool(valid[:, :, :, 0].all())
+    valid_any = valid[:, :, :, :1] if all_rows_have_valid else valid.any(dim=-1, keepdim=True)
+    uniforms = torch.jit.annotate(list[torch.Tensor], [])
+    noises = torch.jit.annotate(list[torch.Tensor], [])
+    zero_step = torch.zeros((batch, heads, 1, topk), device=valid.device, dtype=torch.float32)
+    for offset in range(queries):
+        step_uniform = torch.rand(
+            (batch, heads, 1), device=valid.device, dtype=torch.float32, generator=generator
+        )
+        uniforms.append(step_uniform)
+        if count_cap > 0 and float(step_uniform.min()) < stochastic_frac:
+            do_draw = (
+                True
+                if all_rows_have_valid
+                else bool(((step_uniform < stochastic_frac) & valid_any[:, :, offset]).any())
+            )
+            if do_draw:
+                draw = torch.randn(
+                    (batch, heads, 1, attn_topk),
+                    device=valid.device,
+                    dtype=torch.float32,
+                    generator=generator,
+                )
+                noises.append(draw[:, :, :, :topk] if topk < attn_topk else draw)
+            else:
+                noises.append(zero_step)
+        else:
+            noises.append(zero_step)
+    uniform = torch.cat(uniforms, dim=2).reshape(rows, queries)
+    noise = torch.cat(noises, dim=2)
+    return uniform, noise
+
+
 def _rust_detached_scan(
     presyn: "SynapticPresyn",
     state: dict[str, Any],
@@ -1531,29 +1702,60 @@ def _rust_detached_scan(
     rounding. The EMA normalizer advances query by query in float32 like the scripted loop.
     """
     cfg = presyn.cfg
+    if (
+        getattr(cfg, "_rust_canonical_tuple", None) is None
+        and not cfg.metriplectic_integrator
+        and not cfg.learnable_kinetics
+    ):
+        object.__setattr__(
+            cfg,
+            "_rust_canonical_tuple",
+            (
+                math.exp(-1.0 / cfg.tau_c),
+                math.exp(-1.0 / cfg.tau_buf),
+                float(cfg.alpha_ca),
+                float(cfg.alpha_buf_on),
+                float(cfg.alpha_buf_off),
+                float(cfg.syt_fast_kd),
+                float(cfg.syt_slow_kd),
+                float(cfg.doc2_gain),
+                float(cfg.complexin_bias),
+                float(cfg.q_beta),
+                float(cfg.qmax),
+                float(cfg.prime_rate),
+                float(cfg.unprime_per_release),
+                float(cfg.nsf_recover),
+                float(cfg.rec_rate),
+                float(cfg.energy_fill),
+                float(cfg.energy_max),
+                float(cfg.energy_use),
+                float(cfg.endo_delay),
+                float(cfg.lambda_loge),
+                float(cfg.epsilon),
+                float(cfg.loge_bias_clamp or 0.0),
+            ),
+        )
     batch, heads, queries, topk = drive.shape
     rows = batch * heads
     stochastic = train and stochastic_frac > 0.0
-    uniform = torch.empty((rows, 0))
-    noise = torch.zeros((batch, heads, queries, topk))
     if stochastic:
-        uniforms = []
-        for offset in range(queries):
-            step_uniform = torch.rand(
-                (batch, heads, 1), device=drive.device, dtype=torch.float32, generator=generator
-            )
-            uniforms.append(step_uniform)
-            sampled = (step_uniform.unsqueeze(-1) < stochastic_frac) & valid[:, :, offset : offset + 1]
-            if int(cfg.stochastic_count_cap) > 0 and bool(sampled.any()):
-                noise[:, :, offset : offset + 1] = torch.randn(
-                    (batch, heads, 1, int(cfg.attn_topk)),
-                    device=drive.device,
-                    dtype=torch.float32,
-                    generator=generator,
-                )[..., :topk]
-        uniform = torch.cat(uniforms, dim=2).reshape(rows, queries)
+        uniform, noise = _scripted_rust_scan_rng(
+            valid,
+            generator,
+            batch,
+            heads,
+            queries,
+            topk,
+            int(cfg.attn_topk),
+            float(stochastic_frac),
+            int(cfg.stochastic_count_cap),
+        )
         if generator is not None:
             presyn._commit_train_sampling_generator(generator)
+        noise_np = noise.reshape(rows, queries, topk).contiguous().numpy()
+    else:
+        uniform = torch.empty((rows, 0))
+        noise_np = np.empty((0, 0, 0), dtype=np.float32)
 
     names = ("C", "BUF", "RRP", "RES", "PR", "CL", "E")
     key_count = int(state["C"].shape[2])
@@ -1565,14 +1767,14 @@ def _rust_detached_scan(
         else torch.zeros((0, rows, key_count))
     )
     with torch.no_grad():
-        e_raw, recorded, sampled_mask = _rust_detached_scan_kernel()(
+        e_raw, grad_factor = _rust_detached_scan_kernel()(
             slab.numpy(),
             delay_slab.numpy(),
             drive.detach().reshape(rows, queries, topk).contiguous().numpy(),
             idx.reshape(rows, queries, topk).contiguous().numpy(),
             valid.reshape(rows, queries, topk).contiguous().numpy(),
             uniform.contiguous().numpy(),
-            noise.reshape(rows, queries, topk).contiguous().numpy(),
+            noise_np,
             cfg,
             int(first_active_key_count),
             float(stochastic_frac) if stochastic else 0.0,
@@ -1599,17 +1801,14 @@ def _rust_detached_scan(
             presyn.ema_e.fill_(float(ema))
         else:
             ema_view = presyn.ema_e.detach().reshape(1, 1, 1, 1).expand(1, 1, queries, 1)
-        output = edge_release / (ema_view + 1e-6)
-    if not needs_drive_grad:
-        return output
-    recorded_t = torch.from_numpy(recorded).view(6, batch, heads, queries, topk)
-    mask_t = (
-        torch.from_numpy(sampled_mask).view(batch, heads, queries, topk)
-        if stochastic
-        else torch.zeros(drive.shape, dtype=torch.bool)
-    )
-    edges = [recorded_t[i] for i in range(6)] + [mask_t, noise, ema_view]
-    return _DetachedScanReleaseGrad.apply(drive, output, valid, cfg, *edges)
+        inv_ema = 1.0 / (ema_view + 1e-6)
+        output = edge_release * inv_ema
+        if not needs_drive_grad:
+            return output
+        d_output_d_drive = (
+            torch.from_numpy(grad_factor).view(batch, heads, queries, topk) * inv_ema
+        ).to(drive.dtype)
+    return _PrecomputedReleaseGrad.apply(drive, output, d_output_d_drive)
 
 
 def _checkpoint_recurrence_segment(
@@ -2350,6 +2549,9 @@ class SynapticPresyn(nn.Module):
         drive: Tensor,
         idx: Tensor,
         valid: Tensor | None,
+        *,
+        logits: Tensor | None = None,
+        barrier_scale: float = 0.0,
     ) -> Tensor:
         """Run one deterministic decode step in the Rust kernel and write the advanced state back.
 
@@ -2363,26 +2565,95 @@ class SynapticPresyn(nn.Module):
         if kernel is None:  # pragma: no cover - guarded by the predicate
             raise RuntimeError("rustbpe presyn kernel is not available")
         B, H, T, K = drive.shape
-        valid_mask = (
-            valid if valid is not None else torch.ones(drive.shape, dtype=torch.bool)
-        )
-        np_state: dict[str, Any] = {
-            key: state[key].detach().contiguous().numpy()
-            for key in ("C", "BUF", "RRP", "RES", "PR", "CL", "AMP", "E")
-        }
-        np_state["DELAY"] = [t.detach().contiguous().numpy() for t in state["DELAY"]]
-        release, next_state = kernel(
-            drive.detach().contiguous().numpy(),
-            idx.detach().contiguous().to(torch.int64).numpy(),
-            valid_mask.detach().contiguous().numpy(),
-            np_state,
-            self.cfg,
-            self.ema_e,
-        )
-        for key in ("C", "BUF", "RRP", "RES", "PR", "CL", "E"):
-            state[key] = torch.from_numpy(next_state[key])
-        state["DELAY"] = [torch.from_numpy(entry) for entry in next_state["DELAY"]]
-        return torch.from_numpy(release).reshape(B, H, T, K)
+        cfg = self.cfg
+        if (
+            getattr(cfg, "_rust_canonical_tuple", None) is None
+            and not cfg.metriplectic_integrator
+            and not cfg.learnable_kinetics
+        ):
+            object.__setattr__(
+                cfg,
+                "_rust_canonical_tuple",
+                (
+                    math.exp(-1.0 / cfg.tau_c),
+                    math.exp(-1.0 / cfg.tau_buf),
+                    float(cfg.alpha_ca),
+                    float(cfg.alpha_buf_on),
+                    float(cfg.alpha_buf_off),
+                    float(cfg.syt_fast_kd),
+                    float(cfg.syt_slow_kd),
+                    float(cfg.doc2_gain),
+                    float(cfg.complexin_bias),
+                    float(cfg.q_beta),
+                    float(cfg.qmax),
+                    float(cfg.prime_rate),
+                    float(cfg.unprime_per_release),
+                    float(cfg.nsf_recover),
+                    float(cfg.rec_rate),
+                    float(cfg.energy_fill),
+                    float(cfg.energy_max),
+                    float(cfg.energy_use),
+                    float(cfg.endo_delay),
+                    float(cfg.lambda_loge),
+                    float(cfg.epsilon),
+                    float(cfg.loge_bias_clamp or 0.0),
+                ),
+            )
+        if torch.is_grad_enabled():
+            np_state: dict[str, Any] = {
+                key: state[key].detach().numpy()
+                for key in ("C", "BUF", "RRP", "RES", "PR", "CL", "AMP", "E")
+            }
+            np_state["DELAY"] = [t.detach().numpy() for t in state["DELAY"]]
+            drive_np = drive.detach().contiguous().numpy()
+            idx_np = idx.detach().contiguous().to(torch.int64).numpy()
+            valid_np = (
+                valid.detach().contiguous().numpy() if valid is not None else None
+            )
+        else:
+            np_state = {
+                key: state[key].numpy()
+                for key in ("C", "BUF", "RRP", "RES", "PR", "CL", "AMP", "E")
+            }
+            np_state["DELAY"] = [t.numpy() for t in state["DELAY"]]
+            drive_np = drive.contiguous().numpy()
+            idx_np = (
+                idx if idx.dtype == torch.int64 else idx.to(torch.int64)
+            ).contiguous().numpy()
+            valid_np = valid.contiguous().numpy() if valid is not None else None
+        ema_val = float(self.ema_e.item())
+        if logits is None:
+            release, next_state = kernel(
+                drive_np,
+                idx_np,
+                valid_np,
+                np_state,
+                cfg,
+                ema_val,
+            )
+        else:
+            logits_np = (
+                logits.detach().numpy() if logits.requires_grad else logits.numpy()
+            )
+            release, next_state = kernel(
+                drive_np,
+                idx_np,
+                valid_np,
+                np_state,
+                cfg,
+                ema_val,
+                logits_np,
+                float(barrier_scale),
+            )
+        if next_state["C"] is np_state["C"]:
+            delay_list = state["DELAY"]
+            if len(delay_list) > 1:
+                state["DELAY"] = delay_list[1:] + delay_list[:1]
+        else:
+            for key in ("C", "BUF", "RRP", "RES", "PR", "CL", "E"):
+                state[key] = torch.from_numpy(next_state[key])
+            state["DELAY"] = [torch.from_numpy(entry) for entry in next_state["DELAY"]]
+        return torch.from_numpy(release).view(B, H, T, K)
 
     def release_canonical(
         self,
@@ -2450,11 +2721,6 @@ class SynapticPresyn(nn.Module):
                 valid=valid,
                 logits=logits,
             )
-        if logits is not None:
-            raise RuntimeError(
-                "in-kernel logit augmentation was requested outside the supported native "
-                "deterministic decode path"
-            )
         if self._can_use_native_presyn_cpu_decode(
             state,
             drive,
@@ -2464,8 +2730,22 @@ class SynapticPresyn(nn.Module):
             q_pos=q_pos,
             active_key_count=active_key_count,
             runtime_buffers=runtime_buffers,
+        ) and (
+            logits is None
+            or (
+                logits.device.type == "cpu"
+                and logits.dtype == torch.float32
+                and logits.is_contiguous()
+            )
         ):
-            return self._release_canonical_rust_cpu(state, drive, idx, valid)
+            return self._release_canonical_rust_cpu(
+                state, drive, idx, valid, logits=logits
+            )
+        if logits is not None:
+            raise RuntimeError(
+                "in-kernel logit augmentation was requested outside the supported native "
+                "deterministic decode path"
+            )
 
         cfg = self.cfg
         B, H, T, K = drive.shape
@@ -3011,10 +3291,27 @@ class PostsynapticHebb(nn.Module):
     def forward(self, v: Tensor) -> Tensor:
         # The per-expert mode broadcasts its single molecular gate across the expert/layer
         # output. Finer modes retain one gate per output neuron.
-        diag = 1.0 + self.fast + self.slow
-        if diag.numel() == 1:
-            diag = diag.expand(v.shape[-1])
-        return v * diag + v @ (self.U @ self.V)
+        if not torch.is_grad_enabled():
+            cache_key = (
+                self.fast._version,
+                self.slow._version,
+                self.fast.device,
+                self.fast.dtype,
+                v.shape[-1],
+            )
+            cached = getattr(self, "_diag_cache", None)
+            if cached is not None and cached[0] == cache_key:
+                diag = cached[1]
+            else:
+                diag = 1.0 + self.fast + self.slow
+                if diag.numel() == 1:
+                    diag = diag.expand(v.shape[-1])
+                object.__setattr__(self, "_diag_cache", (cache_key, diag))
+        else:
+            diag = 1.0 + self.fast + self.slow
+            if diag.numel() == 1:
+                diag = diag.expand(v.shape[-1])
+        return v * diag + (v @ self.U) @ self.V
 
     @torch.no_grad()
     def update(self, y: Tensor, ca_proxy: Tensor, *, genes: Tensor | None = None) -> None:
@@ -3222,6 +3519,24 @@ class PostsynapticHebb(nn.Module):
         }
 
 
+def _linear_gate_from_signal(signal: Tensor, y_ref: Tensor) -> Tensor:
+    if signal.ndim == 0:
+        return signal
+    if signal.ndim == 1:
+        if y_ref.ndim == 2 and signal.shape[0] == y_ref.shape[0]:
+            return signal.view(-1, 1)
+        if y_ref.ndim == 3 and signal.shape[0] == y_ref.shape[0]:
+            return signal.view(-1, 1, 1)
+        return signal.mean()
+    if signal.ndim == 2:
+        if y_ref.ndim == 3 and signal.shape[:2] == y_ref.shape[:2]:
+            return signal.unsqueeze(-1)
+        if y_ref.ndim == 2 and signal.shape[0] == y_ref.shape[0]:
+            return signal.mean(dim=-1, keepdim=True)
+        return signal.mean()
+    return signal.mean()
+
+
 class SynapticLinear(nn.Module):
     cfg: SynapticConfig
     use_input_ln: bool
@@ -3349,11 +3664,21 @@ class SynapticLinear(nn.Module):
                     self.v_buf.mul_(self.cfg.post_trace_decay).add_(stdp_delta_v)
                 else:
                     norm_factor = max(1, b_size * t_len)
-                    self.u_buf.mul_(self.cfg.post_trace_decay).add_(
-                        0.05 * torch.einsum("bti,btr->ir", x, y_proj) / norm_factor
+                    x_2d = x.reshape(-1, x.size(-1))
+                    y_2d = y.reshape(-1, y.size(-1))
+                    y_proj_2d = y_proj.reshape(-1, y_proj.size(-1))
+                    x_proj_2d = x_proj.reshape(-1, x_proj.size(-1))
+                    self.u_buf.addmm_(
+                        x_2d.t(),
+                        y_proj_2d,
+                        beta=self.cfg.post_trace_decay,
+                        alpha=0.05 / norm_factor,
                     )
-                    self.v_buf.mul_(self.cfg.post_trace_decay).add_(
-                        0.05 * torch.einsum("btr,btj->rj", x_proj, y) / norm_factor
+                    self.v_buf.addmm_(
+                        x_proj_2d.t(),
+                        y_2d,
+                        beta=self.cfg.post_trace_decay,
+                        alpha=0.05 / norm_factor,
                     )
             else:
                 # 2D tensor: (N, in_features) e.g. routed MoE tokens or single time-slice
@@ -3367,11 +3692,17 @@ class SynapticLinear(nn.Module):
                 # fictitious spike pair — LTP/LTD computed over unrelated tokens,
                 # scaling with batch size. Only the dense (B, T, C) path above has
                 # a true temporal axis. Accumulate the plain co-activity trace.
-                self.u_buf.mul_(self.cfg.post_trace_decay).add_(
-                    0.05 * (x.transpose(0, 1) @ y_proj) / batch  # (in, R)
+                self.u_buf.addmm_(
+                    x.transpose(0, 1),
+                    y_proj,
+                    beta=self.cfg.post_trace_decay,
+                    alpha=0.05 / batch,
                 )
-                self.v_buf.mul_(self.cfg.post_trace_decay).add_(
-                    0.05 * (x_proj.transpose(0, 1) @ y) / batch  # (R, out)
+                self.v_buf.addmm_(
+                    x_proj.transpose(0, 1),
+                    y,
+                    beta=self.cfg.post_trace_decay,
+                    alpha=0.05 / batch,
                 )
         # Per-neuron calcium proxy for the CaMKII/PP1 gate.
         if self.post is not None:
@@ -3466,8 +3797,13 @@ class SynapticLinear(nn.Module):
     def forward(
         self, x: Tensor, calcium: Tensor, energy: Tensor, update_mem: bool = True, genes: Tensor | None = None
     ):
-        if self.input_ln is not None:
-            x = self.input_ln(x)
+        cfg = self.cfg
+        post = self.post
+        w_slow = self.w_slow
+        w_fast = self.w_fast
+        input_ln = self.input_ln
+        if input_ln is not None:
+            x = input_ln(x)
 
         # hy8.5: acetylcholine attention/input gain. Default-neutral (1.0) unless a
         # NeuromodulatoryBus broadcast a gain — higher ACh (uncertainty) sharpens input
@@ -3488,66 +3824,79 @@ class SynapticLinear(nn.Module):
             self._plasticity_pending
             and self.training
             and update_mem
-            and self.cfg.enable_hebbian
-            and self.post is not None
+            and cfg.enable_hebbian
+            and post is not None
         ):
             with torch.no_grad():
                 self._apply_hebb_weight_writes(self._last_gate_scale)
             self._plasticity_pending = False
 
         # Linear pass (separate slow/fast for calcium/energy gating)
+        grad_on = torch.is_grad_enabled()
         fast_gate: Tensor | None = None
-        if self.cfg.enable_hebbian and self.w_fast is not None:
-            y_slow = x @ self.w_slow
-            y_fast = x @ self.w_fast
-
-            # Build a per-sample gate from calcium/energy signals.
-            def _gate_from_signal(signal: Tensor, y_ref: Tensor) -> Tensor:
-                sig = signal
-                if y_ref.ndim == 3:
-                    B, T, out_dim = y_ref.shape
-                    if sig.ndim == 0:
-                        return sig.view(1, 1, 1).expand(B, T, 1)
-                    elif sig.ndim == 1:
-                        if sig.shape[0] == B:
-                            return sig.view(B, 1, 1).expand(B, T, 1)
-                        elif sig.shape[0] == B * T:
-                            return sig.view(B, T, 1)
-                        else:
-                            return sig.mean().view(1, 1, 1).expand(B, T, 1)
-                    elif sig.ndim == 2 and sig.shape == (B, T):
-                        return sig.unsqueeze(-1)
-                    elif sig.ndim == 3 and sig.shape == (B, T, out_dim):
-                        return sig
+        if cfg.enable_hebbian and w_fast is not None:
+            if calcium.ndim == 0 and energy.ndim == 0:
+                if (
+                    not grad_on
+                    and not update_mem
+                    and calcium.device.type == "cpu"
+                    and energy.device.type == "cpu"
+                ):
+                    fg = min(
+                        max(float(calcium.item()) * float(energy.item()), 0.0), 1.0
+                    )
+                    cache_key = (
+                        w_slow._version,
+                        w_fast._version,
+                        round(fg, 7),
+                        w_slow.device,
+                        w_slow.dtype,
+                    )
+                    cached = getattr(self, "_w_eff_cache", None)
+                    if cached is not None and cached[0] == cache_key:
+                        w_eff = cached[1]
                     else:
-                        return sig.mean().view(1, 1, 1).expand(B, T, 1)
+                        w_eff = torch.add(w_slow, w_fast, alpha=fg)
+                        object.__setattr__(self, "_w_eff_cache", (cache_key, w_eff))
                 else:
-                    n_rows, out_dim = y_ref.shape
-                    if sig.ndim == 0:
-                        return sig.view(1, 1).expand(n_rows, 1)
-                    elif sig.ndim == 1:
-                        if sig.shape[0] == n_rows:
-                            return sig.view(n_rows, 1)
+                    fast_gate = (calcium * energy).clamp(0.0, 1.0).to(w_fast.dtype)
+                    fg = float(fast_gate.item())
+                    if not grad_on:
+                        cache_key = (
+                            w_slow._version,
+                            w_fast._version,
+                            fg,
+                            w_slow.device,
+                            w_slow.dtype,
+                        )
+                        cached = getattr(self, "_w_eff_cache", None)
+                        if cached is not None and cached[0] == cache_key:
+                            w_eff = cached[1]
                         else:
-                            return sig.mean().view(1, 1).expand(n_rows, 1)
-                    elif sig.ndim == 2 and sig.shape[0] == n_rows and sig.shape[1] == out_dim:
-                        return sig
+                            w_eff = torch.add(w_slow, w_fast, alpha=fg)
+                            object.__setattr__(self, "_w_eff_cache", (cache_key, w_eff))
                     else:
-                        return sig.reshape(n_rows, -1).mean(dim=1, keepdim=True)
-
-            fast_gate = _gate_from_signal(calcium, y_fast)
-            energy_gate = _gate_from_signal(energy, y_fast)
-            fast_gate = (fast_gate * energy_gate).clamp(0.0, 1.0).to(y_fast.dtype)
-
-            y = y_slow + (y_fast * fast_gate)
+                        w_eff = torch.add(w_slow, w_fast, alpha=fg)
+                y = x @ w_eff
+            else:
+                y_slow = x @ w_slow
+                y_fast = x @ w_fast
+                fast_gate = _linear_gate_from_signal(calcium, y_fast)
+                energy_gate = _linear_gate_from_signal(energy, y_fast)
+                fast_gate = (fast_gate * energy_gate).clamp(0.0, 1.0).to(y_fast.dtype)
+                y = y_slow + (y_fast * fast_gate)
         else:
-            y = x @ self.w_slow
-        if self.bias is not None:
-            y = y + self.bias
+            y = x @ w_slow
+        bias = self.bias
+        if bias is not None:
+            y = y + bias
 
         # Postsynaptic modulation (diagonal fast/slow + low-rank)
-        if self.cfg.enable_hebbian and self.post is not None:
-            y = self.post(y)
+        if cfg.enable_hebbian and post is not None:
+            if not post._forward_hooks and not post._forward_pre_hooks:
+                y = post.forward(y)
+            else:
+                y = post(y)
 
             # vg9.2: online Hebbian plasticity. Previously gated behind
             # `not torch.is_grad_enabled()`, so the headline "online learning" NEVER ran during
@@ -3560,9 +3909,8 @@ class SynapticLinear(nn.Module):
             # Engine passes train_mode=False, so generation does not adapt either; a probe
             # that wants online adaptation while reading deterministically passes
             # train_mode=False, update_mem=True (synthetic_tasks._logits_for).
-            grad_on = torch.is_grad_enabled()
             run_plasticity = update_mem and (
-                not grad_on or (self.training and self.cfg.plasticity_during_training)
+                not grad_on or (self.training and cfg.plasticity_during_training)
             )
             if run_plasticity:
                 with torch.no_grad():
@@ -3602,25 +3950,26 @@ class SynapticLinear(nn.Module):
 def build_presyn_state(B: int, T: int, H: int, device, dtype, cfg: SynapticConfig):
     """Allocate recurrent presynaptic state at the configured physical granularity."""
     state_shape = _presyn_state_shape(B, T, H, cfg)
-    ones = torch.ones(state_shape, device=device, dtype=dtype)
-    zeros = torch.zeros(state_shape, device=device, dtype=dtype)
     state = {
         # Triton/Rust-compatible names
-        "C": zeros.clone(),
-        "BUF": zeros.clone(),
-        "RRP": ones * cfg.init_rrp,
-        "RES": ones * cfg.init_reserve,
-        "PR": ones * cfg.init_snare,
-        "CL": ones * cfg.init_clamp,
-        "E": ones * cfg.init_energy,
+        "C": torch.zeros(state_shape, device=device, dtype=dtype),
+        "BUF": torch.zeros(state_shape, device=device, dtype=dtype),
+        "RRP": torch.full(state_shape, cfg.init_rrp, device=device, dtype=dtype),
+        "RES": torch.full(state_shape, cfg.init_reserve, device=device, dtype=dtype),
+        "PR": torch.full(state_shape, cfg.init_snare, device=device, dtype=dtype),
+        "CL": torch.full(state_shape, cfg.init_clamp, device=device, dtype=dtype),
+        "E": torch.full(state_shape, cfg.init_energy, device=device, dtype=dtype),
         # Extra state used by the Python reference implementation / attention augmentation
-        "AMP": ones * cfg.init_amp,
-        "DELAY": [zeros.clone() for _ in range(cfg.endo_delay)],
+        "AMP": torch.full(state_shape, cfg.init_amp, device=device, dtype=dtype),
+        "DELAY": [
+            torch.zeros(state_shape, device=device, dtype=dtype)
+            for _ in range(cfg.endo_delay)
+        ],
     }
     if cfg.metriplectic_integrator:
         # Heat/entropy reservoir for the proof core z=(C, BUF, h). It costs no memory in the
         # default-off configuration and is initialized on the zero-entropy shell when enabled.
-        state["HEAT"] = zeros.clone()
+        state["HEAT"] = torch.zeros(state_shape, device=device, dtype=dtype)
     return state
 
 
@@ -3678,7 +4027,27 @@ class SynapticCausalSelfAttention(nn.Module):
         self.attn_drop = nn.Dropout(attn_drop)
         self.resid_drop = nn.Dropout(resid_drop)
         self.cos, self.sin = rope_cos, rope_sin
+        self._rope_cache: tuple[torch.device, torch.dtype, Tensor, Tensor] | None = None
+        self._k_pos_cache: Tensor | None = None
         self.pre = SynapticPresyn(self.head_dim, cfg)
+
+    def _get_rope_cos_sin(self, T0: int, Tq: int, device: torch.device, dtype: torch.dtype) -> tuple[Tensor, Tensor]:
+        cache = self._rope_cache
+        d_half = self.head_dim // 2
+        if cache is None or cache[0] != device or cache[1] != dtype or cache[2].size(1) < T0 + Tq:
+            cos_cast = self.cos[:, :, :d_half].to(device=device, dtype=dtype).unsqueeze(2).contiguous()
+            sin_cast = self.sin[:, :, :d_half].to(device=device, dtype=dtype).unsqueeze(2).contiguous()
+            cache = (device, dtype, cos_cast, sin_cast)
+            object.__setattr__(self, "_rope_cache", cache)
+        return cache[2][:, T0 : T0 + Tq], cache[3][:, T0 : T0 + Tq]
+
+    def _get_k_pos(self, Tk: int, device: torch.device) -> Tensor:
+        buf = self._k_pos_cache
+        if buf is None or buf.device != device or buf.numel() < Tk:
+            cap = max(Tk, 2048)
+            buf = torch.arange(0, cap, device=device, dtype=torch.float32)
+            object.__setattr__(self, "_k_pos_cache", buf)
+        return buf[:Tk]
 
     def _chunked_release_bias(
         self,
@@ -3725,13 +4094,14 @@ class SynapticCausalSelfAttention(nn.Module):
         )
         return torch.cat(outs, dim=2)
 
-    def _apply_rope(self, x: Tensor, T0: int):
+    def _apply_rope(self, x: Tensor, T0: int, cos: Tensor | None = None, sin: Tensor | None = None):
         H = self.n_head if x.size(-1) == self.n_head * self.head_dim else self.n_kv_head
         D = self.head_dim
         x = x.view(x.size(0), x.size(1), H, D)
-        cos = self.cos[:, T0 : T0 + x.size(1), : D // 2].to(x.device).unsqueeze(2)
-        sin = self.sin[:, T0 : T0 + x.size(1), : D // 2].to(x.device).unsqueeze(2)
-        x1, x2 = x.split(D // 2, dim=-1)
+        if cos is None or sin is None:
+            cos, sin = self._get_rope_cos_sin(T0, x.size(1), x.device, x.dtype)
+        d_half = D // 2
+        x1, x2 = x[..., :d_half], x[..., d_half:]
         xr = torch.cat([x1 * cos - x2 * sin, x1 * sin + x2 * cos], dim=-1)
         return xr
 
@@ -3740,23 +4110,31 @@ class SynapticCausalSelfAttention(nn.Module):
             return x
         nrep = self.n_head // self.n_kv_head
         b, t, nh, d = x.shape
-        return x.unsqueeze(2).expand(b, t, nh, nrep, d).reshape(b, t, self.n_head, d)
+        return x.unsqueeze(3).expand(b, t, nh, nrep, d).reshape(b, t, self.n_head, d)
 
     def forward(self, x: Tensor, kv_cache=None, presyn_state=None, train_mode=True):
         B, Tq, _C = x.shape
         H = self.n_head
+        Hkv = self.n_kv_head
         D = self.head_dim
         device = x.device
+        cfg = self.cfg
+        pre = self.pre
         # Projections (MQA/GQA: K/V may have fewer heads than Q)
         q = self.q_proj(x)
         k = self.k_proj(x)
-        v = self.v_proj(x).view(B, Tq, self.n_kv_head, D)
+        v = self.v_proj(x).view(B, Tq, Hkv, D).transpose(1, 2)  # (B, Hkv, Tq, D)
 
         # RoPE offset is based on the current KV cache position (prefix length)
         T0 = 0 if kv_cache is None else kv_cache.get_pos()
-        q = _rmsnorm(self._apply_rope(q, T0)).transpose(1, 2)  # (B, H, Tq, D)
-        k = _rmsnorm(self._apply_rope(k, T0)).transpose(1, 2)  # (B, Hkv, Tq, D)
-        v = v.transpose(1, 2)  # (B, Hkv, Tq, D)
+        cos, sin = self._get_rope_cos_sin(T0, Tq, device, q.dtype)
+        qk = torch.cat([q.view(B, Tq, H, D), k.view(B, Tq, Hkv, D)], dim=2)
+        d_half = D // 2
+        qk1, qk2 = qk[..., :d_half], qk[..., d_half:]
+        qkr = torch.cat([qk1 * cos - qk2 * sin, qk1 * sin + qk2 * cos], dim=-1)
+        qkr = _rmsnorm(qkr).transpose(1, 2)  # (B, H + Hkv, Tq, D)
+        q = qkr[:, :H]
+        k = qkr[:, H:]
 
         # KV cache: store and fetch the full prefix+current K/V for this layer.
         if kv_cache is not None:
@@ -3767,13 +4145,14 @@ class SynapticCausalSelfAttention(nn.Module):
         if presyn_state is None:
             # Recurrent state stays float32 under bf16/fp16 autocast: slow relaxations such as
             # CL*0.995 + 0.005 and RRP refill increments are below bf16 resolution near 1.0.
-            presyn_state = build_presyn_state(B, Tk, H, device, torch.float32, self.cfg)
+            presyn_state = build_presyn_state(B, Tk, H, device, torch.float32, cfg)
         else:
             # Fill in missing keys from older caches/checkpoints and extend along time as needed.
-            if "C" not in presyn_state:
+            c_state = presyn_state.get("C")
+            if c_state is None:
                 raise KeyError("presyn_state missing required key 'C'")
-            granularity = _resolve_synaptic_granularity(self.cfg)
-            physical_shape = tuple(presyn_state["C"].shape)
+            granularity = _resolve_synaptic_granularity(cfg)
+            physical_shape = tuple(c_state.shape)
             if len(physical_shape) != 3 or physical_shape[0] != B:
                 raise ValueError(
                     f"presynaptic state must be rank 3 with batch size {B}, got {physical_shape}"
@@ -3785,7 +4164,7 @@ class SynapticCausalSelfAttention(nn.Module):
                     )
                 T_state = int(physical_shape[2])
             else:
-                expected_shape = _presyn_state_shape(B, Tk, H, self.cfg)
+                expected_shape = _presyn_state_shape(B, Tk, H, cfg)
                 if physical_shape != expected_shape:
                     raise ValueError(
                         f"{granularity.value} state must have physical shape "
@@ -3793,68 +4172,216 @@ class SynapticCausalSelfAttention(nn.Module):
                     )
                 # Pooled state is independent of logical KV extent and never grows with Tk.
                 T_state = Tk
-            if "BUF" not in presyn_state:
-                presyn_state["BUF"] = torch.zeros_like(presyn_state["C"])
-            if self.cfg.metriplectic_integrator and "HEAT" not in presyn_state:
-                presyn_state["HEAT"] = torch.zeros_like(presyn_state["C"])
-            if "RRP" not in presyn_state:
-                presyn_state["RRP"] = torch.full_like(presyn_state["C"], self.cfg.init_rrp)
-            if "RES" not in presyn_state:
-                presyn_state["RES"] = torch.full_like(presyn_state["C"], self.cfg.init_reserve)
-            if "PR" not in presyn_state:
-                presyn_state["PR"] = torch.full_like(presyn_state["C"], self.cfg.init_snare)
-            if "CL" not in presyn_state:
-                presyn_state["CL"] = torch.full_like(presyn_state["C"], self.cfg.init_clamp)
-            if "E" not in presyn_state:
-                presyn_state["E"] = torch.full_like(presyn_state["C"], self.cfg.init_energy)
-            if "AMP" not in presyn_state:
-                presyn_state["AMP"] = torch.full_like(presyn_state["C"], self.cfg.init_amp)
-            if "DELAY" not in presyn_state:
-                presyn_state["DELAY"] = [
-                    torch.zeros_like(presyn_state["C"]) for _ in range(self.cfg.endo_delay)
-                ]
+            if "DELAY" not in presyn_state or "BUF" not in presyn_state or "AMP" not in presyn_state:
+                if "BUF" not in presyn_state:
+                    presyn_state["BUF"] = torch.zeros_like(c_state)
+                if "RRP" not in presyn_state:
+                    presyn_state["RRP"] = torch.full_like(c_state, cfg.init_rrp)
+                if "RES" not in presyn_state:
+                    presyn_state["RES"] = torch.full_like(c_state, cfg.init_reserve)
+                if "PR" not in presyn_state:
+                    presyn_state["PR"] = torch.full_like(c_state, cfg.init_snare)
+                if "CL" not in presyn_state:
+                    presyn_state["CL"] = torch.full_like(c_state, cfg.init_clamp)
+                if "E" not in presyn_state:
+                    presyn_state["E"] = torch.full_like(c_state, cfg.init_energy)
+                if "AMP" not in presyn_state:
+                    presyn_state["AMP"] = torch.full_like(c_state, cfg.init_amp)
+                if "DELAY" not in presyn_state:
+                    presyn_state["DELAY"] = [
+                        torch.zeros_like(c_state) for _ in range(cfg.endo_delay)
+                    ]
+            if cfg.metriplectic_integrator and "HEAT" not in presyn_state:
+                presyn_state["HEAT"] = torch.zeros_like(c_state)
 
             if T_state < Tk:
-                T_add = Tk - T_state
-                state_dtype = presyn_state["C"].dtype
-                pad_zeros = torch.zeros((B, H, T_add), device=device, dtype=state_dtype)
+                state_dtype = c_state.dtype
+                use_cpu_cap = (
+                    Tq == 1
+                    and cfg.native_presyn
+                    and device.type == "cpu"
+                    and state_dtype == torch.float32
+                    and not train_mode
+                    and not torch.is_grad_enabled()
+                    and _rust_presyn_kernel() is not None
+                    and not cfg.differentiable_recurrence
+                    and not cfg.use_flex_attention
+                    and not bool(getattr(pre, "_mc_sampling", False))
+                    and pre.kinetics is None
+                    and not pre.use_metriplectic_integrator()
+                    and "HEAT" not in presyn_state
+                )
+                if use_cpu_cap:
+                    cap = c_state.stride(1)
+                    if (
+                        c_state.stride(2) == 1
+                        and cap >= Tk
+                        and c_state.stride(0) == H * cap
+                        and c_state.storage_offset() == 0
+                        and c_state.untyped_storage().nbytes()
+                        >= B * H * cap * c_state.element_size()
+                    ):
+                        new_shape = (B, H, Tk)
+                        new_stride = (H * cap, cap, 1)
+                        for k_name in ("C", "BUF", "RRP", "RES", "PR", "CL", "E", "AMP"):
+                            presyn_state[k_name] = torch.as_strided(
+                                presyn_state[k_name], new_shape, new_stride
+                            )
+                        presyn_state["DELAY"] = [
+                            torch.as_strided(d, new_shape, new_stride)
+                            for d in presyn_state["DELAY"]
+                        ]
+                    else:
+                        cap = max(Tk, max(512, T_state * 2))
+                        cap_shape = (B, H, cap)
+                        new_shape = (B, H, Tk)
+                        new_stride = (H * cap, cap, 1)
 
-                def pad_full(t: Tensor, fill: float) -> Tensor:
-                    pad = torch.full((B, H, T_add), fill, device=device, dtype=t.dtype)
-                    return torch.cat([t, pad], dim=2)
+                        def _grow_zero(old_t: Tensor) -> Tensor:
+                            buf = torch.zeros(cap_shape, device=device, dtype=state_dtype)
+                            buf[:, :, :T_state].copy_(old_t)
+                            return torch.as_strided(buf, new_shape, new_stride)
 
-                presyn_state["C"] = torch.cat([presyn_state["C"], pad_zeros], dim=2)
-                presyn_state["BUF"] = torch.cat([presyn_state["BUF"], pad_zeros], dim=2)
-                if self.cfg.metriplectic_integrator:
-                    presyn_state["HEAT"] = torch.cat(
-                        [presyn_state["HEAT"], pad_zeros], dim=2
+                        def _grow_fill(old_t: Tensor, fill_val: float) -> Tensor:
+                            buf = torch.full(
+                                cap_shape, fill_val, device=device, dtype=state_dtype
+                            )
+                            buf[:, :, :T_state].copy_(old_t)
+                            return torch.as_strided(buf, new_shape, new_stride)
+
+                        presyn_state["C"] = _grow_zero(c_state)
+                        presyn_state["BUF"] = _grow_zero(presyn_state["BUF"])
+                        presyn_state["RRP"] = _grow_fill(
+                            presyn_state["RRP"], cfg.init_rrp
+                        )
+                        presyn_state["RES"] = _grow_fill(
+                            presyn_state["RES"], cfg.init_reserve
+                        )
+                        presyn_state["PR"] = _grow_fill(
+                            presyn_state["PR"], cfg.init_snare
+                        )
+                        presyn_state["CL"] = _grow_fill(
+                            presyn_state["CL"], cfg.init_clamp
+                        )
+                        presyn_state["E"] = _grow_fill(
+                            presyn_state["E"], cfg.init_energy
+                        )
+                        presyn_state["AMP"] = _grow_fill(
+                            presyn_state["AMP"], cfg.init_amp
+                        )
+                        presyn_state["DELAY"] = [
+                            _grow_zero(d) for d in presyn_state["DELAY"]
+                        ]
+                else:
+                    T_add = Tk - T_state
+                    pad_shape = (B, H, T_add)
+                    pad_zeros = torch.zeros(pad_shape, device=device, dtype=state_dtype)
+                    presyn_state["C"] = torch.cat([c_state, pad_zeros], dim=2)
+                    presyn_state["BUF"] = torch.cat(
+                        [presyn_state["BUF"], pad_zeros], dim=2
                     )
-                presyn_state["RRP"] = pad_full(presyn_state["RRP"], self.cfg.init_rrp)
-                presyn_state["RES"] = pad_full(presyn_state["RES"], self.cfg.init_reserve)
-                presyn_state["PR"] = pad_full(presyn_state["PR"], self.cfg.init_snare)
-                presyn_state["CL"] = pad_full(presyn_state["CL"], self.cfg.init_clamp)
-                presyn_state["E"] = pad_full(presyn_state["E"], self.cfg.init_energy)
-                presyn_state["AMP"] = pad_full(presyn_state["AMP"], self.cfg.init_amp)
-                presyn_state["DELAY"] = [
-                    torch.cat([d, pad_zeros], dim=2) for d in presyn_state["DELAY"]
-                ]
+                    if cfg.metriplectic_integrator:
+                        presyn_state["HEAT"] = torch.cat(
+                            [presyn_state["HEAT"], pad_zeros], dim=2
+                        )
+                    presyn_state["RRP"] = torch.cat(
+                        [
+                            presyn_state["RRP"],
+                            torch.full(
+                                pad_shape,
+                                cfg.init_rrp,
+                                device=device,
+                                dtype=state_dtype,
+                            ),
+                        ],
+                        dim=2,
+                    )
+                    presyn_state["RES"] = torch.cat(
+                        [
+                            presyn_state["RES"],
+                            torch.full(
+                                pad_shape,
+                                cfg.init_reserve,
+                                device=device,
+                                dtype=state_dtype,
+                            ),
+                        ],
+                        dim=2,
+                    )
+                    presyn_state["PR"] = torch.cat(
+                        [
+                            presyn_state["PR"],
+                            torch.full(
+                                pad_shape,
+                                cfg.init_snare,
+                                device=device,
+                                dtype=state_dtype,
+                            ),
+                        ],
+                        dim=2,
+                    )
+                    presyn_state["CL"] = torch.cat(
+                        [
+                            presyn_state["CL"],
+                            torch.full(
+                                pad_shape,
+                                cfg.init_clamp,
+                                device=device,
+                                dtype=state_dtype,
+                            ),
+                        ],
+                        dim=2,
+                    )
+                    presyn_state["E"] = torch.cat(
+                        [
+                            presyn_state["E"],
+                            torch.full(
+                                pad_shape,
+                                cfg.init_energy,
+                                device=device,
+                                dtype=state_dtype,
+                            ),
+                        ],
+                        dim=2,
+                    )
+                    presyn_state["AMP"] = torch.cat(
+                        [
+                            presyn_state["AMP"],
+                            torch.full(
+                                pad_shape,
+                                cfg.init_amp,
+                                device=device,
+                                dtype=state_dtype,
+                            ),
+                        ],
+                        dim=2,
+                    )
+                    presyn_state["DELAY"] = [
+                        torch.cat([d, pad_zeros], dim=2) for d in presyn_state["DELAY"]
+                    ]
 
         # Repeat cached K/V heads to match query heads (GQA)
-        k_full = self._repeat_kv(k.transpose(1, 2)).transpose(1, 2)  # (B, H, Tk, D)
-        v_full = self._repeat_kv(v.transpose(1, 2)).transpose(1, 2)  # (B, H, Tk, D)
+        if H == Hkv:
+            k_full = k
+            v_full = v
+        else:
+            k_full = self._repeat_kv(k.transpose(1, 2)).transpose(1, 2)  # (B, H, Tk, D)
+            v_full = self._repeat_kv(v.transpose(1, 2)).transpose(1, 2)  # (B, H, Tk, D)
 
         # Build attention logits (masked in-place)
         dots = (q @ k_full.transpose(-1, -2)) / math.sqrt(D)  # (B, H, Tq, Tk)
         prefix_len = Tk - Tq
-        if prefix_len <= 0:
-            attn_mask = torch.tril(torch.ones((Tq, Tk), device=device, dtype=torch.bool))
-        else:
-            attn_mask = torch.zeros((Tq, Tk), device=device, dtype=torch.bool)
-            attn_mask[:, :prefix_len] = True
-            attn_mask[:, prefix_len:] = torch.tril(
-                torch.ones((Tq, Tq), device=device, dtype=torch.bool)
-            )
-        dots = dots.masked_fill(~attn_mask.view(1, 1, Tq, Tk), -torch.inf)
+        unmasked_single_decode = Tq == 1 and prefix_len == Tk - 1
+        if not unmasked_single_decode:
+            if prefix_len <= 0:
+                attn_mask = torch.tril(torch.ones((Tq, Tk), device=device, dtype=torch.bool))
+            else:
+                attn_mask = torch.zeros((Tq, Tk), device=device, dtype=torch.bool)
+                attn_mask[:, :prefix_len] = True
+                attn_mask[:, prefix_len:] = torch.tril(
+                    torch.ones((Tq, Tq), device=device, dtype=torch.bool)
+                )
+            dots = dots.masked_fill(~attn_mask.view(1, 1, Tq, Tk), -torch.inf)
 
         # --- FlexAttention Path (training/prefill only for now) ---
         if self.flex is not None:
@@ -3863,7 +4390,7 @@ class SynapticCausalSelfAttention(nn.Module):
                     "SynapticFlexAttention currently requires full-sequence attention (no prefix KV cache). "
                     "Set SynapticConfig.use_flex_attention=False for decoding with KV cache."
                 )
-            topk = min(self.cfg.attn_topk, Tk)
+            topk = min(cfg.attn_topk, Tk)
             vals, idx = torch.topk(dots, topk, dim=-1)
             valid = torch.isfinite(vals)
             from torch.nn.attention.flex_attention import create_block_mask
@@ -3885,7 +4412,7 @@ class SynapticCausalSelfAttention(nn.Module):
 
             query_outputs = []
             for query_index in range(Tq):
-                _ = self.pre.release_canonical(
+                _ = pre.release_canonical(
                     presyn_state,
                     vals[:, :, query_index : query_index + 1],
                     idx[:, :, query_index : query_index + 1],
@@ -3895,7 +4422,7 @@ class SynapticCausalSelfAttention(nn.Module):
                 )
                 flex_state = presyn_state
                 if (
-                    _resolve_synaptic_granularity(self.cfg)
+                    _resolve_synaptic_granularity(cfg)
                     is not SynapticGranularity.PER_CONNECTION
                 ):
                     # Flex's score modifier indexes per-head/per-key tensors. Broadcast the
@@ -3921,13 +4448,14 @@ class SynapticCausalSelfAttention(nn.Module):
                 )
             y = torch.cat(query_outputs, dim=2)
             y = y.transpose(1, 2).contiguous().view(B, Tq, H * D)
-            y = self.resid_drop(self.o_proj(y))
+            y = self.o_proj(y)
+            if self.training and self.resid_drop.p > 0.0:
+                y = self.resid_drop(y)
             return y, presyn_state
 
         # --- Standard Path ---
-        topk = min(self.cfg.attn_topk, Tk)
+        topk = min(cfg.attn_topk, Tk)
         vals, idx = torch.topk(dots, topk, dim=-1)
-        valid = torch.isfinite(vals)
 
         # Run presynaptic physics on only the valid edges (8j9.2/ukxt: canonical faithful
         # release; the septin barrier is applied at the logit level below, not folded into e).
@@ -3935,9 +4463,9 @@ class SynapticCausalSelfAttention(nn.Module):
         # one-query steps; differentiable recurrence may explicitly group queries for training.
         # Single-token decode already has exactly one materialized query/key frontier.
         differentiable_recurrence = (
-            self.cfg.differentiable_recurrence and torch.is_grad_enabled()
+            cfg.differentiable_recurrence and torch.is_grad_enabled()
         )
-        native_decode = self.pre._can_use_native_presyn_decode(
+        native_decode = pre._can_use_native_presyn_decode(
             presyn_state,
             vals,
             train=train_mode,
@@ -3945,7 +4473,30 @@ class SynapticCausalSelfAttention(nn.Module):
             apply_barrier=False,
             q_pos=None,
         )
+        cpu_native_decode = (
+            Tq == 1
+            and not native_decode
+            and dots.dtype == torch.float32
+            and not dots.requires_grad
+            and dots.is_contiguous()
+            and pre._can_use_native_presyn_cpu_decode(
+                presyn_state,
+                vals,
+                train=train_mode,
+                differentiable=differentiable_recurrence,
+                apply_barrier=False,
+                q_pos=None,
+                active_key_count=None,
+                runtime_buffers=None,
+            )
+        )
+        valid = (
+            None
+            if (cpu_native_decode and unmasked_single_decode)
+            else torch.isfinite(vals)
+        )
         if Tq > 1:
+            assert valid is not None
             e = self._chunked_release_bias(
                 presyn_state,
                 vals,
@@ -3955,7 +4506,7 @@ class SynapticCausalSelfAttention(nn.Module):
                 prefix_len,
             )
         elif native_decode:
-            e = self.pre.release_canonical(
+            e = pre.release_canonical(
                 presyn_state,
                 vals,
                 idx,
@@ -3963,8 +4514,22 @@ class SynapticCausalSelfAttention(nn.Module):
                 valid=valid,
                 logits=dots,
             )
+        elif cpu_native_decode:
+            barrier_scale = (
+                cfg.barrier_strength / max(1.0, float(prefix_len + 1))
+                if unmasked_single_decode
+                else 0.0
+            )
+            e = pre._release_canonical_rust_cpu(
+                presyn_state,
+                vals,
+                idx,
+                valid,
+                logits=dots,
+                barrier_scale=barrier_scale,
+            )
         else:
-            e = self.pre.release_canonical(
+            e = pre.release_canonical(
                 presyn_state,
                 vals,
                 idx,
@@ -3973,39 +4538,58 @@ class SynapticCausalSelfAttention(nn.Module):
                 differentiable=differentiable_recurrence,
             )
 
-        # Scatter biological log-bias back into the logits, preserving masking.
-        if native_decode:
-            augmented_dots = dots
+        if cpu_native_decode and unmasked_single_decode:
+            logits = dots
         else:
-            aug = torch.zeros_like(dots)
-            src_val = self.cfg.lambda_loge * torch.log(self.cfg.epsilon + e).to(
-                aug.dtype
-            )
-            # Clamp the log-release bias to a finite range so no single edge can dominate
-            # the softmax when the normalized release spikes (numerical hardening, vg9.5).
-            clamp = self.cfg.loge_bias_clamp
-            if clamp and clamp > 0.0:
-                src_val = src_val.clamp(-clamp, clamp)
-            src_val = src_val * valid.to(src_val.dtype)
-            aug.scatter_add_(-1, idx, src_val)
-            augmented_dots = dots + aug
+            # Scatter biological log-bias back into the logits, preserving masking.
+            if native_decode or cpu_native_decode:
+                augmented_dots = dots
+            else:
+                assert valid is not None
+                src_val = cfg.lambda_loge * torch.log(cfg.epsilon + e).to(
+                    dots.dtype
+                )
+                # Clamp the log-release bias to a finite range so no single edge can dominate
+                # the softmax when the normalized release spikes (numerical hardening, vg9.5).
+                clamp = cfg.loge_bias_clamp
+                if clamp and clamp > 0.0:
+                    src_val = src_val.clamp(-clamp, clamp)
+                if not unmasked_single_decode or not bool(valid.all()):
+                    src_val = src_val * valid.to(src_val.dtype)
+                if dots.requires_grad:
+                    augmented_dots = dots.scatter_add(-1, idx, src_val)
+                else:
+                    augmented_dots = dots.scatter_add_(-1, idx, src_val)
 
-        # Septin-like distance barrier in global positions.
-        q_pos = torch.arange(
-            prefix_len, prefix_len + Tq, device=device, dtype=torch.float32
-        )
-        k_pos = torch.arange(0, Tk, device=device, dtype=torch.float32)
-        causal_extent = (q_pos + 1.0).clamp_min(1.0)[:, None]
-        dist = (q_pos[:, None] - k_pos[None, :]).abs() / causal_extent
-        logits = augmented_dots - (
-            self.cfg.barrier_strength * dist.to(dots.dtype)
-        ).view(1, 1, Tq, Tk)
+            # Septin-like distance barrier in global positions.
+            k_pos = self._get_k_pos(Tk, device)
+            if Tq == 1:
+                causal_extent_f = max(1.0, float(prefix_len + 1))
+                if prefix_len >= Tk - 1:
+                    dist = (float(prefix_len) - k_pos) * (
+                        cfg.barrier_strength / causal_extent_f
+                    )
+                else:
+                    dist = (float(prefix_len) - k_pos).abs() * (
+                        cfg.barrier_strength / causal_extent_f
+                    )
+                logits = augmented_dots - dist.to(dots.dtype).view(1, 1, 1, Tk)
+            else:
+                q_pos = self._get_k_pos(prefix_len + Tq, device)[prefix_len:]
+                causal_extent = (q_pos + 1.0).clamp_min(1.0)[:, None]
+                dist = (q_pos[:, None] - k_pos[None, :]).abs() / causal_extent
+                logits = augmented_dots - (
+                    cfg.barrier_strength * dist.to(dots.dtype)
+                ).view(1, 1, Tq, Tk)
 
         P = F.softmax(logits, dim=-1)
-        P = self.attn_drop(P)
+        if self.training and self.attn_drop.p > 0.0:
+            P = self.attn_drop(P)
         ctx = torch.matmul(P.to(v_full.dtype), v_full)
         y = ctx.transpose(1, 2).contiguous().view(B, Tq, H * D)
-        y = self.resid_drop(self.o_proj(y))
+        y = self.o_proj(y)
+        if self.training and self.resid_drop.p > 0.0:
+            y = self.resid_drop(y)
         return y, presyn_state
 
 
@@ -4023,15 +4607,26 @@ class SynapticMLP(nn.Module):
         self.register_buffer("E0", torch.tensor(0.8))
 
     def forward(self, x: Tensor, update_mem: bool = True):
-        B, T, _C = x.shape
         c0 = self.C0
         e0 = self.E0
-        c = c0.expand(B, T)
-        e = e0.expand(B, T)
-        h = self.fc(x, c, e, update_mem=update_mem)
+        fc = self.fc
+        proj = self.proj
+        if (
+            not fc._forward_hooks
+            and not fc._forward_pre_hooks
+            and not proj._forward_hooks
+            and not proj._forward_pre_hooks
+        ):
+            h = fc.forward(x, c0, e0, update_mem=update_mem)
+            h = F.relu(h).square()
+            if self.training and self.drop.p > 0.0:
+                h = self.drop(h)
+            return proj.forward(h, c0, e0, update_mem=update_mem)
+        h = fc(x, c0, e0, update_mem=update_mem)
         h = F.relu(h).square()
-        h = self.drop(h)
-        y = self.proj(h, c, e, update_mem=update_mem)
+        if self.training and self.drop.p > 0.0:
+            h = self.drop(h)
+        y = proj(h, c0, e0, update_mem=update_mem)
         return y
 
 
@@ -4093,7 +4688,8 @@ class SynapticExpert(nn.Module):
             update_mem=update_mem,
         )
         y = F.relu(y).square()
-        y = self.drop(y)
+        if self.training and self.drop.p > 0.0:
+            y = self.drop(y)
         y = self.fc2(
             y,
             calcium=c_tens,
@@ -4344,7 +4940,7 @@ class SynapticMoE(nn.Module):
         flat_out = out.view(-1, C)
         flat_x = x.view(-1, C)
 
-        use_fused_genetics = self.cfg.native_genetics and gates.is_cuda
+        use_fused_genetics = bool(self.cfg.native_genetics)
 
         me = torch.zeros(E, device=device)
         pe = torch.zeros(E, device=device)
@@ -4370,37 +4966,29 @@ class SynapticMoE(nn.Module):
 
         with torch.no_grad():
             if use_fused_genetics:
-                try:
-                    from bio_inspired_nanochat.kernels import (
-                        accumulate_router_stats,
-                        update_metabolism_fused,
-                    )
-                    counts, gate_sums = accumulate_router_stats(idx.detach(), gates.detach(), E)
-                    me = counts
-                    pe = gate_sums
-                    # 9mxi: the fatigue/energy EMAs are PERSISTENT adaptation state —
-                    # only write them when update_mem; eval must leave them untouched.
-                    if update_mem:
-                        util = counts.clamp_min(1.0) / float(B * T)
-                        update_metabolism_fused(fatigue_buf, energy_buf, alpha_fatigue, alpha_energy, util)
-                except ImportError:
-                    # Compiled/Triton kernels unavailable: recompute the router
-                    # statistics in plain PyTorch. ``me``/``pe`` were never populated
-                    # by the expert loop on this path, so reading them here produced
-                    # all-zeros — metabolism EMAs collapsed to a constant fixed point
-                    # and aux_loss was identically 0 (load balancing silently off).
-                    flat_idx0 = idx.detach().reshape(-1)
-                    flat_g = gates.detach().reshape(-1)
-                    counts_fb = torch.zeros(E, device=device, dtype=me.dtype)
-                    counts_fb.index_add_(0, flat_idx0, torch.ones_like(flat_g))
-                    sums_fb = torch.zeros(E, device=device, dtype=me.dtype)
-                    sums_fb.index_add_(0, flat_idx0, flat_g.to(me.dtype))
-                    me = counts_fb
-                    pe = sums_fb
+                from bio_inspired_nanochat.kernels.dispatcher import (
+                    dispatch_accumulate_router_stats,
+                    dispatch_update_metabolism,
+                )
+
+                counts, gate_sums = dispatch_accumulate_router_stats(
+                    idx.detach(), gates.detach(), E
+                )
+                me = counts.to(device=device, dtype=me.dtype)
+                pe = gate_sums.to(device=device, dtype=pe.dtype)
+                # 9mxi: the fatigue/energy EMAs are PERSISTENT adaptation state —
+                # only write them when update_mem; eval must leave them untouched.
+                if update_mem:
                     util = me.clamp_min(1.0) / float(B * T)
-                    if update_mem:
-                        fatigue_buf.mul_(1.0 - alpha_fatigue).add_(alpha_fatigue * util)
-                        energy_buf.mul_(1.0 - alpha_energy).add_(alpha_energy * (1.0 - util))
+                    f_next, e_next = dispatch_update_metabolism(
+                        fatigue_buf,
+                        energy_buf,
+                        alpha_fatigue.detach(),
+                        alpha_energy.detach(),
+                        util,
+                    )
+                    fatigue_buf.copy_(f_next)
+                    energy_buf.copy_(e_next)
             else:
                 util = me.clamp_min(1.0) / float(B * T)
                 if update_mem:
@@ -4422,6 +5010,18 @@ class SynapticMoE(nn.Module):
                 last_ctx["glial_bias"] = self.glial.routing_bias.detach().clone()
                 last_ctx["glial_activity"] = self.glial.activity_ema.detach().clone()
             object.__setattr__(self, "last_ctx", last_ctx)
+
+        if use_fused_genetics and gates.requires_grad:
+            flat_idx_valid = idx.reshape(-1)
+            flat_gates_valid = gates.reshape(-1).to(pe.dtype)
+            valid_mask = (flat_idx_valid >= 0) & (flat_idx_valid < E)
+            if not bool(valid_mask.all()):
+                flat_idx_valid = flat_idx_valid[valid_mask]
+                flat_gates_valid = flat_gates_valid[valid_mask]
+            pe_grad = torch.zeros(E, device=device, dtype=pe.dtype).index_add_(
+                0, flat_idx_valid, flat_gates_valid
+            )
+            pe = pe_grad + (pe - pe_grad.detach())
 
         me = me / float(B * T)
         pe = pe / float(B * T)

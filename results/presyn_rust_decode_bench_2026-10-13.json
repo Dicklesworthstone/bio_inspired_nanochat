@@ -1,0 +1,172 @@
+{
+  "bead": "bio_inspired_nanochat-ylo2",
+  "date": "2026-10-13",
+  "torch_num_threads": 4,
+  "rows": [
+    {
+      "batch": 1,
+      "heads": 4,
+      "t_keys": 256,
+      "topk": 32,
+      "pytorch_us": 608.14,
+      "old_rust_us": 156.7,
+      "new_rust_us": 106.81,
+      "speedup_vs_pytorch": 5.69,
+      "speedup_vs_old_rust": 1.47
+    },
+    {
+      "batch": 1,
+      "heads": 4,
+      "t_keys": 512,
+      "topk": 32,
+      "pytorch_us": 888.54,
+      "old_rust_us": 200.3,
+      "new_rust_us": 166.1,
+      "speedup_vs_pytorch": 5.35,
+      "speedup_vs_old_rust": 1.21
+    },
+    {
+      "batch": 1,
+      "heads": 4,
+      "t_keys": 1024,
+      "topk": 32,
+      "pytorch_us": 899.55,
+      "old_rust_us": 265.0,
+      "new_rust_us": 179.25,
+      "speedup_vs_pytorch": 5.02,
+      "speedup_vs_old_rust": 1.48
+    },
+    {
+      "batch": 1,
+      "heads": 4,
+      "t_keys": 2048,
+      "topk": 32,
+      "pytorch_us": 1009.33,
+      "old_rust_us": 410.9,
+      "new_rust_us": 191.77,
+      "speedup_vs_pytorch": 5.26,
+      "speedup_vs_old_rust": 2.14
+    },
+    {
+      "batch": 1,
+      "heads": 4,
+      "t_keys": 4096,
+      "topk": 32,
+      "pytorch_us": 949.67,
+      "old_rust_us": 694.2,
+      "new_rust_us": 133.45,
+      "speedup_vs_pytorch": 7.12,
+      "speedup_vs_old_rust": 5.2
+    },
+    {
+      "batch": 2,
+      "heads": 4,
+      "t_keys": 256,
+      "topk": 32,
+      "pytorch_us": 649.76,
+      "old_rust_us": 204.6,
+      "new_rust_us": 125.6,
+      "speedup_vs_pytorch": 5.17,
+      "speedup_vs_old_rust": 1.63
+    },
+    {
+      "batch": 2,
+      "heads": 4,
+      "t_keys": 512,
+      "topk": 32,
+      "pytorch_us": 632.37,
+      "old_rust_us": 277.8,
+      "new_rust_us": 138.1,
+      "speedup_vs_pytorch": 4.58,
+      "speedup_vs_old_rust": 2.01
+    },
+    {
+      "batch": 2,
+      "heads": 4,
+      "t_keys": 1024,
+      "topk": 32,
+      "pytorch_us": 711.19,
+      "old_rust_us": 418.3,
+      "new_rust_us": 134.09,
+      "speedup_vs_pytorch": 5.3,
+      "speedup_vs_old_rust": 3.12
+    },
+    {
+      "batch": 2,
+      "heads": 4,
+      "t_keys": 2048,
+      "topk": 32,
+      "pytorch_us": 800.06,
+      "old_rust_us": 711.2,
+      "new_rust_us": 150.88,
+      "speedup_vs_pytorch": 5.3,
+      "speedup_vs_old_rust": 4.71
+    },
+    {
+      "batch": 2,
+      "heads": 4,
+      "t_keys": 4096,
+      "topk": 32,
+      "pytorch_us": 1067.94,
+      "old_rust_us": 1282.3,
+      "new_rust_us": 173.71,
+      "speedup_vs_pytorch": 6.15,
+      "speedup_vs_old_rust": 7.38
+    },
+    {
+      "batch": 4,
+      "heads": 8,
+      "t_keys": 256,
+      "topk": 32,
+      "pytorch_us": 732.02,
+      "old_rust_us": 526.7,
+      "new_rust_us": 211.23,
+      "speedup_vs_pytorch": 3.47,
+      "speedup_vs_old_rust": 2.49
+    },
+    {
+      "batch": 4,
+      "heads": 8,
+      "t_keys": 512,
+      "topk": 32,
+      "pytorch_us": 862.47,
+      "old_rust_us": 804.8,
+      "new_rust_us": 230.4,
+      "speedup_vs_pytorch": 3.74,
+      "speedup_vs_old_rust": 3.49
+    },
+    {
+      "batch": 4,
+      "heads": 8,
+      "t_keys": 1024,
+      "topk": 32,
+      "pytorch_us": 1203.69,
+      "old_rust_us": 1384.0,
+      "new_rust_us": 265.24,
+      "speedup_vs_pytorch": 4.54,
+      "speedup_vs_old_rust": 5.22
+    },
+    {
+      "batch": 4,
+      "heads": 8,
+      "t_keys": 2048,
+      "topk": 32,
+      "pytorch_us": 1466.47,
+      "old_rust_us": 2641.4,
+      "new_rust_us": 309.95,
+      "speedup_vs_pytorch": 4.73,
+      "speedup_vs_old_rust": 8.52
+    },
+    {
+      "batch": 4,
+      "heads": 8,
+      "t_keys": 4096,
+      "topk": 32,
+      "pytorch_us": 2119.34,
+      "old_rust_us": 5551.3,
+      "new_rust_us": 427.38,
+      "speedup_vs_pytorch": 4.96,
+      "speedup_vs_old_rust": 12.99
+    }
+  ]
+}

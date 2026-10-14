@@ -112,16 +112,17 @@ MoE-only columns moved to the MoE stage on 2026-10-07).
 
 ---
 
-**Throughput budget (proposed 2026-09-03, bead `74f.10.1`; owner to confirm):** `tok_per_sec` and
+**Throughput budget (confirmed 2026-10-13, bead `74f.10.1`: `train_ratio_max=2.0`, `decode_ratio_max=1.5`):** `tok_per_sec` and
 `peak_mem_gb` are not only recorded — at D1 scale `bio_all` must reach ≥ 1/2.0 of the param-matched
-vanilla's training tokens/s and ≤ 1.5× its decode latency on the same host/batch/sequence, or the
-quality effect is judged at equal compute and the mechanism is a candidate for pruning (`hwxb.6.1`).
+vanilla's training tokens/s and ≤ 1.5× its decode latency on the same host/batch/sequence (enforced
+via `ThroughputBudget` in `bio_inspired_nanochat/perf_regression.py`), or the quality effect is
+judged at equal compute and the mechanism is a candidate for pruning (`hwxb.6.1`).
 
 ## 4) Staged compute + the go/no-go gate
 
-Running all 13 columns × 3 seeds at full budget is wasteful if half the mechanisms do nothing.
+Running all 17 columns × 3 seeds at full budget is wasteful if half the mechanisms do nothing.
 
-1. **Screening pass** — all 13 columns × 2 seeds × 10M tokens. Cheap; drops mechanisms that clearly
+1. **Screening pass** — all 17 columns × 2 seeds × 10M tokens. Cheap; drops mechanisms that clearly
    do not move the primary metric.
 2. **Go/no-go gate** (`ablation_matrix.go_no_go`) — before the expensive pass, require:
    - ≥1 mechanism **survived** screening (else report the null result — the experiment is allowed to
@@ -190,13 +191,20 @@ round-trips every column through `base_train`'s own override parser, and
 --checkpoint-dir` scoring from the checkpoints' own metadata → `eval_stats` pairing — so a broken
 link fails there before it burns GPU hours (about four minutes on CPU; nightly).
 
-**Toy-scale dry run on real text (2026-10-07).** The three anchors ran through this exact chain
-at 2L/128d, 600k WikiText-2 tokens, seeds 1337–1339 (`results/toy_screening_2026-10-07_verdict.md`):
-vanilla 1.958, synaptic_off 2.028, bio_all 2.038 val bpb, the same sign on every seed and `null` under
-the support rule at n = 3. It is the first run of the chain whose seeds are real (`--init_seed`
-reaches weight init since `636e955`) and whose bio arm trains stably (scalar LR, `8d1a3d0`). For
-the D1 run set `BIO_FUSED_PRESYN=1` after the GPU-marked kernel tests pass, so every synaptic column
-uses the one-launch presyn scan.
+**Toy-scale dry runs on real text (2026-10-07 and 2026-10-13).** The three anchors first ran through
+this exact chain at 2L/128d, 600k WikiText-2 tokens, seeds 1337–1339
+(`results/toy_screening_2026-10-07_verdict.md`): vanilla 1.958, synaptic_off 2.028, bio_all 2.038 val bpb.
+Subsequent diagnosis (`results/scaffold_diagnosis_2026-10-07.json`, `03bb9bf` / `f96747e`) showed that the
+`+0.069 bpb` substrate penalty was caused by a missing final RMSNorm before `lm_head` on `GPTSynaptic`:
+restoring `final_norm=True` and moving online Hebbian plasticity to opt-in (`enable_hebbian=False` in
+`bio_all`) brought `synaptic_off` to `1.920 ± 0.004 bpb` (`-0.038 bpb` vs `vanilla`) and `bio_all` to
+`1.930 ± 0.005 bpb` (`-0.028 bpb` vs `vanilla`) on the same 3 seeds × 614k WikiText-2 tokens. On
+2026-10-13 (`hwxb.5.5`), after fixing two meta-device initialization bugs in `add_cusp_latch` and
+`moe_add_glial_homeostasis`, all 17 dense columns × 2 seeds (`results/toy_screening_2026-10-13_verdict.md`)
+and all 5 structural MoE columns × 2 seeds (`results/structural_smoke_2026-10-13.json`) were executed
+end-to-end through `matrix_launch -> base_train -> eval_matrix -> eval_stats`. For the D1 GPU run set
+`BIO_FUSED_PRESYN=1` after the GPU-marked kernel tests pass, so every synaptic column uses the one-launch
+presyn scan.
 
 **Structural arm (opt-in, not pre-registered).** The expert lifecycle is a training-loop knob,
 so `structural_columns()` provides `moe_fixed` (bio_all on `SynapticMoE`, fixed experts) and
@@ -204,7 +212,8 @@ so `structural_columns()` provides `moe_fixed` (bio_all on `SynapticMoE`, fixed 
 --split_health_min=1.5 --merge_health_max=0.35`); `moe_splitmerge − moe_fixed` is the
 lifecycle's effect. `--stage structural` launches the MoE stage: the pair plus the MoE-only
 mechanisms' contrasts against `moe_fixed` (`moe_no_metabolism`, `moe_no_genome`,
-`moe_add_glial_homeostasis`; §2). None of it is part of the screening set.
+`moe_add_glial_homeostasis`; §2; verified end-to-end across all 5 columns in
+`results/structural_smoke_2026-10-13.json`). None of it is part of the dense screening set.
 History of the demand signal: under utilization-based health (product or relative) the 2026-09-02
 pilots fired zero events with and without the balance loss (`results/structural_pair_pilot_2026-09-02.json`,
 `_balance0.json`), so the arm measured a no-op. The credit signal (NeuroScore gradient credit, bead

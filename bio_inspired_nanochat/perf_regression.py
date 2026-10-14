@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any, cast
 
 import json
+import math
 import time
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
@@ -77,6 +78,45 @@ class GateComparison:
     observed_tok_per_sec: float
     baseline_tok_per_sec: float
     speed_ratio: float
+    passed: bool
+    detail: str
+
+
+@dataclass(frozen=True)
+class ThroughputBudget:
+    """Declared maximum relative slowdown of synaptic vs param-matched standard models (bead 74f.10).
+
+    Ratios are defined as ``standard_tok_per_sec / synaptic_tok_per_sec`` (equivalently
+    ``synaptic_latency_ms / standard_latency_ms``) measured in the same invocation on the same
+    host, batch size, and sequence length.
+    """
+
+    train_ratio_max: float = 2.0
+    decode_ratio_max: float = 1.5
+
+    def __post_init__(self) -> None:
+        if not math.isfinite(self.train_ratio_max) or self.train_ratio_max <= 0.0:
+            raise ValueError(
+                f"train_ratio_max must be positive and finite, got {self.train_ratio_max}"
+            )
+        if not math.isfinite(self.decode_ratio_max) or self.decode_ratio_max <= 0.0:
+            raise ValueError(
+                f"decode_ratio_max must be positive and finite, got {self.decode_ratio_max}"
+            )
+
+
+DEFAULT_THROUGHPUT_BUDGET = ThroughputBudget()
+
+
+@dataclass
+class BudgetComparison:
+    mode: str
+    standard_name: str
+    synaptic_name: str
+    standard_tok_per_sec: float
+    synaptic_tok_per_sec: float
+    slowdown_ratio: float
+    max_ratio: float
     passed: bool
     detail: str
 
@@ -171,7 +211,7 @@ class PerfRegressionHarness:
                 n_kv_head=cfg.n_head,
                 n_embd=cfg.n_embd,
                 synapses=True,
-                syn_cfg=SynapticConfig(),
+                syn_cfg=SynapticConfig(native_presyn=True, native_genetics=True),
             )
             model: nn.Module = GPTSynaptic(gpt_cfg).to(device)
         else:
@@ -368,6 +408,69 @@ class PerfRegressionHarness:
                 )
             )
 
+        return comparisons
+
+    def evaluate_budget_gates(
+        self,
+        results: Sequence[BenchmarkResult],
+        budget: ThroughputBudget | None = None,
+    ) -> list[BudgetComparison]:
+        """Compare synaptic vs standard throughput in the same run against ThroughputBudget."""
+        active_budget = budget if budget is not None else DEFAULT_THROUGHPUT_BUDGET
+        by_mode: dict[str, dict[bool, BenchmarkResult]] = {}
+        for res in results:
+            by_mode.setdefault(res.mode, {})[res.synaptic] = res
+
+        comparisons: list[BudgetComparison] = []
+        for mode, max_ratio in (
+            ("train", active_budget.train_ratio_max),
+            ("decode", active_budget.decode_ratio_max),
+        ):
+            pair = by_mode.get(mode, {})
+            std_res = pair.get(False)
+            syn_res = pair.get(True)
+            if std_res is None or syn_res is None:
+                continue
+            geom_matches = (std_res.batch_size, std_res.seq_len) == (
+                syn_res.batch_size,
+                syn_res.seq_len,
+            )
+            valid_tps = (
+                math.isfinite(std_res.tok_per_sec)
+                and math.isfinite(syn_res.tok_per_sec)
+                and std_res.tok_per_sec > 0.0
+                and syn_res.tok_per_sec > 0.0
+            )
+            if not geom_matches or not valid_tps:
+                slowdown_ratio = float("inf")
+                passed = False
+                reason = (
+                    f"geometry mismatch {(std_res.batch_size, std_res.seq_len)} != {(syn_res.batch_size, syn_res.seq_len)}"
+                    if not geom_matches
+                    else f"non-positive throughput (std={std_res.tok_per_sec}, syn={syn_res.tok_per_sec})"
+                )
+                detail = f"{syn_res.name} vs {std_res.name}: invalid comparison ({reason})"
+            else:
+                slowdown_ratio = std_res.tok_per_sec / syn_res.tok_per_sec
+                passed = slowdown_ratio <= max_ratio
+                detail = (
+                    f"{syn_res.name} ({syn_res.tok_per_sec:.1f} tok/s) vs "
+                    f"{std_res.name} ({std_res.tok_per_sec:.1f} tok/s): "
+                    f"slowdown={slowdown_ratio:.2f}x (budget <= {max_ratio:.2f}x)"
+                )
+            comparisons.append(
+                BudgetComparison(
+                    mode=mode,
+                    standard_name=std_res.name,
+                    synaptic_name=syn_res.name,
+                    standard_tok_per_sec=std_res.tok_per_sec,
+                    synaptic_tok_per_sec=syn_res.tok_per_sec,
+                    slowdown_ratio=slowdown_ratio,
+                    max_ratio=max_ratio,
+                    passed=passed,
+                    detail=detail,
+                )
+            )
         return comparisons
 
     def record_to_registry(

@@ -98,18 +98,23 @@ Two 4090s on a desktop talk over PCIe, not NVLink, so all-reduce bandwidth is th
 Recommended environment for the launch:
 
 ```bash
-export NCCL_P2P_LEVEL=PXB        # allow P2P over PCIe switches/bridges where available
-export NCCL_P2P_DISABLE=0        # keep P2P on; set =1 only if you see P2P hangs on your board
+export NCCL_P2P_LEVEL=PHB        # trj GPU0<->GPU1 topology is PHB (same NUMA node 0 PCIe Host Bridge)
+export NCCL_IGNORE_DISABLED_P2P=1 # consumer RTX 4090 driver disables BAR1 P2P; suppress warning & use 4-ch SHM ring
+export NCCL_SHM_DISABLE=0        # keep pinned SHM/direct/direct ring ON (+27.4% faster step than socket copy)
 export NCCL_DEBUG=WARN           # surface NCCL issues without spamming
 export OMP_NUM_THREADS=8         # avoid CPU oversubscription with 2 ranks
 export CUDA_VISIBLE_DEVICES=0,1
 ```
 
-If you hit P2P instability on a particular motherboard, fall back to `NCCL_P2P_DISABLE=1`
-(slower, but staging through host memory is robust). The model is intentionally small (`D1`:
-~91M params with `--tie_embeddings=1`, the Phase-0 decision implemented in `hwxb.2.9`; ~133M
-untied if the flag is off), so the per-step bf16 gradient all-reduce volume (~182 MB tied /
-~266 MB untied) overlaps with backward and PCIe stays out of the critical path.
+On `trj` (`nvidia-smi topo -m`: `GPU0 <-> GPU1 = PHB`, NUMA node 0, CPUs `0-127`), the NVIDIA driver (`595.99.02`)
+disables direct PCIe BAR1 peer-to-peer DMA between consumer GeForce RTX 4090 cards (`Check P2P Type
+isAllDirectP2p 0 directMode 0`), and NCCL automatically establishes a 4-channel pinned shared-memory ring
+(`Channel 00..03 : 0[0] <-> 1[1] via SHM/direct/direct`). Keeping `NCCL_SHM_DISABLE=0` (default) achieves
+`340.69 ms/step` (`96,180.8 tok/s`, `81.75 ms` collective sync overhead) on `D1` `vanilla` (`batch=16, seq=1024`)
+versus `434.04 ms/step` (`75,495.7 tok/s`, `175.10 ms` sync overhead) with `NCCL_SHM_DISABLE=1` — a **2.14×
+reduction in collective communication time (+27.4% end-to-end step throughput)** for `vanilla` and a **2.05×
+reduction in collective communication time (+12.4% end-to-end step throughput: `37,428.7` vs `33,291.3 tok/s`)**
+for `bio` (`results/scale_memory_2x4090_{2026-10-14,noshm_2026-10-14}.jsonl`).
 
 ## 6. Launch recipe
 
@@ -124,7 +129,7 @@ Dual 4090 (the real path) — `torchrun` sets `RANK`/`LOCAL_RANK`/`WORLD_SIZE`, 
 `common.get_dist_info()` reads:
 
 ```bash
-export NCCL_P2P_LEVEL=PXB OMP_NUM_THREADS=8
+export NCCL_P2P_LEVEL=PHB NCCL_IGNORE_DISABLED_P2P=1 OMP_NUM_THREADS=8
 .venv/bin/torchrun --standalone --nproc_per_node=2 -m scripts.base_train \
   --depth=10 --max_seq_len=1024 \
   --device_batch_size=16 --total_batch_size=262144   # = 16*1024*2*8 grad-accum
@@ -157,56 +162,41 @@ one piece that cannot be exercised without the GPUs and is tracked as the residu
 
 The memory helper is also the canonical fixed-seed train/inference performance harness. It sweeps
 vanilla vs bio, batch size, and sequence length; synchronizes every CUDA timing window; records
-aggregate tok/s, slowest-rank latency, rank-0 peak allocated/reserved VRAM, best-effort GPU
+aggregate tok/s, slowest-rank latency, rank-0 peak allocated/reserved VRAM, NVML GPU
 utilization, and optional per-rank Chrome traces as schema-stable JSONL.
 
 Single 4090:
 
 ```bash
-CUDA_VISIBLE_DEVICES=0 uv run python -m scripts.scale_memory --matrix \
+CUDA_VISIBLE_DEVICES=0 uv run --no-sync python -m scripts.scale_memory --matrix \
   --device cuda --depth 10 --tie-embeddings \
   --variants vanilla,bio --modes train,infer \
-  --batches 1,2,4,8,16 --seqs 512,1024,2048 \
-  --warmup 20 --steps 100 --seed 1337 \
-  --output-jsonl runs/perf_4090/single.jsonl \
-  --profile-dir runs/perf_4090/profiles_single
+  --batches 8,16 --seqs 512,1024 \
+  --warmup 2 --steps 5 --seed 1337 \
+  --output-jsonl results/scale_memory_1x4090_2026-10-14.jsonl
 ```
 
 Dual 4090 uses the same matrix under `torchrun`; each JSONL row records `WORLD_SIZE`, and tok/s is
 reported as aggregate device throughput. Keep the PCIe environment from §5:
 
 ```bash
-CUDA_VISIBLE_DEVICES=0,1 NCCL_P2P_LEVEL=PXB OMP_NUM_THREADS=8 \
-  uv run torchrun --standalone --nproc_per_node=2 -m scripts.scale_memory --matrix \
+CUDA_VISIBLE_DEVICES=0,1 NCCL_P2P_LEVEL=PHB NCCL_IGNORE_DISABLED_P2P=1 OMP_NUM_THREADS=8 \
+  uv run --no-sync torchrun --standalone --nproc_per_node=2 -m scripts.scale_memory --matrix \
   --device cuda --depth 10 --tie-embeddings \
   --variants vanilla,bio --modes train,infer \
-  --batches 1,2,4,8,16 --seqs 512,1024,2048 \
-  --warmup 20 --steps 100 --seed 1337 \
-  --output-jsonl runs/perf_4090/dual_rank.jsonl \
-  --profile-dir runs/perf_4090/profiles_dual
+  --batches 8,16 --seqs 512,1024 \
+  --warmup 2 --steps 5 --seed 1337 \
+  --output-jsonl results/scale_memory_2x4090_2026-10-14.jsonl
 ```
 
-For SM occupancy and kernel-level PCIe/NCCL analysis, wrap one representative case with Nsight
-Systems and inspect the emitted Torch Chrome trace alongside it:
-
-```bash
-nsys profile --trace=cuda,nvtx,osrt,cudnn,cublas --stats=true \
-  -o runs/perf_4090/nsys_bio_train_b8_t2048 \
-  uv run python -m scripts.scale_memory --matrix --device cuda --variants bio \
-  --modes train --batches 8 --seqs 2048 --warmup 20 --steps 100 \
-  --profile-dir runs/perf_4090/profiles_nsys
-```
-
-Use Nsight Compute for achieved occupancy on that same representative shape (Systems establishes
-the timeline; Compute supplies SM-level counters):
-
-```bash
-ncu --set full --target-processes all \
-  -o runs/perf_4090/ncu_bio_train_b8_t2048 \
-  uv run python -m scripts.scale_memory --matrix --device cuda --variants bio \
-  --modes train --batches 8 --seqs 2048 --warmup 2 --steps 1
-```
-
-Do not copy CPU measurements or estimates into the 4090 baseline table. The committed harness is
-CPU-smoke-tested, but this checkout reports zero CUDA devices; real single/dual-4090 JSONL and Nsight
-artifacts must be collected on the rig before `j9i` is closed.
+Committed RTX 4090 baseline artifacts (`2026-10-14`, `trj`):
+- `results/scale_memory_1x4090_2026-10-14.jsonl` — single-GPU `D1` (`depth=10, d=640, tie=True`) matrix
+  (`vanilla` train `63,272.4 tok/s`, `7.71 GB`; `bio` train `21,230.8 tok/s`, `14.84 GB` at `batch=16, seq=1024`).
+- `results/scale_memory_2x4090_2026-10-14.jsonl` — dual-GPU `D1` matrix (`vanilla` train `96,180.8 tok/s`,
+  `7.55 GB/rank`, `100.0%` GPU util; `bio` train `37,428.7 tok/s`, `14.69 GB/rank`, `1.763×` scaling).
+- `results/scale_memory_2x4090_noshm_2026-10-14.jsonl` — `NCCL_SHM_DISABLE=1` comparison (`75,495.7 tok/s`
+  `vanilla`, `33,291.3 tok/s` `bio`).
+- `results/profiles/d1_4090_profile_2026-10-14.json` — `torch.profiler` CUDA kernel breakdown at `D1`
+  (`batch=16, seq=1024`) comparing unfused TorchScript scan (`1,061,484` kernel launches, `74,958.6 ms/step`
+  presyn / `159,242.7 ms/step` bio_all) against fused Triton `presyn_detached_scan_kernel` (`158` launches =
+  `93.36 ms` CUDA time, `1,280.84 ms/step` bio_all = `124.3×` speedup, `1.870×` vs `vanilla`).

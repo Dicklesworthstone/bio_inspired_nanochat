@@ -63,6 +63,10 @@ def columns_for_stage(stage: str, survivors: Sequence[str] = (), columns: Sequen
     if stage == "confirmation":
         if not survivors:
             raise ValueError("--stage confirmation needs --survivors (the columns screening kept)")
+        known = {c.config_id for c in am.screening_columns() + am.structural_columns()}
+        unknown = [s for s in survivors if s not in known]
+        if unknown:
+            raise ValueError(f"unknown survivor column id(s) {unknown}; known: {sorted(known)}")
         return am.confirmation_columns(list(survivors))
     if stage == "structural":
         return am.structural_columns()
@@ -126,8 +130,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     columns = columns_for_stage(args.stage, survivors, explicit)
     if args.seeds:
         seeds = [int(s) for s in args.seeds.split(",") if s]
+    elif args.stage == "confirmation":
+        seeds = list(am.min_confirmation_seeds(len(survivors)))
     else:
-        seeds = list(am.CONFIRMATION_SEEDS if args.stage == "confirmation" else am.SCREENING_SEEDS)
+        seeds = list(am.SCREENING_SEEDS)
     recipe = shlex.split(args.recipe)
     commands = build_commands(columns, seeds, recipe, args.nproc)
 

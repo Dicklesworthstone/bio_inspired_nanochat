@@ -129,3 +129,39 @@ def test_launcher_prints_one_command_per_cell_and_the_scoring_command():
     )
     assert one.returncode == 0, one.stderr[-1000:]
     assert sum("--depth=4" in ln and "--model_tag=" in ln for ln in one.stdout.splitlines()) == len(stage)
+
+
+def test_confirmation_stage_defaults_to_statistically_feasible_seed_count():
+    """--stage confirmation without --seeds must default to min_confirmation_seeds(len(survivors))
+    so the emitted run clears the Holm-adjusted exact Wilcoxon power check in go_no_go (hwxb.5.4)."""
+    expected_seeds = am.min_confirmation_seeds(1)
+    assert am.go_no_go(["bio_no_presyn"], tok_per_sec=1_000_000.0, seeds=expected_seeds).proceed
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "scripts.matrix_launch",
+            "--stage",
+            "confirmation",
+            "--survivors",
+            "bio_no_presyn",
+            "--recipe=--depth=4",
+        ],
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        timeout=300,
+        env={**__import__("os").environ, "COLUMNS": "400"},
+    )
+    assert proc.returncode == 0, proc.stderr[-2000:]
+    expected_seed_csv = ",".join(str(s) for s in expected_seeds)
+    assert f"--seeds {expected_seed_csv}" in proc.stdout, proc.stdout
+
+    # Structural survivors include moe_fixed anchor; unknown survivor IDs raise ValueError
+    from scripts.matrix_launch import columns_for_stage
+
+    struct_cols = [c.config_id for c in columns_for_stage("confirmation", ["moe_splitmerge"])]
+    assert "moe_fixed" in struct_cols
+    assert "moe_splitmerge" in struct_cols
+    with pytest.raises(ValueError, match="unknown survivor column id"):
+        columns_for_stage("confirmation", ["not_a_real_column"])

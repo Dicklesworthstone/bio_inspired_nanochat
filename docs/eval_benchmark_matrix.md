@@ -148,34 +148,50 @@ Notation:
 - `splitmerge_every=0` disables lifecycle
 - `SynapticConfig` field names refer to `bio_inspired_nanochat/synaptic.py::SynapticConfig`
 
-Important: `scripts/base_train.py` currently does **not** expose most `SynapticConfig` fields via CLI.
-The standardized harness (`bio_inspired_nanochat-41s`) should own preset → config wiring.
+`scripts/base_train.py` exposes every `SynapticConfig` field via `--syn_cfg.<field>=<value>` (since `c70d2fc`,
+2026-09-01), and `scripts/matrix_launch.py` derives those exact flags from `bio_inspired_nanochat/ablation_matrix.py`
+(see [`docs/ablation_matrix.md`](ablation_matrix.md) for the authoritative 17-column dense screening matrix and
+5-column structural MoE stage).
 
-### Baselines
+### Anchors (dense stage)
 
 | preset_id | model | synapses | lifecycle | notes |
 |---|---:|---:|---:|---|
 | `vanilla` | `GPT` | 0 | N/A | Reference baseline |
-| `bio_all` | `GPTSynaptic` | 1 | on | Default synaptic stack |
-| `bio_all_no_lifecycle` | `GPTSynaptic` | 1 | off | `splitmerge_every=0` |
+| `synaptic_off` | `GPTSynaptic` | 1 | off | Synaptic architecture with every biological mechanism disabled |
+| `bio_all` | `GPTSynaptic` | 1 | off | Default dense synaptic stack (`enable_presyn=True`, `enable_hebbian=False`) |
 
-### Ablations (currently implementable via `SynapticConfig` toggles)
+### Leave-one-out dense ablations (`bio_all` minus each default-on dense mechanism)
 
 | preset_id | change vs `bio_all` | intended effect |
 |---|---|---|
 | `bio_no_presyn` | `enable_presyn=False` | remove presynaptic fatigue/vesicles |
-| `bio_no_hebbian` | `enable_hebbian=False` | remove postsynaptic fast weights |
-| `bio_no_metabolism` | `enable_metabolism=False` | remove expert energy dynamics |
-
-### Parameter ablations (planned, by setting scalars to 0)
-
-| preset_id | change vs `bio_all` | note |
-|---|---|---|
 | `bio_no_stochastic_release` | `stochastic_train_frac=0.0` | objective stability vs realism |
 | `bio_no_doc2` | `doc2_gain=0.0` | disable slow calcium sensor path |
-| `bio_no_bdnf` | `bdnf_scale=0.0` | disable metaplasticity modulation |
 | `bio_no_septin_barrier` | `barrier_strength=0.0` | remove distance barrier on logits |
-| `bio_no_genome` | `xi_dim=0` | shared learned kinetics; removes per-expert Xi specialization |
+
+### Add-one-in dense ablations (`synaptic_off` plus each opt-in dense mechanism)
+
+- `add_hebbian` (`enable_hebbian=True`, `bdnf_scale=0.0`)
+- `add_bdnf` (`enable_hebbian=True`, `bdnf_scale=1.0`)
+- `add_bistable_latch` (`enable_hebbian=True`, `bistable_latch=True`, `bdnf_scale=0.0`)
+- `add_stdp` (`enable_hebbian=True`, `stdp_asym_mode=True`, `bdnf_scale=0.0`)
+- `add_native_presyn` (`enable_presyn=True`, `native_presyn=True`)
+- `add_learnable_kinetics` (`enable_presyn=True`, `learnable_kinetics=True`)
+- `add_differentiable_recurrence` (`enable_presyn=True`, `learnable_kinetics=True`, `differentiable_recurrence=True`)
+- `add_cusp_latch` (`enable_hebbian=True`, `bistable_latch=True`, `cusp_latch=True`, `bdnf_scale=0.0`)
+- `add_metriplectic_integrator` (`enable_presyn=True`, `metriplectic_integrator=True`)
+- `add_neuromod` (`enable_presyn=True`, `enable_hebbian=True`, `neuromod_enabled=True`, `bdnf_scale=0.0`)
+
+### Structural MoE stage (`--stage structural`, `use_moe=1`)
+
+| preset_id | change vs `moe_fixed` | note |
+|---|---|---|
+| `moe_fixed` | `use_moe=1`, `splitmerge_every=0` | MoE anchor with default synaptic stack |
+| `moe_splitmerge` | `splitmerge_every=100`, `sm_health_mode=credit` | NeuroScore credit-driven split/merge lifecycle |
+| `moe_no_metabolism` | `enable_metabolism=False` | remove expert energy dynamics |
+| `moe_no_genome` | `xi_dim=0` | shared learned kinetics; removes per-expert Xi specialization |
+| `moe_add_glial_homeostasis` | `glial_homeostasis=True` | enable astrocyte-inspired glial homeostatic gain |
 
 ---
 

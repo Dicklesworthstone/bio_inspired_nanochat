@@ -1,0 +1,546 @@
+{
+  "alpha": 0.05,
+  "baseline": "vanilla",
+  "canonical_recipe_evidence": true,
+  "data_sources": [
+    "fineweb"
+  ],
+  "decision_rule": {
+    "insufficient_evidence": "fewer than min_pairs matched seeds",
+    "multiple_comparison_correction": "holm",
+    "null": "sufficient matched seeds, but neither directional support rule passed",
+    "supported_gain": "at least min_pairs matched seeds; mean delta and paired-bootstrap 95% CI favorable; Holm-adjusted paired-t and Wilcoxon p-values both <= alpha",
+    "supported_regression": "at least min_pairs matched seeds; mean delta and paired-bootstrap 95% CI adverse; Holm-adjusted paired-t and Wilcoxon p-values both <= alpha"
+  },
+  "lower_is_better": true,
+  "metric": "val_bpb",
+  "min_pairs": 2,
+  "presets": {
+    "add_bdnf": {
+      "aggregate": {
+        "ci_high": 0.9579836389592836,
+        "ci_low": 0.9578466693119562,
+        "mean": 0.9579151541356199,
+        "n": 2,
+        "sem": 5.389872513916759e-06,
+        "std": 7.6224308086430505e-06
+      },
+      "better": false,
+      "ci_adverse": true,
+      "ci_favorable": false,
+      "evidence_sufficient": true,
+      "paired_t_p_adjusted": 1.0,
+      "paired_vs_baseline": {
+        "cohen_dz": 2.900441268104279,
+        "delta_ci_high": 0.0012019107713334698,
+        "delta_ci_low": 0.0007307435158020459,
+        "mean_delta": 0.0009663271435677578,
+        "n_favorable": 0,
+        "n_pairs": 2,
+        "t_p_value": 0.15223370297083574,
+        "t_stat": 4.10184337821969,
+        "wilcoxon_p_value": 0.5
+      },
+      "significant": false,
+      "supported_gain": false,
+      "supported_regression": false,
+      "tests_pass": false,
+      "verdict": "null",
+      "wilcoxon_p_adjusted": 1.0
+    },
+    "add_bistable_latch": {
+      "aggregate": {
+        "ci_high": 0.95803458578916,
+        "ci_low": 0.9578021287305535,
+        "mean": 0.9579183572598567,
+        "n": 2,
+        "sem": 9.147383637886362e-06,
+        "std": 1.2936354000928636e-05
+      },
+      "better": false,
+      "ci_adverse": true,
+      "ci_favorable": false,
+      "evidence_sufficient": true,
+      "paired_t_p_adjusted": 1.0,
+      "paired_vs_baseline": {
+        "cohen_dz": 3.1014371415589035,
+        "delta_ci_high": 0.0011905766394184614,
+        "delta_ci_low": 0.0007484838961906437,
+        "mean_delta": 0.0009695302678045525,
+        "n_favorable": 0,
+        "n_pairs": 2,
+        "t_p_value": 0.14270573385672117,
+        "t_stat": 4.386094468440246,
+        "wilcoxon_p_value": 0.5
+      },
+      "significant": false,
+      "supported_gain": false,
+      "supported_regression": false,
+      "tests_pass": false,
+      "verdict": "null",
+      "wilcoxon_p_adjusted": 1.0
+    },
+    "add_cusp_latch": {
+      "aggregate": {
+        "ci_high": 0.9581830475555839,
+        "ci_low": 0.9576476919054571,
+        "mean": 0.9579153697305205,
+        "n": 2,
+        "sem": 2.106670171159175e-05,
+        "std": 2.979281527500155e-05
+      },
+      "better": false,
+      "ci_adverse": true,
+      "ci_favorable": false,
+      "evidence_sufficient": true,
+      "paired_t_p_adjusted": 1.0,
+      "paired_vs_baseline": {
+        "cohen_dz": 3.268103830220719,
+        "delta_ci_high": 0.0011756697920084491,
+        "delta_ci_low": 0.0007574156849280422,
+        "mean_delta": 0.0009665427384682457,
+        "n_favorable": 0,
+        "n_pairs": 2,
+        "t_p_value": 0.1356518998217535,
+        "t_stat": 4.621796759941599,
+        "wilcoxon_p_value": 0.5
+      },
+      "significant": false,
+      "supported_gain": false,
+      "supported_regression": false,
+      "tests_pass": false,
+      "verdict": "null",
+      "wilcoxon_p_adjusted": 1.0
+    },
+    "add_differentiable_recurrence": {
+      "aggregate": {
+        "ci_high": 0.9711933805154245,
+        "ci_low": 0.9518376126387882,
+        "mean": 0.9615154965771063,
+        "n": 2,
+        "sem": 0.000761665984396198,
+        "std": 0.0010771583651313576
+      },
+      "better": false,
+      "ci_adverse": true,
+      "ci_favorable": false,
+      "evidence_sufficient": true,
+      "paired_t_p_adjusted": 1.0,
+      "paired_vs_baseline": {
+        "cohen_dz": 3.255624663398618,
+        "delta_ci_high": 0.005558529324702133,
+        "delta_ci_low": 0.003574809845406146,
+        "mean_delta": 0.0045666695850541394,
+        "n_favorable": 0,
+        "n_pairs": 2,
+        "t_p_value": 0.1361561851953859,
+        "t_stat": 4.604148552974668,
+        "wilcoxon_p_value": 0.5
+      },
+      "significant": false,
+      "supported_gain": false,
+      "supported_regression": false,
+      "tests_pass": false,
+      "verdict": "null",
+      "wilcoxon_p_adjusted": 1.0
+    },
+    "add_hebbian": {
+      "aggregate": {
+        "ci_high": 0.9579854416721739,
+        "ci_low": 0.957844558606351,
+        "mean": 0.9579150001392625,
+        "n": 2,
+        "sem": 5.543868871471513e-06,
+        "std": 7.84021454605304e-06
+      },
+      "better": false,
+      "ci_adverse": true,
+      "ci_favorable": false,
+      "evidence_sufficient": true,
+      "paired_t_p_adjusted": 1.0,
+      "paired_vs_baseline": {
+        "cohen_dz": 2.898084625793317,
+        "delta_ci_high": 0.0012019107713334698,
+        "delta_ci_low": 0.0007304355230869364,
+        "mean_delta": 0.0009661731472102031,
+        "n_favorable": 0,
+        "n_pairs": 2,
+        "t_p_value": 0.15235282430450103,
+        "t_stat": 4.0985105827018655,
+        "wilcoxon_p_value": 0.5
+      },
+      "significant": false,
+      "supported_gain": false,
+      "supported_regression": false,
+      "tests_pass": false,
+      "verdict": "null",
+      "wilcoxon_p_adjusted": 1.0
+    },
+    "add_learnable_kinetics": {
+      "aggregate": {
+        "ci_high": 0.9726339785996702,
+        "ci_low": 0.9504057615476508,
+        "mean": 0.9615198700736605,
+        "n": 2,
+        "sem": 0.0008746993108310063,
+        "std": 0.0012370116283756086
+      },
+      "better": false,
+      "ci_adverse": true,
+      "ci_favorable": false,
+      "evidence_sufficient": true,
+      "paired_t_p_adjusted": 1.0,
+      "paired_vs_baseline": {
+        "cohen_dz": 2.9253650505386344,
+        "delta_ci_high": 0.00567593614769113,
+        "delta_ci_low": 0.0034661500155255265,
+        "mean_delta": 0.004571043081608328,
+        "n_favorable": 0,
+        "n_pairs": 2,
+        "t_p_value": 0.15098497536745467,
+        "t_stat": 4.137090929363992,
+        "wilcoxon_p_value": 0.5
+      },
+      "significant": false,
+      "supported_gain": false,
+      "supported_regression": false,
+      "tests_pass": false,
+      "verdict": "null",
+      "wilcoxon_p_adjusted": 1.0
+    },
+    "add_metriplectic_integrator": {
+      "aggregate": {
+        "ci_high": 0.9723593725119398,
+        "ci_low": 0.9506852955188224,
+        "mean": 0.9615223340153811,
+        "n": 2,
+        "sem": 0.0008528934266032739,
+        "std": 0.001206173451161212
+      },
+      "better": false,
+      "ci_adverse": true,
+      "ci_favorable": false,
+      "evidence_sufficient": true,
+      "paired_t_p_adjusted": 1.0,
+      "paired_vs_baseline": {
+        "cohen_dz": 2.9858702828162262,
+        "delta_ci_high": 0.005656594205184051,
+        "delta_ci_low": 0.003490419841473913,
+        "mean_delta": 0.004573507023328982,
+        "n_favorable": 0,
+        "n_pairs": 2,
+        "t_p_value": 0.14803560501383004,
+        "t_stat": 4.222658249445496,
+        "wilcoxon_p_value": 0.5
+      },
+      "significant": false,
+      "supported_gain": false,
+      "supported_regression": false,
+      "tests_pass": false,
+      "verdict": "null",
+      "wilcoxon_p_adjusted": 1.0
+    },
+    "add_native_presyn": {
+      "aggregate": {
+        "ci_high": 0.9722202329778656,
+        "ci_low": 0.9507762649922581,
+        "mean": 0.9614982489850619,
+        "n": 2,
+        "sem": 0.0008438384407798982,
+        "std": 0.001193367767402698
+      },
+      "better": false,
+      "ci_adverse": true,
+      "ci_favorable": false,
+      "evidence_sufficient": true,
+      "paired_t_p_adjusted": 1.0,
+      "paired_vs_baseline": {
+        "cohen_dz": 2.9951868795201277,
+        "delta_ci_high": 0.00562345418904131,
+        "delta_ci_low": 0.0034753897969779235,
+        "mean_delta": 0.004549421993009617,
+        "n_favorable": 0,
+        "n_pairs": 2,
+        "t_p_value": 0.14759148397532165,
+        "t_stat": 4.235833906859314,
+        "wilcoxon_p_value": 0.5
+      },
+      "significant": false,
+      "supported_gain": false,
+      "supported_regression": false,
+      "tests_pass": false,
+      "verdict": "null",
+      "wilcoxon_p_adjusted": 1.0
+    },
+    "add_neuromod": {
+      "aggregate": {
+        "ci_high": 0.9711122137945754,
+        "ci_low": 0.9410274177718445,
+        "mean": 0.9560698157832099,
+        "n": 2,
+        "sem": 0.001183862398229707,
+        "std": 0.0016742342595599897
+      },
+      "better": true,
+      "ci_adverse": false,
+      "ci_favorable": false,
+      "evidence_sufficient": true,
+      "paired_t_p_adjusted": 1.0,
+      "paired_vs_baseline": {
+        "cohen_dz": -0.6517513091029719,
+        "delta_ci_high": 7.465743413570536e-05,
+        "delta_ci_low": -0.0018326798518201182,
+        "mean_delta": -0.0008790112088422064,
+        "n_favorable": 1,
+        "n_pairs": 2,
+        "t_p_value": 0.5259194937739476,
+        "t_stat": -0.9217155406278421,
+        "wilcoxon_p_value": 1.0
+      },
+      "significant": false,
+      "supported_gain": false,
+      "supported_regression": false,
+      "tests_pass": false,
+      "verdict": "null",
+      "wilcoxon_p_adjusted": 1.0
+    },
+    "add_stdp": {
+      "aggregate": {
+        "ci_high": 0.9721635766056618,
+        "ci_low": 0.9498790063273119,
+        "mean": 0.9610212914664868,
+        "n": 2,
+        "sem": 0.0008769168583796504,
+        "std": 0.0012401477141941084
+      },
+      "better": false,
+      "ci_adverse": true,
+      "ci_favorable": false,
+      "evidence_sufficient": true,
+      "paired_t_p_adjusted": 1.0,
+      "paired_vs_baseline": {
+        "cohen_dz": 4.452705079015482,
+        "delta_ci_high": 0.004719187577562511,
+        "delta_ci_low": 0.003425741371306801,
+        "mean_delta": 0.004072464474434656,
+        "n_favorable": 0,
+        "n_pairs": 2,
+        "t_p_value": 0.100260463537028,
+        "t_stat": 6.29707591199126,
+        "wilcoxon_p_value": 0.5
+      },
+      "significant": false,
+      "supported_gain": false,
+      "supported_regression": false,
+      "tests_pass": false,
+      "verdict": "null",
+      "wilcoxon_p_adjusted": 1.0
+    },
+    "bio_all": {
+      "aggregate": {
+        "ci_high": 0.971915950492919,
+        "ci_low": 0.9514855578975366,
+        "mean": 0.9617007541952278,
+        "n": 2,
+        "sem": 0.0008039533841768253,
+        "std": 0.0011369617794186136
+      },
+      "better": false,
+      "ci_adverse": true,
+      "ci_favorable": false,
+      "evidence_sufficient": true,
+      "paired_t_p_adjusted": 1.0,
+      "paired_vs_baseline": {
+        "cohen_dz": 3.249170085145547,
+        "delta_ci_high": 0.005786074342604253,
+        "delta_ci_low": 0.0037177800637470115,
+        "mean_delta": 0.004751927203175632,
+        "n_favorable": 0,
+        "n_pairs": 2,
+        "t_p_value": 0.13641846722876164,
+        "t_stat": 4.595020400869777,
+        "wilcoxon_p_value": 0.5
+      },
+      "significant": false,
+      "supported_gain": false,
+      "supported_regression": false,
+      "tests_pass": false,
+      "verdict": "null",
+      "wilcoxon_p_adjusted": 1.0
+    },
+    "bio_no_doc2": {
+      "aggregate": {
+        "ci_high": 0.9727253684720091,
+        "ci_low": 0.9502607809428877,
+        "mean": 0.9614930747074484,
+        "n": 2,
+        "sem": 0.0008840006908264475,
+        "std": 0.0012501657661139474
+      },
+      "better": false,
+      "ci_adverse": true,
+      "ci_favorable": false,
+      "evidence_sufficient": true,
+      "paired_t_p_adjusted": 1.0,
+      "paired_vs_baseline": {
+        "cohen_dz": 2.8839386035877914,
+        "delta_ci_high": 0.005658442161474486,
+        "delta_ci_low": 0.003430053269318001,
+        "mean_delta": 0.0045442477153962435,
+        "n_favorable": 0,
+        "n_pairs": 2,
+        "t_p_value": 0.1530717244883593,
+        "t_stat": 4.07850508624518,
+        "wilcoxon_p_value": 0.5
+      },
+      "significant": false,
+      "supported_gain": false,
+      "supported_regression": false,
+      "tests_pass": false,
+      "verdict": "null",
+      "wilcoxon_p_adjusted": 1.0
+    },
+    "bio_no_presyn": {
+      "aggregate": {
+        "ci_high": 0.9698031887456122,
+        "ci_low": 0.95398749923962,
+        "mean": 0.9618953439926161,
+        "n": 2,
+        "sem": 0.0006223608793649027,
+        "std": 0.0008801511962882911
+      },
+      "better": false,
+      "ci_adverse": true,
+      "ci_favorable": false,
+      "evidence_sufficient": true,
+      "paired_t_p_adjusted": 1.0,
+      "paired_vs_baseline": {
+        "cohen_dz": 4.102629406179789,
+        "delta_ci_high": 0.005799071635180675,
+        "delta_ci_low": 0.004093962365947279,
+        "mean_delta": 0.004946517000563977,
+        "n_favorable": 0,
+        "n_pairs": 2,
+        "t_p_value": 0.10865677491556894,
+        "t_stat": 5.801994147610134,
+        "wilcoxon_p_value": 0.5
+      },
+      "significant": false,
+      "supported_gain": false,
+      "supported_regression": false,
+      "tests_pass": false,
+      "verdict": "null",
+      "wilcoxon_p_adjusted": 1.0
+    },
+    "bio_no_septin_barrier": {
+      "aggregate": {
+        "ci_high": 0.9736279445175294,
+        "ci_low": 0.9496105125295621,
+        "mean": 0.9616192285235458,
+        "n": 2,
+        "sem": 0.0009451064454986112,
+        "std": 0.0013365823531103645
+      },
+      "better": false,
+      "ci_adverse": true,
+      "ci_favorable": false,
+      "evidence_sufficient": true,
+      "paired_t_p_adjusted": 1.0,
+      "paired_vs_baseline": {
+        "cohen_dz": 2.809897072828346,
+        "delta_ci_high": 0.005845701732243969,
+        "delta_ci_low": 0.0034951013307431555,
+        "mean_delta": 0.004670401531493562,
+        "n_favorable": 0,
+        "n_pairs": 2,
+        "t_p_value": 0.156945696016313,
+        "t_stat": 3.9737945492663074,
+        "wilcoxon_p_value": 0.5
+      },
+      "significant": false,
+      "supported_gain": false,
+      "supported_regression": false,
+      "tests_pass": false,
+      "verdict": "null",
+      "wilcoxon_p_adjusted": 1.0
+    },
+    "bio_no_stochastic_release": {
+      "aggregate": {
+        "ci_high": 0.9730435563186449,
+        "ci_low": 0.9498197656014776,
+        "mean": 0.9614316609600613,
+        "n": 2,
+        "sem": 0.0009138759841894051,
+        "std": 0.0012924158111677169
+      },
+      "better": false,
+      "ci_adverse": true,
+      "ci_favorable": false,
+      "evidence_sufficient": true,
+      "paired_t_p_adjusted": 1.0,
+      "paired_vs_baseline": {
+        "cohen_dz": 2.7706722662386225,
+        "delta_ci_high": 0.005626903707450226,
+        "delta_ci_low": 0.0033387642285678254,
+        "mean_delta": 0.004482833968009026,
+        "n_favorable": 0,
+        "n_pairs": 2,
+        "t_p_value": 0.15907685510945502,
+        "t_stat": 3.918322295805659,
+        "wilcoxon_p_value": 0.5
+      },
+      "significant": false,
+      "supported_gain": false,
+      "supported_regression": false,
+      "tests_pass": false,
+      "verdict": "null",
+      "wilcoxon_p_adjusted": 1.0
+    },
+    "synaptic_off": {
+      "aggregate": {
+        "ci_high": 0.9695000986729265,
+        "ci_low": 0.9541031449459074,
+        "mean": 0.961801621809417,
+        "n": 2,
+        "sem": 0.0006058832691080429,
+        "std": 0.000856848336387542
+      },
+      "better": false,
+      "ci_adverse": true,
+      "ci_favorable": false,
+      "evidence_sufficient": true,
+      "paired_t_p_adjusted": 1.0,
+      "paired_vs_baseline": {
+        "cohen_dz": 4.1042200934691815,
+        "delta_ci_high": 0.005688871841724619,
+        "delta_ci_low": 0.0040167177930049425,
+        "mean_delta": 0.004852794817364781,
+        "n_favorable": 0,
+        "n_pairs": 2,
+        "t_p_value": 0.10861547505542213,
+        "t_stat": 5.804243719148289,
+        "wilcoxon_p_value": 0.5
+      },
+      "significant": false,
+      "supported_gain": false,
+      "supported_regression": false,
+      "tests_pass": false,
+      "verdict": "null",
+      "wilcoxon_p_adjusted": 1.0
+    },
+    "vanilla": {
+      "aggregate": {
+        "ci_high": 0.9598737159752704,
+        "ci_low": 0.954023938008834,
+        "mean": 0.9569488269920522,
+        "n": 2,
+        "sem": 0.0002301937552517952,
+        "std": 0.00032554313065068165
+      }
+    }
+  },
+  "recipe_sources": [
+    "base_train_checkpoint"
+  ],
+  "scope_warning": null
+}

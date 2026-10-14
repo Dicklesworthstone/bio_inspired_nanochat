@@ -20,7 +20,9 @@ from rich.table import Table
 
 from bio_inspired_nanochat.perf_regression import (
     DEFAULT_BASELINES_PATH,
+    DEFAULT_THROUGHPUT_BUDGET,
     PerfRegressionHarness,
+    ThroughputBudget,
 )
 
 
@@ -43,6 +45,23 @@ def main(argv: Sequence[str] | None = None) -> int:
         type=float,
         default=0.30,
         help="Allowable performance degradation ratio before failing gate (default 0.30)",
+    )
+    parser.add_argument(
+        "--check-budget",
+        action="store_true",
+        help="Also enforce the relative synaptic-vs-standard ThroughputBudget in the same run",
+    )
+    parser.add_argument(
+        "--train-ratio-max",
+        type=float,
+        default=DEFAULT_THROUGHPUT_BUDGET.train_ratio_max,
+        help="Maximum allowable standard/synaptic training throughput ratio (default 2.0)",
+    )
+    parser.add_argument(
+        "--decode-ratio-max",
+        type=float,
+        default=DEFAULT_THROUGHPUT_BUDGET.decode_ratio_max,
+        help="Maximum allowable standard/synaptic decode latency ratio (default 1.5)",
     )
     parser.add_argument(
         "--output-json",
@@ -94,6 +113,35 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
 
     console.print(table)
+
+    if args.check_budget:
+        budget = ThroughputBudget(
+            train_ratio_max=args.train_ratio_max,
+            decode_ratio_max=args.decode_ratio_max,
+        )
+        budget_comparisons = harness.evaluate_budget_gates(results, budget=budget)
+        budget_table = Table(title="Relative Throughput Budget Gate Results")
+        budget_table.add_column("Mode", style="magenta")
+        budget_table.add_column("Standard (tok/s)", justify="right")
+        budget_table.add_column("Synaptic (tok/s)", justify="right")
+        budget_table.add_column("Slowdown", justify="right")
+        budget_table.add_column("Budget Max", justify="right")
+        budget_table.add_column("Status", style="bold")
+        if not budget_comparisons:
+            all_passed = False
+        for bcomp in budget_comparisons:
+            status_str = "[green]PASS[/green]" if bcomp.passed else "[red]FAIL[/red]"
+            if not bcomp.passed:
+                all_passed = False
+            budget_table.add_row(
+                bcomp.mode,
+                f"{bcomp.standard_tok_per_sec:.1f}",
+                f"{bcomp.synaptic_tok_per_sec:.1f}",
+                f"{bcomp.slowdown_ratio:.2f}x",
+                f"<= {bcomp.max_ratio:.2f}x",
+                status_str,
+            )
+        console.print(budget_table)
 
     if args.record_registry:
         harness.record_to_registry(results)

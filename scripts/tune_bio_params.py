@@ -218,6 +218,9 @@ def _build_synaptic_config(overrides: Dict[str, float]) -> SynapticConfig:
 
     # For objective stability, disable stochastic release by default.
     cfg.stochastic_train_frac = 0.0
+    # Use the bit-exact fused multi-query presyn scan (Rust on CPU, Triton on CUDA; 74f.9)
+    # so CMA-ES candidate evaluation does not fall back to the 20x slower per-query loop.
+    cfg.native_presyn = True
     return cfg
 
 

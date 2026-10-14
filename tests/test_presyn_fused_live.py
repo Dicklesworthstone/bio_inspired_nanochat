@@ -292,3 +292,28 @@ def test_native_dispatch_falls_back_for_grad_and_prefill(
             train=False,
         )
     assert torch.isfinite(prefill_out).all()
+
+
+@pytest.mark.unit
+def test_gqa_repeat_kv_when_n_kv_head_differs_from_replication_factor():
+    model = GPTSynaptic(
+        GPTSynapticConfig(
+            sequence_len=16,
+            vocab_size=64,
+            n_layer=1,
+            n_head=8,
+            n_kv_head=4,
+            n_embd=64,
+            dropout=0.0,
+            syn_cfg=SynapticConfig(stochastic_train_frac=0.0, attn_topk=4),
+        )
+    ).eval()
+    cache = KVCache(batch_size=1, num_heads=4, seq_len=16, head_dim=8, num_layers=1)
+    with torch.inference_mode():
+        logits_prefill, _ = model(torch.tensor([[1, 2, 3, 4]]), kv_cache=cache, train_mode=False)
+        logits_decode, _ = model(torch.tensor([[5]]), kv_cache=cache, train_mode=False)
+    assert logits_prefill.shape == (1, 4, 64)
+    assert logits_decode.shape == (1, 1, 64)
+    assert torch.isfinite(logits_prefill).all()
+    assert torch.isfinite(logits_decode).all()
+

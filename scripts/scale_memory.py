@@ -39,9 +39,10 @@ from bio_inspired_nanochat.run_logging import gather_provenance
 
 console = Console()
 
-# Rough activation multiplier: residual stream + attention scores + MLP intermediates, in bf16.
-# Deliberately conservative; real autocast/checkpointing shifts this. Tune against a measured run.
-_ACT_MULT = 16
+# Rough activation multiplier: residual stream + attention scores + MLP intermediates + chunked
+# vocab cross-entropy working set, calibrated against measured D1 (depth=10, d=640, batch=16,
+# seq=1024) on RTX 4090: 1.355 GB persistent + 6.250 GB est = 7.605 GB vs 7.710 GB measured.
+_ACT_MULT = 32
 # Number of per-key presynaptic state buffers carried per layer (C/BUF/RRP/RES/PR/CL/E ≈ 7).
 _N_PRESYN_BUFFERS = 7
 
@@ -176,13 +177,44 @@ def _synchronize(device: torch.device) -> None:
         torch.cuda.synchronize(device)
 
 
+_NVML_LIB: Any = None
+
+
+def _nvml_utilization_pct(device: torch.device) -> float | None:
+    global _NVML_LIB
+    try:
+        import ctypes
+
+        if _NVML_LIB is None:
+            lib = ctypes.CDLL("libnvidia-ml.so.1")
+            if lib.nvmlInit_v2() != 0:
+                _NVML_LIB = False
+                return None
+            _NVML_LIB = lib
+        if not _NVML_LIB:
+            return None
+        logical_idx = int(device.index or 0)
+        vis = os.environ.get("CUDA_VISIBLE_DEVICES", "")
+        vis_parts = [p.strip() for p in vis.split(",") if p.strip()]
+        phys_idx = int(vis_parts[logical_idx]) if logical_idx < len(vis_parts) and vis_parts[logical_idx].isdigit() else logical_idx
+        handle = ctypes.c_void_p()
+        if _NVML_LIB.nvmlDeviceGetHandleByIndex_v2(phys_idx, ctypes.byref(handle)) != 0:
+            return None
+        util = (ctypes.c_uint * 2)()
+        if _NVML_LIB.nvmlDeviceGetUtilizationRates(handle, ctypes.byref(util)) != 0:
+            return None
+        return float(util[0])
+    except Exception:
+        return None
+
+
 def _gpu_utilization(device: torch.device) -> float | None:
     if device.type != "cuda" or not hasattr(torch.cuda, "utilization"):
         return None
     try:
         return float(torch.cuda.utilization(device))
     except (ImportError, OSError, RuntimeError):
-        return None
+        return _nvml_utilization_pct(device)
 
 
 def measure_throughput(
@@ -208,29 +240,42 @@ def measure_throughput(
         raise ValueError(f"mode must be 'train' or 'infer', got {mode!r}")
     if min(batch, seq, steps) < 1 or warmup < 0:
         raise ValueError("batch, seq, and steps must be positive; warmup must be non-negative")
+    from contextlib import nullcontext
+
     synaptic = getattr(config, "synapses", False)
     torch_device = torch.device(device)
     model.to(torch_device).train(mode == "train")
+    if torch_device.type == "cuda" and hasattr(model, "wte"):
+        model.wte.to(dtype=torch.bfloat16)
+        if hasattr(model, "tie_weights"):
+            model.tie_weights()
     optimizers = model.setup_optimizers() if mode == "train" else []
     vocab = int(config.vocab_size)
     gen = torch.Generator(device="cpu").manual_seed(seed)
     x = torch.randint(0, vocab, (batch, seq), generator=gen).to(torch_device)
     y = torch.randint(0, vocab, (batch, seq), generator=gen).to(torch_device)
+    autocast_ctx = (
+        torch.amp.autocast(device_type="cuda", dtype=torch.bfloat16)
+        if torch_device.type == "cuda"
+        else nullcontext()
+    )
 
     def _step():
         if mode == "infer":
-            with torch.inference_mode():
+            with torch.inference_mode(), autocast_ctx:
                 return model(x, None, None, train_mode=False) if synaptic else model(x)
-        if synaptic:
-            _, loss = model(x, y, None, train_mode=True)
-        else:
-            loss = model(x, y)
         for optimizer in optimizers:
             optimizer.zero_grad(set_to_none=True)
+        with autocast_ctx:
+            if synaptic:
+                _logits, loss = model(x, y, None, train_mode=True)
+                del _logits
+            else:
+                loss = model(x, y)
         loss.backward()
         for optimizer in optimizers:
             optimizer.step()
-        return loss
+        return loss.detach()
 
     if torch_device.type == "cuda":
         torch.cuda.reset_peak_memory_stats(torch_device)
@@ -359,7 +404,9 @@ def run_benchmark_matrix(
                 for batch in batches:
                     for seq in seqs:
                         torch.manual_seed(seed)
-                        model, config = _build_model(depth, seq, variant == "bio", tie_embeddings)
+                        model, config = _build_model(
+                            depth, seq, variant == "bio", tie_embeddings, device=resolved_device
+                        )
                         profile_path = None
                         if profile_dir is not None:
                             profile_path = str(
@@ -398,6 +445,9 @@ def run_benchmark_matrix(
                                 provenance=provenance,
                             )
                         )
+                        del model
+                        if torch.device(resolved_device).type == "cuda":
+                            torch.cuda.empty_cache()
     finally:
         if cleanup:
             from bio_inspired_nanochat.common import compute_cleanup
@@ -423,7 +473,7 @@ def write_benchmark_jsonl(rows: list[BenchmarkResult], path: str | os.PathLike[s
 # --------------------------------------------------------------------------- #
 # CLI
 # --------------------------------------------------------------------------- #
-def _build_model(depth: int, seq: int, synapses: bool, tie: bool):
+def _build_model(depth: int, seq: int, synapses: bool, tie: bool, *, device: str = "cpu"):
     model_dim = depth * 64
     n_head = max(1, (model_dim + 127) // 128)
     common = dict(sequence_len=seq, vocab_size=65536, n_layer=depth, n_head=n_head,
@@ -432,12 +482,17 @@ def _build_model(depth: int, seq: int, synapses: bool, tie: bool):
         from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
 
         cfg = GPTSynapticConfig(synapses=True, **common)  # ty: ignore[invalid-argument-type]
-        model = GPTSynaptic(cfg)
+        cfg.syn_cfg.native_presyn = True
+        cfg.syn_cfg.native_genetics = True
+        with torch.device("meta"):
+            model = GPTSynaptic(cfg)
     else:
         from bio_inspired_nanochat.gpt import GPT, GPTConfig
 
         cfg = GPTConfig(**common)  # ty: ignore[invalid-argument-type]
-        model = GPT(cfg)
+        with torch.device("meta"):
+            model = GPT(cfg)
+    model.to_empty(device=torch.device(device))
     model.init_weights()
     return model, cfg
 
@@ -499,7 +554,11 @@ def main(argv: list[str] | None = None) -> int:
         console.print(table)
         return 0
 
-    model, cfg = _build_model(args.depth, args.seq, args.synapses, args.tie_embeddings)
+    resolved_device = "cuda" if args.device == "auto" and torch.cuda.is_available() else args.device
+    if resolved_device == "auto":
+        resolved_device = "cpu"
+    build_device = resolved_device if args.throughput else "cpu"
+    model, cfg = _build_model(args.depth, args.seq, args.synapses, args.tie_embeddings, device=build_device)
     b = estimate(model, cfg, batch=args.batch, seq=args.seq, world_size=args.world_size)
     gb = b.as_gb()
     console.print(
@@ -514,9 +573,6 @@ def main(argv: list[str] | None = None) -> int:
         f"{b.headroom_gb(args.vram_gb):8.3f} GB"
     )
     if args.throughput:
-        resolved_device = "cuda" if args.device == "auto" and torch.cuda.is_available() else args.device
-        if resolved_device == "auto":
-            resolved_device = "cpu"
         tp = measure_throughput(
             model,
             cfg,
@@ -527,8 +583,13 @@ def main(argv: list[str] | None = None) -> int:
             device=resolved_device,
             seed=args.seed,
         )
+        peak_info = (
+            f"  peak_alloc={tp['peak_allocated_gb']:.3f} GB  peak_res={tp['peak_reserved_gb']:.3f} GB"
+            if tp["peak_allocated_gb"] is not None
+            else ""
+        )
         console.print(
-            f"  throughput: {tp['tok_per_sec']:.1f} tok/s  ({tp['step_ms']:.1f} ms/step)"
+            f"  throughput: {tp['tok_per_sec']:.1f} tok/s  ({tp['step_ms']:.1f} ms/step){peak_info}"
         )
     return 0
 

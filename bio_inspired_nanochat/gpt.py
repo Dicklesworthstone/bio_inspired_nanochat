@@ -550,6 +550,35 @@ class GPT(nn.Module):
         logits = self.lm_head(hidden)
         return softcap * torch.tanh(logits / softcap)
 
+    def _chunked_cross_entropy(self, x, targets):
+        from torch.utils.checkpoint import checkpoint
+
+        x_flat = x.reshape(-1, x.size(-1))
+        targets_flat = targets.reshape(-1)
+        valid_count = (targets_flat != -1).sum().clamp_min(1)
+
+        def _chunk_fn(x_chunk, t_chunk):
+            logits_chunk = self.hidden_to_logits(x_chunk).float()
+            return F.cross_entropy(
+                logits_chunk,
+                t_chunk,
+                ignore_index=-1,
+                reduction="sum",
+            )
+
+        total_loss = torch.zeros((), device=x.device, dtype=torch.float32)
+        chunk_tokens = 2048
+        for start in range(0, x_flat.size(0), chunk_tokens):
+            end = min(start + chunk_tokens, x_flat.size(0))
+            chunk_loss = checkpoint(
+                _chunk_fn,
+                x_flat[start:end],
+                targets_flat[start:end],
+                use_reentrant=False,
+            )
+            total_loss = total_loss + chunk_loss
+        return total_loss / valid_count
+
     def forward(
         self,
         idx,
@@ -563,17 +592,21 @@ class GPT(nn.Module):
         # Forward the lm_head (compute logits)
         if targets is not None:
             # training mode: compute and return the loss
-            # TODO: experiment with Liger Kernels / chunked cross-entropy etc.
+            if (
+                loss_reduction == "mean"
+                and x.is_cuda
+                and torch.is_grad_enabled()
+                and x.size(0) * x.size(1) > 2048
+            ):
+                return self._chunked_cross_entropy(x, targets)
             logits = self.hidden_to_logits(x)
-            logits = logits.float() # use tf32/fp32 for logits
-            logits_flat = logits.reshape(-1, logits.size(-1))
-            targets_flat = targets.reshape(-1)
             loss = F.cross_entropy(
-                logits_flat,
-                targets_flat,
+                logits.float().reshape(-1, logits.size(-1)),
+                targets.reshape(-1),
                 ignore_index=-1,
                 reduction=loss_reduction,
             )
+            del logits
             return loss
         else:
             # inference mode: compute and return the logits

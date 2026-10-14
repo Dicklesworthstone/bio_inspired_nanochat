@@ -135,9 +135,10 @@ never lowered**. CI passes `--cov` on every push (the integration-tests job), so
 ## What CI actually runs (`.github/workflows/`)
 
 - **`ci.yml` — every push to `main` and every PR:** `cargo fmt --check`, `cargo clippy -D warnings`,
-  `cargo test`; the Python quality gate (`scripts/quality_gate.py`: `ruff --fix --unsafe-fixes`
+  `cargo test` (native Rust unit tests in `rust_src/src/{presyn,moe}.rs`, complemented by the 27
+  Python/PyO3 kernel parity tests in `tests/test_rust_kernels.py`); the Python quality gate (`scripts/quality_gate.py`: `ruff --fix --unsafe-fixes`
   on changed files and fails if it had to rewrite them, `ty check`, UBS resource-lifecycle scan), then
-  `uv run ty check` on the whole tree (zero diagnostics since 2026-09-02, bead `fkyw`);
+  `uv run --no-sync ty check` on the whole tree (zero diagnostics since 2026-09-02, bead `fkyw`);
   the Lean formal-feedback audit (`scripts/formal_feedback.py`); a `maturin build` wheel; then
   `maturin develop` + `pytest -m "not slow" --cov` + `validate_all --suite fast`. The wheel and test
   jobs depend on the Rust format job, so one unformatted hunk skips the whole suite.
@@ -145,8 +146,10 @@ never lowered**. CI passes `--cov` on every push (the integration-tests job), so
   subprocesses (tokenizer, `base_train --synapses=1 --syn_cfg.…`, `chat_cli -i base`, and an
   unknown `--syn_cfg` field as the planted negative), so a script that cannot start fails CI.
 - **`nightly-validation.yml` — 04:30 UTC:** `validate_all --suite all --timeout-scale 4`, the
-  perf-regression gate, and `tests/test_e2e_matrix_pipeline.py` (the D1 chain launcher → `base_train`
-  → `eval_matrix` → `eval_stats` at toy scale, e2e+slow), uploading `reports/` and the registry as
-  artifacts.
+  perf-regression gate (`scripts/perf_regression_gate.py`, which checks both stored-baseline drift
+  and, under `--check-budget`, the `ThroughputBudget(train_ratio_max=2.0, decode_ratio_max=1.5)`
+  synaptic-vs-standard relative slowdown budget in the same run), and `tests/test_e2e_matrix_pipeline.py`
+  (the D1 chain launcher → `base_train` → `eval_matrix` → `eval_stats` at toy scale, e2e+slow),
+  uploading `reports/` and the registry as artifacts.
 - **`nightly-uncertainty.yml` — 05:17 UTC:** `tests/test_e2e_uncertainty.py` with its evidence
   directory uploaded.

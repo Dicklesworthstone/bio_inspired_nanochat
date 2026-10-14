@@ -22,7 +22,7 @@ A flat JSON object mapping **`SynapticConfig` field names** to numbers:
 
 ```json
 {
-  "tau_rrp": 35.0,
+  "tau_c": 8.5,
   "camkii_up": 0.08,
   "lambda_loge": 0.9
 }

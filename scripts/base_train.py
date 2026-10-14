@@ -88,6 +88,7 @@ load_cmaes_params = ""  # optional path to a CMA-ES params JSON overlaid onto Sy
 init_type = "baseline"  # baseline | ca_rule30 | ca_rule116
 init_seed = 42
 tie_embeddings = 0  # hwxb.2.9: tie wte/lm_head into one shared matrix (1=on; recommended for small scale-up models)
+final_norm = 1  # apply pre-lm_head RMSNorm on the final residual stream (1=on, 0=off)
 # Split/merge controller (for MoE)
 use_moe = 0  # enable SynapticMoE blocks (structural lifecycle enables this automatically)
 num_experts = 8
@@ -375,6 +376,15 @@ if resuming:
     ):
         raise ValueError("checkpoint tie_embeddings must be boolean-like")
     tie_embeddings = int(bool(saved_tie_embeddings))
+    # A resumed checkpoint keeps the head it was trained with: one saved before the field
+    # existed fed lm_head the unnormalized stream (False).
+    saved_final_norm = resume_model_config.get("final_norm", False)
+    if (
+        not isinstance(saved_final_norm, (bool, int))
+        or int(saved_final_norm) not in (0, 1)
+    ):
+        raise ValueError("checkpoint final_norm must be boolean-like")
+    final_norm = int(bool(saved_final_norm))
     depth = num_layers
     user_config.update(
         depth=depth,
@@ -384,6 +394,7 @@ if resuming:
         init_type=init_type,
         init_seed=init_seed,
         tie_embeddings=tie_embeddings,
+        final_norm=final_norm,
     )
 else:
     # Model kwargs are derived from the desired depth for a fresh run.
@@ -454,6 +465,8 @@ if use_syn:
         else SynapticConfig(
             use_flex_attention=bool(use_flex_attention),
             topological_nas=bool(topological_nas),
+            native_presyn=True,
+            native_genetics=True,
         )
     )
     if load_cmaes_params:
@@ -513,7 +526,9 @@ if use_syn:
         ),
         # A resumed checkpoint keeps the head it was trained with: one saved before the field
         # existed fed lm_head the unnormalized stream.
-        final_norm=bool(resume_model_config.get("final_norm", not resuming)),
+        final_norm=bool(
+            resume_model_config.get("final_norm", bool(final_norm) if not resuming else False)
+        ),
     )
     if syn_cfg.topological_nas and splitmerge_every <= 0:
         raise ValueError("topological_nas=1 requires splitmerge_every > 0")
@@ -1048,11 +1063,11 @@ while True:
     # evaluate the gradient
     synchronize()
     t0 = time.time()
+    nm_entropy = None
     for micro_step in range(grad_accum_steps):
         if use_syn and hebb_chunk_len > 0:
             # hwxb.8: chunked regime — forward+backward per chunk inside the model, scaled for
             # gradient accumulation; returns the detached token-weighted loss.
-            logits = None  # no full-sequence logits in this regime
             with autocast_ctx:
                 train_loss = orig_model.chunked_train_step(
                     x, y, chunk_len=hebb_chunk_len, loss_scale=1.0 / grad_accum_steps
@@ -1063,7 +1078,11 @@ while True:
                 if isinstance(result, tuple):
                     logits, loss = result
                 else:
+                    logits = None
                     loss = result
+            if nm_bus is not None and logits is not None:
+                nm_entropy = nm_bus.entropy_from_logits(logits.detach())
+            del result, logits
             train_loss = loss.detach()  # for logging
             loss = (
                 loss / grad_accum_steps
@@ -1113,8 +1132,6 @@ while True:
     # Neuromodulatory bus (hy8.1): compute DA/ACh/NE from this step's loss + predictive entropy
     # and broadcast the gains so they gate the NEXT step's plasticity/exploration/gain.
     if nm_bus is not None:
-        # use_syn guarantees the model returned (logits, loss), so logits is defined here.
-        nm_entropy = nm_bus.entropy_from_logits(logits) if logits is not None else None
         nm_bus.update(loss=float(train_loss), entropy=nm_entropy)
         nm_bus.broadcast(orig_model)
         if neuromod_log_every and step % neuromod_log_every == 0:

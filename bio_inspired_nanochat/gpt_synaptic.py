@@ -167,7 +167,8 @@ class Block(nn.Module):
             self.last_aux_loss = self.balance_loss * aux
         else:
             y = self.mlp(self.norm2(x), update_mem=update_mem)
-            self.last_aux_loss = torch.tensor(0.0, device=x.device)
+            if self.last_aux_loss.device != x.device:
+                self.last_aux_loss = torch.tensor(0.0, device=x.device)
         x = x + y
         return x, st
 
@@ -243,7 +244,8 @@ class GPTSynaptic(nn.Module):
         # Detached last-step presynaptic state retained for the public
         # ``bio_telemetry()`` read API. Keeping only the final time position
         # avoids holding a training graph or an entire sequence after forward.
-        self._last_presyn_state: list[dict[str, Any] | None] | None = None
+        self._last_presyn_cache: list[dict[str, Any] | None] | None = None
+        self._last_presyn_source: list[dict[str, Any] | None] | None = None
         self.wte: nn.Embedding = nn.Embedding(c.vocab_size, c.n_embd)
         self.h: nn.ModuleList[Block] = nn.ModuleList()
         self.transformer = nn.ModuleDict({"wte": self.wte, "h": self.h})
@@ -338,7 +340,7 @@ class GPTSynaptic(nn.Module):
                 )
         assert T <= self.config.sequence_len
         tok = self.wte(idx)
-        x = self.drop(tok)
+        x = self.drop(tok) if (self.training and self.drop.p > 0.0) else tok
         
         # Initialize per-layer presynaptic state from kv_cache if available
         presyn_states = None
@@ -390,21 +392,48 @@ class GPTSynaptic(nn.Module):
         # Make a normal ``model(tokens); model.bio_telemetry()`` sequence useful
         # without requiring callers to own a KV cache. Only the scalar telemetry
         # channels and final token position are retained, detached from autograd.
-        telemetry_keys = ("C", "BUF", "RRP", "RES", "PR", "CL", "E", "AMP")
-        self._last_presyn_state = [
-            None
-            if state is None
-            else {
-                key: value[..., -1:].detach().clone()
-                for key in telemetry_keys
-                if torch.is_tensor(value := state.get(key)) and value.ndim == 3
-            }
-            for state in presyn_states
-        ]
+        if self.config.syn_cfg.differentiable_recurrence and torch.is_grad_enabled():
+            self._last_presyn_source = None
+            self._last_presyn_cache = self._snapshot_presyn_states(presyn_states)
+        else:
+            self._last_presyn_source = presyn_states
+            self._last_presyn_cache = None
 
         if self.config.final_norm:
             x = F.rms_norm(x, (x.size(-1),))
         return x, active_layers
+
+    @staticmethod
+    def _snapshot_presyn_states(
+        presyn_states: list[dict[str, Any] | None] | None,
+    ) -> list[dict[str, Any] | None] | None:
+        if presyn_states is None:
+            return None
+        telemetry_keys = ("C", "BUF", "RRP", "RES", "PR", "CL", "E", "AMP")
+        snapshots: list[dict[str, Any] | None] = []
+        for state in presyn_states:
+            if state is None:
+                snapshots.append(None)
+                continue
+            snap: dict[str, Any] = {}
+            for key in telemetry_keys:
+                value = state.get(key)
+                if value is not None and torch.is_tensor(value) and value.ndim == 3:
+                    snap[key] = value[..., -1:].detach().clone()
+            snapshots.append(snap)
+        return snapshots
+
+    @property
+    def _last_presyn_state(self) -> list[dict[str, Any] | None] | None:
+        if self._last_presyn_cache is None and self._last_presyn_source is not None:
+            self._last_presyn_cache = self._snapshot_presyn_states(self._last_presyn_source)
+            self._last_presyn_source = None
+        return self._last_presyn_cache
+
+    @_last_presyn_state.setter
+    def _last_presyn_state(self, value: list[dict[str, Any] | None] | None) -> None:
+        self._last_presyn_cache = value
+        self._last_presyn_source = None
 
     def get_hidden_states(
         self,
@@ -427,11 +456,42 @@ class GPTSynaptic(nn.Module):
 
     def hidden_to_logits(self, hidden: Tensor) -> Tensor:
         """Project final hidden states through the configured bounded language head."""
-        logits = self.lm_head(hidden.to(dtype=self.lm_head.weight.dtype))
+        if not torch.is_autocast_enabled() and hidden.dtype != self.lm_head.weight.dtype:
+            hidden = hidden.to(dtype=self.lm_head.weight.dtype)
+        logits = self.lm_head(hidden)
         sc = self.config.logit_softcap
         if sc and sc > 0.0:
             logits = sc * torch.tanh(logits / sc)
         return logits
+
+    def _chunked_cross_entropy(self, x: Tensor, targets: Tensor) -> Tensor:
+        from torch.utils.checkpoint import checkpoint
+
+        x_flat = x.reshape(-1, x.size(-1))
+        targets_flat = targets.reshape(-1)
+        valid_count = (targets_flat != -1).sum().clamp_min(1)
+
+        def _chunk_fn(x_chunk: Tensor, t_chunk: Tensor) -> Tensor:
+            logits_chunk = self.hidden_to_logits(x_chunk).float()
+            return F.cross_entropy(
+                logits_chunk,
+                t_chunk,
+                ignore_index=-1,
+                reduction="sum",
+            )
+
+        total_loss = torch.zeros((), device=x.device, dtype=torch.float32)
+        chunk_tokens = 2048
+        for start in range(0, x_flat.size(0), chunk_tokens):
+            end = min(start + chunk_tokens, x_flat.size(0))
+            chunk_loss = checkpoint(
+                _chunk_fn,
+                x_flat[start:end],
+                targets_flat[start:end],
+                use_reentrant=False,
+            )
+            total_loss = total_loss + chunk_loss
+        return total_loss / valid_count
 
     def forward(
         self,
@@ -455,21 +515,22 @@ class GPTSynaptic(nn.Module):
         # return and the loss path. See vg9.1. We match GPT exactly: the inference
         # path returns softcapped logits in the lm_head dtype (no float cast), and the
         # loss path casts to fp32 before cross-entropy.
-        logits = self.hidden_to_logits(x)
         if targets is None:
-            return logits, None
+            return self.hidden_to_logits(x), None
         aux = sum(
-            
-                getattr(b, "last_aux_loss", torch.tensor(0.0, device=logits.device))
-                for b in self.h[:active_layers]
-            
+            getattr(b, "last_aux_loss", torch.tensor(0.0, device=x.device))
+            for b in self.h[:active_layers]
         )
-        logits = logits.float()  # fp32 logits for the loss (parity with GPT)
-        logits_flat = logits.reshape(-1, logits.size(-1))
-        targets_flat = targets.reshape(-1)
+        if x.is_cuda and torch.is_grad_enabled() and x.size(0) * x.size(1) > 2048:
+            ce = self._chunked_cross_entropy(x, targets)
+            loss = ce + aux
+            with torch.no_grad():
+                logits_sample = self.hidden_to_logits(x[:, -1:])
+            return logits_sample, loss
+        logits = self.hidden_to_logits(x)
         ce = F.cross_entropy(
-            logits_flat,
-            targets_flat,
+            logits.float().reshape(-1, logits.size(-1)),
+            targets.reshape(-1),
             ignore_index=-1,
             reduction="mean",
         )
@@ -531,6 +592,7 @@ class GPTSynaptic(nn.Module):
             tgt = targets[:, start:end]
             n_valid = int((tgt != -1).sum().item())
             _logits, loss = self.forward(idx[:, start:end], tgt, kv_cache=cache, train_mode=True)
+            del _logits
             if n_valid > 0:
                 weight = n_valid / n_valid_total
                 (loss * (weight * loss_scale)).backward()

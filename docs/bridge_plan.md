@@ -1,429 +1,308 @@
 # Bridge Plan — bio_inspired_nanochat
 
-**Reality check:** 2026-09-01 on `db544b2` (Phase 1 report: "Bio-Nanochat Reality Check").
-**This document:** Phase 2 of `/reality-check-for-project` — one resolution per gap between what
-the README promises and what the code delivers, ordered by vision impact, each with success
-criteria, the "would the open beads close it?" answer, and the test that proves it.
-**Consumer / gate / retirement:** read by the owner and by Phase 3a bead generation; it gates the
-first GPU-hour spend (nothing below Phase B should run before the Phase A′ items are green); it
-retires when every gap here is either a bead or closed.
-**Status of the tracker:** 477 issues, 44 open, 4 in progress, 426 closed (`bv --robot-triage`).
-**Rule the plan follows:** a number in a document must cite a committed artifact; a null result is a
-result; nothing here creates a dashboard, certificate, or matrix that no code branches on.
+**Reality check history:**
+- **2026-09-01 (`db544b2`):** Initial Phase 1–2 reality check ("Bio-Nanochat Reality Check").
+- **2026-10-07 (`716cacb`…`1b95827`):** Harness defect fixes, toy screening run, scaffold `final_norm` discovery (`8de4abb`), Rust/Triton multi-query causal scan (`85905ad`, `3956cc3`), CMA-ES LM objective (`e9ff9d6`).
+- **2026-10-13 (`1b95827`, current HEAD):** Comprehensive end-to-end `/reality-check-for-project` audit of code, tests, artifacts, fleet hardware (`csd`, `mac-mini-max`, `trj`, `ts1`, `ts2`), docs, and `.beads/`.
+
+**This document:** Phase 2 of `/reality-check-for-project` — the single authoritative plan bridging every gap between what `README.md` and the design specifications promise and what the codebase actually delivers at `1b95827`. Ordered by vision impact, with concrete files, functions, verification gates, and bead mappings.
+
+**Rule this plan follows:** A number in a document must cite a committed artifact; a null or negative result is a first-class result; never weaken a gate to land a change; nothing here creates a dashboard, certificate, or matrix that no live code branches on.
 
 ---
 
-## Status 2026-10-07 (read first)
+## Status 2026-10-13 at `1b95827` (Read First)
 
-| Gap | Moved to | Evidence |
+| Area / Gap | Ground-Truth Status at `1b95827` | Cited Evidence |
 |---|---|---|
-| G1 harness validity | **three blocking defects fixed** — seeds never reached weight init, the presyn RNG was seeded from uninitialized memory, bio_all diverged from a 0.49 scalar LR | `636e955`, `8d1a3d0`, `results/scalar_lr_sweep_2026-10-07.json` |
-| G1 toy anchors | **first valid run**: vanilla 1.958, synaptic_off 2.028, bio_all 2.038 val bpb (2L/128d, WikiText-2, 3 seeds; `null` at n = 3) | `results/toy_screening_2026-10-07_verdict.md` |
-| G2 online fast weights | **DECIDED: not demonstrated** → `enable_hebbian` opt-in, matrix columns `add_hebbian`/`add_bdnf` | `results/hebbian_chunked_regime_2026-10-07_preregistered.json` |
-| G4 lifecycle | **credit signal fixed and firing; costs +0.03–0.05 loss** at toy scale; D1 structural arm uses it | `aeaf162`, `results/structural_pair_pilot_2026-10-07_credit.json` |
-| G6.1 / G18 recurrence cost | **training no longer records the scan** (one-pass gradient); Rust block scan on CPU (step 1633 → 925 ms); Triton block scan interpreter-verified, GPU acceptance open | `b5325a1`, `85905ad`, `3956cc3` |
-| G8 CMA-ES re-run | **No-go again, and the reason found**: candidates all score ≈ ln(1024); the 100-step proxy never learns its task, so the objective cannot rank settings | `results/cmaes_phase1_rerun_2026-10-07.json` |
-| G16 type debt | **clean**: `ty check` and `ruff check` exit 0 on the whole tree | `716cacb` |
-
-Still true: nothing has run on a GPU. For the D1 run, pass the GPU-marked kernel tests first and then
-export `BIO_FUSED_PRESYN=1`.
-
-## 0. What Phase A closed today (so the plan starts from the real state)
-
-Commits `b95f574…e3f3ec4`, `5e88689…fb9762e`, `72a960f`, `c9659f1`, `871abfe`, all on `main`.
-
-| Done | Evidence |
-|---|---|
-| CI unblocked (rustfmt hunk, both nightlies, release action, `--no-sync` everywhere) | `.github/workflows/*.yml`; runs for today's pushes are still **queued** on GitHub, so green is unverified |
-| `--syn_cfg.<field>=<value>` typed overrides in `base_train`, refused on `--resume` and without `--synapses=1` | `bio_inspired_nanochat/cmaes_params.py`, `tests/test_syn_cfg_cli_overrides.py` |
-| Homeostasis-guard flags and `--sm_health_mode=relative` (scale-free lifecycle health) | `synaptic_splitmerge.py`, `tests/test_lifecycle_health_relative.py`; measured on sx1m |
-| `structural_every` no-op removed; Rust presyn decode dispatched behind `native_presyn` (1.98× at 512 keys, slower past 2k) | `tests/test_presyn_rust_dispatch.py` |
-| Neuromodulatory bus registered as an ablation mechanism → 20-column matrix; `eval_matrix` runs every column | `ablation_registry.py`, `tests/test_neuromod_mechanism.py`, `tests/test_scaleup_ablation_e2e.py` |
-| Registry redirected under pytest; 43 junk rows purged; **first ever `base_train` record** written (CPU smoke, 8 steps, `smoke_cpu`) | `results/registry.jsonl` run `672a84ae9eb7` |
-| `base_train`/`mid_train` could not start on Python 3.14 (`torch.compile` raises) — gated; Quick Start training command runs end to end on two FineWeb shards | `scripts/base_train.py`, `scripts/mid_train.py`, checkpoint `~/.cache/bio_inspired_nanochat/base_checkpoints/smoke_cpu/` |
-| Chat step verified against that checkpoint (`chat_cli -i base -g smoke_cpu`) | this session; README still documents `--source sft` only (G12) |
-| Working-memory probes can read incrementally (`chunk_len`), the only regime in which online fast-weight writes can be seen; probes now read deterministically (`update_mem` split from `train_mode`) | `synthetic_tasks.py`, `gpt_synaptic.py`, `tests/test_working_memory_chunked_eval.py` |
-| README, CHANGELOG, CLAIMS_AUDIT, TESTING, theory index, model zoo, RL study, CA-init corrected; unsupported numbers removed; 13 stale blocks cleared; 5 false closes reopened | those files; `.beads/` |
-
-Still true: **no GPU run exists anywhere; no model larger than 2 layers × 64 dims has been trained;
-the bio-vs-vanilla experiment has not started.** The dual-4090 host `trj` is unreachable from here.
+| **G0 · Fleet & GPU host `trj`** | **REACHABLE (was misdiagnosed as unreachable); NVML driver reload needed.** From `csd` (`sensedemobox`), `trj` (`threadripperje`, `10.10.10.1` via `mac-mini-max` or Tailscale `100.91.120.17`) is live via `ssh -J mac-mini-max ubuntu@10.10.10.1` and has **2× RTX 4090** (`41:00.0`, `42:00.0`) + `/data/projects/bio_inspired_nanochat` cloned at `1b95827` + intact Dec 2025 `runs/` artifacts. `nvidia-smi` on `trj` currently fails with `Driver/library version mismatch (NVML 595.99 vs kernel 595.91.07)` held by 4 `gunicorn` processes (`bulk_youtube_transcript_optimizer`). Also `ts2` (`thinkstation2`) is directly reachable (`ssh ts2`) with a working GTX 1070. | Live SSH probe `csd -> mac-mini-max -> trj`; `hwxb.10` |
+| **G1 · Toy screening vs `final_norm` fix (`8de4abb`)** | **STALE HEADLINE NUMBERS IN DOCS.** `results/toy_screening_2026-10-07_verdict.md` (`vanilla` 1.958, `synaptic_off` 2.028 [+0.069], `bio_all` 2.038 [+0.080] val bpb) was run on `be7344f` **before** `716cacb` (which turned `enable_hebbian` off by default and moved MoE mechanisms to `structural_columns()`) and **before** `8de4abb` (which added the missing final RMSNorm before `lm_head` in `GPTSynaptic`). In `results/scaffold_diagnosis_2026-10-07.json`, `final_norm=True` moved `synaptic_off` from **+0.087 bpb behind `vanilla` to −0.0383 bpb ahead of `vanilla` on all 3 seeds** (`1.9625/1.9513/1.9626` vs `2.0097/1.9969/1.9846`). Yet the 17-column toy screening was never re-run at `1b95827`, and `README.md`, `CLAIMS_AUDIT.md`, and this file still cite the pre-`8de4abb` unnormalized deficit. | `8de4abb`, `results/scaffold_diagnosis_2026-10-07.json` vs `results/toy_screening_2026-10-07_verdict.md` |
+| **G2 · Online fast weights (`enable_hebbian`)** | **DECIDED (negative at toy scale).** Pre-registered chunked-regime benchmark (`chunk_len=8`) showed `hebbian_on == hebbian_off` on associative recall (`0.225` vs `0.225`) and worse validation loss (`3.671` vs `3.591`, all 5 seeds positive) at 0.34× throughput. Demoted to opt-in (`enable_hebbian=False`, `bdnf_scale=1.0` gated behind `enable_hebbian`); `add_hebbian` and `add_bdnf` are now distinct `add_one_in` columns. | `716cacb`, `results/hebbian_chunked_regime_2026-10-07_preregistered.json`, `docs/online_learning_status.md` |
+| **G3 · Evaluation determinism** | **WORKING.** `GPTSynaptic.forward` defaults `train_mode=None -> self.training` (`5cb1a90`). All 3 CPU benchmarks (`fast_weight_comparison`, `structural_nas_evaluation`, `cmaes_phase1_rerun_2026-10-07`) were re-run under the deterministic regime (`1c8ce91`, `e9ff9d6`). | `5cb1a90`, `1c8ce91`, `tests/test_eval_determinism.py` |
+| **G4 · Structural lifecycle (`uta`)** | **WIRED & MEASURED AT TOY SCALE.** NeuroScore EMA bug fixed (`aeaf162`); `sm_health_mode="credit"` fires (`3–6` splits, `14–15` merges, `2–8` resets over 120 steps) with `+0.030…+0.050` loss cost at 2L/64d (`results/structural_pair_pilot_2026-10-07_credit.json`). `structural_columns()` now has 5 MoE columns (`moe_fixed`, `moe_splitmerge`, `moe_no_metabolism`, `moe_no_genome`, `moe_add_glial_homeostasis`). E2E subprocess test of `--stage structural` remains open in `uta.10`. | `aeaf162`, `716cacb`, `results/structural_pair_pilot_2026-10-07_credit.json` |
+| **G6 · Presyn recurrence & kernels** | **CPU SCAN LANDED; GPU ACCEPTANCE OPEN.** Detached recurrence no longer builds autograd graphs (`b5325a1`); Rust `presyn_detached_scan_cpu` (`85905ad`, `BIO_FUSED_PRESYN=1`) cuts 2L/128d `seq=256` step time `1633 ms -> 925 ms` (1.77×); Triton `presyn_detached_scan_kernel` (`3956cc3`) passes on `TRITON_INTERPRET=1`. Real CUDA execution on `trj` (`l7c9`, `3bnd`, `jyb.2`, `jyb.3`) awaits NVML reload. | `b5325a1`, `85905ad`, `3956cc3`, `tests/test_presyn_scan_kernel.py` |
+| **G8 · CMA-ES hyperparameter tuning (`idh4`)** | **PARTIAL.** Copy-task proxy re-run confirmed No-go (`results/cmaes_phase1_rerun_2026-10-07.json`: all candidates score `6.950 ≈ ln(1024)`). Held-out language-model objective (`--objective lm`, `LMTask` on real shards with `setup_optimizers()`) landed in `e9ff9d6`, but the actual `--objective lm` optimization run has not yet been executed and committed. | `e9ff9d6`, `results/cmaes_phase1_rerun_2026-10-07.json`, `scripts/tune_bio_params.py` |
+| **G16 / G23 · Code quality & CI gates (`ty`, `formal_feedback`)** | **REGRESSED AT HEAD (`1b95827`).** Despite `CHANGELOG.md` claiming `ty check` is clean at `716cacb`, `uv run --no-sync ty check` currently **fails with 67 diagnostics** (`tests/test_ablation_matrix.py` lines 112–113, 222–225 from `716cacb`; `tests/test_tune_bio_params.py` lines 166–168 from `e9ff9d6`). Furthermore, `scripts.formal_feedback` and `tests/test_formal_feedback.py` **fail** because `formal/lean/proof_artifacts.json` has stale SHA-256 hashes for 4 files modified in `716cacb`. And setting `BIO_FUSED_PRESYN=1` in the shell breaks `tests/test_ablation_registry.py` because `SynapticConfig.native_presyn` reads `BIO_FUSED_PRESYN` at import time. | `uv run --no-sync ty check`, `uv run --no-sync python -m scripts.formal_feedback` |
+| **G20 · Confirmation-pass statistical power deadlock** | **SELF-BLOCKING SPEC BUG.** `ablation_matrix.go_no_go()` (`bio_inspired_nanochat/ablation_matrix.py:414-431`) refuses to proceed whenever `2 * 0.5^n * m > 0.05` (exact two-sided Wilcoxon floor under Holm correction). Yet `CONFIRMATION_SEEDS` (`ablation_matrix.py:85`), `docs/ablation_matrix.md`, and `hwxb.5.2.2` still pin `n = 3` seeds (`best_case_p = 0.25 > 0.05`), so `go_no_go()` **unconditionally returns `proceed=False` ("INFEASIBLE design")** and `eval_stats.compare_matrix` forces every 3-seed verdict to `"null"`. | `bio_inspired_nanochat/ablation_matrix.py:85,414-431`, `tests/test_ablation_matrix.py:186-195` |
 
 ---
 
-## 1. Gap register
+## 1. Gap Register (2026-10-13 Audit)
 
-Severity is about the promise, not the code. "Beads?" answers: if every open bead were finished,
-would this gap close? **Yes / Partial / No (NO BEAD)**.
+Severity measures impact on the project's core scientific & engineering promises. "Beads?" indicates whether existing open beads in `.beads/` completely cover the gap.
 
-| # | Gap | Vision items | Status | Severity | Beads? | Size |
+| # | Gap | Vision Items | Status at `1b95827` | Severity | Beads? | Size |
 |---|---|---|---|---|---|---|
-| G1 | The headline experiment: bio vs vanilla at scale, with statistics | 12, 13, 19 | NOT STARTED (blocked: GPU host) | Critical | Yes — `hwxb.2.5→2.6→3.x→5.2→5.3→6.x`, `4fw`, `rwg`, `gzm` | XL |
-| G2 | Online fast-weight efficacy: never shown; the probes were blind until today; no training regime lets the model learn to use the writes | 3 | UNPROVEN | Critical | Partial — `sx1m`, `hwxb.4.4`; the chunked training regime has NO BEAD | L |
-| G3 | Evaluation determinism: `GPTSynaptic.forward` defaults to `train_mode=True` (stochastic release + plasticity), so every unwrapped evaluator scores a noisy, self-modifying model | 1, 2, 11, 12 | REGRESSED (contaminates past CPU results and future GPU evals) | Critical | NO BEAD | S |
-| G4 | Structural lifecycle efficacy: defaults inert; NAS regressed on 8/8 seeds; `relative` health exists but no run has measured it | 5, 6 | UNPROVEN (evidence path built this evening: `structural_columns()`) | Major | Partial — `sx1m`, `hwxb.4.3`, `uta.2`; the NAS re-run has NO BEAD | M |
-| G5 | A real end-to-end gate for the training scripts (the test that would have caught the `torch.compile` crash) | 14, 23 | DONE this evening — `tests/test_e2e_quick_start.py` | Major | closed by commit | S |
-| G6 | Kernels: exact causal recurrence 12× slower (`l7c9`), Triton decode kernel never on a GPU (`3bnd`), fused training kernel (`jyb.2/3`), Rust row-parallel (`ylo2`) | 9, 10 | PARTIAL | Major | Yes | L–XL |
-| G7 | Neuromodulation efficacy and the RL sample-efficiency study | 7 | UNPROVEN | Major | Yes — `hwxb.4.2`, `hy8.3` (GPU) | L |
-| G8 | CMA-ES against a language-model objective | 11 | PARTIAL | Major | Yes — `idh4` | L |
-| G9 | Roadmap features without an evidence path | 18 | RESOLVED 2026-09-02 (`74f.9`): 6 of 11 already have D1 columns; 1 is unimplemented, 1 a recipe knob, 3 are off-path research modules — README carries the table | Major | closed | M |
-| G10 | Selective decoding / calibrated abstention unreachable from serving | 8 | DONE 2026-09-03 (`wmel.1`, `wmel.2`): `Engine.generate(selective=…)`, `chat_cli --selective`, `chat_web` request fields; calibration quality still toy-scale | Major | closed | M |
-| G11 | Dual-4090 performance program (utilization, NCCL, precision, cudagraphs, guardrails) | 13 | NOT STARTED (GPU) | Major | Yes — `6pj`, `j9i`, `2fh`, `4nk`, `5rh`, `94r`, `h4j`, `vwl` | XL |
-| G12 | Quick Start step 4 documented `--source sft` only; the working post-`base_train` command was undocumented | 14 | DONE this evening (README §4, CLI help) | Minor | closed by commit | S |
-| G13 | TensorBoard tags the README promised (`calcium_mean`, `rrp_mean`, `fast_weight_norm`) were not emitted | 17 | CLOSED by the morning docs pass — README now lists only the tags NeuroViz emits | Minor | closed | S |
-| G14 | Ship a usable checkpoint, demo, write-up; the 2025 publication milestone | 19, 20 | NOT STARTED (GPU) | Critical (it is the product) | Yes — `hwxb.6.1/6.2/6.3`, `vap.6` | L |
-| G15 | CI/nightlies green **verified**, not just fixed | 23 | UNVERIFIED | Minor | NO BEAD | S |
-| G16 | Type-check debt: 51 `ty` diagnostics, none in the changed-files gate | 23 | DEBT | Minor | NO BEAD | S |
-| G17 | Package footprint: 27 test-only modules, dead `kernels/dispatcher.py`, orphan `metrics_fused.py` | 22 | DEBT | Minor | NO BEAD (deletion needs written permission) | M |
-| G18 | Throughput cost: bio path 4–18× slower than vanilla at toy scale; budget proposed 2026-09-03 (`74f.10.1`, owner to confirm), gate waits for l7c9 (`74f.10.2`) | 9, 13 | DECLARED, NOT ENFORCED | Major | Partial — `l7c9`, `6pj` | M |
-
-Working and not in the register: 1, 2, 4 (presyn dynamics, stochastic release, bistable latch),
-15 (retrofit), 16 (registry hygiene), 21 (docs current as of today).
+| **G0** | **GPU host `trj` access & NVML driver mismatch:** `trj` (2× RTX 4090) IS reachable via `mac-mini-max` (`10.10.10.1` / Tailscale `100.91.120.17`), but `csd`'s `~/.ssh/config` points `trj` to `localhost` and `trj` has an NVML 595.99 vs kernel 595.91.07 mismatch held by 4 `gunicorn` PIDs. | 9, 10, 12, 13, 19 | **BLOCKED ON DRIVER RELOAD** | Critical | Partial (`hwxb.10` had wrong diagnosis) | S |
+| **G1** | **Headline bio-vs-vanilla experiment at D1 scale (17 dense + 5 MoE columns):** Harness & launcher ready; zero GPU runs executed yet. | 12, 13, 19 | **NOT STARTED (GPU)** | Critical | Yes (`hwxb.2.5→2.6→3.x→5.2→5.3→6.x`, `4fw`, `gzm`) | XL |
+| **G19** | **Post-`8de4abb` (`final_norm=True`) 17-column toy screening & doc sync:** Headline CPU numbers in `README.md`, `CLAIMS_AUDIT.md`, and `results/toy_screening_2026-10-07_verdict.md` come from pre-`8de4abb` (`final_norm` missing) and pre-`716cacb` (`enable_hebbian=True`). `scaffold_diagnosis_2026-10-07.json` proved `synaptic_off` beats `vanilla` by `-0.0383` bpb once normalized, but the 17-column screening was never re-run. | 1, 12, 21 | **STALE ARTIFACT & DOCS** | Critical | Was NO BEAD → now `hwxb.5.5` | M |
+| **G20** | **Confirmation-pass statistical power deadlock (`CONFIRMATION_SEEDS` vs `go_no_go`):** `CONFIRMATION_SEEDS` has 3 seeds, where exact Wilcoxon has floor `p = 0.25 > 0.05`. `go_no_go()` unconditionally rejects `n = 3` as `"INFEASIBLE design"`, and `eval_stats.compare_matrix` forces all 3-seed runs to `"null"`. | 12, 16 | **BROKEN CONTRACT** | Critical | Was NO BEAD → now `hwxb.5.4` | S |
+| **G16 / G23** | **Regressed CI gates at HEAD (`ty check`, `formal_feedback`, `BIO_FUSED_PRESYN` env collision, `ci.yml` `--no-sync`):** `ty check` fails with 67 diagnostics; `formal_feedback` fails on 4 stale SHA-256 hashes in `formal/lean/proof_artifacts.json`; `BIO_FUSED_PRESYN=1` breaks `test_ablation_registry.py`; `ci.yml` `build-wheel` lacks `--no-sync`. | 21, 23 | **REGRESSED** | High | Was NO BEAD → now `u0fl.3` | S |
+| **G2** | **Online fast-weight efficacy (`enable_hebbian`):** Proven null/negative on 5-seed chunked associative recall (`results/hebbian_chunked_regime_2026-10-07_preregistered.json`); now default-OFF (`add_hebbian`/`add_bdnf`). Scale-up check (`hwxb.4.4`) remains open for GPU. | 3 | **DECIDED (CPU NULL) / GPU OPEN** | Major | Yes (`hwxb.4.4`) | M |
+| **G3** | **Evaluation determinism (`GPTSynaptic.forward` default `train_mode=None`):** Fixed in `5cb1a90`; CPU artifacts re-run with `measurement_regime` metadata in `1c8ce91`. | 1, 2, 11, 12 | **WORKING (CLOSED)** | — | Closed (`5cb1a90`, `1c8ce91`) | — |
+| **G4** | **Structural lifecycle (`uta`):** Credit health mode (`sm_health_mode="credit"`) fires at toy scale (`results/structural_pair_pilot_2026-10-07_credit.json`) and is wired into `structural_columns()` (now 5 MoE columns). Subprocess E2E smoke (`uta.10` step 3) and GPU scale-up (`hwxb.4.3`, `uta.2`) remain open. | 5, 6 | **PARTIAL** | Major | Yes (`uta.10`, `hwxb.4.3`, `uta.2`) | M |
+| **G5** | **End-to-end subprocess gate for training scripts:** `tests/test_e2e_quick_start.py` and `tests/test_e2e_matrix_pipeline.py` landed. | 14, 23 | **WORKING (CLOSED)** | — | Closed (`5a27e16`) | — |
+| **G6** | **Kernels & exact causal recurrence:** Detached scan (`b5325a1`), Rust CPU scan (`85905ad`), and Triton scan (`3956cc3`) landed on CPU/interpreter. Real RTX 4090 execution (`l7c9`, `3bnd`, `jyb.2`, `jyb.3`, `jyb.10`) and Rust decode row-parallelism (`ylo2`) remain open. | 9, 10 | **PARTIAL (CPU DONE, GPU OPEN)** | Major | Yes (`l7c9`, `3bnd`, `jyb.2`, `jyb.3`, `jyb.10`, `ylo2`) | L |
+| **G7** | **Neuromodulation efficacy & RL study:** `add_neuromod` is in the 17-column screening matrix; `hwxb.4.2` and `hy8.3` (RL study) await GPU. | 7 | **UNPROVEN (GPU)** | Major | Yes (`hwxb.4.2`, `hy8.3`) | L |
+| **G8** | **CMA-ES on a language-model objective (`idh4`):** Copy-task proxy re-run confirmed No-go (`results/cmaes_phase1_rerun_2026-10-07.json`). `--objective lm` implemented in `scripts/tune_bio_params.py` (`e9ff9d6`), but the `--objective lm` optimization run itself has not been executed/committed. | 11 | **PARTIAL** | Major | Yes (`idh4`) | M |
+| **G9** | **Roadmap features evidence mapping:** Resolved in `README.md` §Roadmap (`74f.9`). | 18 | **WORKING (CLOSED)** | — | Closed (`74f.9`) | — |
+| **G10** | **Selective decoding / calibrated abstention in serving:** Wired into `Engine.generate(selective=...)`, `chat_cli --selective`, and `chat_web` (`wmel.1`, `wmel.2`). | 8 | **WORKING (CLOSED)** | — | Closed (`wmel`) | — |
+| **G11** | **Dual-4090 performance program:** All 9 beads (`6pj`, `j9i`, `2fh`, `4nk`, `5rh`, `94r`, `h4j`, `r2d`, `vwl`) open and awaiting `trj` GPU availability. | 13 | **NOT STARTED (GPU)** | Major | Yes (`6pj` children) | XL |
+| **G14** | **Ship a usable checkpoint, inference demo & write-up:** Open under `hwxb.6.1–6.3`, `vap.6`. | 19, 20 | **NOT STARTED (GPU)** | Critical | Yes (`hwxb.6.x`, `vap.6`) | L |
+| **G15** | **CI verified green on GitHub / self-hosted runner:** Tracked by `u0fl`, `u0fl.1`, `u0fl.2`. Currently blocked by G16/G23 regressions on `main` (`ty check` and `formal_feedback` fail). | 23 | **REGRESSED / UNVERIFIED** | Major | Partial (`u0fl` + new G16/G23 bead) | S |
+| **G17** | **Package footprint hygiene:** 94 top-level modules in `bio_inspired_nanochat/`; 46 reachable from `scripts/` (only 15 from core `gpt`/`gpt_synaptic`/`synaptic`/`synaptic_splitmerge`), 48 unreachable from `scripts/` (test-only/standalone). Tracked by `3zsq`, `3zsq.1`, `3zsq.2` (no file deletion without written permission per Rule 1). | 22 | **OPEN DEBT** | Minor | Yes (`3zsq`, `3zsq.1`, `3zsq.2`) | M |
+| **G18** | **Throughput budget & `perf_regression` gate:** Tracked by `74f.10`, `74f.10.1`, `74f.10.2`. | 9, 13 | **IN PROGRESS** | Major | Yes (`74f.10.1`, `74f.10.2`) | M |
+| **G21** | **Cross-document & bead specification drift:** (1) `docs/scale_up_phase0_decisions.md` §1/§3.2 says `working_memory_suite` is PRIMARY and `val_bpb` is secondary, contradicting `docs/ablation_matrix.md` and `ablation_matrix.py:455` (`DECISION_PRIMARY_METRIC = "val_bpb"`). (2) `docs/ablation_matrix.md` §4 still says `13 columns × 3 seeds` while §2 says `17`. (3) `hwxb.5.2.1` says `20 columns` instead of `17 dense + 5 structural`. (4) `ablation_matrix.py:44` docstring says `neuromod` is not registered when it is. (5) `docs/eval_benchmark_matrix.md:151` says `base_train.py` lacks CLI overrides for `SynapticConfig`. (6) `TESTING.md:138` claims 27 Rust unit tests in `rust_src` when `cargo test` runs `0 tests`. (7) `PLAN_TO_OPTIMIZE_KEY_HOTSPOTS_USING_RUST_PYO3.md` is a byte-for-byte duplicate of `PLAN_TO_OPTIMIZE_KEY_HOTSPOTS_USING_TRITON.md`. (8) `README.md` L631 still says `96-parameter SynapticConfig` (vs 109) and L191 claims Dec 2025 `runs/` are gone when they exist on `trj`. | 12, 21, 22 | **DRIFTED** | Medium | Was NO BEAD → now `74f.12` | S |
 
 ---
 
-## 2. Resolutions
+## 2. Detailed Resolutions for Active & Newly Discovered Gaps
 
-### G3 · Evaluation determinism — REGRESSED → WORKING  *(do first: it changes what every other measurement means)*
+### G16 / G23 · Restore Green Code-Quality & Formal-Proof Gates on `main` — REGRESSED → WORKING *(Priority 0: do immediately on CPU)*
 
-**Current state.** `GPTSynaptic.forward(idx, targets=None, kv_cache=None, train_mode=True, …)`.
-`train_mode` gates stochastic vesicle sampling (`stochastic_train_frac=0.12`) and persistent presyn
-normalizer updates in attention, and `update_mem` (plasticity) in the MLP/MoE. `base_train`'s
-validation wrapper and `eval_matrix` pass `train_mode=False`; `scripts/base_eval.py`,
-`core_eval.py`, `scripts/e2e/fast_weight_comparison_bench.py`, `scripts/e2e/structural_nas_evaluation.py`,
-`scripts/e2e/wake_sleep_consolidation.py`, `scripts/tune_bio_params.py`, `perf_regression.py`,
-`self_correcting_generator.py` call `model(...)` with no `train_mode`. Measured today: two identical
-eval-mode forwards differ by up to 0.067 in logits with the default; 0.0 with `train_mode=False`.
-The fast-weight comparison null, the structural-NAS regression, and the CMA-ES proxy No-go were all
-scored in this regime.
+**Current state at `1b95827`.**
+1. `uv run --no-sync ty check` fails with **67 diagnostics**:
+   - `tests/test_ablation_matrix.py` lines 112–113 and 222–225 (7 errors): `build_syn_cfg()` returns `SynapticConfig | None`, and the assertions added in `716cacb` access `.enable_metabolism`, `.glial_homeostasis`, `.enable_hebbian`, `.bdnf_scale` without narrowing `None`.
+   - `tests/test_tune_bio_params.py` lines 166–168 (60 errors): `kwargs = dict(...)` added in `e9ff9d6` widens the value type to an untyped union, failing `ty` checking on all 20 keyword parameters of `evaluate_candidate_detailed(...)`.
+2. `uv run --no-sync python -m scripts.formal_feedback` and `pytest tests/test_formal_feedback.py` fail with `FormalFeedbackError: stale runtime hash` for 4 files modified in `716cacb`:
+   - `bio_inspired_nanochat/ablation_matrix.py` (`4b6420f488a7...` → `301fcb4b7b6f...`)
+   - `bio_inspired_nanochat/ablation_registry.py` (`62ff0747f7c1...` → `7dc100e1d547...`)
+   - `tests/test_ablation_matrix.py` (`399cbc1f3d33...` → `e5a5bb68625f...`)
+   - `tests/test_scaleup_ablation_e2e.py` (`9c9056c181cc...` → `f6f50fcd23ce...`)
+3. Setting `BIO_FUSED_PRESYN=1` in the shell environment causes `tests/test_ablation_registry.py::test_registry_defaults_match_synaptic_config` and `test_native_presyn_is_a_default_off_backend_valid_in_every_column` to fail because `SynapticConfig.native_presyn` evaluates `decouple_config("BIO_FUSED_PRESYN", default=False, cast=bool)` at class definition time.
+4. `.github/workflows/ci.yml` line 211 (`build-wheel`) runs `uv run maturin build --release` without `--no-sync`, causing `uv` to re-resolve and download CUDA PyTorch mid-job after `uv sync --extra cpu --dev`.
 
-**Target state.** An `nn.Module` in eval mode is deterministic by default. `train_mode: bool | None =
-None` resolves to `self.training`; explicit callers are unchanged (`base_train` passes `True` in the
-loop, `False` in eval). Generation keeps adapting only where the Engine says so. *Landed this
-evening (`5cb1a90`); the audit re-runs below are still open.*
-
-**Success criteria.**
-- [ ] `tests/test_eval_determinism.py`: for every evaluator entry point above, two calls on the same
-  batch with an eval-mode synaptic model are bit-identical, and a training-mode forward with
-  `stochastic_train_frac>0` is not.
-- [ ] `test_eval_plasticity_isolation.py` still passes (validation cannot mutate `w_fast`).
-- [ ] The CORE metric computed inside `base_train` is identical across two evaluations of the same
-  checkpoint.
-- [ ] The three CPU artifacts above are re-run once under the fixed default and their JSON files
-  gain a `measurement_regime` field; the docs that cite them say which regime produced the number.
-
-**Implementation.** (1) `gpt_synaptic.py`: default `train_mode=None → self.training`. (2) Run the full
-suite; fix any test that relied on eval-mode plasticity by passing `update_mem=True` explicitly.
-(3) Engine: assert it passes `train_mode` explicitly. (4) Re-run `fast_weight_comparison_bench`,
-`structural_nas_evaluation`, `tune_bio_params` proxy once (CPU, minutes); commit the artifacts.
-
-**Dependencies.** None. **Size.** S. **Vision goals.** 1, 2, 11, 12 (every metric). **Beads?** NO BEAD.
-
-### G1 · The headline experiment — NOT STARTED → WORKING
-
-**Current state.** Harness complete (`eval_matrix`, `eval_stats`, pre-registered D1 matrix with
-synaptic-off anchor, registry, checkpoint manager, DDP path). Since this evening the commands that
-produce every cell's checkpoint are derived from the spec (`scripts/matrix_launch.py`,
-`ablation_matrix.base_train_argv`); before that nothing turned a column into a training run.
-Zero GPU runs. `trj` unreachable.
-
-**Target state.** D1 as pre-registered in `docs/ablation_matrix.md`: depth 10, ~91M tied params,
-500M FineWeb-Edu tokens, 3 seeds, 17 dense columns (20 until the MoE-only ones moved to the MoE stage, 2026-10-07), on 2×4090; verdict written by `eval_stats` with
-paired tests and Holm correction; checkpoints and curves in the registry.
+**Target state.**
+- Fix the type annotations in `tests/test_ablation_matrix.py` and `tests/test_tune_bio_params.py` so `uv run --no-sync ty check` exits 0 with 0 diagnostics.
+- Append a new proof-preserving runtime-hash refresh record in `formal/lean/proof_artifacts.json` (after fixing `tests/test_ablation_matrix.py`) so `uv run --no-sync python -m scripts.formal_feedback --run-tests` and `pytest tests/test_formal_feedback.py` exit 0.
+- Make `tests/test_ablation_registry.py` resilient to `BIO_FUSED_PRESYN=1` in the outer environment (or read `BIO_FUSED_PRESYN` cleanly) so running the test suite with `BIO_FUSED_PRESYN=1` passes 100%.
+- Add `--no-sync` to `uv run --no-sync maturin build --release` in `.github/workflows/ci.yml`.
 
 **Success criteria.**
-- [ ] `hwxb.2.5` smoke on the GPU host: 200 steps, `val_bpb` finite, checkpoint saved and resumed
-  bit-exactly (`hwxb.2.6` save→kill→resume proof).
-- [ ] `hwxb.3.1/3.2` vanilla baseline: 3 seeds, all Phase-0 metrics in the registry.
-- [ ] `hwxb.5.2` screening matrix, then confirmation; the go/no-go estimate committed before the run.
-- [ ] `hwxb.5.3` verdict: for each mechanism, effect on `val_bpb` with CI and the throughput cost
-  beside it. A null is a valid outcome and closes the bead.
-
-**Implementation.** Provision (ssh entry for `trj` or a rented 2×4090/A100), fetch FineWeb-Edu +
-CORE bundle once, then execute the bead chain in order. Only after G3, G2-regime, G4-wiring are
-green, or the run measures the wrong defaults.
-
-**Dependencies.** G3; G2 (training regime); G4 (matrix wiring); G5. **Size.** XL. **Vision goals.**
-12, 13, 19. **Beads?** Yes — the chain exists and is correct.
-
-### G2 · Online fast-weight efficacy — UNPROVEN → MEASURED
-
-**Current state.** Mechanism live by default; ON vs OFF held-out loss identical to six decimals
-(hwxb.4.4); Δw_fast ≈ 1e-7. Root cause found today: every probe ran one full teacher-forced
-forward, in which the writes land after the matmuls that would need them — the measurement could
-not see the mechanism. `retrieval_accuracy(chunk_len=k)` now reads incrementally and the writes
-provably change later logits (`test_hebbian_writes_land_once_per_chunk_and_become_visible`). Training
-still runs full forwards, so the slow weights never learn to *use* the scratchpad.
-
-**Target state.** A chunked training regime: the sequence is forwarded in `k`-token chunks through a
-KV cache, deferred writes land between chunks, the loss is summed over chunks and backpropagated
-through the slow weights once per sequence. Exposed as `--hebb_chunk_len` in `base_train` and
-`eval_matrix`'s inline loop; recorded in `run_config`.
-
-**Success criteria.**
-- [ ] Unit: chunked training loss on a synaptic model with Hebbian OFF equals full-forward loss
-  (tolerance 1e-5); with Hebbian ON, `w_fast` changes between chunks inside one sequence.
-- [ ] CPU experiment, 2L/64d, 5 seeds, associative recall 2–16 pairs, 2k steps: ON vs OFF recall
-  accuracy under chunked reading. Predeclared: effect = ON − OFF; countermetric = tokens/s ratio
-  chunked/full. **Either** ON > OFF by ≥ 3σ at ≥ 8 pairs, **or** the README's "infinite local
-  context" is demoted to a hypothesis and `enable_hebbian` moves to the add-one-in set.
-- [ ] Control: the same models read with a full forward show ON ≈ OFF (proves the regime matters).
-- [ ] `docs/online_learning_status.md` rewritten from the artifacts; `sx1m`/`sax.1` commented.
-
-**Implementation.** `GPTSynaptic.forward_chunked(idx, targets, chunk_len)` (reuses `KVCache`; no
-new module); `base_train`/`eval_matrix` flag; `scripts/e2e/hebbian_chunked_regime.py` producing a
-committed JSON; three-factor gating (`hy8.2`, closed) switched on in the ON arm as a second column.
-
-**Dependencies.** G3. **Size.** L. **Vision goals.** 3. **Beads?** Partial — `sx1m` names the
-problem, `hwxb.4.4` is GPU-scale; the regime itself has NO BEAD.
-
-### G4 · Structural lifecycle efficacy — UNPROVEN → MEASURED
-
-**Current state.** Controller wired in `base_train` (`--splitmerge_every`, `--sm_health_mode`);
-product health peaks at half the routing mass so uniform experts read as dying; `relative` mode
-measured on sx1m (separates a real straggler at E=16). The lifecycle is a `base_train` knob, not a
-`SynapticConfig` field, so until this evening no matrix column could carry it;
-`ablation_matrix.structural_columns()` now defines the opt-in pair `moe_fixed` vs `moe_splitmerge`
-(bio_all on `SynapticMoE`; split/merge every 100 steps under `relative` health) and
-`scripts/matrix_launch.py --stage structural` emits their `base_train` commands. The one NAS
-evaluation regressed (p=0.0036) and was scored under the G3 regime.
-
-**Target state.** The pair trained and scored like any other cell (screening budget, 2 seeds), and
-the NAS evaluation re-run under G3 with both health modes.
-
-**Success criteria.**
-- [x] The `moe_splitmerge` command carries `--splitmerge_every=100 --sm_health_mode=relative
-  --split_health_min=1.5 --merge_health_max=0.35` and both columns share `bio_all`'s
-  `SynapticConfig` (`tests/test_matrix_launch.py`).
-- [x] CPU pilot done 2026-09-02 (2 seeds, 120 steps): **zero events under either signal**; the
-  balance loss keeps utilization within ±0.03 of the fair share, so a utilization-triggered
-  lifecycle never fires in healthy training. The finding replaces the criterion: the D1 structural
-  arm needs a demand signal the balance loss does not flatten, or a weaker balance loss.
-- [ ] `structural_nas_evaluation` re-run (8 seeds) under `relative` health: report final-loss delta
-  with CI. If still worse, split/merge stays opt-in and the README says so in the lifecycle section.
-- [ ] `sx1m` closed with the numbers, whichever way they fall.
-
-**Dependencies.** G3. **Size.** M. **Vision goals.** 5, 6. **Beads?** Partial — `sx1m`, `hwxb.4.3`,
-`uta.2`; the NAS re-run has NO BEAD.
-
-### G5 · A real end-to-end gate for the training scripts — NO TEST → WORKING
-
-**Current state.** 1,789 tests, none of which runs `scripts.base_train` as the user does; the
-harness tests import pieces. `torch.compile` on 3.14 killed the script at line 564 for months.
-
-**Target state.** One subprocess test (marked `e2e`, ~60 s CPU) runs `python -m scripts.base_train
---synapses=1 --depth=1 --num_iterations=2 …` on a 200-document synthetic parquet + 512-token
-tokenizer built in `tmp_path`, then `chat_cli -i base -p "x"` on the result. CI runs it.
-
-**Success criteria.**
-- [ ] Test asserts: exit 0, a `model_*.pt` and `meta_*.json` exist, one registry row with
-  `harness == "train"` in the temp registry, a non-empty generation.
-- [ ] Planted negative: with `--syn_cfg.bogus=1` the process exits non-zero with the field name.
-
-**Dependencies.** None. **Size.** S. **Vision goals.** 14, 23. **Beads?** NO BEAD.
-
-### G6 · Kernels — PARTIAL → ACCEPTED
-
-**Current state.** Exact causal recurrence 12× slower after the 08hm correctness fix (`l7c9`, P1);
-Triton FP32 Tq=1 decode kernel real but never executed on a GPU (`3bnd`); Rust decode dispatched on
-CPU, loses past 2k keys (`ylo2`); fused training kernel and backward designed, not built (`jyb.2/3`).
-
-**Target state.** In order of leverage: (1) `l7c9` — a vectorized exact causal scan (associative
-scan over the calcium/buffer recurrence, blocked by `recurrence_block_size`) with decode parity kept
-by `test_e2e_decode_parity`; target ≤ 2× the pre-08hm path on CPU. (2) `3bnd` on the 4090 with the
-existing `benchmark_presyn_live`. (3) `jyb.2/3` only if the D1 verdict keeps presyn.
-
-**Success criteria.**
-- [ ] `l7c9`: parity tests green; `perf_regression` gate records the new ratio.
-- [ ] `3bnd`: kernel output equals reference to 1e-5 on 4090; speedup table committed.
-
-**Dependencies.** G1 (GPU) for (2)(3); none for (1). **Size.** L/XL. **Vision goals.** 9, 10.
-**Beads?** Yes.
-
-### G7 · Neuromodulation — UNPROVEN → MEASURED
-
-**Current state.** Registered as `add_neuromod` in the matrix today; the bus is instantiated by the
-harness; the unsupported "1.72×" numbers were removed. `hy8.3` (RL study) open, GPU.
-
-**Target state.** Its effect appears as one row of the D1 verdict (G1); the RL study runs against
-a real reward with a predeclared denominator (samples to reach a fixed reward, 3 seeds).
-
-**Success criteria.** D1 row with CI; `hy8.3` artifact committed or the bead closed as null.
-**Dependencies.** G1. **Size.** L. **Vision goals.** 7. **Beads?** Yes.
-
-### G8 · CMA-ES on a language-model objective — PARTIAL → RUN
-
-**Current state.** CLI real; one Phase-1 run on a synthetic proxy (No-go, gain within seed noise,
-scored under G3). `idh4` open.
-
-**Target state.** Phase 1 re-run on the fixed proxy under G3 (CPU), then against `val_bpb` on the
-D1 small config (GPU), with the 74f.1 readiness gate.
-
-**Success criteria.** Committed `results/cmaes_phase1_*.json` with seed-noise floor beside the gain;
-README §CMA-ES cites it. **Dependencies.** G3; G1 for the LM objective. **Size.** L. **Vision.** 11.
-**Beads?** Yes — `idh4`.
-
-### G9 · Roadmap toggles with no evidence path — DECIDED (2026-09-02)
-
-*Outcome:* the premise was half wrong. Six of the eleven roadmap features are registered mechanisms
-with D1 columns (stochastic release, septin barrier, Doc2, Xi genome, the bistable latch, and the
-endocytosis queue through `bio_no_presyn`); Rab/SNARE routing is not implemented; CA init is a
-training-recipe knob; gauge-reversible and simplicial are research modules `GPTSynaptic` does not
-import, and ultrametric attention is an opt-in on the vanilla `GPT` only. README §Roadmap now carries the per-feature evidence table. No new columns were
-added: nothing off the live path can be ablated. The original analysis follows for the record.
-
-**Current state.** Endocytosis buffer, septin, Rab/SNARE, Doc2, Xi genome, CA init, gauge-reversible,
-simplicial, ultrametric, tropical skeleton, topological NAS exist as config fields; nine mechanisms
-have add-one-in columns; these eleven have none, so no planned run will ever produce evidence for
-them.
-
-**Target state.** For each: (a) if it is a `SynapticConfig` toggle, add it to `MECHANISMS` with its
-prerequisites so `add_one_in()` derives a column, and accept the matrix growing; or (b) mark it
-`exploratory` in the registry and in README §Roadmap with "no efficacy evidence planned".
-
-**Success criteria.** `test_scaleup_ablation_e2e::test_module_enumerates_the_full_matrix` updated to
-the new count; README roadmap table has an Evidence column with one of {D1 column, exploratory}.
-**Dependencies.** None (config-only). **Size.** M. **Vision.** 18. **Beads?** NO BEAD.
-
-### G10 · Selective decoding in serving — PARTIAL → WORKING
-
-**Current state.** `quality_guarded_predict` exists; unreachable from `Engine.generate`, `chat_cli`,
-`chat_web`. Calibration numbers come from a 1-layer toy and are labeled so.
-
-**Target state.** `Engine.generate(..., selective=True)` routes through it; `chat_web` exposes a
-toggle; abstentions are visible in the response.
-
-**Success criteria.** Test: with a planted low-confidence step the engine abstains; with `selective`
-off the output is unchanged. **Dependencies.** None. **Size.** M. **Vision.** 8. **Beads?** Yes — `wmel`.
-
-### G11 · Dual-4090 performance — NOT STARTED → MEASURED
-
-**Current state.** Nine perf beads, all GPU-gated; zero measurements.
-**Target state.** `j9i` profiling harness first; then hotspot order. **Success criteria.** A committed
-`perf_baselines.json` with GPU rows; a CI perf guardrail that fails on >10% regression of tok/s.
-**Dependencies.** G1 provisioning. **Size.** XL. **Vision.** 13. **Beads?** Yes.
-
-### G12 · Quick Start step 4 — PARTIAL → WORKING
-
-**Current state.** README §4 gives `chat_web --source sft`; after §3 only a base checkpoint exists.
-`load_model` accepts `base`; the CLIs' help strings say `sft|mid|rl`.
-**Target state.** §4 shows `chat_cli -i base -g <model_tag>` (and the `chat_web --source base`
-form) with the note that a base model completes text rather than chats; help strings list `base`.
-**Success criteria.** Covered by the G5 e2e test. **Dependencies.** None. **Size.** S. **Beads?** NO BEAD.
-
-### G13 · TensorBoard tags — CLOSED
-
-Re-checked against HEAD: the README's "Key metrics to watch" already names only the tags
-NeuroViz emits (`<layer>/energy_mean`, `health_mean`, `util_mean`, `dead_expert_frac`,
-`camkii_mean`); the morning docs pass removed the three promised-but-missing names. Emitting
-calcium/RRP means and the fast-weight norm from `GPTSynaptic._last_presyn_state` and
-`SynapticLinear.w_fast` would be a 30-line addition if anyone wants the channels; nothing is
-promised that is not delivered. **Vision.** 17.
-
-### G14 · Ship it — NOT STARTED → SHIPPED
-
-**Current state.** No checkpoint exists. `hwxb.6.1–6.3`, `vap.6` open.
-**Target state.** The D1 winner (or the vanilla baseline plus an honest null) trained to the final
-recipe, checkpoint hash in `docs/model_zoo.md`, demo command in README, write-up with the verdict
-table — positive or null — replacing the 2025 milestones.
-**Success criteria.** `python -m scripts.chat_cli -i base -g <tag>` on a fresh clone reproduces the
-documented sample; `results/registry.jsonl best --metric val_bpb` returns it.
-**Dependencies.** G1. **Size.** L. **Vision.** 19, 20. **Beads?** Yes.
-
-### G15 · CI verified green — UNVERIFIED → VERIFIED
-
-Runs for every push today are queued. **Success criteria.** One green `ci.yml` and one green
-nightly on `main`, linked from TESTING.md. If the runner backlog persists 48 h, add a self-hosted
-runner on the GPU host (which G1 needs anyway). **Size.** S. **Beads?** NO BEAD.
-
-### G16 · Type-check debt — DEBT → CLEAN
-
-51 `ty` diagnostics (`ty check --output-format concise`): optimizer-group typing in `gpt.py` /
-`gpt_synaptic.py` / `adamw.py` / `muon.py` (13), `perf_regression.py` `Tensor | Module` unions (5),
-`neuroviz.py` (4), `deliberation.py` (4), the `base_train` eval wrapper (4), `benchmark_flex.py` (3),
-test files (18). The changed-files gate hides them. **Success criteria.** `uv run ty check` exits 0
-and CI runs it on the whole tree. **Size.** S (one afternoon). **Beads?** NO BEAD.
-
-### G17 · Footprint — DEBT → HONEST
-
-27 modules imported only by tests; `kernels/dispatcher.py` imported by nothing; `metrics_fused.py`
-orphaned. **Target.** Quarantine test-only modules under `bio_inspired_nanochat/experimental/`;
-delete the two dead files **only with written permission** (AGENTS.md rule 1). README's footprint
-sentence matches the import graph. **Size.** M. **Beads?** NO BEAD.
-
-### G18 · Throughput budget — UNBOUNDED → GATED
-
-Bio path 4–18× slower than vanilla at toy scale (`perf_baselines.json`). **Target.** Declare the
-budget the project accepts (proposal: ≤ 2.0× training, ≤ 1.5× decode at D1 scale after `l7c9`) in
-README §Performance, and make `perf_regression` fail above it. **Success criteria.** The gate fails on
-a planted 3× slowdown and passes at HEAD. **Dependencies.** G6(1). **Size.** M. **Beads?** Partial.
+- [ ] `uv run --no-sync ruff check` exits 0.
+- [ ] `uv run --no-sync ty check` exits 0.
+- [ ] `uv run --no-sync python -m scripts.formal_feedback --run-tests` exits 0.
+- [ ] `BIO_FUSED_PRESYN=1 OMP_NUM_THREADS=1 uv run --no-sync pytest tests/test_ablation_registry.py tests/test_ablation_matrix.py tests/test_tune_bio_params.py tests/test_formal_feedback.py` exits 0.
 
 ---
 
-## 3. Order of work and dependencies
+### G0 · Unblock Dual-4090 GPU Host `trj` (`hwxb.10`) — MISDIAGNOSED → READY
+
+**Current state.**
+- `trj` (`threadripperje`) is NOT missing or offline. It is reachable from `csd` (`sensedemobox`) through `mac-mini-max` (`ssh -J mac-mini-max ubuntu@10.10.10.1` or Tailscale `100.91.120.17`).
+- On `csd`, `~/.ssh/config` currently has a broken stub (`Host trj` -> `HostName localhost`) and lacks `trj_ed25519` (which lives on `mac-mini-max:~/.ssh/trj_ed25519`).
+- On `trj`, `/data/projects/bio_inspired_nanochat` is already cloned at `1b95827` (`main`), and two RTX 4090s are attached at PCIe `41:00.0` and `42:00.0`.
+- `nvidia-smi` on `trj` currently fails with `Failed to initialize NVML: Driver/library version mismatch (NVML library version: 595.99)` vs loaded kernel module `595.91.07` (`/proc/driver/nvidia/version`), held open by 4 `gunicorn` processes from `/data/projects/bulk_youtube_transcript_optimizer` (PIDs 7365, 13148, 13154, 3020335).
+- Additionally, `ts2` (`thinkstation2`, GTX 1070, driver 590.48.01) is directly reachable via `ssh ts2` right now.
+
+**Target state.**
+1. Update `~/.ssh/config` on `csd` so `Host trj threadripperje` uses `HostName 10.10.10.1` with `ProxyJump mac-mini-max` (and copy `trj_ed25519` to `csd:~/.ssh/`), enabling direct `ssh trj`.
+2. On `trj`, coordinate a brief restart of the `gunicorn` processes (or reboot `trj` / `sudo rmmod nvidia_uvm nvidia_drm nvidia_modeset nvidia && sudo modprobe nvidia_uvm`) so kernel module `595.99` matches userland NVML `595.99`.
+3. On `trj:/data/projects/bio_inspired_nanochat`, run `uv sync --extra cuda --dev && uv run --no-sync maturin develop --release --manifest-path rust_src/Cargo.toml` and `uv run --no-sync pytest -m gpu -v`.
+4. Copy the surviving December 2025 artifacts (`runs/ca_init_microbench/20251218_054731/`, `runs/cmaes_phase1_10d_*`, `runs/eval_matrix/`) or their summary metadata into tracked `results/` if needed, and correct the false "runs/ is gone" statement in `README.md`, `CLAIMS_AUDIT.md`, and `docs/ca_init_decision.md`.
+
+**Success criteria.**
+- [ ] `ssh trj nvidia-smi -L` lists two `NVIDIA GeForce RTX 4090` GPUs.
+- [ ] `ssh trj "cd /data/projects/bio_inspired_nanochat && uv run --no-sync pytest -m gpu -v"` passes with 0 failures.
+- [ ] `hwxb.10` closed with recorded driver/CUDA/PyTorch versions and GPU test output, unblocking all 20+ downstream GPU beads.
+
+---
+
+### G19 · Re-run the 17-Column Toy Screening on the Fixed (`final_norm=True`, `enable_hebbian=False`) Scaffold & Sync Docs — STALE → CURRENT
+
+**Current state.**
+- `results/toy_screening_2026-10-07_verdict.md` and `results/toy_screening_2026-10-07_summary.csv` were generated at `be7344f` (19 columns), before `716cacb` (`enable_hebbian=False`, MoE columns moved to `structural_columns()`) and before `8de4abb` (`final_norm=True` on `GPTSynaptic`).
+- In that pre-fix run, `GPTSynaptic` lacked the final RMSNorm before `lm_head`, causing `synaptic_off` to lose to `vanilla` by `+0.069` val bpb (`2.028` vs `1.958`), and `enable_hebbian=True` degraded `bio_all` (`2.038`) and every `bio_no_*` column.
+- Commit `8de4abb` proved in `results/scaffold_diagnosis_2026-10-07.json` that with `final_norm=True`, `synaptic_off` beats `vanilla` on all 3 seeds by `-0.0383` val bpb (`1.9588` vs `1.9971` mean).
+- Yet `README.md` (L25, L149), `CLAIMS_AUDIT.md` (L13, L77), and `results/toy_screening_2026-10-07_verdict.md` still report the broken pre-`8de4abb` numbers (`+0.069` / `+0.080` deficit), and `CHANGELOG.md` (L45) misquotes `bio_no_bdnf` from that pre-fix CSV as `add_hebbian`/`add_bdnf`.
+
+**Target state.**
+- Execute the 17-column dense toy screening (`am.screening_columns()`: 3 anchors + 4 `leave_one_out` + 10 `add_one_in`) × 3 seeds (`1337, 1338, 1339`) at HEAD (`final_norm=True`, `enable_hebbian=False`, `BIO_FUSED_PRESYN=1`) on the same 2L/128d WikiText-2 300-step protocol.
+- Commit the updated summary CSV, verdict JSON, and verdict markdown in `results/`.
+- Update `README.md`, `CLAIMS_AUDIT.md`, `CHANGELOG.md`, and `docs/bridge_plan.md` to cite the post-`8de4abb` 17-column artifact alongside the pre-`8de4abb` scaffold diagnosis.
+
+**Success criteria.**
+- [ ] All 51 cells (`17 columns × 3 seeds`) complete with `status == "ok"` and `recipe_source == "base_train_checkpoint"`.
+- [ ] `synaptic_off` vs `vanilla` reflects the `final_norm=True` scaffold, and `add_hebbian` vs `add_bdnf` are measured as distinct columns.
+- [ ] Every headline toy-screening number in `README.md` and `CLAIMS_AUDIT.md` matches the committed post-`8de4abb` artifact.
+
+---
+
+### G20 · Resolve Confirmation-Pass Statistical Power Deadlock & Restore Deleted Budget Cap in `go_no_go()` — DEADLOCKED → FEASIBLE
+
+**Current state.**
+- `eval_stats.compare_matrix()` (`bio_inspired_nanochat/eval_stats.py:468-474`) requires **both** Holm-adjusted paired t-test `p <= alpha` **and** Holm-adjusted exact two-sided Wilcoxon signed-rank `p <= alpha` (`alpha = 0.05`) to declare `supported_gain` or `supported_regression`.
+- For `n` matched seeds, the exact two-sided Wilcoxon p-value has a hard mathematical floor of `2 * 0.5^n`. For `n = 3` (`CONFIRMATION_SEEDS = (1337, 1338, 1339)`), the minimum possible Wilcoxon p-value is `0.25 > 0.05`.
+- Worse, commit `ea54808` **accidentally deleted `if hours > cap_gpu_hours:`** from `ablation_matrix.go_no_go()` (`bio_inspired_nanochat/ablation_matrix.py:414-431`) when adding the `best_case_p > CONFIRMATION_ALPHA` check! `test_go_no_go_blocks_when_over_the_cap` only passed by coincidence because `n=3` triggered the `INFEASIBLE` Wilcoxon branch while `hours` happened to exceed `cap_gpu_hours`; for `n >= 6` seeds, `go_no_go()` currently returns `proceed=True` even when `hours = 66666.7 > cap_gpu_hours = 1.0`!
+- Meanwhile, `scripts/matrix_launch.py --stage confirmation` defaults to `am.CONFIRMATION_SEEDS` (`n=3`), which is rejected by `go_no_go()` as `INFEASIBLE`.
+
+**Target state.**
+1. **Restore `if hours > cap_gpu_hours:` in `ablation_matrix.go_no_go()`** so over-budget confirmation passes are blocked for any seed count `n`, and add a regression test with `n=6` seeds over the GPU-hour cap.
+2. **Add `min_confirmation_seeds(n_survivors: int = 1, alpha: float = CONFIRMATION_ALPHA) -> tuple[int, ...]` and `FEASIBLE_CONFIRMATION_SEEDS`** (`n=6`: `(1337, 1338, 1339, 1340, 1341, 1342)`) to `bio_inspired_nanochat/ablation_matrix.py` while keeping `CONFIRMATION_SEEDS = (1337, 1338, 1339)` for backwards compatibility with `test_go_no_go_blocks_statistically_infeasible_design`.
+3. **Wire `min_confirmation_seeds(len(survivors))` into `scripts/matrix_launch.py --stage confirmation`** when `--seeds` is not explicitly overridden (or warn/upgrade when `len(seeds) < min_n`), so `--stage confirmation` automatically emits a statistically powered confirmation schedule that passes `go_no_go()` when within `cap_gpu_hours`.
+
+**Success criteria.**
+- [ ] `go_no_go()` blocks when `hours > cap_gpu_hours` for both `n=3` and `n=6` seeds.
+- [ ] `min_confirmation_seeds(len(survivors))` produces the exact minimum seed tuple (`n = ceil(log2(2m/alpha))`) starting at `1337`, and `go_no_go(survivors, tok_per_sec=50_000.0, seeds=min_confirmation_seeds(len(survivors)))` returns `proceed == True`.
+- [ ] `scripts/matrix_launch.py --stage confirmation --survivors bio_no_presyn` uses `min_confirmation_seeds` by default and passes all unit tests.
+
+---
+
+### G4 & `uta.10` · Finish CPU E2E Smoke of the 5-Column Structural Stage — PARTIAL → WORKING
+
+**Current state.**
+- Steps 1 and 2 of `uta.10` (`STRUCTURAL_TRAIN_OVERRIDES` using `sm_health_mode="credit"`, `docs/ablation_matrix.md` §6 updated with `results/structural_pair_pilot_2026-10-07_credit.json`, `tests/test_matrix_launch.py` updated, plus `moe_no_metabolism`, `moe_no_genome`, `moe_add_glial_homeostasis` added to `structural_columns()`) are already in `main`.
+- Step 3 of `uta.10` (running `matrix_launch --stage structural` -> `base_train` -> `eval_matrix` -> `eval_stats` end-to-end on a tiny CPU recipe to prove MoE checkpoints round-trip through `eval_matrix`'s bio-flag and MoE architecture reconstruction) has not been executed yet.
+
+**Target state.**
+- Run and test the structural stage (`moe_fixed`, `moe_splitmerge`, `moe_no_metabolism`, `moe_no_genome`, `moe_add_glial_homeostasis`) end-to-end through `matrix_launch --stage structural --execute` -> `eval_matrix` -> `eval_stats`, commit the CPU structural smoke artifact in `results/`, add an automated E2E test in `tests/test_e2e_matrix_pipeline.py`, and close `uta.10`.
+
+**Success criteria.**
+- [ ] `eval_matrix` loads all structural stage checkpoints from `base_train`, reconstructs `use_moe=True`, populates `moe_gini` and `dead_expert_frac` (non-null), and `eval_stats` pairs structural arms against `moe_fixed`.
+
+---
+
+### G8 & `idh4` · Execute CMA-ES Phase 1 with `--objective lm` on CPU — PARTIAL → MEASURED
+
+**Current state.**
+- `results/cmaes_phase1_rerun_2026-10-07.json` re-ran the synthetic copy-task proxy under deterministic eval and proved why it failed (`6.950 ≈ ln(1024)` uniform loss).
+- Commit `e9ff9d6` added `--objective lm` (`LMTask` on real parquet shards with `setup_optimizers()` and held-out `val_bpb`) to `scripts/tune_bio_params.py`, and `test_lm_objective_learns_real_structure_deterministically` proved that 40 steps lower held-out bpb by >1.0 bpb.
+- However, no CMA-ES optimization run using `--objective lm` has been executed and committed to `results/`.
+
+**Target state.**
+- Run `scripts.tune_bio_params optimize --objective lm` on CPU (with `BIO_FUSED_PRESYN=1`, fixed FineWeb/WikiText shards, readiness gate enabled), commit the resulting JSON artifact under `results/cmaes_phase1_lm_2026-10-*.json`, and update `PLAN_TO_USE_CMAES_...md` and `README.md` §Systematic Optimization.
+
+**Success criteria.**
+- [ ] Committed `results/cmaes_phase1_lm_*.json` reporting baseline bpb, best bpb, seed-noise floor, and Go/No-go verdict.
+
+---
+
+### G6 & `ylo2` · Zero-Clone + Rayon Row-Parallel Optimization of `presyn_release_canonical_cpu` + Native Rust Unit Tests — SLOW AT LONG CONTEXT → >2× FASTER ACROSS 512–4,096 KEYS
+
+**Current state.**
+- `rust_src/src/presyn.rs::presyn_detached_scan_cpu` (multi-query scan) already uses Rayon `par_for_each` over `(batch, head)` rows and updates a contiguous `(7, n_rows, key_count)` slab in place.
+- By contrast, `rust_src/src/presyn.rs::presyn_release_canonical_cpu` (single-query `Tq=1` decode) still runs sequentially over `for b in 0..batch { for h in 0..heads`, copies 8 `(B, H, T_key)` arrays + `endo_delay` arrays via `.to_owned()`, `.clone()`s 7 more `previous_*` `(B, H, T_key)` arrays (even though step 2 updates each key `0..key_count` independently!), and allocates 3 full `(B, H, T_key)` scratch arrays (`released_by_key`, `drive_by_key`, `accessed`) on every token. At `T_key = 4096`, those 21 heap allocations/clones make Rust decode `0.75×` slower than PyTorch (`1.81 ms` vs `1.36 ms`).
+- Furthermore, `cargo test --manifest-path rust_src/Cargo.toml --no-default-features` runs `0 tests` because `rust_src` has no `#[cfg(test)]` module.
+
+**Target state.**
+1. Eliminate the 7 redundant `previous_*` 3D array clones and the 3 full-`(B, H, T_key)` scratch allocations in `presyn_release_canonical_cpu`, parallelize over `(batch, head)` rows with Rayon (with contiguous slice iteration for SIMD auto-vectorization), and avoid copying `AMP` when unchanged.
+2. Add native `#[cfg(test)]` Rust unit tests in `rust_src/src/presyn.rs` and `rust_src/src/moe.rs` so `cargo test --manifest-path rust_src/Cargo.toml --no-default-features` tests the Rust math directly.
+3. Benchmark `presyn_release_canonical_cpu` vs PyTorch across `512`, `1,024`, `2,048`, and `4,096` keys, commit `results/presyn_rust_decode_bench_2026-10-13.json`, and close `bio_inspired_nanochat-ylo2`.
+
+**Success criteria.**
+- [ ] `tests/test_presyn_rust_dispatch.py` and `tests/test_presyn_rust_parity.py` pass with exact float32 parity.
+- [ ] `cargo test --manifest-path rust_src/Cargo.toml --no-default-features` executes and passes `>= 10` native Rust unit tests.
+- [ ] Committed benchmark shows `>= 2.0×` speedup over PyTorch at `2,048` and `4,096` keys.
+
+---
+
+### G18 & `74f.10` · Enforce Bio/Vanilla Throughput Budget in `perf_regression.py` — DRIFT-ONLY → BUDGET-GATED
+
+**Current state.**
+- `README.md` §Performance and `docs/ablation_matrix.md` §3 declare the accepted throughput budget: `bio_all` training tok/s `>= 1/2.0` of param-matched `vanilla` (`train_ratio_max = 2.0`) and `Tq=1` cached decode latency `<= 1.5×` `vanilla` (`decode_ratio_max = 1.5`).
+- However, `bio_inspired_nanochat/perf_regression.py` only compares each benchmark against its own historical baseline (`evaluate_gates`), never comparing synaptic vs standard throughput/latency ratios against the declared budget.
+
+**Target state.**
+- Add `ThroughputBudget(train_ratio_max: float = 2.0, decode_ratio_max: float = 1.5)` and `evaluate_budget_gates(results, budget)` to `bio_inspired_nanochat/perf_regression.py`.
+- Add unit tests in `tests/test_perf_regression.py` including a planted `3×` slowdown negative test that fails the gate and a positive test within budget, and document the gate in `TESTING.md`.
+
+---
+
+### G21 · Reconcile Cross-Document & Bead Specification Drift — DRIFTED → CONSISTENT
+
+**Current state.**
+1. `docs/scale_up_phase0_decisions.md` (§1, §3.2) states `working_memory_suite` accuracy is the PRIMARY headline metric and `val_bpb` is secondary, whereas `docs/ablation_matrix.md` (§3, §5) and `bio_inspired_nanochat/ablation_matrix.py:455` (`DECISION_PRIMARY_METRIC = "val_bpb"`) define `val_bpb` as PRIMARY.
+2. `docs/ablation_matrix.md` §2 says 17 screening columns (`3 + 4 + 10`), while §4 (L123, L125) still says `13 columns × 3 seeds` and `13 columns × 2 seeds`.
+3. `bio_inspired_nanochat/ablation_matrix.py:44-46` docstring says `Global neuromodulation (hy8.1) and NeuroScore are NOT yet registered ablation mechanisms`, even though `neuromod` (`neuromod_enabled`) IS registered in `ablation_registry.MECHANISMS` and is in `add_one_in()`.
+4. `docs/eval_benchmark_matrix.md` §3 (L151) still says `scripts/base_train.py currently does not expose most SynapticConfig fields via CLI` and lists `bio_no_hebbian`, `bio_no_bdnf`, `bio_no_metabolism`, `bio_no_genome` as dense presets.
+5. `TESTING.md` L138 claims `cargo test --manifest-path rust_src/Cargo.toml --no-default-features` "Runs the 27 Rust unit tests in `rust_src`", whereas `rust_src` has 0 `#[test]` functions (`running 0 tests`) and the 27 tests live in `tests/test_rust_kernels.py`.
+6. `PLAN_TO_OPTIMIZE_KEY_HOTSPOTS_USING_RUST_PYO3.md` is a byte-for-byte duplicate of `PLAN_TO_OPTIMIZE_KEY_HOTSPOTS_USING_TRITON.md`.
+7. `README.md` L631 still says `96-parameter SynapticConfig` (vs `109` at L475), L17/L678 say `476 issues`, and L191 / `CLAIMS_AUDIT.md` L79 / `docs/ca_init_decision.md` L8 say `runs/` from Dec 2025 is gone (when it is on `trj`).
+
+**Target state.**
+- Update each of the above files in-place so there is zero contradiction across `README.md`, `CLAIMS_AUDIT.md`, `TESTING.md`, `docs/ablation_matrix.md`, `docs/eval_benchmark_matrix.md`, `docs/scale_up_phase0_decisions.md`, `bio_inspired_nanochat/ablation_matrix.py`, and `PLAN_TO_OPTIMIZE_KEY_HOTSPOTS_USING_RUST_PYO3.md`.
+
+---
+
+## 2.5 Ambition & Idea-Wizard 30→15 Synthesis (Brenner Opportunity Matrix & Modes of Reasoning)
+
+Applying the **Brenner Hypothesis Opportunity Matrix** (`Score = (MindChange × Falsifiability × OptionValue) / (Cost × Ambiguity × InfraRisk)`) and **Modes of Reasoning** operators (`Deductive Invariant Check`, `Abductive Root-Cause Diagnosis`, `Systems & Wiring Audit`, `Adversarial Failure-Mode Analysis`, `Statistical Power Analysis`), 30 candidate improvements were evaluated and winnowed to the **Top 15 High-Leverage Actions**:
+
+| Rank | Idea / Engineering & Scientific Lever | Cognitive Operator | Brenner Score | Covering Bead(s) |
+|---:|---|---|---:|---|
+| **1** | **Re-run 17-column dense CPU screening on fixed `final_norm=True` / `enable_hebbian=False` scaffold** (`BIO_FUSED_PRESYN=1`) to replace stale pre-`8de4abb` numbers (`synaptic_off` `+0.069` -> `-0.038` bpb) | Abductive Root-Cause + Quickie Pilot | **125.0** | `hwxb.5.5` |
+| **2** | **Restore 100% green quality & proof gates at HEAD** (fix 67 `ty` errors, refresh 4 `formal_feedback` SHA-256 hashes, isolate `BIO_FUSED_PRESYN` in `test_ablation_registry.py`, add `--no-sync` to `ci.yml`) | Deductive Invariant Check | **100.0** | `u0fl.3` |
+| **3** | **Restore accidentally deleted `hours > cap_gpu_hours` guard in `go_no_go()` + add `min_confirmation_seeds(n_survivors)`** (`n >= ceil(log2(2m/alpha))`) and wire into `matrix_launch.py --stage confirmation` | Adversarial + Statistical Power | **80.0** | `hwxb.5.4` |
+| **4** | **Zero-clone + Rayon row-parallel `presyn_release_canonical_cpu` in `rust_src/src/presyn.rs`** (eliminating 21 per-token 3D array allocations/clones) + benchmark across 512–4,096 keys | Systems & Bottleneck Analysis | **75.0** | `ylo2` |
+| **5** | **Execute CMA-ES Phase 1 with `--objective lm` on learnable text shards** (`scripts/tune_bio_params.py`) + recover Dec 2025 `runs/` artifacts from `trj` | Refuter-First EV + Quickie Pilot | **64.0** | `idh4`, `hwxb.10` |
+| **6** | **Execute Step 3 of `uta.10`:** CPU E2E smoke of the 5-column MoE structural stage (`moe_fixed`, `moe_splitmerge`, `moe_no_metabolism`, `moe_no_genome`, `moe_add_glial_homeostasis`) through `matrix_launch -> eval_matrix -> eval_stats` | Systems & Wiring Audit | **60.0** | `uta.10` |
+| **7** | **Implement `ThroughputBudget` (`train <= 2.0x`, `decode <= 1.5x`) and `evaluate_budget_gates()` in `perf_regression.py`** with planted 3× slowdown unit test | Deductive Invariant Check | **50.0** | `74f.10.1`, `74f.10.2` |
+| **8** | **Configure `csd -> mac-mini-max -> trj` SSH & inspect/resolve `trj` NVML library mismatch (`595.99` vs `595.91.07`) + `ts2` CUDA smoke** | Systems & Infra Triage | **48.0** | `hwxb.10` |
+| **9** | **Add native Rust `#[cfg(test)]` unit tests in `rust_src/src/presyn.rs` and `rust_src/src/moe.rs`** so `cargo test --no-default-features` tests Rust math directly (fixing `0 tests`) | Adversarial Proof Check | **45.0** | `ylo2`, `74f.12` |
+| **10** | **Cache `rustbpe.pack_indices_i64` lookup in `gpt_synaptic.py` / `synaptic.py` with `@functools.lru_cache(maxsize=1)`** and expose `final_norm` in `scripts/base_train.py` CLI globals | Systems & Wiring Audit | **40.0** | `uta.10`, `hwxb.5.5` |
+| **11** | **Reconcile all 8 cross-document contradictions** across `README.md`, `CLAIMS_AUDIT.md`, `CHANGELOG.md`, `TESTING.md`, `docs/scale_up_phase0_decisions.md`, `docs/ablation_matrix.md`, `docs/eval_benchmark_matrix.md`, and `PLAN_TO_OPTIMIZE_KEY_HOTSPOTS_USING_RUST_PYO3.md` | Epistemic Consistency Audit | **36.0** | `74f.12` |
+| **12** | **Programmatic import-graph footprint test & `README.md` table (`3zsq.2`)** verifying the exact reachable core vs experimental module boundary | Deductive Boundary Check | **30.0** | `3zsq.2` |
+| **13** | **Re-run CPU scaling-law calibration grid (`scripts/e2e/scaling_law_study.py`) on fixed `final_norm=True` scaffold** with `BIO_FUSED_PRESYN=1` | Quickie Pilot | **25.0** | `74f.6` |
+| **14** | **Add E2E MoE structural pipeline & `go_no_go` cap/power regression tests** in `tests/test_ablation_matrix.py` and `tests/test_matrix_launch.py` | Adversarial Test Hardening | **24.0** | `hwxb.5.4`, `uta.10` |
+| **15** | **Wire remaining implicit GPU/budget dependency edges in `.beads/`** (`vap.2 -> hwxb.10`, `uta.2 -> hwxb.10`, `74f.10 -> 74f.10.2`) and validate with `bv --robot-triage` | Graph Topology Hygiene | **20.0** | `hwxb.10`, `74f.10` |
+
+---
+
+## 3. Order of Work and Dependencies
 
 ```mermaid
 flowchart TD
-  G3[G3 eval determinism] --> G2[G2 chunked training regime + CPU experiment]
-  G3 --> G4[G4 lifecycle in eval_matrix + NAS rerun]
-  G3 --> G8a[G8 CMA-ES proxy rerun]
-  G5[G5 e2e gate] --> G12[G12 Quick Start step 4]
-  G9[G9 roadmap toggles decided] --> G1
-  G2 --> G1[G1 headline experiment on GPU]
-  G4 --> G1
-  G13[G13 TB tags] -.-> G1
-  G6a[G6.1 l7c9 causal scan] --> G18[G18 throughput gate] --> G1
-  P[Provision GPU host] --> G1
-  G1 --> G7[G7 neuromod row + RL]
-  G1 --> G8b[G8 CMA-ES on val_bpb]
-  G1 --> G6b[G6.2 Triton 4090 acceptance] --> G6c[G6.3 fused training kernel]
-  G1 --> G11[G11 perf program]
-  G1 --> G14[G14 ship + write-up]
-  G10[G10 selective decoding] -.-> G14
-  G15[G15 CI verified] -.-> G1
-  G16[G16 ty clean] -.-> G15
-  G17[G17 footprint] -.-> G14
+  G16["G16/G23 (u0fl.3) Fix ty check (67 errs) + formal_feedback hashes + BIO_FUSED_PRESYN test + ci.yml"] --> G19["G19 (hwxb.5.5) Re-run 17-col CPU toy screening on fixed final_norm scaffold"]
+  G16 --> G4["G4 (uta.10) CPU E2E smoke for 5-col --stage structural"]
+  G16 --> G8["G8 (idh4) Run CMA-ES --objective lm on CPU"]
+  G16 --> YLO2["G6 (ylo2) Zero-clone + Rayon presyn_release_canonical_cpu + Rust unit tests"]
+  G20["G20 (hwxb.5.4) Restore go_no_go budget cap + min_confirmation_seeds"] --> G19
+  YLO2 --> G18["G18 (74f.10.1/2) Enforce ThroughputBudget in perf_regression.py"]
+  G19 --> G21["G21 (74f.12) Reconcile README, CLAIMS_AUDIT, phase0, matrix & Rust plan docs"]
+  G4 --> G21
+  G8 --> G21
+  G0["G0 (hwxb.10) Fix csd ssh config + sync Dec 2025 runs/ + reload NVML on trj (2x RTX 4090)"] --> G6["G6 (l7c9/3bnd/jyb.2) Run GPU kernel tests & benchmark_presyn_live on 4090"]
+  G0 --> HW11["hwxb.11 Stage 500M FineWeb-Edu shards + CORE bundle on trj"]
+  G6 --> G1["G1 (hwxb.2.5->3.x->5.2->5.3) D1 Ablation Matrix on dual 4090s"]
+  G20 --> G1
+  HW11 --> G1
+  G18 --> G1
+  G1 --> G7["G7 (hy8.3) Neuromodulated RL study"]
+  G1 --> G11["G11 (6pj) Dual-4090 perf optimization"]
+  G1 --> G14["G14 (hwxb.6) Ship checkpoint + demo + write-up"]
+  G17["G17 (3zsq) Footprint audit & experimental/ quarantine"] -.-> G14
 ```
 
-**Phase A′ (CPU, this week, in this order):** G3 → G5 → G12 → G2 → G4 → G9 → G6.1 → G18 → G10
-→ G16 → G17. Everything here is doable on this host; G2 and G4 produce the numbers that decide
-which defaults the GPU run should carry.
+1. **Immediate CPU Gate Repair, Kernel Optimization & Calibration (Phase A″ — runnable right now on `csd`):**
+   - **Step 1 (`G16/G23` — `u0fl.3`):** Fix the 67 `ty check` diagnostics, refresh the 4 stale runtime hashes in `formal/lean/proof_artifacts.json`, fix `BIO_FUSED_PRESYN=1` test isolation in `tests/test_ablation_registry.py`, and add `--no-sync` to `ci.yml` `build-wheel`.
+   - **Step 2 (`G20` — `hwxb.5.4`):** Restore `if hours > cap_gpu_hours:` in `go_no_go()`, add `min_confirmation_seeds()`, and wire it into `scripts/matrix_launch.py --stage confirmation`.
+   - **Step 3 (`G6` — `ylo2`):** Optimize `presyn_release_canonical_cpu` in `rust_src/src/presyn.rs` (zero redundant clones + Rayon row parallelism), add native Rust unit tests in `rust_src`, rebuild `rustbpe`, and benchmark across `512–4,096` keys.
+   - **Step 4 (`G18` — `74f.10.1` / `74f.10.2`):** Implement `ThroughputBudget` (`train_ratio_max=2.0`, `decode_ratio_max=1.5`) and `evaluate_budget_gates()` in `bio_inspired_nanochat/perf_regression.py` with planted 3× slowdown unit tests.
+   - **Step 5 (`G4` — `uta.10`):** Cache `_rust_pack_indices_kernel`, expose `final_norm` in `scripts/base_train.py`, and execute Step 3 of `uta.10` (`matrix_launch --stage structural --execute` -> `eval_matrix` -> `eval_stats`) on CPU.
+   - **Step 6 (`G8` — `idh4`):** Run `scripts.tune_bio_params optimize --objective lm` on CPU with `BIO_FUSED_PRESYN=1` and commit `results/cmaes_phase1_lm_2026-10-13.json`.
+   - **Step 7 (`G19` & `G21` — `hwxb.5.5` & `74f.12`):** Re-run the 17-column toy screening at HEAD (`final_norm=True`, `enable_hebbian=False`), commit `results/toy_screening_2026-10-13_*`, recover Dec 2025 `runs/` from `trj`, and synchronize all docs (`README.md`, `CLAIMS_AUDIT.md`, `CHANGELOG.md`, `TESTING.md`, `docs/ablation_matrix.md`, `docs/scale_up_phase0_decisions.md`, `docs/eval_benchmark_matrix.md`, `PLAN_TO_OPTIMIZE_KEY_HOTSPOTS_USING_RUST_PYO3.md`).
 
-**Phase B (GPU host):** Provision → `hwxb.2.5` → `hwxb.2.6` → `hwxb.3.1/3.2` → `hwxb.5.2` →
-`hwxb.5.3` → `hwxb.6.x`; in parallel `j9i` → `3bnd` → `6pj` items; `hy8.3`; `idh4`; `74f.6`.
+2. **GPU Unblock & D1 Execution on `trj` (Phase B — dual RTX 4090s on `threadripperje`):**
+   - **Step 1 (`G0 / hwxb.10`):** Add `ProxyJump mac-mini-max` for `trj` on `csd`, sync Dec 2025 `runs/`, resolve the NVML `595.99` vs kernel `595.91.07` mismatch on `trj` (or run initial CUDA smoke on `ts2`), verify `nvidia-smi` and `pytest -m gpu`.
+   - **Step 2 (`G6 / l7c9 / 3bnd / jyb.10`):** Run CUDA tests for `presyn_detached_scan_kernel` and `benchmark_presyn_live --output results/presyn_live_rtx4090.json`.
+   - **Step 3 (`G1 / hwxb.11 -> hwxb.2.5 -> hwxb.2.6 -> hwxb.3.x -> hwxb.5.2.1 -> hwxb.5.2.2 -> hwxb.5.3`):** Stage FineWeb-Edu shards on `trj`, run the 2×4090 smoke & crash-resume proof, train the vanilla D1 baseline, execute the 17-column dense screening + 5-column MoE structural stage, apply `go_no_go`, run confirmation, and publish the statistical verdict.
+   - **Step 4 (`G14 / hwxb.6.x`):** Prune non-performers, ship the winning checkpoint + inference demo, and publish the final write-up.
 
-**Phase C:** footprint and packaging (`vap.6`).
+---
 
-## 4. Would finishing the open beads close the vision?
+## 4. Verification Matrix
 
-For the headline question: **yes, once a GPU exists** — the `hwxb` chain is the pre-registered
-experiment and the harness is done. For the vision as written: **no.** Five open gaps have no bead
-(G3's audit re-runs, G9, G15, G16, G17; G5, G12 and G13 are closed), two are only partially
-covered (G2's training regime, G4's NAS re-run), and one is a policy decision (G18). Phase 3a
-should create beads for exactly those eight items; the rest already have correct beads and need
-no new tracker entries.
-
-## 5. Verification plan (how each vision item is proven when the plan is done)
-
-| Vision item | Proof |
+| Vision / Gap Item | Concrete Verification Command & Artifact |
 |---|---|
-| 3 Fast weights give within-sequence memory | G2 artifact: ON−OFF ≥ 3σ under chunked reading, ≈0 under full reading, 5 seeds |
-| 5–6 Lifecycle grows capacity where demanded | G4 artifact: events fire in healthy training; final-loss delta with CI, both health modes |
-| 7 Neuromodulation helps | D1 `add_neuromod` row with CI |
-| 8 Calibrated abstention in serving | G10 test; `chat_web` toggle |
-| 9–10 Kernels | `test_e2e_decode_parity`, `benchmark_presyn_live` on 4090, perf table |
-| 11 CMA-ES gain | `results/cmaes_phase1_*.json` with seed-noise floor |
-| 12 Bio vs vanilla with statistics | `eval_stats` verdict table on D1, committed |
-| 13 Dual-4090 performance | GPU rows in `perf_baselines.json`; guardrail in CI |
-| 14 Quick Start | G5 subprocess test in CI |
-| 17 TensorBoard vitals | README lists only emitted tags (checked at HEAD, 2026-09-01) |
-| 18 Roadmap features | Evidence column: D1 column or "exploratory" |
-| 19–20 Checkpoint + write-up | `chat_cli` reproduces the documented sample on a fresh clone |
-| 22–23 Docs and CI | green run links in TESTING.md; `ty check` exit 0 |
-| all | every number in README cites a file under `results/` or `docs/` that the test suite can load |
+| **G16 / G23 (`u0fl.3`)** Quality & Proof Gates | `uv run --no-sync ruff check && uv run --no-sync ty check && uv run --no-sync python -m scripts.formal_feedback --run-tests` (all exit 0) |
+| **G20 (`hwxb.5.4`)** Statistical Power & Cap Gate | `uv run --no-sync pytest tests/test_ablation_matrix.py tests/test_matrix_launch.py tests/test_eval_stats.py -v` |
+| **G6 (`ylo2`)** Rust Decode Optimization & Unit Tests | `cargo test --manifest-path rust_src/Cargo.toml --no-default-features && uv run --no-sync pytest tests/test_presyn_rust_dispatch.py tests/test_presyn_rust_parity.py -v` |
+| **G18 (`74f.10.2`)** Throughput Budget Gate | `uv run --no-sync pytest tests/test_perf_regression.py -v` |
+| **G4 (`uta.10`)** Structural Stage E2E | `uv run --no-sync pytest tests/test_e2e_matrix_pipeline.py -v -m slow` + `results/structural_smoke_2026-10-13_summary.csv` |
+| **G8 (`idh4`)** CMA-ES LM Objective | `results/cmaes_phase1_lm_2026-10-13.json` + `uv run --no-sync pytest tests/test_tune_bio_params.py -v` |
+| **G19 (`hwxb.5.5`)** Post-`final_norm` 17-Col Screening | `results/toy_screening_2026-10-13_verdict.md` + `results/toy_screening_2026-10-13_summary.csv` |
+| **G0 (`hwxb.10`)** `trj` Dual-4090 Provisioning | `ssh trj "nvidia-smi -L && cd /data/projects/bio_inspired_nanochat && uv run --no-sync pytest -m gpu -v"` |
+| **G6 (`3bnd`/`jyb.2`)** Presyn Kernels on 4090 | `results/presyn_live_rtx4090.json` via `uv run --no-sync python -m scripts.benchmark_presyn_live --output results/presyn_live_rtx4090.json` |
+| **G1 (`hwxb.5`)** Headline D1 Ablation Matrix | `results/d1_screening_verdict.json` & `results/d1_confirmation_verdict.json` + `results/registry.jsonl` |
+| **G14 (`hwxb.6`)** Shipped Checkpoint & Demo | `uv run --no-sync python -m scripts.chat_cli -i base -g <shipped_tag> -p "The synaptic vesicle"` |
 
-## 6. What this plan refuses to do
-
-No new certificate, ledger, or dashboard: the registry, `eval_stats`, and pytest are the only
-recording surfaces. No metric without a predeclared denominator and a countermetric (throughput
-beside every quality number). No closing a bead on a proxy: GPU-acceptance beads close on GPU
-artifacts. Null results close beads and go into the README.

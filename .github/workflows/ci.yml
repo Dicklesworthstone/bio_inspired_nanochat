@@ -208,7 +208,7 @@ jobs:
       - name: Build wheel with maturin
         run: |
           uv sync --extra cpu --dev
-          uv run maturin build --release
+          uv run --no-sync maturin build --release
 
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4

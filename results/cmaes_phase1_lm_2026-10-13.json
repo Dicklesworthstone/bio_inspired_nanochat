@@ -1,0 +1,67 @@
+{
+  "question": "Does CMA-ES Phase 1 with --objective lm (held-out bits/byte on text shards with base_train optimizer recipe and native_presyn=True) learn and separate parameter candidates?",
+  "command": "torchrun --standalone --nproc_per_node 6 -m scripts.tune_bio_params optimize --distributed --objective lm --lm-train-tokens 8192 --lm-eval-tokens 1024 --lm-seq-len 64 --generations 4 --popsize 6 --steps 40 --batch-size 4 --seed 1337 --device cpu --run-dir runs/cmaes/lm_cpu_2026-10-13 --no-tensorboard",
+  "objective": "lm (held-out bits/byte)",
+  "native_presyn": true,
+  "lm_task": {
+    "train_tokens": 8192,
+    "eval_tokens": 1024,
+    "seq_len": 64,
+    "steps": 40,
+    "batch_size": 4
+  },
+  "generations": [
+    {
+      "generation": 1,
+      "best_loss": 0.9830905415516087,
+      "mean_loss": 0.9831180202946412,
+      "min_loss": 0.9830905415516087,
+      "elapsed_s": 9.942264544777572
+    },
+    {
+      "generation": 2,
+      "best_loss": 0.9829600809028484,
+      "mean_loss": 0.9829693525856792,
+      "min_loss": 0.9829600809028484,
+      "elapsed_s": 9.048803597688675
+    },
+    {
+      "generation": 3,
+      "best_loss": 0.9829600809028484,
+      "mean_loss": 0.9833518560678206,
+      "min_loss": 0.9833271402034888,
+      "elapsed_s": 8.9301878050901
+    },
+    {
+      "generation": 4,
+      "best_loss": 0.9829600809028484,
+      "mean_loss": 0.9834010523826624,
+      "min_loss": 0.9833895688446921,
+      "elapsed_s": 9.001903261989355
+    }
+  ],
+  "best": {
+    "best_loss": 0.9829600809028484,
+    "best_params": {
+      "alpha_ca": 0.3904667669337268,
+      "complexin_bias": 0.06456524229636917,
+      "doc2_gain": 0.213961018249756,
+      "lambda_loge": 1.266243983154555,
+      "nsf_recover": 0.06248424152344603,
+      "prime_rate": 0.08222897314957141,
+      "syt_fast_kd": 0.44508775346468227,
+      "syt_slow_kd": 0.6772836347677407,
+      "tau_c": 8.584188920784168,
+      "unprime_per_release": 0.06970165057711933
+    },
+    "generation": 2,
+    "measurement_regime": {
+      "eval_determinism": "module-training-flag (GPTSynaptic.forward train_mode defaults to self.training; commit 5cb1a90)",
+      "read": "full-forward",
+      "since": "2026-09-01"
+    },
+    "run_id": "tune-7ddf697e5d79e19d",
+    "saved_at_unix": 1791954572.6872563
+  },
+  "gain_vs_first_generation_mean": 0.00015793939179287175
+}

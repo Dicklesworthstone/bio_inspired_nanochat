@@ -131,3 +131,15 @@ def test_validator_range_checks_eps_max():
 
 def test_default_config_validates_clean():
     assert validate_config(SynapticConfig()) == ([], [])
+
+
+def test_cusp_latch_constructs_under_meta_device_context():
+    """base_train constructs GPTSynaptic inside with torch.device('meta'): (add_cusp_latch column)."""
+    import torch
+
+    cfg = _cfg()
+    with torch.device("meta"):
+        latch = cc.CuspLatch(cfg)
+    assert isinstance(latch.k.certificate.eps, float)
+    assert 0.0 < latch.k.certificate.eps < 1.0
+
