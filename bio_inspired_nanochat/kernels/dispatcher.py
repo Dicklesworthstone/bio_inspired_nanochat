@@ -107,8 +107,12 @@ def dispatch_accumulate_router_stats(
         return accumulate_router_stats(indices, gates, num_experts)
 
     elif resolved_backend == Backend.RUST and rustbpe is not None and hasattr(rustbpe, "accumulate_router_stats_cpu"):
-        indices_np = indices.detach().cpu().numpy().astype(np.int64)
-        gates_np = gates.detach().cpu().numpy().astype(np.float32)
+        indices_np = np.ascontiguousarray(
+            indices.detach().to(device="cpu", dtype=torch.int64).numpy()
+        )
+        gates_np = np.ascontiguousarray(
+            gates.detach().to(device="cpu", dtype=torch.float32).numpy()
+        )
         counts_np, probs_np = rustbpe.accumulate_router_stats_cpu(indices_np, gates_np, num_experts)
         return (
             torch.from_numpy(counts_np).to(device=gates.device, dtype=torch.float32),
@@ -121,7 +125,7 @@ def dispatch_accumulate_router_stats(
     for e in range(num_experts):
         mask = indices == e
         counts[e] = mask.any(dim=-1).sum().float()
-        gate_sums[e] = gates.masked_select(mask).sum()
+        gate_sums[e] = gates.masked_select(mask).float().sum()
 
     return counts, gate_sums
 
@@ -147,11 +151,21 @@ def dispatch_update_metabolism(
         return update_metabolism_fused(fatigue, energy, alpha_fatigue, alpha_energy, util)
 
     elif resolved_backend == Backend.RUST and rustbpe is not None and hasattr(rustbpe, "update_metabolism_cpu"):
-        f_np = fatigue.detach().cpu().numpy().astype(np.float32)
-        e_np = energy.detach().cpu().numpy().astype(np.float32)
-        af_np = alpha_fatigue.detach().cpu().numpy().astype(np.float32)
-        ae_np = alpha_energy.detach().cpu().numpy().astype(np.float32)
-        u_np = util.detach().cpu().numpy().astype(np.float32)
+        f_np = np.ascontiguousarray(
+            fatigue.detach().to(device="cpu", dtype=torch.float32).numpy()
+        )
+        e_np = np.ascontiguousarray(
+            energy.detach().to(device="cpu", dtype=torch.float32).numpy()
+        )
+        af_np = np.ascontiguousarray(
+            alpha_fatigue.detach().to(device="cpu", dtype=torch.float32).numpy()
+        )
+        ae_np = np.ascontiguousarray(
+            alpha_energy.detach().to(device="cpu", dtype=torch.float32).numpy()
+        )
+        u_np = np.ascontiguousarray(
+            util.detach().to(device="cpu", dtype=torch.float32).numpy()
+        )
 
         f_out_np, e_out_np = rustbpe.update_metabolism_cpu(f_np, e_np, af_np, ae_np, u_np)
         return (

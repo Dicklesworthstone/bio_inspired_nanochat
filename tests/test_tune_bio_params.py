@@ -158,14 +158,28 @@ def test_lm_objective_learns_real_structure_deterministically() -> None:
 
     task = _bigram_lm_task()
     x0 = encode_params(SynapticConfig(), TOP10_PARAM_SPECS)
-    kwargs = dict(
-        specs=TOP10_PARAM_SPECS, seed=3, batch_size=4, device="cpu", lr=0.0, weight_decay=0.0,
-        timeout_seconds=None, max_retries=0, raise_on_error=True, lm_task=task,
-        model_config=replace(MODEL_CONFIG, n_layer=1, n_embd=64, n_head=2, n_kv_head=2),
-    )
-    untrained = evaluate_candidate_detailed(x0, steps=0, **kwargs).objective
-    trained = evaluate_candidate_detailed(x0, steps=40, **kwargs).objective
-    again = evaluate_candidate_detailed(x0, steps=40, **kwargs).objective
+    model_cfg = replace(MODEL_CONFIG, n_layer=1, n_embd=64, n_head=2, n_kv_head=2)
+
+    def _eval(steps: int) -> float:
+        return evaluate_candidate_detailed(
+            x0,
+            specs=TOP10_PARAM_SPECS,
+            seed=3,
+            steps=steps,
+            batch_size=4,
+            device="cpu",
+            lr=0.0,
+            weight_decay=0.0,
+            timeout_seconds=None,
+            max_retries=0,
+            raise_on_error=True,
+            lm_task=task,
+            model_config=model_cfg,
+        ).objective
+
+    untrained = _eval(0)
+    trained = _eval(40)
+    again = _eval(40)
     # Uniform over 64 tokens is 6 bits = 3 bits/byte; the stream carries 1 bit/token = 0.5 bits/byte.
     assert untrained > 2.5, untrained
     assert trained < untrained - 1.0, (untrained, trained)

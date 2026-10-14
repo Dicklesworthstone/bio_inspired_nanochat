@@ -1,0 +1,103 @@
+{
+  "arguments": {
+    "batch": 4,
+    "decode_tokens": 64,
+    "dtype": "float32",
+    "heads": 8,
+    "prefix_len": 512,
+    "t_key": 2048,
+    "topk": 32,
+    "trials": 30,
+    "warmup": 10
+  },
+  "dtype": "float32",
+  "gates": {
+    "acceptance_eligible": false,
+    "hardware_passed": true,
+    "model_passed": true,
+    "model_speedup_min": 1.05,
+    "release_passed": true,
+    "release_speedup_min": 1.2
+  },
+  "git": {
+    "benchmark_source_tracked": true,
+    "branch": "main",
+    "commit": "1b95827d9db70249b6fb95c053daaa37c1871c97",
+    "tracked_worktree_clean": false
+  },
+  "gpu": {
+    "capability": [
+      8,
+      9
+    ],
+    "multiprocessor_count": 128,
+    "name": "NVIDIA GeForce RTX 4090",
+    "rtx_4090_eligible": true,
+    "total_memory_bytes": 25252724736
+  },
+  "model_decode": {
+    "correctness": {
+      "kv_max_abs": 1.6391277313232422e-06,
+      "logits_max_abs": 1.1920928955078125e-06,
+      "passed": true,
+      "state_max_abs": 3.814697265625e-06
+    },
+    "eager": {
+      "median_ms": 417.15711975097656,
+      "minimum_ms": 389.7026672363281,
+      "p95_ms": 1312.316650390625,
+      "trials": 30
+    },
+    "eager_ms_per_token": 6.518079996109009,
+    "fused": {
+      "median_ms": 271.134521484375,
+      "minimum_ms": 240.02029418945312,
+      "p95_ms": 596.8179321289062,
+      "trials": 30
+    },
+    "fused_ms_per_token": 4.236476898193359,
+    "shape": {
+      "batch": 4,
+      "decode_tokens": 64,
+      "prefix_len": 512
+    },
+    "speedup": 1.5385614397870637
+  },
+  "release": {
+    "cold_start_ms": 3853.321575999871,
+    "correctness": {
+      "logits_max_abs": 4.76837158203125e-07,
+      "passed": true,
+      "release_max_abs": 1.430511474609375e-06,
+      "state_max_abs": 1.1920928955078125e-06
+    },
+    "eager": {
+      "median_ms": 1.2737759947776794,
+      "minimum_ms": 1.1212799549102783,
+      "p95_ms": 1.4653120040893555,
+      "trials": 30
+    },
+    "fused": {
+      "median_ms": 0.208064004778862,
+      "minimum_ms": 0.15855999290943146,
+      "p95_ms": 0.35020801424980164,
+      "trials": 30
+    },
+    "scope": "canonical release plus top-k log-bias injection",
+    "shape": {
+      "batch": 4,
+      "heads": 8,
+      "t_key": 2048,
+      "topk": 32
+    },
+    "speedup": 6.122039206788771
+  },
+  "schema_version": 1,
+  "seed": 1337,
+  "software": {
+    "cuda_runtime": "12.8",
+    "python": "3.14.2",
+    "torch": "2.9.1+cu128",
+    "triton": "3.5.1"
+  }
+}

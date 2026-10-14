@@ -423,9 +423,10 @@ class SynapticConfig:
     # jyb.2: the live presyn Triton kernel is deliberately narrow until jyb.3 supplies
     # autograd: deterministic FP32 CUDA decode only (one query, no grad/MC/learnable kinetics/
     # metriplectic integration). On CPU the same toggle dispatches the Rust mirror
-    # (rustbpe.presyn_release_canonical_cpu) for the same slice; measured 2026-09-01 it is
-    # ~2x faster than PyTorch at <=512 keys and not faster at 2k+ keys (bead ylo2), which is
-    # why it is not on by default. Every other shape/mode falls back to release_canonical.
+    # (rustbpe.presyn_release_canonical_cpu) for the same slice; after bead ylo2 (2026-10-13,
+    # results/presyn_rust_decode_bench_2026-10-13.json) it is 3.5x-7.1x faster than PyTorch across
+    # T_keys=256..4096 (up to 13x faster than the pre-ylo2 Rust kernel at 4096 keys). Every other
+    # shape/mode falls back to release_canonical.
     native_presyn: bool = decouple_config("BIO_FUSED_PRESYN", default=False, cast=bool)
     native_genetics: bool = decouple_config("BIO_FUSED_GENETICS", default=False, cast=bool)
 
@@ -3740,7 +3741,7 @@ class SynapticCausalSelfAttention(nn.Module):
             return x
         nrep = self.n_head // self.n_kv_head
         b, t, nh, d = x.shape
-        return x.unsqueeze(2).expand(b, t, nh, nrep, d).reshape(b, t, self.n_head, d)
+        return x.unsqueeze(3).expand(b, t, nh, nrep, d).reshape(b, t, self.n_head, d)
 
     def forward(self, x: Tensor, kv_cache=None, presyn_state=None, train_mode=True):
         B, Tq, _C = x.shape
@@ -4344,7 +4345,7 @@ class SynapticMoE(nn.Module):
         flat_out = out.view(-1, C)
         flat_x = x.view(-1, C)
 
-        use_fused_genetics = self.cfg.native_genetics and gates.is_cuda
+        use_fused_genetics = bool(self.cfg.native_genetics)
 
         me = torch.zeros(E, device=device)
         pe = torch.zeros(E, device=device)
@@ -4370,37 +4371,29 @@ class SynapticMoE(nn.Module):
 
         with torch.no_grad():
             if use_fused_genetics:
-                try:
-                    from bio_inspired_nanochat.kernels import (
-                        accumulate_router_stats,
-                        update_metabolism_fused,
-                    )
-                    counts, gate_sums = accumulate_router_stats(idx.detach(), gates.detach(), E)
-                    me = counts
-                    pe = gate_sums
-                    # 9mxi: the fatigue/energy EMAs are PERSISTENT adaptation state —
-                    # only write them when update_mem; eval must leave them untouched.
-                    if update_mem:
-                        util = counts.clamp_min(1.0) / float(B * T)
-                        update_metabolism_fused(fatigue_buf, energy_buf, alpha_fatigue, alpha_energy, util)
-                except ImportError:
-                    # Compiled/Triton kernels unavailable: recompute the router
-                    # statistics in plain PyTorch. ``me``/``pe`` were never populated
-                    # by the expert loop on this path, so reading them here produced
-                    # all-zeros — metabolism EMAs collapsed to a constant fixed point
-                    # and aux_loss was identically 0 (load balancing silently off).
-                    flat_idx0 = idx.detach().reshape(-1)
-                    flat_g = gates.detach().reshape(-1)
-                    counts_fb = torch.zeros(E, device=device, dtype=me.dtype)
-                    counts_fb.index_add_(0, flat_idx0, torch.ones_like(flat_g))
-                    sums_fb = torch.zeros(E, device=device, dtype=me.dtype)
-                    sums_fb.index_add_(0, flat_idx0, flat_g.to(me.dtype))
-                    me = counts_fb
-                    pe = sums_fb
+                from bio_inspired_nanochat.kernels.dispatcher import (
+                    dispatch_accumulate_router_stats,
+                    dispatch_update_metabolism,
+                )
+
+                counts, gate_sums = dispatch_accumulate_router_stats(
+                    idx.detach(), gates.detach(), E
+                )
+                me = counts.to(device=device, dtype=me.dtype)
+                pe = gate_sums.to(device=device, dtype=pe.dtype)
+                # 9mxi: the fatigue/energy EMAs are PERSISTENT adaptation state —
+                # only write them when update_mem; eval must leave them untouched.
+                if update_mem:
                     util = me.clamp_min(1.0) / float(B * T)
-                    if update_mem:
-                        fatigue_buf.mul_(1.0 - alpha_fatigue).add_(alpha_fatigue * util)
-                        energy_buf.mul_(1.0 - alpha_energy).add_(alpha_energy * (1.0 - util))
+                    f_next, e_next = dispatch_update_metabolism(
+                        fatigue_buf,
+                        energy_buf,
+                        alpha_fatigue.detach(),
+                        alpha_energy.detach(),
+                        util,
+                    )
+                    fatigue_buf.copy_(f_next)
+                    energy_buf.copy_(e_next)
             else:
                 util = me.clamp_min(1.0) / float(B * T)
                 if update_mem:
@@ -4422,6 +4415,18 @@ class SynapticMoE(nn.Module):
                 last_ctx["glial_bias"] = self.glial.routing_bias.detach().clone()
                 last_ctx["glial_activity"] = self.glial.activity_ema.detach().clone()
             object.__setattr__(self, "last_ctx", last_ctx)
+
+        if use_fused_genetics and gates.requires_grad:
+            flat_idx_valid = idx.reshape(-1)
+            flat_gates_valid = gates.reshape(-1).to(pe.dtype)
+            valid_mask = (flat_idx_valid >= 0) & (flat_idx_valid < E)
+            if not bool(valid_mask.all()):
+                flat_idx_valid = flat_idx_valid[valid_mask]
+                flat_gates_valid = flat_gates_valid[valid_mask]
+            pe_grad = torch.zeros(E, device=device, dtype=pe.dtype).index_add_(
+                0, flat_idx_valid, flat_gates_valid
+            )
+            pe = pe_grad + (pe - pe_grad.detach())
 
         me = me / float(B * T)
         pe = pe / float(B * T)

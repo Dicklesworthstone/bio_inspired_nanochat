@@ -1,3 +1,9 @@
+import ast as _ast
+
+for _ast_alias in ("Num", "Str", "Bytes", "NameConstant", "Ellipsis"):
+    if not hasattr(_ast, _ast_alias):
+        setattr(_ast, _ast_alias, _ast.Constant)
+
 from .genetics_fused import (
     accumulate_router_stats as accumulate_router_stats,
     update_metabolism_fused as update_metabolism_fused,
@@ -15,3 +21,4 @@ __all__ = [
     "update_metabolism_fused",
     "update_metrics_fused",
 ]
+
