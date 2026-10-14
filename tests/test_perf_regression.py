@@ -317,3 +317,125 @@ def test_perf_gate_cli_integration(tmp_path: Path):
     assert output_json.exists()
     payload = json.loads(output_json.read_text(encoding="utf-8"))
     assert len(payload) >= 4
+
+
+def test_throughput_budget_planted_3x_slowdown_fails_and_in_budget_passes(
+    tmp_path: Path, monkeypatch
+):
+    """Planted 3x synaptic slowdown fails ThroughputBudget(2.0x train, 1.5x decode)."""
+    from bio_inspired_nanochat.perf_regression import ThroughputBudget
+
+    harness = PerfRegressionHarness(baselines_path=tmp_path / "baselines.json")
+    planted_results = [
+        BenchmarkResult(
+            name="standard_transformer_train",
+            mode="train",
+            synaptic=False,
+            tok_per_sec=3000.0,
+            latency_ms=1.0,
+            peak_memory_mb=1.0,
+            steps_measured=5,
+            batch_size=2,
+            seq_len=32,
+            device="cpu",
+            benchmark_config={"name": "standard_transformer_train", "device": "cpu"},
+        ),
+        BenchmarkResult(
+            name="synaptic_transformer_train",
+            mode="train",
+            synaptic=True,
+            tok_per_sec=1000.0,  # 3.0x slower than standard (> 2.0x budget)
+            latency_ms=3.0,
+            peak_memory_mb=1.5,
+            steps_measured=5,
+            batch_size=2,
+            seq_len=32,
+            device="cpu",
+            benchmark_config={"name": "synaptic_transformer_train", "device": "cpu"},
+        ),
+        BenchmarkResult(
+            name="standard_transformer_cached_tq1_decode",
+            mode="decode",
+            synaptic=False,
+            tok_per_sec=600.0,
+            latency_ms=1.67,
+            peak_memory_mb=1.0,
+            steps_measured=200,
+            batch_size=1,
+            seq_len=16,
+            device="cpu",
+            benchmark_config={"name": "standard_transformer_cached_tq1_decode", "device": "cpu"},
+        ),
+        BenchmarkResult(
+            name="synaptic_transformer_cached_tq1_decode",
+            mode="decode",
+            synaptic=True,
+            tok_per_sec=200.0,  # 3.0x slower than standard (> 1.5x budget)
+            latency_ms=5.0,
+            peak_memory_mb=1.5,
+            steps_measured=200,
+            batch_size=1,
+            seq_len=16,
+            device="cpu",
+            benchmark_config={"name": "synaptic_transformer_cached_tq1_decode", "device": "cpu"},
+        ),
+    ]
+    harness.save_baselines(planted_results, tolerance=0.25)
+
+    budget_comps = harness.evaluate_budget_gates(planted_results, budget=ThroughputBudget())
+    assert len(budget_comps) == 2
+    assert all(not c.passed for c in budget_comps)
+    assert budget_comps[0].slowdown_ratio == pytest.approx(3.0)
+    assert budget_comps[1].slowdown_ratio == pytest.approx(3.0)
+
+    # CLI with --check-budget must fail on the planted 3x slowdown even when baseline drift passes
+    monkeypatch.setattr(PerfRegressionHarness, "run_all", lambda self: planted_results)
+    ret_fail = gate_main([
+        "--mode", "check",
+        "--baselines", str(tmp_path / "baselines.json"),
+        "--check-budget",
+    ])
+    assert ret_fail == 1
+
+    # When synaptic throughput is within budget (1.8x train <= 2.0x, 1.4x decode <= 1.5x), both pass
+    import dataclasses
+
+    passing_results = [
+        planted_results[0],
+        dataclasses.replace(planted_results[1], tok_per_sec=3000.0 / 1.8),
+        planted_results[2],
+        dataclasses.replace(planted_results[3], tok_per_sec=600.0 / 1.4),
+    ]
+    harness.save_baselines(passing_results, tolerance=0.25)
+    monkeypatch.setattr(PerfRegressionHarness, "run_all", lambda self: passing_results)
+    ret_pass = gate_main([
+        "--mode", "check",
+        "--baselines", str(tmp_path / "baselines.json"),
+        "--check-budget",
+    ])
+    assert ret_pass == 0
+
+    # Invalid ThroughputBudget ratios and mismatched geometry / non-positive throughput fail closed
+    with pytest.raises(ValueError, match="train_ratio_max must be positive"):
+        ThroughputBudget(train_ratio_max=0.0)
+    with pytest.raises(ValueError, match="decode_ratio_max must be positive"):
+        ThroughputBudget(decode_ratio_max=-1.0)
+
+    geom_mismatch = [
+        passing_results[0],
+        dataclasses.replace(passing_results[1], seq_len=64),
+    ]
+    geom_comp = harness.evaluate_budget_gates(geom_mismatch)
+    assert len(geom_comp) == 1
+    assert not geom_comp[0].passed
+    assert "geometry mismatch" in geom_comp[0].detail
+
+    zero_tps = [
+        dataclasses.replace(passing_results[0], tok_per_sec=0.0),
+        passing_results[1],
+    ]
+    zero_comp = harness.evaluate_budget_gates(zero_tps)
+    assert len(zero_comp) == 1
+    assert not zero_comp[0].passed
+    assert "non-positive throughput" in zero_comp[0].detail
+
