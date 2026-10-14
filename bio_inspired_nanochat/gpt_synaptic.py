@@ -427,11 +427,42 @@ class GPTSynaptic(nn.Module):
 
     def hidden_to_logits(self, hidden: Tensor) -> Tensor:
         """Project final hidden states through the configured bounded language head."""
-        logits = self.lm_head(hidden.to(dtype=self.lm_head.weight.dtype))
+        if not torch.is_autocast_enabled() and hidden.dtype != self.lm_head.weight.dtype:
+            hidden = hidden.to(dtype=self.lm_head.weight.dtype)
+        logits = self.lm_head(hidden)
         sc = self.config.logit_softcap
         if sc and sc > 0.0:
             logits = sc * torch.tanh(logits / sc)
         return logits
+
+    def _chunked_cross_entropy(self, x: Tensor, targets: Tensor) -> Tensor:
+        from torch.utils.checkpoint import checkpoint
+
+        x_flat = x.reshape(-1, x.size(-1))
+        targets_flat = targets.reshape(-1)
+        valid_count = (targets_flat != -1).sum().clamp_min(1)
+
+        def _chunk_fn(x_chunk: Tensor, t_chunk: Tensor) -> Tensor:
+            logits_chunk = self.hidden_to_logits(x_chunk).float()
+            return F.cross_entropy(
+                logits_chunk,
+                t_chunk,
+                ignore_index=-1,
+                reduction="sum",
+            )
+
+        total_loss = torch.zeros((), device=x.device, dtype=torch.float32)
+        chunk_tokens = 2048
+        for start in range(0, x_flat.size(0), chunk_tokens):
+            end = min(start + chunk_tokens, x_flat.size(0))
+            chunk_loss = checkpoint(
+                _chunk_fn,
+                x_flat[start:end],
+                targets_flat[start:end],
+                use_reentrant=False,
+            )
+            total_loss = total_loss + chunk_loss
+        return total_loss / valid_count
 
     def forward(
         self,
@@ -455,21 +486,22 @@ class GPTSynaptic(nn.Module):
         # return and the loss path. See vg9.1. We match GPT exactly: the inference
         # path returns softcapped logits in the lm_head dtype (no float cast), and the
         # loss path casts to fp32 before cross-entropy.
-        logits = self.hidden_to_logits(x)
         if targets is None:
-            return logits, None
+            return self.hidden_to_logits(x), None
         aux = sum(
-            
-                getattr(b, "last_aux_loss", torch.tensor(0.0, device=logits.device))
-                for b in self.h[:active_layers]
-            
+            getattr(b, "last_aux_loss", torch.tensor(0.0, device=x.device))
+            for b in self.h[:active_layers]
         )
-        logits = logits.float()  # fp32 logits for the loss (parity with GPT)
-        logits_flat = logits.reshape(-1, logits.size(-1))
-        targets_flat = targets.reshape(-1)
+        if x.is_cuda and torch.is_grad_enabled() and x.size(0) * x.size(1) > 2048:
+            ce = self._chunked_cross_entropy(x, targets)
+            loss = ce + aux
+            with torch.no_grad():
+                logits_sample = self.hidden_to_logits(x[:, -1:])
+            return logits_sample, loss
+        logits = self.hidden_to_logits(x)
         ce = F.cross_entropy(
-            logits_flat,
-            targets_flat,
+            logits.float().reshape(-1, logits.size(-1)),
+            targets.reshape(-1),
             ignore_index=-1,
             reduction="mean",
         )
@@ -531,6 +563,7 @@ class GPTSynaptic(nn.Module):
             tgt = targets[:, start:end]
             n_valid = int((tgt != -1).sum().item())
             _logits, loss = self.forward(idx[:, start:end], tgt, kv_cache=cache, train_mode=True)
+            del _logits
             if n_valid > 0:
                 weight = n_valid / n_valid_total
                 (loss * (weight * loss_scale)).backward()

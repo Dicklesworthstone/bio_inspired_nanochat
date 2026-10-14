@@ -83,9 +83,19 @@ class NeuromodulatoryBus(nn.Module):
     @torch.no_grad()
     def entropy_from_logits(logits: Tensor) -> float:
         """Mean per-token predictive entropy (nats) — a convenient ACh signal."""
-        logp = torch.log_softmax(logits.detach().float().reshape(-1, logits.shape[-1]), dim=-1)
-        ent = -(logp.exp() * logp).sum(dim=-1).mean()
-        return float(ent)
+        flat = logits.detach().reshape(-1, logits.shape[-1])
+        if flat.size(0) == 0:
+            return 0.0
+        chunk_tokens = 2048
+        if flat.size(0) <= chunk_tokens:
+            logp = torch.log_softmax(flat.float(), dim=-1)
+            ent = -(logp.exp() * logp).sum(dim=-1).mean()
+            return float(ent)
+        total_ent = torch.zeros((), device=flat.device, dtype=torch.float32)
+        for start in range(0, flat.size(0), chunk_tokens):
+            logp = torch.log_softmax(flat[start : start + chunk_tokens].float(), dim=-1)
+            total_ent = total_ent - (logp.exp() * logp).sum()
+        return float(total_ent / flat.size(0))
 
     @torch.no_grad()
     def update(
