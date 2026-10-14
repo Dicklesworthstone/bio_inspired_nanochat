@@ -1,4 +1,7 @@
+"""Multi-layer MoE routing telemetry reduction across ``SynapticMoE.last_ctx`` dicts (bead 3zsq.1: kept for multi-layer telemetry callers alongside single-layer ``kernels/metrics_fused.py``)."""
+
 import torch
+
 
 def accumulate_metrics_fused(moe_ctx_list, num_experts):
     """
