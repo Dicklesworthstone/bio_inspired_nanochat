@@ -1131,17 +1131,64 @@ while True:
 
     # Neuromodulatory bus (hy8.1): compute DA/ACh/NE from this step's loss + predictive entropy
     # and broadcast the gains so they gate the NEXT step's plasticity/exploration/gain.
+    nm_tel: dict[str, float] | None = None
     if nm_bus is not None:
         nm_bus.update(loss=float(train_loss), entropy=nm_entropy)
         nm_bus.broadcast(orig_model)
         if neuromod_log_every and step % neuromod_log_every == 0:
-            tel = nm_bus.telemetry()
-            telemetry.log_bio(step, neuromod=tel)
+            nm_tel = nm_bus.telemetry()
             print0(
-                f"  [neuromod] DA={tel['nm/da']:+.3f} ACh={tel['nm/ach']:.3f} NE={tel['nm/ne']:.3f} "
-                f"| gains: plast={tel['nm/gain_plasticity']:.3f} explore={tel['nm/gain_explore']:.3f} "
-                f"glob={tel['nm/gain_global']:.3f}"
+                f"  [neuromod] DA={nm_tel['nm/da']:+.3f} ACh={nm_tel['nm/ach']:.3f} NE={nm_tel['nm/ne']:.3f} "
+                f"| gains: plast={nm_tel['nm/gain_plasticity']:.3f} explore={nm_tel['nm/gain_explore']:.3f} "
+                f"glob={nm_tel['nm/gain_global']:.3f}"
             )
+    bio_cadence = neuromod_log_every if neuromod_log_every > 0 else 50
+    if use_syn and master_process and (step % bio_cadence == 0 or step == num_iterations - 1):
+        bio_payload: dict[str, Any] = {}
+        kinetics_by_mod: dict[str, dict[str, float]] = {}
+        max_rho = 0.0
+        expert_health: dict[str, dict[str, float]] = {}
+        for mod_name, mod in orig_model.named_modules():
+            if hasattr(mod, "spectral_radius") and hasattr(mod, "values"):
+                rho_val = float(cast(Any, mod).spectral_radius().detach().item())
+                vals = dict(cast(Any, mod).values())
+                vals["spectral_radius"] = rho_val
+                kinetics_by_mod[mod_name] = vals
+                max_rho = max(max_rho, rho_val)
+            energy_buf = getattr(mod, "energy", None)
+            fatigue_buf = getattr(mod, "fatigue", None)
+            if isinstance(energy_buf, torch.Tensor) and isinstance(fatigue_buf, torch.Tensor):
+                expert_health[mod_name] = {
+                    "energy_mean": float(energy_buf.detach().float().mean().item()),
+                    "energy_min": float(energy_buf.detach().float().min().item()),
+                    "fatigue_mean": float(fatigue_buf.detach().float().mean().item()),
+                    "fatigue_max": float(fatigue_buf.detach().float().max().item()),
+                    "num_experts": float(energy_buf.numel()),
+                }
+        if kinetics_by_mod:
+            bio_payload["spectral_radius"] = max_rho
+            bio_payload["kinetics"] = kinetics_by_mod
+        w_fast_norm = sum(
+            float(p.detach().float().norm().item())
+            for n, p in orig_model.named_parameters()
+            if "fast" in n
+        )
+        hebb_buf_norm = sum(
+            float(b.detach().float().norm().item())
+            for n, b in orig_model.named_buffers()
+            if any(k in n.lower() for k in ("u_buf", "v_buf", "hebb"))
+        )
+        bio_payload["fast_weight_mag"] = w_fast_norm
+        bio_payload["hebb_state_l2"] = hebb_buf_norm
+        if nm_tel is not None:
+            bio_payload["neuromod"] = nm_tel
+        elif nm_bus is not None:
+            bio_payload["neuromod"] = nm_bus.telemetry()
+        if sm_ctrl is not None:
+            bio_payload["splitmerge"] = sm_ctrl.state_dict()
+        if expert_health:
+            bio_payload["expert_health"] = expert_health
+        telemetry.log_bio(step, **bio_payload)
     synchronize()
     t1 = time.time()
     dt = t1 - t0
