@@ -41,9 +41,9 @@ The mechanism set is the authoritative ``ablation_registry.MECHANISMS`` list. ``
 science matrix: they are performance/runtime toggles, not standalone biological mechanisms (flex
 is prefill-only and incompatible with KV-cache decode eval; native needs CUDA; tropical routing
 needs a certified exact-affine score adapter; checkpointing changes activation storage rather than
-the forward dynamics). Global neuromodulation (hy8.1) and NeuroScore are NOT yet registered ablation
-mechanisms, so they are not in this matrix; registering them is a documented prerequisite for
-including them (see ``docs/ablation_matrix.md`` §"Known gaps").
+the forward dynamics). Global neuromodulation (hy8.1) is registered as an opt-in mechanism
+(``add_neuromod``); NeuroScore is an evaluation metric rather than a model mechanism (see
+``docs/ablation_matrix.md``).
 """
 
 from __future__ import annotations
@@ -80,9 +80,31 @@ MATRIX_EXCLUDED_MECHANISMS: frozenset[str] = (
     INFRA_MECHANISMS | {"topological_nas"}
 )
 
-# Reproducible seeds. >=3 for research-grade statistical significance (matches eval_benchmark_matrix).
+# Reproducible seeds. >=3 for paired variance estimation; note that the pre-registered
+# exact two-sided Wilcoxon leg in eval_stats.compare_matrix has floor p = 2^(1-n), which requires
+# n >= ceil(log2(2 * m / alpha)) seeds (>=6 for m=1 survivor at alpha=0.05; see min_confirmation_seeds).
 SCREENING_SEEDS: tuple[int, ...] = (1337, 1338)
 CONFIRMATION_SEEDS: tuple[int, ...] = (1337, 1338, 1339)
+FEASIBLE_CONFIRMATION_SEEDS: tuple[int, ...] = (1337, 1338, 1339, 1340, 1341, 1342)
+
+
+def min_confirmation_seeds(
+    n_survivors: int = 1,
+    *,
+    alpha: float = CONFIRMATION_ALPHA,
+    base_seed: int = 1337,
+) -> tuple[int, ...]:
+    """Smallest deterministic seed tuple clearing the Holm-adjusted exact Wilcoxon floor.
+
+    For ``m = max(1, n_survivors)`` survivors at significance level ``alpha``, the two-sided
+    exact Wilcoxon signed-rank test has floor ``p = 2 * 2^-n`` and Holm multiplies by ``m``,
+    requiring ``n >= ceil(log2(2 * m / alpha))`` (6 seeds for m=1, 7 for m=2, 8 for m=3..6).
+    """
+    if alpha <= 0.0 or alpha >= 1.0:
+        raise ValueError(f"alpha must be in (0, 1), got {alpha}")
+    family = max(1, int(n_survivors))
+    min_n = max(len(FEASIBLE_CONFIRMATION_SEEDS), math.ceil(math.log2(2.0 * family / alpha)))
+    return tuple(int(base_seed) + i for i in range(min_n))
 
 # Equal-compute token budgets per run (the final value is pinned by the Phase-0 decision rule and the
 # feasible set from hwxb.4.5; these are the planning defaults from docs/eval_benchmark_matrix.md).
@@ -374,6 +396,12 @@ def confirmation_columns(survivors: list[str]) -> list[AblationConfig]:
     """Expensive second pass: the anchors plus only the ``survivors`` that screening kept."""
     keep = set(survivors)
     cols = [c for c in screening_columns() if c.role == "anchor" or c.config_id in keep]
+    struct_kept = [c for c in structural_columns() if c.config_id in keep]
+    if struct_kept:
+        struct_anchors = [
+            c for c in structural_columns() if c.config_id == "moe_fixed" and c.config_id not in keep
+        ]
+        cols.extend(struct_anchors + struct_kept)
     return cols
 
 
@@ -411,6 +439,12 @@ def go_no_go(survivors: list[str], tok_per_sec: float, *,
     if n_surv == 0:
         return GoNoGo(False, hours, cap_gpu_hours, 0,
                       "No mechanism survived screening — nothing to confirm; report the null result.")
+    if hours > cap_gpu_hours:
+        return GoNoGo(
+            False, hours, cap_gpu_hours, n_surv,
+            f"Estimated {hours:.1f} GPU-h exceeds the {cap_gpu_hours:.1f} GPU-h cap; "
+            f"prune survivors or lower confirmation budget before launching.",
+        )
     # Pre-flight power check: refuse to authorize GPU-hours when the pre-registered
     # rule (Holm-adjusted paired t AND Wilcoxon both <= alpha) is mathematically
     # unfirable at this seed count — the exact Wilcoxon leg has floor p = 2^(1-n)

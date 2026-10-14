@@ -109,8 +109,10 @@ def test_moe_only_mechanisms_are_contrasted_on_moe_blocks_never_in_the_dense_scr
     for column in moe.values():
         assert column.train_overrides == moe_fixed.train_overrides == {"use_moe": 1}
         assert column.base is moe_fixed.base
-    assert moe["moe_no_metabolism"].build_syn_cfg().enable_metabolism is False
-    assert moe["moe_add_glial_homeostasis"].build_syn_cfg().glial_homeostasis is True
+    cfg_no_met = moe["moe_no_metabolism"].build_syn_cfg()
+    cfg_add_glial = moe["moe_add_glial_homeostasis"].build_syn_cfg()
+    assert cfg_no_met is not None and cfg_no_met.enable_metabolism is False
+    assert cfg_add_glial is not None and cfg_add_glial.glial_homeostasis is True
 
 
 def test_add_one_in_enables_mechanism_and_its_prerequisites():
@@ -173,6 +175,16 @@ def test_go_no_go_blocks_when_no_survivors():
 def test_go_no_go_blocks_when_over_the_cap():
     g = am.go_no_go(["bio_no_presyn"], tok_per_sec=10.0, cap_gpu_hours=1.0)
     assert g.proceed is False and g.estimated_gpu_hours > g.cap_gpu_hours
+    assert "exceeds the" in g.reason
+    # Also verify cap blocks even when the seed count (n=6) is statistically feasible (hwxb.5.4).
+    g_feasible = am.go_no_go(
+        ["bio_no_presyn"],
+        tok_per_sec=10.0,
+        cap_gpu_hours=1.0,
+        seeds=am.FEASIBLE_CONFIRMATION_SEEDS,
+    )
+    assert g_feasible.proceed is False and g_feasible.estimated_gpu_hours > g_feasible.cap_gpu_hours
+    assert "exceeds the" in g_feasible.reason
 
 
 def test_go_no_go_proceeds_within_budget():
@@ -192,6 +204,24 @@ def test_go_no_go_blocks_statistically_infeasible_design():
     assert g.proceed is False
     assert "INFEASIBLE" in g.reason
     assert "Raise seeds" in g.reason
+
+
+def test_min_confirmation_seeds_clears_wilcoxon_holm_floor():
+    """min_confirmation_seeds(m) returns the exact minimum seed tuple that clears go_no_go."""
+    assert am.min_confirmation_seeds(1) == am.FEASIBLE_CONFIRMATION_SEEDS
+    non_anchors = [c.config_id for c in am.screening_columns() if c.role != "anchor"]
+    for m in (1, 2, 3, 5):
+        survivors = non_anchors[:m]
+        seeds = am.min_confirmation_seeds(m)
+        ok = am.go_no_go(survivors, tok_per_sec=1_000_000.0, cap_gpu_hours=1000.0, seeds=seeds)
+        assert ok.proceed is True, (m, seeds, ok.reason)
+        assert len(am.confirmation_columns(survivors)) == len(am.anchors()) + m
+        too_few = am.go_no_go(
+            survivors, tok_per_sec=1_000_000.0, cap_gpu_hours=1000.0, seeds=seeds[:-1]
+        )
+        assert too_few.proceed is False and "INFEASIBLE" in too_few.reason
+    with pytest.raises(ValueError, match="alpha"):
+        am.min_confirmation_seeds(1, alpha=0.0)
 
 
 def test_decision_rule_primary_metric_is_a_declared_metric():
@@ -218,7 +248,11 @@ def test_every_matrix_column_builds_a_distinct_model():
 
 
 def test_add_one_in_adds_exactly_one_mechanism_chain():
-    by_id = {c.config_id: c.build_syn_cfg() for c in am.add_one_in()}
+    by_id: dict[str, SynapticConfig] = {}
+    for c in am.add_one_in():
+        cfg = c.build_syn_cfg()
+        assert cfg is not None
+        by_id[c.config_id] = cfg
     assert by_id["add_hebbian"].enable_hebbian and by_id["add_hebbian"].bdnf_scale == 0.0
     assert by_id["add_bdnf"].enable_hebbian and by_id["add_bdnf"].bdnf_scale == 1.0
     for cid in ("add_bistable_latch", "add_stdp", "add_cusp_latch", "add_neuromod"):

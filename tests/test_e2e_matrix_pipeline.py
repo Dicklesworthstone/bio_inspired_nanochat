@@ -101,3 +101,101 @@ def test_eval_stats_pairs_the_synaptic_off_anchor_against_vanilla(pipeline):
     assert "synaptic_off" in presets, list(presets)[:5]
     entry = presets["synaptic_off"]
     assert "paired_vs_baseline" in entry and entry["paired_vs_baseline"]["n_pairs"] == len(SEEDS)
+
+
+def test_structural_stage_pipeline_trains_and_scores_moe_columns(pipeline):
+    """MoE structural stage (moe_fixed vs moe_splitmerge) trains, scores, and pairs cleanly (uta.10)."""
+    base_dir: Path = pipeline["base_dir"]
+    struct_cols = ("moe_fixed", "moe_splitmerge")
+    env = {
+        **os.environ,
+        "NANOCHAT_BASE_DIR": str(base_dir),
+        "BIO_RESULTS_REGISTRY": str(base_dir / "registry.jsonl"),
+        "PYTHONWARNINGS": "ignore",
+    }
+    launch = _run(
+        [
+            "scripts.matrix_launch",
+            "--stage",
+            "structural",
+            "--columns",
+            ",".join(struct_cols),
+            "--seeds",
+            ",".join(map(str, SEEDS)),
+            f"--recipe={RECIPE}",
+            "--execute",
+        ],
+        env,
+        timeout=2400,
+    )
+    assert launch.returncode == 0, (launch.stdout[-2000:], launch.stderr[-4000:])
+
+    out_dir = base_dir / "structural_out"
+    template = str(base_dir / "base_checkpoints" / "matrix_{preset}_s{seed}")
+    scored = _run(
+        [
+            "scripts.eval_matrix",
+            "matrix",
+            "--presets",
+            ",".join(struct_cols),
+            "--seeds",
+            ",".join(map(str, SEEDS)),
+            "--checkpoint-dir",
+            template,
+            "--data",
+            "fineweb",
+            "--device-type",
+            "cpu",
+            "--eval-bpb",
+            "--eval-tokens",
+            "128",
+            "--device-batch-size",
+            "2",
+            "--niah-lengths",
+            "8",
+            "--continual-exposures",
+            "2",
+            "--ece-bins",
+            "5",
+            "--out-dir",
+            str(out_dir),
+            "--batch-id",
+            "structural_pipeline",
+            "--registry-path",
+            str(base_dir / "structural_eval_registry.jsonl"),
+        ],
+        env,
+        timeout=2400,
+    )
+    assert scored.returncode == 0, (scored.stdout[-2000:], scored.stderr[-4000:])
+    summary = next(out_dir.rglob("summary.csv"))
+    rows = list(csv.DictReader(summary.open(encoding="utf-8")))
+    assert {(r["preset"], int(r["seed"])) for r in rows} == {
+        (c, s) for c in struct_cols for s in SEEDS
+    }
+    for r in rows:
+        assert math.isfinite(float(r["val_bpb"])), r
+        assert math.isfinite(float(r["moe_gini"])), r
+        assert math.isfinite(float(r["dead_expert_frac"])), r
+
+    verdict_path = base_dir / "structural_verdict.json"
+    stats = _run(
+        [
+            "bio_inspired_nanochat.eval_stats",
+            str(summary),
+            "--baseline",
+            "moe_fixed",
+            "--min-pairs",
+            "2",
+            "--json-out",
+            str(verdict_path),
+        ],
+        env,
+        timeout=600,
+    )
+    assert stats.returncode == 0, stats.stderr[-3000:]
+    verdict = json.loads(verdict_path.read_text(encoding="utf-8"))
+    presets = verdict.get("presets") or verdict
+    assert "moe_splitmerge" in presets
+    assert presets["moe_splitmerge"]["paired_vs_baseline"]["n_pairs"] == len(SEEDS)
+
