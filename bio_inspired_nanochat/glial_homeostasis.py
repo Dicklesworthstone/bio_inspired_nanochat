@@ -52,14 +52,16 @@ class GlialHomeostasis(nn.Module):
 
         self.num_experts = int(num_experts)
         self.group_size = min(int(group_size), self.num_experts)
+        self.num_groups = (self.num_experts - 1) // self.group_size + 1
         self.ema_rate = float(ema_rate)
         self.feedback_rate = float(feedback_rate)
         self.energy_weight = float(energy_weight)
         self.bias_cap = float(bias_cap)
 
         group_index = torch.arange(self.num_experts, dtype=torch.long) // self.group_size
-        num_groups = int(group_index[-1].item()) + 1
-        group_counts = torch.bincount(group_index, minlength=num_groups).to(torch.float32)
+        starts = torch.arange(self.num_groups, dtype=torch.long) * self.group_size
+        ends = (starts + self.group_size).clamp_max(self.num_experts)
+        group_counts = (ends - starts).to(torch.float32)
 
         self.register_buffer("group_index", group_index)
         self.register_buffer("group_counts", group_counts)
@@ -67,7 +69,7 @@ class GlialHomeostasis(nn.Module):
             "activity_ema",
             torch.full((self.num_experts,), 1.0 / float(self.num_experts)),
         )
-        self.register_buffer("group_energy_ema", torch.ones(num_groups))
+        self.register_buffer("group_energy_ema", torch.ones(self.num_groups))
         self.register_buffer("gliotransmitter_bias", torch.zeros(self.num_experts))
         self.register_buffer("steps", torch.zeros((), dtype=torch.long))
 
@@ -78,7 +80,26 @@ class GlialHomeostasis(nn.Module):
 
     @torch.no_grad()
     def reset_(self) -> None:
-        """Return the controller to its healthy, behavior-neutral fixed point."""
+        """Return the controller to its healthy, behavior-neutral fixed point (to_empty-safe)."""
+        idx = (
+            torch.arange(
+                self.num_experts,
+                device=self.group_index.device,
+                dtype=torch.long,
+            )
+            // self.group_size
+        )
+        self.group_index.copy_(idx)
+        starts = (
+            torch.arange(
+                self.num_groups,
+                device=self.group_counts.device,
+                dtype=torch.long,
+            )
+            * self.group_size
+        )
+        ends = (starts + self.group_size).clamp_max(self.num_experts)
+        self.group_counts.copy_((ends - starts).to(self.group_counts.dtype))
         self.activity_ema.fill_(1.0 / float(self.num_experts))
         self.group_energy_ema.fill_(1.0)
         self.gliotransmitter_bias.zero_()

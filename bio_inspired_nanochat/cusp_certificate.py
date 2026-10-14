@@ -110,11 +110,11 @@ def epsilon_gauge(cfg: SynapticConfig, n_beta: int = 21) -> float:
     contraction, i.e. `ρ(M_cb)` comfortably below 1 (a clear gap). This reuses the `yw9.7`
     closed-form `cb_spectral_radius`.
     """
-    rho_c = torch.tensor(math.exp(-1.0 / cfg.tau_c), dtype=torch.float64)
-    rho_b = torch.tensor(math.exp(-1.0 / cfg.tau_buf), dtype=torch.float64)
-    a_on = torch.tensor(float(cfg.alpha_buf_on), dtype=torch.float64)
-    a_off = torch.tensor(float(cfg.alpha_buf_off), dtype=torch.float64)
-    betas = torch.linspace(0.0, 1.0, n_beta, dtype=torch.float64)
+    rho_c = torch.tensor(math.exp(-1.0 / cfg.tau_c), dtype=torch.float64, device="cpu")
+    rho_b = torch.tensor(math.exp(-1.0 / cfg.tau_buf), dtype=torch.float64, device="cpu")
+    a_on = torch.tensor(float(cfg.alpha_buf_on), dtype=torch.float64, device="cpu")
+    a_off = torch.tensor(float(cfg.alpha_buf_off), dtype=torch.float64, device="cpu")
+    betas = torch.linspace(0.0, 1.0, n_beta, dtype=torch.float64, device="cpu")
     rho = cb_spectral_radius(rho_c, rho_b, a_on, a_off, betas)
     return float(rho.max())
 

@@ -239,3 +239,36 @@ def test_glia_enabled_model_warm_starts_from_pre_glia_checkpoint() -> None:
         atol=0.0,
         rtol=0.0,
     )
+
+
+def test_meta_device_construction_and_to_empty_initializes_group_buffers() -> None:
+    """base_train constructs GPTSynaptic on meta and materializes via to_empty + init_weights."""
+    cfg = GPTSynapticConfig(
+        sequence_len=8,
+        vocab_size=32,
+        n_layer=1,
+        n_head=2,
+        n_kv_head=2,
+        n_embd=8,
+        use_moe=True,
+        num_experts=5,
+        moe_top_k=1,
+        moe_hidden_mult=1,
+        syn_cfg=SynapticConfig(
+            enable_hebbian=False,
+            glial_homeostasis=True,
+            glial_group_size=2,
+        ),
+    )
+    with torch.device("meta"):
+        model = GPTSynaptic(cfg)
+    model = model.to_empty(device=torch.device("cpu"))
+    model.init_weights()
+
+    moe = model.h[0].mlp
+    assert isinstance(moe, SynapticMoE) and moe.glial is not None
+    assert torch.equal(moe.glial.group_index, torch.tensor([0, 0, 1, 1, 2], dtype=torch.long))
+    assert torch.equal(moe.glial.group_counts, torch.tensor([2.0, 2.0, 1.0]))
+    moe.glial.observe(torch.tensor([10.0, 0.0, 0.0, 0.0, 0.0]), torch.ones(5))
+    assert bool(torch.isfinite(moe.glial.routing_bias).all())
+
