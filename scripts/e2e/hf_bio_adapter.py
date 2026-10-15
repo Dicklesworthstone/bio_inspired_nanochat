@@ -37,7 +37,9 @@ from bio_inspired_nanochat.run_logging import RunLogger
 from bio_inspired_nanochat.synaptic import SynapticConfig
 from bio_inspired_nanochat.torch_imports import torch
 
-USER_AGENT = "OpenAI File Downloader, XaiImageApiFetch/1.0"
+USER_AGENT = (
+    "bio_inspired_nanochat-hf-e2e (+https://github.com/Dicklesworthstone/bio_inspired_nanochat)"
+)
 DEFAULT_REPOSITORY = "sshleifer/tiny-gpt2"
 DEFAULT_REVISION = "5f91d94bd9cd7190a9f3216ff93cd1dd95f2c7be"
 
@@ -81,7 +83,7 @@ def _download_checkpoint(
     *,
     cache_dir: str | Path | None,
 ) -> Path:
-    """Fetch only model/tokenizer artifacts, always with the mandated user-agent string."""
+    """Fetch only model/tokenizer artifacts, always with this project's own user-agent string."""
     downloaded = snapshot_download(
         repository,
         revision=revision,
