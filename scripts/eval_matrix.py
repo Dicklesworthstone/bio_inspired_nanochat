@@ -489,9 +489,13 @@ def _val_loss_ppl_ece(
             # All-masked batch (every target is ignore_index): contribute NOTHING
             # rather than a NaN or an artificial zero-weight observation.
 
-            # ECE (optional): use max prob and correctness per token.
-            probs = torch.softmax(logits_flat, dim=-1)
-            conf, pred = probs.max(dim=-1)
+            # Convert logits to log-probabilities in-place after cross_entropy so
+            # large-vocab checkpoints (e.g. B=16, T=2048, V=65536 => 8 GiB per fp32
+            # tensor) never hold logits + probs + id_log_probs + id_probs + ood_logits
+            # simultaneously in VRAM.
+            logits.sub_(torch.logsumexp(logits, dim=-1, keepdim=True))
+            max_log_prob, pred = logits_flat.max(dim=-1)
+            conf = max_log_prob.exp()
             correct = (pred == targets_flat) & valid
             # Bin by confidence in [0,1]
             bins = torch.clamp((conf * ece_bins).to(torch.int64), 0, ece_bins - 1)
@@ -502,24 +506,25 @@ def _val_loss_ppl_ece(
                     acc_sum[b] += float(correct[mask].float().sum().item())
                     count[b] += float(mask.sum().item())
 
-            id_log_probs = torch.log_softmax(logits, dim=-1)
-            id_probs = id_log_probs.exp()
-            id_uncertainty.extend(
-                float(value)
-                for value in (-(id_probs * id_log_probs).sum(dim=-1).mean(dim=-1)).cpu().tolist()
-            )
+            vocab_dim = logits.size(-1)
+            for row_lp in logits:
+                id_uncertainty.append(
+                    float((-(row_lp.exp() * row_lp).sum(dim=-1).mean(dim=-1)).item())
+                )
+            del logits, logits_flat
+
             ood_x = _deterministic_ood_tokens(
                 x,
-                vocab_size=logits.size(-1),
+                vocab_size=vocab_dim,
                 seed=ood_seed,
             )
             ood_logits = _get_logits(model, ood_x).to(torch.float32)
-            ood_log_probs = torch.log_softmax(ood_logits, dim=-1)
-            ood_probs = ood_log_probs.exp()
-            ood_uncertainty.extend(
-                float(value)
-                for value in (-(ood_probs * ood_log_probs).sum(dim=-1).mean(dim=-1)).cpu().tolist()
-            )
+            ood_logits.sub_(torch.logsumexp(ood_logits, dim=-1, keepdim=True))
+            for row_lp in ood_logits:
+                ood_uncertainty.append(
+                    float((-(row_lp.exp() * row_lp).sum(dim=-1).mean(dim=-1)).item())
+                )
+            del ood_logits
 
     if ddp and torch.distributed.is_initialized():
         # Pool the numerator and denominator across ranks. Averaging rank-local
@@ -1286,6 +1291,12 @@ def _run_one(
             {"run_id": run_id, **run_config},
         )
 
+    autocast_ctx = (
+        torch.amp.autocast(device_type=device_type, dtype=torch.bfloat16)
+        if device_type == "cuda"
+        else nullcontext()
+    )
+
     # The historical inline loop is retained only for explicit CI/smoke use. Scientific rows load
     # the completed base_train model above and never retrain it under a divergent recipe.
     if checkpoint_path is None:
@@ -1322,11 +1333,13 @@ def _run_one(
                     if supports_train_mode and hebb_chunk_len > 0:
                         # hwxb.8: chunked regime — forward+backward per chunk inside the model.
                         step_logits = None
-                        loss = model.chunked_train_step(
-                            x, y, chunk_len=hebb_chunk_len, loss_scale=1.0 / grad_accum_steps
-                        )
+                        with autocast_ctx:
+                            loss = model.chunked_train_step(
+                                x, y, chunk_len=hebb_chunk_len, loss_scale=1.0 / grad_accum_steps
+                            )
                         continue
-                    result = model(x, y, train_mode=True) if supports_train_mode else model(x, y)
+                    with autocast_ctx:
+                        result = model(x, y, train_mode=True) if supports_train_mode else model(x, y)
                     if isinstance(result, tuple):
                         step_logits, loss = result
                     else:
@@ -1401,7 +1414,8 @@ def _run_one(
         else:
             token_bytes = get_token_bytes(device=device)
             if "loss_reduction" in inspect.signature(model.forward).parameters:
-                val_bpb = float(evaluate_bpb(model, val_iter, eval_steps, token_bytes))
+                with autocast_ctx:
+                    val_bpb = float(evaluate_bpb(model, val_iter, eval_steps, token_bytes))
             else:
                 orig_forward = model.forward
 
@@ -1430,7 +1444,8 @@ def _run_one(
 
                 model.forward = _syn_forward_wrapper
                 try:
-                    val_bpb = float(evaluate_bpb(model, val_iter, eval_steps, token_bytes))
+                    with autocast_ctx:
+                        val_bpb = float(evaluate_bpb(model, val_iter, eval_steps, token_bytes))
                 finally:
                     model.forward = orig_forward
 
@@ -1439,7 +1454,7 @@ def _run_one(
         if tokenizer is None:
             core_metric = None
         else:
-            with _force_synaptic_eval_forward(model) as eval_model:
+            with autocast_ctx, _force_synaptic_eval_forward(model) as eval_model:
                 out = evaluate_model(
                     eval_model, tokenizer, device, max_per_task=core_max_per_task
                 )
@@ -1458,7 +1473,7 @@ def _run_one(
         max_len = context_max if niah_lengths.strip() else min(context_max, 256)
         lengths_used = _resolve_niah_lengths(niah_lengths, max_len)
         if lengths_used and ddp_rank == 0:
-            with _force_synaptic_eval_forward(model) as eval_model:
+            with autocast_ctx, _force_synaptic_eval_forward(model) as eval_model:
                 niah_result = niah_accuracy_by_length(
                     eval_model,
                     vocab_size=min(64, int(vocab_size)),
@@ -1483,15 +1498,16 @@ def _run_one(
     continual = ContinualMetricSummary(None, {}, [], "not_run", "non-zero DDP rank")
     if ddp_rank == 0:
         try:
-            continual = _continual_forgetting_metric(
-                model,
-                sequence_len=sequence_len,
-                vocab_size=vocab_size,
-                task_count=continual_tasks,
-                exposures=continual_exposures,
-                seed=seed + 74_700,
-                device=device,
-            )
+            with autocast_ctx:
+                continual = _continual_forgetting_metric(
+                    model,
+                    sequence_len=sequence_len,
+                    vocab_size=vocab_size,
+                    task_count=continual_tasks,
+                    exposures=continual_exposures,
+                    seed=seed + 74_700,
+                    device=device,
+                )
         except Exception as e:
             continual = ContinualMetricSummary(None, {}, [], "error", repr(e))
             console.print(f"[yellow][continual] eval skipped:[/yellow] {e}")
