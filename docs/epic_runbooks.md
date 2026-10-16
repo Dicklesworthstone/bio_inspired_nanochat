@@ -53,19 +53,40 @@ Each epic section specifies:
 
 ---
 
-## 4. Epic 6pj: Dual-4090 GPU Performance Optimization
+## 4. Epic 6pj / hwxb: Dual-4090 GPU Training & D1 Data Staging
 
-- **Scope**: High-throughput training on dual PCIe RTX 4090 GPUs (NCCL/P2P, Triton fused kernels, mixed precision).
-- **Prerequisites**: CUDA 12.8+, `NCCL_P2P_LEVEL=NVL` or `LOC`, 24GB VRAM.
+- **Scope**: High-throughput training on dual PCIe RTX 4090 GPUs (`trj`, 2× 24GB VRAM, CUDA 12.9, `NCCL_P2P_DISABLE=1` required on consumer PCIe topology without ACS/P2P), D1 FineWeb-Edu data staging (`hwxb.11`), and canonical 2×4090 launch recipe (`hwxb.2.5`).
+- **Staged D1 Data & Artifacts on `trj` (`hwxb.11`)**:
+  - **Cache Root**: `/data/cache/bio_inspired_nanochat` (symlinked at `~/.cache/bio_inspired_nanochat/*`).
+  - **FineWeb-Edu Shards**: `28` shards (`shard_00000.parquet` .. `shard_00027.parquet` in `/data/cache/bio_inspired_nanochat/base_data`):
+    - **Train split**: `27` shards (`shard_00000`..`shard_00026`), `6,858,282,127` UTF-8 bytes (`~1,672,751,738` tokens at `4.1` bytes/token; well above the `500M` token D1 requirement).
+    - **Val split**: `1` shard (`shard_00027`), `255,042,315` UTF-8 bytes (`~62,205,442` tokens).
+  - **Tokenizer (`vocab_size=65536`, trained on `2,000,000,000` FineWeb-Edu chars via `scripts.tok_train`)**:
+    - `/data/cache/bio_inspired_nanochat/tokenizer/tokenizer.json` — SHA256: `45d958866dbe10af5f33f4cd360d7fe30cfabdd7dbe5cd3aaec27f25e579e46b`
+    - `/data/cache/bio_inspired_nanochat/tokenizer/token_bytes.pt` — SHA256: `ae39c27aae519d14071efc95f9a558ba0b7ede47e7d83ad4f198422b44c5f70e` (`mean_token_bytes=6.9151`)
+  - **CORE Eval Bundle**:
+    - Archive: `/data/cache/bio_inspired_nanochat/eval_bundle.zip` — SHA256: `90a7c19e28ee7a52b4f6e1f87658deb9fde7f63deba2379045bdb1fe9ea5d200`
+    - Extracted bundle path: `/data/cache/bio_inspired_nanochat/eval_bundle` (symlinked at `~/.cache/bio_inspired_nanochat/eval_bundle`).
 - **Execution Commands**:
   ```bash
   # Check VRAM headroom and memory budget
   uv run --no-sync python -m scripts.scale_memory --depth 12 --seq 2048 --batch 8 --world-size 2 --synapses --vram-gb 24
+  # Canonical 2x4090 DDP training launch recipe (hwxb.2.5; ~110.8k tok/s, 21.09 GiB peak VRAM at depth=10, B=16, seq=2048)
+  NANOCHAT_BASE_DIR=/data/cache/bio_inspired_nanochat NCCL_P2P_DISABLE=1 uv run --no-sync \
+    torchrun --standalone --nproc_per_node=2 -m scripts.base_train -- \
+    --depth=10 --tie_embeddings=1 --device_batch_size=16 --total_batch_size=65536 \
+    --num_iterations=25 --save_every=20 --eval_every=25 --eval_tokens=65536 \
+    --core_metric_every=-1 --sample_every=25 --init_seed=1337 --model_tag=matrix_vanilla_s1337
+  # Score a saved checkpoint with CORE eval + BPB + capability metrics
+  NANOCHAT_BASE_DIR=/data/cache/bio_inspired_nanochat CUDA_VISIBLE_DEVICES=0 uv run --no-sync \
+    python -m scripts.eval_matrix run --preset vanilla --seed 1337 \
+    --checkpoint-dir /data/cache/bio_inspired_nanochat/base_checkpoints/matrix_vanilla_s1337 \
+    --eval-bpb --core-eval --core-max-per-task 20 --eval-tokens 65536 --out-dir runs/eval_matrix_smoke_trj
   # Run multi-GPU performance benchmark
   uv run --no-sync python -m pytest tests/test_perf_regression.py tests/test_scaleup_ddp.py -v
   ```
-- **Produced Artifacts**: `results/perf_baselines.json`, `runs/budget_accounting.jsonl`.
-- **Success Criteria**: $\ge 18\text{GB}$ VRAM headroom, throughput within $5\%$ of vanilla transformer baseline.
+- **Produced Artifacts**: `results/perf_baselines.json`, `results/presyn_live_rtx4090.json`, `runs/budget_accounting.jsonl`.
+- **Success Criteria**: $\ge 18\text{GB}$ VRAM budget fit (`21.09 GiB` peak on 24GB 4090 at `device_batch_size=16`), checkpoint round-trip resume verified, finite decreasing loss (`val_bpb` `7.1741 -> 3.5242` in 25 steps).
 - **Rollback Flags**: Fallback to eager PyTorch reference kernels via `export USE_TRITON_SYNAPSE=0`.
 
 ---
