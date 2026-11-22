@@ -1,0 +1,10 @@
+# recorded 2026-11-22T02:30:46Z; HEAD of each .lake/packages clone before reclaim (restore: git clone + checkout)
+Cli 34d2efffcb6dc8d5f3537cf6a7f88bfaa999ec49 https://github.com/leanprover/lean4-cli
+LeanSearchClient 9d39f9bb0c30aa2f6200808805ff16e6ce950890 https://github.com/leanprover-community/LeanSearchClient
+Qq 6d26f8bb4b2bb78f929ad160feac508866821316 https://github.com/leanprover-community/quote4
+aesop 4a174c490d8707121c4a9290800489f105d85e07 https://github.com/leanprover-community/aesop
+batteries 66e469188fe07963e5cf666c7d4433f45b8131c5 https://github.com/leanprover-community/batteries
+importGraph b3cc36c295aa5e3e3c0197b09a6556298e710447 https://github.com/leanprover-community/import-graph
+mathlib 84f896adf3907cf0305482a9a583a0945d67a9a8 https://github.com/leanprover-community/mathlib4.git
+plausible c2d7840c65673533e15b499f25beecdc6227f7d8 https://github.com/leanprover-community/plausible
+proofwidgets 17137fad38a2cc782ff00b323a13c3a991d085ab https://github.com/leanprover-community/ProofWidgets4
