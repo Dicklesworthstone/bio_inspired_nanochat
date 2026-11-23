@@ -576,19 +576,19 @@ supervised starting policies on the official GSM8K training split
 and tests whether the correct answers depend on the question.
 [Cobbe et al., 2021](https://arxiv.org/abs/2110.14168)
 
-- [ ] Load the same archived two-layer, width-192 FineWeb checkpoint
+- [x] Load the same archived two-layer, width-192 FineWeb checkpoint
   for both arms and verify its weights and tokenizer. One arm learns
   worked solutions with the production token masks for calculator
   outputs. The other learns just the official final answer in
   `#### number` format. Keep the question text and start state matched.
-- [ ] Use official revision `740312add88f781978c0658806c59bc2815b9866`.
+- [x] Use official revision `740312add88f781978c0658806c59bc2815b9866`.
   Take selection questions from shuffled training indices [128, 192)
   and confirmation questions from [192, 256). Train on indices
   [256, 7473), excluding question text duplicates of either panel
   and worked solutions longer than 512 rendered tokens. Apply the
   same exclusions to both arms. Retain the official test split
   for later evaluation.
-- [ ] Train for 384 updates with 32 questions per update, microbatches
+- [x] Train for 384 updates with 32 questions per update, microbatches
   of eight and fixed shuffled epochs. Use AdamW with peak learning
   rate 0.001, 16 warmup steps, cosine decay to 0.0001, weight decay
   0.0001, gradient norm cap 1 and BF16 autocast. Supervise assistant
@@ -596,7 +596,7 @@ and tests whether the correct answers depend on the question.
   calculator output tokens. Disable ordinary synaptic writes in
   both arms. Save final checkpoints with the production writer
   and reload using the production reader.
-- [ ] Sample four unforced completions per question with the production
+- [x] Sample four unforced completions per question with the production
   engine, temperature 1, top-k 50 and a 160-token cap. On each panel,
   require at least 24 correct completions out of 256, at least 16 mixed
   reward groups out of 64, and correct answers of at least four distinct
@@ -609,7 +609,7 @@ and tests whether the correct answers depend on the question.
   descriptive check, also score 4,095 whole-panel label shuffles
   from seed 620033 plus the identity assignment. These shuffles
   preserve the full answer histogram.
-- [ ] Independently reconstruct every reward and qualification
+- [x] Independently reconstruct every reward and qualification
   decision. If any arm supplies mixed reward groups, replay an actual
   group through the exact final-matrix score and compare with full
   masked autograd. Keep task qualification and gradient parity as
@@ -618,13 +618,76 @@ and tests whether the correct answers depend on the question.
 
 ### Compatibility check for a deeper starting model
 
-- [ ] Stage the public depth-20 NanoChat SFT artifact at revision
+- [x] Stage the public depth-20 NanoChat SFT artifact at revision
   `53b7aa58db3e1c512d121a53f747f9649c15bc55`. Verify the model and
   tokenizer hashes, use the repository's restricted readers, and
   check its token mapping against the local tokenizer.
-- [ ] On fixed token inputs, add an initially zero synaptic residual
+- [x] On fixed token inputs, add an initially zero synaptic residual
   to the final MLP projection of the loaded vanilla model. Compare
   logits and the final-matrix score gradient with the original
   projection. Use this as a compatibility check. The public starting
   model's training data would need a separate validation fold.
   [Public checkpoint and model card](https://huggingface.co/gaviego/nanochat/tree/53b7aa58db3e1c512d121a53f747f9649c15bc55)
+
+### Observed checkpoint qualification
+
+The independent data audit matched all 7,473 training rows to the
+original OpenAI JSONL and rebuilt the shuffle. All 7,217 eligible
+training questions fit the filter. Neither held-out panel had a
+question in training with the same text after digit normalization.
+Both arms saw 12,288 question exposures. Answer-only training
+supervised 66,041 tokens and worked-solution training supervised
+1,241,316. Both final checkpoints passed GPU and local CPU reload
+with identical weights and tied embeddings. In the masked-loss
+fixture, both objectives matched exactly and the worked-solution
+gradients agreed within 5.97 × 10⁻⁸ across 49 tensors. Its 15 forced
+calculator tokens were excluded.
+
+| Arm | Held-out panel | Parseable / 256 | Correct / 256 | Mixed groups / 64 | Rotated-label matches | Constant-answer matches | Paired p |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Answer only | Selection | 256 | 2 | 2 | 1 | 8 | 0.500 |
+| Answer only | Confirmation | 255 | 2 | 2 | 5 | 4 | 0.875 |
+| Worked solution | Selection | 215 | 1 | 1 | 0 | 8 | 0.500 |
+| Worked solution | Confirmation | 210 | 1 | 1 | 2 | 4 | 0.875 |
+
+Neither checkpoint qualified. Every panel scored below the
+constant-answer control. The histogram-preserving label shuffles
+gave p-values from 0.751 to 0.945. The answer-only policy learned to
+emit the answer format, and both policies supplied occasional real
+mixed rewards. The official test split remains reserved.
+
+On the first mixed confirmation group from each arm, the cached
+score matched masked autograd within 1.71 × 10⁻¹³ across 17 scored
+tokens for answer-only and 1.94 × 10⁻¹² across 197 for worked
+solutions. Both groups had rewards `[0, 1, 0, 0]`. The longer group
+needed the normalization correction at 193 of its 194 scored
+prefixes. The replay used the trainer's untruncated softmax
+objective in FP64 and the samples recorded from the BF16 top-k
+engine. The identical macOS CPU replay finished first for the
+longer group, and the redundant Linux attempt was stopped.
+
+### Deeper checkpoint compatibility
+
+The public depth-20 SFT checkpoint loaded through the native
+weights-only reader. Its 65,527 BPE ranks, nine special tokens and
+tokenizer pattern matched the local mapping exactly. On two fixed
+32-token contexts, the zero-initialized final projection residual
+preserved every measured logit and the final-matrix score gradient
+exactly in FP32 and BF16 on an RTX 4090. The first probe changed the
+required rotary-buffer dtype when converting the weights to FP32.
+The rerun retained the checkpoint's native BF16 rotary tables.
+
+The verified weights are staged for a larger-model follow-up.
+Validation on prompts independent of its training still needs to
+establish mixed rewards and performance above the label controls.
+[Pinned public weights](https://huggingface.co/gaviego/nanochat/tree/53b7aa58db3e1c512d121a53f747f9649c15bc55)
+
+Both checkpoint qualification and the full RL study stay open
+under `hy8.3.3` and `hy8.3`. To replay the pilot, unpack the
+`sources` entries to their named files. The gzip archive contains
+the `train` and `eval` objects for each arm. Write them as
+`answer-train.json`, `answer-evaluation.json`,
+`rationale-train.json`, and `rationale-evaluation.json` under a
+fresh scratch directory. Pass that directory and a result path to
+`audit_gsm_sft.py` in a DSR check.
+[Qualification, checkpoint locations and DSR receipts](../../results/gsm8k_sft_2026-11-23.json) · [Training and scoring traces](../../results/gsm8k_sft_2026-11-23.json.gz)

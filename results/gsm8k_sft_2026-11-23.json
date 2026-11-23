@@ -1,0 +1,843 @@
+{
+  "checkpoints": {
+    "local": "/Volumes/SANDISK_SSD/scratch/bio-gsm8k-sft.WISwYy0G",
+    "portability_checks": {
+      "answer": {
+        "checkpoint_file_sha256": "e508284772a4490895a6fa4a54c0c56e5728debb1955c852d924870e81a3e2fa",
+        "checkpoint_meta_sha256": "b55efb9b9b9232858dbc66202cafe114decfd4c467f26e3baa436699f72aaa2e",
+        "checkpoint_state_sha256": "36992712ceef73c8af34f668424efd631108a570068a395ac38fe0b10b3aacd0",
+        "vocab_size": 65536
+      },
+      "rationale": {
+        "checkpoint_file_sha256": "cf118ef31034486c6d81807f95e32740b25a373d53c41909078c9fcd951b64cd",
+        "checkpoint_meta_sha256": "fdba7cc4c8419d0d071ce07bed82cab932956b973442137874ee686cd9a29d6c",
+        "checkpoint_state_sha256": "4b2df6fb2e4c7bbc3e67d10b2d88b4bbf958b1a7b02200dd8d0fac08bcec52e8",
+        "vocab_size": 65536
+      }
+    },
+    "remote": "trj:/data/projects/bio-gsm-sft.10jRLTXN/cache",
+    "step": 384
+  },
+  "dsr": {
+    "gsm-sft-published-trace-audit": {
+      "run_id": "9FC9B4A1-52E4-44CA-960A-365BF10506B5",
+      "status": "success",
+      "exit_code": 0,
+      "source_before": "860ee0626d90da4995292a96a9d9fbc3471f1dca|51f782f0b5e16482c8b801351b28973949caf401654a55dc17b3a3babb73991d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "860ee0626d90da4995292a96a9d9fbc3471f1dca|51f782f0b5e16482c8b801351b28973949caf401654a55dc17b3a3babb73991d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "config_sha256": "d27f356f158cbf6186c798f202942f04e38acfb485dfe2dd87803ba85bbff74c",
+      "checks": [
+        {
+          "status": "passed",
+          "exit_code": 0,
+          "log_sha256": "24d7c5d09e27f39ec0b8cf3239aac5ab7352b3d494c3342c2c512544ac0fb494",
+          "duration_ms": 1135
+        }
+      ],
+      "raw_sha256": "eb5b23b9c3e7ed283d5316cc001466991694586ad6c81451cce5cb3234bcb684"
+    },
+    "gsm-sft-rationale-real-score": {
+      "run_id": "26929673-c394-488d-b95e-37a84d53b84c",
+      "status": "failure",
+      "exit_code": 1,
+      "source_before": "860ee0626d90da4995292a96a9d9fbc3471f1dca|51f782f0b5e16482c8b801351b28973949caf401654a55dc17b3a3babb73991d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "860ee0626d90da4995292a96a9d9fbc3471f1dca|51f782f0b5e16482c8b801351b28973949caf401654a55dc17b3a3babb73991d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "config_sha256": "65fccc852ffff90b3d4e8534121e87d20da0b70e4c282e3bcdf105856b312d19",
+      "checks": [
+        {
+          "status": "failed",
+          "exit_code": 143,
+          "log_sha256": "d80f5f3d154198abd62f4f8a9e7893bce0fe5e06a510beefc14eafb501ed731a",
+          "duration_ms": 410783
+        }
+      ],
+      "raw_sha256": "45c81a0f7866d827824a5f2e99e7bcf9df180aaed0c3a4d13859afce6edaeb7d"
+    },
+    "gsm-sft-answer": {
+      "checks": [
+        {
+          "duration_ms": 708562,
+          "exit_code": 0,
+          "log_sha256": "f1490f30c3d75d7d154fdc5944ebf258e4c2b581528c8b7ed455d5eae6891245",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "1fcad9d70c9c8cc4476364505a89f8ad77a3d8de84e492a711a48c53e7822a26",
+      "exit_code": 0,
+      "raw_sha256": "83872497c52c0982e2ddcd4d5d8ae5cdae02c0bf27b7cb55e9c143bf23c3ea83",
+      "run_id": "16884ee0-d48c-4d96-aba9-09c3aaff476e",
+      "source_after": "860ee0626d90da4995292a96a9d9fbc3471f1dca|51f782f0b5e16482c8b801351b28973949caf401654a55dc17b3a3babb73991d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "860ee0626d90da4995292a96a9d9fbc3471f1dca|51f782f0b5e16482c8b801351b28973949caf401654a55dc17b3a3babb73991d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    },
+    "gsm-sft-answer-real-score": {
+      "checks": [
+        {
+          "duration_ms": 76950,
+          "exit_code": 0,
+          "log_sha256": "f83d649474532c3509f1734fa32bc2d878224f79b83385a538b8ca90b6b37b03",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "8ace9565b8ff1573d09f2f5d587722073aabd2a5e7c07d27aa15dabaea19c211",
+      "exit_code": 0,
+      "raw_sha256": "c9a4c52614deb780f33dcc600fca2c28f4de267087f6a2e6fab4fca07f3053e5",
+      "run_id": "fc30879c-ff07-40ab-b6d9-1479bd55ecc1",
+      "source_after": "860ee0626d90da4995292a96a9d9fbc3471f1dca|51f782f0b5e16482c8b801351b28973949caf401654a55dc17b3a3babb73991d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "860ee0626d90da4995292a96a9d9fbc3471f1dca|51f782f0b5e16482c8b801351b28973949caf401654a55dc17b3a3babb73991d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    },
+    "gsm-sft-audit": {
+      "checks": [
+        {
+          "duration_ms": 1270,
+          "exit_code": 0,
+          "log_sha256": "32314e9475ab80886e3c6ee42d01b63702d7342bf1d639d88b071511bd03c2f7",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "87f1593321781b767a93e16ed234e16fe391090752ba912dc0df2424304161ab",
+      "exit_code": 0,
+      "raw_sha256": "96c567444989d1df64d2a7b54a72255505859ecf7fbbaabe6bef19979e50f4fe",
+      "run_id": "1B320F3C-0D93-4C52-AF04-B13C5288D6BE",
+      "source_after": "860ee0626d90da4995292a96a9d9fbc3471f1dca|51f782f0b5e16482c8b801351b28973949caf401654a55dc17b3a3babb73991d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "860ee0626d90da4995292a96a9d9fbc3471f1dca|51f782f0b5e16482c8b801351b28973949caf401654a55dc17b3a3babb73991d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    },
+    "gsm-sft-independent-folds": {
+      "checks": [
+        {
+          "duration_ms": 53605,
+          "exit_code": 0,
+          "log_sha256": "ba784e31db7a973fbbec5dd51c2d6bd1b688afdb06e7717a144e8bb1679d9658",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "12fd258c75f4997f260eb437bae33602040236796a82531cfa0e8d22d297933b",
+      "exit_code": 0,
+      "raw_sha256": "be026ff3784c86caf0688459a7051a48d3847af447d723a04cc1b73b35b3b96b",
+      "run_id": "9c490301-8a5f-4fe9-8781-5bcc91ddf98a",
+      "source_after": "860ee0626d90da4995292a96a9d9fbc3471f1dca|51f782f0b5e16482c8b801351b28973949caf401654a55dc17b3a3babb73991d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "860ee0626d90da4995292a96a9d9fbc3471f1dca|51f782f0b5e16482c8b801351b28973949caf401654a55dc17b3a3babb73991d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    },
+    "gsm-sft-mask-parity": {
+      "checks": [
+        {
+          "duration_ms": 143517,
+          "exit_code": 0,
+          "log_sha256": "f4a08a4e7aa899bf4063f76bc1bb79da259498ce84f03942974016f89be564cb",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "16f80451b316e9206a7a976b3f34202234bc2872a9f729e9803db1c1c71bdb92",
+      "exit_code": 0,
+      "raw_sha256": "b70c8dd612d6506f57936c69f76e22384c0eca5ee1d0a673872917f1684f92a1",
+      "run_id": "163b9f6d-3b62-4983-9644-1b4a53d8ed47",
+      "source_after": "860ee0626d90da4995292a96a9d9fbc3471f1dca|51f782f0b5e16482c8b801351b28973949caf401654a55dc17b3a3babb73991d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "860ee0626d90da4995292a96a9d9fbc3471f1dca|51f782f0b5e16482c8b801351b28973949caf401654a55dc17b3a3babb73991d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    },
+    "gsm-sft-portable-checkpoints": {
+      "checks": [
+        {
+          "duration_ms": 9764,
+          "exit_code": 0,
+          "log_sha256": "7d640292e3acf0a02c693cf110f1552a65e33712c71a35fbb8ad8f2fdf3eb041",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "53ab917ccc96ceb9d9da9c1da199cdca8258989b9a9d6e2426c5d8f7ae4bf3e4",
+      "exit_code": 0,
+      "raw_sha256": "0f81624b68450cd4cc552b331b62e7bb8816f12ed114d2c32c01d7c738794471",
+      "run_id": "F11EE9EF-3522-4AE5-96DB-C22396E2F75A",
+      "source_after": "860ee0626d90da4995292a96a9d9fbc3471f1dca|51f782f0b5e16482c8b801351b28973949caf401654a55dc17b3a3babb73991d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "860ee0626d90da4995292a96a9d9fbc3471f1dca|51f782f0b5e16482c8b801351b28973949caf401654a55dc17b3a3babb73991d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    },
+    "gsm-sft-public-adapter": {
+      "checks": [
+        {
+          "duration_ms": 109529,
+          "exit_code": 1,
+          "log_sha256": "37c8d4be028ccbe7a5e2a33b9f2f8ae290d4345eea2254023def03d407d1fdbf",
+          "status": "failed"
+        }
+      ],
+      "config_sha256": "23b02dcabc0eb18f999c16cea130a5ddce65caa3974b9552dadb4b6e13d7d353",
+      "exit_code": 1,
+      "raw_sha256": "c5497869152129ac8276fefef16854938f97b9628a954c4d894c21deba7a63fe",
+      "run_id": "fe453ff3-13cc-4dfa-9d26-4ffcd53dac7c",
+      "source_after": "860ee0626d90da4995292a96a9d9fbc3471f1dca|51f782f0b5e16482c8b801351b28973949caf401654a55dc17b3a3babb73991d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "860ee0626d90da4995292a96a9d9fbc3471f1dca|51f782f0b5e16482c8b801351b28973949caf401654a55dc17b3a3babb73991d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "failure"
+    },
+    "gsm-sft-public-adapter-rotary": {
+      "checks": [
+        {
+          "duration_ms": 133115,
+          "exit_code": 0,
+          "log_sha256": "fcf8283bae5d9e4883c9f792757eda144982279e9cdbb2ae4aa0b2d4b241d2d3",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "6c31bc85c569eb9726488bd5afebd880c53f85cbd110a4779b16186f91460c20",
+      "exit_code": 0,
+      "raw_sha256": "37f1182f28fa23f0be5ad8800eb51784ca75438465959155457d5936a19db592",
+      "run_id": "643e0c71-d134-40e2-9f76-127320388444",
+      "source_after": "860ee0626d90da4995292a96a9d9fbc3471f1dca|51f782f0b5e16482c8b801351b28973949caf401654a55dc17b3a3babb73991d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "860ee0626d90da4995292a96a9d9fbc3471f1dca|51f782f0b5e16482c8b801351b28973949caf401654a55dc17b3a3babb73991d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    },
+    "gsm-sft-rationale": {
+      "checks": [
+        {
+          "duration_ms": 1693321,
+          "exit_code": 0,
+          "log_sha256": "8712547115b33577f6cf938839861ac7fdb48995d9628e82392fa69cecd9f713",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "342dfc191024fc3b2426a7fd544f53eb1501ba83def8a5a1a0bb7f3def646f3b",
+      "exit_code": 0,
+      "raw_sha256": "1f7d9b45f1efd359ff32810d72050325120692f81289297e77db57b61079fe4f",
+      "run_id": "06867f63-b755-499c-b190-53ce4ace8264",
+      "source_after": "860ee0626d90da4995292a96a9d9fbc3471f1dca|51f782f0b5e16482c8b801351b28973949caf401654a55dc17b3a3babb73991d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "860ee0626d90da4995292a96a9d9fbc3471f1dca|51f782f0b5e16482c8b801351b28973949caf401654a55dc17b3a3babb73991d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    },
+    "gsm-sft-rationale-local-real-score": {
+      "checks": [
+        {
+          "duration_ms": 12579,
+          "exit_code": 0,
+          "log_sha256": "87752754b93515f7cbe67e1aa8c30a01ad80bb080b43555ff24ce46abddfa1e0",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "b18f40a8ae77c47c10358f6863157ffce5661d672b17619957447642bc87b1bc",
+      "exit_code": 0,
+      "raw_sha256": "c2a560bf538259c4d967e48c7304b1cd763edc79d43d1f3bf343074d2bc1456a",
+      "run_id": "34D6AE39-FFCF-4762-99C8-F9E280FAFF82",
+      "source_after": "860ee0626d90da4995292a96a9d9fbc3471f1dca|51f782f0b5e16482c8b801351b28973949caf401654a55dc17b3a3babb73991d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "860ee0626d90da4995292a96a9d9fbc3471f1dca|51f782f0b5e16482c8b801351b28973949caf401654a55dc17b3a3babb73991d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    }
+  },
+  "implementation_basis": "860ee0626d90da4995292a96a9d9fbc3471f1dca",
+  "official_fold_audit": {
+    "exclusions": {
+      "duplicate": [],
+      "too_long": []
+    },
+    "indices_sha256": "4be8c759bc4eb581caa5466a86c28969c378703f6da47f2f2bb0948f016c3d6b",
+    "mode": "4",
+    "mode_count": 204,
+    "panels": {
+      "confirmation": {
+        "digit_normalized_exact_question_overlap": 0,
+        "distinct_labels": 45,
+        "mode_hits_if_always_emitted": 4,
+        "source_rows_sha256": "0aa5832cec03af734497a0a485d8554af635e065d10d79f7d04d996bf29ffe90"
+      },
+      "selection": {
+        "digit_normalized_exact_question_overlap": 0,
+        "distinct_labels": 49,
+        "mode_hits_if_always_emitted": 8,
+        "source_rows_sha256": "89067360f02e17a6b31feb564c0fcdc3c8da7d446916b4cd5faa96cd5ab2bda5"
+      }
+    },
+    "source_rows_verified": 7473,
+    "training": 7217
+  },
+  "optional_linux_probe": {
+    "check_log_sha256": "d80f5f3d154198abd62f4f8a9e7893bce0fe5e06a510beefc14eafb501ed731a",
+    "disposition": "Stopped the redundant Linux CPU check after the identical local CPU check passed.",
+    "exit_code": 143
+  },
+  "public_checkpoint_adapter": {
+    "artifact_revision": "53b7aa58db3e1c512d121a53f747f9649c15bc55",
+    "contexts": [
+      2,
+      32
+    ],
+    "device": "NVIDIA GeForce RTX 4090",
+    "local_token_map_identical": {
+      "bpe_ranks": 65527,
+      "special_tokens": 9
+    },
+    "model_sha256": "cd0762cbae420c25b47033ad0816ff1d5a61910a7e2223dff156945225e105b6",
+    "numeric_checks": {
+      "bf16": {
+        "gradient_max_difference": 0.0,
+        "gradient_relative_error": 0.0,
+        "logits_identical": true
+      },
+      "fp32": {
+        "gradient_max_difference": 0.0,
+        "gradient_relative_error": 0.0,
+        "logits_identical": true
+      }
+    },
+    "setup_and_recovery": {
+      "direct_download_bytes_before_timeout": 554621907,
+      "initial_probe": "Converting the whole module to FP32 converted its required BF16 rotary buffers. The checked probe retains the original rotary tables.",
+      "reassembly": "536870912 prefix bytes plus eight verified HTTP 206 ranges; the complete SHA-256 matched the pinned manifest."
+    },
+    "staged_location": "trj:/data/projects/bio-gsm-sft.10jRLTXN/public-complete",
+    "stored_step": 700,
+    "strict_native_load": true,
+    "tokenizer_sha256": "4c060565a46fe83b49d99005acba796f2a630daa7970eb49f7513b89f9fb40e0"
+  },
+  "qualification": {
+    "arms": {
+      "answer": {
+        "checkpoint": {
+          "arm": "answer",
+          "checkpoint_file_sha256": "e508284772a4490895a6fa4a54c0c56e5728debb1955c852d924870e81a3e2fa",
+          "checkpoint_meta_sha256": "b55efb9b9b9232858dbc66202cafe114decfd4c467f26e3baa436699f72aaa2e",
+          "checkpoint_state_sha256": "36992712ceef73c8af34f668424efd631108a570068a395ac38fe0b10b3aacd0",
+          "exclusions": {
+            "duplicate": [],
+            "too_long": []
+          },
+          "initial_state_sha256": "c4a78aad18e9ab14db9ba3da434ef89b4d55c20be7ef5d3e15d837c44ed80e0d",
+          "mode_answer": "4",
+          "mode_count_in_train": 204,
+          "train_examples": 7217
+        },
+        "examples_seen": 12288,
+        "final_32_update_mean_loss": 1.0380138475447893,
+        "first_32_update_mean_loss": 6.545105256140232,
+        "panels": {
+          "confirmation": {
+            "correct": 2,
+            "denominator": 32,
+            "distinct_correct": 2,
+            "gates": {
+              "at_least_16_mixed": false,
+              "at_least_24_correct": false,
+              "at_least_eight_more_than_rotated": false,
+              "at_least_four_correct_values": false,
+              "beats_constant_mode": false,
+              "paired_p_no_greater_than_0_025": false
+            },
+            "individual_deltas": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              -2,
+              0,
+              0,
+              0,
+              0,
+              0,
+              -1,
+              0,
+              -2,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0
+            ],
+            "length_cap_hits": 0,
+            "median_completion_tokens": 4.0,
+            "mixed_groups": 2,
+            "mode_matches": 4,
+            "p": 0.875,
+            "parsed": 255,
+            "pass": false,
+            "questions": 64,
+            "rotated_matches": 5,
+            "scored_completions": 256,
+            "tail": 28,
+            "whole_label_shuffle": {
+              "denominator": 4096,
+              "p": 0.86279296875,
+              "tail": 3534
+            }
+          },
+          "selection": {
+            "correct": 2,
+            "denominator": 8,
+            "distinct_correct": 2,
+            "gates": {
+              "at_least_16_mixed": false,
+              "at_least_24_correct": false,
+              "at_least_eight_more_than_rotated": false,
+              "at_least_four_correct_values": false,
+              "beats_constant_mode": false,
+              "paired_p_no_greater_than_0_025": false
+            },
+            "individual_deltas": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              -1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "length_cap_hits": 0,
+            "median_completion_tokens": 4.0,
+            "mixed_groups": 2,
+            "mode_matches": 8,
+            "p": 0.5,
+            "parsed": 256,
+            "pass": false,
+            "questions": 64,
+            "rotated_matches": 1,
+            "scored_completions": 256,
+            "tail": 4,
+            "whole_label_shuffle": {
+              "denominator": 4096,
+              "p": 0.751220703125,
+              "tail": 3077
+            }
+          }
+        },
+        "qualified": false,
+        "targets_seen": 66041
+      },
+      "rationale": {
+        "checkpoint": {
+          "arm": "rationale",
+          "checkpoint_file_sha256": "cf118ef31034486c6d81807f95e32740b25a373d53c41909078c9fcd951b64cd",
+          "checkpoint_meta_sha256": "fdba7cc4c8419d0d071ce07bed82cab932956b973442137874ee686cd9a29d6c",
+          "checkpoint_state_sha256": "4b2df6fb2e4c7bbc3e67d10b2d88b4bbf958b1a7b02200dd8d0fac08bcec52e8",
+          "exclusions": {
+            "duplicate": [],
+            "too_long": []
+          },
+          "initial_state_sha256": "c4a78aad18e9ab14db9ba3da434ef89b4d55c20be7ef5d3e15d837c44ed80e0d",
+          "mode_answer": "4",
+          "mode_count_in_train": 204,
+          "train_examples": 7217
+        },
+        "examples_seen": 12288,
+        "final_32_update_mean_loss": 2.976668454706669,
+        "first_32_update_mean_loss": 6.808017089962959,
+        "panels": {
+          "confirmation": {
+            "correct": 1,
+            "denominator": 8,
+            "distinct_correct": 1,
+            "gates": {
+              "at_least_16_mixed": false,
+              "at_least_24_correct": false,
+              "at_least_eight_more_than_rotated": false,
+              "at_least_four_correct_values": false,
+              "beats_constant_mode": false,
+              "paired_p_no_greater_than_0_025": false
+            },
+            "individual_deltas": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              -1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              -1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "length_cap_hits": 34,
+            "median_completion_tokens": 86.5,
+            "mixed_groups": 1,
+            "mode_matches": 4,
+            "p": 0.875,
+            "parsed": 210,
+            "pass": false,
+            "questions": 64,
+            "rotated_matches": 2,
+            "scored_completions": 256,
+            "tail": 7,
+            "whole_label_shuffle": {
+              "denominator": 4096,
+              "p": 0.944580078125,
+              "tail": 3869
+            }
+          },
+          "selection": {
+            "correct": 1,
+            "denominator": 2,
+            "distinct_correct": 1,
+            "gates": {
+              "at_least_16_mixed": false,
+              "at_least_24_correct": false,
+              "at_least_eight_more_than_rotated": false,
+              "at_least_four_correct_values": false,
+              "beats_constant_mode": false,
+              "paired_p_no_greater_than_0_025": false
+            },
+            "individual_deltas": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "length_cap_hits": 19,
+            "median_completion_tokens": 83.0,
+            "mixed_groups": 1,
+            "mode_matches": 8,
+            "p": 0.5,
+            "parsed": 215,
+            "pass": false,
+            "questions": 64,
+            "rotated_matches": 0,
+            "scored_completions": 256,
+            "tail": 1,
+            "whole_label_shuffle": {
+              "denominator": 4096,
+              "p": 0.88134765625,
+              "tail": 3610
+            }
+          }
+        },
+        "qualified": false,
+        "targets_seen": 1241316
+      }
+    },
+    "audited_completions": 1024,
+    "audited_training_updates": 768,
+    "preferred_qualified": null,
+    "provenance": {
+      "dataset_sha256": "ea82612ea9582142387730c793eb67d3b12849002bc0b7fa6f8efafa7351419d",
+      "revision": "740312add88f781978c0658806c59bc2815b9866",
+      "start_file_sha256": "8f34814a8c9b049681976be55a1fb795ef2a067928e1e149f49cd8040ebf0e57",
+      "start_meta_sha256": "18b613bc7cc60941e6dbdb4cc9d4b61ca6715de433af6d28db7e3bc95eb2a781",
+      "tokenizer_sha256": "45d958866dbe10af5f33f4cd360d7fe30cfabdd7dbe5cd3aaec27f25e579e46b"
+    }
+  },
+  "rationale_probe_execution": "The identical local macOS CPU replay passed. The redundant slower Linux CPU attempt was stopped after the local result.",
+  "raw_trace": {
+    "archive_sha256": "ac6db190ae9aa62099ae41fd219b8a43b0e4596a972472cd812c96cbdb8b30bf",
+    "source_files": {
+      "answer": {
+        "evaluation_sha256": "121f252b60a724c63daebb6136eb1457811ba9ab6108e58ccf4fe500a554adb3",
+        "training_sha256": "398e92738a6a912c478e412ed6b6d1216f8c16909eb24451e9828e075cf504d6"
+      },
+      "rationale": {
+        "evaluation_sha256": "7c22535cc68074a775c884be3c2387fb08395e7ee355107e87596890a03e6d35",
+        "training_sha256": "3183cc462eb7efc654e1ab08c3d1b18e9ffa238dedc4fc5ea4ac9b1be6a71cfe"
+      }
+    }
+  },
+  "registered_label_shuffle": "834dcfc",
+  "registered_public_adapter": "a9415fe3b76fb2a10f591f9121a93b7be7964b3f",
+  "registered_training_protocol": "8fed1a69de7a70e5b760a4c2658a94c0c28e8c32",
+  "score_parity": {
+    "answer": {
+      "checkpoint_state_sha256": "36992712ceef73c8af34f668424efd631108a570068a395ac38fe0b10b3aacd0",
+      "gradient_norm": 0.029384172592123198,
+      "index": 219,
+      "maximum_gradient_error": 1.701006956816853e-13,
+      "nonzero_normalizer_prefixes": 1,
+      "panel": "confirmation",
+      "prefixes_with_scored_edges": 5,
+      "probe": "passed",
+      "rollout_rewards": [
+        0,
+        1,
+        0,
+        0
+      ],
+      "sample_hash": "1505f2fad9c0d9f397b41eebb8640015a8b7b07a51712f6727b3564c9944a286",
+      "scored_tokens": 17
+    },
+    "rationale": {
+      "checkpoint_state_sha256": "4b2df6fb2e4c7bbc3e67d10b2d88b4bbf958b1a7b02200dd8d0fac08bcec52e8",
+      "gradient_norm": 0.07727749108696017,
+      "index": 249,
+      "maximum_gradient_error": 1.9326137912223373e-12,
+      "nonzero_normalizer_prefixes": 193,
+      "panel": "confirmation",
+      "prefixes_with_scored_edges": 194,
+      "probe": "passed",
+      "rollout_rewards": [
+        0,
+        1,
+        0,
+        0
+      ],
+      "sample_hash": "16e8b9177829d5711d122cc685e79f30e3f0e4f6a9546c35f2b2a7f09dbc3896",
+      "scored_tokens": 197
+    }
+  },
+  "sources": {
+    "audit_gsm_folds.py": {
+      "content": "\"\"\"Independently rebuild the shuffled GSM8K fold identity from OpenAI's JSONL.\"\"\"\nimport hashlib\nimport json\nimport re\nimport sys\nfrom collections import Counter\nfrom pathlib import Path\n\nimport numpy as np\nimport pyarrow.parquet as pq\nfrom rich.console import Console\n\nfrom bio_inspired_nanochat.tokenizer import get_tokenizer\nfrom tasks.gsm8k import GSM8K\n\n\nANSWER = re.compile(r\"#### (-?[0-9.,]+)\")\nNUMBERS = re.compile(r\"(?<!\\w)[-+]?\\d[\\d,.]*\")\n\n\ndef key(text):\n    return \" \".join(text.casefold().split())\n\n\ndef fingerprint(rows):\n    return hashlib.sha256(json.dumps(rows, sort_keys=True, separators=(\",\", \":\")).encode()).hexdigest()\n\n\ndef answer(row):\n    found = ANSWER.search(row[\"answer\"])\n    assert found is not None\n    return found.group(1).replace(\",\", \"\")\n\n\ndef main(root, original, output):\n    rows = [json.loads(row) for row in original.read_text().splitlines()]\n    parquet = pq.read_table(root / \"main/train-00000-of-00001.parquet\").to_pylist()\n    assert len(rows) == len(parquet) == 7473\n    assert rows == parquet\n    order = np.random.default_rng(42).permutation(len(rows)).tolist()\n    shuffled = [rows[i] for i in order]\n    selection, confirmation = shuffled[128:192], shuffled[192:256]\n    heldout = [key(row[\"question\"]) for row in selection + confirmation]\n    assert len(set(heldout)) == 128\n    task = GSM8K(\"main\", \"train\", data_dir=root)\n    tokenizer = get_tokenizer()\n    exclusions, included = {\"duplicate\": [], \"too_long\": []}, []\n    count = Counter()\n    all_tasks_checked = 0\n    for logical, source in enumerate(shuffled):\n        conversation = task[logical]\n        assert source[\"question\"] == conversation[\"messages\"][0][\"content\"]\n        assert answer(source) == answer({\"answer\": conversation[\"messages\"][1][\"content\"][-1][\"text\"]})\n        all_tasks_checked += 1\n        if logical < 256:\n            continue\n        if key(source[\"question\"]) in heldout:\n            exclusions[\"duplicate\"].append(logical)\n            continue\n        ids, _ = tokenizer.render_conversation(conversation, max_tokens=513)\n        if len(ids) == 513:\n            exclusions[\"too_long\"].append(logical)\n            continue\n        included.append(logical)\n        count[answer(source)] += 1\n    mode = min(count, key=lambda value: (-count[value], value))\n    train_patterns = {NUMBERS.sub(\"<number>\", key(shuffled[i][\"question\"])) for i in included}\n    panels = {}\n    for name, selected in ((\"selection\", selection), (\"confirmation\", confirmation)):\n        labels = [answer(row) for row in selected]\n        panels[name] = {\"source_rows_sha256\": fingerprint(selected), \"distinct_labels\": len(set(labels)),\n                        \"mode_hits_if_always_emitted\": labels.count(mode) * 4,\n                        \"digit_normalized_exact_question_overlap\": sum(\n                            NUMBERS.sub(\"<number>\", key(row[\"question\"])) in train_patterns for row in selected\n                        )}\n    result = {\"source_rows_verified\": all_tasks_checked, \"training\": len(included), \"exclusions\": exclusions,\n              \"indices_sha256\": fingerprint(included), \"mode\": mode, \"mode_count\": count[mode], \"panels\": panels}\n    Console().print(result)\n    output.write_text(json.dumps(result, sort_keys=True, indent=2) + \"\\n\")\n\n\nif __name__ == \"__main__\":\n    main(*(Path(name) for name in sys.argv[1:]))\n",
+      "sha256": "ff6dc8df87b71e6846c8af69e8e4a6609fa0d19f7408e8f548bd7110b4ad2e55"
+    },
+    "audit_gsm_sft.py": {
+      "content": "\"\"\"Independently reconstruct pilot schedules and held-out reward gates.\"\"\"\nimport json\nimport math\nimport random\nimport statistics\nimport sys\nfrom collections import Counter\nfrom pathlib import Path\n\n\ndef read(path):\n    return json.loads(path.read_text())\n\n\ndef sign_flip(differences):\n    histogram = {0: 1}\n    observed = sum(differences)\n    for difference in differences:\n        if difference == 0:\n            continue\n        expanded = Counter()\n        for source, multiplicity in histogram.items():\n            expanded[source - difference] += multiplicity\n            expanded[source + difference] += multiplicity\n        histogram = expanded\n    tail = sum(count for value, count in histogram.items() if value >= observed)\n    total = sum(histogram.values())\n    return tail, total\n\n\ndef shuffled_label_tail(rows, correct):\n    \"\"\"Compare with assignments that preserve the entire answer histogram.\"\"\"\n    rng = random.Random(620033)\n    observed_labels = [row[\"answer\"] for row in rows]\n    output_counts = [Counter(row[\"parsed\"]) for row in rows]\n    tail = 1\n    for _ in range(4095):\n        shuffled = observed_labels.copy()\n        rng.shuffle(shuffled)\n        total = sum(count[label] for count, label in zip(output_counts, shuffled, strict=True))\n        tail += total >= correct\n    return {\"tail\": tail, \"denominator\": 4096, \"p\": tail / 4096}\n\n\ndef assess(rows, mode):\n    assert len(rows) == 64 and len({row[\"index\"] for row in rows}) == 64\n    gold = [row[\"answer\"] for row in rows]\n    rotated = gold[17:] + gold[:17]\n    paired = []\n    correct = wrong = common = mixed = parsed = 0\n    successes = set()\n    lengths = []\n    for row, decoy in zip(rows, rotated, strict=True):\n        answers, sizes = row[\"parsed\"], row[\"completion_lengths\"]\n        assert len(answers) == len(sizes) == 4 and all(0 <= length <= 160 for length in sizes)\n        assert all(value is None or isinstance(value, str) for value in answers)\n        side = [int(value == row[\"answer\"]) for value in answers]\n        other = sum(value == decoy for value in answers)\n        assert side == row[\"rewards\"]\n        hits = sum(side)\n        correct += hits\n        wrong += other\n        common += 4 * (row[\"answer\"] == mode)\n        mixed += 0 < hits < 4\n        parsed += sum(value is not None for value in answers)\n        lengths.extend(sizes)\n        if hits:\n            successes.add(row[\"answer\"])\n        paired.append(hits - other)\n    tail, denominator = sign_flip(paired)\n    gates = {\"at_least_24_correct\": correct >= 24, \"at_least_16_mixed\": mixed >= 16,\n             \"at_least_four_correct_values\": len(successes) >= 4, \"beats_constant_mode\": correct > common,\n             \"at_least_eight_more_than_rotated\": correct - wrong >= 8, \"paired_p_no_greater_than_0_025\": tail * 40 <= denominator}\n    return {\"correct\": correct, \"scored_completions\": 256, \"mixed_groups\": mixed, \"questions\": 64,\n            \"parsed\": parsed, \"distinct_correct\": len(successes), \"rotated_matches\": wrong, \"mode_matches\": common,\n            \"tail\": tail, \"denominator\": denominator, \"p\": tail / denominator, \"individual_deltas\": paired,\n            \"whole_label_shuffle\": shuffled_label_tail(rows, correct),\n            \"median_completion_tokens\": statistics.median(lengths), \"length_cap_hits\": lengths.count(160),\n            \"pass\": all(gates.values()), \"gates\": gates}\n\n\ndef main(root, output):\n    arms, fits = {}, {}\n    for arm in (\"answer\", \"rationale\"):\n        trained = read(root / f\"{arm}-train.json\")\n        fit = trained[\"train\"]\n        assert [row[\"step\"] for row in fit] == list(range(1, 385))\n        original = set(range(256, 7473))\n        seen = set()\n        for indices in trained[\"exclusions\"].values():\n            assert len(indices) == len(set(indices)) and not seen & set(indices) and set(indices) <= original\n            seen.update(indices)\n        original.difference_update(seen)\n        assert trained[\"train_examples\"] == len(original)\n        master = sorted(original)\n        rng = random.Random(120611)\n        reference = master.copy()\n        rng.shuffle(reference)\n        exposures = 0\n        for row in fit:\n            if len(reference) < 32:\n                epoch = master.copy()\n                rng.shuffle(epoch)\n                reference.extend(epoch)\n            assert Counter(row[\"indices\"]) == Counter(reference[:32])\n            reference = reference[32:]\n            exposures += len(row[\"indices\"])\n            assert math.isfinite(row[\"train_loss\"]) and math.isfinite(row[\"gradient_norm\"])\n            assert row[\"tokens\"] >= 32 and 0 < row[\"learning_rate\"] <= .001\n        assert exposures == 12288\n        evaluated = read(root / f\"{arm}-evaluation.json\")\n        assert evaluated[\"checkpoint_state_sha256\"] == trained[\"checkpoint_state_sha256\"]\n        scores = {}\n        for name, start in ((\"selection\", 128), (\"confirmation\", 192)):\n            panel = evaluated[\"panels\"][name]\n            rows = panel[\"rows\"]\n            assert [row[\"index\"] for row in rows] == list(range(start, start + 64))\n            actual_mix = next((row for row in rows if 0 < sum(row[\"rewards\"]) < 4), None)\n            if actual_mix is None:\n                assert panel[\"first_mixed\"] is None\n            else:\n                assert panel[\"first_mixed\"][\"index\"] == actual_mix[\"index\"]\n                assert panel[\"first_mixed\"][\"rewards\"] == actual_mix[\"rewards\"]\n            scores[name] = assess(rows, trained[\"mode_answer\"])\n        meta = {name: value for name, value in trained.items() if name not in (\"train\", \"provenance\")}\n        arms[arm] = {\"checkpoint\": meta, \"panels\": scores, \"qualified\": all(count[\"pass\"] for count in scores.values()),\n                     \"examples_seen\": exposures, \"targets_seen\": sum(row[\"tokens\"] for row in fit),\n                     \"first_32_update_mean_loss\": statistics.mean(row[\"train_loss\"] for row in fit[:32]),\n                     \"final_32_update_mean_loss\": statistics.mean(row[\"train_loss\"] for row in fit[-32:])}\n        fits[arm] = trained\n    first, second = fits[\"answer\"], fits[\"rationale\"]\n    assert first[\"provenance\"] == second[\"provenance\"] and first[\"initial_state_sha256\"] == second[\"initial_state_sha256\"]\n    for key in (\"exclusions\", \"mode_answer\", \"mode_count_in_train\", \"train_examples\"):\n        assert first[key] == second[key]\n    assert all(a[\"indices\"] == b[\"indices\"] for a, b in zip(first[\"train\"], second[\"train\"], strict=True))\n    qualified = sorted((name for name, row in arms.items() if row[\"qualified\"]),\n                       key=lambda name: (-arms[name][\"panels\"][\"selection\"][\"correct\"], name))\n    result = {\"arms\": arms, \"preferred_qualified\": qualified[0] if qualified else None,\n              \"audited_training_updates\": 768, \"audited_completions\": 1024, \"provenance\": first[\"provenance\"]}\n    output.write_text(json.dumps(result, sort_keys=True, indent=2) + \"\\n\")\n\n\nif __name__ == \"__main__\":\n    main(*(Path(value) for value in sys.argv[1:]))\n",
+      "sha256": "a13053c4554830aeb8984f16b1714a3547cabae48772f046b8866a124eadea06"
+    },
+    "gsm_sft.py": {
+      "content": "\"\"\"Train and score two compatible GSM8K starting policies on frozen folds.\"\"\"\nimport hashlib\nimport json\nimport math\nimport random\nimport sys\nimport time\nfrom collections import Counter\nfrom pathlib import Path\n\nimport torch\nfrom rich.console import Console\nfrom torch.nn import functional as F\n\nfrom bio_inspired_nanochat.checkpoint_manager import (\n    build_model, checkpoint_model_config, config_provenance, load_model, save_checkpoint, synaptic_config_to_meta,\n)\nfrom bio_inspired_nanochat.common import get_base_dir, stable_seed_u64\nfrom bio_inspired_nanochat.engine import Engine\nfrom scripts.e2e.trained_hebbian_binding import tensor_digest\nfrom tasks.gsm8k import GSM8K, GSM8K_REVISION, extract_answer\n\n\nUPDATES = 384\nBATCH = 32\nMICROBATCH = 8\nPANELS = {\"selection\": range(128, 192), \"confirmation\": range(192, 256)}\n\n\ndef sha(path):\n    with path.open(\"rb\") as stream:\n        return hashlib.file_digest(stream, \"sha256\").hexdigest()\n\n\ndef question_key(conversation):\n    return \" \".join(conversation[\"messages\"][0][\"content\"].casefold().split())\n\n\ndef gold_answer(conversation):\n    text = conversation[\"messages\"][-1][\"content\"][-1][\"text\"]\n    answer = extract_answer(text)\n    assert answer is not None\n    return answer\n\n\ndef preflight(dataset, directory, starting):\n    old = json.loads(Path(\"results/prediction_credit_2026-11-23.json\").read_text())\n    evidence = old[\"gsm8k_screen\"]\n    cache = Path(get_base_dir())\n    observed = {\"dataset_sha256\": sha(directory / \"main/train-00000-of-00001.parquet\"),\n                \"tokenizer_sha256\": sha(cache / \"tokenizer/tokenizer.json\"),\n                \"start_file_sha256\": sha(starting / \"model_000000.pt\"),\n                \"start_meta_sha256\": sha(starting / \"meta_000000.json\"), \"revision\": GSM8K_REVISION}\n    assert len(dataset) == 7473 and GSM8K_REVISION == evidence[\"dataset_revision\"]\n    assert observed[\"dataset_sha256\"] == evidence[\"dataset_sha256\"]\n    assert observed[\"tokenizer_sha256\"] == evidence[\"tokenizer_sha256\"]\n    assert observed[\"start_file_sha256\"] == evidence[\"checkpoints\"][\"paired_fineweb\"][\"model_sha256\"]\n    assert observed[\"start_meta_sha256\"] == evidence[\"checkpoints\"][\"paired_fineweb\"][\"meta_sha256\"]\n    return observed\n\n\ndef prepare(dataset, tokenizer, arm):\n    seen = {question_key(dataset[index]) for indices in PANELS.values() for index in indices}\n    panel_keys = [set(question_key(dataset[index]) for index in indices) for indices in PANELS.values()]\n    assert len(panel_keys[0]) == len(panel_keys[1]) == 64 and not panel_keys[0] & panel_keys[1]\n    records, exclusions, answers = {}, {\"duplicate\": [], \"too_long\": []}, Counter()\n    for index in range(256, len(dataset)):\n        conversation = dataset[index]\n        if question_key(conversation) in seen:\n            exclusions[\"duplicate\"].append(index)\n            continue\n        ids, mask = tokenizer.render_conversation(conversation, max_tokens=513)\n        if len(ids) > 512:\n            exclusions[\"too_long\"].append(index)\n            continue\n        target = gold_answer(conversation)\n        answers[target] += 1\n        full_length = len(ids)\n        if arm == \"answer\":\n            short = {\"messages\": [conversation[\"messages\"][0], {\"role\": \"assistant\", \"content\": f\"#### {target}\"}]}\n            ids, mask = tokenizer.render_conversation(short, max_tokens=513)\n        assert len(ids) == len(mask) and len(ids) <= 512 and any(mask)\n        records[index] = (ids, mask, full_length)\n    assert records\n    common = sorted(answers, key=lambda answer: (-answers[answer], answer))[0]\n    return records, exclusions, common, answers[common]\n\n\ndef collate(group, pad, device):\n    width = max(len(ids) for ids, _, _ in group) - 1\n    inputs = torch.full((len(group), width), pad, dtype=torch.long)\n    targets = torch.full_like(inputs, -1)\n    for row, (ids, mask, _) in enumerate(group):\n        tokens = torch.tensor(ids)\n        keep = torch.tensor(mask[1:], dtype=torch.bool)\n        inputs[row, :len(ids)-1] = tokens[:-1]\n        targets[row, :len(ids)-1] = tokens[1:].masked_fill(~keep, -1)\n    return inputs.to(device), targets.to(device)\n\n\ndef lr_for(step):\n    if step <= 16:\n        return 0.001 * step / 16\n    phase = (step - 16) / (UPDATES - 16)\n    return 0.0001 + 0.0009 * (1 + math.cos(math.pi * phase)) / 2\n\n\ndef optimizer_batches(records):\n    rng = random.Random(120611)\n    order = sorted(records)\n    buffered = []\n    while True:\n        shuffled = order.copy()\n        rng.shuffle(shuffled)\n        buffered.extend(shuffled)\n        while len(buffered) >= BATCH:\n            ids, buffered = buffered[:BATCH], buffered[BATCH:]\n            # Length-aware scheduling within each update leaves the question\n            # selection and all denominators shared across arms.\n            yield sorted(ids, key=lambda index: records[index][2])\n\n\ndef fit(arm, dataset, directory, starting, out):\n    input_manifest = preflight(dataset, directory, starting)\n    device = torch.device(\"cuda\")\n    model, tokenizer, _ = build_model(starting, 0, device, \"train\")\n    cfg = model.config.syn_cfg\n    assert cfg.enable_hebbian and not cfg.enable_stdp and not model.config.use_moe and not cfg.enable_presyn\n    initial_hash = tensor_digest(model.state_dict())\n    records, exclusions, mode, mode_count = prepare(dataset, tokenizer, arm)\n    # The original archive uses tied embeddings; preserve the actual parameter sharing.\n    assert model.lm_head.weight is model.wte.weight\n    pad = tokenizer.encode_special(\"<|assistant_end|>\")\n    optimizer = torch.optim.AdamW(model.parameters(), lr=0.001, weight_decay=0.0001, fused=True)\n    schedule = optimizer_batches(records)\n    rows = []\n    console = Console()\n    start = time.monotonic()\n    for step in range(1, UPDATES + 1):\n        indices = next(schedule)\n        group = [records[index] for index in indices]\n        labeled = sum(sum(mask[1:]) for _, mask, _ in group)\n        assert labeled > 0\n        lr = lr_for(step)\n        for parameters in optimizer.param_groups:\n            parameters[\"lr\"] = lr\n        optimizer.zero_grad(set_to_none=True)\n        losses = []\n        for offset in range(0, len(group), MICROBATCH):\n            inputs, targets = collate(group[offset:offset+MICROBATCH], pad, device)\n            with torch.autocast(device_type=\"cuda\", dtype=torch.bfloat16):\n                hidden, _ = model._forward_hidden(inputs, train_mode=True, structural_training=True, update_mem=False)\n                valid = targets >= 0\n                states, labels = hidden[valid], targets[valid]\n                logits = model.hidden_to_logits(states, for_loss=True)\n                loss = F.cross_entropy(logits, labels, reduction=\"sum\") / labeled\n            loss.backward()\n            losses.append(loss.detach())\n        norm = float(torch.nn.utils.clip_grad_norm_(model.parameters(), 1., error_if_nonfinite=True))\n        optimizer.step()\n        total_loss = float(sum(losses))\n        assert math.isfinite(total_loss)\n        rows.append({\"step\": step, \"indices\": indices, \"tokens\": labeled, \"learning_rate\": lr,\n                     \"train_loss\": total_loss, \"gradient_norm\": norm})\n        if step % 32 == 0:\n            console.print(f\"{arm}: update {step}/{UPDATES}, loss {total_loss:.4f}, elapsed {time.monotonic()-start:.1f}s\")\n    assert all(torch.isfinite(parameter).all() for parameter in model.state_dict().values())\n    checkpoint = Path(get_base_dir()) / \"chatsft_checkpoints\" / arm\n    meta = {\"step\": UPDATES, \"model_config\": checkpoint_model_config(model, {}), \"synapses\": True,\n            \"synaptic_config\": synaptic_config_to_meta(cfg), \"provenance\": config_provenance(cfg),\n            \"study\": {\"arm\": arm, \"training_mode\": \"gsm8k_train_only\", **input_manifest}}\n    save_checkpoint(checkpoint, UPDATES, model.state_dict(), None, meta)\n    loaded, _, loaded_meta = load_model(\"sft\", device, phase=\"eval\", model_tag=arm, step=UPDATES)\n    digest = tensor_digest(loaded.state_dict())\n    assert digest == tensor_digest(model.state_dict()) and loaded_meta[\"study\"] == meta[\"study\"]\n    assert loaded.config.syn_cfg.enable_hebbian and loaded.lm_head.weight is loaded.wte.weight\n    result = {\"arm\": arm, \"provenance\": input_manifest, \"initial_state_sha256\": initial_hash,\n              \"checkpoint_state_sha256\": digest, \"checkpoint_file_sha256\": sha(checkpoint / f\"model_{UPDATES:06d}.pt\"),\n              \"checkpoint_meta_sha256\": sha(checkpoint / f\"meta_{UPDATES:06d}.json\"),\n              \"train_examples\": len(records), \"exclusions\": exclusions, \"mode_answer\": mode,\n              \"mode_count_in_train\": mode_count, \"train\": rows}\n    (out / f\"{arm}-train.json\").write_text(json.dumps(result, sort_keys=True, separators=(\",\", \":\"), allow_nan=False) + \"\\n\")\n    return loaded, tokenizer, result\n\n\ndef evaluate(arm, model, tokenizer, task, result, out):\n    engine = Engine(model, tokenizer)\n    console = Console()\n    challenge = {}\n    for panel, indices in PANELS.items():\n        rows = []\n        chosen_mix = None\n        for index in indices:\n            conversation = task[index]\n            gold = gold_answer(conversation)\n            prompt = tokenizer.render_for_completion(conversation)\n            seed = stable_seed_u64(42, salt=f\"gsm-sft-qualified:{index}\") % (2**63)\n            with torch.no_grad(), torch.autocast(device_type=\"cuda\", dtype=torch.bfloat16):\n                tokens, masks = engine.generate_batch(prompt, num_samples=4, max_batch_size=4,\n                                                      max_tokens=160, top_k=50, temperature=1.0, seed=seed)\n            completion = [tokenizer.decode(row[len(prompt):]) for row in tokens]\n            parsed = [extract_answer(response) for response in completion]\n            rewards = [int(task.reward(conversation, response)) for response in completion]\n            assert rewards == [int(answer == gold) for answer in parsed]\n            rows.append({\"index\": index, \"answer\": gold, \"parsed\": parsed, \"rewards\": rewards, \"seed\": seed,\n                         \"completion_lengths\": [len(row) - len(prompt) for row in tokens]})\n            if 0 < sum(rewards) < 4 and chosen_mix is None:\n                chosen_mix = {\"index\": index, \"tokens\": tokens, \"masks\": masks, \"rewards\": rewards,\n                              \"prompt_length\": len(prompt), \"seed\": seed}\n            if len(rows) % 16 == 0:\n                console.print(f\"{arm} {panel}: {len(rows)}/64 questions, {sum(sum(row['rewards']) for row in rows)} correct\")\n        challenge[panel] = {\"rows\": rows, \"first_mixed\": chosen_mix}\n        # Save earned panel evidence immediately as well as a final joint ledger.\n        (out / f\"{arm}-{panel}.json\").write_text(json.dumps(challenge[panel], sort_keys=True) + \"\\n\")\n    (out / f\"{arm}-evaluation.json\").write_text(\n        json.dumps({\"arm\": arm, \"panels\": challenge, \"mode_answer\": result[\"mode_answer\"],\n                    \"checkpoint_state_sha256\": result[\"checkpoint_state_sha256\"]}, sort_keys=True) + \"\\n\")\n\n\ndef main(arm, root, dataset, starting, execution):\n    assert arm in (\"answer\", \"rationale\")\n    torch.set_num_threads(1)\n    torch.manual_seed(7133)\n    torch.cuda.manual_seed_all(7133)\n    torch.set_float32_matmul_precision(\"high\")\n    task = GSM8K(\"main\", \"train\", data_dir=dataset)\n    if execution == \"train\":\n        fit(arm, task, dataset, starting, root)\n    else:\n        device = torch.device(\"cuda\")\n        model, tokenizer, _ = load_model(\"sft\", device, phase=\"eval\", model_tag=arm, step=UPDATES)\n        result = json.loads((root / f\"{arm}-train.json\").read_text())\n        assert tensor_digest(model.state_dict()) == result[\"checkpoint_state_sha256\"]\n        evaluate(arm, model, tokenizer, task, result, root)\n\n\nif __name__ == \"__main__\":\n    arm, root, dataset, start, execution = sys.argv[1:]\n    main(arm, Path(root), Path(dataset), Path(start), execution)\n",
+      "sha256": "3eeaea281d38a0054d41b5e25332a9f6df94a2d93cf2198caa68e8492aa672d6"
+    },
+    "helpers/prediction_credit.py": {
+      "content": "\"\"\"Measure prediction-time score traces on the existing final synaptic projection.\"\"\"\nimport hashlib\nimport itertools\nimport json\nimport math\nimport statistics\nimport sys\nfrom fractions import Fraction\nfrom pathlib import Path\n\nimport torch\nfrom rich.console import Console\n\nfrom bio_inspired_nanochat.common import softcap_logits\nfrom bio_inspired_nanochat.rollout_credit import permute_advantages, synaptic_token_logp\nfrom bio_inspired_nanochat.synthetic_tasks import reward_task\nfrom scripts.e2e.neuromod_rl import NeuromodRLE2EConfig, _build_model\n\n\nclass Decision:\n    \"\"\"Detached inputs and action feedback captured before any reward is known.\"\"\"\n\n    def __init__(self, model, questions):\n        self.layer = model.h[-1].mlp.mlp.proj\n        assert not model.config.use_moe and self.layer.input_ln is None\n        assert not model.config.dropout and self.layer.post is not None\n        assert getattr(self.layer, \"_nm_ach_input_gain\", 1.0) == getattr(self.layer, \"_nm_ne_gain\", 1.0) == 1.0\n        with torch.no_grad():\n            handles = [\n                self.layer.register_forward_pre_hook(lambda _, args: self.record_input(args)),\n                model.h[-1].register_forward_hook(lambda _, _args, output: self.record_residual(output)),\n            ]\n            try:\n                hidden, _ = model._forward_hidden(questions, train_mode=False, update_mem=False)\n            finally:\n                for handle in handles:\n                    handle.remove()\n            self.raw_logits = model.lm_head(hidden[:, -1])\n            self.cap = model.config.logit_softcap\n            self.logits = softcap_logits(self.raw_logits, self.cap, for_loss=False)\n            self.head = model.lm_head.weight.detach()\n            self.final_norm = model.config.final_norm\n\n    def record_input(self, args):\n        self.x = args[0][:, -1].detach()\n\n    def record_residual(self, output):\n        self.residual = output[0][:, -1].detach()\n\n    @torch.no_grad()\n    def trace(self, actions, basis=None):\n        feedback = self.head[actions]\n        if self.cap > 0:\n            selected = self.raw_logits.gather(1, actions)\n            feedback = feedback * (1 - (selected / self.cap).tanh().square()).unsqueeze(-1)\n        if self.final_norm:\n            residual = self.residual[:, None, :]\n            rms = (residual.square().mean(dim=-1, keepdim=True) + torch.finfo(residual.dtype).eps).sqrt()\n            feedback = (feedback - residual * (residual * feedback).mean(dim=-1, keepdim=True) / rms.square()) / rms\n        post = self.layer.post\n        feedback = feedback * (1 + post.fast + post.slow) + (feedback @ post.V.T) @ post.U.T\n        return Trace(self.x, feedback if basis is None else feedback @ basis, basis)\n\n\nclass Trace:\n    def __init__(self, x, feedback, basis):\n        self.x = x\n        self.feedback = feedback\n        self.basis = basis\n\n    def combine(self, coefficients):\n        assert coefficients.shape == self.feedback.shape[:2]\n        assert torch.all(coefficients.sum(dim=1) == 0)\n        per_question = (coefficients[:, :, None] * self.feedback).sum(dim=1)\n        aggregate = self.x.T @ per_question / coefficients.numel()\n        return aggregate if self.basis is None else aggregate @ self.basis.T\n\n\ndef data(cfg, seed, batch):\n    return reward_task(batch=batch, context_len=cfg.context_len, vocab_size=cfg.vocab_size, seed=seed)[0]\n\n\ndef optimizer_for(model):\n    return torch.optim.AdamW(model.parameters(), lr=0.002, weight_decay=0.0001)\n\n\ndef end_step(model, opt):\n    torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0, error_if_nonfinite=True)\n    opt.step()\n\n\ndef warm(seed):\n    cfg = NeuromodRLE2EConfig(seed=seed, batch_size=16, rl_steps=96)\n    model = _build_model(cfg).train()\n    model.config.syn_cfg.stochastic_train_frac = 0.0\n    opt = optimizer_for(model)\n    for step in range(1, 129):\n        batch = data(cfg, 2_000_000 + seed + step, 16)\n        opt.zero_grad()\n        loss = -synaptic_token_logp(model, batch.inputs, batch.targets, update_mem=False)[:, -1].mean()\n        loss.backward()\n        end_step(model, opt)\n    return cfg, model.eval()\n\n\ndef state_sha(model):\n    result = hashlib.sha256()\n    for name, tensor in sorted(model.state_dict().items()):\n        result.update(name.encode())\n        result.update(tensor.detach().contiguous().numpy().tobytes())\n    return result.hexdigest()\n\n\ndef basis_for(width, seed, dtype):\n    rng = torch.Generator().manual_seed(13_000_000 + seed)\n    raw = torch.randn(width, 16, generator=rng, dtype=torch.float64)\n    return torch.linalg.qr(raw, mode=\"reduced\")[0].to(dtype)\n\n\ndef choose(decision, seed):\n    rng = torch.Generator().manual_seed(seed)\n    return torch.multinomial(decision.logits.softmax(-1), 4, replacement=True, generator=rng)\n\n\ndef sampled_autograd(model, parameter, questions, actions, coefficients):\n    logits, _ = model(questions, train_mode=False, update_mem=False)\n    logp = logits[:, -1].log_softmax(dim=-1).gather(1, actions)\n    return torch.autograd.grad((logp * coefficients).mean(), parameter)[0]\n\n\ndef parity_diagnostic():\n    records = []\n    for use_rms, cap in itertools.product((False, True), (0.0, 0.25, 15.0)):\n        cfg = NeuromodRLE2EConfig(seed=116)\n        model = _build_model(cfg).eval().double()\n        model.config.final_norm = use_rms\n        model.config.logit_softcap = cap\n        if cap == 0.25:\n            with torch.no_grad():\n                model.lm_head.weight.mul_(30)\n        batch = data(cfg, 45, 5)\n        decision = Decision(model, batch.inputs)\n        actions = torch.tensor([[1, 4, 1, 11], [7, 15, 31, 17], [3, 3, 3, 3],\n                                [12, 5, 8, 9], [40, 38, 22, 40]])\n        assert cap != 0.25 or float(decision.raw_logits.gather(1, actions).abs().max()) > 5 * cap\n        exact_trace = decision.trace(actions)\n        basis = basis_for(64, 116, torch.float64)\n        sketch = decision.trace(actions, basis)\n        basis_reflected = basis * torch.tensor([-1, 1] * 8, dtype=basis.dtype)\n        reflected = decision.trace(actions, basis_reflected)\n        # Rewards arrive after the detached eligibility is captured. Include\n        # zero groups and unequal credit for repeated actions.\n        rewards = torch.tensor([[1, 0, 0, 1], [0, 1, 0, 0], [1, 1, 0, 0],\n                                [0, 0, 0, 0], [0, 1, 0, 1]], dtype=model.lm_head.weight.dtype)\n        coefficient = rewards - rewards.mean(1, keepdim=True)\n        oracle = sampled_autograd(model, decision.layer.w_slow, batch.inputs, actions, coefficient)\n        exact = exact_trace.combine(coefficient)\n        torch.testing.assert_close(exact, oracle, atol=1e-11, rtol=1e-10)\n        actual = sketch.combine(coefficient)\n        torch.testing.assert_close(actual, oracle @ basis @ basis.T, atol=1e-11, rtol=1e-10)\n        torch.testing.assert_close(actual, reflected.combine(coefficient), atol=1e-11, rtol=1e-10)\n        order = torch.tensor([3, 1, 4, 0, 2])\n        permuted = Trace(sketch.x[order], sketch.feedback[order], basis).combine(coefficient[order])\n        torch.testing.assert_close(actual, permuted, atol=1e-11, rtol=1e-10)\n        within = torch.tensor([3, 0, 2, 1])\n        sorted_actions = Trace(sketch.x, sketch.feedback[:, within], basis)\n        torch.testing.assert_close(actual, sorted_actions.combine(coefficient[:, within]), atol=1e-11, rtol=1e-10)\n        assert torch.count_nonzero(sketch.combine(torch.zeros_like(coefficient))) == 0\n        assert not sketch.x.requires_grad and not sketch.feedback.requires_grad\n        records.append({\"final_rms\": use_rms, \"cap\": cap, \"score_max_error\": float((exact - oracle).abs().max()),\n                        \"rank16_max_error\": float((actual - oracle @ basis @ basis.T).abs().max())})\n    # For feature zero, the shortcut is exactly zero. The centered full\n    # scores remain nonzero because the two expected terms differ.\n    unequal = Fraction(1) * (0 - Fraction(1, 4)) - (0 - Fraction(3, 4))\n    assert unequal == Fraction(1, 2)\n    return {\"fixture_rows\": records, \"unequal_prefix_normalizer_residual\": str(unequal)}\n\n\ndef expected_reward(model, holdout):\n    logits, _ = model(holdout.inputs, train_mode=False, update_mem=False)\n    scores = logits[:, -1].double().log_softmax(dim=-1).gather(1, holdout.targets[:, -1:])\n    return scores.exp().mean()\n\n\ndef normalize(matrix):\n    norm = matrix.norm()\n    if float(norm) == 0:\n        return matrix\n    return (0.003 / norm) * matrix\n\n\ndef measure(model, parameter, initial, holdout, matrix, heldout_gradient):\n    direction = normalize(matrix)\n    derivative = float((direction.double() * heldout_gradient.double()).sum())\n    variants = {}\n    with torch.no_grad():\n        try:\n            for scale in (-1.0, -0.5, 0.5, 1.0):\n                parameter.copy_(initial + scale * direction)\n                variants[str(scale)] = float(expected_reward(model, holdout))\n        finally:\n            parameter.copy_(initial)\n    full = (variants[\"1.0\"] - variants[\"-1.0\"]) / 2\n    half = variants[\"0.5\"] - variants[\"-0.5\"]\n    extrapolated = (4 * half - full) / 3\n    assert abs(extrapolated - derivative) <= max(2e-7, .01 * abs(derivative)), (extrapolated, derivative)\n    return {\"derivative\": derivative, \"expected_reward_perturbed\": variants, \"unit_difference\": full,\n            \"half_difference\": half, \"two_scale_difference\": extrapolated, \"write_norm\": float(direction.norm()),\n            \"raw_matrix_norm\": float(matrix.norm())}\n\n\ndef exact_tail(differences):\n    total = math.fsum(differences)\n    draws = itertools.product((-1, 1), repeat=len(differences))\n    tails = sum(math.fsum(s * d for s, d in zip(signs, differences, strict=True)) >= total - 1e-12 for signs in draws)\n    return tails, tails / 2 ** len(differences)\n\n\ndef run_frozen(seed):\n    cfg, model = warm(seed)\n    digest = state_sha(model)\n    holdout = data(cfg, 108059, 512)\n    questions = data(cfg, 11_000_000 + seed, 128)\n    decision = Decision(model, questions.inputs)\n    parameter = decision.layer.w_slow\n    initial = parameter.detach().clone()\n    baseline = expected_reward(model, holdout)\n    gradient = torch.autograd.grad(baseline, parameter)[0]\n    actions = choose(decision, 12_000_000 + seed)\n    basis = basis_for(64, seed, decision.x.dtype)\n    exact, sketch = decision.trace(actions), decision.trace(actions, basis)\n    gold = questions.targets[:, -1:]\n    rewards = (actions == gold).to(decision.x.dtype)\n    coefficient = rewards - rewards.mean(1, keepdim=True)\n    shuffled = torch.stack([permute_advantages(row, 14_000_000 + 128 * seed + index)\n                            for index, row in enumerate(coefficient)])\n    oracle = sampled_autograd(model, parameter, questions.inputs, actions, coefficient)\n    actual = exact.combine(coefficient)\n    torch.testing.assert_close(actual, oracle, atol=2e-8, rtol=2e-5)\n    torch.testing.assert_close(sketch.combine(coefficient), oracle @ basis @ basis.T, atol=2e-8, rtol=2e-5)\n    measurements = {name: measure(model, parameter, initial, holdout, delta, gradient)\n                    for name, delta in ((\"exact\", actual), (\"rank16\", sketch.combine(coefficient)),\n                                        (\"shuffled\", sketch.combine(shuffled)))}\n    assert state_sha(model) == digest\n    return {\"initial_sha256\": digest, \"baseline\": float(baseline.detach()),\n            \"gold\": gold.flatten().tolist(), \"actions\": actions.tolist(), \"rewards\": rewards.tolist(),\n            \"exact_relative_error\": float((actual - oracle).norm() / oracle.norm()),\n            \"coefficient\": coefficient.tolist(), \"shuffled_coefficient\": shuffled.tolist(),\n            \"exact_elements_per_group\": exact.x.shape[-1] + 4 * exact.feedback.shape[-1],\n            \"rank16_elements_per_group\": sketch.x.shape[-1] + 4 * sketch.feedback.shape[-1],\n            \"mixed_groups\": int(((rewards.sum(1) > 0) & (rewards.sum(1) < 4)).sum()), **measurements}\n\n\ndef main(output):\n    torch.set_num_threads(1)\n    fixtures = parity_diagnostic()\n    console = Console()\n    runs = {}\n    for seed in range(90521, 97522, 1000):\n        row = run_frozen(seed)\n        runs[str(seed)] = row\n        console.print(seed, {arm: row[arm][\"derivative\"] for arm in (\"exact\", \"rank16\", \"shuffled\")})\n    deltas = [row[\"rank16\"][\"derivative\"] - row[\"shuffled\"][\"derivative\"] for row in runs.values()]\n    hits = sum(value > 0 for value in deltas)\n    tail, p = exact_tail(deltas)\n    exact_positive = sum(row[\"exact\"][\"derivative\"] > 0 for row in runs.values())\n    rank_mean = statistics.mean(row[\"rank16\"][\"derivative\"] for row in runs.values())\n    exact_mean = statistics.mean(row[\"exact\"][\"derivative\"] for row in runs.values())\n    competent = sum(row[\"baseline\"] > 0.10 for row in runs.values())\n    result = {\"fixtures\": fixtures, \"runs\": runs, \"rank_mean\": rank_mean, \"exact_mean\": exact_mean,\n              \"exact_positive\": exact_positive, \"aligned_beats_shuffle\": hits, \"tail\": tail, \"p\": p,\n              \"competent\": competent, \"all_mixed\": all(row[\"mixed_groups\"] > 0 for row in runs.values()),\n              \"advance\": competent >= 6 and all(row[\"mixed_groups\"] > 0 for row in runs.values())\n              and exact_positive >= 7 and rank_mean > 0 and rank_mean >= exact_mean / 4 and hits >= 6 and p <= .025}\n    output.write_text(json.dumps(result, sort_keys=True, separators=(\",\", \":\"), allow_nan=False) + \"\\n\")\n\n\nif __name__ == \"__main__\":\n    main(Path(sys.argv[1]))\n",
+      "sha256": "f64a09e919ad64c6917b88b9adcb56739d622dfde5b5fb2dd7fc2a43d7af8394"
+    },
+    "helpers/prefix_score.py": {
+      "content": "\"\"\"Compare a cached prefix score accumulator to independent masked autograd.\"\"\"\nimport json\nimport sys\nfrom collections import defaultdict\nfrom pathlib import Path\n\nimport torch\nfrom rich.console import Console\n\nfrom bio_inspired_nanochat.common import softcap_logits\nfrom bio_inspired_nanochat.engine import KVCache\nfrom bio_inspired_nanochat.rollout_credit import pack_rollout_tokens\nfrom prediction_credit import Decision, NeuromodRLE2EConfig, _build_model, basis_for, state_sha\n\n\nclass CachedDecision(Decision):\n    def __init__(self, model, token_ids, cache):\n        self.layer = model.h[-1].mlp.mlp.proj\n        with torch.no_grad():\n            handles = [\n                self.layer.register_forward_pre_hook(lambda _, args: self.record_input(args)),\n                model.h[-1].register_forward_hook(lambda _, _args, output: self.record_residual(output)),\n            ]\n            try:\n                hidden, _ = model._forward_hidden(token_ids, kv_cache=cache, train_mode=False, update_mem=False)\n            finally:\n                for handle in handles:\n                    handle.remove()\n            self.raw_logits = model.lm_head(hidden[:, -1])\n            self.cap = model.config.logit_softcap\n            self.logits = softcap_logits(self.raw_logits, self.cap, for_loss=False)\n            self.head = model.lm_head.weight.detach()\n            self.final_norm = model.config.final_norm\n\n\ndef capture(model, prompt, continuations, masks):\n    cfg = model.config\n    new_cache = KVCache(batch_size=1, num_heads=cfg.n_kv_head, head_dim=cfg.n_embd // cfg.n_head,\n                        seq_len=len(prompt), num_layers=cfg.n_layer)\n    nodes = {prompt: (CachedDecision(model, torch.tensor([prompt]), new_cache), new_cache)}\n    captured = defaultdict(dict)\n    prefix_data = {}\n    for completion, mask in zip(continuations, masks, strict=True):\n        prefix = prompt\n        for token, scored in zip(completion, mask, strict=True):\n            decision, cache = nodes[prefix]\n            assert cache.get_pos() == len(prefix)\n            if scored:\n                if prefix not in prefix_data:\n                    vocab = torch.arange(cfg.vocab_size)[None, :]\n                    all_scores = decision.trace(vocab).feedback[0]\n                    normalizer = decision.logits.softmax(-1)[0] @ all_scores\n                    prefix_data[prefix] = decision.x[0], normalizer\n                if token not in captured[prefix]:\n                    captured[prefix][token] = decision.trace(torch.tensor([[token]])).feedback[0, 0]\n            child = prefix + (token,)\n            if child not in nodes:\n                branch = cache.fork_batch(1)\n                pred = CachedDecision(model, torch.tensor([[token]]), branch)\n                nodes[child] = (pred, branch)\n            prefix = child\n    return captured, prefix_data\n\n\ndef aggregate(prompt, continuations, masks, coefficients, edges, nodes, basis=None, omit_normalizer=False):\n    weights = defaultdict(lambda: defaultdict(float))\n    count = 0\n    for completion, mask, coefficient in zip(continuations, masks, coefficients.tolist(), strict=True):\n        prefix = prompt\n        for token, scored in zip(completion, mask, strict=True):\n            if scored:\n                weights[prefix][token] += coefficient\n                count += 1\n            prefix = prefix + (token,)\n    matrix = None\n    masses = {}\n    for prefix, by_action in weights.items():\n        x, expected = nodes[prefix]\n        mass = sum(by_action.values())\n        masses[prefix] = mass\n        score = sum((weight * edges[prefix][token] for token, weight in by_action.items()), torch.zeros_like(expected))\n        if not omit_normalizer:\n            score = score - mass * expected\n        score = score if basis is None else score @ basis\n        term = torch.outer(x, score) / count\n        matrix = term if matrix is None else matrix + term\n    return (matrix if basis is None else matrix @ basis.T), count, masses\n\n\ndef independent_oracle(model, prompt, continuations, masks, coefficients, parameter):\n    width = len(prompt) + max(map(len, continuations))\n    padded = torch.zeros(len(continuations), width, dtype=torch.long)\n    keep = torch.zeros_like(padded, dtype=torch.bool)\n    for index, (completion, mask) in enumerate(zip(continuations, masks, strict=True)):\n        sequence = prompt + completion\n        padded[index, :len(sequence)] = torch.tensor(sequence)\n        keep[index, len(prompt):len(sequence)] = torch.tensor(mask)\n    inputs, shifted, _ = pack_rollout_tokens(padded, keep, include_last=True)\n    logits, _ = model(inputs, train_mode=False, update_mem=False)\n    valid = shifted >= 0\n    probability = logits.log_softmax(-1).gather(2, shifted.clamp_min(0).unsqueeze(-1)).squeeze(-1)\n    objective = (probability * valid * coefficients[:, None]).sum() / valid.sum()\n    return torch.autograd.grad(objective, parameter)[0], int(valid.sum())\n\n\ndef case(cap):\n    cfg = NeuromodRLE2EConfig(seed=678)\n    model = _build_model(cfg).double().eval()\n    model.config.syn_cfg.enable_presyn = False\n    model.config.logit_softcap = cap\n    initial = state_sha(model)\n    parameter = model.h[-1].mlp.mlp.proj.w_slow\n    prompt = (1, 3, 5)\n    completions = [(7, 8, 9, 10), (7, 8, 2), (4, 12, 11), (7, 8)]\n    masks = [(True, False, True, True), (True, False, True),\n             (True, True, True), (True, False)]\n    edges, nodes = capture(model, prompt, completions, masks)\n    rewards = torch.tensor([1., 0., 0., 0.], dtype=torch.float64)\n    coefficient = rewards - rewards.mean()\n    oracle, oracle_count = independent_oracle(model, prompt, completions, masks, coefficient, parameter)\n    actual, count, masses = aggregate(prompt, completions, masks, coefficient, edges, nodes)\n    wrong, _, _ = aggregate(prompt, completions, masks, coefficient, edges, nodes, omit_normalizer=True)\n    basis = basis_for(cfg.n_embd, 678, torch.float64)\n    sketch, _, _ = aggregate(prompt, completions, masks, coefficient, edges, nodes, basis=basis)\n    assert count == oracle_count == 9\n    assert masses[prompt] == 0 and masses[prompt + (7, 8)] == 0.5\n    torch.testing.assert_close(actual, oracle, atol=1e-11, rtol=1e-10)\n    assert float((wrong - oracle).norm()) > 1e-6\n    torch.testing.assert_close(sketch, (oracle @ basis) @ basis.T, atol=1e-11, rtol=1e-10)\n    assert state_sha(model) == initial\n    return {\"cap\": cap, \"valid_tokens\": count, \"distinct_scored_prefixes\": len(nodes),\n            \"distinct_scored_edges\": sum(map(len, edges.values())),\n            \"root_mass\": masses[prompt], \"shared_post_tool_mass\": masses[prompt + (7, 8)],\n            \"max_corrected_error\": float((actual - oracle).abs().max()),\n            \"max_rank16_error\": float((sketch - (oracle @ basis) @ basis.T).abs().max()),\n            \"omitting_normalizer_l2_error\": float((wrong - oracle).norm())}\n\n\nif __name__ == \"__main__\":\n    torch.set_num_threads(1)\n    results = [case(cap) for cap in (0.0, 15.0)]\n    Console().print(results)\n    Path(sys.argv[1]).write_text(json.dumps(results, sort_keys=True, indent=2) + \"\\n\")\n",
+      "sha256": "ec35d26ef4cda6bbf973b176fc9a600167ceba21718032442291019f7a98ee44"
+    },
+    "masked_sft_probe.py": {
+      "content": "\"\"\"Check that the selected-token SFT head preserves the normal masked objective.\"\"\"\nimport copy\nimport json\nimport sys\nfrom pathlib import Path\n\nimport torch\nfrom rich.console import Console\nfrom torch.nn import functional as F\n\nfrom bio_inspired_nanochat.checkpoint_manager import build_model\nfrom gsm_sft import collate, gold_answer\nfrom tasks.gsm8k import GSM8K\n\n\ndef verify(model, tokenizer, task, arm):\n    padding = tokenizer.encode_special(\"<|assistant_end|>\")\n    tool_open, tool_close = [tokenizer.encode_special(f\"<|output_{boundary}|>\") for boundary in (\"start\", \"end\")]\n    model = copy.deepcopy(model)\n    reference = copy.deepcopy(model)\n    group = []\n    forced = 0\n    for index in (256, 257):\n        conversation = task[index]\n        if arm == \"answer\":\n            conversation = {\"messages\": [conversation[\"messages\"][0],\n                                         {\"role\": \"assistant\", \"content\": f\"#### {gold_answer(conversation)}\"}]}\n        ids, labels = tokenizer.render_conversation(conversation)\n        open_output = False\n        for token, learned in zip(ids, labels, strict=True):\n            if token == tool_open:\n                open_output = True\n            if open_output:\n                assert not learned\n                forced += 1\n            if token == tool_close:\n                open_output = False\n        assert not open_output\n        group.append((ids, labels, len(ids)))\n    inputs, targets = collate(group, padding, torch.device(\"cpu\"))\n    valid = targets >= 0\n    hidden, _ = model._forward_hidden(inputs, train_mode=True, update_mem=False)\n    loss = F.cross_entropy(model.hidden_to_logits(hidden[valid], for_loss=True), targets[valid])\n    _, oracle = reference(inputs, targets, train_mode=True, update_mem=False)\n    torch.testing.assert_close(loss, oracle, atol=2e-6, rtol=1e-6)\n    loss.backward()\n    oracle.backward()\n    largest = sum_error = checked = 0\n    for one, other in zip(model.parameters(), reference.parameters(), strict=True):\n        if other.grad is None:\n            assert one.grad is None\n            continue\n        torch.testing.assert_close(one.grad, other.grad, atol=4e-6, rtol=8e-5)\n        diff = one.grad - other.grad\n        largest = max(largest, float(diff.abs().max()))\n        sum_error += float(diff.square().sum())\n        checked += 1\n    return {\"supervised_positions\": int(valid.sum()), \"forced_calculator_positions\": forced,\n            \"max_gradient_error\": largest, \"gradient_error_l2\": sum_error**.5,\n            \"objective_error\": abs(float(loss.detach()) - float(oracle.detach())), \"gradient_tensors\": checked}\n\n\ndef main(data, checkpoint, output):\n    torch.set_num_threads(1)\n    task = GSM8K(\"main\", \"train\", data_dir=data)\n    model, tokenizer, _ = build_model(checkpoint, 0, torch.device(\"cpu\"), \"train\")\n    result = {name: verify(model, tokenizer, task, name) for name in (\"answer\", \"rationale\")}\n    assert result[\"rationale\"][\"forced_calculator_positions\"] > 0\n    Console().print(result)\n    output.write_text(json.dumps(result, indent=2, sort_keys=True) + \"\\n\")\n\n\nif __name__ == \"__main__\":\n    main(*(Path(arg) for arg in sys.argv[1:]))\n",
+      "sha256": "cfa6eb4bcc66045ccf8dd3c8d8fd6a26a00d493d63b43d2c08fd7e6a3e0f41c8"
+    },
+    "public_checkpoint_adapter.py": {
+      "content": "\"\"\"Check native loading and an identity-initialized synaptic residual on public D20 weights.\"\"\"\nimport hashlib\nimport json\nimport sys\nfrom pathlib import Path\n\nimport torch\nfrom rich.console import Console\nfrom torch import nn\n\nfrom bio_inspired_nanochat.checkpoint_manager import build_model\nfrom bio_inspired_nanochat.gpt import GPT\nfrom bio_inspired_nanochat.synaptic import SynapticConfig, SynapticLinear\nfrom bio_inspired_nanochat.tokenizer import RustBPETokenizer\n\n\nREVISION = \"53b7aa58db3e1c512d121a53f747f9649c15bc55\"\nMODEL_SHA256 = \"cd0762cbae420c25b47033ad0816ff1d5a61910a7e2223dff156945225e105b6\"\nTOKENIZER_SHA256 = \"4c060565a46fe83b49d99005acba796f2a630daa7970eb49f7513b89f9fb40e0\"\n\n\ndef sha(path):\n    with path.open(\"rb\") as stream:\n        return hashlib.file_digest(stream, \"sha256\").hexdigest()\n\n\nclass SynapticResidual(nn.Module):\n    def __init__(self, incumbent):\n        super().__init__()\n        self.incumbent = incumbent\n        cfg = SynapticConfig(enable_hebbian=True, enable_stdp=False, enable_presyn=False, enable_metabolism=False)\n        self.adaptation = SynapticLinear(incumbent.in_features, incumbent.out_features,\n                                         cfg, bias=False, use_input_ln=False).to(incumbent.weight)\n        self.register_buffer(\"calcium\", torch.tensor(0.5, device=incumbent.weight.device))\n        self.register_buffer(\"energy\", torch.tensor(0.8, device=incumbent.weight.device))\n        with torch.no_grad():\n            self.adaptation.w_slow.zero_()\n            self.adaptation.w_fast.zero_()\n            self.adaptation.post.fast.zero_()\n            self.adaptation.post.slow.zero_()\n            self.adaptation.post.U.zero_()\n        self.requires_grad_(False)\n        self.adaptation.w_slow.requires_grad_(True)\n\n    def forward(self, x):\n        result = self.incumbent(x)\n        local = self.adaptation(x, self.calcium, self.energy, update_mem=False)\n        return result + local.to(result.dtype)\n\n\ndef identity(actual, expected):\n    assert actual.get_vocab_size() == expected.get_vocab_size() == 65536\n    assert actual.enc._pat_str == expected.enc._pat_str\n    assert actual.enc._mergeable_ranks == expected.enc._mergeable_ranks\n    assert actual.enc._special_tokens == expected.enc._special_tokens\n    return {\"bpe_ranks\": len(actual.enc._mergeable_ranks), \"special_tokens\": len(actual.enc._special_tokens)}\n\n\ndef logits_and_grad(model, inputs, parameter, enable_autocast, actions=None):\n    with torch.autocast(device_type=\"cuda\", dtype=torch.bfloat16, enabled=enable_autocast):\n        logits = model(inputs)[:, -1].float()\n        if actions is None:\n            actions = logits.detach().topk(2, dim=-1).indices\n        sampled = logits.log_softmax(dim=-1).gather(1, actions)\n        score = (sampled[:, 0] - sampled[:, 1]).mean() / 2\n    return logits.detach(), actions, torch.autograd.grad(score, parameter)[0].detach()\n\n\ndef main(root, tokenizer_path, output):\n    torch.set_num_threads(1)\n    paths = root / \"checkpoint\"\n    assert sha(paths / \"model_000700.pt\") == MODEL_SHA256\n    assert sha(root / \"tokenizer/tokenizer.pkl\") == TOKENIZER_SHA256\n    model, tokenizer, meta = build_model(paths, 700, torch.device(\"cuda\"), \"eval\")\n    assert isinstance(model, GPT) and model.config.n_layer == 20 and model.config.n_embd == 1280\n    token_map = identity(tokenizer, RustBPETokenizer.from_directory(tokenizer_path))\n    rotary = model.cos, model.sin\n    model.float()\n    # The production trunk requires its original BF16 rotary tables even\n    # when the model parameters and matmuls are tested in FP32.\n    model.cos, model.sin = rotary\n    torch.set_float32_matmul_precision(\"highest\")\n    model.requires_grad_(False)\n    layer = model.transformer.h[-1].mlp\n    archived = layer.c_proj\n    device = torch.device(\"cuda\")\n    inputs = torch.randint(0, 65528, (2, 32), device=device, generator=torch.Generator(device=device).manual_seed(44031))\n    checks = {}\n    for dtype, low_precision in ((\"fp32\", False), (\"bf16\", True)):\n        layer.c_proj = archived\n        archived.weight.requires_grad_(True)\n        baseline, actions, expected = logits_and_grad(model, inputs, archived.weight, low_precision)\n        layer.c_proj = SynapticResidual(archived)\n        adaptation = layer.c_proj.adaptation\n        adapted, _, result = logits_and_grad(model, inputs, adaptation.w_slow, low_precision, actions)\n        torch.testing.assert_close(adapted, baseline, atol=0, rtol=0)\n        # Matmul and Linear use transposed parameter layouts at the two\n        # sites. Compare after returning to the same orientation.\n        torch.testing.assert_close(result, expected.T, atol=2e-5 if low_precision else 3e-7,\n                                   rtol=.02 if low_precision else 1e-5)\n        assert torch.count_nonzero(adaptation.w_slow) == 0 and expected.norm() > 0\n        checks[dtype] = {\"logits_identical\": True, \"gradient_max_difference\": float((result - expected.T).abs().max()),\n                         \"gradient_relative_error\": float((result - expected.T).norm() / expected.norm())}\n    report = {\"artifact_revision\": REVISION, \"model_sha256\": MODEL_SHA256, \"tokenizer_sha256\": TOKENIZER_SHA256,\n              \"local_token_map_identical\": token_map, \"strict_native_load\": True, \"stored_step\": meta[\"step\"],\n              \"device\": torch.cuda.get_device_name(), \"contexts\": list(inputs.shape), \"numeric_checks\": checks}\n    Console().print(report)\n    output.write_text(json.dumps(report, sort_keys=True, indent=2, allow_nan=False) + \"\\n\")\n\n\nif __name__ == \"__main__\":\n    main(*(Path(value) for value in sys.argv[1:]))\n",
+      "sha256": "4c1f12bb72a12c8b0b672461ec171a26ec504052f3e5156c6c8b7bec1d270aa0"
+    },
+    "real_reward_score.py": {
+      "content": "\"\"\"Compare the cache score with masked autograd on an actually sampled GSM8K group.\"\"\"\nimport hashlib\nimport json\nimport sys\nfrom collections import defaultdict\nfrom pathlib import Path\n\nimport torch\nfrom rich.console import Console\n\nfrom bio_inspired_nanochat.checkpoint_manager import load_model\nfrom bio_inspired_nanochat.engine import KVCache\nfrom bio_inspired_nanochat.rollout_credit import pack_rollout_tokens\nfrom prefix_score import CachedDecision\nfrom scripts.e2e.trained_hebbian_binding import tensor_digest\nfrom tasks.gsm8k import GSM8K\n\n\ndef expected_feedback(decision):\n    \"\"\"Reduce vocabulary scores before applying the common local Jacobian.\"\"\"\n    weight = decision.logits.softmax(-1)\n    if decision.cap > 0:\n        weight = weight * (1 - (decision.raw_logits / decision.cap).tanh().square())\n    feedback = weight @ decision.head\n    if decision.final_norm:\n        residual = decision.residual\n        rms = (residual.square().mean(-1, keepdim=True) + torch.finfo(residual.dtype).eps).sqrt()\n        feedback = (feedback - residual * (residual * feedback).mean(-1, keepdim=True) / rms.square()) / rms\n    post = decision.layer.post\n    return (feedback * (1 + post.fast + post.slow) + (feedback @ post.V.T) @ post.U.T)[0]\n\n\ndef cached_ledger(model, prompt, continuations, scored_masks):\n    wanted = defaultdict(set)\n    prefix_set = set()\n    for tail, mask in zip(continuations, scored_masks, strict=True):\n        for step, (action, scored) in enumerate(zip(tail, mask, strict=True)):\n            prefix = prompt + tail[:step]\n            prefix_set.add(prefix)\n            if scored:\n                wanted[prefix].add(action)\n    cfg = model.config\n    cache = KVCache(batch_size=1, num_heads=cfg.n_kv_head, head_dim=cfg.n_embd // cfg.n_head,\n                    seq_len=len(prompt), num_layers=cfg.n_layer)\n    caches, sites = {}, {}\n    for prefix in sorted(prefix_set, key=lambda row: (len(row), row)):\n        if prefix == prompt:\n            branch, new = cache, torch.tensor([prompt])\n        else:\n            branch, new = caches[prefix[:-1]].fork_batch(1), torch.tensor([[prefix[-1]]])\n        decision = CachedDecision(model, new, branch)\n        assert branch.get_pos() == len(prefix)\n        caches[prefix] = branch\n        if prefix in wanted:\n            actions = sorted(wanted[prefix])\n            trace = decision.trace(torch.tensor([actions]))\n            sites[prefix] = (trace.x[0].clone(), expected_feedback(decision),\n                             dict(zip(actions, trace.feedback[0], strict=True)))\n    return sites\n\n\ndef reduce_delayed(ledger, prompt, continuations, masks, rewards):\n    coefficient = [value - sum(rewards) / 4 for value in rewards]\n    edges = defaultdict(lambda: defaultdict(float))\n    count = 0\n    for tail, mask, weight in zip(continuations, masks, coefficient, strict=True):\n        for step, (token, scored) in enumerate(zip(tail, mask, strict=True)):\n            if scored:\n                edges[prompt + tail[:step]][token] += weight\n                count += 1\n    masses = []\n    gradient = None\n    for prefix, edge in edges.items():\n        x, expected, action = ledger[prefix]\n        mass = sum(edge.values())\n        masses.append(mass)\n        reward_head = sum((weight * action[token] for token, weight in edge.items()), torch.zeros_like(expected))\n        update = torch.outer(x, reward_head - mass * expected) / count\n        gradient = update if gradient is None else gradient + update\n    assert count > 0 and gradient is not None\n    return gradient, count, sum(value != 0 for value in masses), edges\n\n\ndef full_oracle(model, group, parameter):\n    sequences, masks = group[\"tokens\"], group[\"masks\"]\n    width = max(map(len, sequences))\n    ids = torch.zeros(4, width, dtype=torch.long)\n    keep = torch.zeros_like(ids, dtype=torch.bool)\n    for index, (tokens, mask) in enumerate(zip(sequences, masks, strict=True)):\n        ids[index, :len(tokens)] = torch.tensor(tokens)\n        keep[index, :len(mask)] = torch.tensor(mask, dtype=torch.bool)\n    inputs, targets, _ = pack_rollout_tokens(ids, keep, include_last=True)\n    valid = targets >= 0\n    hidden, _ = model._forward_hidden(inputs, train_mode=False, update_mem=False)\n    logits = model.hidden_to_logits(hidden[valid], for_loss=False)\n    logp = logits.log_softmax(-1).gather(1, targets[valid].unsqueeze(1)).flatten()\n    rewards = torch.tensor(group[\"rewards\"], dtype=torch.float64)\n    coefficients = rewards - rewards.mean()\n    row_ids = torch.where(valid)[0]\n    return torch.autograd.grad((coefficients[row_ids] * logp).mean(), parameter)[0], int(valid.sum())\n\n\ndef run(root, dataset, arms):\n    console = Console()\n    task = GSM8K(\"main\", \"train\", data_dir=dataset)\n    result = {}\n    for arm in arms:\n        record = json.loads((root / f\"{arm}-evaluation.json\").read_text())\n        panel = next((name for name in (\"confirmation\", \"selection\") if record[\"panels\"][name][\"first_mixed\"]), None)\n        if panel is None:\n            result[arm] = {\"probe\": \"no_mixed_group\"}\n            continue\n        group = record[\"panels\"][panel][\"first_mixed\"]\n        model, tokenizer, _ = load_model(\"sft\", torch.device(\"cpu\"), phase=\"eval\", model_tag=arm, step=384)\n        identity = tensor_digest(model.state_dict())\n        assert identity == record[\"checkpoint_state_sha256\"]\n        model.double()\n        parameter = model.h[-1].mlp.mlp.proj.w_slow\n        conversation = task[group[\"index\"]]\n        prompt = tuple(tokenizer.render_for_completion(conversation))\n        assert len(prompt) == group[\"prompt_length\"] and all(tuple(seq[:len(prompt)]) == prompt for seq in group[\"tokens\"])\n        tails = [tuple(row[len(prompt):]) for row in group[\"tokens\"]]\n        assert all(len(row) == len(mask) and not any(mask[:len(prompt)])\n                   for row, mask in zip(group[\"tokens\"], group[\"masks\"], strict=True))\n        masks = [row[len(prompt):] for row in group[\"masks\"]]\n        ledger = cached_ledger(model, prompt, tails, masks)\n        rewards = [int(task.reward(conversation, tokenizer.decode(list(row)))) for row in tails]\n        assert rewards == group[\"rewards\"] and 0 < sum(rewards) < 4\n        observed, tokens, nonzero, edges = reduce_delayed(ledger, prompt, tails, masks, rewards)\n        expected, denominator = full_oracle(model, group, parameter)\n        assert tokens == denominator and float(expected.norm()) > 0\n        torch.testing.assert_close(observed, expected, atol=3e-11, rtol=5e-8)\n        delta_error = float((observed - expected).abs().max())\n        result[arm] = {\"probe\": \"passed\", \"panel\": panel, \"index\": group[\"index\"], \"rollout_rewards\": rewards,\n                       \"scored_tokens\": tokens, \"prefixes_with_scored_edges\": len(edges),\n                       \"nonzero_normalizer_prefixes\": nonzero, \"maximum_gradient_error\": delta_error,\n                       \"gradient_norm\": float(expected.norm()), \"checkpoint_state_sha256\": identity,\n                       \"sample_hash\": hashlib.sha256(json.dumps(group, sort_keys=True).encode()).hexdigest()}\n        console.print(arm, result[arm])\n    return result\n\n\nif __name__ == \"__main__\":\n    torch.set_num_threads(1)\n    root, dataset, output = (Path(value) for value in sys.argv[1:4])\n    arms = sys.argv[4:]\n    assert arms and all(arm in (\"answer\", \"rationale\") for arm in arms)\n    output.write_text(json.dumps(run(root, dataset, arms), sort_keys=True, indent=2, allow_nan=False) + \"\\n\")\n",
+      "sha256": "0a41bea1ff55667ae71a293a75ca047759f799fa7c8d4a20d93c14487a2e7c6e"
+    },
+    "verify_sft_checkpoint_copies.py": {
+      "content": "\"\"\"Reopen the two transferred checkpoints through the normal SFT reader.\"\"\"\nimport hashlib\nimport json\nimport sys\nfrom pathlib import Path\n\nimport torch\nfrom rich.console import Console\n\nfrom bio_inspired_nanochat.checkpoint_manager import load_model\nfrom bio_inspired_nanochat.common import get_base_dir\nfrom scripts.e2e.trained_hebbian_binding import tensor_digest\n\n\ndef sha(path):\n    with path.open(\"rb\") as stream:\n        return hashlib.file_digest(stream, \"sha256\").hexdigest()\n\n\ndef main(source, output):\n    result = {}\n    torch.set_num_threads(1)\n    base = Path(get_base_dir())\n    for arm in (\"answer\", \"rationale\"):\n        expected = json.loads((source / f\"{arm}-train.json\").read_text())\n        model, tokenizer, metadata = load_model(\"sft\", torch.device(\"cpu\"), phase=\"eval\", model_tag=arm, step=384)\n        path = base / \"chatsft_checkpoints\" / arm\n        observed = {\"checkpoint_file_sha256\": sha(path / \"model_000384.pt\"),\n                    \"checkpoint_state_sha256\": tensor_digest(model.state_dict()),\n                    \"checkpoint_meta_sha256\": sha(path / \"meta_000384.json\")}\n        assert all(expected[key] == value for key, value in observed.items())\n        assert metadata[\"study\"][\"arm\"] == arm and model.config.syn_cfg.enable_hebbian\n        assert model.lm_head.weight is model.wte.weight\n        assert model.config.vocab_size == tokenizer.get_vocab_size()\n        result[arm] = {**observed, \"vocab_size\": model.config.vocab_size}\n    Console().print(result)\n    output.write_text(json.dumps(result, sort_keys=True, indent=2) + \"\\n\")\n\n\nif __name__ == \"__main__\":\n    main(*(Path(arg) for arg in sys.argv[1:]))\n",
+      "sha256": "55bd6a3a87688282772b669e8a9e5abfde58ecf35e63212dc760f5c47748fc2c"
+    }
+  },
+  "training_mask_parity": {
+    "answer": {
+      "forced_calculator_positions": 0,
+      "gradient_error_l2": 0.0,
+      "gradient_tensors": 49,
+      "max_gradient_error": 0,
+      "objective_error": 0.0,
+      "supervised_positions": 11
+    },
+    "rationale": {
+      "forced_calculator_positions": 15,
+      "gradient_error_l2": 3.4256833970446797e-07,
+      "gradient_tensors": 49,
+      "max_gradient_error": 5.960464477539063e-08,
+      "objective_error": 0.0,
+      "supervised_positions": 106
+    }
+  }
+}
