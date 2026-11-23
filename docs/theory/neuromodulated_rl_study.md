@@ -853,3 +853,48 @@ commands ran from the recorded implementation checkout. The
 three `audit_*.py` drivers reconstruct every reported decision
 from the archived rows and the frozen panel.
 [Results, replay source and DSR receipts](../../results/d20_fresh_arithmetic_2026-11-23.json) · [Panel and generation archive](../../results/d20_fresh_arithmetic_2026-11-23.json.gz)
+
+## Calibrating arithmetic difficulty for mixed rewards
+
+The [pinned Qwen policy](https://huggingface.co/Qwen/Qwen2.5-Math-1.5B-Instruct/tree/aafeb0fc6f22cbf0eaeed126eff8be45b0360a35)
+solved all the single-operation controls. This study varies computation
+depth and number size while retaining exact answer checks. Its aim is to
+find a setting where reward responds to the question and has meaningful
+variation within a group of samples.
+
+- [ ] Seal screening, confirmation, adaptation and transfer panels before
+  model inference. Each has eight pairs per difficulty, split evenly
+  between an ordered register and a packing calculation. Each pair
+  changes only the starting quantity. Verify both correct answers with
+  an independent integer calculation and exchange labels within each pair
+  for the control. Set the generator seed to 811023. The three levels
+  use 1, 2 and 3 rounds of four operations with starting magnitudes
+  100–999, 1,000–9,999 and 10,000–99,999 respectively. Each round
+  adds, multiplies, subtracts and floor-divides in that order. Discard
+  pairs whose answers coincide with each other or a printed quantity.
+- [ ] Use the same public checkpoint and published chain-of-thought
+  system prompt, with four independent BF16 samples per question,
+  temperature 1, top-k 50, top-p 1 and a 512-token limit. Parse the
+  last complete integer-valued boxed answer. Use batches of eight
+  questions and derive batch seeds from panel and level, independent
+  of which level is selected.
+- [ ] On screening, a level qualifies with at least 48 parseable and
+  16 correct out of 64 samples, at least 4 mixed groups out of 16,
+  correct answers for at least 4 distinct integers, a strict lead over
+  the best constant integer, and at least eight more correct than the
+  exchanged-label control with exact pair-sign-flip `p ≤ 0.025`.
+  Select the lowest qualifying level using screening alone. Run
+  confirmation at that level. If no level qualifies on screening,
+  keep confirmation and all adaptation panels sealed.
+- [ ] Freeze the selected level and checkpoint for later adaptation
+  only if confirmation passes the same gates. If confirmation has
+  any genuine mixed group, use its first one for a numerical check
+  on the exact delayed score of Qwen's final MLP projection. Compare
+  a detached local trace with independent autograd for the same FP32
+  full-softmax objective and recorded completions. Record the sampled
+  actions, reward denominators and gradient error. Keep the official
+  GSM8K test split and the adaptation and transfer panels untouched.
+- [ ] Independently reconstruct panel math, rewards, the screen
+  selection, confirmation and the archived evidence. Preserve all
+  levels and publish the gate result, including any lack of reward
+  variation or a format/length failure.
