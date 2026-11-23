@@ -62,3 +62,50 @@ baseline (`hwxb.3`) exists.
 Keep `neuromod_enabled` off by default. Enable it for RL fine-tuning experiments only
 alongside the baseline arm described above, and log the per-step levels the bus already
 exposes so the comparison is auditable.
+
+## Same-episode dopamine feedback
+
+Bead `hwxb.4.4.2` tests whether the reward attached to a policy action
+reaches that episode's deferred Hebbian write and whether the timing
+improves synthetic reward learning. The old harness computed and broadcast
+the reward after training, then reset the next episode's traces before any
+training forward could commit the write. An instrumented run on `bea83c5`
+counted zero committed deferred writes and 136 discarded by reset (four
+sites on each of 34 subsequent resets). Its original battery passed. The
+last episode left four additional writes pending. Eligibility traces are an
+established way to make earlier activity available to delayed feedback.
+[Distal reward model](https://doi.org/10.1093/cercor/bhl152)
+
+### Registered checklist
+
+- [x] Replay the old 35-step battery and count real deferred writes at the
+  production update and reset boundaries.
+- [ ] Expose the normal deferred-write operation at an explicit safe
+  boundary. In the existing reward harness, complete backward and the
+  optimizer step, broadcast feedback, commit exactly once per eligible
+  site, then reset at the next episode. Test that it lands, changes the
+  persistent slow matrix, consumes eligibility once and respects the
+  dopamine gain. Keep ordinary forward and validation semantics.
+- [ ] Run the contextual-bandit study on seeds 410–417 for 128 updates per
+  seed and feedback policy. Use the existing two-layer, width-64 model and
+  copy-first reward with batch size 16. Initialize the three policies
+  identically and use the same task seeds and action RNG initialization.
+  Isolate dopamine by setting input, exploration and novelty gain slopes
+  to zero. Apply the real reward's gain to its own completed episode
+  (aligned), use gain 1 (neutral), or use the gain before that reward was
+  observed (one-episode lag). The three policies can produce different
+  actions and hence different reward streams during training.
+- [ ] Evaluate the identical 512 held-out contexts at updates 0, 32, 64,
+  96 and 128 with writes off and fast state reset. Treat mean probability
+  of the rewarded action as the expected reward of sampling the policy.
+  Record greedy accuracy and gold-token negative log likelihood too.
+- [ ] Compare aligned with neutral and aligned with lagged. The endpoint
+  is each seed's mean held-out expected reward at updates 32–128. Require
+  at least 0.01 absolute improvement, positive changes in at least six of
+  eight matched seeds, and a one-sided paired sign-flip p-value at most
+  0.025 for each contrast (enumerate all 256 signs). Require both contrasts
+  for advancement. Publish every trajectory with commit counts, gains and
+  outcomes. The study covers synthetic policy-gradient learning in the
+  E2E harness. GRPO and full-model recall remain separate.
+- [ ] Recompute the decision independently, run DSR quality checks and
+  record the bounded outcome in Beads.
