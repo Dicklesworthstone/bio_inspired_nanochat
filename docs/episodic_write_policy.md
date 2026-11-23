@@ -247,12 +247,43 @@ the identity permutation and zero correction. The formula conditions on the
 incoming traces. A nonlinear normalization applied after the product, a
 sequence-dependent STDP update or subsequent training requires its own control.
 
+A two-token example shows why the correction matters. Take scalar
+`X = Y = (−1, 1)`, unit projections and zero starting traces. The identity
+and swapped assignments give `C = +1` and `−1`. Both give `UV = h²`.
+Multiplying the mean factors would give zero. To compute the correction
+at model width, form `Xcᵀ(Xc Pᵢ)/n` and `(Yc Pₒ)ᵀYc/n` from centered rows
+and multiply these two rank-width factors. This avoids materializing either
+feature covariance or enumerating permutations.
+
 The prospective check compares with the production layer over every
 permutation of blocks of sizes 1, 2, 4 and 5, in both tensor shapes.
 Use nonzero incoming traces, FP64, rectangular projections, constant-row
 controls and an absolute entrywise tolerance of `1e-10`. Also seek explicit
 counterexamples to dropping the covariance term and to commuting normalization
 with permutation averaging.
+
+Both the covariance formula and its rank-factorized implementation passed.
+The largest entrywise difference from exhaustive averaging was
+**1.57 × 10⁻¹³** (rounded upward) across 24 cases and 882 production-layer
+evaluations. The five-row varied fixture gave a **0.35071** entrywise
+difference between bounding the expected product and averaging the bounded
+products. Thus the raw null can serve as an analytic control for trace
+experiments. An experiment on the normalized weight update must carry each
+permuted product through that normalization. These fixtures test the formula
+and its implementation. The effect of learned fast weights on held-out
+language quality remains open under `hwxb.4.4`. [All cases, executable implementation and DSR receipts](../results/episodic_write_policy_audit_2026-11-23.json)
+
+For a fixed sequence of activation blocks with **independent** permutations
+from block to block, the correction can also be maintained online. Write
+`Dₜ = E[UₜVₜ] − E[Uₜ]E[Vₜ]`. Independence eliminates the two cross terms
+between the old centered traces and the new centered cross-moment, giving
+`Dₜ = d² Dₜ₋₁ + h² Sₓ,ₜ Pᵢ Pₒᵀ Sᵧ,ₜ/(nₜ−1)`. For a singleton the new term
+is zero. Update both mean traces with the block mean `Mₜ` and add `Dₜ`
+at readout. This argument requires the future activation blocks to be fixed
+independently of the randomized writes. The verification compares three
+successive blocks of 2, 3 and 4 rows against every joint permutation. All
+288 streams were enumerated (864 calls to the layer). The largest difference
+over the three readouts was `1.69e-14` in FP64.
 
 ### Reproducing the studies
 
@@ -304,3 +335,10 @@ jq -r '.statistics_verifier.source' "$audit" > "$SCRATCH/replay.py" &&
   jq '.statistics_verifier.report' "$audit" > "$SCRATCH/expected.json" &&
   cmp "$SCRATCH/observed.json" "$SCRATCH/expected.json"
 ```
+
+The locked Linux CPU suite recorded 2,078 passes and 11 skips in 696.61 s.
+Nine skips required CUDA, one required `torch.compile` on Python 3.14 and
+one required Dynamo for FlexAttention. Ruff, ty and the eight focused tests
+passed. The first full-suite attempt exhausted temporary storage and measured
+a 2.21× training slowdown against the 2.00× limit. The completed recovery
+passed the same throughput gate. [Run receipts and skip reasons](../results/episodic_write_policy_audit_2026-11-23.json)

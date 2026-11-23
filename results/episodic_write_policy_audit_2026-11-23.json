@@ -258,6 +258,78 @@
         }
       ]
     },
+    "write-published-replay": {
+      "purpose": "Extracted the published verifier and reproduced the archived statistical report byte for byte.",
+      "id": "EB925E20-D151-489C-A146-528C6D7C23E0",
+      "status": "success",
+      "exit_code": 0,
+      "duration_ms": 1154,
+      "config_sha256": "ff71b404c9867ceb96943921411ff6590c3e5a6fdda0e91b5344ec9760adabda",
+      "source_before": "e633c47b0f694351f846e8fb81e644a5ff61e87b|a79cda77c73b82ad2bf7bead1ed54736d7cabc5636e5bbac9cb60feb7ff96358|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "e633c47b0f694351f846e8fb81e644a5ff61e87b|a79cda77c73b82ad2bf7bead1ed54736d7cabc5636e5bbac9cb60feb7ff96358|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "checks": [
+        {
+          "command": "export UV_PROJECT_ENVIRONMENT=/Volumes/SANDISK_SSD/scratch/bio-d1-execution.mBId4ZF4/nov23-mac-wheel-env UV_OFFLINE=true OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 && uv run --no-sync --python /opt/homebrew/bin/python3.14 python /tmp/nanochat-write-gain.csg2x2ZX/published-replay.py /Users/jemanuel/projects/bio_inspired_nanochat/results /tmp/nanochat-write-gain.csg2x2ZX/packaged-observed.json && cmp /tmp/nanochat-write-gain.csg2x2ZX/packaged-observed.json /tmp/nanochat-write-gain.csg2x2ZX/packaged-reference.json",
+          "exit_code": 0,
+          "log_sha256": "3ad1681d1bc5fdd0e9a6a576df4e1d40d520d19c5fb0fced07275a519da69fa3",
+          "duration_ms": 1005
+        }
+      ]
+    },
+    "hebbian-shared-permutation": {
+      "purpose": "Exhaustive FP64 replay of the raw Hebbian trace-product identity on production SynapticLinear, with degenerate inputs and nonlinear counterexamples.",
+      "id": "815A8946-510C-4FD0-B0CD-72DDF721E7CF",
+      "status": "success",
+      "exit_code": 0,
+      "duration_ms": 2875,
+      "config_sha256": "4cbcf4f4422719f0680ba0d51bb9707887992decc7f89b7138534509e8337178",
+      "source_before": "e633c47b0f694351f846e8fb81e644a5ff61e87b|a79cda77c73b82ad2bf7bead1ed54736d7cabc5636e5bbac9cb60feb7ff96358|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "e633c47b0f694351f846e8fb81e644a5ff61e87b|a79cda77c73b82ad2bf7bead1ed54736d7cabc5636e5bbac9cb60feb7ff96358|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "checks": [
+        {
+          "command": "export PYTHONPATH=. && export UV_PROJECT_ENVIRONMENT=/Volumes/SANDISK_SSD/scratch/bio-d1-execution.mBId4ZF4/nov23-mac-wheel-env UV_OFFLINE=true OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 && uv run --no-sync --python /opt/homebrew/bin/python3.14 python /tmp/nanochat-write-gain.csg2x2ZX/verify_hebbian_null.py /tmp/nanochat-write-gain.csg2x2ZX/hebbian-null.json",
+          "exit_code": 0,
+          "log_sha256": "215c7bc25b990cf209ec25501afcfe905a58a6d9184ddd48fed20294b564ec5d",
+          "duration_ms": 2764
+        }
+      ]
+    },
+    "hebbian-factorized-null": {
+      "purpose": "Re-executed all layer permutations and checked the rank-factorized implementation against the same oracle.",
+      "id": "BBEF67BD-5AD4-468C-9815-AB37A7598FFD",
+      "status": "success",
+      "exit_code": 0,
+      "duration_ms": 2665,
+      "config_sha256": "1b9578cc414921029d504fa094d483bc2a937cac8b6962fb6784e27ab80021b0",
+      "source_before": "e633c47b0f694351f846e8fb81e644a5ff61e87b|a79cda77c73b82ad2bf7bead1ed54736d7cabc5636e5bbac9cb60feb7ff96358|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "e633c47b0f694351f846e8fb81e644a5ff61e87b|a79cda77c73b82ad2bf7bead1ed54736d7cabc5636e5bbac9cb60feb7ff96358|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "checks": [
+        {
+          "command": "export PYTHONPATH=. && export UV_PROJECT_ENVIRONMENT=/Volumes/SANDISK_SSD/scratch/bio-d1-execution.mBId4ZF4/nov23-mac-wheel-env UV_OFFLINE=true OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 && uv run --no-sync --python /opt/homebrew/bin/python3.14 python /tmp/nanochat-write-gain.csg2x2ZX/verify_hebbian_null.py /tmp/nanochat-write-gain.csg2x2ZX/hebbian-final.json",
+          "exit_code": 0,
+          "log_sha256": "b971227a15fe19cb740ff9c2bf3a928dc348cb0ff858fd20f5d966cda13efe66",
+          "duration_ms": 2557
+        }
+      ]
+    },
+    "hebbian-stream-null": {
+      "purpose": "Checked the streaming correction against all independent joint permutations of three fixed activation blocks.",
+      "id": "97346CB8-0636-4DF1-A34E-142440A93821",
+      "status": "success",
+      "exit_code": 0,
+      "duration_ms": 2778,
+      "config_sha256": "d2e60079e6cdf7237dafd80bb61eeca5ae5f52c92af516e4cadae956acb80117",
+      "source_before": "e633c47b0f694351f846e8fb81e644a5ff61e87b|a79cda77c73b82ad2bf7bead1ed54736d7cabc5636e5bbac9cb60feb7ff96358|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "e633c47b0f694351f846e8fb81e644a5ff61e87b|a79cda77c73b82ad2bf7bead1ed54736d7cabc5636e5bbac9cb60feb7ff96358|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "checks": [
+        {
+          "command": "export PYTHONPATH=. && export UV_PROJECT_ENVIRONMENT=/Volumes/SANDISK_SSD/scratch/bio-d1-execution.mBId4ZF4/nov23-mac-wheel-env UV_OFFLINE=true OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 && uv run --no-sync --python /opt/homebrew/bin/python3.14 python /tmp/nanochat-write-gain.csg2x2ZX/verify_stream_null.py /tmp/nanochat-write-gain.csg2x2ZX/stream-null.json",
+          "exit_code": 0,
+          "log_sha256": "d8e105f9d7305b9553cca997eabecdee46a8335bfdd890aebf226b7cfa7704e6",
+          "duration_ms": 2665
+        }
+      ]
+    },
     "binding-opportunities": {
       "purpose": "Post hoc replay of every held-out target, exact-pair versus permutation loss partition and empirical oracle ceilings",
       "id": "4b8740c0-36fb-4300-a751-a50275cdc61c",
@@ -313,12 +385,40 @@
       ]
     },
     "write-full-suite-recovery": {
-      "purpose": "Exact-source Linux suite rerun with CUDA hidden on a worker with free scratch space.",
-      "status": "running"
+      "purpose": "Alternative full-suite run on a CUDA-wheel Linux worker with CUDA hidden. Stopped the slower duplicate after the locked CPU-wheel suite completed all 2089 cases. This partial run supplies no full-suite verdict.",
+      "id": "62fd02c6-15b8-4174-9121-ccf3ed676ea8",
+      "status": "failure",
+      "exit_code": 1,
+      "duration_ms": 1761143,
+      "config_sha256": "f24d65b004f9349be46b333cacabf25aa21f90e4375a48e6dd37730f9077b698",
+      "source_before": "8426935c6c72f84e90b9c3cf45b47b6d18719e7b|c24a715fb08feefa00a1d86444a0bfa86bd8a028289752d901f71f036508116c|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "8426935c6c72f84e90b9c3cf45b47b6d18719e7b|c24a715fb08feefa00a1d86444a0bfa86bd8a028289752d901f71f036508116c|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "checks": [
+        {
+          "command": "source /data/projects/bio-native-u0fl4-V6tSMxvb/env && export CUDA_VISIBLE_DEVICES= HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 UV_OFFLINE=true NANOCHAT_BASE_DIR=/data/projects/bio-vanilla-kkUkqcbo/cache OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 RAYON_NUM_THREADS=1 && uv run --no-sync python -m pytest -q tests/ --tb=short --junitxml=/data/projects/bio-wg72.wortLhYk/recovery.xml",
+          "exit_code": 143,
+          "log_sha256": "0fd4bab44683e9a2d93785519e95c20526428291ade59242ad7488a7e7238470",
+          "duration_ms": 1759944
+        }
+      ]
     },
     "write-linux-cpu-recovered": {
       "purpose": "Exact-source locked CPU-only suite on original host after free space returned, with an explicit private temporary directory.",
-      "status": "running"
+      "id": "96c28a69-230b-4c99-b50a-8294f6506b1b",
+      "status": "success",
+      "exit_code": 0,
+      "duration_ms": 701830,
+      "config_sha256": "2d2c19455c1a70badd411683a01ef44ef8d566601b710eaafc2a32acadf47ece",
+      "source_before": "8426935c6c72f84e90b9c3cf45b47b6d18719e7b|c24a715fb08feefa00a1d86444a0bfa86bd8a028289752d901f71f036508116c|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "8426935c6c72f84e90b9c3cf45b47b6d18719e7b|c24a715fb08feefa00a1d86444a0bfa86bd8a028289752d901f71f036508116c|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "checks": [
+        {
+          "command": "export TMPDIR=/data/projects/bio-write-science.A0bK5ynp/pytest-scratch TMP=/data/projects/bio-write-science.A0bK5ynp/pytest-scratch TEMP=/data/projects/bio-write-science.A0bK5ynp/pytest-scratch UV_PROJECT_ENVIRONMENT=/data/projects/bio-nov23-cpu.xflG5TXe/venv PATH=/data/projects/bio-nov23-cpu.xflG5TXe/venv/bin:$PATH CUDA_VISIBLE_DEVICES= HF_HUB_OFFLINE=1 UV_OFFLINE=true OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 RAYON_NUM_THREADS=1 && uv run --no-sync python -m pytest -q tests/ --tb=short --junitxml=/data/projects/bio-write-science.A0bK5ynp/cpu-recovery.xml",
+          "exit_code": 0,
+          "log_sha256": "a98e8f77d629fecaf9ee6fbeb9a81a8b4748dfdbe2c78ba00a2849adf104039f",
+          "duration_ms": 701694
+        }
+      ]
     }
   },
   "write_score_verifier": {
@@ -928,6 +1028,511 @@
       }
     }
   },
+  "raw_hebbian_null": {
+    "protocol_commit": "bb868a3",
+    "source": "\"\"\"Check the exact shared-permutation null against Nanochat's raw trace update.\"\"\"\nimport hashlib\nimport itertools\nimport json\nimport sys\nfrom pathlib import Path\n\nimport torch\nfrom rich.console import Console\n\nfrom bio_inspired_nanochat import synaptic\n\n\ndef bounded(matrix):\n    return matrix / max(1., float(matrix.norm()))\n\n\ndef mean_raw_write(x, y, u0, v0, proj_in, proj_out, decay, step=.05):\n    \"\"\"Uniform shared-permutation expectation. Inputs are one block of FP64 rows.\"\"\"\n    n = x.shape[0]\n    mx, my = x.mean(0), y.mean(0)\n    eu = decay * u0 + step * torch.outer(mx, my @ proj_out)\n    ev = decay * v0 + step * torch.outer(mx @ proj_in, my)\n    expected = eu @ ev\n    if n == 1:\n        return expected\n    xc, yc = x - mx, y - my\n    left = xc.T @ (xc @ proj_in) / n\n    right = (yc @ proj_out).T @ yc / n\n    return expected + (step ** 2 / (n - 1)) * (left @ right)\n\n\n@torch.no_grad()\ndef check(n, shape, fixture):\n    torch.manual_seed(967 + n)\n    config = synaptic.SynapticConfig(enable_hebbian=True, enable_stdp=shape == \"routed\")\n    layer = synaptic.SynapticLinear(3, 5, config).double()\n    layer.u_buf.normal_(std=0.2)\n    layer.v_buf.normal_(std=0.2)\n    initial = {k: v.clone() for k, v in layer.state_dict().items()}\n    x = torch.randn(n, 3, dtype=torch.float64) * 12\n    y = torch.randn(n, 5, dtype=torch.float64) * 15\n    if fixture == \"constant_x\":\n        x = x[:1].expand_as(x)\n    if fixture == \"constant_y\":\n        y = y[:1].expand_as(y)\n    mx, my = x.mean(0), y.mean(0)\n    m = torch.outer(mx, my)\n    sx = (x - mx).T @ (x - mx) / n\n    sy = (y - my).T @ (y - my) / n\n    d = config.post_trace_decay\n    eu = d * layer.u_buf + .05 * m @ layer.proj_out\n    ev = d * layer.v_buf + .05 * layer.proj_in.T @ m\n    independent = eu @ ev\n    correction = (.05 ** 2 / (n - 1)) * sx @ layer.proj_in @ layer.proj_out.T @ sy if n > 1 else torch.zeros_like(independent)\n    expected = independent + correction\n    low_rank = mean_raw_write(x, y, layer.u_buf, layer.v_buf, layer.proj_in, layer.proj_out, d)\n    samples, normalized = [], []\n    for permutation in itertools.permutations(range(n)):\n        layer.load_state_dict(initial)\n        shuffled = y[list(permutation)]\n        if shape == \"routed\":\n            layer._update_hebb_traces(x, shuffled, None)\n        else:\n            layer._update_hebb_traces(x[None], shuffled[None], None)\n        raw, _ = synaptic._hebbian_signal(layer.u_buf, layer.v_buf, bounded=False)\n        limited, _ = synaptic._hebbian_signal(layer.u_buf, layer.v_buf, bounded=True)\n        samples.append(raw)\n        normalized.append(limited)\n    mean = torch.stack(samples).mean(0)\n    error = float((expected - mean).abs().max())\n    gap = float((independent - mean).abs().max())\n    nonlinear_gap = float((bounded(expected) - torch.stack(normalized).mean(0)).abs().max())\n    return {\"rows\": n, \"path\": shape, \"fixture\": fixture, \"permutations\": len(samples),\n            \"max_entry_error\": error, \"low_rank_entry_error\": float((low_rank - mean).abs().max()),\n            \"independent_factors_error\": gap,\n            \"bounded_mean_vs_mean_bounded_error\": nonlinear_gap}\n\n\nout = Path(sys.argv[1])\nrecords = [check(n, shape, fixture) for n in (1, 2, 4, 5) for shape in (\"dense\", \"routed\")\n           for fixture in (\"varied\", \"constant_x\", \"constant_y\")]\nworst = max(max(r[\"max_entry_error\"], r[\"low_rank_entry_error\"]) for r in records)\ndegenerate = max(r[\"independent_factors_error\"] for r in records if r[\"fixture\"] != \"varied\" or r[\"rows\"] == 1)\nnaive = max(r[\"independent_factors_error\"] for r in records)\nnonlinear = max(r[\"bounded_mean_vs_mean_bounded_error\"] for r in records)\npassed = worst <= 1e-10 and degenerate <= 1e-10 and naive > 1e-10 and nonlinear > 1e-10\nreport = {\"torch\": str(torch.__version__), \"layer_source_sha256\": hashlib.sha256(Path(synaptic.__file__).read_bytes()).hexdigest(),\n          \"cases\": len(records), \"layer_evaluations\": sum(r[\"permutations\"] for r in records),\n          \"worst_entry_error\": worst, \"worst_degenerate_error\": degenerate, \"worst_independent_factors_error\": naive,\n          \"worst_normalization_error\": nonlinear, \"passed\": passed, \"records\": records}\nwith out.open(\"x\") as stream:\n    json.dump(report, stream, indent=2, allow_nan=False)\n    stream.write(\"\\n\")\nConsole().print({k: v for k, v in report.items() if k != \"records\"})\nif not passed:\n    raise SystemExit(1)\n",
+    "arguments": [
+      "new_report_filename"
+    ],
+    "initial_report": {
+      "torch": "2.9.1",
+      "layer_source_sha256": "6357b25cf14a145df46d5b77db4c9fe6028983b8b86d66cae45871ec8c27f10b",
+      "cases": 24,
+      "layer_evaluations": 882,
+      "worst_entry_error": 1.4810375148499588e-13,
+      "worst_degenerate_error": 1.4810375148499588e-13,
+      "worst_independent_factors_error": 296.85306563624323,
+      "worst_normalization_error": 0.35070986324136266,
+      "passed": true,
+      "records": [
+        {
+          "rows": 1,
+          "path": "dense",
+          "fixture": "varied",
+          "permutations": 1,
+          "max_entry_error": 3.552713678800501e-15,
+          "independent_factors_error": 3.552713678800501e-15,
+          "bounded_mean_vs_mean_bounded_error": 1.6653345369377348e-16
+        },
+        {
+          "rows": 1,
+          "path": "dense",
+          "fixture": "constant_x",
+          "permutations": 1,
+          "max_entry_error": 3.552713678800501e-15,
+          "independent_factors_error": 3.552713678800501e-15,
+          "bounded_mean_vs_mean_bounded_error": 1.6653345369377348e-16
+        },
+        {
+          "rows": 1,
+          "path": "dense",
+          "fixture": "constant_y",
+          "permutations": 1,
+          "max_entry_error": 3.552713678800501e-15,
+          "independent_factors_error": 3.552713678800501e-15,
+          "bounded_mean_vs_mean_bounded_error": 1.6653345369377348e-16
+        },
+        {
+          "rows": 1,
+          "path": "routed",
+          "fixture": "varied",
+          "permutations": 1,
+          "max_entry_error": 3.552713678800501e-15,
+          "independent_factors_error": 3.552713678800501e-15,
+          "bounded_mean_vs_mean_bounded_error": 1.6653345369377348e-16
+        },
+        {
+          "rows": 1,
+          "path": "routed",
+          "fixture": "constant_x",
+          "permutations": 1,
+          "max_entry_error": 3.552713678800501e-15,
+          "independent_factors_error": 3.552713678800501e-15,
+          "bounded_mean_vs_mean_bounded_error": 1.6653345369377348e-16
+        },
+        {
+          "rows": 1,
+          "path": "routed",
+          "fixture": "constant_y",
+          "permutations": 1,
+          "max_entry_error": 3.552713678800501e-15,
+          "independent_factors_error": 3.552713678800501e-15,
+          "bounded_mean_vs_mean_bounded_error": 1.6653345369377348e-16
+        },
+        {
+          "rows": 2,
+          "path": "dense",
+          "fixture": "varied",
+          "permutations": 2,
+          "max_entry_error": 5.684341886080802e-14,
+          "independent_factors_error": 296.85306563624323,
+          "bounded_mean_vs_mean_bounded_error": 0.030980346963009997
+        },
+        {
+          "rows": 2,
+          "path": "dense",
+          "fixture": "constant_x",
+          "permutations": 2,
+          "max_entry_error": 5.684341886080802e-14,
+          "independent_factors_error": 5.684341886080802e-14,
+          "bounded_mean_vs_mean_bounded_error": 5.551115123125783e-17
+        },
+        {
+          "rows": 2,
+          "path": "dense",
+          "fixture": "constant_y",
+          "permutations": 2,
+          "max_entry_error": 1.0658141036401503e-14,
+          "independent_factors_error": 1.0658141036401503e-14,
+          "bounded_mean_vs_mean_bounded_error": 1.3877787807814457e-16
+        },
+        {
+          "rows": 2,
+          "path": "routed",
+          "fixture": "varied",
+          "permutations": 2,
+          "max_entry_error": 5.684341886080802e-14,
+          "independent_factors_error": 296.85306563624323,
+          "bounded_mean_vs_mean_bounded_error": 0.030980346963009997
+        },
+        {
+          "rows": 2,
+          "path": "routed",
+          "fixture": "constant_x",
+          "permutations": 2,
+          "max_entry_error": 5.684341886080802e-14,
+          "independent_factors_error": 5.684341886080802e-14,
+          "bounded_mean_vs_mean_bounded_error": 5.551115123125783e-17
+        },
+        {
+          "rows": 2,
+          "path": "routed",
+          "fixture": "constant_y",
+          "permutations": 2,
+          "max_entry_error": 1.0658141036401503e-14,
+          "independent_factors_error": 1.0658141036401503e-14,
+          "bounded_mean_vs_mean_bounded_error": 1.3877787807814457e-16
+        },
+        {
+          "rows": 4,
+          "path": "dense",
+          "fixture": "varied",
+          "permutations": 24,
+          "max_entry_error": 4.263256414560601e-14,
+          "independent_factors_error": 65.66022779994582,
+          "bounded_mean_vs_mean_bounded_error": 0.3275301598578333
+        },
+        {
+          "rows": 4,
+          "path": "dense",
+          "fixture": "constant_x",
+          "permutations": 24,
+          "max_entry_error": 2.842170943040401e-14,
+          "independent_factors_error": 2.842170943040401e-14,
+          "bounded_mean_vs_mean_bounded_error": 1.1102230246251565e-16
+        },
+        {
+          "rows": 4,
+          "path": "dense",
+          "fixture": "constant_y",
+          "permutations": 24,
+          "max_entry_error": 1.4810375148499588e-13,
+          "independent_factors_error": 1.4810375148499588e-13,
+          "bounded_mean_vs_mean_bounded_error": 9.853229343548264e-15
+        },
+        {
+          "rows": 4,
+          "path": "routed",
+          "fixture": "varied",
+          "permutations": 24,
+          "max_entry_error": 4.263256414560601e-14,
+          "independent_factors_error": 65.66022779994582,
+          "bounded_mean_vs_mean_bounded_error": 0.3275301598578333
+        },
+        {
+          "rows": 4,
+          "path": "routed",
+          "fixture": "constant_x",
+          "permutations": 24,
+          "max_entry_error": 2.842170943040401e-14,
+          "independent_factors_error": 2.842170943040401e-14,
+          "bounded_mean_vs_mean_bounded_error": 1.1102230246251565e-16
+        },
+        {
+          "rows": 4,
+          "path": "routed",
+          "fixture": "constant_y",
+          "permutations": 24,
+          "max_entry_error": 1.4810375148499588e-13,
+          "independent_factors_error": 1.4810375148499588e-13,
+          "bounded_mean_vs_mean_bounded_error": 9.853229343548264e-15
+        },
+        {
+          "rows": 5,
+          "path": "dense",
+          "fixture": "varied",
+          "permutations": 120,
+          "max_entry_error": 1.4210854715202004e-14,
+          "independent_factors_error": 34.863130495694904,
+          "bounded_mean_vs_mean_bounded_error": 0.35070986324136266
+        },
+        {
+          "rows": 5,
+          "path": "dense",
+          "fixture": "constant_x",
+          "permutations": 120,
+          "max_entry_error": 2.1316282072803006e-14,
+          "independent_factors_error": 2.1316282072803006e-14,
+          "bounded_mean_vs_mean_bounded_error": 1.6653345369377348e-16
+        },
+        {
+          "rows": 5,
+          "path": "dense",
+          "fixture": "constant_y",
+          "permutations": 120,
+          "max_entry_error": 4.973799150320701e-14,
+          "independent_factors_error": 4.973799150320701e-14,
+          "bounded_mean_vs_mean_bounded_error": 1.1102230246251565e-16
+        },
+        {
+          "rows": 5,
+          "path": "routed",
+          "fixture": "varied",
+          "permutations": 120,
+          "max_entry_error": 1.4210854715202004e-14,
+          "independent_factors_error": 34.863130495694904,
+          "bounded_mean_vs_mean_bounded_error": 0.35070986324136266
+        },
+        {
+          "rows": 5,
+          "path": "routed",
+          "fixture": "constant_x",
+          "permutations": 120,
+          "max_entry_error": 2.1316282072803006e-14,
+          "independent_factors_error": 2.1316282072803006e-14,
+          "bounded_mean_vs_mean_bounded_error": 1.6653345369377348e-16
+        },
+        {
+          "rows": 5,
+          "path": "routed",
+          "fixture": "constant_y",
+          "permutations": 120,
+          "max_entry_error": 4.973799150320701e-14,
+          "independent_factors_error": 4.973799150320701e-14,
+          "bounded_mean_vs_mean_bounded_error": 1.1102230246251565e-16
+        }
+      ]
+    },
+    "factorized_report": {
+      "torch": "2.9.1",
+      "layer_source_sha256": "6357b25cf14a145df46d5b77db4c9fe6028983b8b86d66cae45871ec8c27f10b",
+      "cases": 24,
+      "layer_evaluations": 882,
+      "worst_entry_error": 1.5631940186722204e-13,
+      "worst_degenerate_error": 1.4810375148499588e-13,
+      "worst_independent_factors_error": 296.85306563624323,
+      "worst_normalization_error": 0.35070986324136266,
+      "passed": true,
+      "records": [
+        {
+          "rows": 1,
+          "path": "dense",
+          "fixture": "varied",
+          "permutations": 1,
+          "max_entry_error": 3.552713678800501e-15,
+          "low_rank_entry_error": 8.881784197001252e-16,
+          "independent_factors_error": 3.552713678800501e-15,
+          "bounded_mean_vs_mean_bounded_error": 1.6653345369377348e-16
+        },
+        {
+          "rows": 1,
+          "path": "dense",
+          "fixture": "constant_x",
+          "permutations": 1,
+          "max_entry_error": 3.552713678800501e-15,
+          "low_rank_entry_error": 8.881784197001252e-16,
+          "independent_factors_error": 3.552713678800501e-15,
+          "bounded_mean_vs_mean_bounded_error": 1.6653345369377348e-16
+        },
+        {
+          "rows": 1,
+          "path": "dense",
+          "fixture": "constant_y",
+          "permutations": 1,
+          "max_entry_error": 3.552713678800501e-15,
+          "low_rank_entry_error": 8.881784197001252e-16,
+          "independent_factors_error": 3.552713678800501e-15,
+          "bounded_mean_vs_mean_bounded_error": 1.6653345369377348e-16
+        },
+        {
+          "rows": 1,
+          "path": "routed",
+          "fixture": "varied",
+          "permutations": 1,
+          "max_entry_error": 3.552713678800501e-15,
+          "low_rank_entry_error": 8.881784197001252e-16,
+          "independent_factors_error": 3.552713678800501e-15,
+          "bounded_mean_vs_mean_bounded_error": 1.6653345369377348e-16
+        },
+        {
+          "rows": 1,
+          "path": "routed",
+          "fixture": "constant_x",
+          "permutations": 1,
+          "max_entry_error": 3.552713678800501e-15,
+          "low_rank_entry_error": 8.881784197001252e-16,
+          "independent_factors_error": 3.552713678800501e-15,
+          "bounded_mean_vs_mean_bounded_error": 1.6653345369377348e-16
+        },
+        {
+          "rows": 1,
+          "path": "routed",
+          "fixture": "constant_y",
+          "permutations": 1,
+          "max_entry_error": 3.552713678800501e-15,
+          "low_rank_entry_error": 8.881784197001252e-16,
+          "independent_factors_error": 3.552713678800501e-15,
+          "bounded_mean_vs_mean_bounded_error": 1.6653345369377348e-16
+        },
+        {
+          "rows": 2,
+          "path": "dense",
+          "fixture": "varied",
+          "permutations": 2,
+          "max_entry_error": 5.684341886080802e-14,
+          "low_rank_entry_error": 5.684341886080802e-14,
+          "independent_factors_error": 296.85306563624323,
+          "bounded_mean_vs_mean_bounded_error": 0.030980346963009997
+        },
+        {
+          "rows": 2,
+          "path": "dense",
+          "fixture": "constant_x",
+          "permutations": 2,
+          "max_entry_error": 5.684341886080802e-14,
+          "low_rank_entry_error": 5.684341886080802e-14,
+          "independent_factors_error": 5.684341886080802e-14,
+          "bounded_mean_vs_mean_bounded_error": 5.551115123125783e-17
+        },
+        {
+          "rows": 2,
+          "path": "dense",
+          "fixture": "constant_y",
+          "permutations": 2,
+          "max_entry_error": 1.0658141036401503e-14,
+          "low_rank_entry_error": 7.105427357601002e-15,
+          "independent_factors_error": 1.0658141036401503e-14,
+          "bounded_mean_vs_mean_bounded_error": 1.3877787807814457e-16
+        },
+        {
+          "rows": 2,
+          "path": "routed",
+          "fixture": "varied",
+          "permutations": 2,
+          "max_entry_error": 5.684341886080802e-14,
+          "low_rank_entry_error": 5.684341886080802e-14,
+          "independent_factors_error": 296.85306563624323,
+          "bounded_mean_vs_mean_bounded_error": 0.030980346963009997
+        },
+        {
+          "rows": 2,
+          "path": "routed",
+          "fixture": "constant_x",
+          "permutations": 2,
+          "max_entry_error": 5.684341886080802e-14,
+          "low_rank_entry_error": 5.684341886080802e-14,
+          "independent_factors_error": 5.684341886080802e-14,
+          "bounded_mean_vs_mean_bounded_error": 5.551115123125783e-17
+        },
+        {
+          "rows": 2,
+          "path": "routed",
+          "fixture": "constant_y",
+          "permutations": 2,
+          "max_entry_error": 1.0658141036401503e-14,
+          "low_rank_entry_error": 7.105427357601002e-15,
+          "independent_factors_error": 1.0658141036401503e-14,
+          "bounded_mean_vs_mean_bounded_error": 1.3877787807814457e-16
+        },
+        {
+          "rows": 4,
+          "path": "dense",
+          "fixture": "varied",
+          "permutations": 24,
+          "max_entry_error": 4.263256414560601e-14,
+          "low_rank_entry_error": 4.263256414560601e-14,
+          "independent_factors_error": 65.66022779994582,
+          "bounded_mean_vs_mean_bounded_error": 0.3275301598578333
+        },
+        {
+          "rows": 4,
+          "path": "dense",
+          "fixture": "constant_x",
+          "permutations": 24,
+          "max_entry_error": 2.842170943040401e-14,
+          "low_rank_entry_error": 2.842170943040401e-14,
+          "independent_factors_error": 2.842170943040401e-14,
+          "bounded_mean_vs_mean_bounded_error": 1.1102230246251565e-16
+        },
+        {
+          "rows": 4,
+          "path": "dense",
+          "fixture": "constant_y",
+          "permutations": 24,
+          "max_entry_error": 1.4810375148499588e-13,
+          "low_rank_entry_error": 1.5631940186722204e-13,
+          "independent_factors_error": 1.4810375148499588e-13,
+          "bounded_mean_vs_mean_bounded_error": 9.853229343548264e-15
+        },
+        {
+          "rows": 4,
+          "path": "routed",
+          "fixture": "varied",
+          "permutations": 24,
+          "max_entry_error": 4.263256414560601e-14,
+          "low_rank_entry_error": 4.263256414560601e-14,
+          "independent_factors_error": 65.66022779994582,
+          "bounded_mean_vs_mean_bounded_error": 0.3275301598578333
+        },
+        {
+          "rows": 4,
+          "path": "routed",
+          "fixture": "constant_x",
+          "permutations": 24,
+          "max_entry_error": 2.842170943040401e-14,
+          "low_rank_entry_error": 2.842170943040401e-14,
+          "independent_factors_error": 2.842170943040401e-14,
+          "bounded_mean_vs_mean_bounded_error": 1.1102230246251565e-16
+        },
+        {
+          "rows": 4,
+          "path": "routed",
+          "fixture": "constant_y",
+          "permutations": 24,
+          "max_entry_error": 1.4810375148499588e-13,
+          "low_rank_entry_error": 1.5631940186722204e-13,
+          "independent_factors_error": 1.4810375148499588e-13,
+          "bounded_mean_vs_mean_bounded_error": 9.853229343548264e-15
+        },
+        {
+          "rows": 5,
+          "path": "dense",
+          "fixture": "varied",
+          "permutations": 120,
+          "max_entry_error": 1.4210854715202004e-14,
+          "low_rank_entry_error": 1.7763568394002505e-14,
+          "independent_factors_error": 34.863130495694904,
+          "bounded_mean_vs_mean_bounded_error": 0.35070986324136266
+        },
+        {
+          "rows": 5,
+          "path": "dense",
+          "fixture": "constant_x",
+          "permutations": 120,
+          "max_entry_error": 2.1316282072803006e-14,
+          "low_rank_entry_error": 2.1316282072803006e-14,
+          "independent_factors_error": 2.1316282072803006e-14,
+          "bounded_mean_vs_mean_bounded_error": 1.6653345369377348e-16
+        },
+        {
+          "rows": 5,
+          "path": "dense",
+          "fixture": "constant_y",
+          "permutations": 120,
+          "max_entry_error": 4.973799150320701e-14,
+          "low_rank_entry_error": 4.263256414560601e-14,
+          "independent_factors_error": 4.973799150320701e-14,
+          "bounded_mean_vs_mean_bounded_error": 1.1102230246251565e-16
+        },
+        {
+          "rows": 5,
+          "path": "routed",
+          "fixture": "varied",
+          "permutations": 120,
+          "max_entry_error": 1.4210854715202004e-14,
+          "low_rank_entry_error": 1.7763568394002505e-14,
+          "independent_factors_error": 34.863130495694904,
+          "bounded_mean_vs_mean_bounded_error": 0.35070986324136266
+        },
+        {
+          "rows": 5,
+          "path": "routed",
+          "fixture": "constant_x",
+          "permutations": 120,
+          "max_entry_error": 2.1316282072803006e-14,
+          "low_rank_entry_error": 2.1316282072803006e-14,
+          "independent_factors_error": 2.1316282072803006e-14,
+          "bounded_mean_vs_mean_bounded_error": 1.6653345369377348e-16
+        },
+        {
+          "rows": 5,
+          "path": "routed",
+          "fixture": "constant_y",
+          "permutations": 120,
+          "max_entry_error": 4.973799150320701e-14,
+          "low_rank_entry_error": 4.263256414560601e-14,
+          "independent_factors_error": 4.973799150320701e-14,
+          "bounded_mean_vs_mean_bounded_error": 1.1102230246251565e-16
+        }
+      ]
+    },
+    "stream_source": "\"\"\"Check the streaming raw-write expectation by enumerating independent block permutations.\"\"\"\nimport itertools\nimport json\nimport math\nimport sys\nfrom pathlib import Path\n\nimport torch\nfrom rich.console import Console\n\nfrom bio_inspired_nanochat.synaptic import SynapticConfig, SynapticLinear\n\n\n@torch.no_grad()\ndef replay():\n    torch.manual_seed(941)\n    sizes = (2, 3, 4)\n    blocks = [(torch.randn(n, 3, dtype=torch.float64), torch.randn(n, 5, dtype=torch.float64)) for n in sizes]\n    layer = SynapticLinear(3, 5, SynapticConfig(enable_hebbian=True, enable_stdp=False)).double()\n    layer.u_buf.normal_()\n    layer.v_buf.normal_()\n    initial = {k: v.clone() for k, v in layer.state_dict().items()}\n    eu, ev = layer.u_buf.clone(), layer.v_buf.clone()\n    correction = torch.zeros((3, 5), dtype=torch.float64)\n    expected = []\n    d, h = layer.cfg.post_trace_decay, .05\n    for x, y in blocks:\n        n = len(x)\n        mx, my = x.mean(0), y.mean(0)\n        xc, yc = x - mx, y - my\n        left = xc.T @ (xc @ layer.proj_in) / n\n        right = (yc @ layer.proj_out).T @ yc / n\n        correction = d ** 2 * correction + h ** 2 / (n - 1) * (left @ right)\n        eu = d * eu + h * torch.outer(mx, my @ layer.proj_out)\n        ev = d * ev + h * torch.outer(mx @ layer.proj_in, my)\n        expected.append(eu @ ev + correction)\n    actual = [torch.zeros_like(correction) for _ in sizes]\n    streams = 0\n    for permutations in itertools.product(*(itertools.permutations(range(n)) for n in sizes)):\n        layer.load_state_dict(initial)\n        for j, ((x, y), indices) in enumerate(zip(blocks, permutations, strict=True)):\n            layer._update_hebb_traces(x[None], y[list(indices)][None], None)\n            actual[j] += layer.u_buf @ layer.v_buf\n        streams += 1\n    assert streams == math.prod(math.factorial(n) for n in sizes)\n    errors = [float((a / streams - e).abs().max()) for a, e in zip(actual, expected, strict=True)]\n    return {\"rows_per_block\": sizes, \"joint_permutations\": streams, \"production_layer_calls\": streams * len(sizes),\n            \"entry_errors_by_block\": errors, \"passed\": max(errors) <= 1e-10}\n\n\nresult = replay()\nwith Path(sys.argv[1]).open(\"x\") as stream:\n    json.dump(result, stream, indent=2)\n    stream.write(\"\\n\")\nConsole().print(result)\nif not result[\"passed\"]:\n    raise SystemExit(1)\n",
+    "stream_report": {
+      "rows_per_block": [
+        2,
+        3,
+        4
+      ],
+      "joint_permutations": 288,
+      "production_layer_calls": 864,
+      "entry_errors_by_block": [
+        1.687538997430238e-14,
+        7.105427357601002e-15,
+        1.7763568394002505e-15
+      ],
+      "passed": true
+    }
+  },
   "suite": {
     "csd": {
       "tests": 2089,
@@ -936,6 +1541,13 @@
       "skipped": 11,
       "passed": 1935,
       "xml_sha256": "525efe3872da2de75638b4ae3acb14f746067a6829de8274e958736070f664b4",
+      "skip_reasons": {
+        "installed PyTorch does not support torch.compile on Python 3.14": 1,
+        "CUDA not available (gpu-marked test)": 7,
+        "flex_attention unavailable in this environment: flex_attention requires dynamo support": 1,
+        "CUDA not available": 1,
+        "CUDA backend unavailable": 1
+      },
       "temporary_storage_failures_or_errors": 142,
       "other_failures": [
         {
@@ -945,10 +1557,33 @@
       ]
     },
     "linux_cuda_wheel_on_cpu": {
-      "dsr_status": "running"
+      "dsr_status": "failure",
+      "owner_stopped_after_full_cpu_result": true,
+      "pytest_progress_markers_before_termination": 551
     },
     "linux_cpu_wheel": {
-      "dsr_status": "running"
+      "tests": 2089,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 11,
+      "passed": 2078,
+      "xml_sha256": "b6f6a35405ebc907b112546f03804d0c3fcdd906f4accf3f62214b5737bfc414",
+      "skip_reasons": {
+        "installed PyTorch does not support torch.compile on Python 3.14": 1,
+        "CUDA not available (gpu-marked test)": 7,
+        "flex_attention unavailable in this environment: flex_attention requires dynamo support": 1,
+        "CUDA not available": 1,
+        "CUDA backend unavailable": 1
+      },
+      "temporary_storage_failures_or_errors": 0,
+      "other_failures": [],
+      "source_hashes_matched_checkout": {
+        "scripts/e2e/associative_credit.py": "410534a17e523c7fa69c5436e875b600d4002e496fb83a6efaf6c3a7196b37a2",
+        "scripts/e2e/episodic_write_policy.py": "5991d827ca169525b8b758ba571bc2f70b2a10a3ceda8dc292af6a2be2f9af5f",
+        "tests/test_associative_credit.py": "20d5af0d105d06057076ee8407c54a1adef1082dce2e53df427c2d88aec90e90",
+        "tests/test_episodic_write_policy.py": "a143429af64ed2109d34682be442b36de7dcc464e00b1423a7b965af91de5a92",
+        "bio_inspired_nanochat/synaptic.py": "6357b25cf14a145df46d5b77db4c9fe6028983b8b86d66cae45871ec8c27f10b"
+      }
     }
   },
   "count_input_producers": {
