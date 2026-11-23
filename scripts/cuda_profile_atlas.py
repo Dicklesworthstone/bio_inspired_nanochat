@@ -59,8 +59,10 @@ def _window(connection: sqlite3.Connection, name: str, steps: int) -> Window:
         "AND r.start < ? AND r.end > ? GROUP BY s.value", (end, start, tid >> 24, end, start)
     )
     totals: Counter[str] = Counter()
-    bins = [0] * 100
     span = end - start
+    bin_count = 100
+    edges = [start + (i * span + bin_count - 1) // bin_count for i in range(bin_count + 1)]
+    busy_by_bin: Counter[int] = Counter()
     frontier = start
     for first, last, kernel_name in kernels:
         first, last = max(first, start), min(last, end)
@@ -69,16 +71,19 @@ def _window(connection: sqlite3.Connection, name: str, steps: int) -> Window:
         # newly covered interval on integer boundaries to conserve nanoseconds.
         pos = max(frontier, first)
         while pos < last:
-            idx = min((pos - start) * len(bins) // span, len(bins) - 1)
-            boundary = start + ((idx + 1) * span + len(bins) - 1) // len(bins)
-            stop = min(boundary, last)
-            bins[idx] += stop - pos
+            idx = (pos - start) * bin_count // span
+            stop = min(edges[idx + 1], last)
+            busy_by_bin[idx] += stop - pos
             pos = stop
         frontier = max(frontier, last)
-    busy = sum(bins)
+    busy = sum(busy_by_bin.values())
+    percentages = [
+        100 * busy_by_bin[i] / (right - left) if right > left else 0.0
+        for i, (left, right) in enumerate(zip(edges, edges[1:]))
+    ]
     return Window(name, steps, span / 1e6, len(kernels), busy / 1e6, 100 * busy / span,
                   _top_ms(totals), _top_ms(Counter(dict(api))),
-                  [100 * ticks * len(bins) / span for ticks in bins])
+                  percentages)
 
 
 def _draw(windows: list[Window], destination: Path) -> None:

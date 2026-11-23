@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import sqlite3
+from contextlib import closing
 from functools import wraps
 from pathlib import Path
 from types import SimpleNamespace
@@ -21,6 +23,32 @@ from bio_inspired_nanochat.perf_regression import (
     _synchronize_for_timing,
 )
 from scripts.perf_regression_gate import main as gate_main
+
+
+@pytest.mark.parametrize("span", [7, 101])
+def test_cuda_atlas_occupancy_uses_actual_bin_width(span):
+    from scripts.cuda_profile_atlas import _window
+
+    with closing(sqlite3.connect(":memory:")) as db:
+        db.executescript("""
+            CREATE TABLE NVTX_EVENTS(start, end, globalTid, text);
+            CREATE TABLE CUPTI_ACTIVITY_KIND_KERNEL(start, end, shortName, globalPid);
+            CREATE TABLE CUPTI_ACTIVITY_KIND_RUNTIME(start, end, nameId, globalTid);
+            CREATE TABLE StringIds(id, value);
+            INSERT INTO StringIds VALUES (1, 'compute');
+        """)
+        db.execute("INSERT INTO NVTX_EVENTS VALUES (0, ?, 0, 'train')", (span,))
+        # Overlapping launches continuously cover the window.
+        db.executemany("INSERT INTO CUPTI_ACTIVITY_KIND_KERNEL VALUES (?, ?, 1, 0)",
+                       [(0, span - 1), (1, span)])
+        window = _window(db, "train", 1)
+    assert window.kernel_count == 2
+    assert window.kernel_busy_ms == span / 1e6
+    assert window.kernel_busy_percent == 100.0
+    edges = [(i * span + 99) // 100 for i in range(101)]
+    assert window.kernel_busy_percent_by_bin == [
+        100.0 if end > start else 0.0 for start, end in zip(edges, edges[1:])
+    ]
 
 
 def test_cuda_update_cannot_replace_the_committed_cpu_baseline():

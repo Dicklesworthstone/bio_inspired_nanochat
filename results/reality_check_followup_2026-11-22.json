@@ -1537,6 +1537,74 @@
           "sha256": "ab215c9d65d78d277c45d02b20ca249f3af1971f563b45521c78142aa53f39c3"
         }
       ]
+    },
+    {
+      "probe": "bio-nov23-atlas-boundary-before",
+      "observation": "Original renderer failed both continuously busy, overlapping-kernel controls (7 ns and 101 ns windows). It divided by nominal instead of actual bin widths.",
+      "run_id": "D92865AF-2623-4C4A-83E1-6E077F72BC3D",
+      "exit": 1,
+      "source": "b76b0506761314dbf672804086e1d63c3cc0328a|f6a5b088e4104662395d0aec7fce7f92823b6fc3cf897cca175ad9579ffaa58d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 1,
+          "sha256": "13d5f06170d9635f15dee053b2bdd737b6fc02193c3f11fafb258a373eb70fed"
+        }
+      ]
+    },
+    {
+      "probe": "bio-nov23-atlas-exact",
+      "observation": "Two independent occupancy counterexamples now pass; rendered the archived trace, and Ruff/ty passed. All scalar fields and kernel/API totals matched; maximum bin change on the recorded trace was 0.000000648 percentage points.",
+      "run_id": "9ABA8466-40C7-44AD-AC3D-72223A28C5CE",
+      "exit": 0,
+      "source": "b76b0506761314dbf672804086e1d63c3cc0328a|4caade26c6fc9564b12d3a4d217e73248d48197e35bdd0ef203e7f66aba80e7f|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "4cb1d5c8d9c3bfa471fcb5fce5cd6e5b684602417cb7c216a39bf2c04d2f7671"
+        },
+        {
+          "exit": 0,
+          "sha256": "2f4d27278c7a89169c0f4ae76778f8181d316cfb5344c6f986eed231aa43e488"
+        },
+        {
+          "exit": 0,
+          "sha256": "9a93b90327baf58d1e5f5005573b579785e01f7e09f2cb7571a2c79d6fe53887"
+        }
+      ]
+    },
+    {
+      "probe": "bio-nov23-linux-lock",
+      "observation": "Verified the platform marker with the universal lock. Linux CPU resolved the same 92 external distributions before and after; GPU the same 107, including pinned Triton 3.5.1 on both.",
+      "run_id": "0a2b5c49-727b-44ef-b502-a7bbf03a70ae",
+      "exit": 0,
+      "source": "129fb695b43fde9a369721517f5ff7bbb9456321|abe1e848cea20b0c03df26c2f9f51bec4c99f735b97e2ef098215b4d81d1690c|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "d2af92885fc09a0548879e0160d23dc231a7f3ecf999dd577c48c6ec7fd55e0e"
+        },
+        {
+          "exit": 0,
+          "sha256": "fd7a2268645a4e82cae610980becfe4df1908f357b8dfcd4634110a429208cee"
+        },
+        {
+          "exit": 0,
+          "sha256": "cabb620f1de63c59e6c7bad2d78ee8bd966ad087dac9221eea4469e7c487ec16"
+        }
+      ]
+    },
+    {
+      "probe": "bio-nov23-formal",
+      "observation": "Final Flex test binding: 288 mapped tests passed, three skipped, compiled Lean audit verified all 19 resolved theorem identities against allowed axioms.",
+      "run_id": "af2a2632-f468-4b40-930e-a59cbace3bac",
+      "exit": 0,
+      "source": "129fb695b43fde9a369721517f5ff7bbb9456321|f1df5ddc16597fd8d7fd74ec5d6c7cf2ddc7e2cda7b06654598b180e433d77eb|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "0b02818228343726c454d7591f04cf260864ab44692f99ecfd221f795da63284"
+        }
+      ]
     }
   ],
   "reference_feasibility": {
