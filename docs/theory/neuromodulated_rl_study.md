@@ -605,7 +605,10 @@ and tests whether the correct answers depend on the question.
   outputs against gold labels rotated by 17 questions. Test the paired
   differences across questions with a one-sided exact sign-flip
   `p ≤ 0.025`. A checkpoint qualifies only if it passes both panels.
-  If both qualify, prioritize the higher selection score.
+  If both qualify, prioritize the higher selection score. As a
+  descriptive check, also score 4,095 whole-panel label shuffles
+  from seed 620033 plus the identity assignment. These shuffles
+  preserve the full answer histogram.
 - [ ] Independently reconstruct every reward and qualification
   decision. If any arm supplies mixed reward groups, replay an actual
   group through the exact final-matrix score and compare with full
