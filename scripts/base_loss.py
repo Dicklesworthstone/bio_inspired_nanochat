@@ -6,7 +6,7 @@ Loads a checkpoint, and:
 Example run as:
 torchrun --standalone --nproc_per_node=8 -m scripts.base_loss
 """
-import os
+import runpy
 from contextlib import nullcontext
 from bio_inspired_nanochat.torch_imports import torch, F
 from bio_inspired_nanochat.checkpoint_manager import load_model
@@ -20,11 +20,17 @@ from bio_inspired_nanochat.report import get_report
 # Configuration
 device_batch_size = 32
 split_tokens = 20*524288  # number of tokens to evaluate per split
+validation_only = False  # score the held-out split without training-split evaluation or sampling
 model_tag = None # optional model tag for the output directory name
 model_step = None # optional model step for the output directory name
 device_type = "" # cuda|cpu|mps (empty => autodetect)
-with open(os.path.join('bio_inspired_nanochat', 'configurator.py')) as f:
-    exec(f.read()) # nosec B102 # overrides from command line or config file
+configured = runpy.run_module("bio_inspired_nanochat.configurator", init_globals=globals())
+device_batch_size = configured["device_batch_size"]
+split_tokens = configured["split_tokens"]
+validation_only = configured["validation_only"]
+model_tag = configured["model_tag"]
+model_step = configured["model_step"]
+device_type = configured["device_type"]
 
 # Load the base model and the tokenizer
 device_type = autodetect_device_type() if device_type == "" else device_type
@@ -35,8 +41,8 @@ autocast_ctx = torch.amp.autocast(device_type=device_type, dtype=torch.bfloat16)
 
 # Evaluate the loss on each split
 tokens_per_step = device_batch_size * sequence_len * ddp_world_size
-if split_tokens % tokens_per_step != 0:
-    raise ValueError("split_tokens must be divisible by tokens_per_step")
+if split_tokens <= 0 or split_tokens % tokens_per_step != 0:
+    raise ValueError("split_tokens must be a positive multiple of tokens_per_step")
 steps = split_tokens // tokens_per_step
 token_bytes = get_token_bytes(device=device)
 bpb_results = {}
@@ -58,7 +64,7 @@ if is_synaptic:
             return logits
     model.forward = syn_forward_wrapper
 
-for split_name in ["train", "val"]:
+for split_name in (["val"] if validation_only else ["train", "val"]):
     loader = tokenizing_distributed_data_loader(device_batch_size, sequence_len, split_name, device=device)
     with autocast_ctx:
         bpb = evaluate_bpb(model, loader, steps, token_bytes)
@@ -71,7 +77,7 @@ if is_synaptic:
 
 # Master process also samples from the model
 samples = []
-if ddp_rank == 0:
+if ddp_rank == 0 and not validation_only:
     prompts = [
         "The capital of France is",
         "The chemical symbol of gold is",
@@ -91,11 +97,9 @@ if ddp_rank == 0:
         samples.append(sample_str)
 
 # Log to report
-get_report().log(section="Base model loss", data=[
-    {
-        "train bpb": bpb_results["train"],
-        "val bpb": bpb_results["val"],
-    },
+get_report().log(section="Base model validation loss" if validation_only else "Base model loss", data=[
+    {f"{split} bpb": score for split, score in bpb_results.items()},
+    {"input tokens per split": steps * tokens_per_step},
     {f"sample {i}": sample for i, sample in enumerate(samples)},
 ])
 

@@ -136,6 +136,19 @@ def test_base_train_records_exactly_one_train_row_in_the_registry(quick_start):
     assert math.isfinite(float(train_rows[0]["metrics"]["val_bpb"]))
 
 
+def test_validation_only_scores_the_saved_checkpoint(quick_start):
+    result = _run([
+        "scripts.base_loss", f"--model_tag={MODEL_TAG}", "--model_step=2", "--device_type=cpu",
+        "--device_batch_size=2", "--split_tokens=128", "--validation_only=True",
+    ], quick_start["env"], timeout=600)
+    assert result.returncode == 0, result.stderr[-3000:]
+    report = (quick_start["base_dir"] / "report" / "base-model-validation-loss.md").read_text()
+    val = next(line for line in report.splitlines() if line.startswith("- val bpb: "))
+    assert math.isfinite(float(val.removeprefix("- val bpb: ")))
+    assert "input tokens per split: 128" in report
+    assert "train bpb:" not in report and "sample 0:" not in report
+
+
 def test_chat_cli_generates_from_the_base_checkpoint(quick_start):
     chat = _run(
         [

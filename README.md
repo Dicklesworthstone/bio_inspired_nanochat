@@ -496,6 +496,10 @@ uv run --no-sync python -m bio_inspired_nanochat.dataset -n 8
 uv run --no-sync python -m scripts.tok_train --max_chars=2000000000
 ```
 
+New tokenizers use `tokenizer.json`. For historical project checkpoints, the
+loader can read the token ranks, pattern and special tokens stored in a
+by-value `tokenizer.pkl` archive.
+
 Then train a small bio-model. Every setting is a `--key=value` override of the defaults at the
 top of `scripts/base_train.py`, and any `SynapticConfig` field is reachable as
 `--syn_cfg.<field>=<value>`:
@@ -519,6 +523,15 @@ Model width is derived from `--depth` (the nanochat convention). For two GPUs us
 - `--hebb_chunk_len=N` enables single-process chunked training with truncated backpropagation. Later chunks can read earlier Hebbian writes when plasticity is enabled. The registered toy recall study missed its benefit threshold. [Deciding experiment](results/hebbian_chunked_regime_2026-10-07_preregistered.json)
 - `--sm_homeostasis_guards=1` - Ramp freshly seeded experts in and floor their energy after lifecycle events (`uta.6`)
 - `--neuromod_enabled=1` - Turn on the DA/ACh/NE bus
+
+This command scores the saved model on held-out FineWeb.
+
+```bash
+uv run --no-sync python -m scripts.base_loss --model_tag=my_first_brain \
+    --device_batch_size=1 --split_tokens=1048576 --validation_only=True
+```
+
+The validation report records bits per byte and the number of input positions.
 
 ### 3. Monitor Vitals (TensorBoard)
 
