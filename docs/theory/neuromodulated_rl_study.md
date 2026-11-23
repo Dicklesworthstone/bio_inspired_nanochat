@@ -745,3 +745,24 @@ distribution. The official GSM8K test split stays reserved.
 - [ ] Independently check prompts, rewards, paired contrasts,
   scope and DSR receipts. Track arithmetic-panel qualification
   separately from the original GSM8K checkpoint and RL gates.
+
+### External reference policy
+
+The D20 four-choice pilot came in near chance. To distinguish a
+weak starting checkpoint from an unusable arithmetic panel, run
+the sealed questions on Qwen2.5-Math-1.5B-Instruct at revision
+`aafeb0fc6f22cbf0eaeed126eff8be45b0360a35`. This is a diagnostic
+reference with a different tokenizer, training history and
+parameter count. Record it separately from the native NanoChat run.
+[Pinned Qwen checkpoint](https://huggingface.co/Qwen/Qwen2.5-Math-1.5B-Instruct/tree/aafeb0fc6f22cbf0eaeed126eff8be45b0360a35)
+
+- [ ] Verify the pinned safetensors checksum and use the installed
+  Transformers implementation with local files only. Score the
+  same free-form instruction with the model's own chat template.
+  Use four samples per question, temperature 1, top-k 50 and
+  a 96-token limit. Run both held-out panels and keep the D20
+  qualification thresholds. Compare parseable answers, correct
+  answers, mixed groups and exchanged-label controls for both.
+- [ ] Report the external result with its own receipts. Use the
+  reserved adaptation and transfer panels only on a policy that
+  qualifies in the registered four-choice comparison.
