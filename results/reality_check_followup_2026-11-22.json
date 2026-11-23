@@ -1724,6 +1724,53 @@
           "sha256": "527fab80ab0a19e279a600fb7bad38b32f5fdaad9b133b6676fad895847a1535"
         }
       ]
+    },
+    {
+      "probe": "bio-nov23-public-fp32-chat",
+      "observation": "The public CUDA chat CLI loaded the real step-24 vanilla checkpoint and completed one selective-decode prompt with --dtype float32. It reported predictive entropy 8.77 nats against the deliberate 0.01 threshold.",
+      "run_id": "78f4daf5-8b99-4685-93ee-a430dcfceb04",
+      "exit": 0,
+      "source": "f1a73788aee3903122af9ccdbfa3d647780ef690|e822aafea3d05014013fcc620d27b0420dcbb4df9feef16b0909fcbff13f4892|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "2f9a45ebf6e8f9307cd001bdd4371ce3c7a0544fd2a8eb48c028e4130ace4349"
+        }
+      ]
+    },
+    {
+      "probe": "bio-nov23-precision-preserve-state",
+      "observation": "With original checkpoint-loader buffers preserved, both four-mode RTX 4090 cohorts completed all 40 trials including warmups. Across the 64 measured cached positions TF32 recovered 64 greedy reference tokens, BF16 zero, and FP16 two. None met the registered speed-and-fidelity rule. Full raw per-format data are versioned.",
+      "run_id": "13307ea8-505c-491e-bcdd-3a409d373241",
+      "exit": 0,
+      "source": "f1a73788aee3903122af9ccdbfa3d647780ef690|03a06c31d05f076d6327590872ffaa58838929da23b10300af1c1eac5c0550b7|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "e1142a796d174be48bd2eed5511e0f6cf4cdeadd68d15546581c4196d2fa9894"
+        },
+        {
+          "exit": 0,
+          "sha256": "3335d5cca00c4e1d391c2a0ca7e7eab3e62fee7ccad85aabb18776aeab3b6330"
+        },
+        {
+          "exit": 0,
+          "sha256": "5b6db70719531b047044d6a353ee03a028b188aa1b7d7512f11827f0e40ca041"
+        }
+      ]
+    },
+    {
+      "probe": "bio-nov23-vanilla-head-replay",
+      "observation": "Independent forward hooks reconstructed all 128 vanilla cached choices across the four formats. Widening only the final softcap in the saved BF16 and FP16 head traces restored all 32 highest-FP32 greedy decisions in each arm. Original BF16 maxima tied across 289 to 468 tokens, and FP16 maxima tied across 72 to 90.",
+      "run_id": "81d4d209-3694-4d9c-b777-773a671623d2",
+      "exit": 0,
+      "source": "f1a73788aee3903122af9ccdbfa3d647780ef690|03a06c31d05f076d6327590872ffaa58838929da23b10300af1c1eac5c0550b7|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "514e3d6b788cf978d26518b1d9f4daeda61ee8a42df0963e14bc518088bf5737"
+        }
+      ]
     }
   ],
   "reference_feasibility": {
