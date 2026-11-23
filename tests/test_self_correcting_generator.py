@@ -1,6 +1,6 @@
 """Tests for the Self-Correcting Generation Loop (beads `re4e.1`, `re4e.1.3`)."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -22,6 +22,26 @@ from bio_inspired_nanochat.self_correcting_generator import (
     SelfCorrectionEvent,
     SelfCorrectingTrajectory,
 )
+from scripts.e2e.self_correction_eval import REGISTERED, run_binding_correction
+
+
+def test_two_token_binding_study_recomputes_joint_labels_coverage_and_backbone_work():
+    cfg = replace(REGISTERED, seeds=(2, 4), samples_per_seed=3, train_batch=4, train_steps=2)
+    report = run_binding_correction(cfg)
+    rows = [r for run in report['runs'] for r in run['samples']]
+    assert len(rows) == report['pairs'] == len({r['source_id'] for r in rows}) == 6
+    assert report['coverage'] == sum(not r['abstained'] for r in rows) / 6
+    for row in rows:
+        assert row['gold'][0] == row['prompt'][row['prompt'][:-2].index(row['prompt'][-1]) + 1]
+        assert row['gold'][1] == cfg.vocab_size - 1
+        assert row['baseline_failure'] == (row['baseline'] != row['gold'])
+        assert row['corrected_failure'] == (row['abstained'] or row['corrected'] != row['gold'])
+        assert row['baseline_cost']['backbone_calls'] == 2
+        assert row['corrected_cost']['backbone_calls'] > row['baseline_cost']['backbone_calls']
+        assert row['checks'] and len(row['attempts']) <= 2
+    for arm in ('baseline', 'corrected'):
+        assert report['costs'][arm]['backbone_input_tokens'] == sum(sum(r[f'{arm}_cost']['context_lengths']) for r in rows)
+        assert report['cumulative_error_rates'][arm][-1] == report['failures'][arm] / 6
 
 
 class _TokenStateModel(nn.Module):

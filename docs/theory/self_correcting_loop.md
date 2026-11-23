@@ -4,11 +4,7 @@ _Capability Frontier (`re4e`) · Emergent Compositions & Bounded Repair. Author:
 
 ## Purpose & Scope
 
-The **Self-Correcting Generation Loop** composes:
-1. **Sheaf Obstruction Detection** (`r00r.5`): Fast detection of representation discontinuities via a fixed-sheaf coboundary residual. This MVP detector is not an H¹ or semantic-correctness certificate.
-2. **Span Localization**: Precise isolation of the offending token span $[t_{\text{start}}, t_{\text{end}}]$.
-3. **Causal Deliberation & Localized Regeneration** (`r00r.1` / `r00r.15`): Free-energy gradient relaxation and constrained resampling over the corrupted span.
-4. **Re-Checking & Bounded Abstention**: Post-regeneration obstruction check. If the residual remains above threshold after $N_{\text{max}}$ attempts, the loop terminates with an `ABSTAIN` token. This bounded fallback is separate from the conformal certificate implemented by `re4e.10`.
+The generator measures a fixed-sheaf residual along adjacent tokens in a model-generated completion. A flagged result selects a bounded span around the largest edge residual. Deliberation relaxes the prefix representation, resamples the span and measures the new candidate. An exhausted repair budget can yield an abstention. A completion with fewer than two tokens has no edge and returns `UNCHECKED`. Correctness requires an independent answer label. [Generator](../../bio_inspired_nanochat/self_correcting_generator.py)
 
 ---
 
@@ -35,26 +31,40 @@ Input: Prompt tokens X_0, Model M, Sheaf Detector D_sheaf, Max Attempts N_max, B
 
 ---
 
-## 2. Termination & Non-Oscillation Proof
+## 2. Repair-attempt and model-call bounds
 
-### Theorem 1 (Strict Finite-Time Termination)
-For any input prompt and finite generation length $T$, the self-correcting loop terminates in at most $N_{\text{max}}$ iterations, requiring at most $O(N_{\text{max}} \cdot (T + K_{\text{delib}}))$ total FLOPs.
+For a valid prompt of length $P$ and $T\ge2$ generated tokens, let $R$ be the attempt cap, $L$ the maximum repair span and $K$ the per-token deliberation budget. The initial draft takes $T$ backbone calls. An attempt can make two full-candidate checks and regenerate at most $\min(L,T)$ tokens. The whole call therefore uses at most $T + R(2+\min(L,T))$ backbone evaluations and $RK\min(L,T)$ relaxation steps. Each backbone evaluation may process up to $P+T$ input positions. Operation counts depend on those lengths and the model architecture.
 
-**Proof**:
-1. Each iteration $n \in [1, N_{\text{max}}]$ executes a finite forward pass of length $\le T$ and a bounded deliberation loop of at most $K_{\text{delib}}$ steps.
-2. The outer loop counter $n$ strictly increments on each attempt.
-3. If $n = N_{\text{max}}$ without achieving $\|\delta^0(s)\|_2 \le \tau$, the loop breaks unconditionally and returns the `ABSTAIN` status when abstention is enabled.
-4. Thus, infinite loops and runtime divergence are strictly impossible. $\blacksquare$
+The outer counter advances on every attempt. Assuming each underlying call returns, the generator terminates by the cap even if successive repairs alternate between earlier answers. Finite iteration counts alone give no guarantee of numerical stability or answer correctness. [Generation and repair loop](../../bio_inspired_nanochat/self_correcting_generator.py)
 
 ### Deliberation Energy Check
 
-The current relaxation takes fixed-size gradient steps on the learned quadratic energy proxy $\mathcal{E}(h)$. Tests check descent for the configured reference setting; the implementation does not claim that lower proxy energy certifies semantic coherence.
+The current relaxation takes fixed-size gradient steps on $\mathcal{E}(h)=\tfrac12\lVert g(h)-h\rVert^2$, where $g$ is a nonlinear gate. A freshly constructed controller initializes this gate separately from the language model. The reference tests measure descent of this proxy. [Controller and energy calculation](../../bio_inspired_nanochat/causal_deliberation.py)
 
 ---
 
 ## 3. Configuration & API Interface
 
-- `max_repair_attempts`: Integer $N_{\text{max}} \in [1, 5]$ (default: 3).
-- `obstruction_threshold`: Sheaf threshold $\tau_{\text{obstruction}} \in (0, 1]$ (default: 0.40).
-- `deliberation_budget`: Relaxation steps $K \in [0, 16]$ (default: 4).
-- `abstain_on_exhaustion`: Boolean (default: True) returning `ABSTAIN` payload if unrepairable.
+- `max_repair_attempts` is a positive integer and defaults to 3.
+- `obstruction_threshold` lies in $(0,1]$ and defaults to 0.40.
+- `deliberation_budget` is a nonnegative integer number of relaxation steps and defaults to 4.
+- `abstain_on_exhaustion` defaults to true and returns an abstention when all allowed attempts fail the detector check.
+
+## Paired evaluation on trained binding answers
+
+**Self-correction returned fewer correct answers and exceeded the registered compute budget.** Eight independently initialized two-layer GPTs trained on 2,048 variable-binding prompts apiece. Each prompt contained three variable/value bindings and four distractors. A correct completion supplied the queried value followed by a separator. Training supervised both positions, giving the detector one edge to inspect. Each seed contributed 32 new prompts. All 256 held-out prompts were distinct and excluded from every training stream. Each generation pair started from the same model, prompt and RNG seed, and its initial tokens matched exactly. The detector used threshold 0.40, at most two repair attempts and at most four relaxation steps per repaired token. The controller's relaxation gate was independently initialized. [Evaluation and frozen settings](../../scripts/e2e/self_correction_eval.py)
+
+| Measured on the same 256 prompts | Single pass | Self-correction |
+|---|---:|---:|
+| Exact two-token answers | 29 | 14 |
+| Incorrect or abstained | 227 | 242 |
+| Answered | 256 | 141 |
+| Backbone calls | 512 | 1,607 |
+| Input tokens processed by backbone | 6,400 | 21,007 |
+| Calls to the output head | 512 | 994 |
+| Calls to the relaxation gate, including energy measurements | 1,024 | 5,844 |
+| Instrumented CPU generation time | 7.46 s | 22.65 s |
+
+Correction lost 15 initially correct answers and recovered zero of 227 initial errors. Error rose 5.86 percentage points, with a paired training-seed bootstrap 95% interval of +1.56 to +11.72 points. The paired t-test gave $p=0.090$ and the Wilcoxon test gave $p=0.0625$. Coverage was 141/256 and 127 of the 141 returned answers were wrong. Backbone calls rose 3.14× and wall time rose 3.04×, above the registered 3× limits. Timings exclude restoration of the matched model state and oracle scoring. [Seed-level uncertainty, joint outputs, costs and error curves](../../results/self_correction_binding_2026-11-22.json)
+
+The loop attempted repairs on 125 prompts, executed 241 repairs and inspected 613 candidates or drafts. All ten final responses labelled `REPAIRED` failed the independent oracle. Twenty-two queries produced an exactly correct intermediate repair, yet 21 of these ended in abstention. Of the 15 initially correct answers lost, 13 ended in abstention and two ended in an incorrect accepted repair. These measurements concern this trained synthetic task and the fixed generation policy. Natural-language factuality and systematic compositional generalization require separate measurements. [Per-attempt tokens and obstruction scores](../../results/self_correction_binding_2026-11-22.json)
