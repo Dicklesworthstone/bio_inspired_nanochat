@@ -615,3 +615,16 @@ and tests whether the correct answers depend on the question.
   masked autograd. Keep task qualification and gradient parity as
   separate results. Publish the complete denominators and checkpoint
   identities.
+
+### Compatibility check for a deeper starting model
+
+- [ ] Stage the public depth-20 NanoChat SFT artifact at revision
+  `53b7aa58db3e1c512d121a53f747f9649c15bc55`. Verify the model and
+  tokenizer hashes, use the repository's restricted readers, and
+  check its token mapping against the local tokenizer.
+- [ ] On fixed token inputs, add an initially zero synaptic residual
+  to the final MLP projection of the loaded vanilla model. Compare
+  logits and the final-matrix score gradient with the original
+  projection. Use this as a compatibility check. The public starting
+  model's training data would need a separate validation fold.
+  [Public checkpoint and model card](https://huggingface.co/gaviego/nanochat/tree/53b7aa58db3e1c512d121a53f747f9649c15bc55)
