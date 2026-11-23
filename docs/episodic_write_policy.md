@@ -86,3 +86,51 @@ an entropy-only abstainer, more decoding passes, holonomy-only scoring,
 sheaf diffusion, a tuned repetition penalty, a new checkpoint format and a new
 benchmark dashboard. The existing Beads already cover most of these. None
 isolates useful online learning as directly at the available compute budget.
+
+## Prospective transfer test after the write selector failed
+
+Bead `zml5`. The first study passed 11/32 contrasts. The all-write cache
+improved on the frozen count model in all four panels. The separate transfer
+question is whether *pairing* a cue with its actual successor supplies
+information beyond lexical repetition when a pretrained Transformer already
+sees the same prefix.
+
+Freeze Pythia-160M at revision `50f5173d932e8e61f858120bcb800b97af589f46`.
+Use the first 128 eligible FineWeb documents from the last two validation row
+groups, last group first, and every eligible article in WikiText-103-raw test
+at `b08601e04326c79dfdd32d625aee71d232d685c3`. Require unique documents,
+lossless tokenizer round trips, and 128–512 scored tokens from the first
+2,048 Unicode characters. Shorten long prefixes to fit; start with the
+model's end-of-text token. Exclude the preceding study's FineWeb documents.
+Within each corpus sort by SHA-256 and use every fourth document for
+calibration, starting with index zero. The rest are untouched test cases.
+[Pythia model and provenance](https://huggingface.co/EleutherAI/pythia-160m) ·
+[WikiText](https://huggingface.co/datasets/Salesforce/wikitext)
+
+Every arm predicts before writing. Each sees the same two most recent
+completed 32-event blocks. The exact binding predictor is
+`(m_xy + 4 p_neural)/(m_x + 4)`. In its counterfactual, replace each
+block's `m_xy` by `n_x n_y / 32`. This is the **exact mean probability**
+over uniform within-block permutations of values at fixed cues; the read
+opportunity, block recency, cue and outcome marginals are identical. Also
+compare a target-frequency cache and a continuous cache keyed by cosine
+similarity between the neural hidden states that predicted each target.
+The latter gets the same 64 past observations and richer stored keys.
+
+Tune each arm's mixture with the frozen model on calibration BPB over
+`0, .01, .03, .1, .3, .6, 1`. Tune the continuous cache's inverse
+temperature over `1, 5, 15, 50` on that same split. Prefer the lower
+mixture and temperature on ties. Freeze all settings before test evaluation.
+Report the unmodified LM, every tuned control, and the exchangeable control
+at the *binding arm's* mixture. All predictive distributions must normalize.
+
+Advance mechanistic attribution only if binding saves at least 0.005 BPB
+against the frozen LM **and** the same-mixture exchangeable control on each
+corpus, with positive simultaneous paired lower bounds. Declare competitive
+benefit only if it additionally clears that bar against all three separately
+tuned controls on each corpus. Bootstrap whole test documents with 32,768
+draws, seeds 8911 and 8912 (FineWeb, WikiText), using one-sided 5% / 10
+bounds for the ten contrasts. No changes to the write selector or training
+defaults follow from this transfer test. The corpus split establishes
+evaluation independence from calibration; overlap with Pythia's pretraining
+is unknown.
