@@ -1,0 +1,802 @@
+{
+  "credit": {
+    "confirmation": {
+      "gradient_max_error": 4.470348358154297e-08,
+      "gradient_norm": 4.206605911254883,
+      "gradient_relative_error": 1.5271587448510222e-07,
+      "id": "confirmation.subtraction.2.1",
+      "rewards": [
+        1,
+        1,
+        1,
+        0
+      ],
+      "rollout_format": "four-choice only",
+      "sampled_actions": [
+        2,
+        2,
+        2,
+        3
+      ],
+      "score_precision": "FP32 with original BF16 rotary tables",
+      "shapes": {
+        "matrix": [
+          5120,
+          1280
+        ],
+        "retained_feedback": [
+          1,
+          4,
+          1280
+        ],
+        "retained_input": [
+          1,
+          5120
+        ]
+      }
+    },
+    "screen": {
+      "gradient_max_error": 4.470348358154297e-08,
+      "gradient_norm": 5.518840789794922,
+      "gradient_relative_error": 1.888896926573817e-07,
+      "id": "screen.addition.3.0",
+      "rewards": [
+        1,
+        1,
+        0,
+        0
+      ],
+      "rollout_format": "four-choice only",
+      "sampled_actions": [
+        2,
+        2,
+        1,
+        1
+      ],
+      "score_precision": "FP32 with original BF16 rotary tables",
+      "shapes": {
+        "matrix": [
+          5120,
+          1280
+        ],
+        "retained_feedback": [
+          1,
+          4,
+          1280
+        ],
+        "retained_input": [
+          1,
+          5120
+        ]
+      }
+    }
+  },
+  "dsr": {
+    "d20-published-archive-replay": {
+      "run_id": "80811896-20B7-4CEF-944D-BBF1CD990855",
+      "status": "success",
+      "exit_code": 0,
+      "source_before": "948581c40b0a3324f9c149cef8bd5baa42025962|d6dd65bfcb6a186d5950454cb2cafc244320885bc5abead09977b924d3be5a66|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "948581c40b0a3324f9c149cef8bd5baa42025962|d6dd65bfcb6a186d5950454cb2cafc244320885bc5abead09977b924d3be5a66|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "config_sha256": "51188d3058a8cc13e0c9c5df54dded9c3c1a320bb9627860b211684d45557406",
+      "checks": [
+        {
+          "status": "passed",
+          "exit_code": 0,
+          "log_sha256": "46eabd639fec452e86dbf2e813d736292d2b1916eabee6ad9d5c560d52388907",
+          "duration_ms": 951
+        }
+      ],
+      "json_sha256": "62fd68f388d917c1674c8daeb99a6f13917ae9c0318659967a2cf743d2d2fa84"
+    },
+    "d20-credit": {
+      "checks": [
+        {
+          "duration_ms": 270336,
+          "exit_code": 0,
+          "log_sha256": "58b4703a9a574bf2efd27afa3cb62c6f480bfc829b4c92bf13acebfe03716c95",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "91ef2c1cc26ac24c1f0cf63c66eda83440936c59716268d552c5b78330488159",
+      "exit_code": 0,
+      "json_sha256": "b4cab6bb85b5c41f92474a746123dc369899c65e26eb63cbea74ba22df19a620",
+      "run_id": "5b66e5a0-0fc6-4a88-8816-8c493c3b7cfb",
+      "source_after": "948581c40b0a3324f9c149cef8bd5baa42025962|d6dd65bfcb6a186d5950454cb2cafc244320885bc5abead09977b924d3be5a66|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "948581c40b0a3324f9c149cef8bd5baa42025962|d6dd65bfcb6a186d5950454cb2cafc244320885bc5abead09977b924d3be5a66|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    },
+    "d20-external-audit": {
+      "checks": [
+        {
+          "duration_ms": 919,
+          "exit_code": 0,
+          "log_sha256": "239338f377f4ca5d1996d60b34546b2c7a6468cbee84aebdf6a6c274da7c3cb6",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "fa0fe830b7c51d9dd7cdaee95ccb6695ff5f592117d6eec665c753fd3e9d45fd",
+      "exit_code": 0,
+      "json_sha256": "e010302b188434d9c2fe5c5aa129cbc9948c5da093fabafbcbfa57c958b282c2",
+      "run_id": "B1D306AC-C3AA-4E13-9DD3-691D7EC8FA3A",
+      "source_after": "948581c40b0a3324f9c149cef8bd5baa42025962|d6dd65bfcb6a186d5950454cb2cafc244320885bc5abead09977b924d3be5a66|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "948581c40b0a3324f9c149cef8bd5baa42025962|d6dd65bfcb6a186d5950454cb2cafc244320885bc5abead09977b924d3be5a66|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    },
+    "d20-external-reference": {
+      "checks": [
+        {
+          "duration_ms": 461534,
+          "exit_code": 0,
+          "log_sha256": "6b0b6aa34af325bbea2154423dbb19ff0452ff1d44458028d7edca1ed286bfc1",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "0bf9bcb918c30be9a7caf165411f097bf1c7b72618b5c7a6885670143f55f980",
+      "exit_code": 0,
+      "json_sha256": "afc4bf5e01e9da4349e1fe62170003081bfb0cb8dfe0fb5c875907f53eb08314",
+      "run_id": "22a91eea-b33e-4fba-8a9b-386303e9ad59",
+      "source_after": "948581c40b0a3324f9c149cef8bd5baa42025962|d6dd65bfcb6a186d5950454cb2cafc244320885bc5abead09977b924d3be5a66|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "948581c40b0a3324f9c149cef8bd5baa42025962|d6dd65bfcb6a186d5950454cb2cafc244320885bc5abead09977b924d3be5a66|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    },
+    "d20-final-driver-lint": {
+      "checks": [
+        {
+          "duration_ms": 644,
+          "exit_code": 0,
+          "log_sha256": "d11b2e19fced8e0492720207174e74aa43fe5902b543fe1ec1758f986c1088dd",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "7dbda7e7ba56d11ce045bdce7f28fec109fee3145c63567215c0a9ef3c196274",
+      "exit_code": 0,
+      "json_sha256": "7bc5442ae4dfc22e6f63c648e3553c3ef5ba8e58fc6f4889909d2441c88270cb",
+      "run_id": "60AD621C-A975-4834-998C-7A7AAC02199E",
+      "source_after": "948581c40b0a3324f9c149cef8bd5baa42025962|d6dd65bfcb6a186d5950454cb2cafc244320885bc5abead09977b924d3be5a66|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "948581c40b0a3324f9c149cef8bd5baa42025962|d6dd65bfcb6a186d5950454cb2cafc244320885bc5abead09977b924d3be5a66|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    },
+    "d20-final-scorer-replay": {
+      "checks": [
+        {
+          "duration_ms": 772,
+          "exit_code": 0,
+          "log_sha256": "713df09eadce111817ca4ac5cfb4a04abffd46275f26f44ef2d6b0707b682232",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "54b100639cf64ae992690c4df19c2add2d61a86f742db4eb9ba65b06a4c16a7d",
+      "exit_code": 0,
+      "json_sha256": "1d8c8b0f9c03a851a18acd5ac85772f8d89245b4b9f2f135e30f887fa88446de",
+      "run_id": "2C73B2E4-2F01-415E-A95C-7A99675D9D46",
+      "source_after": "948581c40b0a3324f9c149cef8bd5baa42025962|d6dd65bfcb6a186d5950454cb2cafc244320885bc5abead09977b924d3be5a66|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "948581c40b0a3324f9c149cef8bd5baa42025962|d6dd65bfcb6a186d5950454cb2cafc244320885bc5abead09977b924d3be5a66|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    },
+    "d20-free-credit-parity": {
+      "checks": [
+        {
+          "duration_ms": 237908,
+          "exit_code": 0,
+          "log_sha256": "8de64c1de45370baacf1238dee8c998d60abd4c277a79d507f75707b05c2d914",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "877a1891575f2d575212a512a2b7ff43d7cb978b9a6a009e6d18391ba2a46010",
+      "exit_code": 0,
+      "json_sha256": "8f7d7018172fabd285613d09e25c8736276576032cc0386d925e984c35d7afde",
+      "run_id": "cf76e69f-1cd3-4d0b-864c-7199f68995b2",
+      "source_after": "948581c40b0a3324f9c149cef8bd5baa42025962|d6dd65bfcb6a186d5950454cb2cafc244320885bc5abead09977b924d3be5a66|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "948581c40b0a3324f9c149cef8bd5baa42025962|d6dd65bfcb6a186d5950454cb2cafc244320885bc5abead09977b924d3be5a66|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    },
+    "d20-freeze-panels": {
+      "checks": [
+        {
+          "duration_ms": 864,
+          "exit_code": 0,
+          "log_sha256": "df18f6beaa8b771cacaa77f9befcdc3fb1a249a17af09fbf774ecc05bd5a87aa",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "f79ef29a2c01d01d1181497ca144e1fe378204147773b66534c8938ba77ac178",
+      "exit_code": 0,
+      "json_sha256": "1bf7eff11a7bbcc54e8dd8aba1565be1e436ddb6d1c933ecfcda05459e038373",
+      "run_id": "C11AF6F1-E545-4BAE-A844-7FE52C5C75F8",
+      "source_after": "948581c40b0a3324f9c149cef8bd5baa42025962|d6dd65bfcb6a186d5950454cb2cafc244320885bc5abead09977b924d3be5a66|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "948581c40b0a3324f9c149cef8bd5baa42025962|d6dd65bfcb6a186d5950454cb2cafc244320885bc5abead09977b924d3be5a66|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    },
+    "d20-independent-audit": {
+      "checks": [
+        {
+          "duration_ms": 1311,
+          "exit_code": 0,
+          "log_sha256": "8e817534564676b8a924b08672100f1eb6a42b44f48c997cd6ec3fd36b89ac9f",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "d07cbb702edd37255b06d866ed0b42f2a45080e92f9133aeb1478d26dad0220a",
+      "exit_code": 0,
+      "json_sha256": "9b52fe5f3547511f5e42677f1df9187d508f16e1b85e45bec04d69d53ed47e8a",
+      "run_id": "237DFB24-A1E2-498D-B731-36298169A10C",
+      "source_after": "948581c40b0a3324f9c149cef8bd5baa42025962|d6dd65bfcb6a186d5950454cb2cafc244320885bc5abead09977b924d3be5a66|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "948581c40b0a3324f9c149cef8bd5baa42025962|d6dd65bfcb6a186d5950454cb2cafc244320885bc5abead09977b924d3be5a66|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    },
+    "d20-native-choice": {
+      "checks": [
+        {
+          "duration_ms": 234453,
+          "exit_code": 0,
+          "log_sha256": "ccbdf2b05683cfc31b73a6cc90055d984684b3824b90b2091c8e49d4440ea08e",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "39114909155fb02ac86dde1adfca1ebcfea955b9c8b373e958f57fd4fe0edf9d",
+      "exit_code": 0,
+      "json_sha256": "1883da48691ed90e278b5a4360decd90acba3f314b8e7ba25e47849ec85ae832",
+      "run_id": "b6cbe638-af35-4d01-91ee-ac63dfc11041",
+      "source_after": "948581c40b0a3324f9c149cef8bd5baa42025962|d6dd65bfcb6a186d5950454cb2cafc244320885bc5abead09977b924d3be5a66|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "948581c40b0a3324f9c149cef8bd5baa42025962|d6dd65bfcb6a186d5950454cb2cafc244320885bc5abead09977b924d3be5a66|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    },
+    "d20-native-free": {
+      "checks": [
+        {
+          "duration_ms": 636654,
+          "exit_code": 0,
+          "log_sha256": "6c800cf4f287b3c0c56bbe905b9485556f7783cb6bccc7afa85e49e15177bd04",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "5d3db26d0c5d0087f42cddb3001f5ed0d5dec27551f9eb77084d5ab86ef7ef2d",
+      "exit_code": 0,
+      "json_sha256": "be27d19553185dfc00931979ad5efd7bccd88a62f3b5bff6718fb44c6883278e",
+      "run_id": "9dc0c1d3-a215-48c6-82dc-d8d459a0b20b",
+      "source_after": "948581c40b0a3324f9c149cef8bd5baa42025962|d6dd65bfcb6a186d5950454cb2cafc244320885bc5abead09977b924d3be5a66|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "948581c40b0a3324f9c149cef8bd5baa42025962|d6dd65bfcb6a186d5950454cb2cafc244320885bc5abead09977b924d3be5a66|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    },
+    "d20-qwen-public-recipe": {
+      "checks": [
+        {
+          "duration_ms": 498046,
+          "exit_code": 0,
+          "log_sha256": "55c64b82acf360ef9acdf789d5a3b7b7e595fab7a2009f377a9441360ea13477",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "70d28f9276480d25cecd14bae72bbd05a50a65d0de4fab90502fcea1a35c53b5",
+      "exit_code": 0,
+      "json_sha256": "aa0b2cebf1c47ddf5b0d1eeb7c7e62ff7a2acd2d1e36e679dbd3c8e246140f57",
+      "run_id": "04a1b594-5ef2-4e41-ab02-b438dbed53c1",
+      "source_after": "948581c40b0a3324f9c149cef8bd5baa42025962|d6dd65bfcb6a186d5950454cb2cafc244320885bc5abead09977b924d3be5a66|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "948581c40b0a3324f9c149cef8bd5baa42025962|d6dd65bfcb6a186d5950454cb2cafc244320885bc5abead09977b924d3be5a66|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    },
+    "d20-qwen-recipe-local-audit": {
+      "checks": [
+        {
+          "duration_ms": 753,
+          "exit_code": 0,
+          "log_sha256": "595bdb76ce226208057677f94140287df9034a111b8bfc1e674cfc714a386a22",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "49f8b3af30b46acfe7f4c5a6cdff7cf1d3e904728a500951ae9656986cb43806",
+      "exit_code": 0,
+      "json_sha256": "2278db73f4d97155903d0aa930e4740fffb22a2a22e0050375ebf9a467557b1d",
+      "run_id": "1DFF5751-FF88-4AFA-85D5-3D34428FF660",
+      "source_after": "948581c40b0a3324f9c149cef8bd5baa42025962|d6dd65bfcb6a186d5950454cb2cafc244320885bc5abead09977b924d3be5a66|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "948581c40b0a3324f9c149cef8bd5baa42025962|d6dd65bfcb6a186d5950454cb2cafc244320885bc5abead09977b924d3be5a66|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    },
+    "d20-verify-frozen-panels": {
+      "checks": [
+        {
+          "duration_ms": 1002,
+          "exit_code": 0,
+          "log_sha256": "94fb04fccf2802e119981978a471ca08fee47b4fe8f8fb4ba32b7fe0631004db",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "104848acf54ab496b025412e32df01e82912d28db1f7e71483a8a82929d6c426",
+      "exit_code": 0,
+      "json_sha256": "5295bb1a4aabf49f4c0a7c4350fbb6e1c5960f2fd9217e47af67de8b7c4eb677",
+      "run_id": "C5EC297D-ACB6-418F-9A80-0D8980B3B14F",
+      "source_after": "948581c40b0a3324f9c149cef8bd5baa42025962|d6dd65bfcb6a186d5950454cb2cafc244320885bc5abead09977b924d3be5a66|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "948581c40b0a3324f9c149cef8bd5baa42025962|d6dd65bfcb6a186d5950454cb2cafc244320885bc5abead09977b924d3be5a66|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    }
+  },
+  "external_reference": {
+    "input_file_sha256": {
+      "LICENSE": "c156170b718ec29139d3653d40ed1986fd92fb7e0959b5c71f3c48f62e6636f4",
+      "config.json": "a48e6ab280ad87a25f06da604d486aa819b9c1bc467dae7c25fe5d05c57f5511",
+      "generation_config.json": "6cdbb935125f725b568855b396e182b00c9c736fdfab1ef3970087f4ee5cac3f",
+      "merges.txt": "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3",
+      "tokenizer.json": "c0382117ea329cdf097041132f6d735924b697924d6f6fc3945713e96ce87539",
+      "tokenizer_config.json": "d743761ff02297cc5cdf38a612b0f78d5cdf5ceb3f251ab1d25ad353d24b1887",
+      "vocab.json": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910"
+    },
+    "model_parameters": 1543714304,
+    "public_recipe": {
+      "identity": "08faf1e950173bb44c11d26df28c55da7237dc55c77dbc1cbae4a5d7584540d9",
+      "model_revision": "aafeb0fc6f22cbf0eaeed126eff8be45b0360a35",
+      "panels": {
+        "confirmation": {
+          "completions": 128,
+          "constant": 24,
+          "correct": 128,
+          "distinct_correct": 11,
+          "exchanged": 0,
+          "gates": {
+            "beats_constant": true,
+            "correct": true,
+            "distinct_answers": true,
+            "exact_p": true,
+            "exchanged_gap": true,
+            "mixed": false
+          },
+          "mixed": 0,
+          "paired_differences": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ],
+          "paired_test": {
+            "denominator": 65536,
+            "p": 1.52587890625e-05,
+            "tail": 1
+          },
+          "parseable": 128,
+          "pass": false,
+          "questions": 32
+        },
+        "screen": {
+          "completions": 128,
+          "constant": 24,
+          "correct": 128,
+          "distinct_correct": 14,
+          "exchanged": 0,
+          "gates": {
+            "beats_constant": true,
+            "correct": true,
+            "distinct_answers": true,
+            "exact_p": true,
+            "exchanged_gap": true,
+            "mixed": false
+          },
+          "mixed": 0,
+          "paired_differences": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ],
+          "paired_test": {
+            "denominator": 65536,
+            "p": 1.52587890625e-05,
+            "tail": 1
+          },
+          "parseable": 128,
+          "pass": false,
+          "questions": 32
+        }
+      },
+      "panels_sha256": "d289cbbb6c39c801da8cc6fa4fff52ea89d38c3fc2b41df1a2771ca110bfb19b",
+      "parity_reward_mode": null,
+      "thresholds_met": false
+    },
+    "qualification": {
+      "boxed_diagnostic": {
+        "confirmation": {
+          "completions": 128,
+          "constant": 24,
+          "correct": 15,
+          "distinct_correct": 6,
+          "exchanged": 0,
+          "gates": {
+            "beats_constant": false,
+            "correct": true,
+            "distinct_answers": true,
+            "exact_p": true,
+            "exchanged_gap": true,
+            "mixed": true
+          },
+          "mixed": 13,
+          "paired_differences": [
+            2,
+            1,
+            1,
+            1,
+            1,
+            2,
+            1,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            2,
+            2
+          ],
+          "paired_test": {
+            "denominator": 2048,
+            "p": 0.00048828125,
+            "tail": 1
+          },
+          "parseable": 15,
+          "pass": false,
+          "questions": 32
+        },
+        "screen": {
+          "completions": 128,
+          "constant": 24,
+          "correct": 10,
+          "distinct_correct": 7,
+          "exchanged": 0,
+          "gates": {
+            "beats_constant": false,
+            "correct": false,
+            "distinct_answers": true,
+            "exact_p": true,
+            "exchanged_gap": true,
+            "mixed": true
+          },
+          "mixed": 9,
+          "paired_differences": [
+            0,
+            2,
+            1,
+            3,
+            1,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0
+          ],
+          "paired_test": {
+            "denominator": 64,
+            "p": 0.015625,
+            "tail": 1
+          },
+          "parseable": 10,
+          "pass": false,
+          "questions": 32
+        }
+      },
+      "boxed_thresholds_met": false,
+      "identity": "08faf1e950173bb44c11d26df28c55da7237dc55c77dbc1cbae4a5d7584540d9",
+      "matched_screen_criterion": false,
+      "model_revision": "aafeb0fc6f22cbf0eaeed126eff8be45b0360a35",
+      "panel_questions_verified": 128,
+      "panels": {
+        "confirmation": {
+          "completions": 128,
+          "constant": 24,
+          "correct": 0,
+          "distinct_correct": 0,
+          "exchanged": 0,
+          "gates": {
+            "beats_constant": false,
+            "correct": false,
+            "distinct_answers": false,
+            "exact_p": false,
+            "exchanged_gap": false,
+            "mixed": false
+          },
+          "mixed": 0,
+          "paired_differences": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "paired_test": {
+            "denominator": 1,
+            "p": 1.0,
+            "tail": 1
+          },
+          "parseable": 0,
+          "pass": false,
+          "questions": 32
+        },
+        "screen": {
+          "completions": 128,
+          "constant": 24,
+          "correct": 0,
+          "distinct_correct": 0,
+          "exchanged": 0,
+          "gates": {
+            "beats_constant": false,
+            "correct": false,
+            "distinct_answers": false,
+            "exact_p": false,
+            "exchanged_gap": false,
+            "mixed": false
+          },
+          "mixed": 0,
+          "paired_differences": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "paired_test": {
+            "denominator": 1,
+            "p": 1.0,
+            "tail": 1
+          },
+          "parseable": 0,
+          "pass": false,
+          "questions": 32
+        }
+      },
+      "panels_sha256": "d289cbbb6c39c801da8cc6fa4fff52ea89d38c3fc2b41df1a2771ca110bfb19b",
+      "parity_reward_mode": null
+    },
+    "staged_location": "trj:/data/projects/bio-d20-fresh.fXITEjgH/qwen"
+  },
+  "free_credit": {
+    "gradient_frobenius_norm": 0.1545833945274353,
+    "gradient_max_error": 1.4016404747962952e-07,
+    "gradient_relative_error": 1.018475641166915e-05,
+    "objective": "FP32 full softmax replay and recorded BF16 top-k sampled completions",
+    "panel": "screen",
+    "prompt_id": "screen.addition.0.0",
+    "rewards": [
+      0,
+      1,
+      0,
+      0
+    ],
+    "scored_tokens": 131
+  },
+  "implementation_basis": "948581c40b0a3324f9c149cef8bd5baa42025962",
+  "qualification": {
+    "advance_free_confirmation": false,
+    "advance_restricted_adaptation": false,
+    "model_sha256": "cd0762cbae420c25b47033ad0816ff1d5a61910a7e2223dff156945225e105b6",
+    "panel_questions_verified": 128,
+    "panels_sha256": "d289cbbb6c39c801da8cc6fa4fff52ea89d38c3fc2b41df1a2771ca110bfb19b",
+    "restricted": {
+      "confirmation": {
+        "completions": 128,
+        "correct": 30,
+        "distinct_correct": 8,
+        "exchanged_expected_accuracy": 0.25617674781096866,
+        "expected_accuracy": 0.2528661845426541,
+        "gap": -0.0033105632683145814,
+        "gates": {
+          "distinct_answers": true,
+          "exact_p": false,
+          "exchanged_gap": false,
+          "expected_accuracy": false,
+          "mixed": false
+        },
+        "mixed": 6,
+        "paired_probability_differences": [
+          -0.035555336624383926,
+          0.013918123207986355,
+          0.0006753928028047085,
+          -0.002377467229962349,
+          0.00750347669236362,
+          -0.06662097945809364,
+          0.025766223669052124,
+          -0.002332933247089386,
+          -0.004580437671393156,
+          -0.0508909597992897,
+          0.004843654576689005,
+          0.008930129930377007,
+          0.025802239775657654,
+          -0.026273075491189957,
+          0.0048334039747715,
+          -0.009579479694366455
+        ],
+        "paired_test": {
+          "denominator": 65536,
+          "p": 0.83306884765625,
+          "tail": 54596
+        },
+        "pass": false,
+        "questions": 32
+      },
+      "screen": {
+        "completions": 128,
+        "correct": 29,
+        "distinct_correct": 7,
+        "exchanged_expected_accuracy": 0.23483906579349423,
+        "expected_accuracy": 0.23869805917638587,
+        "gap": 0.00385899338289164,
+        "gates": {
+          "distinct_answers": true,
+          "exact_p": false,
+          "exchanged_gap": false,
+          "expected_accuracy": false,
+          "mixed": false
+        },
+        "mixed": 5,
+        "paired_probability_differences": [
+          -0.01900257496163249,
+          0.0012690834701061249,
+          0.03230280242860317,
+          -0.043391019105911255,
+          0.017440279945731163,
+          0.009381512179970741,
+          0.024582305923104286,
+          -0.012168290093541145,
+          -0.06991274561733007,
+          0.0010001040063798428,
+          0.16503317654132843,
+          -0.0012006997130811214,
+          0.015790733508765697,
+          0.0038603004068136215,
+          -0.0005375898908823729,
+          -0.0009595907758921385
+        ],
+        "paired_test": {
+          "denominator": 65536,
+          "p": 0.32391357421875,
+          "tail": 21228
+        },
+        "pass": false,
+        "questions": 32
+      }
+    },
+    "unrestricted": {
+      "screen": {
+        "completions": 128,
+        "constant": 24,
+        "correct": 18,
+        "distinct_correct": 10,
+        "exchanged": 0,
+        "gates": {
+          "beats_constant": false,
+          "correct": true,
+          "distinct_answers": true,
+          "exact_p": true,
+          "exchanged_gap": true,
+          "mixed": true
+        },
+        "mixed": 16,
+        "paired_differences": [
+          2,
+          0,
+          2,
+          2,
+          1,
+          0,
+          2,
+          3,
+          0,
+          0,
+          0,
+          1,
+          1,
+          1,
+          1,
+          2
+        ],
+        "paired_test": {
+          "denominator": 2048,
+          "p": 0.00048828125,
+          "tail": 1
+        },
+        "parseable": 94,
+        "pass": false,
+        "questions": 32
+      }
+    },
+    "unrestricted_qualified": false
+  },
+  "registered_box_diagnostic": "fb24ed241b670cb79b208beea907d2eff22d70b7",
+  "registered_external_credit": "7db064389918e6b7747cce79a6a8debf3f1bcf99",
+  "registered_external_public_recipe": "d646a0b5e88bdccc81bff5692afaa9786d4e9b78",
+  "registered_external_reference": "2677404a2ace80611c0c55fb4af2938b0be11f45",
+  "registered_panels_sha256": "d289cbbb6c39c801da8cc6fa4fff52ea89d38c3fc2b41df1a2771ca110bfb19b",
+  "registered_protocol": "c174ea31fab37d42067e41529938e3d30fb53fe7",
+  "sources": {
+    "audit_d20.py": {
+      "content": "\"\"\"Reconstruct panel integrity, all rewards, and the registered comparisons.\"\"\"\nimport hashlib\nimport json\nimport math\nimport re\nimport statistics\nimport sys\nfrom collections import Counter\nfrom fractions import Fraction\nfrom pathlib import Path\n\n\nFORMULAS = {\n    \"addition\": lambda a, b: a + b,\n    \"subtraction\": lambda a, b: a - b,\n    \"rows\": lambda a, b: a * b,\n    \"shares\": lambda a, b: b // a if b % a == 0 else None,\n}\n\n\ndef pairs(items):\n    assert len(items) == 32\n    for one, two in zip(items[::2], items[1::2], strict=True):\n        assert one[\"pair\"] == two[\"pair\"] and one[\"side\"] == 0 and two[\"side\"] == 1\n        yield one, two\n\n\ndef audit_data(panels):\n    assert set(panels) == {\"screen\", \"confirmation\", \"adaptation\", \"transfer\"}\n    questions = set()\n    for data in panels.values():\n        assert Counter(row[\"label\"] for row in data) == {index: 8 for index in range(4)}\n        assert Counter(row[\"family\"] for row in data) == {kind: 8 for kind in FORMULAS}\n        for first, other in pairs(data):\n            assert first[\"family\"] == other[\"family\"] and first[\"options\"] == other[\"options\"]\n            assert first[\"gold\"] != other[\"gold\"] and len(set(first[\"options\"])) == 4\n            assert not {first[\"gold\"], other[\"gold\"]} & set(first[\"shown\"] + other[\"shown\"])\n            assert sum(a != b for a, b in zip(first[\"shown\"], other[\"shown\"], strict=True)) == 1\n            for row in (first, other):\n                assert set(map(int, re.findall(r\"\\b\\d+\\b\", row[\"question\"]))) == set(row[\"shown\"])\n                assert FORMULAS[row[\"family\"]](*row[\"shown\"]) == row[\"gold\"] == row[\"options\"][row[\"label\"]]\n                assert row[\"question\"] not in questions\n                questions.add(row[\"question\"])\n    assert len(questions) == 128\n    return len(questions)\n\n\ndef sign_flip(diffs):\n    valid = [value for value in diffs if value != 0]\n    lookups = [0]\n    for value in valid:\n        lookups = [term for old in lookups for term in (old + value, old - value)]\n    observed = sum(valid)\n    tail = sum(value >= observed for value in lookups)\n    total = len(lookups)\n    return {\"tail\": tail, \"denominator\": total, \"p\": tail / total}\n\n\ndef independent_integer(text):\n    match = re.search(r\"#### (-?[0-9.,]+)\", text)\n    if match is None:\n        return None\n    try:\n        value = Fraction(match.group(1).replace(\",\", \"\"))\n        return value.numerator if value.denominator == 1 else None\n    except ValueError:\n        return None\n\n\ndef score_free(panel, predictions, parser=independent_integer, token_limit=96):\n    assert len(panel) == len(predictions) == 32\n    counts = Counter(row[\"gold\"] for row in panel)\n    constant = 4 * max(counts.values())\n    deltas, labels, parsed_total = [], set(), 0\n    correct = exchanged = mixed = 0\n    for first, second in pairs(panel):\n        paired_correct = paired_exchanged = 0\n        for chosen, swap, observed in zip((first, second), (second, first),\n                                           (predictions[2*len(deltas)], predictions[2*len(deltas)+1]), strict=True):\n            assert chosen[\"id\"] == observed[\"id\"] and chosen[\"gold\"] == observed[\"gold\"]\n            assert len(observed[\"text\"]) == len(observed[\"tokens\"]) == len(observed[\"masks\"]) == 4\n            assert all(len(ids) == len(mask) and len(ids) - observed[\"prompt_length\"] == size and 0 <= size <= token_limit\n                       for ids, mask, size in zip(observed[\"tokens\"], observed[\"masks\"], observed[\"lengths\"], strict=True))\n            parsed = [parser(value) for value in observed[\"text\"]]\n            assert parsed == observed[\"parsed\"]\n            rewards = [int(value == chosen[\"gold\"]) for value in parsed]\n            assert rewards == observed[\"rewards\"]\n            parsed_total += sum(value is not None for value in parsed)\n            hits = sum(rewards)\n            mixed += 0 < hits < 4\n            if hits:\n                labels.add(chosen[\"gold\"])\n            paired_correct += hits\n            paired_exchanged += sum(value == swap[\"gold\"] for value in parsed)\n        deltas.append(paired_correct - paired_exchanged)\n        correct += paired_correct\n        exchanged += paired_exchanged\n    test = sign_flip(deltas)\n    gates = {\"correct\": correct >= 12, \"mixed\": mixed >= 8, \"distinct_answers\": len(labels) >= 4,\n             \"beats_constant\": correct > constant, \"exchanged_gap\": correct - exchanged >= 4,\n             \"exact_p\": test[\"tail\"] * 40 <= test[\"denominator\"]}\n    return {\"correct\": correct, \"exchanged\": exchanged, \"constant\": constant, \"mixed\": mixed, \"distinct_correct\": len(labels),\n            \"parseable\": parsed_total, \"completions\": 128, \"questions\": 32, \"paired_differences\": deltas,\n            \"paired_test\": test, \"gates\": gates, \"pass\": all(gates.values())}\n\n\ndef score_choice(panel, observations):\n    predictions = observations[\"rows\"]\n    assert len(set(observations[\"label_token_ids\"])) == 4 and len(predictions) == 32\n    successes = set()\n    values, controls, deltas = [], [], []\n    mixed = correct = 0\n    for first, second in pairs(panel):\n        dif = Fraction(0)\n        for row, swap, observed in zip((first, second), (second, first),\n                                       (predictions[2*len(deltas)], predictions[2*len(deltas)+1]), strict=True):\n            assert row[\"id\"] == observed[\"id\"] and row[\"label\"] == observed[\"label\"]\n            probability = observed[\"probabilities\"]\n            assert len(probability) == 4 and all(0 < value < 1 for value in probability)\n            assert abs(math.fsum(probability) - 1) < 2e-7\n            sampled = observed[\"samples\"]\n            assert len(sampled) == 4 and all(value in range(4) for value in sampled)\n            rewards = [int(value == row[\"label\"]) for value in sampled]\n            assert rewards == observed[\"rewards\"]\n            hit = sum(rewards)\n            mixed += 0 < hit < 4\n            correct += hit\n            if hit:\n                successes.add(row[\"gold\"])\n            true, wrong = probability[row[\"label\"]], probability[swap[\"label\"]]\n            values.append(true)\n            controls.append(wrong)\n            dif += Fraction(true) - Fraction(wrong)\n        deltas.append(dif)\n    # Each observed FP32 probability is an exact dyadic rational. Convert\n    # to a common integer scale for unambiguous sign flips, including ties.\n    factor = max(value.denominator for value in deltas)\n    test = sign_flip([int(value * factor) for value in deltas])\n    average, swapped = statistics.mean(values), statistics.mean(controls)\n    gates = {\"expected_accuracy\": average >= .35, \"exchanged_gap\": average - swapped >= .08, \"mixed\": mixed >= 8,\n             \"distinct_answers\": len(successes) >= 4, \"exact_p\": test[\"tail\"] * 40 <= test[\"denominator\"]}\n    return {\"expected_accuracy\": average, \"exchanged_expected_accuracy\": swapped, \"gap\": average-swapped,\n            \"correct\": correct, \"completions\": 128, \"mixed\": mixed, \"questions\": 32,\n            \"distinct_correct\": len(successes), \"paired_probability_differences\": [float(value) for value in deltas],\n            \"paired_test\": test, \"gates\": gates, \"pass\": all(gates.values())}\n\n\ndef main(data_file, free_file, choice_file, destination):\n    data = json.loads(data_file.read_bytes())[\"panels\"]\n    count = audit_data(data)\n    free, choose = (json.loads(name.read_bytes()) for name in (free_file, choice_file))\n    fingerprint = hashlib.sha256(data_file.read_bytes()).hexdigest()\n    assert free[\"panels_sha256\"] == choose[\"panels_sha256\"] == fingerprint\n    assert free[\"checkpoint_sha256\"] == choose[\"checkpoint_sha256\"]\n    assert free[\"mode\"] == \"free\" and choose[\"mode\"] == \"choice\"\n    free_scores = {key: score_free(data[key], val) for key, val in free[\"panels\"].items()}\n    choice_scores = {key: score_choice(data[key], val) for key, val in choose[\"panels\"].items()}\n    assert set(choice_scores) == {\"screen\", \"confirmation\"} and \"screen\" in free_scores\n    result = {\"model_sha256\": free[\"checkpoint_sha256\"], \"panel_questions_verified\": count,\n              \"panels_sha256\": fingerprint, \"unrestricted\": free_scores, \"restricted\": choice_scores,\n              \"advance_free_confirmation\": free_scores[\"screen\"][\"pass\"] and \"confirmation\" not in free_scores,\n              \"unrestricted_qualified\": set(free_scores) == {\"screen\", \"confirmation\"} and\n              all(row[\"pass\"] for row in free_scores.values()),\n              \"advance_restricted_adaptation\": all(row[\"pass\"] for row in choice_scores.values())}\n    with destination.open(\"x\") as stream:\n        json.dump(result, stream, sort_keys=True, indent=2)\n        stream.write(\"\\n\")\n\n\nif __name__ == \"__main__\":\n    main(*(Path(arg) for arg in sys.argv[1:]))\n",
+      "sha256": "e853de5343555382222b7a39eedc7015f8aba6a41a4b60c3c8420661079270f0"
+    },
+    "audit_qwen_external.py": {
+      "content": "\"\"\"Apply the unchanged free-form scoring rule to the external reference.\"\"\"\nimport hashlib\nimport json\nimport re\nimport sys\nfrom fractions import Fraction\nfrom pathlib import Path\n\nfrom audit_d20 import audit_data, score_free\n\n\ndef parse_box(text):\n    matches = re.findall(r\"\\\\boxed\\s*\\{\\s*([+-]?[0-9]+(?:,[0-9]{3})*(?:\\.[0-9]+)?)\\s*\\}\", text)\n    for match in reversed(matches):\n        value = Fraction(match.replace(\",\", \"\"))\n        if value.denominator == 1:\n            return value.numerator\n    return None\n\n\ndef rescore(rows):\n    for row in rows:\n        parsed = [parse_box(text) for text in row[\"text\"]]\n        yield {**row, \"parsed\": parsed, \"rewards\": [int(value == row[\"gold\"]) for value in parsed]}\n\n\ndef main(datafile, output, destination):\n    raw = json.loads(output.read_bytes())\n    assert raw[\"mode\"] == \"free\" and set(raw[\"panels\"]) == {\"screen\", \"confirmation\"}\n    assert raw[\"model_revision\"] == \"aafeb0fc6f22cbf0eaeed126eff8be45b0360a35\"\n    assert raw[\"panels_sha256\"] == hashlib.sha256(datafile.read_bytes()).hexdigest()\n    data = json.loads(datafile.read_bytes())[\"panels\"]\n    count = audit_data(data)\n    scores = {name: score_free(data[name], rows) for name, rows in raw[\"panels\"].items()}\n    boxed = {name: score_free(data[name], list(rescore(rows)), parser=parse_box)\n             for name, rows in raw[\"panels\"].items()}\n    strict_pass = all(row[\"pass\"] for row in scores.values())\n    boxed_pass = all(row[\"pass\"] for row in boxed.values())\n    record = {\"panels\": scores, \"matched_screen_criterion\": strict_pass, \"boxed_diagnostic\": boxed,\n              \"boxed_thresholds_met\": boxed_pass,\n              \"parity_reward_mode\": \"marker\" if strict_pass else \"box\" if boxed_pass else None,\n              \"model_revision\": raw[\"model_revision\"], \"identity\": raw[\"checkpoint_sha256\"],\n              \"panel_questions_verified\": count, \"panels_sha256\": raw[\"panels_sha256\"]}\n    destination.write_text(json.dumps(record, sort_keys=True, indent=2, allow_nan=False) + \"\\n\")\n\n\nif __name__ == \"__main__\":\n    main(*(Path(value) for value in sys.argv[1:]))\n",
+      "sha256": "359161e6f536991dcfe4c9d803efddd547c7bab356e635e5b672a58b8968ea05"
+    },
+    "audit_qwen_recipe.py": {
+      "content": "\"\"\"Independently score the follow-up using Qwen's published prompt.\"\"\"\nimport hashlib\nimport json\nimport sys\nfrom pathlib import Path\n\nfrom audit_d20 import audit_data, score_free\nfrom audit_qwen_external import parse_box\n\n\ndef main(data_path, scored, result):\n    raw_data = data_path.read_bytes()\n    data = json.loads(raw_data)[\"panels\"]\n    assert audit_data(data) == 128\n    identity = hashlib.sha256(raw_data).hexdigest()\n    evidence = json.loads(scored.read_bytes())\n    assert evidence[\"panels_sha256\"] == identity\n    assert evidence[\"mode\"] == \"boxed_recipe\" and set(evidence[\"panels\"]) == {\"screen\", \"confirmation\"}\n    scored = {name: score_free(data[name], rows, parser=parse_box, token_limit=256)\n              for name, rows in evidence[\"panels\"].items()}\n    qualified = all(row[\"pass\"] for row in scored.values())\n    report = {\"panels\": scored, \"panels_sha256\": identity, \"identity\": evidence[\"checkpoint_sha256\"],\n              \"model_revision\": evidence[\"model_revision\"], \"thresholds_met\": qualified,\n              \"parity_reward_mode\": \"box\" if qualified else None}\n    result.write_text(json.dumps(report, sort_keys=True, indent=2) + \"\\n\")\n\n\nif __name__ == \"__main__\":\n    main(*(Path(value) for value in sys.argv[1:]))\n",
+      "sha256": "5c0333cfe9a9bbacc66cb5f4ae22e47be138df09d30381a3c57795a72741debf"
+    },
+    "d20_eval.py": {
+      "content": "\"\"\"Sample fresh paired arithmetic with the pinned D20 checkpoint.\"\"\"\nimport hashlib\nimport json\nimport sys\nfrom decimal import Decimal, InvalidOperation\nfrom pathlib import Path\n\nimport torch\nfrom rich.console import Console\n\nfrom bio_inspired_nanochat.checkpoint_manager import build_model\nfrom bio_inspired_nanochat.common import stable_seed_u64\nfrom bio_inspired_nanochat.engine import Engine\nfrom bio_inspired_nanochat.gpt import GPT\nfrom public_checkpoint_adapter import MODEL_SHA256, TOKENIZER_SHA256\nfrom tasks.gsm8k import extract_answer\n\n\nLETTERS = \"ABCD\"\n\n\ndef sha(path):\n    with path.open(\"rb\") as stream:\n        return hashlib.file_digest(stream, \"sha256\").hexdigest()\n\n\ndef load_public(root):\n    assert sha(root / \"checkpoint/model_000700.pt\") == MODEL_SHA256\n    assert sha(root / \"tokenizer/tokenizer.pkl\") == TOKENIZER_SHA256\n    model, tokenizer, metadata = build_model(root / \"checkpoint\", 700, torch.device(\"cuda\"), \"eval\")\n    assert isinstance(model, GPT) and (model.config.n_layer, model.config.n_embd) == (20, 1280)\n    assert tokenizer.get_vocab_size() == 65536 and metadata[\"step\"] == 700\n    return model, tokenizer\n\n\ndef prompt(tokenizer, row, kind):\n    question = row[\"question\"]\n    if kind == \"free\":\n        text = question + \"\\n\\nKeep any work short. Put the final integer after ####.\"\n    else:\n        options = \"\\n\".join(f\"{letter}. {value}\" for letter, value in zip(LETTERS, row[\"options\"], strict=True))\n        text = f\"{question}\\n\\n{options}\\n\\nAnswer with just the letter.\"\n    conversation = {\"messages\": [{\"role\": \"user\", \"content\": text}, {\"role\": \"assistant\", \"content\": \"\"}]}\n    return tokenizer.render_for_completion(conversation)\n\n\ndef action_tokens(tokenizer, device):\n    options = [tokenizer.encode(f\" {letter}\") for letter in LETTERS]\n    assert all(len(row) == 1 for row in options) and len({row[0] for row in options}) == 4\n    return torch.tensor([row[0] for row in options], dtype=torch.long, device=device)\n\n\ndef padded(tokenizer, rows, device):\n    prompts = [prompt(tokenizer, row, \"choice\") for row in rows]\n    last = [len(row) - 1 for row in prompts]\n    width = max(last) + 1\n    eos = tokenizer.encode_special(\"<|assistant_end|>\")\n    ids = torch.tensor([row + [eos] * (width - len(row)) for row in prompts], dtype=torch.long, device=device)\n    return ids, torch.tensor(last, device=device)\n\n\ndef choose(probability, id_string):\n    seed = stable_seed_u64(440313, salt=f\"d20.arithmetic.choice:{id_string}\") % (2**63)\n    gen = torch.Generator(device=probability.device).manual_seed(seed)\n    return torch.multinomial(probability, 4, replacement=True, generator=gen), seed\n\n\ndef parse_integer(text):\n    answer = extract_answer(text)\n    if answer is None:\n        return None\n    try:\n        value = Decimal(answer)\n        integer = int(value)\n        return integer if value == integer else None\n    except (InvalidOperation, ValueError, OverflowError):\n        return None\n\n\ndef evaluate_free(model, tokenizer, rows, panel):\n    engine = Engine(model, tokenizer)\n    output = []\n    console = Console()\n    for position, row in enumerate(rows, 1):\n        base = prompt(tokenizer, row, \"free\")\n        seed = stable_seed_u64(440313, salt=f\"d20.arithmetic.free:{row['id']}\") % (2**63)\n        with torch.no_grad(), torch.autocast(device_type=\"cuda\", dtype=torch.bfloat16):\n            ids, mask = engine.generate_batch(base, num_samples=4, max_batch_size=4, max_tokens=96,\n                                              temperature=1.0, top_k=50, seed=seed)\n        completions = [tokenizer.decode(sequence[len(base):]) for sequence in ids]\n        parsed = [parse_integer(response) for response in completions]\n        output.append({\"id\": row[\"id\"], \"gold\": row[\"gold\"], \"parsed\": parsed, \"seed\": seed,\n                       \"rewards\": [int(answer == row[\"gold\"]) for answer in parsed],\n                       \"lengths\": [len(sequence)-len(base) for sequence in ids], \"text\": completions,\n                       \"tokens\": ids, \"masks\": mask, \"prompt_length\": len(base)})\n        if position % 8 == 0:\n            console.print(f\"{panel} free form {position}/{len(rows)} questions, \"\n                          f\"{sum(sum(item['rewards']) for item in output)} correct\")\n    return output\n\n\ndef evaluate_choice(model, tokenizer, rows):\n    output = []\n    device = model.get_device()\n    labels = action_tokens(tokenizer, device)\n    for start in range(0, len(rows), 8):\n        batch = rows[start:start+8]\n        ids, last = padded(tokenizer, batch, device)\n        index = torch.arange(len(batch), device=device)\n        with torch.no_grad(), torch.autocast(device_type=\"cuda\", dtype=torch.bfloat16):\n            hidden = model.get_hidden_states(ids)[index, last]\n            logits = model.hidden_to_logits(hidden).index_select(1, labels).float()\n            probabilities = logits.softmax(-1)\n        for row, policy in zip(batch, probabilities, strict=True):\n            sampled, seed = choose(policy, row[\"id\"])\n            selected = sampled.tolist()\n            output.append({\"id\": row[\"id\"], \"label\": row[\"label\"], \"probabilities\": policy.tolist(), \"seed\": seed,\n                           \"samples\": selected, \"rewards\": [int(action == row[\"label\"]) for action in selected]})\n    return {\"label_token_ids\": labels.tolist(), \"rows\": output}\n\n\ndef main(kind, data, data_sha, checkpoint, output, panels):\n    torch.set_num_threads(1)\n    assert sha(data) == data_sha and kind in (\"free\", \"choice\")\n    model, tokenizer = load_public(checkpoint)\n    data = json.loads(data.read_text())[\"panels\"]\n    result = {}\n    for panel in panels:\n        rows = data[panel]\n        if kind == \"free\":\n            result[panel] = evaluate_free(model, tokenizer, rows, panel)\n        else:\n            result[panel] = evaluate_choice(model, tokenizer, rows)\n    record = {\"checkpoint_sha256\": MODEL_SHA256, \"panels_sha256\": data_sha, \"mode\": kind,\n              \"panels\": result, \"gpu\": torch.cuda.get_device_name()}\n    with output.open(\"x\") as stream:\n        json.dump(record, stream, sort_keys=True, separators=(\",\", \":\"), allow_nan=False)\n        stream.write(\"\\n\")\n\n\nif __name__ == \"__main__\":\n    kind, data, data_sha, checkpoint, output, *panels = sys.argv[1:]\n    main(kind, Path(data), data_sha, Path(checkpoint), Path(output), panels)\n",
+      "sha256": "f038cc6b60c3c30187ba9722247eb9be41b190022f49fd5142445b589f25bf75"
+    },
+    "d20_free_score.py": {
+      "content": "\"\"\"Audit the final-matrix score on a native free-form reward group.\"\"\"\nimport json\nimport sys\nfrom pathlib import Path\n\nimport torch\nfrom rich.console import Console\n\nfrom bio_inspired_nanochat.rollout_credit import pack_rollout_tokens\nfrom d20_eval import load_public, parse_integer, sha\nfrom d20_score import adapter_for\n\n\ndef forward_last(model, ids, valid):\n    return model._forward_hidden(ids)[valid]\n\n\n@torch.no_grad()\ndef capture(model, block, ids, labels):\n    valid = labels != -1\n    x, residual = [], []\n\n    def pre(_module, args):\n        x.append(args[0][valid].clone())\n\n    def post(_module, _args, output):\n        residual.append(output[valid].clone())\n\n    handles = (block.mlp.c_proj.register_forward_pre_hook(pre), block.register_forward_hook(post))\n    try:\n        hidden = forward_last(model, ids, valid)\n    finally:\n        for handle in handles:\n            handle.remove()\n    assert len(x) == len(residual) == 1\n    y = residual[0]\n    head = model.lm_head.weight.detach()\n    actions = labels[valid]\n    sums = []\n    for offset in range(0, len(actions), 64):\n        section = slice(offset, offset + 64)\n        state = y[section]\n        raw = model.lm_head(hidden[section])\n        squashed = (raw / 15).tanh()\n        slope = 1 - squashed.square()\n        scores = (15 * squashed).softmax(-1)\n        target = actions[section]\n        action_feedback = slope.gather(1, target[:, None]) * head[target]\n        average_feedback = (scores * slope) @ head\n        raw_feedback = action_feedback - average_feedback\n        rms = (state.square().mean(-1, keepdim=True) + torch.finfo(state.dtype).eps).sqrt()\n        sums.append((raw_feedback - state * (state * raw_feedback).mean(-1, keepdim=True) / rms.square()) / rms)\n    return x[0], torch.cat(sums)\n\n\ndef main(free_path, datafile, checkpoint, outfile):\n    torch.set_num_threads(1)\n    torch.set_float32_matmul_precision(\"highest\")\n    evidence = json.loads(free_path.read_bytes())\n    assert evidence[\"mode\"] == \"free\" and evidence[\"panels_sha256\"] == sha(datafile)\n    panel = \"confirmation\" if \"confirmation\" in evidence[\"panels\"] else \"screen\"\n    row = next(row for row in evidence[\"panels\"][panel] if 0 < sum(row[\"rewards\"]) < 4)\n    model, tokenizer = load_public(checkpoint)\n    block, matrix = adapter_for(model)\n    device = model.get_device()\n    raw = row[\"tokens\"]\n    length = max(map(len, raw))\n    inputs = torch.zeros((4, length), dtype=torch.long, device=device)\n    flags = torch.zeros_like(inputs, dtype=torch.bool)\n    for index, (tokens, mask) in enumerate(zip(raw, row[\"masks\"], strict=True)):\n        inputs[index, :len(tokens)] = torch.tensor(tokens, device=device)\n        flags[index, :len(mask)] = torch.tensor(mask, device=device, dtype=torch.bool)\n    inputs, labels, _ = pack_rollout_tokens(inputs, flags, include_last=False)\n    valid = labels != -1\n    x, feedback = capture(model, block, inputs, labels)\n    # Reveal the feedback only after the input and centered score are detached.\n    offset = row[\"prompt_length\"]\n    evaluated = [int(parse_integer(tokenizer.decode(ids[offset:])) == row[\"gold\"]) for ids in raw]\n    assert evaluated == row[\"rewards\"] and 0 < sum(evaluated) < 4\n    reward = torch.tensor(evaluated, device=device, dtype=torch.float32)\n    coefficient = (reward - reward.mean())[torch.where(valid)[0]]\n    gradient = (x.T @ (feedback * coefficient[:, None])) / len(coefficient)\n\n    hidden = forward_last(model, inputs, valid)\n    logp = model.hidden_to_logits(hidden, for_loss=True).log_softmax(-1)\n    selected = logp.gather(1, labels[valid].unsqueeze(1)).flatten()\n    oracle, = torch.autograd.grad((coefficient * selected).mean(), matrix)\n    torch.testing.assert_close(gradient, oracle, atol=4e-7, rtol=3e-5)\n    norm = float(oracle.norm())\n    relative = float((gradient - oracle).norm()) / norm\n    assert norm > 0 and relative < 1e-4\n    result = {\"panel\": panel, \"prompt_id\": row[\"id\"], \"rewards\": evaluated, \"scored_tokens\": len(coefficient),\n              \"gradient_frobenius_norm\": norm, \"gradient_relative_error\": relative,\n              \"gradient_max_error\": float((gradient - oracle).abs().max()),\n              \"objective\": \"FP32 full softmax replay and recorded BF16 top-k sampled completions\"}\n    Console().print(result)\n    outfile.write_text(json.dumps(result, sort_keys=True, indent=2) + \"\\n\")\n\n\nif __name__ == \"__main__\":\n    main(*(Path(arg) for arg in sys.argv[1:]))\n",
+      "sha256": "7bbcf1816aca3f06b87d5b484148c0c15560d6503d99aa4ad4b3b9dba808fc60"
+    },
+    "d20_panels.py": {
+      "content": "\"\"\"Generate paired arithmetic panels independently of any model observation.\"\"\"\nimport hashlib\nimport json\nimport random\nimport sys\nfrom pathlib import Path\n\n\nSEED = 710623\nFAMILIES = (\"addition\", \"subtraction\", \"rows\", \"shares\")\nNAMES = (\"Inez\", \"Marek\", \"Asha\", \"Luz\", \"Oren\", \"Riva\", \"Niko\", \"Ana\",\n         \"Mina\", \"Ivo\", \"Salma\", \"Noor\", \"Tari\", \"Rafi\", \"Leena\", \"Ola\")\nOBJECTS = (\"brass buttons\", \"small jars\", \"green ribbons\", \"blank labels\",\n           \"blue beads\", \"postcards\", \"clay tiles\", \"teal marbles\",\n           \"birch markers\", \"seed packets\", \"red pins\", \"glass pebbles\",\n           \"paper squares\", \"cloth patches\", \"cedar tokens\", \"steel clips\")\nPAIR_TEMPLATES = (\n    (\"{name} puts {a} {item} in a tin and adds {b} more. How many are in the tin now?\",\n     \"{name} starts a display with {a} {item}, then brings {b} more. How many are on the display?\",\n     \"{name} sets aside {a} {item} before finding {b} more. How many are there altogether?\",\n     \"{name} counts {a} {item} in one box and {b} in a second box. How many are in the two boxes?\"),\n    (\"{name} has {a} {item} and gives away {b}. How many are left?\",\n     \"{name} counted {a} {item}, then used {b}. How many are still unused?\",\n     \"{name} carries {a} {item} and sets {b} down. How many does {name} still carry?\",\n     \"{name} starts with {a} {item} and removes {b}. How many remain?\"),\n    (\"{name} puts {b} {item} in each of {a} equal rows. How many are there?\",\n     \"{name} fills {a} trays with {b} {item} per tray. How many are in all the trays?\",\n     \"{name} makes {a} piles with {b} {item} in each. How many are in the piles?\",\n     \"{name} sets out {a} groups of {b} {item}. How many are set out altogether?\"),\n    (\"{name} shares {b} {item} equally among {a} friends. How many does each friend get?\",\n     \"{name} divides {b} {item} evenly into {a} boxes. How many go into each box?\",\n     \"{name} has {b} {item} and makes {a} equal piles. How many go into one pile?\",\n     \"{name} distributes {b} {item} evenly across {a} bags. How many are in each bag?\"),\n)\n\n\ndef quantities(family, rng):\n    while True:\n        if family == \"addition\":\n            a, b = rng.randrange(3, 10), rng.randrange(2, 8)\n            shown, correct = ((a, b), (a, b + 1)), (a + b, a + b + 1)\n        elif family == \"subtraction\":\n            a = rng.randrange(7, 16)\n            b = rng.randrange(2, a - 2)\n            shown, correct = ((a, b), (a, b + 1)), (a - b, a - b - 1)\n        elif family == \"rows\":\n            a, b = rng.randrange(2, 6), rng.randrange(2, 6)\n            shown, correct = ((a, b), (a, b + 1)), (a * b, a * (b + 1))\n        else:\n            a, b = rng.randrange(2, 6), rng.randrange(2, 6)\n            shown, correct = ((a, a * b), (a, a * (b + 1))), (b, b + 1)\n        if set(correct).isdisjoint({value for pair in shown for value in pair}):\n            return shown, correct\n\n\ndef generate():\n    rng = random.Random(SEED)\n    panels = {}\n    seen = set()\n    for panel_index, panel in enumerate((\"screen\", \"confirmation\", \"adaptation\", \"transfer\")):\n        rows = []\n        for family_index, family in enumerate(FAMILIES):\n            first_positions = list(range(4))\n            rng.shuffle(first_positions)\n            shift = rng.randrange(1, 4)\n            for within, first in enumerate(first_positions):\n                second = (first + shift) % 4\n                shown, correct = quantities(family, rng)\n                options = [None] * 4\n                options[first], options[second] = correct\n                blocked = set(correct) | {value for pair in shown for value in pair}\n                pool = sorted(set(range(max(1, min(correct)-5), max(correct)+6)) - blocked)\n                misses = iter(rng.sample(pool, 2))\n                options = [value if value is not None else next(misses) for value in options]\n                formula = PAIR_TEMPLATES[family_index][panel_index]\n                pair = f\"{panel}.{family}.{within}\"\n                for side, ((a, b), gold, slot) in enumerate(zip(shown, correct, (first, second), strict=True)):\n                    # Panel-specific wording keeps exact questions disjoint\n                    # even when some small integer problems recur.\n                    question = formula.format(name=NAMES[4*family_index+within],\n                                               item=OBJECTS[(4*panel_index+within+family_index) % len(OBJECTS)], a=a, b=b)\n                    assert question not in seen\n                    seen.add(question)\n                    rows.append({\"id\": f\"{pair}.{side}\", \"pair\": pair, \"side\": side, \"family\": family,\n                                 \"shown\": [a, b], \"question\": question, \"options\": options, \"gold\": gold, \"label\": slot})\n        assert sorted(row[\"label\"] for row in rows) == [0]*8 + [1]*8 + [2]*8 + [3]*8\n        panels[panel] = rows\n    return {\"seed\": SEED, \"panels\": panels}\n\n\nif __name__ == \"__main__\":\n    payload = json.dumps(generate(), sort_keys=True, separators=(\",\", \":\"), allow_nan=False).encode() + b\"\\n\"\n    with Path(sys.argv[1]).open(\"xb\") as output:\n        output.write(payload)\n    sys.stdout.write(hashlib.sha256(payload).hexdigest() + \"\\n\")\n",
+      "sha256": "850251b03a03b318582e62b9171dce0198838b464dbeac0da5db98f2afeccdf9"
+    },
+    "d20_score.py": {
+      "content": "\"\"\"Verify and optionally train the D20 last-matrix delayed score.\"\"\"\nimport json\nimport sys\nimport time\nfrom pathlib import Path\n\nimport torch\nfrom rich.console import Console\nfrom torch.nn import functional as F\n\nfrom bio_inspired_nanochat.common import softcap_logits\nfrom bio_inspired_nanochat.rollout_credit import permute_advantages\nfrom d20_eval import action_tokens, choose, load_public, padded, sha\nfrom public_checkpoint_adapter import SynapticResidual\n\n\ndef adapter_for(model):\n    rotary = model.cos, model.sin\n    model.float()\n    model.cos, model.sin = rotary\n    model.requires_grad_(False)\n    block = model.transformer.h[-1]\n    block.mlp.c_proj = SynapticResidual(block.mlp.c_proj)\n    return block, block.mlp.c_proj.adaptation.w_slow\n\n\ndef from_hidden(hidden, action_head):\n    raw = F.linear(hidden, action_head)\n    return raw, softcap_logits(raw, 15., for_loss=True)\n\n\n@torch.no_grad()\ndef capture(model, block, ids, positions, head):\n    rows = torch.arange(len(ids), device=ids.device)\n    trace = {}\n\n    def record_input(_module, inputs):\n        trace[\"input\"] = inputs[0][rows, positions].clone()\n\n    def record_residual(_module, _inputs, output):\n        trace[\"residual\"] = output[rows, positions].clone()\n\n    first = block.mlp.c_proj.register_forward_pre_hook(record_input)\n    second = block.register_forward_hook(record_residual)\n    try:\n        captured = model._forward_hidden(ids)[rows, positions]\n        raw, logits = from_hidden(captured, head)\n    finally:\n        first.remove()\n        second.remove()\n    residual = trace[\"residual\"]\n    scale = (residual.square().mean(-1, keepdim=True) + torch.finfo(residual.dtype).eps).sqrt()\n    action_feedback = head[None, :, :] * (1 - (raw / 15).tanh().square())[:, :, None]\n    residual = residual[:, None, :]\n    scale = scale[:, None, :]\n    projector = residual * (residual * action_feedback).mean(-1, keepdim=True) / scale.square()\n    feedback = (action_feedback - projector) / scale\n    assert not trace[\"input\"].requires_grad and not feedback.requires_grad\n    return trace[\"input\"], feedback, logits\n\n\ndef late_update(input_vector, feedback, choices, coefficients):\n    group = torch.arange(len(choices), device=choices.device)[:, None]\n    assert int(torch.count_nonzero(coefficients.sum(-1))) == 0\n    score = (feedback[group, choices] * coefficients.unsqueeze(-1)).sum(dim=1)\n    return input_vector.T @ score / coefficients.numel()\n\n\ndef replay(model, inputs, positions, head, choices, coefficients, parameter):\n    index = torch.arange(len(inputs), device=inputs.device)\n    hidden = model._forward_hidden(inputs)[index, positions]\n    _, logits = from_hidden(hidden, head)\n    logp = logits.log_softmax(-1).gather(1, choices)\n    gradient, = torch.autograd.grad((coefficients * logp).mean(), parameter)\n    return gradient.detach(), logits.detach()\n\n\ndef delta(weight):\n    length = weight.norm()\n    return weight * torch.where(length > 0, .02 / length.clamp_min(1e-30), 0.)\n\n\ndef check_gradient(model, tokenizer, block, parameter, head, row, record):\n    device = model.get_device()\n    inputs, positions = padded(tokenizer, [row], device)\n    actions = torch.tensor([record[\"samples\"]], dtype=torch.long, device=device)\n    true_reward = [int(value == row[\"label\"]) for value in record[\"samples\"]]\n    assert true_reward == record[\"rewards\"] and 0 < sum(true_reward) < 4\n    x, feedback, logits = capture(model, block, inputs, positions, head)\n    rewards = torch.tensor([true_reward], dtype=torch.float32, device=device)\n    coefficients = rewards - rewards.mean(dim=-1, keepdim=True)\n    estimate = late_update(x, feedback, actions, coefficients)\n    reference, other_logits = replay(model, inputs, positions, head, actions, coefficients, parameter)\n    torch.testing.assert_close(logits, other_logits, atol=2e-6, rtol=2e-6)\n    torch.testing.assert_close(estimate, reference, atol=3e-7, rtol=2e-5)\n    norm = float(reference.norm())\n    assert norm > 0\n    error = float((estimate-reference).abs().max())\n    return {\"id\": row[\"id\"], \"sampled_actions\": record[\"samples\"], \"rewards\": true_reward,\n            \"gradient_norm\": norm, \"gradient_max_error\": error,\n            \"gradient_relative_error\": float((estimate-reference).norm()) / norm,\n            \"shapes\": {\"matrix\": list(reference.shape), \"retained_input\": list(x.shape), \"retained_feedback\": list(feedback.shape)},\n            \"rollout_format\": \"four-choice only\", \"score_precision\": \"FP32 with original BF16 rotary tables\"}\n\n\n@torch.no_grad()\ndef transfer(model, tokenizer, head, questions):\n    output = []\n    for offset in range(0, len(questions), 8):\n        group = questions[offset:offset+8]\n        inputs, last = padded(tokenizer, group, model.get_device())\n        rows = torch.arange(len(group), device=inputs.device)\n        _, logits = from_hidden(model._forward_hidden(inputs)[rows, last], head)\n        for row, probability in zip(group, logits.softmax(-1).tolist(), strict=True):\n            output.append({\"id\": row[\"id\"], \"label\": row[\"label\"], \"probability\": probability})\n    return output\n\n\ndef fit_arm(model, tokenizer, block, parameter, head, data, arm):\n    with torch.no_grad():\n        parameter.zero_()\n    steps = []\n    device = model.get_device()\n    for start in range(0, 32, 4):\n        rows = data[\"adaptation\"][start:start+4]\n        inputs, last = padded(tokenizer, rows, device)\n        x, feedback, logits = capture(model, block, inputs, last, head)\n        results = [choose(probability, row[\"id\"]) for probability, row in zip(logits.softmax(-1), rows, strict=True)]\n        actions = torch.stack([item[0] for item in results])\n        gold = torch.tensor([row[\"label\"] for row in rows], dtype=torch.long, device=device)\n        rewards = (actions == gold[:, None]).float()\n        centered = rewards - rewards.mean(dim=1, keepdim=True)\n        begin = time.perf_counter()\n        if arm == \"replay\":\n            proposed, same_logits = replay(model, inputs, last, head, actions, centered, parameter)\n            torch.testing.assert_close(same_logits, logits, atol=2e-6, rtol=2e-6)\n        elif arm == \"off\":\n            proposed = torch.zeros_like(parameter)\n        else:\n            if arm == \"shuffled\":\n                coefficients = torch.stack([permute_advantages(row, 111971 + start + index)\n                                            for index, row in enumerate(centered)])\n            else:\n                coefficients = centered\n            proposed = late_update(x, feedback, actions, coefficients)\n        update = delta(proposed)\n        with torch.no_grad():\n            parameter.add_(update)\n        torch.cuda.synchronize()\n        after = time.perf_counter()\n        steps.append({\"index\": start//4+1, \"ids\": [row[\"id\"] for row in rows],\n                      \"probabilities\": logits.softmax(-1).tolist(), \"actions\": actions.tolist(),\n                      \"rewards\": rewards.tolist(), \"seed\": [seed for _, seed in results],\n                      \"gradient_norm\": float(proposed.norm()), \"write_norm\": float(update.norm()), \"reward_seconds\": after-begin})\n    return {\"steps\": steps, \"final\": transfer(model, tokenizer, head, data[\"transfer\"])}, parameter.detach().clone()\n\n\ndef main(data_file, choice_file, checkpoint, output, do_adapt, audit_file):\n    torch.set_num_threads(1)\n    torch.set_float32_matmul_precision(\"highest\")\n    payload, choice = (json.loads(path.read_bytes()) for path in (data_file, choice_file))\n    data = payload[\"panels\"]\n    assert choice[\"panels_sha256\"] == sha(data_file) and choice[\"mode\"] == \"choice\"\n    model, tokenizer = load_public(checkpoint)\n    action_ids = action_tokens(tokenizer, model.get_device())\n    assert action_ids.tolist() == choice[\"panels\"][\"screen\"][\"label_token_ids\"]\n    block, parameter = adapter_for(model)\n    head = model.lm_head.weight.detach().index_select(0, action_ids)\n    probes = {}\n    for name in (\"screen\", \"confirmation\"):\n        records = choice[\"panels\"][name][\"rows\"]\n        index = next((i for i, row in enumerate(records) if 0 < sum(row[\"rewards\"]) < 4), None)\n        if index is not None:\n            probes[name] = check_gradient(model, tokenizer, block, parameter, head, data[name][index], records[index])\n    assert len(probes) == 2\n    summary = {\"probe\": probes, \"panels_sha256\": sha(data_file), \"checkpoint_sha256\": choice[\"checkpoint_sha256\"]}\n    if do_adapt:\n        audit = json.loads(audit_file.read_bytes())\n        assert audit[\"panels_sha256\"] == sha(data_file) and audit[\"advance_restricted_adaptation\"]\n        base = transfer(model, tokenizer, head, data[\"transfer\"])\n        runs, weights = {}, {}\n        for arm in (\"exact\", \"replay\", \"off\", \"shuffled\"):\n            runs[arm], weights[arm] = fit_arm(model, tokenizer, block, parameter, head, data, arm)\n        for fast, control in zip(runs[\"exact\"][\"steps\"], runs[\"replay\"][\"steps\"], strict=True):\n            assert fast[\"actions\"] == control[\"actions\"] and fast[\"rewards\"] == control[\"rewards\"]\n        error = float((weights[\"exact\"]-weights[\"replay\"]).abs().max())\n        torch.testing.assert_close(weights[\"exact\"], weights[\"replay\"], atol=5e-7, rtol=2e-5)\n        summary[\"adaptation\"] = {\"base\": base, \"runs\": runs, \"exact_minus_replay_max\": error}\n    Console().print(probes)\n    with output.open(\"x\") as stream:\n        json.dump(summary, stream, indent=2, sort_keys=True, allow_nan=False)\n        stream.write(\"\\n\")\n\n\nif __name__ == \"__main__\":\n    data, choice, checkpoint, output, mode, audit = sys.argv[1:]\n    main(Path(data), Path(choice), Path(checkpoint), Path(output), mode == \"adapt\", Path(audit))\n",
+      "sha256": "db598befdc355b14c9acc99ebe5d290bb683ed8fbcb2a019a3bce74f80bd859b"
+    },
+    "public_checkpoint_adapter.py": {
+      "content": "\"\"\"Check native loading and an identity-initialized synaptic residual on public D20 weights.\"\"\"\nimport hashlib\nimport json\nimport sys\nfrom pathlib import Path\n\nimport torch\nfrom rich.console import Console\nfrom torch import nn\n\nfrom bio_inspired_nanochat.checkpoint_manager import build_model\nfrom bio_inspired_nanochat.gpt import GPT\nfrom bio_inspired_nanochat.synaptic import SynapticConfig, SynapticLinear\nfrom bio_inspired_nanochat.tokenizer import RustBPETokenizer\n\n\nREVISION = \"53b7aa58db3e1c512d121a53f747f9649c15bc55\"\nMODEL_SHA256 = \"cd0762cbae420c25b47033ad0816ff1d5a61910a7e2223dff156945225e105b6\"\nTOKENIZER_SHA256 = \"4c060565a46fe83b49d99005acba796f2a630daa7970eb49f7513b89f9fb40e0\"\n\n\ndef sha(path):\n    with path.open(\"rb\") as stream:\n        return hashlib.file_digest(stream, \"sha256\").hexdigest()\n\n\nclass SynapticResidual(nn.Module):\n    def __init__(self, incumbent):\n        super().__init__()\n        self.incumbent = incumbent\n        cfg = SynapticConfig(enable_hebbian=True, enable_stdp=False, enable_presyn=False, enable_metabolism=False)\n        self.adaptation = SynapticLinear(incumbent.in_features, incumbent.out_features,\n                                         cfg, bias=False, use_input_ln=False).to(incumbent.weight)\n        self.register_buffer(\"calcium\", torch.tensor(0.5, device=incumbent.weight.device))\n        self.register_buffer(\"energy\", torch.tensor(0.8, device=incumbent.weight.device))\n        with torch.no_grad():\n            self.adaptation.w_slow.zero_()\n            self.adaptation.w_fast.zero_()\n            self.adaptation.post.fast.zero_()\n            self.adaptation.post.slow.zero_()\n            self.adaptation.post.U.zero_()\n        self.requires_grad_(False)\n        self.adaptation.w_slow.requires_grad_(True)\n\n    def forward(self, x):\n        result = self.incumbent(x)\n        local = self.adaptation(x, self.calcium, self.energy, update_mem=False)\n        return result + local.to(result.dtype)\n\n\ndef identity(actual, expected):\n    assert actual.get_vocab_size() == expected.get_vocab_size() == 65536\n    assert actual.enc._pat_str == expected.enc._pat_str\n    assert actual.enc._mergeable_ranks == expected.enc._mergeable_ranks\n    assert actual.enc._special_tokens == expected.enc._special_tokens\n    return {\"bpe_ranks\": len(actual.enc._mergeable_ranks), \"special_tokens\": len(actual.enc._special_tokens)}\n\n\ndef logits_and_grad(model, inputs, parameter, enable_autocast, actions=None):\n    with torch.autocast(device_type=\"cuda\", dtype=torch.bfloat16, enabled=enable_autocast):\n        logits = model(inputs)[:, -1].float()\n        if actions is None:\n            actions = logits.detach().topk(2, dim=-1).indices\n        sampled = logits.log_softmax(dim=-1).gather(1, actions)\n        score = (sampled[:, 0] - sampled[:, 1]).mean() / 2\n    return logits.detach(), actions, torch.autograd.grad(score, parameter)[0].detach()\n\n\ndef main(root, tokenizer_path, output):\n    torch.set_num_threads(1)\n    paths = root / \"checkpoint\"\n    assert sha(paths / \"model_000700.pt\") == MODEL_SHA256\n    assert sha(root / \"tokenizer/tokenizer.pkl\") == TOKENIZER_SHA256\n    model, tokenizer, meta = build_model(paths, 700, torch.device(\"cuda\"), \"eval\")\n    assert isinstance(model, GPT) and model.config.n_layer == 20 and model.config.n_embd == 1280\n    token_map = identity(tokenizer, RustBPETokenizer.from_directory(tokenizer_path))\n    rotary = model.cos, model.sin\n    model.float()\n    # The production trunk requires its original BF16 rotary tables even\n    # when the model parameters and matmuls are tested in FP32.\n    model.cos, model.sin = rotary\n    torch.set_float32_matmul_precision(\"highest\")\n    model.requires_grad_(False)\n    layer = model.transformer.h[-1].mlp\n    archived = layer.c_proj\n    device = torch.device(\"cuda\")\n    inputs = torch.randint(0, 65528, (2, 32), device=device, generator=torch.Generator(device=device).manual_seed(44031))\n    checks = {}\n    for dtype, low_precision in ((\"fp32\", False), (\"bf16\", True)):\n        layer.c_proj = archived\n        archived.weight.requires_grad_(True)\n        baseline, actions, expected = logits_and_grad(model, inputs, archived.weight, low_precision)\n        layer.c_proj = SynapticResidual(archived)\n        adaptation = layer.c_proj.adaptation\n        adapted, _, result = logits_and_grad(model, inputs, adaptation.w_slow, low_precision, actions)\n        torch.testing.assert_close(adapted, baseline, atol=0, rtol=0)\n        # Matmul and Linear use transposed parameter layouts at the two\n        # sites. Compare after returning to the same orientation.\n        torch.testing.assert_close(result, expected.T, atol=2e-5 if low_precision else 3e-7,\n                                   rtol=.02 if low_precision else 1e-5)\n        assert torch.count_nonzero(adaptation.w_slow) == 0 and expected.norm() > 0\n        checks[dtype] = {\"logits_identical\": True, \"gradient_max_difference\": float((result - expected.T).abs().max()),\n                         \"gradient_relative_error\": float((result - expected.T).norm() / expected.norm())}\n    report = {\"artifact_revision\": REVISION, \"model_sha256\": MODEL_SHA256, \"tokenizer_sha256\": TOKENIZER_SHA256,\n              \"local_token_map_identical\": token_map, \"strict_native_load\": True, \"stored_step\": meta[\"step\"],\n              \"device\": torch.cuda.get_device_name(), \"contexts\": list(inputs.shape), \"numeric_checks\": checks}\n    Console().print(report)\n    output.write_text(json.dumps(report, sort_keys=True, indent=2, allow_nan=False) + \"\\n\")\n\n\nif __name__ == \"__main__\":\n    main(*(Path(value) for value in sys.argv[1:]))\n",
+      "sha256": "4c1f12bb72a12c8b0b672461ec171a26ec504052f3e5156c6c8b7bec1d270aa0"
+    },
+    "qwen_external.py": {
+      "content": "\"\"\"Run the sealed free-form panels on the pinned external arithmetic reference.\"\"\"\nimport hashlib\nimport json\nimport sys\nfrom pathlib import Path\n\nimport torch\nfrom rich.console import Console\nfrom transformers import AutoModelForCausalLM, AutoTokenizer\n\nfrom bio_inspired_nanochat.common import stable_seed_u64\nfrom d20_eval import parse_integer, sha\n\n\nREVISION = \"aafeb0fc6f22cbf0eaeed126eff8be45b0360a35\"\nLFS_SHA = \"08faf1e950173bb44c11d26df28c55da7237dc55c77dbc1cbae4a5d7584540d9\"\nREQUIRED = (\"config.json\", \"generation_config.json\", \"tokenizer.json\", \"tokenizer_config.json\",\n            \"vocab.json\", \"merges.txt\", \"LICENSE\")\n\n\ndef verify(directory, manifest):\n    evidence = json.loads(manifest.read_bytes())\n    assert evidence[\"sha\"] == REVISION and evidence[\"cardData\"][\"license\"] == \"apache-2.0\"\n    indexed = {row[\"rfilename\"]: row for row in evidence[\"siblings\"]}\n    weights = directory / \"model.safetensors\"\n    assert weights.stat().st_size == 3087467144\n    assert sha(weights) == LFS_SHA == indexed[\"model.safetensors\"][\"lfs\"][\"sha256\"]\n    fingerprints = {}\n    for name in REQUIRED:\n        content = (directory / name).read_bytes()\n        header = f\"blob {len(content)}\\0\".encode()\n        assert hashlib.sha1(header + content, usedforsecurity=False).hexdigest() == indexed[name][\"blobId\"]\n        fingerprints[name] = hashlib.sha256(content).hexdigest()\n    return fingerprints\n\n\ndef evaluate(model, tokenizer, rows, panel):\n    console = Console()\n    output = []\n    for offset in range(0, len(rows), 16):\n        batch = rows[offset:offset+16]\n        texts = []\n        for row in batch:\n            content = row[\"question\"] + \"\\n\\nKeep any work short. Put the final integer after ####.\"\n            texts.append(tokenizer.apply_chat_template([{\"role\": \"user\", \"content\": content}],\n                                                       tokenize=False, add_generation_prompt=True))\n        encoded = tokenizer(texts, add_special_tokens=False, padding=True, return_tensors=\"pt\").to(\"cuda\")\n        width = encoded[\"input_ids\"].size(1)\n        seed = stable_seed_u64(440313, salt=f\"external.qwen.free:{panel}:{offset}\") % (2**63)\n        torch.manual_seed(seed)\n        torch.cuda.manual_seed(seed)\n        with torch.inference_mode():\n            tokens = model.generate(**encoded, max_new_tokens=96, do_sample=True, temperature=1.0,\n                                    top_k=50, top_p=1.0, repetition_penalty=1.0, num_return_sequences=4,\n                                    pad_token_id=tokenizer.pad_token_id)\n        stop = model.generation_config.eos_token_id\n        endings = set(stop if isinstance(stop, list) else [stop])\n        endings.add(tokenizer.pad_token_id)\n        for index, row in enumerate(batch):\n            prompt = encoded[\"input_ids\"][index][encoded[\"attention_mask\"][index].bool()].tolist()\n            completion = []\n            for sequence in tokens[index*4:(index+1)*4, width:].tolist():\n                end = next((pos for pos, value in enumerate(sequence) if value in endings), len(sequence))\n                completion.append(sequence[:end])\n            decoded = tokenizer.batch_decode(completion, skip_special_tokens=True)\n            parsed = [parse_integer(response) for response in decoded]\n            output.append({\"id\": row[\"id\"], \"gold\": row[\"gold\"], \"parsed\": parsed, \"seed\": seed,\n                           \"rewards\": [int(answer == row[\"gold\"]) for answer in parsed],\n                           \"lengths\": [len(seq) for seq in completion], \"text\": decoded,\n                           \"tokens\": [prompt + seq for seq in completion], \"prompt_length\": len(prompt),\n                           \"masks\": [[0] * len(prompt) + [1] * len(seq) for seq in completion]})\n        console.print(f\"{panel} external reference {len(output)}/32, {sum(sum(row['rewards']) for row in output)} correct\")\n    return output\n\n\ndef main(data_path, fingerprint, directory, manifest, output):\n    assert sha(data_path) == fingerprint\n    torch.set_num_threads(1)\n    identity = verify(directory, manifest)\n    cuda_device = torch.device(\"cuda:0\")\n    tokenizer = AutoTokenizer.from_pretrained(directory, local_files_only=True, trust_remote_code=False)\n    tokenizer.padding_side = \"left\"\n    assert tokenizer.pad_token_id is not None and tokenizer.chat_template\n    model = AutoModelForCausalLM.from_pretrained(directory, dtype=torch.bfloat16, local_files_only=True,\n                                                trust_remote_code=False, use_safetensors=True).to(cuda_device).eval()\n    assert model.config.model_type == \"qwen2\" and 1_000_000_000 < model.num_parameters() < 2_000_000_000\n    rows = json.loads(data_path.read_bytes())[\"panels\"]\n    scores = {panel: evaluate(model, tokenizer, rows[panel], panel) for panel in (\"screen\", \"confirmation\")}\n    evidence = {\"mode\": \"free\", \"panels\": scores, \"panels_sha256\": fingerprint, \"checkpoint_sha256\": LFS_SHA,\n                \"model_revision\": REVISION, \"input_file_sha256\": identity, \"model_parameters\": model.num_parameters(),\n                \"gpu\": torch.cuda.get_device_name()}\n    with output.open(\"x\") as stream:\n        json.dump(evidence, stream, sort_keys=True, separators=(\",\", \":\"), allow_nan=False)\n        stream.write(\"\\n\")\n\n\nif __name__ == \"__main__\":\n    path, fingerprint, directory, manifest, output = sys.argv[1:]\n    main(Path(path), fingerprint, Path(directory), Path(manifest), Path(output))\n",
+      "sha256": "da909afa549988bbe6719f0ec6d7705ed6a27f5c000a1e4df7fd698fc8801e42"
+    },
+    "qwen_public_recipe.py": {
+      "content": "\"\"\"Run the sealed free-form panels on the pinned external arithmetic reference.\"\"\"\nimport hashlib\nimport json\nimport sys\nfrom pathlib import Path\n\nimport torch\nfrom rich.console import Console\nfrom transformers import AutoModelForCausalLM, AutoTokenizer\n\nfrom bio_inspired_nanochat.common import stable_seed_u64\nfrom audit_qwen_external import parse_box\nfrom d20_eval import sha\n\n\nREVISION = \"aafeb0fc6f22cbf0eaeed126eff8be45b0360a35\"\nLFS_SHA = \"08faf1e950173bb44c11d26df28c55da7237dc55c77dbc1cbae4a5d7584540d9\"\nREQUIRED = (\"config.json\", \"generation_config.json\", \"tokenizer.json\", \"tokenizer_config.json\",\n            \"vocab.json\", \"merges.txt\", \"LICENSE\")\n\n\ndef verify(directory, manifest):\n    evidence = json.loads(manifest.read_bytes())\n    assert evidence[\"sha\"] == REVISION and evidence[\"cardData\"][\"license\"] == \"apache-2.0\"\n    indexed = {row[\"rfilename\"]: row for row in evidence[\"siblings\"]}\n    weights = directory / \"model.safetensors\"\n    assert weights.stat().st_size == 3087467144\n    assert sha(weights) == LFS_SHA == indexed[\"model.safetensors\"][\"lfs\"][\"sha256\"]\n    fingerprints = {}\n    for name in REQUIRED:\n        content = (directory / name).read_bytes()\n        header = f\"blob {len(content)}\\0\".encode()\n        assert hashlib.sha1(header + content, usedforsecurity=False).hexdigest() == indexed[name][\"blobId\"]\n        fingerprints[name] = hashlib.sha256(content).hexdigest()\n    return fingerprints\n\n\ndef evaluate(model, tokenizer, rows, panel):\n    console = Console()\n    output = []\n    for offset in range(0, len(rows), 16):\n        batch = rows[offset:offset+16]\n        texts = []\n        for row in batch:\n            messages = [{\"role\": \"system\", \"content\": r\"Please reason step by step, and put your final answer within \\boxed{}.\"},\n                        {\"role\": \"user\", \"content\": row[\"question\"]}]\n            texts.append(tokenizer.apply_chat_template(messages,\n                                                       tokenize=False, add_generation_prompt=True))\n        encoded = tokenizer(texts, add_special_tokens=False, padding=True, return_tensors=\"pt\").to(\"cuda\")\n        width = encoded[\"input_ids\"].size(1)\n        seed = stable_seed_u64(440313, salt=f\"external.qwen.free:{panel}:{offset}\") % (2**63)\n        torch.manual_seed(seed)\n        torch.cuda.manual_seed(seed)\n        with torch.inference_mode():\n            tokens = model.generate(**encoded, max_new_tokens=256, do_sample=True, temperature=1.0,\n                                    top_k=50, top_p=1.0, repetition_penalty=1.0, num_return_sequences=4,\n                                    pad_token_id=tokenizer.pad_token_id)\n        stop = model.generation_config.eos_token_id\n        endings = set(stop if isinstance(stop, list) else [stop])\n        endings.add(tokenizer.pad_token_id)\n        for index, row in enumerate(batch):\n            prompt = encoded[\"input_ids\"][index][encoded[\"attention_mask\"][index].bool()].tolist()\n            completion = []\n            for sequence in tokens[index*4:(index+1)*4, width:].tolist():\n                end = next((pos for pos, value in enumerate(sequence) if value in endings), len(sequence))\n                completion.append(sequence[:end])\n            decoded = tokenizer.batch_decode(completion, skip_special_tokens=True)\n            parsed = [parse_box(response) for response in decoded]\n            output.append({\"id\": row[\"id\"], \"gold\": row[\"gold\"], \"parsed\": parsed, \"seed\": seed,\n                           \"rewards\": [int(answer == row[\"gold\"]) for answer in parsed],\n                           \"lengths\": [len(seq) for seq in completion], \"text\": decoded,\n                           \"tokens\": [prompt + seq for seq in completion], \"prompt_length\": len(prompt),\n                           \"masks\": [[0] * len(prompt) + [1] * len(seq) for seq in completion]})\n        console.print(f\"{panel} external reference {len(output)}/32, {sum(sum(row['rewards']) for row in output)} correct\")\n    return output\n\n\ndef main(data_path, fingerprint, directory, manifest, output):\n    assert sha(data_path) == fingerprint\n    torch.set_num_threads(1)\n    identity = verify(directory, manifest)\n    cuda_device = torch.device(\"cuda:0\")\n    tokenizer = AutoTokenizer.from_pretrained(directory, local_files_only=True, trust_remote_code=False)\n    tokenizer.padding_side = \"left\"\n    assert tokenizer.pad_token_id is not None and tokenizer.chat_template\n    model = AutoModelForCausalLM.from_pretrained(directory, dtype=torch.bfloat16, local_files_only=True,\n                                                trust_remote_code=False, use_safetensors=True).to(cuda_device).eval()\n    assert model.config.model_type == \"qwen2\" and 1_000_000_000 < model.num_parameters() < 2_000_000_000\n    rows = json.loads(data_path.read_bytes())[\"panels\"]\n    scores = {panel: evaluate(model, tokenizer, rows[panel], panel) for panel in (\"screen\", \"confirmation\")}\n    evidence = {\"mode\": \"boxed_recipe\", \"panels\": scores, \"panels_sha256\": fingerprint, \"checkpoint_sha256\": LFS_SHA,\n                \"model_revision\": REVISION, \"input_file_sha256\": identity, \"model_parameters\": model.num_parameters(),\n                \"gpu\": torch.cuda.get_device_name()}\n    with output.open(\"x\") as stream:\n        json.dump(evidence, stream, sort_keys=True, separators=(\",\", \":\"), allow_nan=False)\n        stream.write(\"\\n\")\n\n\nif __name__ == \"__main__\":\n    path, fingerprint, directory, manifest, output = sys.argv[1:]\n    main(Path(path), fingerprint, Path(directory), Path(manifest), Path(output))\n",
+      "sha256": "74618fa86b612c301b65229a1ec57c69cb134d29bc61043f44510b50d40de6db"
+    }
+  },
+  "trace_sha256": "24c6238c974db55a7ad5e61b7a44d8bcd21cf8e97306806776997a9ce678086a"
+}

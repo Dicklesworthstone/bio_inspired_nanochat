@@ -742,7 +742,7 @@ distribution. The official GSM8K test split stays reserved.
   a mean gain of at least two percentage points over both off
   and shuffled with a one-sided exact pair-sign-flip
   `p ≤ 0.025` for each.
-- [ ] Independently check prompts, rewards, paired contrasts,
+- [x] Independently check prompts, rewards, paired contrasts,
   scope and DSR receipts. Track arithmetic-panel qualification
   separately from the original GSM8K checkpoint and RL gates.
 
@@ -756,17 +756,18 @@ reference with a different tokenizer, training history and
 parameter count. Record it separately from the native NanoChat run.
 [Pinned Qwen checkpoint](https://huggingface.co/Qwen/Qwen2.5-Math-1.5B-Instruct/tree/aafeb0fc6f22cbf0eaeed126eff8be45b0360a35)
 
-- [ ] Verify the pinned safetensors checksum and use the installed
+- [x] Verify the pinned safetensors checksum and use the installed
   Transformers implementation with local files only. Score the
   same free-form instruction with the model's own chat template.
   Use four samples per question, temperature 1, top-k 50 and
   a 96-token limit. Run both held-out panels and keep the D20
   qualification thresholds. Compare parseable answers, correct
   answers, mixed groups and exchanged-label controls for both.
-- [ ] Report the external result with its own receipts. Use the
+- [x] Report the external result with its own receipts. Use the
   reserved adaptation and transfer panels only on a policy that
   qualifies in the registered four-choice comparison.
-- [ ] If the external reference passes both panels, check a
+- [x] Apply the gate for the external reference score check. On
+  a qualified pair of panels, check a
   zero-initialized final-projection synaptic residual on the first
   mixed confirmation group. Require identical starting logits and
   agreement between the exact detached trace and full autograd for
@@ -816,3 +817,39 @@ trial was gated off. With the model frozen, the first recorded
 mixed group from each panel gave a nonzero delayed score.
 The exact last-matrix trace agreed with autograd within
 4.48 × 10⁻⁸ maximum absolute error on both groups.
+
+A separate free-form replay used the first mixed screen group,
+with recorded rewards `[0, 1, 0, 0]`. The trace matched the FP32
+full-softmax gradient on 131 scored tokens. Maximum absolute
+error was 1.41 × 10⁻⁷ and relative Frobenius error was 1.02 × 10⁻⁵.
+The original samples came from the BF16 top-k policy. This replay
+compares two implementations of the same FP32 objective.
+
+### External reference observations
+
+The original Qwen run reached the 96-token cap in 235 of 256
+completions and produced zero parseable `####` answers. The
+boxed-answer diagnostic on those same samples found 10 correct
+on the screen and 15 on confirmation, with 9 and 13 mixed
+groups respectively. There were zero matches to exchanged
+labels. Both boxed counts fell below the 24-correct constant
+control. This was the same sampled text under two score rules.
+
+Under Qwen's published prompt and the 256-token cap, the model
+answered all 256 completions correctly. No recorded completion
+matched the exchanged labels. Each paired exact test gave
+`p = 1/65536`. Both panels had zero mixed groups,
+so the centered reward was zero on every group. The two
+configurations changed both the instruction and the token budget.
+The recorded counts measure their combined effect. The external
+score check and training trial did not advance, and neither
+model used the adaptation or transfer panels.
+
+The D20 study closes `hy8.3.4`. Native GSM8K qualification and
+RL effectiveness stay open under `hy8.3.3` and `hy8.3`.
+For replay, extract the source entries to files and the archived
+panel and prediction objects to separate JSON files. The DSR
+commands ran from the recorded implementation checkout. The
+three `audit_*.py` drivers reconstruct every reported decision
+from the archived rows and the frozen panel.
+[Results, replay source and DSR receipts](../../results/d20_fresh_arithmetic_2026-11-23.json) · [Panel and generation archive](../../results/d20_fresh_arithmetic_2026-11-23.json.gz)
