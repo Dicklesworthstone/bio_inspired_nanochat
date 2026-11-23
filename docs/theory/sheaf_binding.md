@@ -32,7 +32,7 @@ $$L_{uu} = \sum_{e \ni u} \mathcal{F}_{u \trianglelefteq e}^T \mathcal{F}_{u \tr
 ### 2.1 Theorem 1 (0-Cohomology is the Space of Global Bindings)
 
 $$H^0(\mathcal{G}, \mathcal{F}) = \ker(\delta) = \ker(L) = \{x \in C^0 : \delta x = 0\}$$
-A 0-cochain $x$ is a valid, uncorrupted global variable binding if and only if $L x = 0$ (Dirichlet energy $\mathcal{E}(x) = x^T L x = \|\delta x\|^2 = 0$).
+A 0-cochain $x$ satisfies the supplied restriction maps exactly when $Lx=0$, equivalently when its Dirichlet energy $x^T Lx=\|\delta x\|^2$ vanishes. Whether the binding yields the correct answer requires a separate target.
 
 ### 2.2 Theorem 2 (1-Cohomology as the Binding Obstruction)
 
@@ -60,7 +60,7 @@ this factor. Larger stable steps can make the largest eigenvalue decisive.
 
 Vesicular SNARE receptors form an operadic colored tree algebra $\mathcal{O}_{\text{SNARE}}$:
 $$\gamma: \mathcal{O}(k) \times \mathcal{O}(n_1) \times \dots \times \mathcal{O}(n_k) \to \mathcal{O}(n_1 + \dots + n_k)$$
-Matching v-SNARE and t-SNARE binary hash codes guarantees exact, context-free subtree compositionality, preventing out-of-distribution syntactic drift on systematic benchmarks (SCAN / COGS).
+`OperadicSNAREMatcher` scores the cosine affinity of two projected vectors. Its matched-code test establishes an ordering between that input pair and its sign reversal. Associative substitution and systematic language generalization remain separate empirical or mathematical obligations.
 
 ---
 
@@ -82,7 +82,7 @@ Matching v-SNARE and t-SNARE binary hash codes guarantees exact, context-free su
 
 ## 5. Audit & Telemetry Specification
 
-All sheaf evaluations emit structured JSONL logs containing:
+The node-monitor audit records the following quantities when its JSONL output is enabled.
 - `step`: Global integer step
 - `obstruction_score`: Per-sample Rayleigh quotient divided by $\lambda_{\max}(L)$, averaged across the batch.
 - `spectral_gap`: Smallest non-zero eigenvalue $\lambda_2(L)$
