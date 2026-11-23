@@ -6,10 +6,12 @@ Two implementations are available:
 2) Our own RustBPE Tokenizer for training and tiktoken for efficient inference
 """
 
+import io
 import json
 import os
 import copy
 import pickle # nosec B403
+import pickletools
 from functools import lru_cache
 from typing import Any, cast
 
@@ -164,6 +166,41 @@ class HuggingFaceTokenizer:
 # -----------------------------------------------------------------------------
 # Tokenizer based on rustbpe + tiktoken combo
 
+class _ArchivedEncoding:
+    """Inert stand-in for the old tiktoken object while reading its data."""
+
+
+class _EncodingDataReader(pickle.Unpickler):
+    def find_class(self, module, name):
+        if (module, name) == ("tiktoken.core", "Encoding"):
+            return _ArchivedEncoding
+        raise ValueError("Legacy tokenizer contains an unsupported object type")
+
+    @classmethod
+    def read_encoding(cls, serialized: bytes) -> tiktoken.Encoding:
+        # Python 3's by-value Encoding archive contains a single object with
+        # strings, bytes, integers and dictionaries. Verify the whole stream
+        # before interpreting it, including opcodes that bypass find_class.
+        allowed = {
+            "PROTO", "FRAME", "STOP", "MARK", "GLOBAL", "STACK_GLOBAL",
+            "NEWOBJ", "BUILD", "EMPTY_TUPLE", "EMPTY_DICT", "SETITEM", "SETITEMS",
+            "BINUNICODE", "SHORT_BINUNICODE", "BINUNICODE8", "SHORT_BINBYTES",
+            "BINBYTES", "BINBYTES8", "BININT", "BININT1", "BININT2", "LONG1", "LONG4",
+            "MEMOIZE", "BINPUT", "LONG_BINPUT", "BINGET", "LONG_BINGET",
+        }
+        for opcode, _, _ in pickletools.genops(serialized):
+            if opcode.name not in allowed:
+                raise ValueError(f"Unsupported legacy tokenizer instruction: {opcode.name}")
+        record = cls(io.BytesIO(serialized)).load()
+        if type(record) is not _ArchivedEncoding:
+            raise ValueError("Legacy tokenizer must contain a tiktoken Encoding")
+        state = vars(record)
+        if set(state) != {"name", "pat_str", "mergeable_ranks", "special_tokens"}:
+            raise ValueError("Legacy tokenizer does not contain a by-value encoding")
+        return tiktoken.Encoding(name=state["name"], pat_str=state["pat_str"],
+                                 mergeable_ranks=state["mergeable_ranks"], special_tokens=state["special_tokens"])
+
+
 class RustBPETokenizer:
     """Light wrapper around tiktoken (for efficient inference) but train with rustbpe"""
 
@@ -235,7 +272,7 @@ class RustBPETokenizer:
             )
 
         with open(pickle_path, "rb") as f:
-            enc = pickle.load(f) # nosec B301
+            enc = _EncodingDataReader.read_encoding(f.read())
         return cls(enc, "<|bos|>")
 
     @classmethod

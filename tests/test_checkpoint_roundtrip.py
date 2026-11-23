@@ -201,3 +201,33 @@ def test_rustbpe_tokenizer_json_round_trip(tmp_path):
     tok2 = RustBPETokenizer.from_directory(str(tmp_path))
     assert tok2.encode(sample) == ids_before
     assert tok2.get_vocab_size() == tok.get_vocab_size()
+
+
+@pytest.mark.parametrize("protocol", [3, 4, 5])
+def test_legacy_tokenizer_loads_archived_encoding_data(tmp_path, protocol):
+    import pickle
+
+    import tiktoken
+
+    from bio_inspired_nanochat.tokenizer import RustBPETokenizer
+
+    encoding = tiktoken.Encoding(name="archived", pat_str=r".",
+                                 mergeable_ranks={bytes([i]): i for i in range(256)},
+                                 special_tokens={"<|bos|>": 256})
+    payload = pickle.dumps(encoding, protocol=protocol)
+    (tmp_path / "tokenizer.pkl").write_bytes(payload)
+    restored = RustBPETokenizer.from_directory(tmp_path)
+    assert restored.encode("test") == encoding.encode("test")
+    assert restored.get_bos_token_id() == 256
+
+
+def test_legacy_tokenizer_refuses_foreign_classes_and_plain_data(tmp_path):
+    import pickle
+    from types import SimpleNamespace
+
+    from bio_inspired_nanochat.tokenizer import RustBPETokenizer
+
+    for unrelated in (SimpleNamespace, {"name": "not an encoding"}):
+        (tmp_path / "tokenizer.pkl").write_bytes(pickle.dumps(unrelated))
+        with pytest.raises(ValueError, match="unsupported object type|must contain a tiktoken Encoding"):
+            RustBPETokenizer.from_directory(tmp_path)
