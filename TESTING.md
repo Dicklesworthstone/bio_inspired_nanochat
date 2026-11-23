@@ -28,7 +28,7 @@ CUDA_VISIBLE_DEVICES=0 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=
   --checkpoint-dir "$CHECKPOINT" --step "$STEP" --out "runs/dsr/$DSR_RUN_ID/precision-$STEP.json"
 ```
 
-The reference uses FP32 matrix weights and PyTorch's `highest` matmul setting.
+The first sweep used the inference head at `6434469`. Its reference uses FP32 matrix weights and PyTorch's `highest` matmul setting.
 TF32 allows `high` precision matmuls. BF16 and FP16 use CUDA autocast with
 `high`. Every arm retains the model's rotary tables and stored biological
 state. Each of four held-out blocks supplies 32 prompt tokens and eight cached
@@ -55,6 +55,13 @@ precision. Use the sweep for an explicit `highest` reference. These four
 single-device blocks do not qualify a change to training or serving defaults.
 [Vanilla measurements](results/profiles/precision_vanilla_2026-11-23.json) ·
 [Synaptic measurements](results/profiles/precision_bio_2026-11-23.json)
+
+An independent replay reproduced all 128 original vanilla choices. On each
+of the 32 BF16 predictions the bounded logits gave 289–468 tokens the same
+maximum score. FP16 gave 72–90 tokens the same maximum. Keeping the raw
+lower-precision matrix product and evaluating just the final tanh in FP32
+restored the FP32 choice on all 32 positions in both modes. Even the FP32
+reference had a two-way tie twice. [Token-by-token replay with source](results/profiles/vanilla_softcap_replay_2026-11-23.json)
 
 > The test discipline for `bio_inspired_nanochat`. Established by bead **eqyk.1**
 > (*Unit-test framework, conventions, fixtures & coverage gate*) — the foundation
