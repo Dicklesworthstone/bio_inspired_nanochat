@@ -163,3 +163,71 @@ result of this probe and it is **not** the experiment that decides the claim. Th
 the deferred writes landing between them — and compares Hebbian ON vs OFF under chunked reading, with
 the throughput cost beside the effect. Until that runs, the "infinite local context" claim is
 **unmeasured**, not null.
+## Matched intervention on trained Hebbian memory
+
+The previous five-seed toy study measured the entire memory mechanism on
+versus off. This experiment asks whether ordinary language-model training
+learns to use the **actual assignment of activations** in the online write.
+Both models have the same parameters and write capacity. The control
+shuffles only the association between pre- and postsynaptic rows, using one
+permutation for both trace factors in a block. The original normalized
+production write and all of its downstream dynamics execute in both arms.
+This is the behavioral follow-up to the raw-product identity in
+[the permutation study](episodic_write_policy.md#a-matched-control-for-nanochats-raw-hebbian-write).
+Related architectures learn to use fast weights and test-time updates through
+different training rules. [Fast-weight programmers](https://proceedings.mlr.press/v139/schlag21a.html) · [Test-time training layers](https://arxiv.org/abs/2407.04620)
+
+### Registered experiment
+
+- [ ] Pin the implementation, tokenizer, staged train and validation shards,
+  GPU identity, torch build and both random streams. Seeds are 6311–6314.
+  Within each seed, initialize both training arms identically. Use a
+  depth-two, width-192, three-head, tied-head GPTSynaptic with a 1,024-token
+  context, Hebbian memory enabled, STDP, presynaptic release and metabolism
+  disabled, and zero online slow consolidation. Retain the normalized
+  transient write, its default learning and decay rates, and the postsynaptic
+  modulation. Reset fast state between independent training sequences.
+- [ ] Exercise the real chunked-backpropagation path on a time-boxed
+  apparatus run. Use one sequence per step and 128-token chunks. Verify that
+  the fresh model's first chunk is identical before an intervention can take
+  effect, both active read arms perform the same number of writes, and a
+  later chunk registers a change. Verify lane-local marginal preservation
+  and restoration of the original method.
+- [ ] Train two models per seed for 768 AdamW updates at `3e-4`, no weight
+  decay, global gradient clipping at 1, with an identical 786,432-token
+  training exposure per arm. Check loss, gradients, checkpoints, write
+  activity, memory and wall time. Use independently seeded uniform
+  permutations for the training control, shared across all write sites
+  within a chunk. Use two cards as independent single-process workers.
+  Before seeing held-out results, measure steps 5–16 in each training arm.
+  Admit the registered run if the slower arm's mean time times 3,072
+  fits 2,400 seconds per card. Otherwise report the measured cost shortfall.
+- [ ] Score every checkpoint on the same 128 complete or prefix-truncated
+  documents drawn in order from the midpoint validation row group and
+  subsequent groups. Use the first at most 512 tokens of each document,
+  require at least 256 tokens, reject duplicate document hashes, and reset
+  state for each article. Start with BOS and score only positions after the
+  first complete 128-token chunk. Both trained arms and the common initial
+  model get an identity read, four independent shuffled reads and a frozen
+  read. Average the four shuffled probabilities before taking the coding
+  loss. Record the average shuffled loss too, to expose the Jensen gap.
+  Also score the existing associative-recall task at 4 and 8 pairs using
+  64 held-out examples apiece. These probe exact recall using randomized
+  symbols and serve as descriptive checks on models trained on text. Pad with
+  BOS between the examples and query to put the query in the next chunk.
+- [ ] Publish complete per-document bits, bytes, first-block invariance,
+  checkpoint and input digests, probe counts, per-arm throughput and all
+  statistical decisions. Advance a claim of learned pairing only if the
+  paired-trained identity read saves at least 0.005 BPB against **both**
+  the paired-trained shuffle ensemble and its frozen read, and the
+  pairing benefit grows by at least 0.005 BPB over the common initialization
+  and over the paired-vs-shuffled read gap of the shuffle-trained model.
+  Require positive savings on all four seeds for each contrast and a
+  positive one-sided 98.75% lower bound from 32,768 paired document
+  bootstrap draws over the seed-averaged loss differences. The document
+  bounds condition on these four seeds. Report other read contrasts as
+  descriptive.
+- [ ] Recompute every decision from the raw held-out scores, perform static
+  and runtime qualification through DSR, and close only the verified scope
+  in Beads. D1 scale and reward-gated training retain distinct acceptance.
+
