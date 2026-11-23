@@ -3809,6 +3809,21 @@ class SynapticLinear(nn.Module):
             self.post._consolidate_delta(molecular)
 
     @torch.no_grad()
+    def commit_pending_plasticity(self) -> bool:
+        """Apply a deferred training write using the current dopamine gain.
+
+        Call after the backward that produced the eligibility traces and
+        before resetting or starting an independent episode. This must be
+        an optimizer boundary with no other backward using these weights.
+        """
+        if not self._plasticity_pending or not self.cfg.enable_hebbian or self.post is None:
+            return False
+        self._apply_hebb_weight_writes(self._last_gate_scale)
+        self._plasticity_pending = False
+        self._last_gate_scale = None
+        return True
+
+    @torch.no_grad()
     def reset_sequence_state(
         self, *, reset_fast_weights: bool = False, reset_consolidation: bool = True
     ) -> None:
@@ -3868,16 +3883,8 @@ class SynapticLinear(nn.Module):
         # never mutate w_fast/w_slow/post.* mid-evaluation; the next training
         # forward lands the identical write before its matmuls, preserving the
         # training trajectory exactly.
-        if (
-            self._plasticity_pending
-            and self.training
-            and update_mem
-            and cfg.enable_hebbian
-            and post is not None
-        ):
-            with torch.no_grad():
-                self._apply_hebb_weight_writes(self._last_gate_scale)
-            self._plasticity_pending = False
+        if self._plasticity_pending and self.training and update_mem:
+            self.commit_pending_plasticity()
 
         # Linear pass (separate slow/fast for calcium/energy gating)
         grad_on = torch.is_grad_enabled()

@@ -22,13 +22,16 @@ Run:
 from __future__ import annotations
 
 import argparse
+import itertools
+import json
 import math
 import shutil
+import statistics
 import tempfile
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Literal, Sequence
 
 import torch
 import torch.nn.functional as F
@@ -105,6 +108,120 @@ def _build_model(cfg: NeuromodRLE2EConfig, *, seed_offset: int = 0) -> GPTSynapt
     )
     model = GPTSynaptic(gpt_cfg).to(cfg.device)
     return model
+
+
+Feedback = Literal["aligned", "neutral", "lagged"]
+
+
+@torch.no_grad()
+def heldout_reward(model: GPTSynaptic, cfg: NeuromodRLE2EConfig) -> dict:
+    batch, reward = reward_task(batch=512, context_len=cfg.context_len,
+                                vocab_size=cfg.vocab_size, seed=88_103)
+    batch = batch.to(cfg.device)
+    model.eval()
+    model.reset_sequence_state(reset_fast_weights=True)
+    logits, _ = model(batch.inputs, train_mode=False, update_mem=False)
+    model.train()
+    scores = logits[:, -1].float()
+    gold = batch.targets[:, -1:]
+    logp = F.log_softmax(scores, dim=-1).gather(1, gold).squeeze(1)
+    return {"expected_reward": float(logp.exp().mean()), "gold_nll": -float(logp.mean()),
+            "greedy_hits": int(reward(scores.argmax(-1)).sum()), "examples": 512}
+
+
+def train_reward_policy(
+    cfg: NeuromodRLE2EConfig, *, feedback: Feedback = "aligned",
+    isolated: bool = False, eval_at: Sequence[int] = (), logger: RunLogger | None = None,
+) -> dict:
+    """Train the existing reward policy with an explicit post-backward write boundary."""
+    model = _build_model(cfg, seed_offset=3).train()
+    layers = [layer for layer in model.modules() if isinstance(layer, SynapticLinear)]
+    optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=1e-4)
+    bus_cfg = NeuromodConfig(ema_tau=0.8)
+    if isolated:
+        bus_cfg.ach_gain_slope = bus_cfg.ach_input_slope = bus_cfg.ne_gain_slope = 0.0
+    if feedback == "neutral":
+        bus_cfg.da_gain_slope = 0.0
+    bus = NeuromodulatoryBus(bus_cfg)
+    train = []
+    checkpoints = {0: heldout_reward(model, cfg)} if 0 in eval_at else {}
+    for step in range(cfg.rl_steps):
+        batch, reward_fn = reward_task(batch=cfg.batch_size, context_len=cfg.context_len,
+                                       vocab_size=cfg.vocab_size, seed=cfg.seed + 100 + step)
+        batch = batch.to(cfg.device)
+        model.reset_sequence_state(reset_fast_weights=True)
+        logits, _ = model(batch.inputs, train_mode=True)
+        policy = torch.distributions.Categorical(probs=F.softmax(logits[:, -1, :], dim=-1))
+        actions = policy.sample()
+        rewards = reward_fn(actions)
+        reward = float(rewards.mean())
+        advantage = rewards - rewards.mean()
+        loss = -(policy.log_prob(actions) * advantage.detach()).mean()
+        optimizer.zero_grad()
+        loss.backward()
+        grad_norm = float(torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_clip, error_if_nonfinite=True))
+        optimizer.step()
+
+        loss_value = float(loss.detach())
+        entropy = float(policy.entropy().detach().mean())
+        if not all(math.isfinite(value) for value in (reward, loss_value, entropy, grad_norm)):
+            raise FloatingPointError(f"Non-finite policy signal at update {step + 1}")
+        if feedback == "lagged":
+            gain = bus.gains()["plasticity"]
+            bus.broadcast(model)
+        bus.update(reward=reward, entropy=entropy, loss=loss_value)
+        if feedback != "lagged":
+            gain = bus.gains()["plasticity"]
+            bus.broadcast(model)
+        writes = sum(layer.commit_pending_plasticity() for layer in layers)
+        if not layers or writes != len(layers):
+            raise RuntimeError(f"Expected {len(layers)} committed writes, saw {writes} at update {step + 1}")
+
+        entry = {"step": step + 1, "reward": reward, "loss": loss_value, "entropy": entropy,
+                 "grad_norm": grad_norm, "dopamine_gain": gain, "writes": writes, **bus.levels()}
+        train.append(entry)
+        if logger is not None and (step + 1) % 10 == 0:
+            logger.log_metrics(**entry)
+        if step + 1 in eval_at:
+            checkpoints[step + 1] = heldout_reward(model, cfg)
+    if any(not torch.isfinite(param).all() for param in model.parameters()):
+        raise FloatingPointError("Non-finite parameters after reward training")
+    return {"train": train, "heldout": checkpoints, "sites": len(layers)}
+
+
+def timing_study(out: Path) -> dict:
+    """Compare the three registered feedback schedules on fixed held-out episodes."""
+    arms: tuple[Feedback, ...] = ("aligned", "neutral", "lagged")
+    steps = (0, 32, 64, 96, 128)
+    seeds = range(410, 418)
+    console = Console()
+    runs = {}
+    for seed in seeds:
+        cfg = NeuromodRLE2EConfig(seed=seed, batch_size=16, rl_steps=steps[-1])
+        runs[seed] = {arm: train_reward_policy(cfg, feedback=arm, isolated=True, eval_at=steps) for arm in arms}
+        console.log(f"Completed all three feedback schedules for seed {seed}")
+
+    def score(seed: int, arm: Feedback) -> float:
+        return statistics.fmean(runs[seed][arm]["heldout"][step]["expected_reward"] for step in steps[1:])
+
+    contrasts = {}
+    for control in ("neutral", "lagged"):
+        differences = [score(seed, "aligned") - score(seed, control) for seed in seeds]
+        total = math.fsum(differences)
+        flips = itertools.product((-1, 1), repeat=len(differences))
+        extreme = sum(math.fsum(sign * delta for sign, delta in zip(signs, differences, strict=True))
+                      >= total - 1e-14 for signs in flips)
+        mean, p = total / len(differences), extreme / (2 ** len(differences))
+        wins = sum(delta > 0 for delta in differences)
+        contrasts[control] = {"mean": mean, "one_sided_p": p, "positive_seeds": wins,
+                              "seed_deltas": differences, "pass": mean >= .01 and p <= .025 and wins >= 6}
+    report = {"runs": runs, "torch": str(torch.__version__), "contrasts": contrasts,
+              "advance": all(row["pass"] for row in contrasts.values())}
+    out.mkdir(parents=True, exist_ok=True)
+    with (out / "timing-study.json").open("x") as stream:
+        json.dump(report, stream, indent=2, allow_nan=False)
+        stream.write("\n")
+    return report
 
 
 def run_neuromod_rl_e2e(
@@ -257,73 +374,10 @@ def run_neuromod_rl_e2e(
         # ===================================================================
         # Part 3: Neuromodulated RL micro-run improves reward & stays finite
         # ===================================================================
-        rl_model = _build_model(cfg, seed_offset=3)
-        rl_model.train()
-        optimizer = torch.optim.AdamW(rl_model.parameters(), lr=cfg.lr, weight_decay=1e-4)
-        rl_bus = NeuromodulatoryBus(NeuromodConfig(enabled=True, ema_tau=0.8))
-
-        reward_history: list[float] = []
-        loss_history: list[float] = []
-        all_finite = True
-
-        for step in range(cfg.rl_steps):
-            rl_batch, r_fn = reward_task(
-                batch=cfg.batch_size,
-                context_len=cfg.context_len,
-                vocab_size=cfg.vocab_size,
-                seed=cfg.seed + 100 + step,
-            )
-            rl_batch = rl_batch.to(cfg.device)
-            answer_pos = int(rl_batch.meta["answer_pos"])
-
-            # Reset working memory per sequence
-            rl_model.reset_sequence_state(reset_fast_weights=True)
-
-            logits, _ = rl_model(rl_batch.inputs, train_mode=True)
-            pred_logits = logits[:, answer_pos, :]  # (B, V)
-
-            # Sample action tokens from policy distribution
-            probs = F.softmax(pred_logits, dim=-1)
-            dist = torch.distributions.Categorical(probs=probs)
-            actions = dist.sample()  # (B,)
-
-            # Compute reward
-            rewards = r_fn(actions)  # (B,) float
-            mean_reward = float(rewards.mean().item())
-            reward_history.append(mean_reward)
-
-            # REINFORCE policy gradient loss modulated by advantage
-            log_probs = dist.log_prob(actions)
-            # Baseline-subtracted advantage
-            advantage = rewards - rewards.mean()
-            loss = -(log_probs * advantage.detach()).mean()
-
-            optimizer.zero_grad()
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(rl_model.parameters(), cfg.grad_clip)
-            optimizer.step()
-
-            loss_val = float(loss.detach().item())
-            loss_history.append(loss_val)
-
-            # Update Neuromodulatory Bus with step reward and entropy
-            entropy = float(dist.entropy().mean().item())
-            rl_bus.update(reward=mean_reward, entropy=entropy, loss=loss_val)
-            rl_bus.broadcast(rl_model)
-
-            if not (math.isfinite(loss_val) and math.isfinite(mean_reward)):
-                all_finite = False
-
-            if (step + 1) % 10 == 0:
-                run_logger.log_metrics(
-                    step=step + 1,
-                    reward=mean_reward,
-                    loss=loss_val,
-                    entropy=entropy,
-                    da=float(rl_bus.da),
-                    ach=float(rl_bus.ach),
-                    ne=float(rl_bus.ne),
-                )
+        trace = train_reward_policy(cfg, logger=run_logger)
+        reward_history = [row["reward"] for row in trace["train"]]
+        committed = sum(row["writes"] for row in trace["train"])
+        all_finite = True  # Nonfinite runs raise at their training boundary.
 
         first_half_r = sum(reward_history[: len(reward_history) // 2]) / (len(reward_history) // 2)
         second_half_r = sum(reward_history[len(reward_history) // 2 :]) / (len(reward_history) - len(reward_history) // 2)
@@ -366,6 +420,8 @@ def run_neuromod_rl_e2e(
                 "unrewarded_drift": drift_unrewarded,
                 "first_half_reward": first_half_r,
                 "second_half_reward": second_half_r,
+                "reward_episode_commits": committed,
+                "reward_episode_sites": trace["sites"],
             },
         )
 
@@ -393,7 +449,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--device", type=str, default="cpu", help="Device to execute on")
     parser.add_argument("--seed", type=int, default=42, help="RNG seed")
     parser.add_argument("--steps", type=int, default=35, help="Number of RL micro-run steps")
+    parser.add_argument("--timing-study", action="store_true", help="Run the fixed three-arm CPU study")
     args = parser.parse_args(argv)
+
+    if args.timing_study:
+        if args.run_dir is None:
+            parser.error("--timing-study requires --run-dir")
+        report = timing_study(Path(args.run_dir))
+        Console().print(report["contrasts"])
+        return 0
 
     cfg = NeuromodRLE2EConfig(device=args.device, seed=args.seed, rl_steps=args.steps)
     report = run_neuromod_rl_e2e(cfg, run_dir=args.run_dir, verbose=True)
