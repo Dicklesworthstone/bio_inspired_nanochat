@@ -786,6 +786,17 @@ the first mixed confirmation group for the numerical transfer
 check above with boxed rewards. Keep the `####` and boxed
 results separate. [Qwen evaluation instructions](https://github.com/QwenLM/Qwen2.5-Math#evaluation)
 
+The archived samples using the original prompt cleared neither
+panel under the boxed-answer diagnostic. Run one follow-up on
+the same two panels using Qwen's published chain-of-thought
+system message and a 256-token cap. Keep the seeds, sampling
+temperature, top-k and denominators. Use the boxed parser and
+the same qualification gates. If both panels qualify, run the
+same numerical transfer check with the first mixed confirmation
+group from this follow-up. This tests the model and response
+format together, with no new training.
+[Published prompt](https://github.com/QwenLM/Qwen2.5-Math/blob/main/evaluation/utils.py)
+
 ### D20 observations
 
 The native free-form model answered 18 of 128 correctly, compared
