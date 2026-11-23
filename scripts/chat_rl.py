@@ -18,11 +18,11 @@ torchrun --standalone --nproc_per_node=8 -m scripts.chat_rl -- --run=default
 
 import os
 import itertools
+from contextlib import nullcontext
 from typing import Protocol, cast
 
 import wandb
 import torch
-import torch.nn.functional as F
 import torch.distributed as torch_dist
 
 from bio_inspired_nanochat.common import (
@@ -41,8 +41,10 @@ from bio_inspired_nanochat.checkpoint_manager import (
     synaptic_config_to_meta,
 )
 from bio_inspired_nanochat.engine import Engine, batch_slices
+from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic
 from bio_inspired_nanochat.configurator import apply_config
 from bio_inspired_nanochat.report import get_report
+from bio_inspired_nanochat.rollout_credit import RolloutCredit, pack_rollout_tokens, permute_advantages, synaptic_token_logp
 from tasks.gsm8k import GSM8K
 
 
@@ -78,6 +80,10 @@ num_epochs = 1 # how many epochs of gsm8k to train on
 save_every = 60 # every how many steps to save the model
 eval_every = 60 # every how many steps to evaluate the model for val pass@k
 eval_examples = 400 # number of examples used for evaluating pass@k
+reward_credit = "legacy" # legacy|off|aligned|shuffled
+reward_credit_lr = 0.03 # slow-matrix step size in the aligned and shuffled modes
+gsm8k_data_dir = "" # optional offline cache of the official split parquets
+max_steps = -1 # positive values cap the scheduled training steps
 # now allow CLI to override the settings via the configurator lol
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 apply_config(globals())
@@ -101,9 +107,11 @@ engine = Engine(model, tokenizer) # for sampling rollouts
 # -----------------------------------------------------------------------------
 # Rollout / sampling generator loop that yields batches of examples for training
 
-train_task = GSM8K(subset="main", split="train")
-val_task = GSM8K(subset="main", split="test")
+train_task = GSM8K(subset="main", split="train", data_dir=gsm8k_data_dir)
+val_task = GSM8K(subset="main", split="test", data_dir=gsm8k_data_dir)
 num_steps = (len(train_task) // examples_per_step) * num_epochs
+if max_steps > 0:
+    num_steps = min(num_steps, max_steps)
 print0(f"Calculated number of steps: {num_steps}")
 
 @torch.no_grad()
@@ -119,6 +127,13 @@ def get_batch():
         # (i.e. keep the <|assistant_start|>, but delete everything after it)
         tokens = tokenizer.render_for_completion(conversation)
         prefix_length = len(tokens)
+        rollout_limit = max_new_tokens
+        if reward_credit != "legacy":
+            # The attribution forward consumes the last sampled token as well.
+            remaining = model.config.sequence_len - prefix_length
+            if remaining < 0:
+                raise ValueError("GSM8K prompt exceeds the model's context length")
+            rollout_limit = min(rollout_limit, remaining)
 
         # Generate num_samples samples using batched generation, use loop to avoid OOMs
         model.eval() # ensure the model is in eval mode
@@ -131,7 +146,7 @@ def get_batch():
                 tokens,
                 num_samples=num_samples,
                 max_batch_size=device_batch_size,
-                max_tokens=max_new_tokens,
+                max_tokens=rollout_limit,
                 temperature=temperature,
                 top_k=top_k,
                 seed=rollout_seed,
@@ -156,9 +171,7 @@ def get_batch():
         ids = torch.tensor(padded_generated_token_sequences, dtype=torch.long, device=device)
         mask_ids = torch.tensor(padded_masks, dtype=torch.long, device=device)
         # Generate autoregressive inputs and targets to the Transformer
-        inputs = ids[:, :-1]
-        targets = ids[:, 1:].clone() # clone to avoid in-place modification:
-        targets[mask_ids[:, 1:] == 0] = -1 # <-- inplace modification right here. -1 is the ignore index
+        inputs, targets, action_mask = pack_rollout_tokens(ids, mask_ids.bool(), include_last=reward_credit != "legacy")
         # NOTE also that the Engine returns mask=0 for BOTH the prompt tokens AND the tool use tokens.
         # So we will (correctly) end up not training on the prompt tokens, or the tool use forced tokens.
         rewards = torch.tensor(rewards, dtype=torch.float, device=device)
@@ -166,7 +179,7 @@ def get_batch():
         mu = rewards.mean()
         advantages = rewards - mu
         # yield inputs/targets as (B, T) of ids and rewards as (B,) of floats
-        yield generated_token_sequences, inputs, targets, rewards, advantages
+        yield generated_token_sequences, inputs, targets, rewards, advantages, action_mask
 
 # -----------------------------------------------------------------------------
 # Simple evaluation loop for GSM8K pass@k
@@ -246,6 +259,18 @@ if examples_per_step % ddp_world_size != 0:
     raise ValueError("Desired examples per step must be divisible by the number of ranks")
 examples_per_rank = examples_per_step // ddp_world_size # per GPU
 print0(f"Calculated examples per rank: {examples_per_rank}")
+if reward_credit not in ("legacy", "off", "aligned", "shuffled"):
+    raise ValueError("reward_credit must be legacy, off, aligned or shuffled")
+credit = None
+if reward_credit in ("aligned", "shuffled"):
+    if not isinstance(model, GPTSynaptic):
+        raise ValueError("Reward credit requires a synaptic starting checkpoint")
+    credit = RolloutCredit(model, lr=reward_credit_lr, rollouts_per_rank=examples_per_rank * num_samples)
+
+
+def average_rank_credit(update: torch.Tensor) -> None:
+    dist.all_reduce(update, op=dist.ReduceOp.SUM)
+    update.div_(ddp_world_size)
 
 # Kick off the training loop
 batch_iterator = get_batch()
@@ -278,7 +303,7 @@ for step in range(num_steps):
     sequence_lengths = []
     for example_step in range(examples_per_rank):
         # Get one batch corresponding to one example in the training dataset
-        sequences_all, inputs_all, targets_all, rewards_all, advantages_all = next(batch_iterator)
+        sequences_all, inputs_all, targets_all, rewards_all, advantages_all, action_mask = next(batch_iterator)
         # Evaluate the loss and gradients
         model.train() # ensure the model is in train mode
         # Keep every rollout while bounding each forward/backward micro-batch.
@@ -286,6 +311,11 @@ for step in range(num_steps):
         # chunk is not overweighted relative to a full chunk.
         slices = batch_slices(inputs_all.size(0), device_batch_size)
         total_valid = (targets_all >= 0).sum().clamp(min=1)
+        write_advantages = advantages_all
+        if reward_credit == "shuffled":
+            write_advantages = permute_advantages(
+                advantages_all, stable_seed_u64(step, salt=f"chat_rl.credit:{ddp_rank}:{example_step}")
+            )
         for pass_idx, (b0, b1) in enumerate(slices):
             # Pluck out the batch for this pass
             inputs = inputs_all[b0:b1]
@@ -293,15 +323,10 @@ for step in range(num_steps):
             rewards = rewards_all[b0:b1]
             advantages = advantages_all[b0:b1]
             # Calculate log probabilities. Note that the loss calculates NLL = -logp, so we negate
-            with autocast_ctx:
-                # Handle both GPT and GPTSynaptic signatures
-                if hasattr(model, 'config') and getattr(model.config, 'synapses', False):
-                    # GPTSynaptic: forward returns (logits, loss), need to compute loss ourselves
-                    logits, _ = model(inputs, targets, train_mode=True)
-                    logits_flat = logits.view(-1, logits.size(-1))
-                    targets_flat = targets.view(-1)
-                    loss_per_token = F.cross_entropy(logits_flat, targets_flat, reduction='none', ignore_index=-1)
-                    logp = -loss_per_token.view_as(inputs)
+            observation = credit.observe(action_mask[b0:b1], write_advantages[b0:b1]) if credit is not None else nullcontext()
+            with observation, autocast_ctx:
+                if isinstance(model, GPTSynaptic):
+                    logp = synaptic_token_logp(model, inputs, targets, update_mem=reward_credit == "legacy")
                 else:
                     # GPT: forward accepts loss_reduction='none'
                     logp = -model(inputs, targets, loss_reduction='none').view_as(inputs) # (B, T)
@@ -343,6 +368,10 @@ for step in range(num_steps):
     for opt in optimizers: # then step the optimizers
         opt.step()
     model.zero_grad(set_to_none=True)
+    if credit is not None:
+        credit_stats = credit.commit(average_replicas=average_rank_credit if ddp else None)
+        print0(f"Step {step}/{num_steps} | Rollout credit {credit_stats}")
+        wandb_run.log({"step": step, **credit_stats})
     wandb_run.log({
         "step": step,
         "lrm": lrm,
@@ -388,6 +417,8 @@ for step in range(num_steps):
             rank=ddp_rank,
         )
         print0(f"✅ Saved model checkpoint to {checkpoint_dir}")
+
+batch_iterator.close()
 
 # Log to report
 get_report().log(section="Chat RL", data=[

@@ -15,6 +15,7 @@ Notice that GSM8K uses tool calls inside << >> tags.
 """
 
 import re
+from pathlib import Path
 from typing import Any, Dict, List, cast
 
 from datasets import Dataset, load_dataset
@@ -36,16 +37,23 @@ def extract_answer(completion):
     return None
 
 
+GSM8K_REVISION = "740312add88f781978c0658806c59bc2815b9866"
+
+
 class GSM8K(Task):
 
-    def __init__(self, subset, split, **kwargs):
+    def __init__(self, subset, split, *, data_dir=None, **kwargs):
         super().__init__(**kwargs)
         if subset not in ["main", "socratic"]:
             raise ValueError("GSM8K subset must be main|socratic")
         if split not in ["train", "test"]:
             raise ValueError("GSM8K split must be train|test")
-        dataset = load_dataset("openai/gsm8k", subset, split=split, revision="f18c7ed").shuffle(seed=42)
-        self.ds: Dataset = dataset
+        if data_dir:
+            parquet = Path(data_dir) / subset / f"{split}-00000-of-00001.parquet"
+            dataset = load_dataset("parquet", data_files={split: str(parquet)}, split=split)
+        else:
+            dataset = load_dataset("openai/gsm8k", subset, split=split, revision=GSM8K_REVISION)
+        self.ds: Dataset = dataset.shuffle(seed=42)
 
     @property
     def eval_type(self):
