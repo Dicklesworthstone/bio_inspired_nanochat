@@ -404,13 +404,13 @@ reward arrives.
 
 ### Registered work
 
-- [ ] Independently verify exact factorization against the full
+- [x] Independently verify exact factorization against the full
   autograd score with repeated actions, zero rewards, RMS normalization
   on and off, and saturated and uncapped logits. Verify storage and
   reward arrival order, and exhibit an unequal-prefix counterexample
   to canceling the normalizer. Check the abstract cancellation and
   projection sign identities in Lean.
-- [ ] Reuse the copy-first initialization procedure for eight new
+- [x] Reuse the copy-first initialization procedure for eight new
   seeds, 90521 through 97521 spaced by 1000. Draw four actions for each
   of 128 questions seeded by `11000000 + model_seed` with sampler seed
   `12000000 + model_seed`. Use an action-independent random orthogonal
@@ -418,7 +418,7 @@ reward arrives.
   reward coefficients within each question using seed
   `14000000 + 128 * model_seed + question_index`. Keep the fixed
   prediction states, actions and rewards across all directions.
-- [ ] Measure directional derivatives of expected reward over an
+- [x] Measure directional derivatives of expected reward over an
   independent set of 512 questions from seed 108059. Normalize exact,
   rank-16 and shuffled matrix directions to 0.003 Frobenius norm.
   Compare with a central finite difference at ±one write, checking
@@ -428,7 +428,7 @@ reward arrives.
   derivative at least one quarter of the exact mean, and rank-16
   aligned beating shuffled in at least six seeds with a one-sided
   exact sign-flip `p ≤ 0.025`.
-- [ ] If the frozen test qualifies, execute four matched arms on new
+- [x] If the frozen test qualifies, execute four matched arms on new
   seeds 100521 through 107521 spaced by 1000. Use the same 128
   supervised updates and 96 on-policy updates as the previous
   studies, with 512 new holdout questions from seed 109073. Compare
@@ -440,7 +440,7 @@ reward arrives.
   and 96. Require six positive seeds and a one-sided exact sign-flip
   `p ≤ 0.025` against each. Record the gap to the exact-score arm
   and require the mean to be within one percentage point of that arm.
-- [ ] Screen the archived FineWeb synaptic start, both 50-step
+- [x] Screen the archived FineWeb synaptic start, both 50-step
   synaptic scale pilots, and the 150-step vanilla smoke checkpoint.
   Run 16 fixed questions from the official shuffled training split
   on each candidate, four samples per question, temperature 1,
@@ -461,12 +461,12 @@ can make the root mass zero while leaving nonzero masses farther
 down the tree. Forced tokens define the next prefix and carry no
 score coefficient.
 
-- [ ] Use the production KV cache and a frozen dense synaptic model
+- [x] Use the production KV cache and a frozen dense synaptic model
   with presynaptic recurrence disabled. Capture prediction traces
   before revealing fixed rewards. Include a shared prompt, a
   branch shared after a forced token, repeated actions, divergent
   branches, and unequal endings.
-- [ ] Reconstruct the aggregate and compare it with full masked
+- [x] Reconstruct the aggregate and compare it with full masked
   autograd. Run the comparison with and without output capping.
   Check that omitting every prefix normalizer fails, and that
   reducing the corrected matrix to the fixed rank-16 basis agrees
@@ -482,12 +482,89 @@ samples per context, and explicit FP32 on one RTX 4090. Use fixed
 signed coefficients to test update equivalence. This check
 measures score computation with a common input and objective.
 
-- [ ] Compare a retained autograd graph, a fresh autograd replay
+- [x] Compare a retained autograd graph, a fresh autograd replay
   after reward, and the exact decision-time trace. Use three warmups
   and 12 timed rounds per method in one invocation, rotating order.
   Require sampled actions and the final matrix gradient to agree
   for every timed result.
-- [ ] Measure synchronized end-to-end and post-reward wall time and
+- [x] Measure synchronized end-to-end and post-reward wall time and
   peak and retained PyTorch tensor allocations. Report the comparison
-  against both autograd methods. This fixture changes one matrix and
-  makes no claim about whole-model training throughput.
+  against both autograd methods. The workload computes an update
+  only for the final matrix.
+
+### Observed score and reward
+
+On the eight frozen policies, exact, rank-16 and shuffled credit had
+mean directional derivatives of +2.823 × 10⁻⁵, +1.519 × 10⁻⁵ and
+−2.528 × 10⁻⁶ respectively. Rank-16 beat the shuffle in all eight
+seeds, with a one-sided exact p = 0.00390625. It retained 53.8% of the
+exact derivative. A four-action trace needs 320 stored scalars in
+the sketched representation and 512 in the exact factorized
+representation, excluding the fixed shared basis and bookkeeping.
+
+The frozen result qualified the fresh training cohort. The
+training result fell short of the one-percentage-point threshold.
+All 32 policies trained with mixed rewards. The full measurements
+and traces from both phases reproduced byte for byte. Independent
+scoring recovered 53,248 sampled action rewards and 65,536 training
+holdout scores.
+
+| Rank-16 aligned compared with | Mean expected reward gain (percentage points) | Positive seeds | One-sided exact p |
+| --- | ---: | ---: | ---: |
+| Off | +0.191388 | 5/8 | 0.277344 |
+| Rank-16 shuffled | +0.187482 | 5/8 | 0.210938 |
+| Exact local score | +0.154712 | 6/8 | 0.273438 |
+
+The exact local formula matched autograd in all six float64
+RMS and softcap fixtures within 8.68 × 10⁻¹⁹ absolute error.
+Lean checked shared-normalizer cancellation, the counterexample
+with unequal normalizers, sketch sign invariance and
+nonnegativity. The proofs address the finite-sum identities.
+
+On the four-completion fixture, the root mass was zero and the
+shared prefix after a forced token had mass 0.5. The corrected cache
+accumulator matched full masked autograd within 5.69 × 10⁻¹³
+absolute error. Omitting all normalizers produced about
+8.90 × 10⁻⁴ Frobenius error. With presynaptic recurrence enabled,
+the accumulator matched independent cached autograd within
+5.43 × 10⁻¹⁹. Full replay differed by up to 7.65 × 10⁻¹² there.
+For a fixed top-8 support at temperature 0.7, full and truncated
+softmax produced identical weighted gradients on shared prefixes.
+
+### Native cost and GSM8K checkpoint screen
+
+The live RTX 4090 comparison matched sampled actions in every
+round. The exact trace's matrix update differed from autograd by
+at most 3.73 × 10⁻⁹. The table gives medians of 12 timed rounds in
+one invocation. Retained memory is the extra PyTorch tensor memory
+still allocated when feedback arrives.
+
+| Method | End to end (ms) | After reward (ms) | Retained tensor bytes |
+| --- | ---: | ---: | ---: |
+| Retained autograd | 319.68 | 14.47 | 8,132,096 |
+| Autograd replay | 527.32 | 267.10 | 512 |
+| Exact trace | 243.46 | 4.38 | 49,664 |
+
+The trace took less end-to-end time in 8 of 12 rounds versus a
+retained graph and 11 of 12 versus replay. It preserved more
+pre-reward state than replay while cutting post-reward latency.
+This establishes the cost tradeoff for the frozen, final-matrix
+workload.
+
+Each of the four staged checkpoints produced zero correct
+completions in 64 samples and zero mixed groups in 16 questions.
+The screen used only the official training split. The paired
+FineWeb checkpoint was the sole archive with eligible dense
+Hebbian layers enabled. The larger GSM8K sample-efficiency test
+remains open in `hy8.3` and needs a compatible checkpoint that
+earns mixed rewards.
+[Protocol, sources and receipts](../../results/prediction_credit_2026-11-23.json) · [Replay rows](../../results/prediction_credit_2026-11-23.json.gz)
+
+For replay, extract each `sources` entry's `content` to its named
+file in a fresh directory. Run the Python drivers through DSR with
+`PYTHONPATH=.` from the recorded implementation checkout.
+`prediction_credit.py` takes an output JSON path and
+`train_prediction_credit.py` takes the frozen result and an output
+path. Split the gzip archive's `frozen` and `training` entries
+into separate files before passing them, in that order, to
+`verify_prediction_credit.py` with a fresh result path.
