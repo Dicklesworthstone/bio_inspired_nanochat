@@ -23,6 +23,12 @@ from bio_inspired_nanochat.perf_regression import (
 from scripts.perf_regression_gate import main as gate_main
 
 
+def test_cuda_update_cannot_replace_the_committed_cpu_baseline():
+    with pytest.raises(SystemExit) as error:
+        gate_main(["--mode", "update", "--device", "cuda"])
+    assert error.value.code == 2
+
+
 def test_perf_harness_decode_uses_one_cache_and_counts_only_generated_tokens(monkeypatch):
     """Prompt prefill is untimed; measured calls are cached Tq=1 decode tokens."""
     calls = []

@@ -8,7 +8,14 @@ Run project checks through DSR. The command examples below describe the payloads
 workers. The repository policy covers CPU, GPU, scheduled checks and release automation.
 The standing DSR profiles are `bio_inspired_nanochat` for main and `bio_inspired_nanochat-nightly`
 for the two nightly suites. Both run the repository's gate definitions with local `act` and retain
-artifacts under `runs/dsr/$DSR_RUN_ID/`. Use a private, pinned checkout on the Linux worker.
+artifacts under `runs/dsr/$DSR_RUN_ID/`. Use a private, pinned checkout on the Linux worker,
+with Docker, `act`, a static Linux `minisign` on PATH and the
+`catthehacker/ubuntu:full-22.04` image. The local runner copies the checkout and uses
+the Linux worker tool-cache UID (1000).
+The main quality job installs the signed UBS installer and executable from the
+same v5.5.26 release into its own cache. Mixing the development installer with
+that released runner failed after checksum verification because their cache
+publication protocols differed.
 The project registry can also be used on a fresh dispatcher:
 
 ```bash
@@ -17,6 +24,16 @@ DSR_REPOS_FILE="$PWD/dsr/quality.yaml" dsr --json quality --tool bio_inspired_na
 ```
 
 Beads `u0fl.1` and `u0fl.2` track terminal main, nightly and hardware qualification.
+
+The `bio_inspired_nanochat-gpu` profile uses a private checkout and a dedicated uv
+environment on the two-4090 worker. It builds the source-matched native extension,
+runs the CUDA-marked and canonical/Rust parity cases, then executes the registered
+same-invocation presynaptic and throughput comparisons. The run directory contains
+JUnit results and raw timing JSON. Invoke the GPU profile explicitly when the
+cards are available. Absolute throughput comparisons require an independently
+measured `results/perf_baselines_rtx4090.json`; the committed CPU timings
+belong to a different device. Relative train/decode comparisons always run
+both model variants in the same invocation.
 
 The audit exercised two-rank vanilla checkpointing, greedy and selective web generation,
 the default bio Quick Start and the printed matrix scoring command. The research host's
@@ -56,6 +73,7 @@ The worker used Python 3.14.2, installed the wheel into an isolated uv environme
 reused existing Torch dependencies. The packaged and loaded shared libraries both hashed
 to `be4c6deb888e23e9e4934b9d3addd8445ed2266c8213523eb9ff2d59b3562854`.
 The original wheel failed before model allocation with the new ABI diagnostic.
+The unmodified nine-case CPU Quick Start suite passed on the rebuilt wheel in 963.47 seconds.
 
 Both the default native trainer and `--syn_cfg.native_presyn=0` wrote complete two-step
 checkpoints on identical local parquet shards. Validation BPB was 1.4349256529350143
@@ -68,6 +86,15 @@ logits bit for bit. Across backends, 109 of 195 tensors already differed after s
 The maximum logit differences on that prompt were 0.0003334433 at step one and
 0.0007157624 at step two. All 10 selected CPU scan and decode tests passed. The hardware
 GPU case was deselected for that check.
+
+Tracing the first forward showed that the first layer's first valid edge already differed
+with identical inputs and CPU autocast off. Training release was 1.4492371082 in Rust
+and 1.4492373466 in the reference. Before the first Muon step all weights were identical.
+The first layer's query-projection gradients differed by at most 9.90e-10,
+enough for two entries to round to different BF16 values. After Muon's Nesterov
+interpolation, 14 entries in that matrix rounded differently before its Newton–Schulz
+iterations. The updated weights differed by up to 0.0003124997. Both instrumented runs reproduced their
+195 final checkpoint tensors exactly.
 
 To identify the backend in an affected environment, start a fresh process.
 

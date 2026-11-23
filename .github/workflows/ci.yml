@@ -99,7 +99,8 @@ jobs:
           set -euo pipefail
           AST_GREP_VERSION="0.40.5"
           ASSET="app-x86_64-unknown-linux-gnu.zip"
-          curl -fsSL "https://github.com/ast-grep/ast-grep/releases/download/${AST_GREP_VERSION}/${ASSET}" -o /tmp/ast-grep.zip
+          curl -fsSL -A 'bio_inspired_nanochat-agent (+https://github.com/Dicklesworthstone/bio_inspired_nanochat)' \
+            "https://github.com/ast-grep/ast-grep/releases/download/${AST_GREP_VERSION}/${ASSET}" -o /tmp/ast-grep.zip
           unzip -q /tmp/ast-grep.zip -d /tmp/ast-grep
           install -m 0755 /tmp/ast-grep/ast-grep "$HOME/.local/bin/ast-grep"
           install -m 0755 /tmp/ast-grep/sg "$HOME/.local/bin/sg"
@@ -109,9 +110,7 @@ jobs:
         run: uv sync --extra cpu --dev
 
       - name: Install UBS
-        run: |
-          curl -fsSL "https://raw.githubusercontent.com/Dicklesworthstone/ultimate_bug_scanner/master/install.sh?$(date +%s)" | bash -s -- --non-interactive
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        run: bash dsr/install-ubs.sh
 
       - name: Determine diff base
         id: diff

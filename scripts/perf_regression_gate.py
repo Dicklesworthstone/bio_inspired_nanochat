@@ -11,6 +11,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+from dataclasses import asdict, replace
 import json
 from collections.abc import Sequence
 from pathlib import Path
@@ -21,6 +22,7 @@ from rich.table import Table
 from bio_inspired_nanochat.perf_regression import (
     DEFAULT_BASELINES_PATH,
     DEFAULT_THROUGHPUT_BUDGET,
+    STANDARD_BENCHMARK_CONFIGS,
     PerfRegressionHarness,
     ThroughputBudget,
 )
@@ -28,6 +30,10 @@ from bio_inspired_nanochat.perf_regression import (
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run performance regression gates")
+    parser.add_argument("--device", choices=("cpu", "cuda"),
+                        help="Run every incumbent and candidate on this device")
+    parser.add_argument("--observations-json", type=Path,
+                        help="Save actual per-arm measurements and relative budget comparisons")
     parser.add_argument(
         "--mode",
         choices=["check", "update"],
@@ -75,12 +81,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="Append benchmark results to experiment registry",
     )
     args = parser.parse_args(argv)
+    if (args.mode == "update" and args.device == "cuda"
+            and Path(args.baselines).resolve() == Path(DEFAULT_BASELINES_PATH).resolve()):
+        parser.error("CUDA baseline updates require a separate --baselines file for the measured GPU")
 
     console = Console()
     harness = PerfRegressionHarness(baselines_path=args.baselines)
 
     console.print("[bold cyan]Running Performance Regression Benchmarks...[/bold cyan]")
-    results = harness.run_all()
+    if args.device is None:
+        results = harness.run_all()
+    else:
+        results = harness.run_all([replace(cfg, device=args.device) for cfg in STANDARD_BENCHMARK_CONFIGS])
 
     if args.mode == "update":
         harness.save_baselines(results, tolerance=args.tolerance)
@@ -114,6 +126,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     console.print(table)
 
+    budget_comparisons = []
     if args.check_budget:
         budget = ThroughputBudget(
             train_ratio_max=args.train_ratio_max,
@@ -145,6 +158,13 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.record_registry:
         harness.record_to_registry(results)
+
+    if args.observations_json:
+        args.observations_json.parent.mkdir(parents=True, exist_ok=True)
+        args.observations_json.write_text(json.dumps({
+            "results": [asdict(result) for result in results],
+            "relative_budget": [asdict(comparison) for comparison in budget_comparisons],
+        }, indent=2) + "\n", encoding="utf-8")
 
     if args.output_json:
         out_path = Path(args.output_json)
