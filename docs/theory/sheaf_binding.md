@@ -37,15 +37,22 @@ A 0-cochain $x$ is a valid, uncorrupted global variable binding if and only if $
 ### 2.2 Theorem 2 (1-Cohomology as the Binding Obstruction)
 
 $$H^1(\mathcal{G}, \mathcal{F}) = \operatorname{coker}(\delta) = C^1(\mathcal{G}, \mathcal{F}) / \operatorname{im}(\delta)$$
-$\dim H^1(\mathcal{G}, \mathcal{F}) = 0$ if and only if every locally consistent assignment along a spanning tree can be extended without holonomic contradiction to the entire graph. The normalized Dirichlet energy $(x^T L x) / \|x\|^2$ serves as the exact scalar obstruction test statistic.
+For a graph with no 2-cells, $\dim H^1 = \dim C^1-\operatorname{rank}(\delta)$.
+A scalar identity sheaf on three vertices has a one-dimensional node kernel on
+both a path and a triangle. The path has $\dim H^1=0$ and the triangle has
+$\dim H^1=1$. An individual edge observation $b$ is compatible with some node
+assignment exactly when $b\in\operatorname{im}\delta$. Determining its class
+requires observing $b$. The implemented energy measures how well supplied node
+features agree across edges. It can be positive even on the path.
 
 ### 2.3 Theorem 3 (Diffusion Convergence)
 
 For step size $\eta < 2 / \lambda_{\max}(L)$, the discrete sheaf diffusion iteration:
 $$x^{(t+1)} = (I - \eta L) x^{(t)}$$
 converges exponentially to the orthogonal projection $\Pi_{\ker(L)}(x^{(0)})$ with rate:
-$$\|x^{(t)} - \Pi_{\ker(L)}(x^{(0)})\| \le (1 - \eta \lambda_2(L))^t \|x^{(0)}\|$$
-where $\lambda_2(L) > 0$ is the sheaf spectral gap (algebraic connectivity of the sheaf).
+$$\|x^{(t)} - \Pi_{\ker(L)}(x^{(0)})\| \le \max_{\lambda_i>0}|1-\eta\lambda_i|^t \|x^{(0)}\|.$$
+For $0<\eta\le1/\lambda_{\max}$, the smallest positive eigenvalue determines
+this factor. Larger stable steps can make the largest eigenvalue decisive.
 
 ---
 
@@ -62,7 +69,7 @@ Matching v-SNARE and t-SNARE binary hash codes guarantees exact, context-free su
 | ID | Obligation / Theorem | Formal Statement | Proof / Verification Method | Fallback Behavior |
 |:---|:---|:---|:---|:---|
 | **OBL-G1** | Global Section Ker(L) | $L x = 0 \iff \delta x = 0$ | $x^T L x = \|\delta x\|^2 = 0$ | Eager linear projection |
-| **OBL-G2** | Exponential Diffusion | Rate bounded by $1 - \eta \lambda_2(L)$ | Rayleigh quotient spectral gap | Standard softmax attention |
+| **OBL-G2** | Exponential diffusion | Positive-spectrum contraction factor from §2.3 | Both ends of the positive spectrum | Standard softmax attention |
 | **OBL-G3** | Operadic Composition | Associative subtree substitution | Binary Hamming distance matching | Soft routing baseline |
 | **OBL-G4** | AUROC Separation | $\text{AUROC} \ge 0.95$ on corrupted bindings | ROC curve over normalized Dirichlet energy | Monolithic transformer baseline |
 
@@ -77,7 +84,9 @@ Matching v-SNARE and t-SNARE binary hash codes guarantees exact, context-free su
 
 All sheaf evaluations emit structured JSONL logs containing:
 - `step`: Global integer step
-- `obstruction_energy`: Normalized Rayleigh quotient $(x^T L x) / \|x\|^2$
+- `obstruction_score`: Per-sample Rayleigh quotient divided by $\lambda_{\max}(L)$, averaged across the batch.
 - `spectral_gap`: Smallest non-zero eigenvalue $\lambda_2(L)$
 - `dim_ker`: Dimension of $H^0$ global sections
-- `is_certified`: Boolean validity flag
+- `is_certified`: The node operator has a numerical kernel and a positive spectral gap.
+- `h1_dimension`: Edge-space dimension minus numerical rank, when supplied for a graph.
+- `h1_obstruction`: Unknown for node-only observations. Output correctness requires independent labels.

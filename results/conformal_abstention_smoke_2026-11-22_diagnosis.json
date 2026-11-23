@@ -1,0 +1,116 @@
+{
+  "checkpoint_and_data_digests_verified": true,
+  "diagnostic_script_sha256": "414de05ce8a705fbebe34e7111169aff942c339eeb841ba21e8cd5f6dbebb2b6",
+  "distinct_raw_argmax_ids": 1,
+  "finite_population_baselines": {
+    "distinct_target_ids": 176,
+    "population_majority_target_correct": 9,
+    "queries": 256,
+    "repeat_last_token_correct": 0
+  },
+  "majority_rule": "Most common ground-truth ID among original 256, ties by lower ID. In-sample retrospective on those 256; fixed on the separate 128.",
+  "max_softmax_range": [
+    0.003549005603417754,
+    0.00622342387214303
+  ],
+  "maximum_ce_minus_nll_absolute_nats": 0.0,
+  "ordered_document_prefix_target_sha256": "8661a23f84679a7633da5277566d97552c696305f5360c2f82908f6f019742a6",
+  "population_majority_target_id": 288,
+  "purpose": "Alignment and greedy serving diagnosis of the original zero-top-1 result",
+  "queried_model_subset": "first eight original population queries, fixed before diagnosis",
+  "raw_argmax_equals_greedy_count": 8,
+  "rows": [
+    {
+      "document_index": 0,
+      "engine_greedy_id": 48046,
+      "last_input_id": 261,
+      "last_logit_true_token_nll_nats": 6.489610195159912,
+      "max_softmax": 0.0041086566634476185,
+      "raw_argmax_id": 48046,
+      "teacher_forced_last_ce_nats": 6.489610195159912,
+      "true_id": 747
+    },
+    {
+      "document_index": 1,
+      "engine_greedy_id": 48046,
+      "last_input_id": 46,
+      "last_logit_true_token_nll_nats": 5.614152908325195,
+      "max_softmax": 0.004126082640141249,
+      "raw_argmax_id": 48046,
+      "teacher_forced_last_ce_nats": 5.614152908325195,
+      "true_id": 361
+    },
+    {
+      "document_index": 2,
+      "engine_greedy_id": 48046,
+      "last_input_id": 64918,
+      "last_logit_true_token_nll_nats": 31.93067169189453,
+      "max_softmax": 0.006144785787910223,
+      "raw_argmax_id": 48046,
+      "teacher_forced_last_ce_nats": 31.93067169189453,
+      "true_id": 47639
+    },
+    {
+      "document_index": 3,
+      "engine_greedy_id": 48046,
+      "last_input_id": 2225,
+      "last_logit_true_token_nll_nats": 5.093200206756592,
+      "max_softmax": 0.00622342387214303,
+      "raw_argmax_id": 48046,
+      "teacher_forced_last_ce_nats": 5.093200206756592,
+      "true_id": 283
+    },
+    {
+      "document_index": 4,
+      "engine_greedy_id": 48046,
+      "last_input_id": 351,
+      "last_logit_true_token_nll_nats": 8.094320297241211,
+      "max_softmax": 0.003549005603417754,
+      "raw_argmax_id": 48046,
+      "teacher_forced_last_ce_nats": 8.094320297241211,
+      "true_id": 5166
+    },
+    {
+      "document_index": 5,
+      "engine_greedy_id": 48046,
+      "last_input_id": 65,
+      "last_logit_true_token_nll_nats": 8.674755096435547,
+      "max_softmax": 0.0050819870084524155,
+      "raw_argmax_id": 48046,
+      "teacher_forced_last_ce_nats": 8.674755096435547,
+      "true_id": 2200
+    },
+    {
+      "document_index": 6,
+      "engine_greedy_id": 48046,
+      "last_input_id": 403,
+      "last_logit_true_token_nll_nats": 11.801555633544922,
+      "max_softmax": 0.005497048143297434,
+      "raw_argmax_id": 48046,
+      "teacher_forced_last_ce_nats": 11.801555633544922,
+      "true_id": 15385
+    },
+    {
+      "document_index": 7,
+      "engine_greedy_id": 48046,
+      "last_input_id": 757,
+      "last_logit_true_token_nll_nats": 12.22598648071289,
+      "max_softmax": 0.006151191424578428,
+      "raw_argmax_id": 48046,
+      "teacher_forced_last_ce_nats": 12.22598648071289,
+      "true_id": 8515
+    }
+  ],
+  "saved_checkpoint_provenance": null,
+  "scope": "Per-query logits and parity cover eight inputs; cheap token baselines cover all 384. No new calibration or threshold was attempted.",
+  "separate_descriptive_baselines": {
+    "distinct_target_ids": 96,
+    "population_majority_target_correct": 3,
+    "queries": 128,
+    "repeat_last_token_correct": 0
+  },
+  "source_study_sha256": "6113cccacc4be18fc0086dfc88fd444d943265629407d57a3b3e7fc6ab7abf7b",
+  "teacher_forced_definition": "native model loss on the usual shifted sequence, retaining the final position only",
+  "tokenizer_scope": "The serving loader checks model vocabulary size. The consumed tokenizer.json is hashed in the source study. The historical checkpoint stores no training tokenizer fingerprint.",
+  "training_tokenizer_hash_available_in_checkpoint": false
+}

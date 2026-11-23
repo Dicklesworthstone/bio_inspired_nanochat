@@ -4,13 +4,12 @@ Executes standardized comparative performance and capability benchmarks across:
 1. Vanilla Transformer baseline
 2. Bio-Inspired Synaptic Transformer (presyn vesicle + Hebbian fast weights)
 3. MGR Simplicial Attention Transformer (2-hop simplicial diffusion)
-4. MGR Reversible Coupling Transformer (measure-preserving O(1) activation memory)
-5. Bio-Inspired + MGR Geometric Hybrid Transformer
+4. MGR Reversible Coupling Transformer
 
 Measures:
 - Forward/Decode throughput (tok/s)
 - Training throughput (tok/s, forward + backward + step)
-- Peak activation memory (MB)
+- Model parameter and buffer storage (MiB)
 - Perplexity (PPL) / Loss proxy on synthetic sequence benchmark
 - Gradient norm stability
 - Outputs structured CSV and JSON reports
@@ -19,6 +18,7 @@ Measures:
 from __future__ import annotations
 
 import argparse
+import copy
 import csv
 from dataclasses import asdict, dataclass, field
 import json
@@ -37,6 +37,7 @@ from bio_inspired_nanochat.gpt import GPT, GPTConfig
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
 from bio_inspired_nanochat.mgr_variants import ReversibleBlock, SimplicialCausalSelfAttention
 from bio_inspired_nanochat.synaptic import SynapticConfig
+from bio_inspired_nanochat.xpoll import ReversibleBlock as ReplayBlock
 
 
 @dataclass
@@ -68,7 +69,7 @@ class ModelBenchmarkResult:
     loss_proxy: float
     ppl_proxy: float
     param_count: int
-    peak_memory_mb: float
+    model_storage_mib: float
     grad_norm: float
 
 
@@ -93,7 +94,7 @@ class XpollBenchmarkReport:
                 "Loss Proxy",
                 "PPL Proxy",
                 "Param Count",
-                "Peak Mem (MB)",
+                "Model storage (MiB)",
                 "Grad Norm",
             ])
             for r in self.results:
@@ -105,7 +106,7 @@ class XpollBenchmarkReport:
                     f"{r.loss_proxy:.4f}",
                     f"{r.ppl_proxy:.2f}",
                     r.param_count,
-                    f"{r.peak_memory_mb:.2f}",
+                    f"{r.model_storage_mib:.2f}",
                     f"{r.grad_norm:.4f}",
                 ])
 
@@ -323,7 +324,7 @@ def benchmark_model(
         loss_proxy=mean_loss,
         ppl_proxy=ppl,
         param_count=param_count,
-        peak_memory_mb=mem_mb,
+        model_storage_mib=mem_mb,
         grad_norm=mean_gnorm,
     )
 
@@ -363,7 +364,7 @@ def run_xpoll_benchmark(
         table.add_column("Train tok/s", justify="right")
         table.add_column("Loss Proxy", justify="right")
         table.add_column("PPL Proxy", justify="right")
-        table.add_column("Mem (MB)", justify="right")
+        table.add_column("Model (MiB)", justify="right")
 
         for r in report.results:
             table.add_row(
@@ -374,11 +375,66 @@ def run_xpoll_benchmark(
                 f"{r.train_tok_per_sec:.1f}",
                 f"{r.loss_proxy:.3f}",
                 f"{r.ppl_proxy:.2f}",
-                f"{r.peak_memory_mb:.2f}",
+                f"{r.model_storage_mib:.2f}",
             )
         console.print(table)
 
     return report
+
+
+def compare_coupling_replay(cfg: XpollBenchmarkConfig) -> dict:
+    """Pair identical stateless coupling stacks in a training and saved-storage probe."""
+    if min(cfg.n_layer, cfg.benchmark_steps, cfg.batch_size, cfg.sequence_len) < 1:
+        raise ValueError("layers, steps, batch size and sequence length must be positive")
+    torch.manual_seed(cfg.seed)
+    base = nn.Sequential(*(ReplayBlock(cfg.n_embd) for _ in range(cfg.n_layer))).to(cfg.device)
+    x = torch.randn(cfg.batch_size, cfg.sequence_len, cfg.n_embd, device=cfg.device)
+    target = torch.randn_like(x)
+    count = cfg.batch_size * cfg.sequence_len * cfg.benchmark_steps
+    models = {"eager": copy.deepcopy(base).eval(), "replay": base.train()}
+    # These blocks have no train/eval-dependent layer. eval() selects the same
+    # ordinary coupling with autograd enabled and training still updates weights.
+    results = {}
+    losses = {}
+    for mode, model in models.items():
+        storage = {}
+        weight_ptrs = {p.untyped_storage().data_ptr() for p in model.parameters()}
+
+        def record_saved(t: torch.Tensor) -> torch.Tensor:
+            buf = t.untyped_storage()
+            if buf.data_ptr() not in weight_ptrs and buf.nbytes():
+                storage[buf.data_ptr()] = buf.nbytes()
+            return t
+
+        with torch.autograd.graph.saved_tensors_hooks(record_saved, lambda t: t):
+            probe = model(x)
+        del probe
+        optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
+        losses[mode] = []
+        for step in range(cfg.warmup_steps + cfg.benchmark_steps):
+            if step == cfg.warmup_steps:
+                if x.is_cuda:
+                    torch.cuda.synchronize(x.device)
+                start = time.perf_counter()
+            optimizer.zero_grad(set_to_none=True)
+            loss = F.mse_loss(model(x), target)
+            loss.backward()
+            optimizer.step()
+            losses[mode].append(float(loss.detach()))
+        if x.is_cuda:
+            torch.cuda.synchronize(x.device)
+        elapsed = time.perf_counter() - start
+        results[mode] = {
+            "wall_seconds": elapsed, "positions_per_second": count / elapsed,
+            "last_training_mse": losses[mode][-1],
+            "forward_saved_nonparameter_storage_bytes": sum(storage.values()),
+        }
+    if losses["eager"] != losses["replay"]:
+        raise AssertionError("eager and replay training losses diverged")
+    for a, b in zip(models["eager"].parameters(), models["replay"].parameters(), strict=True):
+        torch.testing.assert_close(a, b, rtol=0, atol=0)
+    return {"config": asdict(cfg), "torch": str(torch.__version__),
+            "matched_parameter_tensors": len(list(base.parameters())), "arms": results}
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -392,6 +448,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--layers", type=int, default=4, help="Layer count")
     parser.add_argument("--batch-size", type=int, default=4, help="Batch size")
     parser.add_argument("--seed", type=int, default=42, help="Seed")
+    parser.add_argument("--coupling-replay", action="store_true",
+                        help="Compare checkpointed xpoll coupling against identical eager SGD")
     args = parser.parse_args(argv)
 
     cfg = XpollBenchmarkConfig(
@@ -403,7 +461,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         batch_size=args.batch_size,
         seed=args.seed,
     )
-    run_xpoll_benchmark(cfg, output_csv=args.output_csv, output_json=args.output_json, verbose=True)
+    if args.coupling_replay:
+        report = compare_coupling_replay(cfg)
+        Console().print_json(data=report)
+        if args.output_json:
+            Path(args.output_json).write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    else:
+        run_xpoll_benchmark(cfg, output_csv=args.output_csv, output_json=args.output_json, verbose=True)
     return 0
 
 

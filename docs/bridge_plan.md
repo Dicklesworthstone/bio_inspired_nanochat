@@ -1,5 +1,43 @@
 # Bridge Plan — bio_inspired_nanochat
 
+## Follow-up at `8e8ad5c`
+
+Training and held-out evaluation now share a sealed run manifest. The prospective D1 roster
+contains 18 dense columns and two screening seeds. It includes both prerequisite controls.
+The launcher accounts for physical devices and charges standalone scoring. The eight-cell
+CPU rehearsal ran the printed scorer against real checkpoints. Use the prospective protocol
+for the next GPU run. The November 22 decision below preserves the findings at its audited
+revision. [Current protocol](ablation_matrix.md) · [Follow-up DSR receipts](../results/reality_check_followup_2026-11-22.json)
+
+### Execution order for the remaining research work
+
+- [x] Rebuild the native CPU extension, exercise the public Quick Start, and compare
+  repeated native and repeated reference training separately. The cross-backend trained
+  logits still miss the registered tolerance. Keep `u0fl.4` open.
+- [x] Run identical standalone launcher/scorer commands through actual training,
+  checkpoint reload and held-out evaluation. Verify candidate isolation in a real
+  two-rank optimizer run. These results cover execution and provenance.
+- [x] Score the independent 150-step vanilla checkpoint on 384 real-text queries.
+  Preserve the zero-coverage result and audit raw entropy, logits and greedy tokens.
+  [Scoring result](../results/conformal_abstention_smoke_2026-11-22.json) · [Independent diagnosis](../results/conformal_abstention_smoke_2026-11-22_diagnosis.json)
+- [ ] Complete `hwxb.2.6` on two physical GPUs. Compare the uninterrupted control,
+  real process interruption, restarted job and missing-rank negative. Require the
+  same next data, weights, optimizers, controller, RNG and validation trace.
+- [ ] Measure the frozen D1 recipe on staged FineWeb data, including held-out scoring.
+  Charge both cards for training. Reconcile the measurement with the screen and
+  confirmation caps before allocating the 36 screening cells.
+- [ ] Train and score the matched vanilla reference, run admissible registered
+  contrasts, then record the statistical decision or the measured budget shortfall.
+  Select a final checkpoint only after the absolute quality and reproduction gates.
+- [ ] Test repetition against the same checkpoint with presynaptic release enabled
+  and disabled, a calibrated frequency penalty, matched decoding and next-token loss.
+  The small-checkpoint experiment informs the method. D1 acceptance remains `74f.13`.
+- [ ] Evaluate the sheaf detector on actual labelled model outputs. Compare entropy
+  and self-consistency on the same observations. Track graph cohomology separately
+  from node disagreement and per-output correctness (`r00r.5.3`, `0642.8.3.1`).
+- [ ] Qualify the standing main/nightly DSR gates, reconcile the full Python run,
+  and check the final published revision and generated evidence (`u0fl`).
+
 ## November 22, 2026 — decision at `16ce9fe1979c`
 
 **The repository can train and serve a synaptic language model. Whether the synaptic mechanisms

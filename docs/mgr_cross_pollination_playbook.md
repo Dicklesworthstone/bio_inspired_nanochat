@@ -13,7 +13,7 @@
 
 | MGR Mathematical Framework | Bio-Inspired Touchpoint | Status | Code Pointer | Key Finding / Outcome |
 |:---|:---|:---|:---|:---|
-| **Reversible / Measure-Preserving** | Synaptic memory buffer memory reduction ($O(1)$ activations) | Prototype / Ingested | `docs/mgr_landscape_digest.md` | Frees VRAM headroom for multi-token calcium state; requires explicit detachment for persistent Hebbian consolidation. |
+| **Reversible / Measure-Preserving** | Activation replay | Stateless prototype | [Measured comparison](xpoll_findings.md) | Saved tensor bytes scale linearly with depth. Stateful GPU training remains open. |
 | **Simplicial / Higher-Order Attention** | Multi-hop synaptic lateral diffusion | Prototype / Ingested | `bio_inspired_nanochat/synaptic.py` | Extends pairwise dot-product attention with 2-hop graph diffusion $A \cdot (A \cdot v)$. |
 | **Ultrametric / $p$-adic Attention** | Hierarchical synaptic routing & dendrite trees | Evaluated | `docs/mgr_landscape_digest.md` | Provides tree-structured inductive bias; dense implementation is $O(T^2)$ without bucketized prefix hashing. |
 | **Matrix Gauge Learning** | Synaptic representation drift stabilization | Evaluated | `docs/mgr_landscape_digest.md` | Rotational SO(D) transport preserves frame alignment; conflicts with standard KV-cache decode unless transported in-place. |
@@ -25,7 +25,7 @@
 
 ### A. Reversible & Measure-Preserving Flows
 - **The Idea**: By using additive coupling layers ($y_1 = x_1 + F(x_2)$, $y_2 = x_2 + G(y_1)$), intermediate activations do not need to be saved in forward passes and can be reconstructed exactly during backward passes.
-- **Application to Bio-Transformers**: Stateful synaptic attention maintains per-token calcium, vesicle pool buffers, and fast-weight traces. Reversible computation eliminates activation memory, enabling $2\times$ longer context windows on 24GB RTX 4090s.
+- **Application to bio-transformers.** Stateful synaptic attention maintains calcium, vesicle pools and fast-weight traces. A replay implementation must preserve those states and apply each update once. Achievable context length on a 24 GB RTX 4090 remains unmeasured.
 - **Rule of Thumb**:
   - Conserved quantities ($E, \text{RRP} + \text{RES}$) compose naturally with Hamiltonian/symplectic flows.
   - Dissipative / irreversible steps (endocytosis decay, entropy production) must be integrated via Metriplectic/GENERIC discrete gradient brackets.
@@ -40,7 +40,7 @@
 ## 3. Decision Guide / FAQ
 
 ### Q1: When should an engineer activate MGR-inspired techniques?
-- **Activate Reversible Blocks** when sequence length $T \ge 4096$ and activation VRAM exceeds $50\%$ of total GPU memory.
+- **Evaluate reversible blocks** against the same architecture at the target context length, comparing optimizer updates, device peak memory and throughput.
 - **Activate Simplicial Mixing** when multi-entity relational reasoning or graph-structured context retention is required.
 - **Activate Cellular Automata Init** when seeding fresh MoE expert slots during neurogenesis events to ensure diverse initial subnetworks.
 

@@ -8,12 +8,12 @@ and performance benchmarking.
 from __future__ import annotations
 
 import math
-from typing import Any, Tuple
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
+from torch.utils.checkpoint import checkpoint
 
 
 # -----------------------------------------------------------------------------
@@ -21,70 +21,8 @@ from torch import Tensor
 # -----------------------------------------------------------------------------
 
 
-class ReversibleCouplingFunction(torch.autograd.Function):
-    """Autograd function implementing exact activation recomputation backward."""
-
-    @staticmethod
-    def forward(
-        ctx: Any,
-        x: Tensor,
-        f_block: nn.Module,
-        g_block: nn.Module,
-    ) -> Tensor:
-        # Split input along feature dimension
-        x1, x2 = torch.chunk(x, 2, dim=-1)
-        with torch.no_grad():
-            f_x2 = f_block(x2)
-            y1 = x1 + f_x2
-            g_y1 = g_block(y1)
-            y2 = x2 + g_y1
-            y = torch.cat([y1, y2], dim=-1)
-
-        ctx.f_block = f_block
-        ctx.g_block = g_block
-        ctx.save_for_backward(y)
-        return y
-
-    @staticmethod
-    def backward(ctx: Any, *grad_outputs: Any) -> Tuple[Tensor, None, None]:
-        grad_y: Tensor = grad_outputs[0]
-        (y,) = ctx.saved_tensors
-        y1, y2 = torch.chunk(y, 2, dim=-1)
-        dy1, dy2 = torch.chunk(grad_y, 2, dim=-1)
-
-        # Exact backward reconstruction: x2 = y2 - g(y1), x1 = y1 - f(x2)
-        with torch.set_grad_enabled(True):
-            y1_detached = y1.detach().requires_grad_(True)
-            g_y1 = ctx.g_block(y1_detached)
-            x2 = y2 - g_y1.detach()
-
-            x2_detached = x2.detach().requires_grad_(True)
-            f_x2 = ctx.f_block(x2_detached)
-
-            # Gradients of g
-            grad_g_params = torch.autograd.grad(
-                g_y1,
-                (y1_detached, *tuple(ctx.g_block.parameters())),
-                grad_outputs=dy2,
-                retain_graph=True,
-            )
-            dy1_total = dy1 + grad_g_params[0]
-
-            # Gradients of f
-            grad_f_params = torch.autograd.grad(
-                f_x2,
-                (x2_detached, *tuple(ctx.f_block.parameters())),
-                grad_outputs=dy1_total,
-            )
-            dy2_total = dy2 + grad_f_params[0]
-
-            dx = torch.cat([dy1_total, dy2_total], dim=-1)
-
-        return dx, None, None
-
-
 class ReversibleBlock(nn.Module):
-    """Reversible additive coupling layer achieving O(1) activation memory."""
+    """Invertible additive coupling with one saved input per training block."""
 
     def __init__(self, d_model: int, hidden_dim: int | None = None) -> None:
         super().__init__()
@@ -106,16 +44,19 @@ class ReversibleBlock(nn.Module):
         )
 
     def forward(self, x: Tensor) -> Tensor:
-        if self.training and x.requires_grad:
-            return ReversibleCouplingFunction.apply(x, self.f, self.g)
-        # Fast non-autograd path
+        if self.training and torch.is_grad_enabled():
+            # Non-reentrant replay also differentiates weights when the input is frozen.
+            return checkpoint(self._couple, x, use_reentrant=False)
+        return self._couple(x)
+
+    def _couple(self, x: Tensor) -> Tensor:
         x1, x2 = torch.chunk(x, 2, dim=-1)
         y1 = x1 + self.f(x2)
         y2 = x2 + self.g(y1)
         return torch.cat([y1, y2], dim=-1)
 
     def inverse(self, y: Tensor) -> Tensor:
-        """Exact inverse pass: reconstructs x from output y."""
+        """Recover the input from the output up to floating-point roundoff."""
         y1, y2 = torch.chunk(y, 2, dim=-1)
         x2 = y2 - self.g(y1)
         x1 = y1 - self.f(x2)

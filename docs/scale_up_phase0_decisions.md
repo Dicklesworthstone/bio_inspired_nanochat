@@ -158,7 +158,12 @@ The model is "useful" iff **both** hold on the held-out eval:
 (Chance levels are task-defined in `synthetic_tasks.py`: e.g. 1/vocab-ish for recall, 1/num-distractors for
 binding. The suite already reports per-difficulty curves.)
 
-### 3.2 The bio-vs-vanilla rule (the headline)
+### 3.2 Original Phase-0 bio-vs-vanilla rule
+
+The prospective D1 registration supersedes the seed counts, control roster and significance
+criteria in this historical section. Its screen uses 18 columns and two seeds. Confirmation
+uses fresh seeds sized for the complete Holm family. Capacity and optimizer differences are
+recorded per contrast. [Current D1 protocol](ablation_matrix.md)
 
 - **Equal-compute discipline — equalize on TOKEN BUDGET**, not wall-clock. Bio runs are slower per step, so
   matching wall-clock would *handicap bio on data*. We hold **params, data (same token budget + same shards +

@@ -94,17 +94,14 @@ Each epic section specifies:
 ## 5. Epic gzm: Bio vs Vanilla Evaluation Rigor
 
 - **Scope**: Rigorous, reproducible benchmarking across FineWeb 10M Matrix A, NIAH long-context, ECE calibration, and continual learning forgetting rate.
-- **Prerequisites**: Pre-tokenized FineWeb shards, validation benchmarks.
-- **Execution Commands**:
-  ```bash
-  # Run the preset matrix (writes summary CSV/JSONL under --out-dir; add --eval-bpb once tokenizer artifacts exist)
-  uv run --no-sync python -m scripts.eval_matrix matrix --presets vanilla,bio_all --seeds 1337,1338 --out-dir runs/eval_matrix
-  # Compute statistical significance with paired tests and bootstrap CIs on the summary CSV
-  uv run --no-sync python -m bio_inspired_nanochat.eval_stats runs/eval_matrix/summary.csv --baseline vanilla --alpha 0.05
-  ```
-- **Produced Artifacts**: `runs/eval_summary.jsonl`, statistical markdown/JSON report.
-- **Success Criteria**: Statistically significant delta ($p < 0.05$, Holm-Bonferroni corrected) across 3 seeds.
-- **Rollback Flags**: N/A (read-only evaluation).
+- **Inputs.** Stage the ordered FineWeb shards, tokenizer and token-byte table. Measure both
+  training and scoring time for the intended backend on the target host.
+- **Execution.** Run the D1 launcher's `--plan` under DSR and use the same arguments with
+  `--execute`. Run the exact scoring command printed by the launcher. Retain its manifest,
+  `summary.csv`, `summary.jsonl` and the screening decision. [D1 commands](ablation_matrix.md)
+- **Decision.** Two seeds screen mechanisms descriptively. Confirmation requires the
+  admitted screen, matched controls, a feasible device-hour budget and independent seeds
+  for the full Holm family. A null result or a budget refusal is a valid outcome.
 
 ---
 

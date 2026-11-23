@@ -1,0 +1,281 @@
+{
+  "research_commit": "8e8ad5c7b3eb0d874c29177fc7ef704e688cd0f8",
+  "scope": "Local DSR runs on candidate working trees. Each source field gives the commit, tracked-diff digest and untracked-files digest. Training quality and runtime results apply to the measured configurations.",
+  "receipts": [
+    {
+      "probe": "bio-d1-rehearsal",
+      "observation": "Published CPU launcher and scorer, 8 cells; 5 tests passed",
+      "run_id": "7d97db76-c474-454b-8789-3e4ccc0ce5a8",
+      "exit": 0,
+      "source": "320ffdc8fe558da8e42fd031f39fd5555df7af72|89b4ca3da44db560fffe2e6bf4c58d19d9902cb2adf4245f9556e227ad2d3e16|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "675739cd7b4941e83cb28f3fb92c22bade0651e4337f579d915b04e7aaab5635"
+        }
+      ]
+    },
+    {
+      "probe": "bio-d1-integration",
+      "observation": "Repeat pipeline and rejection checks passed; obsolete dry CLI expectation and a type error failed the umbrella",
+      "run_id": "d97c06f3-b629-43e9-8ec4-21de56ace0ad",
+      "exit": 1,
+      "source": "320ffdc8fe558da8e42fd031f39fd5555df7af72|be0c77bac58310907a17962d77ccaf273ad6917baaed9c3156a24ad53c30bb89|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "d6b0f9e0681d2a58849554e1aacaa3aa3a432537dfad4c871f999a9fd416ea0a"
+        },
+        {
+          "exit": 1,
+          "sha256": "f40ab36e20bcc4ec70879dab6d8aa4e3670261f35beeb38dad9258db40de7412"
+        },
+        {
+          "exit": 1,
+          "sha256": "fec6e6951441b17830eb44d7855cf385e5eaf35a3807ad7c5026cdcc817cb784"
+        }
+      ]
+    },
+    {
+      "probe": "bio-matrix-commands",
+      "observation": "Corrected CLI fixture and matrix contracts: 40 passed; lint and types passed",
+      "run_id": "24fd2092-e47a-4a23-bb01-5adacf0bf7e2",
+      "exit": 0,
+      "source": "320ffdc8fe558da8e42fd031f39fd5555df7af72|2132291c80aad66a22d1d972a9a05bcb49dde5b0b2d1a0357ba50e5e18c61b80|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "13583651a6defaead2d4bdf8bb508a42aeda87762b24c75f104d7e7374eb411e"
+        },
+        {
+          "exit": 0,
+          "sha256": "7095dfbc7c1b81b68e998484ddf9039b329f80e528ebca6e6f5f68675c7589a5"
+        }
+      ]
+    },
+    {
+      "probe": "bio-confirm-admission",
+      "observation": "Three cost/confirmation fixture tests, lint, types and UBS passed",
+      "run_id": "cd13179c-f933-48f8-9ff6-ac85cc963f4b",
+      "exit": 0,
+      "source": "320ffdc8fe558da8e42fd031f39fd5555df7af72|a900269804a2bd077ab78ad71a31706dc7e8232431d2c326a04a8bc8da3e1f8c|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "9ee74e201f46f5254d9e3ea48f5d75502456d54d6d99dd2bb8b3803156109d86"
+        },
+        {
+          "exit": 0,
+          "sha256": "39c468c321b067d42e81ccfb222a942e6df9e9ed68ca3c6f576ccbd1bdb3c3bb"
+        },
+        {
+          "exit": 0,
+          "sha256": "986211595a32802c1f2e324087f5c3b459f1628cc5b9a783310e5f4b554fcf2c"
+        }
+      ]
+    },
+    {
+      "probe": "bio-preroll",
+      "observation": "28-code-file pre-commit UBS, zero critical findings; warnings retained",
+      "run_id": "eadc41c4-ef91-493b-bdeb-cf62f4a5ca13",
+      "exit": 0,
+      "source": "320ffdc8fe558da8e42fd031f39fd5555df7af72|2132291c80aad66a22d1d972a9a05bcb49dde5b0b2d1a0357ba50e5e18c61b80|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "e8671175ce7fa5e81211cb80ad7f70205c5a2f21e9dd5d1b6ee9d4f47d8273c3"
+        }
+      ]
+    },
+    {
+      "probe": "cmaref",
+      "observation": "Independent and permuted CMA candidates, failed candidate isolation, real Gloo vs serial",
+      "run_id": "e0b78702-6238-4e93-a9bb-9a5f45650d04",
+      "exit": 0,
+      "source": "320ffdc8fe558da8e42fd031f39fd5555df7af72|b6a418d94bfe7e605e2269adf581bbb6a7c0f5824a7a872f621374f867951c23|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "acd6048c96c8abe3daecfcd4691c94876665b17272b05bab3391aa1a39ce0758"
+        },
+        {
+          "exit": 0,
+          "sha256": "94d42d67c61d44b9e1f15412e8520b610621a81982f5ae554e4b6bb116c29f7a"
+        },
+        {
+          "exit": 0,
+          "sha256": "7f7f3b22e59cf8cb05e2735825d104b23b21eadee4c0236b3124fe8aefb593fe"
+        }
+      ]
+    },
+    {
+      "probe": "fidelity",
+      "observation": "20 targeted replacement and provenance tests passed; type check failed",
+      "run_id": "95439d24-5d52-41e8-8edb-c95b046df58b",
+      "exit": 1,
+      "source": "320ffdc8fe558da8e42fd031f39fd5555df7af72|e2dee2176ce89ff22ea9936022c8d807d8194d3dd415a43d97da15952d2e5778|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "d6b221f1ac7255aee54ca594b2831d553c9f8909097de405cc0f90eda4bf0fe5"
+        },
+        {
+          "exit": 1,
+          "sha256": "9f89afe3bafc844124b9e4713f355c3ea1aa4a9540fce193e3763acf55403b85"
+        },
+        {
+          "exit": 0,
+          "sha256": "551fb49f958118f005cc4314bd77bf2bbf6c08af22129727b7d2e5ecc3ac7817"
+        }
+      ]
+    },
+    {
+      "probe": "typefinal",
+      "observation": "Repaired scorer types and checked snapshot",
+      "run_id": "92bb6f09-8887-421d-9a61-d3fc568c8a15",
+      "exit": 0,
+      "source": "320ffdc8fe558da8e42fd031f39fd5555df7af72|1e148aefb3b1b935ef01f7f6a463a657aa74c6970d06f3e351272fcef4725ba7|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "9db52f0523fdc65ca9735bd877194c1e65e14c5b7f384d3faa4cd207eeac3bf5"
+        },
+        {
+          "exit": 0,
+          "sha256": "dee443537895c72b3324380a7eacffb6babf14854ac8d64cd4dd30099ca6f22d"
+        },
+        {
+          "exit": 0,
+          "sha256": "2b4899d3afab177db082f4772868fb29349eb03a0d77a2941fd25df07c9b10b1"
+        }
+      ]
+    },
+    {
+      "probe": "science1",
+      "observation": "Sparse numerical and execution checks, first run",
+      "run_id": "7930ebbe-9b70-4be7-97ff-b6427928f1af",
+      "exit": 0,
+      "source": "320ffdc8fe558da8e42fd031f39fd5555df7af72|7204b460956ab246f2ff97eae965a2b4132080cad91ab066211bf349c7976c90|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "acfaed9aae77fb9926bb4aef6cde18f5bd672e88b90cca0cae230ab3ca2e9fa5"
+        },
+        {
+          "exit": 0,
+          "sha256": "6785fb4e9e51218ed7c3a4dd6f6f1806c5371b55c5cc207f6123af245f754d67"
+        },
+        {
+          "exit": 0,
+          "sha256": "39958928340266a9ca839563ebdce9048801a5569c8982018fd58750883b239e"
+        }
+      ]
+    },
+    {
+      "probe": "science2",
+      "observation": "Repeated sparse checks and measured activity regimes; 0/6 faster than dense",
+      "run_id": "ed75cdd2-5753-44d0-b347-2be972b81a61",
+      "exit": 0,
+      "source": "320ffdc8fe558da8e42fd031f39fd5555df7af72|94114f04d8a8118895ef4a42b9cecb7d0cd4ed46bf119d757af2e6a27ceaf3fd|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "574fa952837c90d292fed8d8c533ceb74657453715035495cb832c6dc83bd281"
+        }
+      ]
+    },
+    {
+      "probe": "bio-real-abstention",
+      "observation": "Trained synthetic finite-support selective-prediction control",
+      "run_id": "5b380911-286c-4422-bfe3-3bc25fa00566",
+      "exit": 0,
+      "source": "320ffdc8fe558da8e42fd031f39fd5555df7af72|b540c948022ecf653d7c9e1cf4430960be3b42f5615e6816dc6cdc840d3de63f|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "2bf08f7f876a32bfe01c6bc30ca945f746abbf2d9c3369347c60ea5b252e641f"
+        },
+        {
+          "exit": 0,
+          "sha256": "51142cf07c5dda5f5342d2c43bb50248520c77b05b2148cc2ee13cc8715f5bc4"
+        },
+        {
+          "exit": 0,
+          "sha256": "d889d3d7f406b48fe1bebf5899ad50e56a2e9d129b74a51b6872304bec31fc3f"
+        },
+        {
+          "exit": 0,
+          "sha256": "462dd046952e79dd12a299cbef8d1547e0f98b54fb3233ee54fadce4257dce8b"
+        }
+      ]
+    },
+    {
+      "probe": "bio-replay-prototype",
+      "observation": "Same-batch coupling replay vs eager SGD at 1, 4 and 8 layers; identical losses and final weights",
+      "run_id": "bf55eca0-329e-42dd-9439-0409064b26a9",
+      "exit": 0,
+      "source": "8e8ad5c7b3eb0d874c29177fc7ef704e688cd0f8|85fc867dd3e7e2e7943ad616d496365e35f0f114311aea171dc0e7342696ccd4|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "60ea95fb809a47a9476af7b0a50fceb2e2799286642cc80e29415b5c4f7e41c4"
+        },
+        {
+          "exit": 0,
+          "sha256": "c90e7cece898c40fda52ff3a6dfe64b4b8fc3d0000e87a252e66524e18d37697"
+        },
+        {
+          "exit": 0,
+          "sha256": "d789ca66b81d0b1c0c33f84bdd39018bdd6b75399efd3f61faf2931ee3b8f786"
+        },
+        {
+          "exit": 0,
+          "sha256": "770d5fccd7949dcabc6b12ea1616ca55135c33102e1b448607f0874557607a19"
+        }
+      ]
+    },
+    {
+      "probe": "main-pinned",
+      "observation": "Normal main profile, first runner: Rust format could not read XDG config and UBS lacked minisign",
+      "run_id": "7ab4a1ef-9f12-4760-9e7c-89500aaad310",
+      "exit": 1,
+      "source": "8e8ad5c7b3eb0d874c29177fc7ef704e688cd0f8|cdbaf9e981accc88bc61f25dea4fa3886fbd6bb0b6053bf9f8abe733559fae0b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 1,
+          "sha256": "eaf680741d2066f38a1410a0f8dfbd9f481d898f6dc06d2e8146c1fd9d4d5a4b"
+        }
+      ]
+    },
+    {
+      "probe": "io-gates",
+      "observation": "Rust format, Clippy and Rust tests passed; wrong runner UID prevented uv installation",
+      "run_id": "dd42214e-f8fa-40cb-bcbd-c83a1433eabc",
+      "exit": 1,
+      "source": "8e8ad5c7b3eb0d874c29177fc7ef704e688cd0f8|6f61b1dd2b408758cda09514af3b402fb0f863474a40a2cdccea40013aaee512|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 1,
+          "sha256": "c01421ee06971003b97f5bd8b01d9cee616706f40c97872e7d67ef3967566f64"
+        }
+      ]
+    },
+    {
+      "probe": "nightly-pinned",
+      "observation": "First nightly runner: uv tool cache permission failure and local artifact upload failure",
+      "run_id": "3c8b0480-98e1-496f-a404-311248666c08",
+      "exit": 1,
+      "source": "8e8ad5c7b3eb0d874c29177fc7ef704e688cd0f8|6f61b1dd2b408758cda09514af3b402fb0f863474a40a2cdccea40013aaee512|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 1,
+          "sha256": "ae504c185e7f176dba6f532b956b303aec8dc8dc564bf8fd38e48a7760169153"
+        },
+        {
+          "exit": 128,
+          "sha256": "457d806a84aeec5ca02e20be89e7166cbc933a853aa4bd0f309c84d22bf2d24b"
+        }
+      ]
+    }
+  ]
+}

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import pytest
 import torch
 
 from bio_inspired_nanochat.sheaf_binding import (
@@ -29,6 +30,27 @@ def test_sheaf_laplacian_nullspace_and_certificate():
     assert cert.is_certified
     assert cert.dimension_kernel == stalk_dim
     assert cert.spectral_gap > 0.0
+    assert cert.h1_dimension is None and cert.h1_obstruction is None
+
+
+@pytest.mark.parametrize(("edges", "h1"), [
+    ([(0, 1), (1, 2)], 0),
+    ([(0, 1), (1, 2), (2, 0)], 2),
+    ([(0, 0)], 2),
+])
+def test_graph_cohomology_needs_edge_space(edges, h1):
+    monitor = SheafConsistencyMonitor
+    laplacian = monitor.build_sheaf_laplacian(edges, num_nodes=3, stalk_dim=2)
+    cert = monitor.evaluate_certificate(laplacian, edge_space_dim=2 * len(edges))
+    assert cert.h1_dimension == h1
+    assert cert.h1_obstruction is None
+
+
+def test_tied_auroc_assigns_half_credit():
+    auroc = SheafConsistencyMonitor.compute_binding_auroc
+    assert auroc([3, 3], [3, 3]) == 0.5
+    assert auroc([0, 1], [1, 2]) == 0.875
+    assert auroc([1, 2], [0, 1]) == 0.125
 
 
 def test_sheaf_diffusion_convergence_reduces_dirichlet_energy():

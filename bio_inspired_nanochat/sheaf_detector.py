@@ -112,10 +112,10 @@ class SheafHallucinationDetector(nn.Module):
         if not self.enabled:
             # Fallback no-op pass
             cert = BindingCertificate(
-                is_certified=True,
-                h1_obstruction=0.0,
+                is_certified=False,
+                h1_obstruction=None,
                 spectral_gap=0.0,
-                dimension_kernel=self.d_model,
+                dimension_kernel=0,
                 step=step,
             )
             return HallucinationReport(
@@ -128,8 +128,10 @@ class SheafHallucinationDetector(nn.Module):
                 repaired_activations=None,
             )
 
+        if activations.ndim not in (2, 3) or activations.shape[-1] != self.d_model:
+            raise ValueError("expected activations [T,D] or [B,T,D] with the configured width")
         if laplacian is None:
-            T = activations.shape[0] if activations.ndim >= 2 else 1
+            T = activations.shape[-2]
             if T > 1:
                 A = torch.diag(torch.ones(T - 1, device=activations.device), 1) + torch.diag(torch.ones(T - 1, device=activations.device), -1)
                 D = torch.diag(A.sum(dim=-1))

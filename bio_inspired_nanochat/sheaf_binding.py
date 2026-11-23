@@ -21,10 +21,11 @@ from torch import Tensor
 @dataclass
 class BindingCertificate:
     is_certified: bool
-    h1_obstruction: float
+    h1_obstruction: float | None
     spectral_gap: float
     dimension_kernel: int
     step: int = 0
+    h1_dimension: int | None = None
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -73,27 +74,38 @@ class SheafConsistencyMonitor:
             v_col_start = v * stalk_dim
 
             delta[e_row_start:e_row_end, u_col_start : u_col_start + stalk_dim] = -R_u
-            delta[e_row_start:e_row_end, v_col_start : v_col_start + stalk_dim] = R_v
+            delta[e_row_start:e_row_end, v_col_start : v_col_start + stalk_dim] += R_v
 
         return delta.t() @ delta
 
     @staticmethod
+    def apply_laplacian(x: Tensor, laplacian: Tensor) -> Tensor:
+        """Apply a token Laplacian or the full block Laplacian to each sample."""
+        if laplacian.ndim != 2 or laplacian.shape[0] != laplacian.shape[1]:
+            raise ValueError("expected a square Laplacian")
+        size = laplacian.shape[0]
+        if x.ndim == 1 and x.numel() == size:
+            return laplacian @ x
+        if x.ndim not in (2, 3):
+            raise ValueError("expected node features [T,D] or [B,T,D]")
+        nodes, width = x.shape[-2:]
+        if size == nodes:
+            return laplacian @ x
+        if size == nodes * width:
+            return (x.flatten(-2) @ laplacian.T).reshape_as(x)
+        raise ValueError(f"Laplacian size {size} does not match {nodes} nodes of width {width}")
+
+    @staticmethod
     def compute_obstruction_energy(x: Tensor, laplacian: Tensor) -> float:
         """Compute normalized Dirichlet energy (x^T L x) / (lambda_max * ||x||^2) in [0, 1]."""
-        T = laplacian.shape[0]
-        if x.shape[0] == T:
-            x_mat = x.float()
-            l_mat = laplacian.float()
-            energy = torch.trace(x_mat.t() @ (l_mat @ x_mat))
-            norm_sq = torch.sum(x_mat**2).clamp(min=1e-8)
-            eigs = torch.linalg.eigvalsh(l_mat)
-            l_max = float(eigs.max().item()) if eigs.numel() > 0 else 1.0
-            scale = max(1e-6, l_max)
-            return float((energy / (scale * norm_sq)).clamp(0.0, 1.0).item())
-        x_flat = x.view(-1, laplacian.shape[0])
-        norm_sq = torch.sum(x_flat**2, dim=-1).clamp(min=1e-8)
-        energy = torch.sum(x_flat * (x_flat @ laplacian.t()), dim=-1)
-        return float((energy / norm_sq).mean().item())
+        features = x.float()
+        operator = laplacian.float()
+        applied = SheafConsistencyMonitor.apply_laplacian(features, operator)
+        feature_dims = (-2, -1) if x.ndim > 1 else (-1,)
+        energy = (features * applied).sum(dim=feature_dims)
+        denom = features.square().sum(dim=feature_dims) * torch.linalg.eigvalsh(operator).amax()
+        ratio = torch.where(denom > 0, energy / denom, torch.zeros_like(energy))
+        return float(ratio.clamp(0, 1).mean().item())
 
     @staticmethod
     def evaluate_certificate(
@@ -101,8 +113,10 @@ class SheafConsistencyMonitor:
         stalk_dim: int = 8,
         tol: float = 1e-4,
         step: int = 0,
+        *,
+        edge_space_dim: int | None = None,
     ) -> BindingCertificate:
-        """Evaluate spectral gap and dimension of ker(L) (H^0 global sections)."""
+        """Measure H^0 and, for a graph with known edge-space size, dim H^1."""
         eigenvalues = torch.linalg.eigvalsh(laplacian)
         zero_mask = eigenvalues.abs() < tol
         dim_ker = int(zero_mask.sum().item())
@@ -110,10 +124,14 @@ class SheafConsistencyMonitor:
         non_zero = eigenvalues[~zero_mask]
         spectral_gap = float(non_zero.min().item()) if non_zero.numel() > 0 else 0.0
 
+        rank = laplacian.shape[0] - dim_ker
+        if edge_space_dim is not None and edge_space_dim < rank:
+            raise ValueError("edge space cannot be smaller than the coboundary rank")
         is_certified = dim_ker >= 1 and spectral_gap > 0.0
         return BindingCertificate(
             is_certified=is_certified,
-            h1_obstruction=float(eigenvalues.min().item()),
+            h1_obstruction=None,  # An individual obstruction needs independently observed edge data.
+            h1_dimension=None if edge_space_dim is None else edge_space_dim - rank,
             spectral_gap=spectral_gap,
             dimension_kernel=dim_ker,
             step=step,
@@ -128,20 +146,14 @@ class SheafConsistencyMonitor:
         clean = np.array(clean_energies)
         corrupted = np.array(corrupted_energies)
 
-        all_scores = np.concatenate([clean, corrupted])
-        all_labels = np.concatenate([np.zeros_like(clean), np.ones_like(corrupted)])
-
-        order = np.argsort(all_scores)
-        ranks = np.empty_like(order)
-        ranks[order] = np.arange(len(all_scores)) + 1
-
-        n_pos = len(corrupted)
-        n_neg = len(clean)
-        if n_pos == 0 or n_neg == 0:
-            return 0.5
-
-        u_stat = np.sum(ranks[all_labels == 1]) - (n_pos * (n_pos + 1)) / 2.0
-        return float(u_stat / (n_pos * n_neg))
+        if not clean.size or not corrupted.size:
+            raise ValueError("AUROC requires both classes")
+        if not np.isfinite(clean).all() or not np.isfinite(corrupted).all():
+            raise ValueError("AUROC requires finite scores")
+        ordered = np.sort(clean)
+        lower = np.searchsorted(ordered, corrupted, side="left")
+        upper = np.searchsorted(ordered, corrupted, side="right")
+        return float((lower + upper).mean() / (2 * clean.size))
 
 
 class SheafDiffusionLayer(nn.Module):
@@ -169,14 +181,10 @@ class SheafDiffusionLayer(nn.Module):
         if not self.enabled or laplacian is None:
             return x
 
-        B, T, D = x.shape
-        x_flat = x.view(B, T * D)
-
         for _ in range(self.num_diffusion_steps):
-            diff = x_flat @ laplacian.t()
-            x_flat = x_flat - self.diffusion_rate * diff
-
-        return x_flat.view(B, T, D)
+            diff = SheafConsistencyMonitor.apply_laplacian(x, laplacian)
+            x = x - self.diffusion_rate * diff
+        return x
 
 
 class OperadicSNAREMatcher(nn.Module):

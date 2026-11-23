@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import pytest
 import torch
 
 from bio_inspired_nanochat.sheaf_binding import SheafConsistencyMonitor
@@ -73,8 +74,26 @@ def test_sheaf_hallucination_detector_fallback_when_disabled(tmp_path: Path):
 
     assert not rep.is_hallucination
     assert rep.obstruction_score == 0.0
+    assert not rep.certificate.is_certified
 
     # Test audit logging
     log_path = tmp_path / "audit.jsonl"
     log_hallucination_audit(rep, jsonl_path=log_path)
     assert log_path.exists()
+
+
+def test_detector_uses_whole_token_path_for_batched_activations():
+    x = torch.tensor([[1., 2.], [-1., -2.], [1., 2.]])
+    detector = SheafHallucinationDetector(2, threshold=0.1, action=DetectorAction.REPAIR)
+    single = detector(x)
+    batched = detector(x.unsqueeze(0))
+    assert single.is_hallucination and batched.is_hallucination
+    assert batched.obstruction_score == pytest.approx(single.obstruction_score)
+    assert batched.repaired_activations is not None and single.repaired_activations is not None
+    torch.testing.assert_close(batched.repaired_activations[0], single.repaired_activations)
+    laplacian = SheafConsistencyMonitor.build_sheaf_laplacian([(0, 1), (1, 2)], num_nodes=3, stalk_dim=2)
+    for scale in (0.01, 10.0):
+        assert detector.compute_obstruction_score(x.unsqueeze(0), scale * laplacian) == pytest.approx(
+            single.obstruction_score, abs=1e-6)
+    mixed = detector(torch.stack([torch.ones_like(x), x]))
+    assert mixed.obstruction_score == pytest.approx(single.obstruction_score / 2)
