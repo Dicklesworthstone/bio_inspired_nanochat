@@ -95,9 +95,17 @@ def test_attention_benchmark_case_matrix_and_recommendation(
     recommendation = recommend(rows, model_path="synaptic", baseline="synaptic_dense")
     assert recommendation == {
         "model_path": "synaptic",
-        "recommended_case": "synaptic_flex",
+        "recommended_case": "synaptic_dense",
         "baseline_case": "synaptic_dense",
-        "throughput_delta_percent": 25.0,
+        "throughput_delta_percent": 0.0,
+    }
+    assert recommend(rows[1:], model_path="synaptic", baseline="synaptic_dense") is None
+    flash = {"case": "vanilla_sdpa_flash", "model_path": "vanilla", "status": "passed", "tokens_per_second": 125.0}
+    auto = {**flash, "case": "vanilla_sdpa_auto", "tokens_per_second": 100.0}
+    assert recommend([flash], model_path="vanilla", baseline="vanilla_sdpa_auto") is None
+    assert recommend([auto, flash], model_path="vanilla", baseline="vanilla_sdpa_auto") == {
+        "model_path": "vanilla", "recommended_case": "vanilla_sdpa_flash",
+        "baseline_case": "vanilla_sdpa_auto", "throughput_delta_percent": 25.0,
     }
 
 

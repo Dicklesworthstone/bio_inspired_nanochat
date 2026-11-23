@@ -72,7 +72,7 @@ attention_cases = (
 )
 attention_warmup_steps = 5
 attention_benchmark_steps = 20
-attention_compile = True
+attention_compile = False  # Torch 2.9's compiler does not support the project's Python 3.14.
 attention_require_4090 = True
 attention_seed = 42
 attention_dtype = "bfloat16"
@@ -557,6 +557,7 @@ def _benchmark_attention_case(
         "use_flex_attention": case.use_flex,
         "status": "failed",
         "reason": None,
+        "final_loss": None,
         "latency_ms": None,
         "tokens_per_second": None,
         "peak_allocated_gib": None,
@@ -573,21 +574,33 @@ def _benchmark_attention_case(
         torch.cuda.synchronize(device)
         torch.cuda.reset_peak_memory_stats(device)
 
+        loss = None
         start = time.perf_counter()
         for _ in range(int(attention_benchmark_steps)):
             model.zero_grad(set_to_none=True)
-            _attention_loss(model, case, tokens, targets, dtp).backward()
+            loss = _attention_loss(model, case, tokens, targets, dtp)
+            loss.backward()
         torch.cuda.synchronize(device)
         elapsed = time.perf_counter() - start
+        peak_allocated = torch.cuda.max_memory_allocated(device)
+        peak_reserved = torch.cuda.max_memory_reserved(device)
 
+        # Check numerics after timing. A backend can return normally even when
+        # its backward generated invalid gradients.
+        if loss is None or not torch.isfinite(loss.detach()).item():
+            raise ValueError("nonfinite final benchmark loss")
+        gradients = [p.grad for p in model.parameters() if p.grad is not None]
+        if not gradients or not torch.stack([torch.isfinite(g).all() for g in gradients]).all().item():
+            raise ValueError("missing or nonfinite final benchmark gradients")
         measured_steps = int(attention_benchmark_steps)
         measured_tokens = measured_steps * int(batch_size) * int(seq_len)
         row.update(
             status="passed",
+            final_loss=float(loss.detach()),
             latency_ms=1000.0 * elapsed / measured_steps,
             tokens_per_second=measured_tokens / elapsed,
-            peak_allocated_gib=torch.cuda.max_memory_allocated(device) / 1024**3,
-            peak_reserved_gib=torch.cuda.max_memory_reserved(device) / 1024**3,
+            peak_allocated_gib=peak_allocated / 1024**3,
+            peak_reserved_gib=peak_reserved / 1024**3,
         )
     except torch.OutOfMemoryError as exc:
         row.update(status="oom", reason=str(exc))
@@ -608,19 +621,20 @@ def _recommend_backend(
         if row["model_path"] == model_path
         and row["status"] == "passed"
         and isinstance(row["tokens_per_second"], float)
+        # Flex replaces edge-dependent calcium influx with a per-key approximation.
+        # Its throughput is reported, but timing cannot establish model equivalence.
+        and row["case"] != "synaptic_flex"
     ]
-    if not successful:
+    baseline_row = next((row for row in successful if row["case"] == baseline), None)
+    if baseline_row is None:
         return None
     best = max(successful, key=lambda row: float(cast(float, row["tokens_per_second"])))
-    baseline_row = next((row for row in successful if row["case"] == baseline), None)
-    delta_pct = None
-    if baseline_row is not None:
-        baseline_rate = float(cast(float, baseline_row["tokens_per_second"]))
-        delta_pct = 100.0 * (float(cast(float, best["tokens_per_second"])) / baseline_rate - 1.0)
+    baseline_rate = float(cast(float, baseline_row["tokens_per_second"]))
+    delta_pct = 100.0 * (float(cast(float, best["tokens_per_second"])) / baseline_rate - 1.0)
     return {
         "model_path": model_path,
         "recommended_case": best["case"],
-        "baseline_case": baseline if baseline_row is not None else None,
+        "baseline_case": baseline,
         "throughput_delta_percent": delta_pct,
     }
 
@@ -688,7 +702,9 @@ def _bench_flex() -> Path:
             "vanilla_sdpa_flash strictly forces PyTorch's FLASH_ATTENTION SDPA backend. "
             "PyTorch does not expose a FlashAttention-2/3 generation label here; do not infer "
             "one from this artifact. The synaptic dense path needs an additive biological score "
-            "bias, so stock SDPA is not functionally equivalent; synaptic_flex is its fused case."
+            "bias. Synaptic FlexAttention uses per-key calcium in place of per-edge influx and "
+            "is timed as an experimental approximation. Comparable-case recommendations require "
+            "the corresponding baseline to finish in the same invocation."
         ),
     }
     artifact = {
@@ -732,7 +748,10 @@ def _bench_flex() -> Path:
             _format_metric(peak, ".2f"),
         )
     console.print(table)
-    console.print(f"[green]Wrote immutable benchmark artifacts to {run_dir}[/green]")
+    console.print(f"Wrote benchmark artifacts to {run_dir}")
+    failed = [str(row["case"]) for row in rows if row["status"] != "passed"]
+    if failed:
+        raise RuntimeError("requested attention cases failed: " + ", ".join(failed))
     return run_dir
 
 

@@ -36,9 +36,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                         help="Save actual per-arm measurements and relative budget comparisons")
     parser.add_argument(
         "--mode",
-        choices=["check", "update"],
+        choices=["check", "update", "profile"],
         default="check",
-        help="Whether to check against baselines or update baseline JSON file",
+        help="Check or update baselines, or annotate CUDA measurement windows for Nsight Systems",
     )
     parser.add_argument(
         "--baselines",
@@ -87,6 +87,14 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     console = Console()
     harness = PerfRegressionHarness(baselines_path=args.baselines)
+
+    if args.mode == "profile":
+        if args.device != "cuda" or args.check_budget or args.record_registry or args.output_json or args.observations_json:
+            parser.error("profile requires --device cuda and writes the profiler trace only")
+        for cfg in STANDARD_BENCHMARK_CONFIGS:
+            console.print(f"Profiling {cfg.name}")
+            harness.run_benchmark(replace(cfg, device="cuda"), nvtx=True)
+        return 0
 
     console.print("[bold cyan]Running Performance Regression Benchmarks...[/bold cyan]")
     if args.device is None:

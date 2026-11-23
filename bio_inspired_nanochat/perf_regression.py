@@ -13,6 +13,7 @@ import json
 import math
 import time
 from collections.abc import Sequence
+from contextlib import nullcontext
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -196,8 +197,9 @@ class PerfRegressionHarness:
     def __init__(self, baselines_path: Path | str | None = None) -> None:
         self.baselines_path = Path(baselines_path or DEFAULT_BASELINES_PATH)
 
-    def run_benchmark(self, cfg: PerfBenchmarkConfig) -> BenchmarkResult:
+    def run_benchmark(self, cfg: PerfBenchmarkConfig, *, nvtx: bool = False) -> BenchmarkResult:
         device = _resolve_device(cfg.device)
+        measured_range = torch.cuda.nvtx.range(cfg.name) if nvtx else nullcontext()
         if device.type == "cuda":
             torch.cuda.reset_peak_memory_stats(device)
         model_sequence_len = cfg.seq_len + (
@@ -242,14 +244,15 @@ class PerfRegressionHarness:
                 optimizer.step()
 
             _synchronize_for_timing(device)
-            t0 = time.perf_counter()
-            for _ in range(cfg.measure_steps):
-                optimizer.zero_grad()
-                out = model(inputs, targets=targets)
-                loss = out[1] if isinstance(out, tuple) else out
-                loss.backward()
-                optimizer.step()
-            _synchronize_for_timing(device)
+            with measured_range:
+                t0 = time.perf_counter()
+                for _ in range(cfg.measure_steps):
+                    optimizer.zero_grad()
+                    out = model(inputs, targets=targets)
+                    loss = out[1] if isinstance(out, tuple) else out
+                    loss.backward()
+                    optimizer.step()
+                _synchronize_for_timing(device)
             elapsed = time.perf_counter() - t0
 
         else:  # decode mode
@@ -280,10 +283,11 @@ class PerfRegressionHarness:
                 for step in range(cfg.warmup_steps):
                     engine._forward(continuation[:, step : step + 1], cache)
                 _synchronize_for_timing(device)
-                t0 = time.perf_counter()
-                for step in range(cfg.warmup_steps, continuation.size(1)):
-                    engine._forward(continuation[:, step : step + 1], cache)
-                _synchronize_for_timing(device)
+                with measured_range:
+                    t0 = time.perf_counter()
+                    for step in range(cfg.warmup_steps, continuation.size(1)):
+                        engine._forward(continuation[:, step : step + 1], cache)
+                    _synchronize_for_timing(device)
                 elapsed = time.perf_counter() - t0
             expected_cache_pos = cfg.seq_len + cfg.warmup_steps + cfg.measure_steps
             if cache.get_pos() != expected_cache_pos:
