@@ -1,0 +1,165 @@
+{
+  "audit_date": "2026-11-22",
+  "source_revision": "16ce9fe1979c2f48da7730c8c2f6970d7f7b43e3",
+  "executor": "DSR 0.2.3, isolated quality profiles",
+  "scope": "Selected user-facing flows, targeted counterexamples and installation checks. The scientific screen, the full test suite, public model distribution and a network deployment were outside the executed probes.",
+  "evidence": [
+    {
+      "probe": "One distributed vanilla update from the matrix launcher",
+      "command": "uv run --no-sync python -m scripts.matrix_launch --nproc 2 --columns vanilla --seeds 1337 --execute --recipe='--depth=2 --max_seq_len=32 --device_batch_size=1 --total_batch_size=64 --num_iterations=1 --eval_every=1 --eval_tokens=64 --core_metric_every=-1 --sample_every=-1 --device_type=cuda'",
+      "input": "Staged real-text data and tokenizer, two RTX 4090 devices, isolated checkpoint output.",
+      "step": 1,
+      "validation_bpb": 3.517920049120671,
+      "checkpoint": {
+        "complete": true,
+        "world_size": 2,
+        "optimizer_shards": true,
+        "train_shards": true
+      },
+      "dsr_run_id": "91f6158f-da5f-4db0-9393-960a1b43f409",
+      "check_exit": 0,
+      "log_sha256": "d99bf9f1702526a197cf6d54200ee7b50ec5db071475002c712ccf990a8ab4f4"
+    },
+    {
+      "probe": "Web generation and selective response",
+      "input": {
+        "entrypoint": "scripts.chat_web via FastAPI TestClient",
+        "device": "CPU, float32",
+        "checkpoint": "scale_harden_kinetics_on, step 50, private",
+        "prompt": "The synapse",
+        "top_k": 1,
+        "temperature": 0,
+        "max_tokens": 4
+      },
+      "observed": {
+        "root_http_status": 200,
+        "completions_http_status": [
+          200,
+          200
+        ],
+        "generated_tokens": [
+          " of",
+          " the",
+          " same",
+          " time"
+        ],
+        "selective_threshold_nats": 0,
+        "abstained_at_entropy_nats": 8.164142608642578,
+        "stats_available_workers": 1,
+        "stats_busy_workers": 0
+      },
+      "dsr_run_id": "91f6158f-da5f-4db0-9393-960a1b43f409",
+      "check_exit": 0,
+      "log_sha256": "0af3e77e5574f390ab7ef9d366cb469087fa7e7edd6bbc6e439f4cc70ca3dbff"
+    },
+    {
+      "probe": "Run the scorer command printed by the matrix launcher",
+      "dsr_run_id": "cd3624b6-2898-448c-b50c-98d39aaf1b9b",
+      "check_exit": 2,
+      "log_sha256": "fa0d16afbd18017a03aa3e6d4ceae489f835eca3db6b93b7c3df1442c10202cc",
+      "observed": "scripts.eval_matrix rejected 'batch'. Its choices were run, matrix and ablation. The emitted command also omitted --eval-bpb."
+    },
+    {
+      "probe": "Evaluate the advertised scientific bounds against deterministic inputs",
+      "dsr_run_id": "c339a139-7d9c-4363-be88-6544c7d25e50",
+      "check_exit": 1,
+      "log_sha256": "6683b5178953e3ff8c9a6b40841e827ddb78d15e0b2c27ccae2853ff7e754510",
+      "conformal": {
+        "api": "ConformalAbstentionEngine",
+        "alpha": 0.05,
+        "calibration_and_evaluation": "32 identical rows [0.75, 0.25] with label index 1 in each set. Evaluation uses cloned tensors.",
+        "learned_threshold": 0.25,
+        "answered": 32,
+        "wrong": 32,
+        "abstentions": 0,
+        "coverage_guaranteed": true
+      },
+      "sparse": {
+        "api": "EventDrivenSparseSynapse",
+        "input": 100,
+        "weight": 1,
+        "external_activity": 0,
+        "threshold": 0.1,
+        "measured_absolute_error": 100,
+        "reported_error_bound": 0.1,
+        "reported_flops_saved_ratio": 1
+      },
+      "scope": "Standalone APIs. The conformal probe concerns error conditional on answering and is independent of the web service's entropy policy."
+    },
+    {
+      "probe": "Frozen CPU-extra resolution on macOS arm64",
+      "dsr_run_id": "724E84D8-29E5-4822-B5AA-070F46CF1635",
+      "check_exit": 2,
+      "log_sha256": "2d98bf16cd5cc0ebd32cbebb83c9b13209c242a223b9f8192ac64492c455fc0a",
+      "python": "3.14.6",
+      "command": "uv sync --python /opt/homebrew/bin/python3.14 --frozen --offline --extra cpu --no-dev --no-install-project --dry-run",
+      "observed": "The lock selected triton==3.5.1, which lists Linux platform wheels. uv reported no distribution for this platform."
+    },
+    {
+      "probe": "Replay the documented bio training setup from the Quick Start fixture",
+      "input": {
+        "fixture": "tests/test_e2e_quick_start.py",
+        "model": "depth 2, context 64, batch 128 tokens, 2 requested iterations, CPU, tau_rrp=60, Hebbian weights and bistable latch enabled"
+      },
+      "dsr_run_id": "846a5864-9320-4c82-a0f3-0249bba76ec2",
+      "check_exit": 1,
+      "log_sha256": "a79ac61b140a622b08b390f9580580e43de367ba0413c4ab0f2f742b91d896cc",
+      "observed": "The installed rustbpe callable returned three values to a two-value unpack in synaptic.py:1770 during evaluation. The default training path sets native_presyn=True.",
+      "installed_native_extension_sha256": "1ff8e09978dc7abded9932afc33af753d68bc20f1677711e948f6a8d25061c27",
+      "installed_native_extension_bytes": 4000848
+    },
+    {
+      "probe": "Reference-backend control for the same Quick Start and selective CLI reload",
+      "dsr_run_id": "c54e73e8-5f6a-4f95-90f2-b21f9380be5a",
+      "checks": [
+        {
+          "training_change": "--syn_cfg.native_presyn=0",
+          "check_exit": 0,
+          "log_sha256": "b235d03a9be1d71533d4862dfa1ce185383a400011f7b41741d2eab0178cdc26",
+          "optimizer_steps": 2,
+          "minimum_reported_validation_bpb": 1.4349
+        },
+        {
+          "entrypoint": "scripts.chat_cli -i base -g e2e_quick_start -p 'The synapse' --device-type cpu -d float32 --selective --max-entropy 0.0",
+          "check_exit": 0,
+          "log_sha256": "d6f7bee99ed59456f029e0a82d66ca9ccc44907d08ae21ec8205127e9cacd604",
+          "abstained_at_reported_entropy_nats": 6.09
+        }
+      ]
+    },
+    {
+      "probe": "Selected pytest on a CUDA-visible Linux host using the installed extension",
+      "dsr_run_id": "91f6158f-da5f-4db0-9393-960a1b43f409",
+      "check_exit": 1,
+      "log_sha256": "88889ca28f277eed76267edfc4b63e0af36f9761f82af41a6b11a1816744ee9b",
+      "test_files": [
+        "tests/test_harness_smoke.py",
+        "tests/test_e2e_quick_start.py",
+        "tests/test_presyn_golden.py",
+        "tests/test_checkpoint_roundtrip.py",
+        "tests/test_presyn_scan_kernel.py",
+        "tests/test_e2e_matrix_pipeline.py"
+      ],
+      "collected": 40,
+      "passed": 24,
+      "failed": 3,
+      "setup_errors": 13,
+      "skipped": 0,
+      "pytest_seconds": 466.9,
+      "attribution": {
+        "failed": "Three Rust scan parity parameterizations hit the installed extension's incompatible return arity.",
+        "quick_start_setup_errors": 9,
+        "matrix_setup_errors": 4,
+        "matrix_progress": "Both vanilla seed checkpoints were written. The first synaptic_off training cell was rejected before scoring. The four matrix test bodies did not run."
+      }
+    },
+    {
+      "probe": "Replay the first rejected matrix cell with the actual launcher",
+      "dsr_run_id": "819ec1cf-0319-4520-a90e-10e67969f5ce",
+      "check_exit": 1,
+      "log_sha256": "aed04600b1cd2444a49f2cf460e183c66bc98fb1be74fb50f28118b37c0ab0ad",
+      "input": "scripts.matrix_launch --columns synaptic_off --seeds 1337 --execute, two-step CPU recipe from tests/test_e2e_matrix_pipeline.py",
+      "observed": "The live trainer enables native_genetics by default. synaptic_off disables its prerequisite enable_metabolism. Config validation rejected the cell before training."
+    }
+  ]
+}

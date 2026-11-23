@@ -4,8 +4,18 @@
 > (*Unit-test framework, conventions, fixtures & coverage gate*) — the foundation
 > every later "unit tests + e2e + detailed logging" bead builds on.
 
-The goal: **green = working.** Tests are deterministic, fast on CPU, portable to
-GPU CI, and emit enough diagnostics that a failure tells you *why*.
+Run project checks through DSR. The command examples below describe the payloads for its
+workers. The repository policy covers CPU, GPU, scheduled checks and release automation.
+The November 22 audit found no standing project profile in the installed DSR configuration.
+Beads `u0fl.1` and `u0fl.2` track the CPU/nightly and hardware receipts. The lane definitions
+below describe the required coverage.
+
+The audit exercised two-rank vanilla checkpointing, greedy and selective web generation,
+the default bio Quick Start and the printed matrix scoring command. The research host's
+installed native CPU extension exposed the scan symbol with an older return signature.
+The default bio trainer failed during evaluation. Explicitly selecting the reference backend
+completed two training steps with the same inputs. Bead `u0fl.4` tracks the source-matched
+wheel, a diagnostic for stale installations and the default-path rerun. [Probe results](results/project_reality_check_2026-11-22.json)
 
 ---
 
@@ -18,7 +28,7 @@ uv sync --extra cpu --dev                        # or --extra gpu on a CUDA box
 # Shortcut without Rust (rustbpe-dependent tests skip):
 uv sync --no-install-project --extra cpu --dev
 
-# What CI runs on every push / PR:
+# DSR change-validation payload:
 uv run --no-sync python -m pytest -m "not slow" -q
 
 # The fast unit subset:
@@ -50,12 +60,12 @@ resolves **without** an installed wheel; the maturin build only adds `rustbpe`.
 
 Registered in `pyproject.toml`; `--strict-markers` makes a typo'd marker an error.
 
-| Marker     | Meaning                                                        | Where it runs                          |
+| Marker     | Meaning                                                        | Intended DSR lane                      |
 |------------|----------------------------------------------------------------|----------------------------------------|
 | `unit`     | Fast, deterministic, no GPU/network/data downloads             | every push (`-m "not slow"`)           |
 | `e2e`      | End-to-end run exercising a whole flow                         | every push + nightly `validate_all`    |
 | `slow`     | Long-running (`-m "not slow"` to skip)                         | nightly only                           |
-| `gpu`      | Requires CUDA; **auto-skipped** on CPU-only hosts              | a GPU host (none in CI today)          |
+| `gpu`      | Requires CUDA; **auto-skipped** on CPU-only hosts              | trusted GPU worker                     |
 | `golden`   | Compares against committed golden artifacts (`tests/golden/`)  | every push                             |
 | `smoke`    | In-process smoke of the flagship harnesses (`pytest -m smoke`) | every push                             |
 
@@ -128,11 +138,15 @@ Commit the resulting `tests/golden/*.npy` files.
 `bio_inspired_nanochat` and enforces `fail_under` **only when `--cov` is passed**
 (so the default fast `pytest` stays lightweight). The floor is **25%** (the suite
 measured ≈34% when the floor was set in 2026-06) and should be **ratcheted upward,
-never lowered**. CI passes `--cov` on every push (the integration-tests job), so the floor is enforced there.
+never lowered**. The DSR integration job must pass `--cov` to enforce the floor.
 
 ---
 
-## What CI actually runs (`.github/workflows/`)
+## Required DSR gates
+
+The YAML files in `.github/workflows/` provide the gate inventory for direct DSR execution.
+The times below are the schedules specified in those files. A run is qualified when DSR
+records the source revision, exit status, denominators and retained artifacts.
 
 - **`ci.yml` — every push to `main` and every PR:** `cargo fmt --check`, `cargo clippy -D warnings`,
   `cargo test` (native Rust unit tests in `rust_src/src/{presyn,moe}.rs`, complemented by the 27

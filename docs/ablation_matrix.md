@@ -15,6 +15,15 @@ staged compute with a GPU-hour gate, and the pinned statistical decision rule.
 > `ablation_registry.MECHANISMS`** in code, so this spec cannot silently drift from what the model
 > actually treats as ablatable. The narrative below mirrors that code; the code is authoritative.
 
+**November 22 audit of the original registration.** Preserve the original design below for
+comparison with the next protocol. A two-seed screen needs an explicit descriptive advancement
+rule. The minimum exact two-sided Wilcoxon p-value with three nonzero pairs is 0.25. The launcher
+and the cost gate use different default seed counts, and the scorer corrects all comparisons to
+one baseline. The original example also requests 498,073,600 tokens per cell. It cannot serve
+as a 10M-token screening recipe. Record the corrected contrasts, independent confirmation
+seeds, capacity matching, GPU-hour accounting and executable recipe before running D1.
+The open acceptance tests are `hwxb.5.6` through `hwxb.5.9`. [Current bridge plan](bridge_plan.md)
+
 ---
 
 ## 1) The confound, and the three anchors
@@ -38,9 +47,9 @@ We therefore run **three anchors** and read the experiment as a decomposition:
 (bio_all     − vanilla)    = the TOTAL bio effect
 ```
 
-**Param-matching.** The synaptic stack adds parameters, so `vanilla` is matched to `GPTSynaptic` by
-adjusting depth/width (`n_layer`/`n_embd`); the runner records **both** param counts in every summary
-row so the comparison is honest. Without this, a win could be a free-parameter artifact.
+**Param-matching requirement.** The registration calls for matching capacity by adjusting
+depth/width and recording both parameter counts. At `16ce9fe` the launcher applies the shared
+recipe to both models, and the checkpoint summary omits those counts (`hwxb.5.9`).
 
 ---
 
@@ -183,22 +192,18 @@ uv run --no-sync python -m scripts.matrix_launch --stage screening \
 `ablation_matrix.base_train_argv(column, seed=…)` contributes `--synapses`, one
 `--syn_cfg.<field>=<value>` per field the column sets, the seed as `--init_seed` (what
 `eval_matrix` checks the checkpoint against) and `--model_tag=matrix_<column>_s<seed>`; the
-launcher prints the matching `eval_matrix batch … --checkpoint-dir
-"<base_dir>/base_checkpoints/matrix_{preset}_s{seed}"` command. `tests/test_matrix_launch.py`
-round-trips every column through `base_train`'s own override parser, and
-`tests/test_e2e_matrix_pipeline.py` runs the whole chain as subprocesses at toy scale — launcher
-(`--columns vanilla,synaptic_off`, two seeds) → `base_train` checkpoints → `eval_matrix matrix
---checkpoint-dir` scoring from the checkpoints' own metadata → `eval_stats` pairing — so a broken
-link fails there before it burns GPU hours (about four minutes on CPU; nightly).
+launcher currently prints `eval_matrix batch`, which argparse rejects. The pipeline test
+constructs its own `eval_matrix matrix --checkpoint-dir … --eval-bpb` command, then scores
+two checkpoints per column and pairs the results. `hwxb.5.8` requires the test to use the
+actual printed command.
 
 **Toy-scale dry runs on real text (2026-10-07 and 2026-10-13).** The three anchors first ran through
 this exact chain at 2L/128d, 600k WikiText-2 tokens, seeds 1337–1339
 (`results/toy_screening_2026-10-07_verdict.md`): vanilla 1.958, synaptic_off 2.028, bio_all 2.038 val bpb.
 Subsequent diagnosis (`results/scaffold_diagnosis_2026-10-07.json`, `03bb9bf` / `f96747e`) showed that the
 `+0.069 bpb` substrate penalty was caused by a missing final RMSNorm before `lm_head` on `GPTSynaptic`:
-restoring `final_norm=True` and moving online Hebbian plasticity to opt-in (`enable_hebbian=False` in
-`bio_all`) brought `synaptic_off` to `1.920 ± 0.004 bpb` (`-0.038 bpb` vs `vanilla`) and `bio_all` to
-`1.930 ± 0.005 bpb` (`-0.028 bpb` vs `vanilla`) on the same 3 seeds × 614k WikiText-2 tokens. On
+the normalization experiment measured mean `1.9971` for vanilla and `1.9588` for normalized
+`synaptic_off` on three paired seeds (difference `−0.0383`). It contains no `bio_all` arm. On
 2026-10-13 (`hwxb.5.5`), after fixing two meta-device initialization bugs in `add_cusp_latch` and
 `moe_add_glial_homeostasis`, all 17 dense columns × 2 seeds (`results/toy_screening_2026-10-13_verdict.md`)
 and all 5 structural MoE columns × 2 seeds (`results/structural_smoke_2026-10-13.json`) were executed

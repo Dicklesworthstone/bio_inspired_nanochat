@@ -6,15 +6,13 @@
 [![PyTorch 2.9+](https://img.shields.io/badge/PyTorch-2.9%2B-red.svg)](https://pytorch.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT%2BOpenAI%2FAnthropic%20Rider-blue.svg)](./LICENSE)
 
-This is a research fork of [Nanochat](https://github.com/karpathy/nanochat) that replaces standard static weights with **computational analogs of synaptic proteins**, implementing biologically-grounded mechanisms for working memory, attention modulation, and neural architecture search.
-
-Standard LLMs are "frozen crystals"—static matrices of `float16` numbers that never change once training is done. **Bio-Inspired Nanochat** is a "living fluid". Its connections grow, shrink, fatigue, recover, and even reproduce *during inference*, mimicking the energy-constrained efficiency of the biological brain.
+This research fork of Nanochat adds state to Transformer attention. During cached generation, release and recovery change the attention bias applied to individual keys. The standard chat engine keeps Hebbian writes off. Training can enable fast-weight updates and an expert split/merge controller. [Upstream Nanochat](https://github.com/karpathy/nanochat) · [Generation path](bio_inspired_nanochat/engine.py) · [Training path](scripts/base_train.py)
 
 ## 📊 Project Status
 
 This is an **active research project** implementing 11+ bio-inspired mechanisms with systematic evaluation and optimization. See our comprehensive planning documents:
 
-- 📋 [**Full Roadmap**](.beads/) - 511 issues across 33 epics in the Beads tracker (`br ready --json` lists claimable work)
+- 📋 [**Full Roadmap**](.beads/) — `br ready --json` lists claimable work
 - 🧬 [**CMA-ES Optimization Plan**](PLAN_TO_USE_CMAES_FOR_HYPERPARAMETER_EXPLORATION_AND_OPTIMIZATION_ACROSS_ALL_BIO_INSPIRED_FEATURES.md) - Systematic hyperparameter tuning (10 params wired in Phase 1; ~48 planned across two phases)
 - 🎯 [**Feature Predictions**](CLAUDE_SONNET45_PREDICTIONS_ON_WHICH_NEW_BIO_INSPIRED_IDEAS_WILL_WORK_BEST_OR_NOT.md) - Evidence-based analysis of which mechanisms will work
 - 🚀 [**New Features Roadmap**](NEW_RADICALLY_NEW_BIO_INSPIRED_FEATURES_TO_ADD_IN_MODULAR_WAY.md) - Detailed specs for upcoming mechanisms
@@ -22,12 +20,14 @@ This is an **active research project** implementing 11+ bio-inspired mechanisms 
 **Implementation Status:**
 Status legend: ✅ shipping (on the live model path, tested) · 🚧 partial/landing · 🔮 aspirational (roadmap).
 
-**Evidence status (2026-10-13):** everything marked ✅ below is implemented on the live path and unit-tested at toy scale. No model has yet been trained on a GPU; the pre-registered experiment that produces the language-model-scale signal is [`docs/ablation_matrix.md`](docs/ablation_matrix.md) (beads `hwxb.3`–`hwxb.6`), gated on the dual-RTX-4090 host (`hwxb.10`). What exists today, all on CPU at 2 layers: (1) **bio-vs-vanilla comparisons on real text**: the initial 3-seed anchor run (`results/toy_screening_2026-10-07_verdict.md`; 2L/128d, 600k WikiText-2 tokens) gave vanilla 1.958, `synaptic_off` 2.028 (+0.069), and `bio_all` 2.038 (+0.080) val bpb; subsequent scaffold diagnosis (`results/scaffold_diagnosis_2026-10-07.json`, `03bb9bf` / `f96747e`) traced the +0.069 substrate penalty to a missing final RMSNorm on `GPTSynaptic` (`final_norm=True` now default) and moved online Hebbian plasticity to opt-in (`enable_hebbian=False` in `bio_all`), bringing `synaptic_off` to `1.920 ± 0.004 bpb` (`-0.038 bpb` vs vanilla) and `bio_all` to `1.930 ± 0.005 bpb` (`-0.028 bpb` vs vanilla). On 2026-10-13, after fixing meta-device initialization bugs in `add_cusp_latch` and `moe_add_glial_homeostasis`, all **17 dense columns × 2 seeds** (`results/toy_screening_2026-10-13_verdict.md`) and all **5 structural MoE columns × 2 seeds** (`results/structural_smoke_2026-10-13.json`) were executed end-to-end through `matrix_launch → base_train → eval_matrix → eval_stats`. (2) **Online Hebbian fast weights did not show the "infinite local context" benefit** in their pre-registered deciding experiment (`results/hebbian_chunked_regime_2026-10-07_preregistered.json`: +0.010 recall vs a 0.016 minimum detectable effect), so they are opt-in since 2026-10-07. (3) **The expert lifecycle fires** under the NeuroScore credit signal (`results/structural_pair_pilot_2026-10-07_credit.json`: +0.03–0.05 loss on 3/3 seeds at toy scale). Treat the mechanism list as "built and pipeline-verified at CPU toy scale", awaiting D1 GPU confirmation.
+**Evidence reviewed 2026-11-22.** A depth-10 vanilla model trained on two RTX 4090s. Its 150-step FineWeb smoke run processed 9.83M tokens and recorded 2.4480 validation bits per byte (bpb). The GPU records also include two 50-step kinetics runs. The matched D1 FineWeb experiment that would establish a benefit from the biology is outstanding. [GPU runbook](docs/epic_runbooks.md) · [Results registry](results/registry.jsonl) · [Experiment specification](docs/ablation_matrix.md)
+
+The most informative CPU comparisons answer different questions. On 614,400 WikiText-2 tokens per seed, the final-normalization diagnostic recorded 1.9971 bpb for vanilla and 1.9588 for the corrected mechanisms-off scaffold across three seeds. That diagnostic has no corrected `bio_all` arm. In a separate 5,120-token smoke run across all 17 dense columns and two seeds, vanilla averaged 0.956949 and `bio_all` 0.961701 on 512 evaluation tokens. All 16 comparisons returned `null`. Five MoE columns also completed two training steps on each of two seeds. [Scaffold diagnostic](results/scaffold_diagnosis_2026-10-07.json) · [Dense screening results](results/toy_screening_2026-10-13_verdict.md) · [MoE smoke](results/structural_smoke_2026-10-13.json)
 
 - ✅ **Core Synaptic Mechanisms** — presynaptic release (faithful Hill dynamics), online Hebbian fast-weights (opt-in), and the structural MoE lifecycle all run on the live path.
 - ✅ **Stochastic release · BDNF metaplasticity · dual fast/slow weights** — implemented and toggleable.
-- 🚧 **Triton GPU & Rust CPU kernels** — one toggle, `native_presyn` (`BIO_FUSED_PRESYN=1`), runs both the multi-query training/prefill scan (`presyn_detached_scan_cpu`, ~3× faster per block on CPU) and the zero-copy L1-tiled single-query decode kernel (`presyn_release_canonical_cpu`, **3.47×–7.12× faster than PyTorch across `T_keys=256..4096`**, `results/presyn_rust_decode_bench_2026-10-13.json`), plus the Triton scan on CUDA (interpreter-verified, awaiting 4090 acceptance in `3bnd` / `jyb.10`).
-- 🚧 **Systematic Optimization** — CMA-ES Phase 1 (the 10 most influential params) supports `--objective lm` (held-out bits/byte on text shards with `native_presyn=True`, verified on CPU in `results/cmaes_phase1_lm_2026-10-13.json` at ~9.0 s/generation); GPU Phase-0 FineWeb run (`idh4`) awaits `hwxb.10`.
+- ✅ **Fused presynaptic kernels** — `native_presyn` selects Rust on supported CPU paths and Triton on supported CUDA paths. At the recorded FP32 decode shapes on one 4090, Triton improved release time 6.84× and cached synaptic-model decode 1.88× over eager execution. [Accepted GPU benchmark](results/presyn_live_rtx4090.json) · [Rust decode benchmark](results/presyn_rust_decode_bench_2026-10-13.json)
+- 🚧 **Systematic optimization** — The CPU held-out-text pilot ran four generations of six candidates. The distributed LM objective can synchronize optimizer updates across different candidates. Their independent fitness and the proposed FineWeb GPU search remain open (`0xd.1`, `idh4`). [CPU pilot](results/cmaes_phase1_lm_2026-10-13.json) · [Audit](docs/bridge_plan.md)
 - 🚧 **Rigorous Evaluation** — the statistical layer (paired t / Wilcoxon, bootstrap + Student-t 95% CIs, multi-seed aggregation) ships in `bio_inspired_nanochat/eval_stats.py`; the full D1 GPU benchmark-matrix *run* is still pending.
 - ✅ **Fail-closed certificate-policy model cards** — `certificate_bundle.py` strictly composes declared-identity stability, retention, predictive-calibration, tropical-radius, and configured-timescale evidence into a bounded same-process authorization; serialized manifests are audit/report inputs only and cannot recreate live runtime attestation. Well-formed failed, stale, fallback-covered, or out-of-scope evidence is rendered transparently and refused; malformed input is rejected before artifacts are created. No passing production-model card is bundled. See [`docs/certified_model_card.md`](docs/certified_model_card.md).
 
@@ -37,13 +37,12 @@ Status legend: ✅ shipping (on the live model path, tested) · 🚧 partial/lan
 
 | Feature | Standard Transformer | Bio-Inspired Nanochat |
 | :--- | :--- | :--- |
-| **Weights** | 🧊 **Static**: Fixed after training. | 🌊 **Fluid**: Evolve in real-time during inference. |
-| **Memory** | 📜 **Context Window**: Limited by `seq_len`. | 🧠 **Associative**: Fast-weights "remember" patterns locally. |
-| **Diversity** | 🎲 **Randomness**: Temperature sampling. | 🔋 **Metabolism**: Synapses "tire out", forcing new paths. |
-| **Capacity** | 🏗️ **Fixed**: Pre-allocated size (e.g., 32 layers). | 🏙️ **Elastic**: Experts multiply/die based on demand. |
-| **Learning** | 🏫 **Offline**: Only learns during Backprop. | ⚡ **Online**: "Learns" context via Hebbian consolidation. |
-| **Optimization** | 🎯 **Grid Search**: Manual hyperparameter tuning. | 🧬 **Evolution**: CMA-ES tunes the bio parameters (10 wired in Phase 1). |
-| **Kernels** | 🐍 **Python/CUDA**: Single backend. | ⚡ **Reference + experimental kernels**: canonical PyTorch plus default-off FP32 Triton decode and a parity-locked Rust CPU decode kernel. |
+| **State during chat** | KV cache stores prior keys and values. | Presynaptic release and recovery also modulate cached attention. |
+| **Working memory** | Attention reads the available context. | An opt-in Hebbian probe can write fast weights. Its deciding toy experiment missed the recall threshold. |
+| **Diversity** | The sampler controls temperature. | Vesicle depletion changes attention bias. Its effect on generated repetition remains unmeasured. |
+| **Capacity** | Dense layer shapes stay fixed. | An optional training controller can split, merge, or reset experts. |
+| **Optimization** | Uses the upstream training recipe. | Phase-1 CMA-ES can search ten synaptic hyperparameters. |
+| **Kernels** | Standard Transformer attention. | PyTorch reference plus optional Rust CPU and Triton CUDA paths. |
 
 ---
 
@@ -58,11 +57,11 @@ We map specific cellular mechanisms from the [Synaptic Cleft](https://en.wikiped
 
 **The Math**: We track a fluid reservoir `RRP` (Readily Releasable Pool) for every attention head. High attention scores drain the pool.
 
-**The Effect**: A physically-grounded **frequency penalty**. The model literally *cannot* attend to the same token endlessly. It gets "bored" (depleted) and naturally shifts focus to novel information.
+**Effect on attention.** Release depletes the available pool and changes the logits used to compute attention. Refill allows the same key to receive attention again. Whether this improves diversity in generated text requires a controlled repetition measurement.
 
-**Implementation**: the canonical model path is `SynapticPresyn.release_canonical` (pure PyTorch, differentiable, golden-locked in `tests/test_presyn_golden.py`). A default-off Triton backend implements an intended acceleration for its deterministic FP32 one-query CUDA decode slice at the configured top-k width; unsupported modes retain the canonical Python path. The same frozen decode trajectory is exercised by Python, Triton's CPU interpreter/CUDA path, and a Rust CPU landing kernel in `tests/test_presyn_backend_parity.py`:
-- **Triton GPU Kernel** (`bio_inspired_nanochat/kernels/presyn_fused.py`): live FP32 `Tq=1` deterministic decode fusion; RTX 4090 acceptance pending.
-- **Rust CPU Kernel** (`rust_src/src/presyn.rs`): PyO3-native canonical deterministic decode step; `release_canonical` dispatches to it for eval-mode one-query CPU decode when `native_presyn=1` (opt-in; measured speed in the kernel section below).
+**Implementation.** The PyTorch reference is `SynapticPresyn.release_canonical`. On supported CUDA configurations, the Triton backend accelerates deterministic FP32 single-query decode at the configured top-k width. The golden and backend-parity tests exercise the frozen decode trajectory across Python, Triton and Rust. [Golden trajectory](tests/test_presyn_golden.py) · [Parity tests](tests/test_presyn_backend_parity.py)
+- **Triton GPU kernel** (`bio_inspired_nanochat/kernels/presyn_fused.py`) accelerates supported FP32 single-query decode on RTX 4090. [Clean-checkout acceptance run](results/presyn_live_rtx4090.json)
+- **Rust CPU kernel.** With `native_presyn=1`, `release_canonical` uses the native deterministic step for supported single-query CPU decode. [Rust source](rust_src/src/presyn.rs)
 
 ```mermaid
 graph LR
@@ -101,15 +100,17 @@ $$ y = x(W_{slow} + \underbrace{W_{fast} + \text{Hebb}(x, y)}_{\text{The Scratch
 *   **Merge** ("bankruptcy"): persistently low-health experts are merged into stronger neighbors.
 *   **Split** ("IPO"): high-health experts clone into weak slots.
 
-These events are **function-preserving** (Net2Net / firefly, `sm_function_preserving=1`, default on): a split makes the destination an exact clone of the parent and gives both a `-ln2` routing-logit bias, so the twins jointly reproduce the parent's routing mass (each fires with half the gate) while antisymmetric `fc1` noise lets them diverge under SGD. In the **dense** regime (`top_k == num_experts`) the model output is unchanged at the event; in sparse top-k the discontinuity is sharply reduced (≈10–40× gentler than the legacy noisy clone in tests) but not zero, since moving a twin pair across the top-k boundary is inherently discrete. Set `sm_function_preserving=0` for the legacy noisy-clone behavior.
+With `sm_function_preserving=1`, a split clones the parent and gives each twin a `−ln 2` routing-logit bias. In the dense, zero-noise test with a negligible destination, the relative output change is below 10⁻⁵. The default `fp_divergence_noise=0.02` lets the twins diverge. Sparse routing, a previously active destination, or merging distinct experts can change the output. [Continuity tests](tests/test_function_preserving_splitmerge.py)
 
 When `use_neuroscore` is enabled, NeuroScore fitness (below) is blended into that health signal so credit assignment — not just utilization × energy — drives these decisions.
 
-When `homeostasis_guards` is enabled (`SplitMergeConfig`, default off, `uta.6`), every lifecycle event additionally stabilizes the touched experts: a freshly seeded slot ramps its routed mass in from ~zero over `gate_ramp_forwards` training forwards with exact pair-mass compensation (the dense-regime output stays preserved throughout the transient, not just at the event), per-expert energy is held at or above `energy_floor` so a collapsed metabolism cannot produce winner-take-all routing, and optimizer moments are reset only for the *changed rows* of the shared router/genome tensors — a short warm restart for touched experts that leaves everyone else's AdamW/Muon state intact.
+With `homeostasis_guards` enabled, the training controller ramps in the seeded slot over `gate_ramp_forwards`, compensates the pair's routed mass, floors per-expert energy and resets optimizer moments on the affected router/genome rows. These guards are opt-in.
 
-**The Effect (intended)**: **Neural Architecture Search**. The model starts small and *grows* capacity exactly where the data complexity demands it.
+**Research question.** Can training-time expert reallocation improve held-out loss at a fixed compute budget?
 
-**Measured (2026-09-01, toy scale):** the health signal does not yet support that story. Utilization is the routed-token fraction, so a uniformly used expert sits at `top_k / num_experts`, while the thresholds are absolute: at 4 experts nothing ever fires (health ≈ 0.3 sits between the merge and split thresholds), and at the 8-expert default every expert is a merge candidate on every check. Because energy relaxes toward `1 − utilization`, health ≈ `u(1 − u)` at steady state and peaks at half the routing mass, so a monopolising expert reads as *dead* and the split threshold of 0.80 is unreachable for any expert count. A scale-free alternative ships default-off: `--sm_health_mode=relative` scores each expert by utilization relative to the fair share `top_k / num_experts` (1.0 = uniform, >1 overworked, <1 underused), with the three thresholds then given in those units (e.g. `--split_health_min=1.5 --merge_health_max=0.35 --reset_health_max=0.05`). Whether lifecycle events *help* under either signal is still the open question on bead `sx1m`; until it is answered, treat the lifecycle as an opt-in study, not a working capacity allocator. **Pilot (2026-09-02, `uta.8`):** a 2-seed CPU run of the structural pair (8 experts, top-2, 120 steps, controller every 10 steps, `results/structural_pair_pilot_2026-09-02.json`) fired zero splits, merges or resets under *either* signal, with loss identical to the no-controller arm: utilization stayed within ±0.03 of the 0.25 fair share because the balance loss (`moe_balance_loss=0.01`) drives routing toward uniform, which is exactly the quantity both health modes key on. A utilization-triggered lifecycle and a load-balance loss work against each other. A follow-up with the balance loss switched off (`--balance-loss 0.0`, same recipe, `results/structural_pair_pilot_2026-09-02_balance0.json`) still fired zero events in all six arms, with utilization spread across the eight experts of 0.03–0.04 around the 0.25 fair share (±15%), so a weaker balance loss alone does not wake the lifecycle at this scale either: the utilization EMA (rate decoded from the genome, bounds 0.001–0.03) moves slowly and 120 steps of a fresh router leave routing near uniform. The D1 structural arm needs a demand signal that is not a slow utilization average before it can measure anything. Since 2026-09-03 that signal exists as `--sm_health_mode=credit` (bead `uta.9`): NeuroScore's per-expert gradient credit relative to the layer mean drives splits and resets (thresholds in the same units as `relative`; the controller fails loudly if NeuroScore has not been stepped). Its first pilot (`results/structural_pair_pilot_2026-09-02_credit.json`) also fired nothing, because of a defect: the credit EMA was seeded with the step-0 routing proxy, orders of magnitude larger than loss-unit credit, so the published credit stayed frozen at the initial routing (fixed 2026-10-07). **Measured after the fix** (`results/structural_pair_pilot_2026-10-07_credit.json`, 3 seeds, 120 steps): the lifecycle acts, with 3–6 splits, 14–15 merges and 2–8 resets per run, and every seed ends with a *higher* loss than the no-controller arm (+0.030 to +0.050). The D1 structural pair (`moe_splitmerge`) now uses the credit signal, so it measures a lifecycle that fires; at toy scale firing costs loss, mostly through frequent merges driven by noisy first-order credit.
+The utilization-based controller has a scale problem. A uniformly used expert receives `top_k / num_experts` of routes, while product health approaches `u(1−u)` as energy relaxes. Under the default absolute split threshold of 0.80, a monopoly can look unhealthy. The optional `--sm_health_mode=relative` compares utilization with its fair share. In two-seed, 120-step CPU pilots neither mode fired, even after removing the balance loss. [Default pilot](results/structural_pair_pilot_2026-09-02.json) · [Balance-loss ablation](results/structural_pair_pilot_2026-09-02_balance0.json)
+
+The optional `--sm_health_mode=credit` uses NeuroScore gradient credit relative to the layer mean. After correcting its EMA initialization, the three-seed pilot fired 3–6 splits, 14–15 merges and 2–8 resets per run. Final loss was 0.030–0.050 higher than the fixed controller-free arm on every seed. A separate eight-seed synthetic equal-FLOP study removed dead experts but increased final MSE on every seed. The optional D1 MoE arm compares the credit controller against fixed experts. [Credit pilot](results/structural_pair_pilot_2026-10-07_credit.json) · [Equal-FLOP study](results/structural_nas_evaluation_a2307f21b18f.json)
 
 ```mermaid
 graph TD
@@ -152,32 +153,11 @@ See `docs/theory/stochastic_thermodynamics.md` §§7.4–7.5 and `results/calibr
 
 ## 🚀 Advanced Bio-Inspired Features (Roadmap)
 
-Beyond the core mechanisms, we're systematically implementing 11 additional biologically-grounded features:
+The table below identifies which proposals run in the model and which have a measurable control.
 
-### Ready for Implementation
-1. **Stochastic Vesicle Release** - Binomial/Gumbel-Sigmoid stochastic path with STE for training
-2. **Vesicle Endocytosis Ring Buffer** - Delayed refill with optional Rab5/7 staging
-3. **Septin-Style Lateral Inhibition** - Windowed inhibition on logits/router for sharpening
+**Synaptic Genome Embedding (Xi):** Each MoE expert owns a compact learned genome vector `Xi` (size `SynapticConfig.xi_dim`). One shared learned decoder maps each 4-D row to six bounded phenotype values: fatigue and energy-recovery rates, CaMKII/PP1 gains, calcium retention, and calcium influx. The bounds imply positive `tau_c` and `tau_rec`, so SGD cannot decode invalid kinetics. This keeps the expert-specific parameter cost at `O(num_experts · xi_dim)` rather than `O(num_experts · num_kinetics)`. Set `xi_dim=0` for the MoE-stage `moe_no_genome` control: the decoder bias still learns one phenotype, but every expert shares it.
 
-### In Research Phase
-4. **Rab/SNARE Code-Based Routing** - Token cargo codes vs expert t-SNARE compatibility
-5. **Doc2 Dual Sync/Async Channels** - Parallel Syt1 (fast) and Doc2 (slow) release paths
-6. **Synaptic Genome Embedding** - Implemented low-dim Xi per expert decoded to kinetic parameters
-7. **CaMKII/PP1 Bistable Latch** - Hill-term ODE with hysteresis for consolidation
-8. **Cellular Automata Initialization** - Rule 30/116 variance-corrected weight init
-
-**Synaptic Genome Embedding (Xi):** Each MoE expert owns a compact learned genome vector `Xi` (size `SynapticConfig.xi_dim`). One shared learned decoder maps each 4-D row to six bounded phenotype values: fatigue and energy-recovery rates, CaMKII/PP1 gains, calcium retention, and calcium influx. The bounds imply positive `tau_c` and `tau_rec`, so SGD cannot decode invalid kinetics. This keeps the expert-specific parameter cost at `O(num_experts · xi_dim)` rather than `O(num_experts · num_kinetics)`. Set `xi_dim=0` for the registered `bio_no_genome` control: the decoder bias still learns one phenotype, but every expert shares it.
-
-### Experimental
-9. **Cross-Pollination with Gauge-Reversible Networks** - Integration of measure-preserving ideas
-10. **Simplicial/Higher-Order Attention** - k-body interactions beyond pairwise
-11. **Ultrametric Routing** - Hierarchical expert organization
-
-
-**Evidence path per feature** (checked against `ablation_registry.MECHANISMS` and the import graph,
-2026-09-02; bead `74f.9`). A D1 column means the pre-registered matrix (`docs/ablation_matrix.md`)
-measures the feature's effect once the GPU run happens; "exploratory" means no efficacy evidence is
-planned and none should be inferred.
+The D1 columns name planned comparisons. Exploratory modules have their own evidence requirements.
 
 | # | Feature | Switch | Evidence path |
 |---|---|---|---|
@@ -188,16 +168,12 @@ planned and none should be inferred.
 | 5 | Doc2 dual sync/async channels | `SynapticConfig.doc2_gain` (mechanism `doc2`, default on) | D1 column `bio_no_doc2` |
 | 6 | Synaptic genome embedding (Xi) | `SynapticConfig.xi_dim` (mechanism `genome`, default on in MoE) | MoE stage column `moe_no_genome` |
 | 7 | CaMKII/PP1 bistable latch | `SynapticConfig.bistable_latch` (opt-in) | D1 column `add_bistable_latch` |
-| 8 | Cellular-automata initialization | `--init_type` in `base_train` / `--init-type` in `eval_matrix` (a training-recipe knob, not a mechanism) | exploratory; the numbers in `docs/ca_init_decision.md` cite `runs/ca_init_microbench/20251218_054731/` (preserved on `trj`, not committed under `results/`) |
+| 8 | Cellular-automata initialization | `--init_type` in `base_train` | Exploratory recipe comparison. [Decision and archived CSVs](docs/ca_init_decision.md) |
 | 9 | Gauge-reversible cross-pollination | research modules (`separation_gauge.py`, `ultrametric_memory.py`) that `GPTSynaptic` does not import | exploratory, off the live path |
 | 10 | Simplicial / higher-order attention | research modules (`mgr_variants.py`, `xpoll.py`) that `GPTSynaptic` does not import | exploratory, off the live path |
 | 11 | Ultrametric routing | opt-in `attention_type="ultrametric"` on the vanilla `GPT` (`gpt.py`); not part of `GPTSynaptic` | exploratory; no bio-matrix column (it is not a synaptic mechanism) |
 
-Each feature is:
-- 📝 **Documented** with biological rationale, implementation plan, and success criteria
-- 🧪 **Testable** via ablation studies and statistical validation
-- ⚙️ **Toggleable** via `SynapticConfig` flags where a flag exists (items 1–3 and 5–7 above; item 4 is unimplemented, 8 is a recipe knob, 9–11 are research modules off the live path), with a registry + validator (`bio_inspired_nanochat/ablation_registry.py`) that defines every mechanism's ablation knob and rejects silently-broken configs (e.g. an opt-in mechanism enabled without its prerequisite)
-- 📊 **Benchmarked** against vanilla transformers with rigorous metrics
+The ablation registry validates prerequisites for the implemented switches. Rab/SNARE remains a proposal, and the separate research modules need their own experiment before their effects can be attributed to the synaptic model. [Ablation registry](bio_inspired_nanochat/ablation_registry.py)
 
 See [NEW_RADICALLY_NEW_BIO_INSPIRED_FEATURES_TO_ADD_IN_MODULAR_WAY.md](NEW_RADICALLY_NEW_BIO_INSPIRED_FEATURES_TO_ADD_IN_MODULAR_WAY.md) for detailed specifications.
 
@@ -232,7 +208,7 @@ The released amount is the release probability scaled by the available vesicles 
 $$ R_t = P_{release} \cdot RRP_t $$
 $$ RRP_{t+1} = RRP_t - R_t + \text{RefillRate} $$
 
-The released signal is then scaled by an energy-gated AMPA amplitude $q = \sigma(\beta_q (E - 0.5)) \cdot q_{max}$ and biased by a septin-like distance barrier. This non-linear depletion is what physically enforces the frequency penalty.
+The released signal is scaled by an energy-gated AMPA amplitude $q = \sigma(\beta_q (E - 0.5)) \cdot q_{max}$ and enters the attention bias alongside a septin-like distance term.
 
 ### 4. Hebbian Learning (Fast Weights + Gated Consolidation)
 Low-rank eligibility traces $U, V$ accumulate co-activity each step. Fast weights decay and absorb the trace (the short-term scratchpad). Consolidation into the slow weights is gated by CaMKII and modulated by BDNF metaplasticity:
@@ -257,45 +233,18 @@ When `use_neuroscore` is enabled (default-off), these three metrics are combined
 
 ## 🧬 Evolution in Silicon: Systematic Hyperparameter Optimization
 
-Manually tuning dozens of interacting biological hyperparameters (time constants, enzyme affinities, energy costs) is intractable for humans. We employ **CMA-ES (Covariance Matrix Adaptation Evolution Strategy)** for systematic, derivative-free optimization. **Status:** Phase 1 (the 10 most influential params) is wired today; the broader subgroup design below — and the ~48-parameter figure — is the *plan*, not shipping code. **Measured (2026-10-07, `results/cmaes_phase1_rerun_2026-10-07.json`):** the 8-generation × 8-candidate Phase-1 run on its synthetic proxy is No-go again — a 7.8e-4 gain against a 2.1e-3 seed-noise floor — and the cause is the objective: every candidate scores ~6.95, the uniform-prediction loss ln(1024) = 6.93, because the 100-step proxy never learns its copy task. A useful search needs an objective the proxy learns (e.g. held-out bpb on real text, bead `idh4`). `SynapticConfig` exposes 109 hyperparameters total (see [`docs/parameter_census.md`](docs/parameter_census.md)).
+The default CMA-ES search covers ten presynaptic parameters. The eight-generation copy-task pilot gained 0.00078 against a seed-noise floor of 0.0021. Its objective stayed near uniform prediction. A separate CPU held-out-text pilot ran four generations of six candidates. A D1 FineWeb search and out-of-sample confirmation remain open (`idh4`). [Copy-task result](results/cmaes_phase1_rerun_2026-10-07.json) · [Held-out-text result](results/cmaes_phase1_lm_2026-10-13.json)
 
-### The Challenge
+The ten default dimensions are `tau_c`, `alpha_ca`, `syt_fast_kd`, `syt_slow_kd`, `doc2_gain`, `complexin_bias`, `prime_rate`, `unprime_per_release`, `nsf_recover`, and `lambda_loge`. The CLI also declares nine postsynaptic and four structural dimensions, making 23 distinct entries in `--search-space full`. The default candidate model uses dense blocks with Hebbian writes disabled. A subsystem search needs a model that actually exercises its parameters. [Search spaces and candidate construction](scripts/tune_bio_params.py)
 
-Our parameter space includes:
-- **10 Calcium Dynamics Parameters** (tau_c, alpha_ca, buffering rates, etc.)
-- **12 Vesicle Trafficking Parameters** (RRP refill, priming, endocytosis rates)
-- **8 Postsynaptic Plasticity Parameters** (Hebbian gains, CaMKII/PP1, BDNF)
-- **6 Structural Plasticity Parameters** (energy costs, split/merge thresholds)
-- **12 Full-Sequence Reference Parameters** (tau_buf, tau_prime, etc.)
-
-These parameters interact non-linearly across:
-- Multiple timescales (ms to seconds)
-- Competing objectives (quality vs performance)
-- Stochastic dynamics (vesicle release noise)
-
-### Two-Phase CMA-ES Strategy
-
-**Phase 1: Critical Parameters (10D, ~$500)**
-Focus on the top-10 most influential parameters identified via sensitivity analysis:
-- `tau_rrp_log` - Vesicle refill timescale
-- `lambda_loge` - Eligibility trace decay
-- `camkii_up_log` - LTP strength
-- `pp1_up_log` - LTD strength
-- `energy_cost_rel_log` - Metabolic taxation
-- (Plus 5 more... see full plan)
-
-**Phase 2: Subgroup Searches (38D staged, ~$2000)**
-With Phase 1 winners fixed, optimize subgroups in parallel:
+**Proposed second phase.** The original plan proposed 38 additional dimensions and a ~$2,000 allocation. Its staged and joint runs were conditional on Phase 1 succeeding (`fg7`, `scq`). The proposed groups were
 - **Calcium Group** (8 params): Buffering, sensor kinetics
 - **Vesicle Group** (9 params): Priming, endocytosis, SNARE
 - **Postsynaptic Group** (7 params): Hebbian, BDNF, CaMKII/PP1
 - **Structural Group** (8 params): Energy, health, routing
 - **Kernel Compat Group** (6 params): Rust-specific parameters
 
-**Objective Function:**
-Multi-objective composite balancing:
-- **Quality** (70%): Perplexity, NIAH accuracy, calibration (ECE)
-- **Performance** (30%): Tokens/sec, memory efficiency
+The planning document also proposed a 70% quality / 30% performance composite. The CPU LM pilot used held-out bpb.
 
 See [PLAN_TO_USE_CMAES_FOR_HYPERPARAMETER_EXPLORATION_AND_OPTIMIZATION_ACROSS_ALL_BIO_INSPIRED_FEATURES.md](PLAN_TO_USE_CMAES_FOR_HYPERPARAMETER_EXPLORATION_AND_OPTIMIZATION_ACROSS_ALL_BIO_INSPIRED_FEATURES.md) for the complete 15,000-word plan including:
 - Detailed parameter inventory with biological justification
@@ -324,8 +273,9 @@ uv run python -m scripts.tune_bio_params optimize \
   --run-dir runs/cmaes/top10 --stagnation-action sigma_reset
 ```
 
-This will:
-- ✅ Support `torchrun --distributed` for multi-GPU population eval (rank0 controller)
+The runner supports the following operations.
+
+- Distribute candidates across ranks. The LM optimizer can synchronize gradients across different candidates, so independent candidate fitness still needs a serial-versus-distributed check (`0xd.1`). [Research gate](docs/bridge_plan.md)
 - ✅ Save `progress.jsonl`, `best_params.json`, and `es_state.json` (+ per-generation replay states) under `--run-dir`; legacy pickle checkpoints are refused
 - ✅ Log scalars/histograms/covariance heatmap to TensorBoard under `--run-dir/tb/`
 
@@ -333,7 +283,7 @@ This will:
 
 ## ⚡ High-Performance Multi-Backend Architecture
 
-Bio-Inspired Nanochat targets **dual RTX 4090** training/inference. The canonical presynaptic path remains PyTorch; two fused backends (Triton on CUDA, Rust on CPU) run whole query blocks of the same recurrence behind one default-off toggle, `native_presyn` (env `BIO_FUSED_PRESYN=1` or `--syn_cfg.native_presyn=1`).
+Bio-Inspired Nanochat targets **dual RTX 4090** training and inference. `native_presyn` selects fused Triton or Rust implementations on supported inputs. Constructing the dataclass directly defaults this field to false unless configured. Fresh `base_train --synapses=1` explicitly enables it, and resume reads the checkpoint configuration. The native CPU extension must match the Python checkout. [Training defaults](scripts/base_train.py) · [Backend dispatch](bio_inspired_nanochat/synaptic.py)
 
 **Why training needs no backward kernel (2026-10-07).** The presynaptic state recurrence is detached by default, so a query's release depends on its own drive only through an elementwise expression of that drive and the *gathered pre-update edge state*. Every multi-query forward therefore runs the exact causal scan with no autograd (`_scripted_detached_presyn_scan`, or a fused backend) and records those edge constants; `_DetachedScanReleaseGrad` returns the scan's values unchanged and differentiates `presyn_edge_release` for all queries at once in backward. Forward values are bit-identical to recording the loop and parameter gradients agree to ~5e-7 relative. On CPU this cut the scan's backward from ~400 ms to ~36 ms per bio_all 2L/128d step (B=8, T=256).
 
@@ -345,7 +295,7 @@ Bio-Inspired Nanochat targets **dual RTX 4090** training/inference. The canonica
 2. **Triton GPU kernels** ✅ (verified and benchmarked on NVIDIA GeForce RTX 4090, behind `native_presyn`)
    - Location: `bio_inspired_nanochat/kernels/presyn_fused.py`
    - `presyn_detached_scan_kernel` (l7c9 / jyb.2): one program per (batch, head) row advances a whole query block in one launch — training and prefill, deterministic or stochastic (block-level draws from the private train RNG). It replaces ~50 small kernels per query per layer, i.e. ~1M launches per D1 forward. `tests/test_presyn_scan_kernel.py` checks it against the scripted scan under both `TRITON_INTERPRET=1` and live CUDA on RTX 4090 (outputs, all state planes, the DELAY queue, the EMA, recorded edges, drive gradient; ~1e-6), with a planted negative.
-   - `presyn_live_decode_kernel` (`3bnd`, `jyb.2`): FP32 `Tq=1` deterministic no-grad decode with direct log-release bias injection. Accepted on RTX 4090 (`results/presyn_triton_4090_bench_2026-10-14.json`): **6.12× faster** on the release primitive (`1.274 ms -> 0.208 ms` at `B=4, H=8, Tk=512, K=32`) and **1.54× faster** per full-model cached decode token (`6.518 ms -> 4.237 ms` across 4 layers).
+   - `presyn_live_decode_kernel` accelerates FP32, deterministic, no-grad cached decode. On a clean RTX 4090 run, release plus log-bias injection at `B=4,H=8,Tk=2048,K=32` fell from 1.090 to 0.159 ms (6.84×). Model decode with a 512-token prefix and 64 generated tokens fell from 4.245 to 2.262 ms/token (1.88×). Both comparisons use the eager synaptic model as the baseline. [Accepted benchmark](results/presyn_live_rtx4090.json)
 
 3. **Rust CPU kernels** ✅ (behind `native_presyn` and `native_genetics`)
    - Location: `rust_src/src/presyn.rs`, `rust_src/src/moe.rs`
@@ -360,7 +310,7 @@ Our dual-4090 optimization roadmap includes:
 - 🚧 **FlexAttention/FlashAttention Evaluation** - Compare SDPA vs FlexAttention vs FlashAttn2/3
 - 🚧 **NCCL/P2P Tuning** - Optimize DDP for PCIe (no NVLink) with bucket sizes and grad overlap
 - ✅ **Memory Optimizations** - bf16 autocast, chunked checkpointed vocabulary cross-entropy, tied embeddings
-- ✅ **Triton Kernel Fusion** - Multi-query scan and FP32 decode slice verified on RTX 4090 (`6.12×` primitive / `1.54×` model decode speedup)
+- ✅ **Triton kernel fusion** — multi-query scan profiled on a 4090 and FP32 cached decode benchmarked against eager synaptic execution. [D1 profile](results/profiles/d1_4090_profile_2026-10-14.json) · [Decode benchmark](results/presyn_live_rtx4090.json)
 - 🚧 **Inference Fastpath** - KV cache reuse + cudagraphs for steady-state decode
 - 🚧 **CI Performance Guardrails** - Automated regression testing
 
@@ -388,22 +338,18 @@ We're implementing systematic bio vs vanilla evaluation with statistical rigor:
 - **Training** - Tokens/sec, GPU utilization, peak memory
 - **Inference** - Latency (prompt + decode), throughput, KV cache efficiency
 
-**Accepted throughput budget (confirmed 2026-10-13, bead `74f.10.1`: `train_ratio_max=2.0`, `decode_ratio_max=1.5`):** at D1 scale, `bio_all` must train at no less than 1/2.0 of the param-matched vanilla's tokens per second and decode at no more than 1.5× its latency, measured by `ThroughputBudget` in `bio_inspired_nanochat/perf_regression.py` (`python -m scripts.perf_regression_gate --check-budget`) on the same host, batch and sequence length. A mechanism whose quality gain does not survive equal-compute accounting is pruned in `hwxb.6.1`. Today's measured CPU toy-scale ratios are ~7.9× training and ~4.4× decode (or ~1.2× decode with `native_presyn=True` after `ylo2`), so default D1 budget enforcement in CI (`74f.10.2`) awaits the D1 GPU recurrence benchmark (`l7c9`).
+**Throughput budget.** At D1 scale, `bio_all` must train within 2.0× vanilla step time and decode within 1.5× vanilla latency at matched conditions. The October dual-4090 same-shape sweep measured 96,181 tok/s for vanilla and 37,429 tok/s for bio at batch 16 per rank and sequence length 1,024. That is a 2.57× training slowdown over five measured steps after two warmups. The `infer` rows time full-sequence forwards. The D1 cached-decode budget still requires a vanilla comparison. [GPU measurements](results/scale_memory_2x4090_2026-10-14.jsonl) · [Benchmark implementation](scripts/scale_memory.py) · [Budget definition](bio_inspired_nanochat/perf_regression.py)
 
 ### Experimental Design
 
 - **Configs**: the 17 pre-registered dense columns of `docs/ablation_matrix.md` (3 anchors, 4 leave-one-out, 10 add-one-in) plus the opt-in MoE stage (`moe_fixed`, the lifecycle arm `moe_splitmerge`, and the MoE-only mechanisms `moe_no_metabolism`, `moe_no_genome`, `moe_add_glial_homeostasis`, which are inert on dense blocks); `python -m scripts.matrix_launch` derives every cell's `base_train` command from the spec and `eval_matrix` scores the checkpoints
 - **Seeds**: 2 matched seeds for pipeline smoke, 3 for research estimates, and at least 6 non-zero matched pairs before a two-sided exact-Wilcoxon-backed directional claim (5 pairs cannot reach `p < 0.05`)
 - **Tests**: paired-bootstrap CI + paired t-test + Wilcoxon signed-rank with Holm correction, Student-t 95% aggregate CIs, and explicit supported/null/regression/insufficient-evidence verdicts — implemented in `bio_inspired_nanochat/eval_stats.py` (run `uv run python -m bio_inspired_nanochat.eval_stats <summary.csv>` on an `eval_matrix` output)
-- **Budget**: Fixed token budget per run (~10B tokens for small-scale)
+- **Budget** — the proposed screen uses 10M training tokens per cell. Confirmation uses 100M per cell subject to a 72 GPU-hour cap. Holding tokens fixed answers a data-efficiency question. A compute-efficiency claim also needs an equal-time or equal-compute comparison. [Ablation design](docs/ablation_matrix.md)
 
 ### Reproducibility
 
-All benchmarks are:
-- ✅ **Deterministic** - Fixed seeds, documented NCCL/CUDA flags
-- ✅ **Scripted** - Single command to run full matrix
-- ✅ **Logged** - JSONL/CSV output with run metadata
-- ✅ **Versioned** - Checkpoint/config stored with results
+The launcher constructs per-cell training commands from the registry. `scripts.eval_matrix matrix` scores the resulting checkpoints. Pass `--eval-bpb` to record the primary metric. Seeded summaries, configuration hashes and archived checkpoints allow a run to be traced when the artifacts are retained. Compiled dual-GPU crash/resume reproducibility remains an open qualification. [Checkpoint contract](docs/scale_up_checkpointing.md)
 
 Example:
 ```bash
@@ -445,7 +391,7 @@ Every aspect of the synapse can be tuned via `SynapticConfig`. These parameters 
 | Parameter | Default | Bio-Analog | Effect on Model |
 | :--- | :--- | :--- | :--- |
 | `tau_c` | 6.0 | **Calcium Decay** | How long a neuron stays "excited" after firing. Higher = longer bursts. |
-| `prime_rate` | 0.075 | **Vesicle Refill** | Recovery rate from fatigue. Lower = prone to "writer's block" if repetitive. |
+| `prime_rate` | 0.075 | **Vesicle priming** | Controls how quickly vesicles become ready for release. |
 | `alpha_ca` | 0.55 | **Calcium Influx** | Sensitivity to attention scores. Higher = easier to trigger release. |
 | `syt_fast_kd` | 0.4 | **Synaptotagmin $K_d$** | The threshold for rapid release. Lower = more trigger-happy. |
 | `stochastic_train_frac`| 0.12 | **Thermal Noise** | Fraction of query positions that use stochastic vesicle release during training. |
@@ -458,45 +404,30 @@ Every aspect of the synapse can be tuned via `SynapticConfig`. These parameters 
 ### Postsynaptic (The "Receiver")
 | Parameter | Default | Bio-Analog | Effect on Model |
 | :--- | :--- | :--- | :--- |
-| `rank_eligibility` | 8 | **PSD Complexity** | Rank of the Hebbian update. Higher = more complex associative patterns. |
-| `rho_elig` | 0.95 | **Trace Decay** | How long the "scratchpad" memory lasts. 0.95 $\approx$ 20 tokens halflife. |
-| `camkii_gain` | 1.5 | **LTP Strength** | "Write" speed for long-term memory. Higher = learns faster from context. |
-| `pp1_gain` | 1.0 | **LTD Strength** | "Erase" speed. Higher = forgets useless context faster. |
-| `bdnf_gamma` | 0.0 | **Metaplasticity** | BDNF-driven LR modulation. Higher = activity-dependent learning boost. |
+| `rank_eligibility` | 8 | **Eligibility rank** | Sets the rank of the co-activity trace. |
+| `post_trace_decay` | 0.96 | **Trace decay** | Controls retention of the previous trace on each update. |
+| `camkii_up` | 0.05 | **Potentiation** | Sets the CaMKII increase rate. |
+| `pp1_tau` | 0.985 | **Phosphatase dynamics** | Controls retention of the PP1 state. |
+| `bdnf_gamma` | 0.0 | **Metaplasticity** | A positive value overrides `bdnf_scale` when Hebbian writes are enabled. |
 
 ### Structural (The "City Planner")
 | Parameter | Default | Bio-Analog | Effect on Model |
 | :--- | :--- | :--- | :--- |
-| `energy_cost_rel` | 0.015 | **Metabolic Cost** | The tax paid for firing. Higher = leaner, smaller networks. |
-| `split_health_min` | 0.80 | **Mitosis Threshold** | How healthy an expert must be to clone. Lower = faster growth. |
-| `router_contrastive_push`| 0.1 | **Lateral Inhibition**| Forces experts to specialize. Higher = sharper specialization. |
+| `energy_cost_rel` | 0.015 | **Release cost** | Scales the energy cost of vesicle release. |
+| `split_health_min` | 0.80 | **Split threshold** | Training-controller flag (`--split_health_min`) selecting candidates for splitting. |
+| `router_contrastive_push` | 0.1 | **Router repulsion** | Sets the repulsive part of the router embedding update. |
 
-**Parameter counts** (machine-verified — see [`docs/parameter_census.md`](docs/parameter_census.md), regenerated by `scripts/param_census.py`):
-- **109** `SynapticConfig` hyperparameters, every one read by runtime code. The count is machine-verified by `scripts/param_census.py` (the census records which bead added each knob); the "48-parameter genome" figure was an early planning estimate, not a code count. Any field can be set from the training command line as `--syn_cfg.<field>=<value>`.
-- **10** of those are actually wired into the CMA-ES search (`TOP10_PARAM_SPECS`, Phase 1). The 38-parameter "subgroup" phase is aspirational (see the CMA-ES plan), not shipping.
+`SynapticConfig` has 109 fields. The training CLI accepts them through `--syn_cfg.<field>=<value>`. Controller settings have separate flags. The CMA-ES CLI exposes the default 10-dimensional search and optional subsystem spaces described above. [Parameter census](docs/parameter_census.md) · [Training configuration](scripts/base_train.py)
 - The biological **genome** is the learned per-expert `Xi` vector (`xi_dim=4`), expanded by one shared decoder to six bounded phenotype kinetics — distinct from the fixed hyperparameters above. `xi_dim=0` is the shared-kinetics ablation.
-
-**Parameter Categories**:
-- ⚡ **Critical** (Top-10): wired into Phase-1 CMA-ES; largest impact on quality/performance
-- 🧪 **Subgroup** (Phase 2, planned): domain-specific tuning (Calcium, Vesicle, Post, Structural, Kernel)
 
 ---
 
 ## 💉 The Neurosurgeon's Toolkit (Configuration)
 
-You can tweak the personality of the brain by adjusting its chemical balance via CLI overrides.
+To study a parameter, compare runs with identical seeds, data, token budgets, and model shape. The command below varies two presynaptic settings for exploration. To attribute an effect, vary one at a time or use a factorial design.
 
-| If the model is... | It means... | You should tweak... | Action |
-| :--- | :--- | :--- | :--- |
-| **Repetitive / Stuck** | Synapses aren't tiring fast enough. | `prime_rate` (Refill Rate) | ⬇️ Decrease |
-| **Forgetful** | Short-term memory is fading too fast. | `camkii_gain` (Write Strength) | ⬆️ Increase |
-| **Scatterbrained** | Firing is too noisy/random. | `syt_fast_kd` (Sensor Sensitivity) | ⬇️ Decrease |
-| **Too Small / Dumb** | Experts aren't reproducing. | `split_health_min` (Birth Bar) | ⬇️ Decrease |
-| **Bloated / Slow** | Too many lazy experts. | `energy_cost_rel` (Metabolic Tax) | ⬆️ Increase |
-
-**Pro Tip**: Try this "ADHD Mode" override to force high novelty seeking:
 ```bash
-python -m scripts.base_train --syn_cfg.prime_rate=0.02 --syn_cfg.energy_cost_rel=0.05
+uv run python -m scripts.base_train --synapses=1 --syn_cfg.prime_rate=0.02 --syn_cfg.energy_cost_rel=0.05
 ```
 
 ---
@@ -521,15 +452,17 @@ cd bio_inspired_nanochat
 uv venv .venv --python 3.14.2
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
-# Install dependencies (GPU)
+# Choose the extra for the target host. On CUDA Linux use
 uv sync --extra gpu
 
-# OR for CPU-only
+# For a supported CPU Linux host use
 uv sync --extra cpu
-
-# Build Rust kernels (optional, for CPU acceleration)
-uv run maturin develop
 ```
+
+The project build installs the Rust extension. Use the extension built from the same
+revision as the checkout. An older installed wheel failed the Quick Start before its
+first optimizer update. The frozen CPU extra also failed to resolve on macOS arm64
+with Python 3.14.6 because of its Triton dependency. [Runtime audit](docs/bridge_plan.md)
 
 ### 1.5. Quality Gate (recommended)
 
@@ -574,16 +507,16 @@ uv run --no-sync python -m scripts.base_train --synapses=1 --depth=12 --splitmer
 ```
 
 Model width is derived from `--depth` (the nanochat convention). For two GPUs use
-`torchrun --standalone --nproc_per_node=2 -m scripts.base_train -- <flags>` (see
+`uv run --no-sync torchrun --standalone --nproc_per_node=2 -m scripts.base_train <flags>` (see
 `scripts/run_bio_dual4090.sh`); the docstring of `scripts/base_train.py` has a 4-layer,
-20-step CPU smoke recipe. Nobody has yet run this at the depth-12 scale on a GPU.
+20-step CPU smoke recipe. The depth-12 example above is a training recipe. The registered D1 headline config is depth 10, width 640 and context 1,024.
 
 **Key Training Flags:**
 - `--synapses=1` - Enable the synaptic model (0 = vanilla transformer)
 - `--syn_cfg.<field>=<value>` - Override any of the 109 `SynapticConfig` fields; values are typed from the dataclass and validated, so a typo or an opt-in mechanism enabled without its prerequisite fails before training starts. Examples: `--syn_cfg.stochastic_train_frac=0.25`, `--syn_cfg.stochastic_mode=gumbel_sigmoid_ste`, `--syn_cfg.stochastic_tau=0.5`, `--syn_cfg.bdnf_scale=0` (ablate BDNF), `--syn_cfg.enable_hebbian=1` (online Hebbian plasticity, opt-in since 2026-10-07; `bistable_latch`, `enable_stdp` and `neuromod_enabled` need it)
 - `--load_cmaes_params=best_params.json` - Overlay a CMA-ES result file instead
 - `--splitmerge_every=N` - Expert lifecycle interval (0 = disable; any N > 0 switches the MLPs to `SynapticMoE`)
-- `--hebb_chunk_len=N` - Chunked training regime for the online fast weights (0 = off): each batch is read N tokens at a time through a cache so the Hebbian writes made on earlier tokens are in force for later ones, as during generation; truncated back-propagation at chunk boundaries. Single-process only for now. Whether it lets the fast weights help is the open experiment (bead `hwxb.9`)
+- `--hebb_chunk_len=N` enables single-process chunked training with truncated backpropagation. Later chunks can read earlier Hebbian writes when plasticity is enabled. The registered toy recall study missed its benefit threshold. [Deciding experiment](results/hebbian_chunked_regime_2026-10-07_preregistered.json)
 - `--sm_homeostasis_guards=1` - Ramp freshly seeded experts in and floor their energy after lifecycle events (`uta.6`)
 - `--neuromod_enabled=1` - Turn on the DA/ACh/NE bus
 
@@ -677,7 +610,7 @@ checkpoints; arbitrary Hugging Face families require an explicit architecture ad
 
 ### Documentation
 *   **`prompts/`** 📜 **The DNA**: Theoretical blueprints and research proposals
-*   **`.beads/`** 📋 **Project Management**: 511 issues across 33 epics (`br ready --json`, `bv --robot-triage`)
+*   **`.beads/`** 📋 **Project Management** — use `br ready --json` or `bv --robot-triage` for current work.
 *   **Planning docs** (root): CMA-ES plan, feature roadmap, predictions
 
 ---
@@ -686,25 +619,15 @@ checkpoints; arbitrary Hugging Face families require an explicit architecture ad
 
 ### Epics
 
-**Closed** (mechanism + tests landed, validated at toy scale): bio modular features (`114`), CMA-ES tooling (`0xd`), numerical hardening (`vg9`), truth & integrity (`8j9`), testing/logging harness (`eqyk`), reproducible research platform (`hm4`), differentiable synaptic dynamics (`yw9`), online learning & working memory (`sax`), neuromodulation (`hy8`), calibrated uncertainty (`u2t`), sleep & consolidation (`cel`), in-silico neuroscience (`odq`), retrofit & geometry (`vap`), the eight theory thrusts (`0642.*`), capability frontier II (`re4e`).
+The main scientific milestone is a matched D1 comparison on FineWeb-Edu (`hwxb.3`, `hwxb.5`). Both GPUs and the input pipeline have already supported smoke training. An operator still needs to archive the full vanilla reference, screen the registered mechanisms, and apply the confirmation rule. A useful model release also needs a retrievable checkpoint, provenance and a reproducible generation example (`hwxb.6`, `vap.6`). [Scale-up decisions](docs/scale_up_phase0_decisions.md) · [Runbook](docs/epic_runbooks.md)
 
-**Open — the work that actually answers the project's question:**
-1. **Scale-up on dual RTX 4090s** (`hwxb`, P1): provision GPU host (`hwxb.10`), train the vanilla baseline (`hwxb.3`), run the pre-registered bio-vs-vanilla ablation (`hwxb.5.2`), ship a usable checkpoint and write it up (`hwxb.6`).
-2. **Efficacy before scale** (`sx1m`, P1): online Hebbian plasticity (`hwxb.9`) and credit-driven lifecycle (`uta.9`, `uta.10`) have been evaluated at CPU toy scale; full D1 GPU evaluation awaits `hwxb.10`.
-3. **Bio vs vanilla evaluation** (`gzm`, `74f`): statistics on D1 GPU runs; the scaling-law study (`3zsq.2`).
-4. **Dual-4090 performance** (`6pj`): profiling harness first (`j9i`), then FlexAttention / NCCL / bf16 / cudagraphs.
-5. **GPU Kernels** (`jyb`, `3bnd`): 4090 acceptance of the Triton decode and multi-query scan kernels (`3bnd`, `jyb.2`, `jyb.10`); the CPU Rust multi-query scan (`jyb.9`) and zero-copy L1-tiled decode kernel (`ylo2`) are complete.
-6. **CMA-ES on FineWeb GPU scale** (`idh4`): `--objective lm` is wired and CPU-verified (`results/cmaes_phase1_lm_2026-10-13.json`); Phase-0 FineWeb GPU run awaits `hwxb.10`.
-
-### Status as of 2026-10-13
-
-| Done | Not done |
-| :--- | :--- |
-| Faithful presynaptic dynamics live; stochastic release & Doc2/Septin on by default; online Hebbian, BDNF, latch, neuromod, learnable kinetics and theory toggles opt-in | Any GPU training run (`depth >= 8` on FineWeb-Edu) |
-| Harness complete & CPU-verified across all 17 dense columns (`results/toy_screening_2026-10-13_verdict.md`) and all 5 structural MoE columns (`results/structural_smoke_2026-10-13.json`) | The D1 GPU bio-vs-vanilla ablation (`hwxb.5.2`); a trained D1 checkpoint; a chat demo with a D1 bio model |
-| Every `SynapticConfig` field settable from the CLI (`--syn_cfg.<field>=<value>`); CMA-ES `--objective lm` wired and CPU-verified (`results/cmaes_phase1_lm_2026-10-13.json`) | CMA-ES `--objective lm` at Phase-0 FineWeb GPU scale (`idh4`); Phase 2 |
-| Triton decode & multi-query scan kernels parity-tested through Triton's CPU interpreter; Rust multi-query scan (`jyb.9`) and zero-copy L1-tiled decode kernel (`ylo2`, 3.47×–7.12× faster than PyTorch) dispatched on CPU | Triton kernels accepted on a 4090 (`3bnd`, `jyb.10`); any GPU measurement at all |
-| Lean proofs of the reduced ODE / thermodynamic models (`formal/lean/proof_artifacts.json`); 0 `ty check` / `ruff` / `clippy` errors; CI + nightly validation | Publication of D1 GPU findings |
+| Question | Recorded evidence | Open work |
+|---|---|---|
+| Does the synaptic model improve quality? | Three-seed scaffold diagnosis and two-seed dense pipeline smoke. | D1 matched baselines and conditional mechanism contrasts (`hwxb.5.2`, `hwxb.5.3`). |
+| Does the model learn or remember online? | Five-seed Hebbian protocol missed its recall threshold. Credit-driven expert lifecycle increased loss on 3/3 toy seeds. | Mechanism-specific hardening and D1 evidence (`hwxb.4.1`–`.4.4`). |
+| Is it efficient? | RTX 4090 release/decode fusion and D1 training measurements on one and two cards. | Matched training and cached-decode budgets, precision, memory and inference work (`6pj`, `4nk`, `5rh`, `h4j`), and scaling curves (`74f.6`). |
+| Can the bio parameters be tuned? | Ten parameters wired and a small CPU held-out-text objective exercised. | Phase-1 GPU search on FineWeb (`idh4`). Phase 2 is proposed. |
+| Can someone use the results? | Training, checkpoint conversion, CLI/web inference, and reduced-model Lean proof artifacts exist. | Redistributable D1 weights, fresh-clone reproduction, measured capabilities and a published verdict (`hwxb.6`, `vap.6`). |
 
 `br ready --json` lists claimable work; `bv --robot-triage` gives the ranked view.
 

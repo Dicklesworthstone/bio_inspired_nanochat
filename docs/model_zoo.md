@@ -1,4 +1,4 @@
-# Model Zoo (bead `vap.6`) — status: no checkpoints exist yet
+# Model zoo — public checkpoint release pending (`vap.6`)
 
 > **Rewritten 2026-09-01.** The previous version of this page listed five 124M-parameter
 > checkpoints with FineWeb `val_bpb` figures, checkpoint paths, and provenance hashes. None of
@@ -14,13 +14,14 @@
 - **An evaluation and statistics harness.** `scripts/eval_matrix.py` (val bpb, NIAH, ECE,
   MoE health), `bio_inspired_nanochat/eval_stats.py` (paired t / Wilcoxon / bootstrap CIs),
   and `bio_inspired_nanochat/results_registry.py` (schema-validated run records).
-- **No trained model.** The largest model trained under version control is 2 layers × 64
-  dims on synthetic tokens on CPU, and `results/registry.jsonl` has no `val_bpb` row. The
-  pre-registered experiment that produces the first real checkpoints is
-  `docs/ablation_matrix.md` + `docs/scale_up_phase0_decisions.md` (beads `hwxb.3`–`hwxb.6`),
-  gated on the dual-RTX-4090 host.
+- **Private research checkpoints.** On November 22 the GPU host held four base-checkpoint
+  directories. The depth-10 vanilla smoke reached step 150 and 2.4480 validation bits per byte
+  (run `506f56c64c48`). Two depth-6 synaptic pilot checkpoints reached step 50
+  (runs `ab6a3bdcef60` and `e5ce074aa6a4`, both seed 42). The public
+  release still needs downloadable weights, their tokenizer and the fresh-clone reproduction
+  required by `hwxb.6.2.1`. [Run records](../results/registry.jsonl)
 
-## How a zoo entry gets created (once a GPU run exists)
+## How a public checkpoint qualifies
 
 1. Train with `python -m scripts.base_train --synapses=1 ...` plus the preset's
    `--syn_cfg.<field>=<value>` overrides. The checkpoint manager persists the full

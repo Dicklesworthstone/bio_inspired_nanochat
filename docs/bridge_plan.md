@@ -1,17 +1,136 @@
 # Bridge Plan — bio_inspired_nanochat
 
-**Reality check history:**
+## November 22, 2026 — decision at `16ce9fe1979c`
+
+**The repository can train and serve a synaptic language model. Whether the synaptic mechanisms
+earn their cost on held-out language is still open.** The dual-4090 host, data and kernels exist.
+The constraint on the next research dollar is obtaining an interpretable comparison. Running the
+current commands verbatim can spend the wrong budget, score a different model or fail to score it
+at all. The October plan below is a historical snapshot. This section supersedes its work order.
+
+### What the evidence establishes
+
+| Goal | Evidence at the audited revision | Outstanding acceptance |
+|---|---|---|
+| 1. Train an actual language model | On the GPU host we found 28 staged shards and four private base-checkpoint directories. The depth-10, width-640 vanilla smoke used 150 × 65,536 = 9,830,400 tokens, seed 1337, context 2048 and reached 2.4480 validation bits/byte. Its commit marker names two optimizer and training shards. [Runbook](epic_runbooks.md) · [Registry](../results/registry.jsonl) | D1 calls for context 1024, a matched full-budget baseline and capability scores. Its published usefulness targets include BPB <1.2, recall and binding >chance+0.20 and NIAH >0.50. Smoke results do not establish these (`hwxb.3.1/.2`). |
+| 2. Attribute quality to biology | The matched three-seed WikiText-2 normalization diagnostic measured vanilla 1.9971 and normalized **mechanisms-off** 1.9588. It contains no normalized full-biology arm. A separate 20-step screen measured vanilla 0.956949, off 0.961802 and full 0.961701. All 16 contrasts to vanilla returned null with two seeds and 512 eval tokens/cell. Two vanilla rows lack checkpoint provenance fields. [Diagnostic](../results/scaffold_diagnosis_2026-10-07.json) · [Screen](../results/toy_screening_2026-10-13_summary.csv) | 34 D1 dense screening cells, then an admissible confirmation or a recorded no-go. Equal tokens measure sample efficiency. Report time, capacity and a same-budget comparator for compute efficiency (`hwxb.5`, `74f.6`). |
+| 3. Suppress repetition and extend memory | Presynaptic release changes the attention bias during cached decoding. The generation engine passes `train_mode=False`. Hebbian writes are opt-in; five paired chunked-regime seeds gave +0.0104 recall vs a 0.0156 detectable effect. Both chunk-trained arms learned poorly. [Engine](../bio_inspired_nanochat/engine.py) · [Registered recall experiment](../results/hebbian_chunked_regime_2026-10-07_preregistered.json) | Repeat-rate improvement needs generated outputs, matched prompts, decode settings, a frequency-penalty control and held-out quality. Readout of stored information needs a trainable positive control and D1 evidence (`74f.13`, `hwxb.4.4`). |
+| 4. Allocate experts where useful | The training controller fires. The credit pilot raised final loss by 0.030–0.050 on 3/3 seeds. In the equal-work eight-seed NAS experiment, fewer dead experts coincided with worse final loss on every seed. The 5 × 2 structural pipeline smoke used two optimizer steps, short of its 100-step event interval. [Pilot](../results/structural_pair_pilot_2026-10-07_credit.json) · [Equal-work study](eval_benchmark_matrix.md) · [Smoke](../results/structural_smoke_2026-10-13.json) | Run the separate M1 fixed-vs-lifecycle control with events, lineage and matched work. Record sparsity-boundary jumps and optimizer resets. The standard chat path has no expert-birth controller (`hwxb.4.3`). |
+| 5. Earn the runtime overhead | Clean FP32 RTX 4090 receipt at `0965db1`, 30 trials, 2,048 release keys, shows 6.84× primitive and 1.88× cached-model speed vs eager **synaptic** execution. Separate D1-shaped training profile, two warmups and five measured steps at batch 16/rank and T=1024, gives vanilla 96,181 vs bio 37,429 tok/s, 7.55 vs 14.69 GiB/rank and 100% vs 66.4% reported utilization. That shape misses the 2.0× training budget at 2.57×. [Eligible receipt](../results/presyn_live_rtx4090.json) · [Dual-GPU rows](../results/scale_memory_2x4090_2026-10-14.jsonl) | This benchmark uses random tokens. Its infer rows time full prompts. Measure representative training plus cached decode against vanilla, including dispersion, at the proposed recipe; decode limit 1.5×. Alternative precision, FlexAttention, input pipeline, DDP and CUDA graphs are optimization candidates (`r2d`, `6pj`). |
+| 6. Tune useful kinetics | Two private depth-6 GPU checkpoints, 50 steps × 8,192 tokens, seed 42, scored 2.057445 off vs 2.055857 on across different source revisions. The copy proxy gained 0.00078 vs a 0.0021 noise floor. In the distributed LM search the scheduler assigns different candidates per rank while the optimizer factory selects cross-rank gradient collectives. [Registry](../results/registry.jsonl) · [Optimizer](../bio_inspired_nanochat/gpt_synaptic.py) · [CMA runner](../scripts/tune_bio_params.py) | Check serial vs population fitness and final weights, including uneven populations and permutations. Verify each proposed coordinate is active on its model. Defaults vs genuine CMA vs learned kinetics require an independent holdout. Broader searches remain conditional (`0xd.1`, `idh4`, `yw9.6`). |
+| 7. Improve decisions under uncertainty | CLI/web can abstain using entropy. The one-layer, ten-seed calibration experiment tied free softmax entropy; the selective demo retained 770/960 predictions and removed two errors. The separate standalone conformal API accepted 32/32 confidently wrong tied predictions with `coverage_guaranteed=True` at α=.05 in a fresh DSR probe. [Calibration artifact](../results/calibration-selective-prediction-86aad7037a51.json) · [Standalone API](../bio_inspired_nanochat/conformal_abstention.py) | Requalify the standalone risk claim and evaluate served error **and coverage** on held-out data. RL sample efficiency and adaptive-compute quality/cost still need matched baselines (`re4e.10`, `hy8.3`, `r00r.16`). |
+| 8. Support bounded mathematical claims | Nineteen Lean theorem declarations and axiom-report requests cover reduced models. The model-card policy composes evidence with explicit scope. Tropical affine-region checks, latch hysteresis and a closed-system integrator provide narrower results. The predictive thermodynamics test passed on 0/10 seeds. [Lean scope](../formal/lean/README.md) · [Thermodynamics](theory/stochastic_thermodynamics.md) · [Model-card contract](certified_model_card.md) | No passing production card or joint full-model guarantee. The node-Laplacian minimum cannot distinguish a path from a cycle for H¹, and the detector benchmark pairs interleaved scores with grouped labels. Re-test with identified observations and actual baseline outputs (`0642.8.3.1`, `r00r.5.3`). |
+| 9. Deliver working software to another researcher | Installed checkout has a training→checkpoint→generation path. The HF adapter has a pinned tiny-GPT-2 conversion and reload witness. No public zoo weights were found. A clean macOS arm64 CPU-extra resolution on Python 3.14 failed at the Linux-only Triton wheel; the inspected installed wheel supplies the Rust extension. [HF adapter](../results/hf_bio_adapter.json) · [Packaging](../pyproject.toml) · [Zoo](model_zoo.md) | Document the supported installation target, supply weights and tokenizer with hashes and run download→load→greedy sample in a fresh checkout (`hwxb.6.2/.2.1`, `vap.6`). |
+| 10. Reproduce results and avoid lost long runs | 215 committed registry rows include 208 CPU and seven CUDA entries (six train and one eval). Several are observations of the same vanilla seed and checkpoint. Vanilla resume has a smoke receipt. [Registry](../results/registry.jsonl) · [Checkpoint contract](scale_up_checkpointing.md) | Interrupt and resume the **active bio state** on two ranks, compare the exact next batch, weights, optimizer state, controllers and loss to an uninterrupted trajectory. Qualify main, nightly and hardware gates through permanent DSR profiles (`hwxb.2.6`, `u0fl.1/.2`). |
+
+### What ran on November 22
+
+DSR launched a two-rank vanilla run through `matrix_launch` on staged real text. One
+optimizer step consumed 64 tokens and wrote a complete checkpoint containing both ranks'
+optimizer and training shards. The emitted scoring command then failed in argument
+parsing. Separately, the real web handler loaded the private depth-6 bio checkpoint under
+FastAPI's in-process client. The same prompt produced four greedy tokens and an abstention
+when the entropy cutoff was zero. This exercises the handler and checkpoint loader. Public
+download, network deployment and useful language quality have their own acceptance criteria.
+[Portable DSR evidence](../results/project_reality_check_2026-11-22.json)
+
+The default CPU bio trainer encountered an older installed Rust extension that returned three
+values from the detached scan where the audited Python source expected two. The model failed
+before its first optimizer update. Disabling the native path completed the two-step control
+with the same inputs, and the CLI loaded that new checkpoint and abstained at a zero cutoff.
+Across six selected pytest files DSR observed 24 passes, three Rust scan parity failures,
+and 13 fixture errors. Nine Quick Start cases shared the native-extension failure. The
+four matrix cases shared a second defect. Both vanilla cells trained, then the first
+`synaptic_off` cell rejected the trainer's `native_genetics=True` because the preset
+disables its prerequisite, `enable_metabolism`. A separate invocation reproduced that
+exception. Rebuild and qualify the source-matched wheel (`u0fl.4`) and exercise each
+effective matrix config through the real trainer (`hwxb.5.7`). [Training defaults](../scripts/base_train.py) · [Native dispatch](../bio_inspired_nanochat/synaptic.py) · [Mechanism prerequisites](../bio_inspired_nanochat/ablation_registry.py)
+
+### Which closures change a scientific conclusion?
+
+- **Mechanism redundancy.** Twelve named configurations at three steps and three seeds produced
+  four distinct per-seed loss vectors. The latch enables Hebbian plasticity, and glial homeostasis
+  requires MoE while this harness used a dense model. The unconditional verdict cannot establish
+  the interaction. Retain the numbers; repeat with prerequisite-matched controls and paired
+  uncertainty before using them to prune a feature (`74f.5`). [Corrected report](mechanism_redundancy_analysis.md)
+- **Sheaf detection, forgetting and memory bounds.** A synthetic label-order error mispairs 32
+  of 64 observations per default detector seed. Perturbing one linear model does not measure
+  holonomy against continual forgetting. Choosing variance above a proposed floor cannot validate
+  that floor. The registered endpoints are open again (`0642.8.3.1`, `r00r.5.3`,
+  `0642.7.3.1`, `r00r.14`). The registered self-correction task still needs real labelled
+  outputs (`re4e.1.3`). [Detector evaluation](../scripts/e2e/sheaf_detector_eval.py) · [Gauge tests](../tests/test_gauge_consolidation.py) · [Limits tests](../tests/test_impossibility_limits.py)
+- **Exploratory backends.** With scalar input 100, external activity 0, weight 1 and threshold
+  0.1, the sparse prototype returned an error bound of 0.1 while the measured error was 100.
+  Its dense linear call still executes. The reversible block computes then discards its parameter
+  gradients. Both issues are open (`r00r.13`, `6cb`). Rab/SNARE docking exists off the live MoE
+  path; the implemented septin barrier is global. The local router concepts remain proposals
+  (`yxq`, `vyh`). [Sparse kernel](../bio_inspired_nanochat/neuromorphic_sparse.py) · [Reversible block](../bio_inspired_nanochat/xpoll.py)
+
+### Experiment and release order
+
+1. **Freeze the question and comparators (`hwxb.5.6`).** Record the descriptive two-seed
+   survivor rule before seeing D1. A paired two-sided exact Wilcoxon floor is 0.5 for two
+   nonzero pairs, 0.25 for three and 0.03125 for six. With two hypotheses even that last
+   best-case raw p misses the first Holm threshold of 0.025. Use the actual hypothesis
+   family and independent confirmation seeds or a justified selection-aware design. Compare
+   added mechanisms to their prerequisite-only control, leave-one-out to full, and lifecycle
+   to fixed MoE. Record parameter counts, token budgets and wall-clock cost. A useful null,
+   an underpowered comparison, and a failed run have different interpretations.
+2. **Make the normal entry points enforce that design (`hwxb.5.7/.9`).** Use the same manifest
+   to admit, launch, resume and score. The printed scorer invokes an unsupported subcommand
+   and omits held-out BPB. Stage/seed checkpoint tags can collide. The scorer reconstructs
+   the model independently of serving and omits `final_norm` and `logit_softcap`; checking
+   biological toggles alone cannot distinguish the fixed and split/merge training recipes.
+   Verify data identities and content-disjoint splits. Debit aggregate wall time × device
+   count. At the existing 72 GPU-hour cap, 40 hours on two GPUs is a refusal. The example
+   with 950 × 524,288 tokens requests 498,073,600 per cell against a 10M-token screen.
+   [Launcher](../scripts/matrix_launch.py) · [Scorer](../scripts/eval_matrix.py) · [Admission](../bio_inspired_nanochat/ablation_matrix.py)
+3. **Rehearse cheaply, then run the baseline (`hwxb.5.8`, `hwxb.2.6`, `hwxb.3`).**
+   The tiny DSR run must execute the printed scorer, identify the exact checkpoint, produce
+   finite BPB, reject the wrong checkpoint or spend, and recover from interruption with matching
+   state. Retain the actual data/tokenizer hashes and denominators. The baseline must also
+   score the absolute usefulness thresholds. [Existing integration test](../tests/test_e2e_matrix_pipeline.py)
+4. **Execute the registered study (`hwxb.5.2.1/.2`, `hwxb.5.3`).** Run 17 × 2 dense
+   screening cells at ~10M tokens each. Keep the five-column structural study separate.
+   Apply the frozen rule, record actual throughput, device-hours and feasibility, and run
+   the 100M-token confirmation only when admitted. Preserve all negative outcomes. An
+   infeasible budget calls for a new prospective protocol. Dense and M1 results must not
+   borrow each other's controls. [Registration and errata](ablation_matrix.md)
+5. **Ship the result that survives (`hwxb.6`, `vap.6`).** Report mechanisms that lost,
+   tied or exceeded budget alongside any winners. Keep a reproducible baseline available
+   even when no biological mechanism qualifies. Public checkpoint acceptance includes a
+   versioned download, tokenizer, hashes, exact recipe and a reproducible sample. The
+   separate model-card policy needs qualifying evidence from its declared model and scope.
+
+**Would finishing the previous backlog deliver the vision?** It named the baseline, matrix,
+checkpoint and write-up. Its literal acceptance criteria could still specify 40
+screening cells, confirm on three seeds, score the wrong state, and close CI on a prohibited
+execution path. The revised graph connects the new tests to GPU admission and records the
+research controls previously missing. Finishing it can yield a trustworthy verdict and a
+reproducible release. A positive biological effect remains an empirical question.
+
+The revised graph retains all 511 previous issues, adds seven and reopens nine. Of the
+518 issues, 458 are closed, 51 open, eight in progress and one explicitly blocked.
+`br dep cycles` reports zero active cycles. The protocol (`hwxb.5.6`), scorer fidelity
+(`hwxb.5.9`), native extension (`u0fl.4`) and CMA rank isolation (`0xd.1`) are ready to
+pick up independently. The matrix rehearsal depends on the protocol, launcher, scorer
+and extension work. [Issue graph](../.beads/issues.jsonl)
+
+---
+
+## Historical audits
+
 - **2026-09-01 (`db544b2`):** Initial Phase 1–2 reality check ("Bio-Nanochat Reality Check").
 - **2026-10-07 (`716cacb`…`1b95827`):** Harness defect fixes, toy screening run, scaffold `final_norm` discovery (`8de4abb`), Rust/Triton multi-query causal scan (`85905ad`, `3956cc3`), CMA-ES LM objective (`e9ff9d6`).
-- **2026-10-13 (`1b95827`, current HEAD):** Comprehensive end-to-end `/reality-check-for-project` audit of code, tests, artifacts, fleet hardware (`csd`, `mac-mini-max`, `trj`, `ts1`, `ts2`), docs, and `.beads/`.
+- **2026-10-13 (`1b95827`):** Audit of code, tests, artifacts, fleet hardware, docs and Beads at that revision.
 
-**This document:** Phase 2 of `/reality-check-for-project` — the single authoritative plan bridging every gap between what `README.md` and the design specifications promise and what the codebase actually delivers at `1b95827`. Ordered by vision impact, with concrete files, functions, verification gates, and bead mappings.
+The sections below preserve the October assessment and its original task list.
 
 **Rule this plan follows:** A number in a document must cite a committed artifact; a null or negative result is a first-class result; never weaken a gate to land a change; nothing here creates a dashboard, certificate, or matrix that no live code branches on.
 
 ---
 
-## Status 2026-10-13 at `1b95827` (Read First)
+## Status 2026-10-13 at `1b95827`
 
 | Area / Gap | Ground-Truth Status at `1b95827` | Cited Evidence |
 |---|---|---|
