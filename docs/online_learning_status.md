@@ -187,6 +187,10 @@ different training rules. [Fast-weight programmers](https://proceedings.mlr.pres
   disabled, and zero online slow consolidation. Retain the normalized
   transient write, its default learning and decay rates, and the postsynaptic
   modulation. Reset fast state between independent training sequences.
+  Initialize the tied embedding at a standard deviation of 0.02. The
+  training-only apparatus run with the ordinary unit-scale tied embedding
+  started above 22 nats per token. A shared small initialization avoids
+  starting either AdamW arm in widespread softcap saturation.
 - [ ] Exercise the real chunked-backpropagation path on a time-boxed
   apparatus run. Use one sequence per step and 128-token chunks. Verify that
   the fresh model's first chunk is identical before an intervention can take
@@ -201,7 +205,12 @@ different training rules. [Fast-weight programmers](https://proceedings.mlr.pres
   within a chunk. Use two cards as independent single-process workers.
   Before seeing held-out results, measure steps 5–16 in each training arm.
   Admit the registered run if the slower arm's mean time times 3,072
-  fits 2,400 seconds per card. Otherwise report the measured cost shortfall.
+  fits 2,400 seconds per card. If it exceeds that budget, report the shortfall
+  and test the same contrast using the largest admitted exposure in the
+  fixed sequence 128 then 64 updates (131,072 or 65,536 tokens per arm).
+  Apply the same time rule to the shorter exposures. Select the exposure
+  from training time alone, before reading any held-out score. Conclusions
+  from a shortened run apply to that early stage of training.
 - [ ] Score every checkpoint on the same 128 complete or prefix-truncated
   documents drawn in order from the midpoint validation row group and
   subsequent groups. Use the first at most 512 tokens of each document,
@@ -230,4 +239,33 @@ different training rules. [Fast-weight programmers](https://proceedings.mlr.pres
 - [ ] Recompute every decision from the raw held-out scores, perform static
   and runtime qualification through DSR, and close only the verified scope
   in Beads. D1 scale and reward-gated training retain distinct acceptance.
+
+### Running the experiment
+
+Use a locked environment and a fresh output directory. Set
+`NANOCHAT_BASE_DIR` to the cache with the archived 28 shards and project
+tokenizer. Run the following commands as DSR quality checks.
+
+```sh
+uv run --no-sync python -m scripts.e2e.trained_hebbian_binding probe \
+  --seeds 6311 --out "$PROBE"
+
+CUDA_VISIBLE_DEVICES=0 uv run --no-sync python -m scripts.e2e.trained_hebbian_binding train \
+  --seeds 6311 6312 --steps "$ADMITTED_STEPS" --out "$STUDY"
+CUDA_VISIBLE_DEVICES=1 uv run --no-sync python -m scripts.e2e.trained_hebbian_binding train \
+  --seeds 6313 6314 --steps "$ADMITTED_STEPS" --out "$STUDY"
+
+CUDA_VISIBLE_DEVICES=0 uv run --no-sync python -m scripts.e2e.trained_hebbian_binding score \
+  --seeds 6311 6312 --out "$STUDY"
+CUDA_VISIBLE_DEVICES=1 uv run --no-sync python -m scripts.e2e.trained_hebbian_binding score \
+  --seeds 6313 6314 --out "$STUDY"
+uv run --no-sync python -m scripts.e2e.trained_hebbian_binding decision --out "$STUDY"
+```
+
+The paired and shuffled checkpoints must share the same initialization and
+training-stream hashes within each seed. Scoring checks each checkpoint's file
+and tensor digests before reading it. Each shuffled score averages four
+draws of the normalized update, including each draw's effect on later
+activations. This estimates a finite ensemble, which differs from the
+analytic mean of a raw single write conditional on fixed activations.
 
