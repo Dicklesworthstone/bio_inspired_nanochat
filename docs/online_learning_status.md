@@ -71,14 +71,14 @@ reachable by hyperparameter tuning alone.
 ## What this bead delivered (the foundational fix)
 
 `SynapticConfig.fast_weight_normalized` defaults **on** after the raw write caused the reproducible
-all-bio Synaptic-MoE divergence tracked by **jpqc**. Both online Hebbian writes step along the **unit-norm** Hebbian direction
-(`fast_weight_eta` for `w_fast`, `post_slow_lr` for `w_slow`) and `‖w_fast‖` is capped by
-`fast_weight_max_norm`. This makes the update **impactful** (`|Δw_fast| ~ O(eta)`, not 1e-7) **and
-stable** (finite & bounded over 200 repeated passes — where the naive boost NaNs). It is the
-prerequisite for any consolidation signal to actually move the fast weights; it does **not** on its
-own make the adaptation predictive. Setting the flag false retains the historical raw path only as
-a negative-control ablation. Tests: `tests/test_online_fast_adaptation.py` and the multi-seed MoE
-stability regression in `tests/test_e2e_train_bio.py`.
+all-bio Synaptic-MoE divergence tracked by **jpqc**. The matrix writes use the unit-norm Hebbian
+direction, with step sizes `fast_weight_eta` and `post_slow_lr`. The fast matrix is capped at
+`fast_weight_max_norm` and stayed within that cap over the original 200 repeated passes.
+The molecular fast and slow gains subsequently exposed another feedback path during training.
+In the original six-seed continual-learning comparison, 11 of 12 biological fits failed during
+their third task. The corrected normalized rule passes $UV/\max(1,\lVert UV\rVert_F)$ to the molecular
+updates. Small eligibility signals retain their amplitude, and large signals retain their direction.
+The raw-update control remains available with `fast_weight_normalized=False`. [Original failures and numerical diagnosis](theory/gauge_consolidation.md)
 
 ## What's needed for the behavioral claim (downstream)
 

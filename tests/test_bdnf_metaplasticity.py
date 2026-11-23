@@ -191,8 +191,8 @@ class TestPulseTrainBehavior:
 class TestNaNGuards:
     """Test NaN guards prevent numerical instability."""
 
-    def test_nan_in_traces_doesnt_crash(self, default_cfg: SynapticConfig):
-        """NaN values in traces should not propagate to weights."""
+    def test_nonfinite_traces_are_rejected_before_consolidation(self, default_cfg: SynapticConfig):
+        """A corrupt signal must be observable and must leave all molecular state intact."""
         hebb = PostsynapticHebb(d_k=16, d_v=16, cfg=default_cfg)
 
         # Create traces with NaN
@@ -200,11 +200,11 @@ class TestNaNGuards:
         traceU[0, 0] = float('nan')
         traceV = torch.randn(4, 16)
 
-        # Should not raise and should not corrupt weights
-        hebb.consolidate(traceU, traceV)
-
-        # slow weights should not contain NaN
-        assert not torch.isnan(hebb.slow).any()
+        before = {name: value.clone() for name, value in hebb.state_dict().items()}
+        with pytest.raises(FloatingPointError, match="eligibility"):
+            hebb.consolidate(traceU, traceV)
+        for name, value in hebb.state_dict().items():
+            torch.testing.assert_close(value, before[name], rtol=0, atol=0)
 
     def test_inf_in_bdnf_is_guarded(self, default_cfg: SynapticConfig):
         """Inf values in BDNF should be handled gracefully."""

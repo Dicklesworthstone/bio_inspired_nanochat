@@ -3251,6 +3251,38 @@ class SynapticPresyn(nn.Module):
 # -----------------------------------------------------------------------------
 
 
+def _hebbian_signal(left: Tensor, right: Tensor, *, bounded: bool) -> tuple[Tensor, float]:
+    """Return UV (or UV / max(1, ||UV||_F)) and its original norm.
+
+    Large finite factors can overflow either the matmul or its sum of squares.
+    Recover their direction before casting the bounded result to the trace dtype.
+    """
+    with torch.autocast(device_type=left.device.type, enabled=False):
+        product = left @ right
+        magnitude = float(product.norm())
+        if math.isfinite(magnitude):
+            return (product / magnitude if bounded and magnitude > 1 else product), magnitude
+        left_scale, right_scale = float(left.abs().amax()), float(right.abs().amax())
+        if not math.isfinite(left_scale) or not math.isfinite(right_scale):
+            raise FloatingPointError("non-finite Hebbian eligibility factor")
+        if not bounded:
+            if not bool(torch.isfinite(product).all()):
+                raise FloatingPointError("raw Hebbian eligibility product overflows its dtype")
+            return product, magnitude
+        # Rescaling finite factors before multiplying also supports float64 traces.
+        # The exceptional path uses CPU fp64 on devices without native double.
+        wide_device = "cpu" if left.device.type == "mps" else left.device
+        scaled = ((left.to(device=wide_device, dtype=torch.float64) / left_scale)
+                  @ (right.to(device=wide_device, dtype=torch.float64) / right_scale))
+        scaled_norm = float(scaled.norm())
+        if scaled_norm == 0:
+            return torch.zeros_like(product), 0.0
+        log_norm = math.log2(left_scale) + math.log2(right_scale) + math.log2(scaled_norm)
+        magnitude = math.exp2(log_norm) if log_norm < 1024 else math.inf
+        bounded_product = (scaled / scaled_norm) * min(magnitude, 1.0)
+        return bounded_product.to(product), magnitude
+
+
 class PostsynapticHebb(nn.Module):
     cfg: SynapticConfig
     fast: nn.Parameter
@@ -3417,7 +3449,19 @@ class PostsynapticHebb(nn.Module):
             self.bdnf.clamp_(0, self.cfg.bdnf_max)
 
     @torch.no_grad()
+    def _molecular_delta(self, product: Tensor) -> Tensor:
+        if self.fast.numel() == 1:
+            return product.mean().reshape_as(self.fast)
+        if product.shape[0] == product.shape[1]:
+            return product.diag()
+        return product.mean(0)
+
+    @torch.no_grad()
     def consolidate(self, traceU: Tensor, traceV: Tensor):
+        product, _ = _hebbian_signal(traceU, traceV, bounded=self.cfg.fast_weight_normalized)
+        self._consolidate_delta(self._molecular_delta(product))
+
+    def _consolidate_delta(self, delta: Tensor):
         """Consolidate Hebbian traces into slow weights with BDNF-modulated learning rate.
 
         BDNF Metaplasticity (bio_inspired_nanochat-711):
@@ -3426,21 +3470,6 @@ class PostsynapticHebb(nn.Module):
         - Modulates slow LR by (1 + gamma * bdnf) where gamma = bdnf_gamma or bdnf_scale
         - Guards against NaN/Inf values
         """
-        # Compute Hebbian delta from traces
-        # traceU: (in, R), traceV: (R, out) -> product is (in, out)
-        # self.slow is (out,) so we need to reduce to that shape
-        trace_product = traceU @ traceV  # (in, out)
-
-        if self.slow.numel() == 1:
-            # One molecular consolidation state for the whole expert/layer.
-            delta = trace_product.mean().reshape_as(self.slow)
-        elif trace_product.shape[0] == trace_product.shape[1]:
-            # Square matrix: take diagonal
-            delta = trace_product.diag()
-        else:
-            # Non-square: take mean over input dimension -> (out,)
-            delta = trace_product.mean(0)
-
         # Accumulate |ΔW_hebb| for BDNF metaplasticity
         if self.cfg.bdnf_hebb_accumulate:
             delta_mag = delta.abs()
@@ -3485,14 +3514,10 @@ class PostsynapticHebb(nn.Module):
 
     @torch.no_grad()
     def hebb_fast(self, traceU: Tensor, traceV: Tensor):
-        # Update fast weights (diagonal)
-        trace_product = traceU @ traceV
-        if self.fast.numel() == 1:
-            delta = trace_product.mean().reshape_as(self.fast)
-        elif trace_product.shape[0] == trace_product.shape[1]:
-            delta = trace_product.diag()
-        else:
-            delta = trace_product.mean(0)
+        product, _ = _hebbian_signal(traceU, traceV, bounded=self.cfg.fast_weight_normalized)
+        self._apply_fast_delta(self._molecular_delta(product))
+
+    def _apply_fast_delta(self, delta: Tensor):
         if delta.shape != self.fast.shape:
             return
         self.fast.mul_(self.cfg.post_fast_decay).add_(self.cfg.post_fast_lr * delta)
@@ -3735,13 +3760,11 @@ class SynapticLinear(nn.Module):
         """
         if self.u_buf is None or self.v_buf is None:
             return
+        product, magnitude = _hebbian_signal(self.u_buf, self.v_buf, bounded=self.cfg.fast_weight_normalized)
         if self.w_fast is not None:
-            if gate_scale is None:
-                gs = torch.ones((), device=self.w_fast.device, dtype=self.w_fast.dtype)
-            else:
-                gs = gate_scale.to(device=self.w_fast.device, dtype=self.w_fast.dtype)
-            delta = self.u_buf @ self.v_buf
-            delta = delta * gs.to(delta.dtype)
+            gs = 1.0 if gate_scale is None else float(gate_scale)
+            if not math.isfinite(gs):
+                raise FloatingPointError("non-finite Hebbian write gate")
             # hy8.1: dopamine (reward-prediction-error) plasticity gain. Default-neutral
             # (1.0) unless a NeuromodulatoryBus has broadcast a gain — then it scales the
             # consolidation step so only reward-relevant updates are amplified (the three-factor
@@ -3755,24 +3778,35 @@ class SynapticLinear(nn.Module):
                 # amplifies activations, which feed the otherwise-unbounded w_slow online drift
                 # (`w_slow.add_(post_slow_lr*delta)` has no decay) — so bounding only w_fast still
                 # diverges through w_slow. Bounding the direction of both keeps the system finite.
-                dn = delta.norm()
-                if float(dn) > 1e-12:
-                    direction = delta / dn
+                if gs != 0 and magnitude * abs(gs) > 1e-12:
+                    # product already has unit norm if the raw signal exceeded one.
+                    direction = (product / min(magnitude, 1.0)) * math.copysign(1.0, gs)
                     self.w_fast.mul_(self.cfg.post_fast_decay).add_(
                         (self.cfg.fast_weight_eta * da) * direction
                     )
                     maxn = self.cfg.fast_weight_max_norm
                     if maxn > 0:
-                        wn = self.w_fast.norm()
-                        if float(wn) > maxn:
+                        wn = float(self.w_fast.norm())
+                        if not math.isfinite(wn):
+                            peak = float(self.w_fast.abs().amax())
+                            if not math.isfinite(peak):
+                                raise FloatingPointError("non-finite Hebbian fast weight")
+                            self.w_fast.div_(peak)
+                            self.w_fast.mul_(maxn / self.w_fast.norm())
+                        elif wn > maxn:
                             self.w_fast.mul_(maxn / wn)
                     self.w_slow.add_((self.cfg.post_slow_lr * da) * direction)
             else:
+                delta = product * gs
                 self.w_fast.mul_(self.cfg.post_fast_decay).add_((self.cfg.post_fast_lr * da) * delta)
                 self.w_slow.add_((self.cfg.post_slow_lr * da) * delta)
         if self.post is not None:
-            self.post.hebb_fast(self.u_buf, self.v_buf)
-            self.post.consolidate(self.u_buf, self.v_buf)
+            # The resulting diagonal multiplies the activations that create the
+            # next eligibility traces. Bound this feedback path on the same
+            # normalized rule as the matrix write, preserving raw subunit signals.
+            molecular = self.post._molecular_delta(product)
+            self.post._apply_fast_delta(molecular)
+            self.post._consolidate_delta(molecular)
 
     @torch.no_grad()
     def reset_sequence_state(

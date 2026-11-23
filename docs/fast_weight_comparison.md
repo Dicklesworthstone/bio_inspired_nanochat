@@ -27,7 +27,7 @@ The synaptic fast-weight mechanism implemented in `bio_inspired_nanochat` is dir
 
 3. **Normalization and Stability**:
    - Classical fast weights frequently suffer from exploding eigenvalues unless heavily regularized.
-   - `GPTSynaptic` enforces strict directional normalization and Frobenius-norm bounds (`fast_weight_normalized=True`, `fast_weight_max_norm=1.0`), ensuring numerical stability during long sequential rollouts.
+   - With `fast_weight_normalized=True`, the model caps the fast matrix at the configured Frobenius norm and bounds the eligibility signal driving molecular gain. The earlier matrix-only cap permitted overflow during sequential training. [Training evidence and limits](theory/gauge_consolidation.md)
 
 ---
 

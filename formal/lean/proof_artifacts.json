@@ -1185,6 +1185,51 @@
       "build_result": "DSR afe60310-4007-40c5-a835-a7a8f2b1fc95 exited 0 with stable source fingerprints. Lake completed 7886 jobs and emitted 19 distinct theorem axiom reports. Build log sha256 79a283c2b73ef341e3b9257038ee2febf502e661a0ca91fe427f90ac726d32a7.",
       "regression_command": "DSR bio-formal-inventory on trj with the installed ABI 1 wheel, all 19 effective pytest modules, tests/test_rank_eligibility.py and tests/test_presyn_scan_kernel.py. CUDA devices were hidden.",
       "regression_result": "Before rebinding, 300 passed, 4 skipped and 1 failed in 2151.97 seconds. The sole failure was test_live_formal_contract_matches_repository_head rejecting the stale synaptic.py hash. Two skips required CUDA, one required torch.compile on Python 3.14 and one required FlexAttention Dynamo support. DSR run-1795395976-560473, pytest log sha256 1fa4eacb3932100df57d41452f4ddc1caf10cc12aeaadb7074e7f804ef181903."
+    },
+    {
+      "cycle_id": "hebbian-stability-2026-11-23",
+      "frog_id": "bio_inspired_nanochat-hwxb.4.4",
+      "route": "runtime-first-proof-preserving",
+      "runtime_defect_found": true,
+      "hash_scope": "formal/lean/BioInspiredNanochat.lean",
+      "artifact_hash": "sha256:831498bc2853d86701250ea89024ab5f5f6190d2e3a5a9ae66f93a7d5d42d963",
+      "theorem_ids": [
+        "BioInspiredNanochat.Metriplectic.poisson_entropy_degeneracy",
+        "BioInspiredNanochat.Metriplectic.friction_energy_degeneracy",
+        "BioInspiredNanochat.Metriplectic.energyRate_zero",
+        "BioInspiredNanochat.Metriplectic.entropyRate_nonnegative",
+        "BioInspiredNanochat.Metriplectic.freeEnergyRate_nonpositive",
+        "BioInspiredNanochat.Metriplectic.freeEnergy_nonincreasing",
+        "BioInspiredNanochat.Metriplectic.trajectory_energy_constant",
+        "BioInspiredNanochat.Metriplectic.trajectory_entropy_from_start",
+        "BioInspiredNanochat.Metriplectic.trajectory_freeEnergy_nonincreasing",
+        "BioInspiredNanochat.Metriplectic.trajectory_component_bounds",
+        "BioInspiredNanochat.StochasticThermodynamics.logMeanGap_nonnegative",
+        "BioInspiredNanochat.StochasticThermodynamics.log_rate_tur_core",
+        "BioInspiredNanochat.StochasticThermodynamics.tur_calibration_inequality",
+        "BioInspiredNanochat.StochasticThermodynamics.crooks_log_calibration"
+      ],
+      "axioms": [
+        "propext",
+        "Classical.choice",
+        "Quot.sound"
+      ],
+      "sorry_or_admit_present": false,
+      "runtime_mapping": [
+        {
+          "path": "bio_inspired_nanochat/synaptic.py",
+          "sha256": "6357b25cf14a145df46d5b77db4c9fe6028983b8b86d66cae45871ec8c27f10b"
+        }
+      ],
+      "change_scope": "The molecular Hebbian update now bounds the norm of its input in normalized mode. A finite oversized trace product is rescaled before its direction is computed. The raw update remains a distinct mode. The changes affect eligibility, fast/slow weights and BDNF observation. No change was made to presynaptic calcium, buffer, heat, the integrator, the exact-real field, or the stochastic current model. The mapped theorems have no hypothesis or conclusion about boundedness of learned Hebbian weights.",
+      "conformance": {
+        "statement_parity": "The ten metriplectic and four conditional current identities retain the same statements and assumptions. The five cusp declarations retain their existing bindings.",
+        "transition_parity": "Guarded presynaptic integrator and release transitions keep their previous implementation. A separate matched continual study measures training stability and retention.",
+        "drift_gate": "Old manifest rejected the changed runtime at the expected and observed digests in DSR 71642668-b712-4516-8075-28446d8b6ca4. The old kernel failed four of five focused regression cases in DSR 350b37a9-bf1c-4f3d-8b2d-446f60386c39."
+      },
+      "lean_toolchain": "leanprover/lean4:v4.27.0",
+      "mathlib_revision": "a3a10db0e9d66acbebf76c5e6a135066525ac900",
+      "regression_command": "python -m scripts.formal_feedback --run-tests --run-lean-audit with the pinned Lake environment; verify the axiom allowlist for every resolved declaration."
     }
   ]
 }

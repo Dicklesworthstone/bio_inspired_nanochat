@@ -44,6 +44,41 @@ def _signals():
     return torch.ones(B), torch.ones(B)  # calcium, energy (per-row)
 
 
+@pytest.mark.parametrize('amplitude', [0.001, 1.0, 1e10, 1e25])
+@torch.no_grad()
+def test_coupled_hebbian_writes_match_high_precision_direction_and_bounded_molecular_response(amplitude):
+    cfg = SynapticConfig(enable_hebbian=True, rank_eligibility=2)
+    layer = SynapticLinear(3, 2, cfg)
+    assert layer.u_buf is not None and layer.v_buf is not None and layer.post is not None and layer.w_fast is not None
+    layer.u_buf.copy_(amplitude * torch.tensor([[1., 2.], [-3., 1.], [2., -1.]]))
+    layer.v_buf.copy_(amplitude * torch.tensor([[2., -1.], [-1., 3.]]))
+    layer.w_fast.zero_()
+    layer.w_slow.zero_()
+    raw = layer.u_buf.double() @ layer.v_buf.double()
+    expected_direction = raw / raw.norm()
+    expected_molecular = (raw / raw.norm().clamp_min(1.0)).mean(0)
+    gate = torch.sigmoid(layer.post.camkii.double() - 0.5) - 0.3
+    layer._apply_hebb_weight_writes(torch.tensor(0.25))
+    torch.testing.assert_close(layer.w_fast, (cfg.fast_weight_eta * expected_direction).float())
+    torch.testing.assert_close(layer.w_slow, (cfg.post_slow_lr * expected_direction).float(), atol=1e-10, rtol=2e-5)
+    torch.testing.assert_close(layer.post.fast, (cfg.post_fast_lr * expected_molecular).float(), atol=1e-12, rtol=2e-5)
+    torch.testing.assert_close(layer.post.slow, (cfg.post_slow_lr * gate * expected_molecular).float(), atol=1e-13, rtol=2e-5)
+
+
+@torch.no_grad()
+def test_corrupt_eligibility_is_reported_before_any_weight_or_molecular_write():
+    layer = _make_lin()
+    assert layer.u_buf is not None and layer.v_buf is not None
+    layer.u_buf.fill_(1.0)
+    layer.v_buf.fill_(1.0)
+    layer.u_buf[0, 0] = float('inf')
+    before = {name: value.clone() for name, value in layer.state_dict().items()}
+    with pytest.raises(FloatingPointError, match='eligibility'):
+        layer._apply_hebb_weight_writes(None)
+    for name, value in layer.state_dict().items():
+        torch.testing.assert_close(value, before[name], rtol=0, atol=0)
+
+
 @pytest.mark.unit
 def test_checkpoint_preserves_the_next_hebbian_training_update(tmp_path):
     lin = _make_lin().train()

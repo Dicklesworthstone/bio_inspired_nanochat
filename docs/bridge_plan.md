@@ -39,6 +39,11 @@ revision. [Current protocol](ablation_matrix.md) · [Follow-up DSR receipts](../
 - [ ] Train and score the matched vanilla reference, run admissible registered
   contrasts, then record the statistical decision or the measured budget shortfall.
   Select a final checkpoint only after the absolute quality and reproduction gates.
+  - [x] Train the vanilla pilot for 24 optimizer updates on two RTX 4090s.
+    After 6,291,456 tokens its independent score was 3.19468 validation BPB.
+    The 13 registered timing steps took 72.14 seconds. Applying the frozen
+    allowance for startup, saves and variability projected 23,580 seconds against
+    a 12,570-second training allocation. The 498,073,600-token run was declined.
 - [x] Test repetition on the same step-50 checkpoint with presynaptic release enabled
   and disabled. Greedy repeated trigrams fell from 256/352 to 242/352 slots across 16
   documents. Seeded sampling produced zero in both arms. Next-token loss differed by
@@ -82,8 +87,13 @@ revision. [Current protocol](ablation_matrix.md) · [Follow-up DSR receipts](../
   EWC gave identical final weights on six seeds. Replay retained A but missed the
   acquisition threshold on B. [First study](../results/continual_controls_2026-11-22.json)
   · [First nonfinite trace](../results/continual_first_nonfinite_2026-11-22.json)
-  - [ ] Fix the Hebbian overflow, rerun the frozen cohort, compare unchanged-arm
-    hashes, and publish the paired result. Check the affected runtime proof binding.
+  - [x] Bound the molecular response in normalized Hebbian mode and preserve the
+    direction of finite trace products that overflow float32. The prior implementation
+    failed four of five discriminating cases. The repaired cohort completed 36/36 fits.
+    Sleep, no-sleep and vanilla each retained 0/768 A targets after C. Both paired
+    sleep-effect intervals were [0, 0]. All 24 unaffected final parameter hashes
+    matched. [Complete rerun](../results/continual_controls_bounded_hebbian_2026-11-22.json)
+  - [ ] Check all mapped runtime tests and compiled theorem identities after the repair.
   - [ ] A test of holonomy still needs model-derived transport (`0642.7.2.2`).
 - [x] Prove two limits under explicit reduced-model assumptions. Four Poisson
   current observations and six live leaky-memory observations respected their

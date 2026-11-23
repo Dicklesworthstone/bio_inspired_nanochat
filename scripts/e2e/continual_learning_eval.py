@@ -14,6 +14,7 @@ import torch
 import torch.nn.functional as F
 from rich.console import Console
 
+from bio_inspired_nanochat import synaptic
 from bio_inspired_nanochat.eval_stats import paired_comparison
 from bio_inspired_nanochat.gauge_consolidation import FisherNaturalConsolidator
 from bio_inspired_nanochat.gpt import GPT, GPTConfig
@@ -168,6 +169,7 @@ def _run_arm(cfg, seed, mode, probe, streams) -> dict:
         return {'status': 'failed', 'mode': mode, 'seed': seed, 'phase': phase, 'step_in_phase': step,
                 'reason': reason, 'last_finite_training_loss': last_finite_loss, 'completed_phase_scores': scores,
                 'forward_tokens_at_stop': exposures, 'wake_layer_writes_at_stop': wake_writes,
+                'offline_seconds': offline_seconds, 'offline_optimizer_steps': 0, 'sleep_updates': sleep_reports,
                 'initial_parameter_sha256': initial_sha, 'parameter_sha256_at_stop': _weights(model),
                 'elapsed_seconds': time.perf_counter() - started}
 
@@ -187,7 +189,10 @@ def _run_arm(cfg, seed, mode, probe, streams) -> dict:
             if isinstance(model, GPTSynaptic):
                 model.reset_sequence_state(reset_fast_weights=False, reset_consolidation=False)
             optimizer.zero_grad(set_to_none=True)
-            logits = _logits(model, x, training=True)
+            try:
+                logits = _logits(model, x, training=True)
+            except FloatingPointError as exc:
+                return failed(phase, step, str(exc))
             loss = F.cross_entropy(logits.flatten(0, 1), y.flatten())
             observed_loss = float(loss.detach())
             if not math.isfinite(observed_loss):
@@ -213,12 +218,16 @@ def _run_arm(cfg, seed, mode, probe, streams) -> dict:
             # A new independent batch resets eligibility. Commit the just-finished wake
             # step first, at the same safe optimizer boundary for both biological arms.
             landed = 0
-            with torch.no_grad():
-                for layer in layers:
-                    if layer._plasticity_pending:
-                        layer._apply_hebb_weight_writes(layer._last_gate_scale)
-                        layer._plasticity_pending = False
-                        landed += 1
+            try:
+                with torch.no_grad():
+                    for layer in layers:
+                        if layer._plasticity_pending:
+                            layer._apply_hebb_weight_writes(layer._last_gate_scale)
+                            layer._plasticity_pending = False
+                            landed += 1
+            except FloatingPointError as exc:
+                wake_writes += landed
+                return failed(phase, step, str(exc))
             if landed != len(layers):
                 raise ValueError('every dense Hebbian layer must commit its one pending wake write')
             wake_writes += landed
@@ -244,21 +253,23 @@ def _run_arm(cfg, seed, mode, probe, streams) -> dict:
             # All controls pay for the same count of frozen replay observations; update only the sleep arm.
             np_state = np.random.get_state()
             np.random.seed(70000 + seed * 2 + index)
+            offline_failure = None
             try:
                 if mode == 'bio_with_sleep':
-                    try:
-                        rep = controller.run_sleep_phase(model, replay, sleep_steps=cfg.sleep_steps, batch_size=4)
-                    except FloatingPointError as exc:
-                        return failed(phase, len(streams[phase]), str(exc))
+                    rep = controller.run_sleep_phase(model, replay, sleep_steps=cfg.sleep_steps, batch_size=4)
                     sleep_reports.append(rep)
                 else:
                     with torch.inference_mode():
                         for _ in range(cfg.sleep_steps):
                             items, _indices = replay.sample(4)
                             _logits(model, torch.stack([item.tokens for item in items]), training=False)
+            except FloatingPointError as exc:
+                offline_failure = str(exc)
             finally:
                 np.random.set_state(np_state)
                 offline_seconds += time.perf_counter() - offline_start
+            if offline_failure is not None:
+                return failed(phase, len(streams[phase]), offline_failure)
     handle.remove()
     last = phases[-1]
     before, after = (scores[p]['measurements']['A'] for p in ('A', last))
@@ -335,7 +346,9 @@ def run_continual_benchmark(config: ContinualEvalConfig) -> dict:
             'gauge_verdict': 'unidentifiable_connection_and_transport',
             'scope': 'Synthetic learned token rules on the same input support, fresh training draws, disjoint held-out sequences. Sleep A-B-C and gauge A-B-A have separate matched forward/backward-example budgets. The supervised replay arm replaces half of B examples by A; reported token counts do not imply equal wall time or FLOPs.',
             'holonomy_limit': 'The candidate exposes only a diagonal Fisher reference penalty. CurvatureMonitor accepts a caller-supplied holonomy number and supplies no learned connection or path transport.',
-            'source_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(), 'torch_version': str(torch.__version__)}
+            'source_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+            'synaptic_source_sha256': hashlib.sha256(Path(synaptic.__file__).read_bytes()).hexdigest(),
+            'torch_version': str(torch.__version__)}
 
 
 def print_continual_summary(summary: dict, console: Console | None = None) -> None:
@@ -345,11 +358,12 @@ def print_continual_summary(summary: dict, console: Console | None = None) -> No
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--output', type=Path, help='Write the full per-seed evidence as JSON.')
     args = parser.parse_args()
     report = run_continual_benchmark(ContinualEvalConfig())
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(report, allow_nan=False, separators=(',', ':')) + '\n', encoding='utf-8')
+    if args.output is not None:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps(report, allow_nan=False, separators=(',', ':')) + '\n', encoding='utf-8')
     print_continual_summary(report)
 
 
