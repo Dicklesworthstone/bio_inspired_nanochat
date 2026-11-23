@@ -944,6 +944,167 @@
           "sha256": "308cb2f74596f59b7a56a651c2c8dece631ba352dd089b5e977e430e383ac01b"
         }
       ]
+    },
+    {
+      "probe": "bio-ubs-final-precommit",
+      "observation": "Whole changed-file UBS remains red at the trusted config executor. Standing and scoped checks retained; no scanner rules were suppressed.",
+      "run_id": "82a501f0-9177-49f5-8d8a-991d18d5dadd",
+      "exit": 1,
+      "source": "3369e57e8b1560b7af0d5ec564acf448c0f07a1f|2a88ef5f9aa6f7279fda5c2e05fe2fb1c21f352141a3f97c499a1fcd3f815c49|no-lockfile",
+      "logs": [
+        {
+          "exit": 1,
+          "sha256": "cd63eb39b64d877b4e5b9a516a8e85bd4ebda7c606d13f898be85a004eeb5feb"
+        }
+      ]
+    },
+    {
+      "probe": "bio-ubs-final-type",
+      "observation": "Both locked and floating ty, whole-repo Ruff and post-Ruff clean diff passed.",
+      "run_id": "d3748e78-a074-4a7c-8e04-d5887ace504d",
+      "exit": 0,
+      "source": "3369e57e8b1560b7af0d5ec564acf448c0f07a1f|2a88ef5f9aa6f7279fda5c2e05fe2fb1c21f352141a3f97c499a1fcd3f815c49|no-lockfile",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "76c4da6e6fcf254325a64888274d0ee2a3b3301b8f06dc266ae96005e84247c2"
+        },
+        {
+          "exit": 0,
+          "sha256": "e7f26aa37542bc4a5be292014f3d2611aa39162ad2b34db227b7a631d1c56a2c"
+        },
+        {
+          "exit": 0,
+          "sha256": "cbd12ce730738704b8d53dd88197064a138982ea2017eb01400066b1c38ae690"
+        },
+        {
+          "exit": 0,
+          "sha256": "6de88bce8ae5be88af8e79b105b5313ed954102d74064cf4bf8650515b79c1aa"
+        }
+      ]
+    },
+    {
+      "probe": "bio-ubs-final-regression",
+      "observation": "Direct entry-point, type-override, JSON and validation-only checkpoint regressions passed; CPU Flex availability is a separate environment condition.",
+      "run_id": "ebd1152b-c2f5-43a4-aca1-efd3c99e0b9c",
+      "exit": 0,
+      "source": "3369e57e8b1560b7af0d5ec564acf448c0f07a1f|2a88ef5f9aa6f7279fda5c2e05fe2fb1c21f352141a3f97c499a1fcd3f815c49|no-lockfile",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "5c9e8d281f349b86482a5aa620753f1f25542f690e6b150a57a7e0f04140ba92"
+        }
+      ]
+    },
+    {
+      "probe": "bio-ubs-final-standing",
+      "observation": "Strict UBS still fails on 2 intentional executable Python boundaries and 17 exact-type schema checks across 378 files. Eight prior findings removed without changing the scanner.",
+      "run_id": "4b86e6f5-7d89-4d56-b174-79424163c171",
+      "exit": 1,
+      "source": "3369e57e8b1560b7af0d5ec564acf448c0f07a1f|2a88ef5f9aa6f7279fda5c2e05fe2fb1c21f352141a3f97c499a1fcd3f815c49|no-lockfile",
+      "logs": [
+        {
+          "exit": 1,
+          "sha256": "1f9b4384b1268f2716cd563ff820b591bfa659aac8c4143657f573b13b34237f"
+        }
+      ]
+    },
+    {
+      "probe": "bio-hebb-corrected",
+      "observation": "Corrected normalized Hebbian path passed 67 direct tests and completed 36/36 unchanged continual cells. All 24 unaffected final weights matched. Sleep and both controls each retained zero A targets out of 768; paired differences zero.",
+      "run_id": "e06a7153-43e2-404f-aaf0-ab8aea02fb04",
+      "exit": 0,
+      "source": "c5a4e19e3be28062115ea6907daa6dfe29f6639c|741e43d3537446fc8aa9c7852f8359d10ef94acdfb411c0ace05895047d60f52|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "a0bab87916fceea11a39958a76e685e34dee9a804e67b83c51b07b84ec71dbd9"
+        },
+        {
+          "exit": 0,
+          "sha256": "8de99a26456874323a34cc251cb3cdb5933488e3c9f0a159923311fb5bdf5ee7"
+        },
+        {
+          "exit": 0,
+          "sha256": "13a462e7bf0559d322eadf04ba47811e332c2f6e4c8db5cfb7fa1da130a313c4"
+        },
+        {
+          "exit": 0,
+          "sha256": "39a985d88f7bd35f32db75e815205546bb887b4cd7ee18a96eaa2a4253b9ce49"
+        }
+      ]
+    },
+    {
+      "probe": "bio-hebb-old",
+      "observation": "The old Hebbian implementation failed 4 of 5 prospective numerical/atomicity regression cases, including matrix and norm overflow; small input passed.",
+      "run_id": "350b37a9-bf1c-4f3d-8b2d-446f60386c39",
+      "exit": 1,
+      "source": "c5a4e19e3be28062115ea6907daa6dfe29f6639c|1a2d2c341ad057a03004b489fe3083eb3e0367c40a854542c6950d684ee8459b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 1,
+          "sha256": "74414bab71e34ccf3a19e84a8ff787e407ce69c221042e4097636c02e4c6dfd2"
+        }
+      ]
+    },
+    {
+      "probe": "bio-vanilla-pilot",
+      "observation": "Two-GPU 24-step vanilla pilot processed 6,291,456 tokens and independently scored 3.19468229 BPB on 1,048,576 held-out targets. Frozen 1,900-step projection 23,579.64 s exceeded 12,570 s training limit. Full run declined.",
+      "run_id": "22aed35d-d9a5-4774-b1d3-879d75f9a176",
+      "exit": 0,
+      "source": "b057a50fe3538fbadb13bf49e591a9bc2a7aaf87|4e3d4e4603b25cb95ac40343958f8de5e1779072316f32a38265e86671d5602f|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "72c7d00ef5e77c24e1191b06af700bf0830fa684fda93ec96a530a97e43efc50"
+        },
+        {
+          "exit": 0,
+          "sha256": "9d50b88e1416520077bd8a08130b5e10ee0f8f5d9f66589402d3fe3ad757105e"
+        },
+        {
+          "exit": 0,
+          "sha256": "dfe124ac71c049b19ad1a3296377e485b5ea7cf1df9cce75bbbb19cd22b830c3"
+        }
+      ]
+    },
+    {
+      "probe": "stable-main-qualified",
+      "observation": "Standing main DSR on published 8f49e72 failed its strict Python quality stage. Rust and wheel stages succeeded. Later repairs were tested separately and two executable-Python boundaries and 17 schema checks still flag under strict UBS.",
+      "run_id": "701de543-143a-4e50-829f-b7c2201b6005",
+      "exit": 1,
+      "source": "8f49e72833aef7eb2322f3265fd09a636c8642c0|bb9e44ae65305aa49e3c3bdd0f5ead4cb887b3e069bd41e494d21ff43e179f8e|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 1,
+          "sha256": "9347b35427e513ad4c36bfc0ca21596faf9cc7d200bdb12767f2ecdf8ced185d"
+        }
+      ]
+    },
+    {
+      "probe": "bio-correction-cohort",
+      "observation": "Eight trained variable-binding models, 256 paired prompts. Single pass 29/256 correct, actual correction 14/256 with 115 abstentions, zero initial errors rescued. 3.139x backbone calls and 3.035x measured time. Full iteration records and 32 direct tests.",
+      "run_id": "6560e556-4ced-48b7-b8d2-0a9a9036ca46",
+      "exit": 0,
+      "source": "c5a4e19e3be28062115ea6907daa6dfe29f6639c|87006d068d0e2727b0a979ef473e218930eb1fe3af659a6f621f91d5978ec2bc|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "420e5d5a5e8dab37aead17e420b3f2a99e1e4f27f6698b28fb0e9fef0ff8b016"
+        },
+        {
+          "exit": 0,
+          "sha256": "39df874ac9049086334933f81d4a7db5c3753fe817f87f099df9949fd9384f5d"
+        },
+        {
+          "exit": 0,
+          "sha256": "02c7f9fd56ab5126b3222a653efc2ad0d377d1cd32dd0e69cedb829f97acfbd9"
+        },
+        {
+          "exit": 0,
+          "sha256": "8c24d918e74f7e9210b91f997c444932587cabd67cfefdff85c22eb919cb3df9"
+        }
+      ]
     }
   ],
   "reference_feasibility": {
