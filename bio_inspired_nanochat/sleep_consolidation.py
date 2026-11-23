@@ -10,10 +10,10 @@ from __future__ import annotations
 
 import math
 import time
-from collections.abc import Sequence
+from collections.abc import Generator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
@@ -25,7 +25,7 @@ from bio_inspired_nanochat.synaptic import SynapticLinear
 
 
 @contextmanager
-def _temporary_eval(model: nn.Module) -> Iterator[None]:
+def _temporary_eval(model: nn.Module) -> Generator[None]:
     """Temporarily evaluate a model without flattening caller-owned per-module modes."""
     training_modes = [(module, module.training) for module in model.modules()]
     model.eval()

@@ -8,10 +8,11 @@ PP1 phosphatase, BDNF metaplasticity, and fast weights) during generation.
 from __future__ import annotations
 
 import math
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum
-from typing import Iterator, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 import torch
 from rich.console import Console
@@ -132,7 +133,7 @@ class OptogeneticStimulator:
                 param.data.copy_(orig_val)
 
     @contextmanager
-    def stimulate(self, clamps: List[SynapticClamp]) -> Iterator[None]:
+    def stimulate(self, clamps: List[SynapticClamp]) -> Generator[None]:
         """Context manager applying optogenetic clamps during execution and restoring state on exit."""
         target_modes: dict[int, set[ClampMode]] = {}
         for clamp in clamps:

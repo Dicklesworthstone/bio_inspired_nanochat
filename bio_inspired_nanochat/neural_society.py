@@ -11,9 +11,10 @@ from __future__ import annotations
 
 import math
 import time
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Any, Dict, List, Optional
 
 import torch
 from rich.console import Console
@@ -25,7 +26,7 @@ from bio_inspired_nanochat.synaptic import SynapticLinear
 
 
 @contextmanager
-def _temporary_eval(model: torch.nn.Module) -> Iterator[None]:
+def _temporary_eval(model: torch.nn.Module) -> Generator[None]:
     """Run inference without permanently changing mixed per-module training modes."""
     training_modes = [(module, module.training) for module in model.modules()]
     model.eval()

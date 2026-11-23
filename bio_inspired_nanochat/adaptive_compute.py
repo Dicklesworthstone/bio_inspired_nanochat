@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import inspect
 import math
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, replace
 from typing import Any, Literal
@@ -400,7 +400,7 @@ class AdaptiveComputeController:
 
 
 @contextmanager
-def temporary_expert_top_k(model, top_k: int) -> Iterator[int]:
+def temporary_expert_top_k(model, top_k: int) -> Generator[int]:
     """Apply one runtime expert cap to every SynapticMoE and restore it even after failure."""
     modules = [module for module in model.modules() if isinstance(module, SynapticMoE)]
     if (

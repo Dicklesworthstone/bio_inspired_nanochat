@@ -32,10 +32,11 @@ import argparse
 import hashlib
 import json
 import math
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
-from typing import Any, Callable, Iterator, Sequence
+from typing import Any, Callable, Sequence
 
 import numpy as np
 from rich.console import Console
@@ -829,7 +830,7 @@ def _softmax_prediction(model: GPTSynaptic, inputs: Tensor) -> _Prediction:
 
 
 @contextmanager
-def _dropout_sampling(model: GPTSynaptic) -> Iterator[None]:
+def _dropout_sampling(model: GPTSynaptic) -> Generator[None]:
     dropout_modules = [module for module in model.modules() if isinstance(module, nn.Dropout)]
     prior = [module.training for module in dropout_modules]
     model.eval()

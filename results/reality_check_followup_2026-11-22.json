@@ -719,6 +719,129 @@
           "sha256": "65777a96c4b2e2115098b2351b73c3f4a50e07559aae10454223c7b3b70bfdc5"
         }
       ]
+    },
+    {
+      "probe": "bio-gpu-calibration",
+      "observation": "First measured hardware baseline, followed by an independent replay on the same RTX 4090. Four absolute checks passed. Training slowdown 1.37x passed, cached decode 2.43x exceeded 1.50x and correctly made this DSR run fail. Shell checks passed.",
+      "run_id": "7f6cfcbd-85f9-4609-b8da-1ac598c6a4b7",
+      "exit": 1,
+      "source": "b057a50fe3538fbadb13bf49e591a9bc2a7aaf87|7e176affae491800876897ee3a7ec66fc0d820d99363d9b6509fe6ae1129b32d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "424c2ee7e39c9deafed1ccdb754d3bd045d80a50198e84cfbdeb4307fba9143d"
+        },
+        {
+          "exit": 1,
+          "sha256": "65164b6e598c8c0b9608aaccdbd119aae1a6308cd3c0b87e5eacaa22271ee245"
+        },
+        {
+          "exit": 0,
+          "sha256": "9520d65eb829f4b76b214e67124e9ac38c1e76ea65a1238a9beca17c56b09629"
+        }
+      ]
+    },
+    {
+      "probe": "bio-saved-val",
+      "observation": "Quick Start trained a real tiny bio checkpoint and the validation-only command returned finite BPB for 128 held-out positions. Ruff and locked ty passed. UBS reported two critical findings in the original code path, leaving this DSR run red.",
+      "run_id": "a2fe466c-07c3-4092-9982-8605d73388f2",
+      "exit": 1,
+      "source": "c5a4e19e3be28062115ea6907daa6dfe29f6639c|ae6ac91319bf478c2ee757d7461ba72431f2fc419659fdfb6e1e3fb1741f3318|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "321a881fe1aceb4fabacdb5829a9b525fe6d8e0d410ed826980988a7120c9942"
+        },
+        {
+          "exit": 0,
+          "sha256": "ab3a5c67c275b984d338f1fb10d130e87bdf95a94aea8e1cdec503cc879caa94"
+        },
+        {
+          "exit": 1,
+          "sha256": "51f0538ceaede5caea5706838c11a5c6652bed288680bd70625343ebacc7a11e"
+        }
+      ]
+    },
+    {
+      "probe": "bio-standing-qualified-code-tests",
+      "observation": "326 scoped CPU regression cases passed across the nine type repairs.",
+      "run_id": "abb9cab8-f468-42c8-83ab-b9267f55eea6",
+      "exit": 0,
+      "source": "3369e57e8b1560b7af0d5ec564acf448c0f07a1f|2a88ef5f9aa6f7279fda5c2e05fe2fb1c21f352141a3f97c499a1fcd3f815c49|no-lockfile",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "a4f0c35bde038e8166b4e524d6c656441ef01a8d2fb6ab11dd80d5d2acfa5755"
+        }
+      ]
+    },
+    {
+      "probe": "bio-standing-qualified-e2e-tests",
+      "observation": "Fourteen end-to-end Quick Start and matrix tests passed on the nine-file type repair.",
+      "run_id": "8b9f67a3-5fd3-4914-a796-ba1790148e84",
+      "exit": 0,
+      "source": "3369e57e8b1560b7af0d5ec564acf448c0f07a1f|2a88ef5f9aa6f7279fda5c2e05fe2fb1c21f352141a3f97c499a1fcd3f815c49|no-lockfile",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "98e1d80f7e22ba19f31d5005dac8246c111f63547027d25f8714e1d3350eb5b1"
+        }
+      ]
+    },
+    {
+      "probe": "bio-standing-qualified-gate",
+      "observation": "Whole-tree DSR on the type repair reached UBS: 9 critical and 26 warnings over 378 files. The strict resource-lifecycle gate remained red.",
+      "run_id": "427b8e4a-3c59-4591-92f5-6adb2856873e",
+      "exit": 1,
+      "source": "3369e57e8b1560b7af0d5ec564acf448c0f07a1f|2a88ef5f9aa6f7279fda5c2e05fe2fb1c21f352141a3f97c499a1fcd3f815c49|no-lockfile",
+      "logs": [
+        {
+          "exit": 1,
+          "sha256": "e2f59f6eb0f782e746ff44fabef8aa620db8f4a6ba65d9eaaf708b74f4f407a4"
+        }
+      ]
+    },
+    {
+      "probe": "bio-standing-qualified-scanner",
+      "observation": "The unfiltered precommit scanner completed on the nine repaired files with zero critical findings, 55 warnings and 417 notes.",
+      "run_id": "772e8b36-0874-445f-8987-d80498d1775c",
+      "exit": 0,
+      "source": "3369e57e8b1560b7af0d5ec564acf448c0f07a1f|2a88ef5f9aa6f7279fda5c2e05fe2fb1c21f352141a3f97c499a1fcd3f815c49|no-lockfile",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "b776f6f4e2dcf35c627f2d1c21a9aa6be85eef10b3db09facb4c2cfb24cc85bf"
+        }
+      ]
+    },
+    {
+      "probe": "bio-standing-scoring-typecheck",
+      "observation": "In the original locked CPU container both ty 0.0.75 and ty 0.0.108 passed the full tree with the nine fixes and the validation-only candidate. Ruff and clean-diff checks passed.",
+      "run_id": "3420efa5-de90-4143-9170-e16453cd5426",
+      "exit": 0,
+      "source": "3369e57e8b1560b7af0d5ec564acf448c0f07a1f|2a88ef5f9aa6f7279fda5c2e05fe2fb1c21f352141a3f97c499a1fcd3f815c49|no-lockfile",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "2279cb8b6b1b87ac6977d78a15b7642a35aae57acd1cdd4c4ccdaf2918de52f3"
+        },
+        {
+          "exit": 0,
+          "sha256": "01751bee985579f8d54bc5c480ffa1af697512cfa3a5a03c45036e983ba305bf"
+        },
+        {
+          "exit": 0,
+          "sha256": "9f7f29ba2ad773a745055b5c2070dbafa6aa4ddd09067389a21e57d135bf28c9"
+        },
+        {
+          "exit": 0,
+          "sha256": "aee95741600b1cf8672cb586df91849aaf5d0b40c8723f9f943d3c016fcff51d"
+        },
+        {
+          "exit": 0,
+          "sha256": "c872e035b8ed09db982e17cb953f36973a4d4ce422b3f1086dc4bec970e788dc"
+        }
+      ]
     }
   ],
   "reference_feasibility": {

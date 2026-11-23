@@ -18,9 +18,10 @@ bio-inspired transformer models (beads odq.1, odq.2, odq.3, eqyk.12):
 from __future__ import annotations
 
 import types
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Iterator
+from typing import Any
 
 import torch
 import torch.nn as nn
@@ -262,7 +263,7 @@ class PatchClampProbe:
 
 
 @contextmanager
-def lesion_head(model: nn.Module, *, layer_idx: int, head_idx: int) -> Iterator[None]:
+def lesion_head(model: nn.Module, *, layer_idx: int, head_idx: int) -> Generator[None]:
     """Acutely knock out an attention head during inference by zeroing its projection output."""
     handles: list[RemovableHandle] = []
 
@@ -298,7 +299,7 @@ def lesion_head(model: nn.Module, *, layer_idx: int, head_idx: int) -> Iterator[
 
 
 @contextmanager
-def lesion_mechanism(model: nn.Module, mechanism: str) -> Iterator[None]:
+def lesion_mechanism(model: nn.Module, mechanism: str) -> Generator[None]:
     """Acutely knock out a biological mechanism (hebbian, vesicle_fatigue, camkii, bdnf, dopamine)."""
     saved_state: dict[tuple[int, str], tuple[Any, str, Any]] = {}
 
@@ -346,7 +347,7 @@ def optogenetic_clamp(
     value: float,
     *,
     layer_idx: int | None = None,
-) -> Iterator[None]:
+) -> Generator[None]:
     """Clamps or injects a biological synaptic state quantity mid-inference (optogenetics analog).
 
     Supported targets:

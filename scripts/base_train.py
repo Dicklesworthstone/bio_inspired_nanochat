@@ -175,9 +175,8 @@ config_keys = [
     if not k.startswith("_") and isinstance(v, (int, float, bool, str))
 ]
 _configured = runpy.run_module("bio_inspired_nanochat.configurator", init_globals=globals())
-for _config_key in config_keys:
-    globals()[_config_key] = _configured[_config_key]
-user_config = {k: globals()[k] for k in config_keys}  # will be useful for logging
+user_config = {k: _configured[k] for k in config_keys}
+globals().update(user_config)
 user_config["syn_cfg_overrides"] = dict(syn_cfg_overrides)
 if syn_cfg_overrides and not synapses:
     # Fail here, before the tokenizer/data/model setup, so a typo in the flags costs seconds.
@@ -218,8 +217,10 @@ print0(f"Vocab size: {vocab_size:,}")
 # A resumed run must use the architecture and sequence length that produced the
 # checkpoint, even when a model_tag lets the caller reach it with different CLI defaults.
 base_dir = get_base_dir()
-output_dirname = model_tag if model_tag else f"d{depth}"  # e.g. d12
+model_tag = user_config["model_tag"]
+output_dirname = model_tag or f"d{depth}"  # e.g. d12
 checkpoint_dir = os.path.join(base_dir, "base_checkpoints", output_dirname)
+resume_from_step = user_config["resume_from_step"]
 resuming = resume_from_step != -1
 if resuming:
     require_complete_checkpoint(checkpoint_dir, resume_from_step)
@@ -227,6 +228,8 @@ resume_meta = (
     load_checkpoint_metadata(checkpoint_dir, resume_from_step) if resuming else None
 )
 matrix_provenance: dict[str, Any] = {}
+matrix_run_id = user_config["matrix_run_id"]
+matrix_manifest = user_config["matrix_manifest"]
 if matrix_run_id or matrix_manifest:
     from bio_inspired_nanochat.matrix_manifest import dataset_identity, load_manifest, source_identity
 
@@ -510,7 +513,7 @@ if use_syn:
             native_genetics=True,
         )
     )
-    if load_cmaes_params:
+    if load_cmaes_params := user_config["load_cmaes_params"]:
         if resume_meta is not None:
             raise ValueError(
                 "load_cmaes_params cannot be combined with --resume: overlaying search "
@@ -902,12 +905,9 @@ mfu: float = 0.0
 # bio mechanisms now live on the forward path.
 divguard = build_divergence_guard()
 if resuming:
-    divguard_state = (
-        train_state.get("divergence_guard") if train_state is not None else None
-    )
-    if divguard_state is None:
+    if train_state is None or train_state.get("divergence_guard") is None:
         raise ValueError("exact resume requires divergence-guard state")
-    divguard.load_state_dict(divguard_state)
+    divguard.load_state_dict(train_state["divergence_guard"])
     print0("[checkpoint] restored divergence-guard EMA and rollback state")
     # Restore RNG last, after compile wrapping and every runtime/controller object has
     # been rebuilt. Initialization work must not consume draws from the saved future.

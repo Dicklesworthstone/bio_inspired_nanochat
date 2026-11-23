@@ -3708,11 +3708,7 @@ def _predictive_gate(
             "sampling_modes": sorted(modes),
             "expected_sites": [list(site) for site in observation.expected_sites],
             "cohort_artifact_sha256": [seed.artifact_sha256 for seed in seeds],
-            "local_seed_pass_rate": (
-                sum(locally_valid) / len(local_evidences)
-                if local_evidences
-                else 0.0
-            ),
+            "local_seed_pass_rate": sum(locally_valid) / len(local_evidences),
             "statistics": asdict(statistics),
             "recomputed_comparisons": comparison_results,
             "recomputed_live_ft": live_ft_results,

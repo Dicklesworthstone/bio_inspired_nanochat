@@ -11,10 +11,11 @@ from __future__ import annotations
 
 import math
 import time
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import torch
@@ -26,7 +27,7 @@ from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic
 
 
 @contextmanager
-def _temporary_eval(model: torch.nn.Module) -> Iterator[None]:
+def _temporary_eval(model: torch.nn.Module) -> Generator[None]:
     """Evaluate without flattening or permanently changing caller-owned module modes."""
     training_modes = [(module, module.training) for module in model.modules()]
     model.eval()
