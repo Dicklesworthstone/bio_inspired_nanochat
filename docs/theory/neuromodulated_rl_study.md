@@ -80,13 +80,13 @@ established way to make earlier activity available to delayed feedback.
 
 - [x] Replay the old 35-step battery and count real deferred writes at the
   production update and reset boundaries.
-- [ ] Expose the normal deferred-write operation at an explicit safe
+- [x] Expose the normal deferred-write operation at an explicit safe
   boundary. In the existing reward harness, complete backward and the
   optimizer step, broadcast feedback, commit exactly once per eligible
   site, then reset at the next episode. Test that it lands, changes the
   persistent slow matrix, consumes eligibility once and respects the
   dopamine gain. Keep ordinary forward and validation semantics.
-- [ ] Run the contextual-bandit study on seeds 410–417 for 128 updates per
+- [x] Run the contextual-bandit study on seeds 410–417 for 128 updates per
   seed and feedback policy. Use the existing two-layer, width-64 model and
   copy-first reward with batch size 16. Initialize the three policies
   identically and use the same task seeds and action RNG initialization.
@@ -95,11 +95,11 @@ established way to make earlier activity available to delayed feedback.
   (aligned), use gain 1 (neutral), or use the gain before that reward was
   observed (one-episode lag). The three policies can produce different
   actions and hence different reward streams during training.
-- [ ] Evaluate the identical 512 held-out contexts at updates 0, 32, 64,
+- [x] Evaluate the identical 512 held-out contexts at updates 0, 32, 64,
   96 and 128 with writes off and fast state reset. Treat mean probability
   of the rewarded action as the expected reward of sampling the policy.
   Record greedy accuracy and gold-token negative log likelihood too.
-- [ ] Compare aligned with neutral and aligned with lagged. The endpoint
+- [x] Compare aligned with neutral and aligned with lagged. The endpoint
   is each seed's mean held-out expected reward at updates 32–128. Require
   at least 0.01 absolute improvement, positive changes in at least six of
   eight matched seeds, and a one-sided paired sign-flip p-value at most
@@ -107,7 +107,7 @@ established way to make earlier activity available to delayed feedback.
   for advancement. Publish every trajectory with commit counts, gains and
   outcomes. The study covers synthetic policy-gradient learning in the
   E2E harness. GRPO and full-model recall remain separate.
-- [ ] Recompute the decision independently, run DSR quality checks and
+- [x] Recompute the decision independently, run DSR quality checks and
   record the bounded outcome in Beads.
 
 ### Supervised initialization follow-up
@@ -117,17 +117,73 @@ The cold-start policy stayed near the 1-in-64 chance rate. At an equal
 expected reward with updates from the Hebbian layer disabled. The task
 can support learning by this architecture.
 
-- [ ] Use eight fresh seeds, 40521 through 47521 in steps of 1000. Train
+- [x] Use eight fresh seeds, 40521 through 47521 in steps of 1000. Train
   each starting model for 128 supervised updates with the same batch size,
   optimizer, learning rate and clipping as the cold study. Use task seeds
   1,000,000 plus the model seed plus step for this initialization phase.
   Disable online writes during supervision. Save a digest of the trained
   state and give an identical copy to each feedback policy.
-- [ ] Apply the same 128-step contextual-bandit schedules and advancement
+- [x] Apply the same 128-step contextual-bandit schedules and advancement
   thresholds from the cold study. Use 512 fresh contexts from seed 101004
   for evaluation. Require at least six starting policies to score at
   least 0.10 expected reward for this result to qualify as a test on
   competent policies. Record early reward, end reward and total writes
   for every arm and seed.
-- [ ] Keep the cold-start and supervised-initialization decisions visible
+- [x] Keep the cold-start and supervised-initialization decisions visible
   and independently reproducible.
+
+### Observed timing and reward
+
+The corrected battery committed **140 of 140** deferred writes in the
+same episode as their reward. It finished with zero discarded and zero
+pending writes. The original battery committed zero, discarded 136 and
+finished with four pending. In a regression test, changing only the
+dopamine gain changed the norm of each persistent matrix update by the
+registered factor. A second commit left the matrices exactly equal.
+
+All 48 policy runs completed. An independent implementation reconstructed
+6,144 feedback gains and 24,576 commit counts from both sets of traces.
+All eight supervised starts exceeded the 0.10 competence floor.
+
+| Starting policy | Comparison with same-episode feedback | Mean expected reward gain, percentage points | Positive seeds | One-sided paired p | Passed |
+| --- | --- | ---: | ---: | ---: | :---: |
+| Cold | Neutral | +0.001949 | 6/8 | 0.144531 | No |
+| Cold | Previous episode | +0.000530 | 6/8 | 0.027344 | No |
+| Supervised | Neutral | +0.358337 | 7/8 | 0.019531 | No |
+| Supervised | Previous episode | +0.246096 | 6/8 | 0.039063 | No |
+
+The minimum effect was **1 percentage point**. The cold-start policy's
+held-out expected reward averaged 1.56% before training and 1.54% after
+aligned training. In the supervised follow-up, aligned feedback moved
+from 34.58% to 60.69%. Neutral and lagged feedback finished at 60.10% and
+60.21%. Those endpoints are descriptive. The registered comparisons
+average four checkpoints and both studies declined advancement. The
+supervised follow-up showed that competent policies improved under all
+three schedules and the timing advantage fell below the registered
+threshold across these seeds. It measures the timing of the
+dopamine multiplier on the Hebbian matrix writes in this copy-first
+task. Larger models, delayed rewards across multiple episodes, and GRPO
+remain open. [Full numerical results and DSR receipts](../../results/delayed_reward_2026-11-23.json) · [Training and holdout traces](../../results/delayed_reward_2026-11-23.json.gz)
+
+### Replay
+
+The synthetic CLI accepts `--timing-study --run-dir "$NEW_DIRECTORY"` in
+the normal DSR check running `uv run --no-sync python -m scripts.e2e.neuromod_rl`.
+The summary JSON contains the supervised-initialization driver and the
+independent verifier. To replay the archived curves, decompress the trace
+archive, extract `cold` and `supervised` into distinct JSON files, and
+pass the corresponding file and a fresh result path to `verify_reward.py`
+in a DSR quality check. Append the positional argument `warm` for
+the supervised trace.
+
+### Qualification
+
+An unchanged 12-step ordinary training replay matched every output,
+gradient and state hash. Evaluation interleaved with training preserved
+model state. Both timing studies reproduced byte for byte from an
+isolated checkout after the CUDA reward-device repair. The final Linux
+CPU suite passed 2,082 tests with 11 skips. The native CUDA battery and
+the compiled axiom checks for all 19 mapped Lean theorems passed.
+Ruff and ty passed on the locked Linux environment. The receipts retain
+the stale-hash rejection, the isolated RAM scratch quota failure, and
+the separate throughput reruns. [Executable evidence](../../results/delayed_reward_2026-11-23.json)

@@ -334,3 +334,8 @@ To replay the statistics in DSR without checkpoints or a GPU, extract
 `executed_verifier_source` from the results JSON to a new scratch file and
 run `uv run --no-sync python "$SCRATCH/verify_binding.py" results`.
 
+The reward-timing follow-up repaired the episode boundary that discarded
+deferred eligibility in the synthetic policy-gradient harness. The fixed
+write path committed every update. Cold and supervised starting policies
+both fell below the preregistered reward benefit. [Matched reward-timing experiments](theory/neuromodulated_rl_study.md#observed-timing-and-reward)
+

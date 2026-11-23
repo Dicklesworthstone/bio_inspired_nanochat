@@ -1,0 +1,1054 @@
+{
+  "prior_source": "bea83c5",
+  "published_trace_replay": {
+    "dsr_run_id": "D2188190-A157-4684-A055-5DB27A24C1DF",
+    "log_sha256": "386d09fa8c8db90c03e5273465fced95b70bfccfa0bf7a909d6e88437f8dcbee",
+    "result": "The archived verifier reproduced both decisions from the compressed publication."
+  },
+  "protocol_commits": {
+    "cold": "2b2fa7f",
+    "supervised": "c54a698"
+  },
+  "implementation_commits": [
+    "307653b",
+    "1b77740"
+  ],
+  "exact_source_sha256": {
+    "bio_inspired_nanochat/synaptic.py": "7d1c194e0d34ae9116685e99cc62ae3dd7c47b9a54c367720229646f1c0fd7e9",
+    "scripts/e2e/neuromod_rl.py": "afb2d3faae5f2a7fc0a17e0506b10be3a8f047ace9a4c695ee2d0e8fa16dec39",
+    "tests/test_e2e_neuromod_rl.py": "be39b0c20b285446cd4bcd2f80581ff689b16638da33688a2c7019744e4479cf",
+    "formal/lean/proof_artifacts.json": "5bb00c5956ae3f39c6f2c45cdbbc6f1304bef7b7b44069801d561cb676edeb9a"
+  },
+  "before": {
+    "deferred_writes_applied": 0,
+    "deferred_writes_cleared_on_reset": 136,
+    "pending_after_last_episode": 4,
+    "steps": 35,
+    "battery_passed": true
+  },
+  "after": {
+    "deferred_writes_applied": 140,
+    "deferred_writes_cleared_on_reset": 0,
+    "pending_after_last_episode": 0,
+    "steps": 35,
+    "battery_passed": true
+  },
+  "ordinary_trajectory": [
+    {
+      "step": 1,
+      "state": "0dbd68ba7dcb88e9307b3f654e8c1afe1eb9206980a6bf0e90d546ae52558fec",
+      "gradients": "3b0e87d25a94953aad8ae258c9bde91acb9f95a442d54b50ebef40ed667ac663",
+      "outputs": "6dd52efd3e7d347cfd69df8fabb5f6f415ffda5fd9d42f5eb850884ca50c731a",
+      "pending": 4
+    },
+    {
+      "step": 2,
+      "state": "a3d51c136ce0f0b59bcd75e3f3743c38441312c9fa328c33f98f46039bc569c8",
+      "gradients": "e5e684aae6a6360f828412ded188c6ff2557609a49158a172c1329e684529a79",
+      "outputs": "d6d480110eb2e71efa615cfccf35a6a4dad45758ba3fba786b03a9a009c3cf0f",
+      "pending": 4
+    },
+    {
+      "step": 3,
+      "state": "8cb27f190556843e13a0b82663e432771171975487c6d95c359730ecc98e8add",
+      "gradients": "ee01b11620640e477ec9628d1bfaa864d9f2215a8e2994f33c9059db877691ed",
+      "outputs": "e6781421a50bfc1245e2763dcc1bb57d56f5cfee341d4268551be3025760fba5",
+      "pending": 4
+    },
+    {
+      "step": 4,
+      "state": "0a143dd13ce252f4a2fa632b39697ebcdd7d157d95116a42212b5ab70bda8b0f",
+      "gradients": "c65647a90c03fa854f83f2f2c530e04606eaa3fc742b07aba0b57bee88c62076",
+      "outputs": "31440a655d56508e16f3c84405658f78795f777c453c851ca96f7a1448fd5183",
+      "pending": 4
+    },
+    {
+      "step": 5,
+      "state": "8d770e3cf411b92925179110f069fbf55c14da8d0c6ffc0df259ef52169d28c7",
+      "gradients": "6146d6e8acdad3e9b6ca16368100b1af6479defeccc3b08b991c3f6e417b42ec",
+      "outputs": "4060c4b461b03d77f4b5b8bd80f1d8169dfbd481f0cf19fadffa08a812fcb3a5",
+      "pending": 4
+    },
+    {
+      "step": 6,
+      "state": "3d472f14455eca5e1a73594ed46b5ee73fc4df5c4b2b3af450d0d2d8c115b4a5",
+      "gradients": "ef18fafd4d5ee55edba7b9a77c1940d34dc2317bcd5cda186b5804a1a5609245",
+      "outputs": "69597dcd8877a0bca7a31499a2ac483bb56baf780d5f0095b6d8c4c4dfb1f908",
+      "pending": 4
+    },
+    {
+      "step": 7,
+      "state": "c9d82e5a690d4880c5ed688a7de7351546bdbfb2b11c269a6324022331d79f21",
+      "gradients": "298a679884dc08ab56db95e982e5c920260a1a9409496869b677030a8d2dd495",
+      "outputs": "9834d911291fc0d4917d8aceb97f56e313cb44f50fcb004d3dfc410adba92903",
+      "pending": 4
+    },
+    {
+      "step": 8,
+      "state": "2c92a26765bcc835b334fd1fb5d79bec00a1ee9e5b6f179c4b4a314d6994b43b",
+      "gradients": "094a4f4e246eed9b42680c2df49624625ab9a7cd275bfe90e222144de9519ea2",
+      "outputs": "f6c77ba69c963730f7fe6807f1af205915c5eff506faf20341fe9a56631b8f7c",
+      "pending": 4
+    },
+    {
+      "step": 9,
+      "state": "05f0d5489f7165b15f54b8a6ff2a780f6fd41f9fc7bb75739ab0586a83f24580",
+      "gradients": "6f9c712bb82e60730748c22b4b4d4d229e78acc7e3049e105e30e715f9fa37d7",
+      "outputs": "d2d1e14ed8529e81571e6b13e7825c4b3cffc33c0f65d28eeb47806d96a04930",
+      "pending": 4
+    },
+    {
+      "step": 10,
+      "state": "4c8f151c971aa7adbe9721fee77b6468cb8763f1962c1eb2933aba4dc1aa12a9",
+      "gradients": "667e7dd441895306565eba07e787a9d9c66bcff633419b192866d3d5c43b7104",
+      "outputs": "e2eef443b108e4e609e16ec7f0fa54f827297b17d42e257968a1504113a6c11b",
+      "pending": 4
+    },
+    {
+      "step": 11,
+      "state": "1cfe34092d4597bec246ea559fa3456eaf5ab00a2c2874970d537bff024b9809",
+      "gradients": "7e9f996dd6bc8d056e8ab959cc6fc99870ec973aa313eb72dd74dd55dc5fb8e9",
+      "outputs": "cfd55105626c3ca0c447a9007584986d69ff18e29bbe22c7e92616f41a9601fc",
+      "pending": 4
+    },
+    {
+      "step": 12,
+      "state": "3d1c58830d25b9b92b511c638ed6c52a97f04c9db4452deb0019d6b1315a87c0",
+      "gradients": "ed9673e3ccf1b3118b2dd85b2dc8601d37062a9ef9263f121e3b6a4f4191074e",
+      "outputs": "e18f9816d3bf9f0250800fac1c27e366dbd3adc5fa1a7552174e5516dc3a1de6",
+      "pending": 4
+    }
+  ],
+  "ordinary_trajectory_identical": true,
+  "compiled_lean_audit": {
+    "log_sha256": "d1a02b44a6ca11a9ab8844c147f89329505980dede332c03c5bd7130c054a536",
+    "mapped_theorems": 19,
+    "tail": [
+      " Classical.choice,",
+      " Quot.sound]",
+      "Compiled axiom allowlist: 19 of 19 unique mapped theorem identities passed"
+    ]
+  },
+  "cold": {
+    "contrasts": {
+      "neutral": {
+        "mean": 1.9494968000799417e-05,
+        "one_sided_p": 0.14453125,
+        "positive_seeds": 6,
+        "seed_deltas": [
+          -9.066425263881683e-07,
+          1.1292286217212677e-07,
+          6.413203664124012e-05,
+          1.51775311678648e-05,
+          5.639158189296722e-07,
+          2.8884969651699066e-06,
+          0.00011067627929151058,
+          -3.66847962141037e-05
+        ],
+        "pass": false
+      },
+      "lagged": {
+        "mean": 5.299225449562073e-06,
+        "one_sided_p": 0.02734375,
+        "positive_seeds": 6,
+        "seed_deltas": [
+          1.7075799405574799e-06,
+          -5.436595529317856e-07,
+          4.895031452178955e-06,
+          1.505296677350998e-05,
+          -6.856862455606461e-07,
+          1.2294622138142586e-05,
+          9.26782377064228e-06,
+          4.0512531995773315e-07
+        ],
+        "pass": false
+      }
+    },
+    "advance": false,
+    "verification": {
+      "updates": 3072,
+      "committed_writes": 12288,
+      "gain_observations": 3072,
+      "heldout_contexts_scored": 61440,
+      "exact_decisions": {
+        "neutral": false,
+        "lagged": false
+      },
+      "sign_patterns_per_contrast": 256,
+      "input_sha256": "ea9ce5b3d0952046279c0bd13d1cf175dea120368aad4592a8dc073c3484552e",
+      "competent": 0,
+      "mean_heldout_reward_curves": {
+        "aligned": [
+          0.015583621803671122,
+          0.0156287633581087,
+          0.01587976166047156,
+          0.015584960812702775,
+          0.015436590532772243
+        ],
+        "neutral": [
+          0.015583621803671122,
+          0.01562851422931999,
+          0.01587664254475385,
+          0.015563231660053134,
+          0.015383708057925105
+        ],
+        "lagged": [
+          0.015583621803671122,
+          0.01562895847018808,
+          0.015877512865699828,
+          0.015583598637022078,
+          0.01541880948934704
+        ]
+      }
+    }
+  },
+  "supervised": {
+    "contrasts": {
+      "neutral": {
+        "mean": 0.0035833651199936867,
+        "one_sided_p": 0.01953125,
+        "positive_seeds": 7,
+        "seed_deltas": [
+          0.0030730217695236206,
+          -0.0034242570400238037,
+          0.0029187053442001343,
+          0.005126848816871643,
+          0.005266651511192322,
+          0.005823366343975067,
+          0.007646434009075165,
+          0.0022361502051353455
+        ],
+        "pass": false
+      },
+      "lagged": {
+        "mean": 0.002460962161421776,
+        "one_sided_p": 0.0390625,
+        "positive_seeds": 6,
+        "seed_deltas": [
+          0.005793802440166473,
+          0.005917385220527649,
+          -0.00318850576877594,
+          0.005225151777267456,
+          0.002585291862487793,
+          -0.0014982149004936218,
+          0.0015490055084228516,
+          0.0033037811517715454
+        ],
+        "pass": false
+      }
+    },
+    "advance": false,
+    "competent_initializations": 8,
+    "starting_state_sha256": {
+      "40521": "34090ff6c2a0915e754f9034b76ca60cbb348096df66b44f7bb849673b408909",
+      "41521": "9d36efd9970861dc3a2a8b98798a47cdd96305ceeb6bbde0e246f64ee732c719",
+      "42521": "dc29134ed5ee1f0d43a6093fcaaf315191da61d1dde111c5adef41e87ac10689",
+      "43521": "96eccfa284bae7473b66f9ab7977731fdfe5841fafb17465598af33c0643382b",
+      "44521": "1420f5b20139bfd6f15ea3f14a226c7640607e5b62478007508c2a3bac33aeb2",
+      "45521": "6c8f00fc1ba5b7eb595d391fdeff54b5f55a4cc1d3390b607a35ce3c3ba5d7ed",
+      "46521": "85addcb1af84d8c124594d4f749536794af4da8eae27c8444a1a8dfe4fbe4352",
+      "47521": "09db42dcf2720caa87c36ac8d326ed3846c901111ab8dac4e9dd8a372b113b91"
+    },
+    "verification": {
+      "updates": 3072,
+      "committed_writes": 12288,
+      "gain_observations": 3072,
+      "heldout_contexts_scored": 61440,
+      "exact_decisions": {
+        "neutral": false,
+        "lagged": false
+      },
+      "sign_patterns_per_contrast": 256,
+      "input_sha256": "11a5e8b418030f11bed352bd7f43253dc9e150c35ac202d8e2659937db674783",
+      "competent": 8,
+      "mean_heldout_reward_curves": {
+        "aligned": [
+          0.3458269163966179,
+          0.3840346559882164,
+          0.476272638887167,
+          0.5511957630515099,
+          0.6069106459617615
+        ],
+        "neutral": [
+          0.3458269163966179,
+          0.38340016454458237,
+          0.47468170523643494,
+          0.5449997708201408,
+          0.6009986028075218
+        ],
+        "lagged": [
+          0.3458269163966179,
+          0.384544737637043,
+          0.4743291400372982,
+          0.5475625097751617,
+          0.6021334677934647
+        ]
+      }
+    }
+  },
+  "direct_supervision_control": {
+    "curves": {
+      "410": {
+        "0": {
+          "expected_reward": 0.015531349927186966,
+          "gold_nll": 4.176280975341797,
+          "greedy_hits": 11,
+          "examples": 512
+        },
+        "32": {
+          "expected_reward": 0.017322015017271042,
+          "gold_nll": 4.089749813079834,
+          "greedy_hits": 31,
+          "examples": 512
+        },
+        "64": {
+          "expected_reward": 0.038266316056251526,
+          "gold_nll": 3.361815929412842,
+          "greedy_hits": 257,
+          "examples": 512
+        },
+        "96": {
+          "expected_reward": 0.14727962017059326,
+          "gold_nll": 2.015089273452759,
+          "greedy_hits": 492,
+          "examples": 512
+        },
+        "128": {
+          "expected_reward": 0.36181485652923584,
+          "gold_nll": 1.0759193897247314,
+          "greedy_hits": 512,
+          "examples": 512
+        }
+      },
+      "411": {
+        "0": {
+          "expected_reward": 0.015607486478984356,
+          "gold_nll": 4.175264358520508,
+          "greedy_hits": 6,
+          "examples": 512
+        },
+        "32": {
+          "expected_reward": 0.01710529997944832,
+          "gold_nll": 4.111379623413086,
+          "greedy_hits": 34,
+          "examples": 512
+        },
+        "64": {
+          "expected_reward": 0.03136180713772774,
+          "gold_nll": 3.632979393005371,
+          "greedy_hits": 112,
+          "examples": 512
+        },
+        "96": {
+          "expected_reward": 0.10840770602226257,
+          "gold_nll": 2.3683836460113525,
+          "greedy_hits": 408,
+          "examples": 512
+        },
+        "128": {
+          "expected_reward": 0.2750418782234192,
+          "gold_nll": 1.3952102661132812,
+          "greedy_hits": 491,
+          "examples": 512
+        }
+      },
+      "412": {
+        "0": {
+          "expected_reward": 0.01589151844382286,
+          "gold_nll": 4.154233455657959,
+          "greedy_hits": 9,
+          "examples": 512
+        },
+        "32": {
+          "expected_reward": 0.01737217605113983,
+          "gold_nll": 4.105568885803223,
+          "greedy_hits": 19,
+          "examples": 512
+        },
+        "64": {
+          "expected_reward": 0.030315367504954338,
+          "gold_nll": 3.6257245540618896,
+          "greedy_hits": 116,
+          "examples": 512
+        },
+        "96": {
+          "expected_reward": 0.1000887006521225,
+          "gold_nll": 2.415511131286621,
+          "greedy_hits": 394,
+          "examples": 512
+        },
+        "128": {
+          "expected_reward": 0.26889273524284363,
+          "gold_nll": 1.3900786638259888,
+          "greedy_hits": 510,
+          "examples": 512
+        }
+      },
+      "413": {
+        "0": {
+          "expected_reward": 0.015357108786702156,
+          "gold_nll": 4.186128616333008,
+          "greedy_hits": 0,
+          "examples": 512
+        },
+        "32": {
+          "expected_reward": 0.016873659566044807,
+          "gold_nll": 4.122490406036377,
+          "greedy_hits": 24,
+          "examples": 512
+        },
+        "64": {
+          "expected_reward": 0.03164659067988396,
+          "gold_nll": 3.5582408905029297,
+          "greedy_hits": 160,
+          "examples": 512
+        },
+        "96": {
+          "expected_reward": 0.1238766685128212,
+          "gold_nll": 2.2072978019714355,
+          "greedy_hits": 455,
+          "examples": 512
+        },
+        "128": {
+          "expected_reward": 0.31624817848205566,
+          "gold_nll": 1.225271224975586,
+          "greedy_hits": 511,
+          "examples": 512
+        }
+      },
+      "414": {
+        "0": {
+          "expected_reward": 0.01560237817466259,
+          "gold_nll": 4.170504570007324,
+          "greedy_hits": 7,
+          "examples": 512
+        },
+        "32": {
+          "expected_reward": 0.01675700955092907,
+          "gold_nll": 4.1432037353515625,
+          "greedy_hits": 9,
+          "examples": 512
+        },
+        "64": {
+          "expected_reward": 0.02883409895002842,
+          "gold_nll": 3.632966995239258,
+          "greedy_hits": 122,
+          "examples": 512
+        },
+        "96": {
+          "expected_reward": 0.10399703681468964,
+          "gold_nll": 2.3896772861480713,
+          "greedy_hits": 410,
+          "examples": 512
+        },
+        "128": {
+          "expected_reward": 0.26810604333877563,
+          "gold_nll": 1.4023652076721191,
+          "greedy_hits": 495,
+          "examples": 512
+        }
+      },
+      "415": {
+        "0": {
+          "expected_reward": 0.015472615137696266,
+          "gold_nll": 4.1796135902404785,
+          "greedy_hits": 5,
+          "examples": 512
+        },
+        "32": {
+          "expected_reward": 0.016404833644628525,
+          "gold_nll": 4.158181190490723,
+          "greedy_hits": 10,
+          "examples": 512
+        },
+        "64": {
+          "expected_reward": 0.022332532331347466,
+          "gold_nll": 3.8824074268341064,
+          "greedy_hits": 61,
+          "examples": 512
+        },
+        "96": {
+          "expected_reward": 0.06999465823173523,
+          "gold_nll": 2.8190484046936035,
+          "greedy_hits": 301,
+          "examples": 512
+        },
+        "128": {
+          "expected_reward": 0.20903116464614868,
+          "gold_nll": 1.6749132871627808,
+          "greedy_hits": 488,
+          "examples": 512
+        }
+      },
+      "416": {
+        "0": {
+          "expected_reward": 0.015564671717584133,
+          "gold_nll": 4.173474311828613,
+          "greedy_hits": 12,
+          "examples": 512
+        },
+        "32": {
+          "expected_reward": 0.01690242439508438,
+          "gold_nll": 4.124290466308594,
+          "greedy_hits": 24,
+          "examples": 512
+        },
+        "64": {
+          "expected_reward": 0.02974240668118,
+          "gold_nll": 3.6316421031951904,
+          "greedy_hits": 145,
+          "examples": 512
+        },
+        "96": {
+          "expected_reward": 0.10934269428253174,
+          "gold_nll": 2.343852996826172,
+          "greedy_hits": 401,
+          "examples": 512
+        },
+        "128": {
+          "expected_reward": 0.2865418791770935,
+          "gold_nll": 1.3363128900527954,
+          "greedy_hits": 502,
+          "examples": 512
+        }
+      },
+      "417": {
+        "0": {
+          "expected_reward": 0.015641845762729645,
+          "gold_nll": 4.170034408569336,
+          "greedy_hits": 10,
+          "examples": 512
+        },
+        "32": {
+          "expected_reward": 0.01704329252243042,
+          "gold_nll": 4.125405311584473,
+          "greedy_hits": 28,
+          "examples": 512
+        },
+        "64": {
+          "expected_reward": 0.02529430389404297,
+          "gold_nll": 3.7703444957733154,
+          "greedy_hits": 90,
+          "examples": 512
+        },
+        "96": {
+          "expected_reward": 0.08359166979789734,
+          "gold_nll": 2.6256051063537598,
+          "greedy_hits": 381,
+          "examples": 512
+        },
+        "128": {
+          "expected_reward": 0.24194370210170746,
+          "gold_nll": 1.5284464359283447,
+          "greedy_hits": 487,
+          "examples": 512
+        }
+      }
+    },
+    "pooled": {
+      "0": {
+        "expected_reward": 0.015583621803671122,
+        "greedy_hits": 7.5,
+        "gold_nll": 4.173191785812378
+      },
+      "32": {
+        "expected_reward": 0.01697258884087205,
+        "greedy_hits": 22.375,
+        "gold_nll": 4.122533679008484
+      },
+      "64": {
+        "expected_reward": 0.02972417790442705,
+        "greedy_hits": 132.875,
+        "gold_nll": 3.637015223503113
+      },
+      "96": {
+        "expected_reward": 0.10582234431058168,
+        "greedy_hits": 405.25,
+        "gold_nll": 2.398058205842972
+      },
+      "128": {
+        "expected_reward": 0.27845255471765995,
+        "greedy_hits": 499.5,
+        "gold_nll": 1.3785646706819534
+      }
+    }
+  },
+  "traces": {
+    "file": "delayed_reward_2026-11-23.json.gz",
+    "sha256": "83955614e594002ae7d53f08e7fc8e1a6083846bddcb4c8e38e44a55e8123202",
+    "policy_runs": 48,
+    "training_episodes": 6144,
+    "archived_holdout_scores": 240
+  },
+  "sources": {
+    "replay_before.py": "\"\"\"Observe the unchanged reward harness at the production deferred-write boundary.\"\"\"\nimport json\nimport sys\nfrom pathlib import Path\n\nfrom bio_inspired_nanochat.synaptic import SynapticLinear\nfrom scripts.e2e.neuromod_rl import NeuromodRLE2EConfig, run_neuromod_rl_e2e\n\n\ncounts = {\"deferred_writes_applied\": 0, \"deferred_writes_cleared_on_reset\": 0}\nseen = set()\napply_write = SynapticLinear._apply_hebb_weight_writes\nreset = SynapticLinear.reset_sequence_state\n\n\ndef measure_apply(self, gate):\n    result = apply_write(self, gate)\n    counts[\"deferred_writes_applied\"] += int(self._plasticity_pending)\n    return result\n\n\ndef measure_reset(self, **kwargs):\n    seen.add(self)\n    counts[\"deferred_writes_cleared_on_reset\"] += int(self._plasticity_pending)\n    return reset(self, **kwargs)\n\n\nSynapticLinear._apply_hebb_weight_writes = measure_apply\nSynapticLinear.reset_sequence_state = measure_reset\npath = Path(sys.argv[1])\nreport = run_neuromod_rl_e2e(NeuromodRLE2EConfig(rl_steps=35), run_dir=path, verbose=False)\nresult = {**counts, \"pending_after_last_episode\": sum(layer._plasticity_pending for layer in seen),\n          \"steps\": 35, \"battery_passed\": report.passed}\n(path / \"observed.json\").write_text(json.dumps(result, indent=2) + \"\\n\")\nexpected = [int(value) for value in sys.argv[2:]]\nobserved = [*counts.values(), result[\"pending_after_last_episode\"]]\nif observed != expected or not report.passed:\n    raise SystemExit(1)\n",
+    "reward_competence.py": "\"\"\"Measure whether direct supervision can learn the same held-out copy-first task.\"\"\"\nimport json\nimport statistics\nimport sys\nfrom pathlib import Path\n\nimport torch\nfrom rich.console import Console\n\nfrom bio_inspired_nanochat.synthetic_tasks import reward_task\nfrom scripts.e2e.neuromod_rl import NeuromodRLE2EConfig, _build_model, heldout_reward\n\n\ncurves = {}\nfor seed in range(410, 418):\n    cfg = NeuromodRLE2EConfig(seed=seed, batch_size=16, rl_steps=128)\n    model = _build_model(cfg, seed_offset=3).train()\n    optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=1e-4)\n    curves[seed] = {0: heldout_reward(model, cfg)}\n    for step in range(1, 129):\n        batch, _ = reward_task(batch=16, context_len=cfg.context_len, vocab_size=cfg.vocab_size,\n                               seed=seed + 99 + step)\n        model.reset_sequence_state(reset_fast_weights=True)\n        optimizer.zero_grad()\n        _, loss = model(batch.inputs, batch.targets, train_mode=True, update_mem=False)\n        loss.backward()\n        torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_clip, error_if_nonfinite=True)\n        optimizer.step()\n        if step % 32 == 0:\n            curves[seed][step] = heldout_reward(model, cfg)\nreport = {\"curves\": curves,\n          \"pooled\": {step: {metric: statistics.fmean(curves[s][step][metric] for s in curves)\n                            for metric in (\"expected_reward\", \"greedy_hits\", \"gold_nll\")}\n                     for step in (0, 32, 64, 96, 128)}}\nwith Path(sys.argv[1]).open(\"x\") as stream:\n    json.dump(report, stream, indent=2)\n    stream.write(\"\\n\")\nConsole().print(report[\"pooled\"])\n",
+    "warm_reward.py": "\"\"\"Run the reward schedules from independently supervised model states.\"\"\"\nimport hashlib\nimport itertools\nimport json\nimport math\nimport statistics\nimport sys\nfrom pathlib import Path\nfrom unittest.mock import patch\n\nimport torch\nfrom rich.console import Console\n\nfrom bio_inspired_nanochat.synthetic_tasks import reward_task\nfrom scripts.e2e import neuromod_rl\n\n\nbuild = neuromod_rl._build_model\nconsole = Console()\nsteps = (0, 32, 64, 96, 128)\narms = (\"aligned\", \"neutral\", \"lagged\")\n\n\n@torch.no_grad()\ndef heldout(model, cfg):\n    batch, reward = reward_task(batch=512, context_len=cfg.context_len,\n                                vocab_size=cfg.vocab_size, seed=101004)\n    model.eval()\n    model.reset_sequence_state(reset_fast_weights=True)\n    logits, _ = model(batch.inputs, train_mode=False, update_mem=False)\n    model.train()\n    scores = logits[:, -1].float()\n    target = batch.targets[:, -1:]\n    log_prob = scores.log_softmax(dim=-1).gather(1, target)\n    return {\"expected_reward\": float(log_prob.exp().mean()), \"greedy_hits\": int(reward(scores.argmax(-1)).sum()),\n            \"gold_nll\": -float(log_prob.mean()), \"examples\": 512}\n\n\ndef supervised_start(cfg):\n    model = build(cfg, seed_offset=3).train()\n    opt = torch.optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=1e-4)\n    for step in range(1, 129):\n        batch, _ = reward_task(batch=16, context_len=cfg.context_len, vocab_size=cfg.vocab_size,\n                               seed=1_000_000 + cfg.seed + step)\n        model.reset_sequence_state(reset_fast_weights=True)\n        opt.zero_grad()\n        _, loss = model(batch.inputs, batch.targets, train_mode=True, update_mem=False)\n        loss.backward()\n        torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_clip, error_if_nonfinite=True)\n        opt.step()\n    return {key: value.clone() for key, value in model.state_dict().items()}\n\n\ndef state_digest(state):\n    digest = hashlib.sha256()\n    for key in sorted(state):\n        digest.update(key.encode())\n        digest.update(state[key].contiguous().reshape(-1).view(torch.uint8).numpy().tobytes())\n    return digest.hexdigest()\n\n\nruns = {}\ncandidate_shas = {}\nfor seed in range(40521, 47522, 1000):\n    cfg = neuromod_rl.NeuromodRLE2EConfig(seed=seed, batch_size=16, rl_steps=128)\n    state = supervised_start(cfg)\n    candidate_shas[seed] = state_digest(state)\n\n    def initialized(config, *, seed_offset=0):\n        model = build(config, seed_offset=seed_offset)\n        model.load_state_dict(state, strict=True)\n        assert state_digest(model.state_dict()) == candidate_shas[seed]\n        return model\n\n    # Substitute only the source of the initialized model and the held-out panel\n    # in the real trainer. The write path, updates and RNG calls are unchanged.\n    with patch.object(neuromod_rl, \"_build_model\", initialized), patch.object(neuromod_rl, \"heldout_reward\", heldout):\n        runs[seed] = {arm: neuromod_rl.train_reward_policy(cfg, feedback=arm, isolated=True, eval_at=steps) for arm in arms}\n    console.log(f\"Completed all three schedules for supervised seed {seed}\")\n\ncontrasts = {}\nfor control in arms[1:]:\n    deltas = [statistics.fmean(\n        result[\"aligned\"][\"heldout\"][step][\"expected_reward\"] - result[control][\"heldout\"][step][\"expected_reward\"]\n        for step in steps[1:]) for result in runs.values()]\n    observed = sum(deltas)\n    extreme = sum(sum(a * b for a, b in zip(deltas, signs, strict=True)) >= observed - 1e-14\n                  for signs in itertools.product((-1, 1), repeat=len(deltas)))\n    mean, p, wins = statistics.fmean(deltas), extreme / 256, sum(delta > 0 for delta in deltas)\n    contrasts[control] = {\"mean\": mean, \"one_sided_p\": p, \"positive_seeds\": wins, \"seed_deltas\": deltas,\n                          \"pass\": mean >= .01 and p <= .025 and wins >= 6}\ncompetent = sum(result[\"aligned\"][\"heldout\"][0][\"expected_reward\"] >= .10 for result in runs.values())\nassert all(math.isfinite(delta) for arm in contrasts.values() for delta in arm[\"seed_deltas\"])\nreport = {\"runs\": runs, \"starting_state_sha256\": candidate_shas, \"competent_initializations\": competent,\n          \"contrasts\": contrasts, \"advance\": competent >= 6 and all(row[\"pass\"] for row in contrasts.values())}\nwith Path(sys.argv[1]).open(\"x\") as out:\n    json.dump(report, out, indent=2, allow_nan=False)\n    out.write(\"\\n\")\n",
+    "verify_reward.py": "\"\"\"Independently check every feedback gain and compare the fixed learning curves.\"\"\"\nimport hashlib\nimport json\nimport math\nimport sys\nfrom pathlib import Path\n\n\nsource, output = map(Path, sys.argv[1:3])\nstudy = json.loads(source.read_text())\narms = (\"aligned\", \"neutral\", \"lagged\")\nis_warm = len(sys.argv) == 4 and sys.argv[3] == \"warm\"\nassert sorted(map(int, study[\"runs\"])) == (list(range(40521, 47522, 1000)) if is_warm else list(range(410, 418)))\ncounts = {\"updates\": 0, \"committed_writes\": 0, \"gain_observations\": 0, \"heldout_contexts_scored\": 0}\nrates = {arm: [] for arm in arms}\nfor runs in study[\"runs\"].values():\n    assert set(runs) == set(arms)\n    assert runs[\"aligned\"][\"heldout\"][\"0\"] == runs[\"neutral\"][\"heldout\"][\"0\"] == runs[\"lagged\"][\"heldout\"][\"0\"]\n    for arm, run in runs.items():\n        assert len(run[\"train\"]) == 128 and run[\"sites\"] == 4\n        average_reward = None\n        previous_da = 0.\n        for number, step in enumerate(run[\"train\"], 1):\n            assert step[\"step\"] == number and step[\"writes\"] == run[\"sites\"]\n            reward = step[\"reward\"]\n            assert 0 <= reward <= 1 and reward * 16 == int(reward * 16)\n            target_da = math.tanh(2 * (reward - (average_reward or 0)))\n            da = .8 * previous_da + .2 * target_da\n            average_reward = reward if average_reward is None else .8 * average_reward + .2 * reward\n            expected = {\"neutral\": 1., \"aligned\": 1. + da, \"lagged\": 1. + previous_da}[arm]\n            assert abs(step[\"dopamine_gain\"] - expected) < 1e-6\n            assert math.isclose(step[\"da\"], da, rel_tol=0, abs_tol=1e-6)\n            previous_da = da\n            counts[\"updates\"] += 1\n            counts[\"committed_writes\"] += step[\"writes\"]\n            counts[\"gain_observations\"] += 1\n        values = []\n        for point in (\"0\", \"32\", \"64\", \"96\", \"128\"):\n            measurement = run[\"heldout\"][point]\n            assert 0 < measurement[\"expected_reward\"] < 1 and measurement[\"examples\"] == 512\n            values.append(measurement[\"expected_reward\"])\n            counts[\"heldout_contexts_scored\"] += measurement[\"examples\"]\n        rates[arm].append(values)\n\ndecisions = {}\nfor control in (\"neutral\", \"lagged\"):\n    differences = [\n        math.fsum(a - b for a, b in zip(treatment[1:], baseline[1:], strict=True)) / 4\n        for treatment, baseline in zip(rates[\"aligned\"], rates[control], strict=True)\n    ]\n    total = math.fsum(differences)\n    count = 0\n    for mask in range(256):\n        negative = math.fsum(value for idx, value in enumerate(differences) if (mask >> idx) & 1)\n        count += total - 2 * negative >= total - 1e-14\n    positive = sum(value > 0 for value in differences)\n    avg = total / 8\n    p = count / 256\n    observed = study[\"contrasts\"][control]\n    assert observed[\"one_sided_p\"] == p and abs(observed[\"mean\"] - avg) < 1e-14\n    assert observed[\"positive_seeds\"] == positive\n    passed = avg >= .01 and p <= .025 and positive >= 6\n    assert observed[\"pass\"] == passed\n    decisions[control] = passed\ncompetent = sum(row[0] >= .10 for row in rates[\"aligned\"])\nif is_warm:\n    assert study[\"competent_initializations\"] == competent and len(set(study[\"starting_state_sha256\"].values())) == 8\nassert study[\"advance\"] == (all(decisions.values()) and (not is_warm or competent >= 6))\nwith output.open(\"x\") as stream:\n    json.dump({**counts, \"exact_decisions\": decisions, \"sign_patterns_per_contrast\": 256,\n               \"input_sha256\": hashlib.sha256(source.read_bytes()).hexdigest(), \"competent\": competent,\n               \"mean_heldout_reward_curves\": {k: [math.fsum(x) / 8 for x in zip(*rows, strict=True)]\n                                              for k, rows in rates.items()}}, stream, indent=2)\n    stream.write(\"\\n\")\n",
+    "ordinary_forward.py": "\"\"\"Fingerprint the implicit forward commit and inert evaluation paths.\"\"\"\nimport hashlib\nimport json\nimport sys\nfrom pathlib import Path\n\nimport torch\n\nfrom bio_inspired_nanochat.synaptic import SynapticLinear\nfrom bio_inspired_nanochat.synthetic_tasks import reward_task\nfrom scripts.e2e.neuromod_rl import NeuromodRLE2EConfig, _build_model\n\n\ndef fingerprint(items):\n    result = hashlib.sha256()\n    for name, tensor in items:\n        result.update(name.encode())\n        result.update(tensor.detach().cpu().contiguous().reshape(-1).view(torch.uint8).numpy().tobytes())\n    return result.hexdigest()\n\n\ncfg = NeuromodRLE2EConfig(seed=177, batch_size=8)\nmodel = _build_model(cfg).train()\noptimizer = torch.optim.AdamW(model.parameters(), lr=cfg.lr)\nrecords = []\nfor step in range(12):\n    batch, _ = reward_task(batch=cfg.batch_size, vocab_size=cfg.vocab_size, seed=679 + step)\n    optimizer.zero_grad()\n    logits, loss = model(batch.inputs, batch.targets, train_mode=True)\n    loss.backward()\n    gradients = fingerprint((name, param.grad) for name, param in model.named_parameters() if param.grad is not None)\n    optimizer.step()\n    weights = fingerprint(model.state_dict().items())\n    model.eval()\n    with torch.no_grad():\n        evaluation, _ = model(batch.inputs, train_mode=False, update_mem=False)\n    assert fingerprint(model.state_dict().items()) == weights\n    model.train()\n    records.append({\"step\": step + 1, \"state\": weights, \"gradients\": gradients,\n                    \"outputs\": fingerprint(((\"training\", logits), (\"evaluation\", evaluation), (\"loss\", loss))),\n                    \"pending\": sum(layer._plasticity_pending for layer in model.modules()\n                                   if isinstance(layer, SynapticLinear))})\nwith Path(sys.argv[1]).open(\"x\") as stream:\n    json.dump(records, stream, indent=2)\n    stream.write(\"\\n\")\n"
+  },
+  "full_linux_cpu": {
+    "tests": 2093,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 11,
+    "passed": 2082,
+    "failures_by_test": [],
+    "junit_sha256": "f45ab9e6d66a436f89d379fa205fe0ae753b0b54f92d90b79c434183c4e209f6"
+  },
+  "pre_device_fix_linux_cpu": {
+    "tests": 2093,
+    "failures": 1,
+    "errors": 0,
+    "skipped": 11,
+    "passed": 2081,
+    "failures_by_test": [
+      {
+        "test": "tests.test_formal_feedback.test_live_formal_contract_matches_repository_head",
+        "kind": "failure",
+        "message": "scripts.formal_feedback.FormalFeedbackError: stale runtime hash for bio_inspired_nanochat/synaptic.py: expected 6357b25cf14a145df46d5b77db4c9fe6028983b8b86d66cae45871ec8c27f10b, actual 7d1c194e0d34ae9116685e99cc62ae3dd7c47b9a54c367720229646f1c0fd7e9"
+      }
+    ],
+    "junit_sha256": "a3e5b85a776a31b30b1e54a35a9bd80ee4b91811da97cd019467d7424c23ded4"
+  },
+  "dsr": {
+    "reward-before-confirm": {
+      "id": "28D7357D-187A-4C75-BD35-4F6628596293",
+      "status": "success",
+      "exit_code": 0,
+      "source_before": "bea83c505f6c19f9837b0ab8491729ab3bf5bd94|ea458a398022d06448e7b96c7f757f4bc18f8ae446340d7fce48bf27c33f4e32|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "bea83c505f6c19f9837b0ab8491729ab3bf5bd94|ea458a398022d06448e7b96c7f757f4bc18f8ae446340d7fce48bf27c33f4e32|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "config_sha256": "6b7d9079d02b9377fe3a10964c40b45866caeaa791f82a63587fe780d83b5168",
+      "checks": [
+        {
+          "command": "export PYTHONPATH=. && export UV_PROJECT_ENVIRONMENT=/Volumes/SANDISK_SSD/scratch/bio-d1-execution.mBId4ZF4/nov23-mac-wheel-env UV_OFFLINE=true OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 && uv run --no-sync --python /opt/homebrew/bin/python3.14 python /tmp/nano-delayed-reward.RgsI3cNK/replay_before.py /tmp/nano-delayed-reward.RgsI3cNK/before-confirm 0 136 4",
+          "exit_code": 0,
+          "log_sha256": "91526990fbfc75f43301b54045fe7baa234469472aa7d74051f0f6037d317291",
+          "duration_ms": 6396
+        }
+      ]
+    },
+    "reward-after-confirm": {
+      "id": "A19D3300-5ECA-4915-BBA8-E6421B4ABE79",
+      "status": "success",
+      "exit_code": 0,
+      "source_before": "2b2fa7f6588e12b4cc876d4c504cdd3a7013115b|b148491a940d4050d4699b8747517b2f351a6fdbdb4f984adaeed9b2c6a6328b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "2b2fa7f6588e12b4cc876d4c504cdd3a7013115b|b148491a940d4050d4699b8747517b2f351a6fdbdb4f984adaeed9b2c6a6328b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "config_sha256": "3125f10a396fee21ab3e9589a34402d7ee0b4643e664fbe9a3f05d81a70fa756",
+      "checks": [
+        {
+          "command": "export PYTHONPATH=. && export UV_PROJECT_ENVIRONMENT=/Volumes/SANDISK_SSD/scratch/bio-d1-execution.mBId4ZF4/nov23-mac-wheel-env UV_OFFLINE=true OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 && uv run --no-sync --python /opt/homebrew/bin/python3.14 python /tmp/nano-delayed-reward.RgsI3cNK/replay_before.py /tmp/nano-delayed-reward.RgsI3cNK/after-confirm 140 0 0",
+          "exit_code": 0,
+          "log_sha256": "58f6d15cc971cecda94694b02ea6070ba5aa262808a904f5186d4f32edbf1fee",
+          "duration_ms": 6388
+        }
+      ]
+    },
+    "reward-focused": {
+      "id": "86BEEC86-73A1-461E-973E-4053BD5E86DB",
+      "status": "success",
+      "exit_code": 0,
+      "source_before": "2b2fa7f6588e12b4cc876d4c504cdd3a7013115b|b148491a940d4050d4699b8747517b2f351a6fdbdb4f984adaeed9b2c6a6328b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "2b2fa7f6588e12b4cc876d4c504cdd3a7013115b|b148491a940d4050d4699b8747517b2f351a6fdbdb4f984adaeed9b2c6a6328b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "config_sha256": "5c157dccd17f5cdee2dfeac2a47c48adf5b0c5a025eda71794393056419b518d",
+      "checks": [
+        {
+          "command": "export UV_PROJECT_ENVIRONMENT=/Volumes/SANDISK_SSD/scratch/bio-d1-execution.mBId4ZF4/nov23-mac-wheel-env UV_OFFLINE=true OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 && uv run --no-sync --python /opt/homebrew/bin/python3.14 python -m pytest -q tests/test_e2e_neuromod_rl.py tests/test_neuromod.py tests/test_eval_determinism.py",
+          "exit_code": 0,
+          "log_sha256": "7c187f4e33483e619a60f9f599457921e91810860d4acefb4a31911f5b4e5113",
+          "duration_ms": 11606
+        },
+        {
+          "command": "ubs bio_inspired_nanochat/synaptic.py scripts/e2e/neuromod_rl.py tests/test_e2e_neuromod_rl.py",
+          "exit_code": 0,
+          "log_sha256": "a7eba9c16b33ed52424602a3ce6f512a7a8b4c0c14457defb1d98e2dffb980ed",
+          "duration_ms": 16270
+        }
+      ]
+    },
+    "reward-matched": {
+      "id": "4831BE69-C222-4125-89DC-5BEC478A3308",
+      "status": "success",
+      "exit_code": 0,
+      "source_before": "2b2fa7f6588e12b4cc876d4c504cdd3a7013115b|b148491a940d4050d4699b8747517b2f351a6fdbdb4f984adaeed9b2c6a6328b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "2b2fa7f6588e12b4cc876d4c504cdd3a7013115b|b148491a940d4050d4699b8747517b2f351a6fdbdb4f984adaeed9b2c6a6328b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "config_sha256": "a85de4fdac935478ee05e1d100339a76d7e03760d5298a8d3749804337505eff",
+      "checks": [
+        {
+          "command": "export UV_PROJECT_ENVIRONMENT=/Volumes/SANDISK_SSD/scratch/bio-d1-execution.mBId4ZF4/nov23-mac-wheel-env UV_OFFLINE=true OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 && uv run --no-sync --python /opt/homebrew/bin/python3.14 python -m scripts.e2e.neuromod_rl --timing-study --run-dir /tmp/nano-delayed-reward.RgsI3cNK/study",
+          "exit_code": 0,
+          "log_sha256": "25a69342e97965b7799c159a7c01cf6580f47083f100b3ec00faeebd07fbe345",
+          "duration_ms": 28669
+        }
+      ]
+    },
+    "reward-positive-control": {
+      "id": "F2117E0D-F243-46BE-8D01-32FF7A01242F",
+      "status": "success",
+      "exit_code": 0,
+      "source_before": "2b2fa7f6588e12b4cc876d4c504cdd3a7013115b|b148491a940d4050d4699b8747517b2f351a6fdbdb4f984adaeed9b2c6a6328b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "2b2fa7f6588e12b4cc876d4c504cdd3a7013115b|b148491a940d4050d4699b8747517b2f351a6fdbdb4f984adaeed9b2c6a6328b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "config_sha256": "2697682c6868e91b7b338fb903456034920280eac87470eacb8ab8d46866903b",
+      "checks": [
+        {
+          "command": "export PYTHONPATH=. && export UV_PROJECT_ENVIRONMENT=/Volumes/SANDISK_SSD/scratch/bio-d1-execution.mBId4ZF4/nov23-mac-wheel-env UV_OFFLINE=true OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 && uv run --no-sync --python /opt/homebrew/bin/python3.14 python /tmp/nano-delayed-reward.RgsI3cNK/reward_competence.py /tmp/nano-delayed-reward.RgsI3cNK/positive-control.json",
+          "exit_code": 0,
+          "log_sha256": "11cf567afebac8ea92456cbfb0b997e770eb656280c2961583ef085e7b41af07",
+          "duration_ms": 12564
+        }
+      ]
+    },
+    "reward-supervised-start": {
+      "id": "7A4B21C6-9AD5-48C4-9232-003AD04BA969",
+      "status": "failure",
+      "exit_code": 1,
+      "source_before": "c54a6981fba3e56d4586a8415f40a0dd42de9679|5a00754ee1c32bafccbce0d745bcacf2e55c3b36fc0aedc6a226cb11a875306c|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "307653bc3576d3e6ab3dc0e9f12accd5856a7bd3|2a4de5a473f941b301029b857c605c3e4ca594df311293bf628ee6955d6de780|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "config_sha256": "a12ed2640cbac12b1bfb4692333e365a7421dc23dad808ae5f993acfab18533c",
+      "checks": [
+        {
+          "command": "export PYTHONPATH=. && export UV_PROJECT_ENVIRONMENT=/Volumes/SANDISK_SSD/scratch/bio-d1-execution.mBId4ZF4/nov23-mac-wheel-env UV_OFFLINE=true OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 && uv run --no-sync --python /opt/homebrew/bin/python3.14 python /tmp/nano-delayed-reward.RgsI3cNK/warm_reward.py /tmp/nano-delayed-reward.RgsI3cNK/warm-study.json",
+          "exit_code": 0,
+          "log_sha256": "d024b768072123f377dbdbba6ece05bc567f446a414ef1b1e87c8bd4e7145ef7",
+          "duration_ms": 37194
+        }
+      ]
+    },
+    "reward-independent-both": {
+      "id": "A72228CE-23D5-4482-A51A-73A361EC24F0",
+      "status": "success",
+      "exit_code": 0,
+      "source_before": "bea83c505f6c19f9837b0ab8491729ab3bf5bd94|ea458a398022d06448e7b96c7f757f4bc18f8ae446340d7fce48bf27c33f4e32|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "bea83c505f6c19f9837b0ab8491729ab3bf5bd94|ea458a398022d06448e7b96c7f757f4bc18f8ae446340d7fce48bf27c33f4e32|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "config_sha256": "37b611fe81fa7814636d22203cf99d05cb7e6e6426b7196356c645c896b34b80",
+      "checks": [
+        {
+          "command": "export UV_PROJECT_ENVIRONMENT=/Volumes/SANDISK_SSD/scratch/bio-d1-execution.mBId4ZF4/nov23-mac-wheel-env UV_OFFLINE=true OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 && uv run --no-sync --python /opt/homebrew/bin/python3.14 python /tmp/nano-delayed-reward.RgsI3cNK/verify_reward.py /tmp/nano-delayed-reward.RgsI3cNK/study/timing-study.json /tmp/nano-delayed-reward.RgsI3cNK/cold-final-verified.json && export UV_PROJECT_ENVIRONMENT=/Volumes/SANDISK_SSD/scratch/bio-d1-execution.mBId4ZF4/nov23-mac-wheel-env UV_OFFLINE=true OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 && uv run --no-sync --python /opt/homebrew/bin/python3.14 python /tmp/nano-delayed-reward.RgsI3cNK/verify_reward.py /tmp/nano-delayed-reward.RgsI3cNK/warm-study.json /tmp/nano-delayed-reward.RgsI3cNK/warm-verified.json warm",
+          "exit_code": 0,
+          "log_sha256": "8368c6e13cda87bc1d09bc5cfab165b9cc69e56034b71990315ec23fbadf1566",
+          "duration_ms": 1167
+        }
+      ]
+    },
+    "reward-immutable-study": {
+      "id": "20CA3BF6-9E62-4833-8572-92449D5BB18A",
+      "status": "success",
+      "exit_code": 0,
+      "source_before": "307653bc3576d3e6ab3dc0e9f12accd5856a7bd3|69370595e314ad3d86d041c61aa37b322be2bce6613aa674121ec19a0c51c32e|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "307653bc3576d3e6ab3dc0e9f12accd5856a7bd3|69370595e314ad3d86d041c61aa37b322be2bce6613aa674121ec19a0c51c32e|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "config_sha256": "78cb4b442383b4c57bead7eb5d1b04d3683b4c7e575f6dcb5b7f552aaef60d27",
+      "checks": [
+        {
+          "command": "export UV_PROJECT_ENVIRONMENT=/Volumes/SANDISK_SSD/scratch/bio-d1-execution.mBId4ZF4/nov23-mac-wheel-env UV_OFFLINE=true OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 && uv run --no-sync --python /opt/homebrew/bin/python3.14 python -m scripts.e2e.neuromod_rl --timing-study --run-dir /tmp/nano-delayed-reward.RgsI3cNK/fixed-study && cmp /tmp/nano-delayed-reward.RgsI3cNK/study/timing-study.json /tmp/nano-delayed-reward.RgsI3cNK/fixed-study/timing-study.json",
+          "exit_code": 0,
+          "log_sha256": "b1e27eb3da65a247d162582ff98508d0b3f32211d061cf81c4b56bf3e8a6e778",
+          "duration_ms": 30464
+        },
+        {
+          "command": "export PYTHONPATH=. && export UV_PROJECT_ENVIRONMENT=/Volumes/SANDISK_SSD/scratch/bio-d1-execution.mBId4ZF4/nov23-mac-wheel-env UV_OFFLINE=true OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 && uv run --no-sync --python /opt/homebrew/bin/python3.14 python /tmp/nano-delayed-reward.RgsI3cNK/warm_reward.py /tmp/nano-delayed-reward.RgsI3cNK/fixed-warm.json && cmp /tmp/nano-delayed-reward.RgsI3cNK/warm-study.json /tmp/nano-delayed-reward.RgsI3cNK/fixed-warm.json",
+          "exit_code": 0,
+          "log_sha256": "274aa1f1e651f63334017348bb11e1eff438cf10a3a9e307f262d07611f0ae54",
+          "duration_ms": 33472
+        },
+        {
+          "command": "export UV_PROJECT_ENVIRONMENT=/Volumes/SANDISK_SSD/scratch/bio-d1-execution.mBId4ZF4/nov23-mac-wheel-env UV_OFFLINE=true OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 && uv run --no-sync --python /opt/homebrew/bin/python3.14 python /tmp/nano-delayed-reward.RgsI3cNK/verify_reward.py /tmp/nano-delayed-reward.RgsI3cNK/fixed-study/timing-study.json /tmp/nano-delayed-reward.RgsI3cNK/fixed-cold-verified.json && export UV_PROJECT_ENVIRONMENT=/Volumes/SANDISK_SSD/scratch/bio-d1-execution.mBId4ZF4/nov23-mac-wheel-env UV_OFFLINE=true OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 && uv run --no-sync --python /opt/homebrew/bin/python3.14 python /tmp/nano-delayed-reward.RgsI3cNK/verify_reward.py /tmp/nano-delayed-reward.RgsI3cNK/fixed-warm.json /tmp/nano-delayed-reward.RgsI3cNK/fixed-warm-verified.json warm",
+          "exit_code": 0,
+          "log_sha256": "bdaabc2f4ede99bd584775532908407a323866da00d515316b0100b4d8157221",
+          "duration_ms": 982
+        }
+      ]
+    },
+    "reward-ordinary-before": {
+      "id": "49FB0F31-0FAC-455A-9738-AEEDD9A3EA6D",
+      "status": "success",
+      "exit_code": 0,
+      "source_before": "bea83c505f6c19f9837b0ab8491729ab3bf5bd94|ea458a398022d06448e7b96c7f757f4bc18f8ae446340d7fce48bf27c33f4e32|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "bea83c505f6c19f9837b0ab8491729ab3bf5bd94|ea458a398022d06448e7b96c7f757f4bc18f8ae446340d7fce48bf27c33f4e32|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "config_sha256": "f742872224acd283f1bd907cbf8b235f1b53d048d6df7db07dcd4f251c405578",
+      "checks": [
+        {
+          "command": "export PYTHONPATH=. && export UV_PROJECT_ENVIRONMENT=/Volumes/SANDISK_SSD/scratch/bio-d1-execution.mBId4ZF4/nov23-mac-wheel-env UV_OFFLINE=true OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 && uv run --no-sync --python /opt/homebrew/bin/python3.14 python /tmp/nano-delayed-reward.RgsI3cNK/ordinary_forward.py /tmp/nano-delayed-reward.RgsI3cNK/ordinary-before.json",
+          "exit_code": 0,
+          "log_sha256": "808819c70b89bc03b94fa1623ec21c894f85de8b5688c0d0980e37d3496b6bce",
+          "duration_ms": 6145
+        }
+      ]
+    },
+    "reward-ordinary-after": {
+      "id": "A7FAB50D-87E3-4688-A29E-3B2F8B701155",
+      "status": "success",
+      "exit_code": 0,
+      "source_before": "307653bc3576d3e6ab3dc0e9f12accd5856a7bd3|69370595e314ad3d86d041c61aa37b322be2bce6613aa674121ec19a0c51c32e|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "307653bc3576d3e6ab3dc0e9f12accd5856a7bd3|69370595e314ad3d86d041c61aa37b322be2bce6613aa674121ec19a0c51c32e|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "config_sha256": "8805a2e175817ba7b525c5417f44eab40e26429c8e5f94544cf721091fff475f",
+      "checks": [
+        {
+          "command": "export PYTHONPATH=. && export UV_PROJECT_ENVIRONMENT=/Volumes/SANDISK_SSD/scratch/bio-d1-execution.mBId4ZF4/nov23-mac-wheel-env UV_OFFLINE=true OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 && uv run --no-sync --python /opt/homebrew/bin/python3.14 python /tmp/nano-delayed-reward.RgsI3cNK/ordinary_forward.py /tmp/nano-delayed-reward.RgsI3cNK/ordinary-after.json && cmp /tmp/nano-delayed-reward.RgsI3cNK/ordinary-before.json /tmp/nano-delayed-reward.RgsI3cNK/ordinary-after.json",
+          "exit_code": 0,
+          "log_sha256": "3aa351a3fe7741ee8f9d5502da1b84223fdad3c3eb0eae1ba45d65d279f1968c",
+          "duration_ms": 5523
+        }
+      ]
+    },
+    "reward-linux-quality": {
+      "id": "7b7b8e57-251c-49ea-bd25-53552216bf1a",
+      "status": "failure",
+      "exit_code": 1,
+      "source_before": "bea83c505f6c19f9837b0ab8491729ab3bf5bd94|ac16f8e9524eb375bffcd7d5b1b73dda08bf04945d49cf0b0dae844bcbde37b9|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "bea83c505f6c19f9837b0ab8491729ab3bf5bd94|ac16f8e9524eb375bffcd7d5b1b73dda08bf04945d49cf0b0dae844bcbde37b9|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "config_sha256": "dcea92446329bed27fe4ae8f864ab83c91f65f00073135396d147a4cf43aeba0",
+      "checks": [
+        {
+          "command": "export UV_PROJECT_ENVIRONMENT=/data/projects/bio-nov23-cpu.xflG5TXe/venv PATH=/data/projects/bio-nov23-cpu.xflG5TXe/venv/bin:$PATH CUDA_VISIBLE_DEVICES= HF_HUB_OFFLINE=1 UV_OFFLINE=true OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 RAYON_NUM_THREADS=1 TMPDIR=/data/projects/bio-delay-qa.RjLUtkCS/tmp TEMP=/data/projects/bio-delay-qa.RjLUtkCS/tmp TMP=/data/projects/bio-delay-qa.RjLUtkCS/tmp && uv run --no-sync ruff check --fix",
+          "exit_code": 0,
+          "log_sha256": "bdcd8a6c11fe7f954a5bf5177887185ba533036fd94d8331eeeb67f901ca7395",
+          "duration_ms": 496
+        },
+        {
+          "command": "export UV_PROJECT_ENVIRONMENT=/data/projects/bio-nov23-cpu.xflG5TXe/venv PATH=/data/projects/bio-nov23-cpu.xflG5TXe/venv/bin:$PATH CUDA_VISIBLE_DEVICES= HF_HUB_OFFLINE=1 UV_OFFLINE=true OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 RAYON_NUM_THREADS=1 TMPDIR=/data/projects/bio-delay-qa.RjLUtkCS/tmp TEMP=/data/projects/bio-delay-qa.RjLUtkCS/tmp TMP=/data/projects/bio-delay-qa.RjLUtkCS/tmp && uv run --no-sync ty check",
+          "exit_code": 2,
+          "log_sha256": "e79f9b584092430fee386b3e2e2aa87cd8d0917d3fac798121a1c3420a8ae71f",
+          "duration_ms": 178
+        },
+        {
+          "command": "export UV_PROJECT_ENVIRONMENT=/data/projects/bio-nov23-cpu.xflG5TXe/venv PATH=/data/projects/bio-nov23-cpu.xflG5TXe/venv/bin:$PATH CUDA_VISIBLE_DEVICES= HF_HUB_OFFLINE=1 UV_OFFLINE=true OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 RAYON_NUM_THREADS=1 TMPDIR=/data/projects/bio-delay-qa.RjLUtkCS/tmp TEMP=/data/projects/bio-delay-qa.RjLUtkCS/tmp TMP=/data/projects/bio-delay-qa.RjLUtkCS/tmp && uv run --no-sync python -m pytest -q tests/ --tb=short --junitxml=/data/projects/bio-delay-qa.RjLUtkCS/full.xml",
+          "exit_code": 1,
+          "log_sha256": "e80f592e943bbc3df165d51aa6a902e215b8a398a7ab8934baeeb329501e8650",
+          "duration_ms": 729033
+        }
+      ]
+    },
+    "reward-linux-type": {
+      "id": "475c168d-2b1f-4437-9eb5-6878aba2730c",
+      "status": "success",
+      "exit_code": 0,
+      "source_before": "bea83c505f6c19f9837b0ab8491729ab3bf5bd94|ac16f8e9524eb375bffcd7d5b1b73dda08bf04945d49cf0b0dae844bcbde37b9|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "bea83c505f6c19f9837b0ab8491729ab3bf5bd94|ac16f8e9524eb375bffcd7d5b1b73dda08bf04945d49cf0b0dae844bcbde37b9|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "config_sha256": "aae084d3df34ca92bfe87448a013160424fc7704ec4e1ab31f032d679d449857",
+      "checks": [
+        {
+          "command": "source /data/projects/bio-native-u0fl4-V6tSMxvb/env && export CUDA_VISIBLE_DEVICES= NANOCHAT_BASE_DIR=/data/projects/bio-vanilla-kkUkqcbo/cache UV_OFFLINE=true && uv run --no-sync ty check && uv run --no-sync ruff check",
+          "exit_code": 0,
+          "log_sha256": "50d47e3180a39ab20e0bcf5eea6a07e339b262d76aa5ee81f2945fd981812cfb",
+          "duration_ms": 60605
+        }
+      ]
+    },
+    "reward-gpu-smoke": {
+      "id": "f414c696-f8f4-4114-87c7-0236652362a1",
+      "status": "failure",
+      "exit_code": 1,
+      "source_before": "bea83c505f6c19f9837b0ab8491729ab3bf5bd94|ac16f8e9524eb375bffcd7d5b1b73dda08bf04945d49cf0b0dae844bcbde37b9|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "bea83c505f6c19f9837b0ab8491729ab3bf5bd94|ac16f8e9524eb375bffcd7d5b1b73dda08bf04945d49cf0b0dae844bcbde37b9|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "config_sha256": "c4529f5d243168f2b52a8207124bb674332bf5adef14679cb549ed6bd3ef6a89",
+      "checks": [
+        {
+          "command": "source /data/projects/bio-native-u0fl4-V6tSMxvb/env && export CUDA_VISIBLE_DEVICES=0 NANOCHAT_BASE_DIR=/data/projects/bio-vanilla-kkUkqcbo/cache UV_OFFLINE=true && uv run --no-sync python -m scripts.e2e.neuromod_rl --run-dir /data/projects/bio-reward-ty.rr86HEpV/gpu-smoke --device cuda --seed 42 --steps 35",
+          "exit_code": 1,
+          "log_sha256": "a2c8e0ea36c201e1554b3db49f030dba6aafb78cb4a79d67223b68b623377039",
+          "duration_ms": 84049
+        }
+      ]
+    },
+    "reward-linux-exact": {
+      "id": "cb933d5e-1ba3-419b-b6d6-82dfaaa02203",
+      "status": "failure",
+      "exit_code": 1,
+      "source_before": "bea83c505f6c19f9837b0ab8491729ab3bf5bd94|5b6568035a3511d9b68e04e64a35427fb002263be44da8565ead26d1d04aa0b6|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "bea83c505f6c19f9837b0ab8491729ab3bf5bd94|5b6568035a3511d9b68e04e64a35427fb002263be44da8565ead26d1d04aa0b6|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "config_sha256": "ed9a3a0b095770867006b2c950b057dbba34c17b8fc16a62df4bc75f4a29d0af",
+      "checks": [
+        {
+          "command": "export UV_PROJECT_ENVIRONMENT=/data/projects/bio-nov23-cpu.xflG5TXe/venv PATH=/data/projects/bio-nov23-cpu.xflG5TXe/venv/bin:$PATH CUDA_VISIBLE_DEVICES= HF_HUB_OFFLINE=1 UV_OFFLINE=true OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 RAYON_NUM_THREADS=1 TMPDIR=/dev/shm/bio-reward-fixed.2uNTBtrq TEMP=/dev/shm/bio-reward-fixed.2uNTBtrq TMP=/dev/shm/bio-reward-fixed.2uNTBtrq && uv run --no-sync ruff check --fix",
+          "exit_code": 0,
+          "log_sha256": "c5757590d9dc71a29270bd26026a0f44b76fb67b6fea4ef5aabe28c0c3061420",
+          "duration_ms": 497
+        },
+        {
+          "command": "export UV_PROJECT_ENVIRONMENT=/data/projects/bio-nov23-cpu.xflG5TXe/venv PATH=/data/projects/bio-nov23-cpu.xflG5TXe/venv/bin:$PATH CUDA_VISIBLE_DEVICES= HF_HUB_OFFLINE=1 UV_OFFLINE=true OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 RAYON_NUM_THREADS=1 TMPDIR=/dev/shm/bio-reward-fixed.2uNTBtrq TEMP=/dev/shm/bio-reward-fixed.2uNTBtrq TMP=/dev/shm/bio-reward-fixed.2uNTBtrq && uv run --no-sync python -m pytest -q tests/ --tb=short --junitxml=/data/projects/bio-delay-qa.RjLUtkCS/exact.xml",
+          "exit_code": 143,
+          "log_sha256": "78e8e93c4f439801ec072af11c5a3da1233937051c13b58518badb03bf9ca7e7",
+          "duration_ms": 67714
+        }
+      ]
+    },
+    "reward-gpu-fixed": {
+      "id": "65ab35c7-1c3e-4fcd-a46d-a16cb29ffd2e",
+      "status": "success",
+      "exit_code": 0,
+      "source_before": "bea83c505f6c19f9837b0ab8491729ab3bf5bd94|5b6568035a3511d9b68e04e64a35427fb002263be44da8565ead26d1d04aa0b6|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "bea83c505f6c19f9837b0ab8491729ab3bf5bd94|5b6568035a3511d9b68e04e64a35427fb002263be44da8565ead26d1d04aa0b6|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "config_sha256": "812d78675abd6833670ded1eecb332556ea4094d193bdf1ff50414245d6d8e4e",
+      "checks": [
+        {
+          "command": "source /data/projects/bio-native-u0fl4-V6tSMxvb/env && export CUDA_VISIBLE_DEVICES=0 NANOCHAT_BASE_DIR=/data/projects/bio-vanilla-kkUkqcbo/cache UV_OFFLINE=true && uv run --no-sync ty check && uv run --no-sync ruff check && uv run --no-sync python -m scripts.e2e.neuromod_rl --run-dir /data/projects/bio-reward-ty.rr86HEpV/gpu-fixed --device cuda --seed 42 --steps 35",
+          "exit_code": 0,
+          "log_sha256": "ccf14cd272e2d26b96f670ac22fb85e6c5f6b30d55430ea905f08625f31dbfdb",
+          "duration_ms": 154853
+        }
+      ]
+    },
+    "reward-linux-rebound": {
+      "id": "cda6ed62-1fca-4ef2-8850-037ae59bab49",
+      "status": "failure",
+      "exit_code": 1,
+      "source_before": "bea83c505f6c19f9837b0ab8491729ab3bf5bd94|71e5e15b0bfbd1f26de1b43c24a97f56465fd8229d93dc23bc0653128c5cc187|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "bea83c505f6c19f9837b0ab8491729ab3bf5bd94|71e5e15b0bfbd1f26de1b43c24a97f56465fd8229d93dc23bc0653128c5cc187|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "config_sha256": "ede324c7708c89d9ba2c243060f7875e1788f1229510fe06c34b83092a12ba4c",
+      "checks": [
+        {
+          "command": "export UV_PROJECT_ENVIRONMENT=/data/projects/bio-nov23-cpu.xflG5TXe/venv PATH=/data/projects/bio-nov23-cpu.xflG5TXe/venv/bin:$PATH CUDA_VISIBLE_DEVICES= HF_HUB_OFFLINE=1 UV_OFFLINE=true OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 RAYON_NUM_THREADS=1 TMPDIR=/dev/shm/bio-reward-rebound.2fqnqMl2 TEMP=/dev/shm/bio-reward-rebound.2fqnqMl2 TMP=/dev/shm/bio-reward-rebound.2fqnqMl2 && uv run --no-sync ruff check --fix",
+          "exit_code": 0,
+          "log_sha256": "9a0c78f9ccd12deca88798cf7948765bc33068ae50510f2ae205239341fb999d",
+          "duration_ms": 493
+        },
+        {
+          "command": "export UV_PROJECT_ENVIRONMENT=/data/projects/bio-nov23-cpu.xflG5TXe/venv PATH=/data/projects/bio-nov23-cpu.xflG5TXe/venv/bin:$PATH CUDA_VISIBLE_DEVICES= HF_HUB_OFFLINE=1 UV_OFFLINE=true OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 RAYON_NUM_THREADS=1 TMPDIR=/dev/shm/bio-reward-rebound.2fqnqMl2 TEMP=/dev/shm/bio-reward-rebound.2fqnqMl2 TMP=/dev/shm/bio-reward-rebound.2fqnqMl2 && uv run --no-sync python -m scripts.formal_feedback",
+          "exit_code": 0,
+          "log_sha256": "363adc2a9bbf9fa164b707fae83ee83a0734ca84180e18d00b5092b5f7f79156",
+          "duration_ms": 278
+        },
+        {
+          "command": "export UV_PROJECT_ENVIRONMENT=/data/projects/bio-nov23-cpu.xflG5TXe/venv PATH=/data/projects/bio-nov23-cpu.xflG5TXe/venv/bin:$PATH CUDA_VISIBLE_DEVICES= HF_HUB_OFFLINE=1 UV_OFFLINE=true OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 RAYON_NUM_THREADS=1 TMPDIR=/dev/shm/bio-reward-rebound.2fqnqMl2 TEMP=/dev/shm/bio-reward-rebound.2fqnqMl2 TMP=/dev/shm/bio-reward-rebound.2fqnqMl2 && uv run --no-sync python -m pytest -q tests/ --tb=short --junitxml=/data/projects/bio-delay-qa.RjLUtkCS/rebound.xml",
+          "exit_code": 143,
+          "log_sha256": "d50703f79834ddd9e222c0a3ecd0fb4e5fe5c73c18d1dd9bd23a47f7bafa6ba6",
+          "duration_ms": 112480
+        }
+      ]
+    },
+    "reward-scratch-diagnosis": {
+      "id": "6dd64b47-8155-4341-9285-6afd469198ab",
+      "status": "failure",
+      "exit_code": 1,
+      "source_before": "bea83c505f6c19f9837b0ab8491729ab3bf5bd94|71e5e15b0bfbd1f26de1b43c24a97f56465fd8229d93dc23bc0653128c5cc187|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "bea83c505f6c19f9837b0ab8491729ab3bf5bd94|71e5e15b0bfbd1f26de1b43c24a97f56465fd8229d93dc23bc0653128c5cc187|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "config_sha256": "c3089cd0689693867a0a92140267bd37e9514efdcec130b5ced848086bb1993d",
+      "checks": [
+        {
+          "command": "export UV_PROJECT_ENVIRONMENT=/data/projects/bio-nov23-cpu.xflG5TXe/venv PATH=/data/projects/bio-nov23-cpu.xflG5TXe/venv/bin:$PATH CUDA_VISIBLE_DEVICES= UV_OFFLINE=true OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 && export TMPDIR=/dev/shm/bio-reward-rebound.2fqnqMl2 TEMP=/dev/shm/bio-reward-rebound.2fqnqMl2 TMP=/dev/shm/bio-reward-rebound.2fqnqMl2 && uv run --no-sync python -m pytest -q tests/test_certificate_bundle.py::test_manifest_roundtrip_emits_artifacts_but_loses_live_attestation --basetemp=/dev/shm/bio-reward-rebound.2fqnqMl2/isolated-fixture-0 --tb=short",
+          "exit_code": 1,
+          "log_sha256": "3c6a244ab66372c111ef63a5cd3bca0a665b9710f1fb84ae832a91682aee39a4",
+          "duration_ms": 2721
+        },
+        {
+          "command": "export UV_PROJECT_ENVIRONMENT=/data/projects/bio-nov23-cpu.xflG5TXe/venv PATH=/data/projects/bio-nov23-cpu.xflG5TXe/venv/bin:$PATH CUDA_VISIBLE_DEVICES= UV_OFFLINE=true OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 && export TMPDIR=/data/projects/bio-delay-qa.RjLUtkCS TEMP=/data/projects/bio-delay-qa.RjLUtkCS TMP=/data/projects/bio-delay-qa.RjLUtkCS && uv run --no-sync python -m pytest -q tests/test_certificate_bundle.py::test_manifest_roundtrip_emits_artifacts_but_loses_live_attestation --basetemp=/data/projects/bio-delay-qa.RjLUtkCS/isolated-fixture-1 --tb=short",
+          "exit_code": 0,
+          "log_sha256": "4c315eddbda82767de115140d194dbad2f5718493eed6408d6c4164aa207e312",
+          "duration_ms": 3147
+        }
+      ]
+    },
+    "reward-linux-sealed": {
+      "id": "6d7d5ed0-efaa-4c4d-9818-c840cc710200",
+      "status": "success",
+      "exit_code": 0,
+      "source_before": "bea83c505f6c19f9837b0ab8491729ab3bf5bd94|71e5e15b0bfbd1f26de1b43c24a97f56465fd8229d93dc23bc0653128c5cc187|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "bea83c505f6c19f9837b0ab8491729ab3bf5bd94|71e5e15b0bfbd1f26de1b43c24a97f56465fd8229d93dc23bc0653128c5cc187|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "config_sha256": "09d3d95af0eb16b7fa8fbb80de93ce9521a07a1985411b34298f84ce136fac44",
+      "checks": [
+        {
+          "command": "export UV_PROJECT_ENVIRONMENT=/data/projects/bio-nov23-cpu.xflG5TXe/venv PATH=/data/projects/bio-nov23-cpu.xflG5TXe/venv/bin:$PATH CUDA_VISIBLE_DEVICES= HF_HUB_OFFLINE=1 UV_OFFLINE=true OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 RAYON_NUM_THREADS=1 TMPDIR=/data/projects/bio-delay-qa.RjLUtkCS/disk-scratch TEMP=/data/projects/bio-delay-qa.RjLUtkCS/disk-scratch TMP=/data/projects/bio-delay-qa.RjLUtkCS/disk-scratch && uv run --no-sync ruff check --fix",
+          "exit_code": 0,
+          "log_sha256": "96479dd1beaa540bd3d5e610d753f869214755bdab2789a1eb8c916499096182",
+          "duration_ms": 180
+        },
+        {
+          "command": "export UV_PROJECT_ENVIRONMENT=/data/projects/bio-nov23-cpu.xflG5TXe/venv PATH=/data/projects/bio-nov23-cpu.xflG5TXe/venv/bin:$PATH CUDA_VISIBLE_DEVICES= HF_HUB_OFFLINE=1 UV_OFFLINE=true OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 RAYON_NUM_THREADS=1 TMPDIR=/data/projects/bio-delay-qa.RjLUtkCS/disk-scratch TEMP=/data/projects/bio-delay-qa.RjLUtkCS/disk-scratch TMP=/data/projects/bio-delay-qa.RjLUtkCS/disk-scratch && uv run --no-sync python -m scripts.formal_feedback",
+          "exit_code": 0,
+          "log_sha256": "dd4006a4cbe21d2b2b6752d3c69ad1916d1977ca63b7f566ed42425452ffb628",
+          "duration_ms": 289
+        },
+        {
+          "command": "export UV_PROJECT_ENVIRONMENT=/data/projects/bio-nov23-cpu.xflG5TXe/venv PATH=/data/projects/bio-nov23-cpu.xflG5TXe/venv/bin:$PATH CUDA_VISIBLE_DEVICES= HF_HUB_OFFLINE=1 UV_OFFLINE=true OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 RAYON_NUM_THREADS=1 TMPDIR=/data/projects/bio-delay-qa.RjLUtkCS/disk-scratch TEMP=/data/projects/bio-delay-qa.RjLUtkCS/disk-scratch TMP=/data/projects/bio-delay-qa.RjLUtkCS/disk-scratch && uv run --no-sync python -m pytest -q tests/ --tb=short --junitxml=/data/projects/bio-delay-qa.RjLUtkCS/sealed.xml",
+          "exit_code": 0,
+          "log_sha256": "3b03cb2074d00cd68e920b22c17e28e5eeb5dfb8527ffedaac2a3a66a611c516",
+          "duration_ms": 743800
+        }
+      ]
+    },
+    "reward-compiled-lean": {
+      "id": "74daf9b4-7144-47d0-9f95-2e7c17a47577",
+      "status": "success",
+      "exit_code": 0,
+      "source_before": "bea83c505f6c19f9837b0ab8491729ab3bf5bd94|71e5e15b0bfbd1f26de1b43c24a97f56465fd8229d93dc23bc0653128c5cc187|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "bea83c505f6c19f9837b0ab8491729ab3bf5bd94|71e5e15b0bfbd1f26de1b43c24a97f56465fd8229d93dc23bc0653128c5cc187|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "config_sha256": "9508fa40c8df3c97a13c9f1264610e5292053f23ccb2b10cd6df4ea018ac1bc4",
+      "checks": [
+        {
+          "command": "source /data/projects/bio-native-u0fl4-V6tSMxvb/env && export CUDA_VISIBLE_DEVICES= NANOCHAT_BASE_DIR=/data/projects/bio-vanilla-kkUkqcbo/cache UV_OFFLINE=true && export ELAN_HOME=/data/projects/bio-formal-efxpLQM6/elan XDG_CACHE_HOME=/data/projects/bio-formal-efxpLQM6/cache PATH=/home/ubuntu/.elan/bin:$PATH && uv run --no-sync python -m scripts.formal_feedback --run-lean-audit --lean-timeout-seconds 600 > /data/projects/bio-reward-ty.rr86HEpV/lean-audit.log 2>&1 && uv run --no-sync python /data/projects/bio-formal-efxpLQM6/audit_axioms.py /data/projects/bio-reward-ty.rr86HEpV/lean-audit.log >> /data/projects/bio-reward-ty.rr86HEpV/lean-audit.log",
+          "exit_code": 0,
+          "log_sha256": "0fbaa11c3be1269a2dfbd5bcb0fe907ff7ed55b7d7f17b66f5e7d7e82b843ef6",
+          "duration_ms": 371401
+        }
+      ]
+    },
+    "reward-baseline-paired": {
+      "id": "128c61a2-d138-4592-b46b-0c01f53075ff",
+      "status": "failure",
+      "exit_code": 1,
+      "source_before": "bea83c505f6c19f9837b0ab8491729ab3bf5bd94|5b6568035a3511d9b68e04e64a35427fb002263be44da8565ead26d1d04aa0b6|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "bea83c505f6c19f9837b0ab8491729ab3bf5bd94|5b6568035a3511d9b68e04e64a35427fb002263be44da8565ead26d1d04aa0b6|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "config_sha256": "1cc2083476794669537abc563da554afc5fc6c700fef182cda2fbd4cd3f85623",
+      "checks": [
+        {
+          "command": "cd /data/projects/bio-delay-qa.RjLUtkCS/baseline && export UV_PROJECT_ENVIRONMENT=/data/projects/bio-nov23-cpu.xflG5TXe/venv PATH=/data/projects/bio-nov23-cpu.xflG5TXe/venv/bin:$PATH CUDA_VISIBLE_DEVICES= HF_HUB_OFFLINE=1 UV_OFFLINE=true OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 RAYON_NUM_THREADS=1 TMPDIR=/dev/shm/bio-reward-fixed.2uNTBtrq TEMP=/dev/shm/bio-reward-fixed.2uNTBtrq TMP=/dev/shm/bio-reward-fixed.2uNTBtrq && uv run --no-sync python -m pytest -q tests/test_perf_regression.py::test_live_throughput_budget_gate_passes --tb=short",
+          "exit_code": 0,
+          "log_sha256": "f845ef7ac2b45fe8666f12667be7ecab5ea94f0c7c11facc73bd757840bc73d8",
+          "duration_ms": 5162
+        },
+        {
+          "command": "cd /data/projects/bio-delay-qa.RjLUtkCS/fixed && export UV_PROJECT_ENVIRONMENT=/data/projects/bio-nov23-cpu.xflG5TXe/venv PATH=/data/projects/bio-nov23-cpu.xflG5TXe/venv/bin:$PATH CUDA_VISIBLE_DEVICES= HF_HUB_OFFLINE=1 UV_OFFLINE=true OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 RAYON_NUM_THREADS=1 TMPDIR=/dev/shm/bio-reward-fixed.2uNTBtrq TEMP=/dev/shm/bio-reward-fixed.2uNTBtrq TMP=/dev/shm/bio-reward-fixed.2uNTBtrq && uv run --no-sync python -m pytest -q tests/test_perf_regression.py::test_live_throughput_budget_gate_passes --tb=short",
+          "exit_code": 1,
+          "log_sha256": "b0682b39810c65fb3f4801a69f93c39e6398f6848d9764153748593b55196cda",
+          "duration_ms": 5050
+        },
+        {
+          "command": "cd /data/projects/bio-delay-qa.RjLUtkCS/fixed && export UV_PROJECT_ENVIRONMENT=/data/projects/bio-nov23-cpu.xflG5TXe/venv PATH=/data/projects/bio-nov23-cpu.xflG5TXe/venv/bin:$PATH CUDA_VISIBLE_DEVICES= HF_HUB_OFFLINE=1 UV_OFFLINE=true OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 RAYON_NUM_THREADS=1 TMPDIR=/dev/shm/bio-reward-fixed.2uNTBtrq TEMP=/dev/shm/bio-reward-fixed.2uNTBtrq TMP=/dev/shm/bio-reward-fixed.2uNTBtrq && uv run --no-sync python -m pytest -q tests/test_perf_regression.py::test_live_throughput_budget_gate_passes --tb=short",
+          "exit_code": 1,
+          "log_sha256": "914c6a94eb87d69c85ea2d8ec68ea3f0c8e6c0fd1ad3c68a9e8d87c079454d4e",
+          "duration_ms": 5162
+        },
+        {
+          "command": "cd /data/projects/bio-delay-qa.RjLUtkCS/baseline && export UV_PROJECT_ENVIRONMENT=/data/projects/bio-nov23-cpu.xflG5TXe/venv PATH=/data/projects/bio-nov23-cpu.xflG5TXe/venv/bin:$PATH CUDA_VISIBLE_DEVICES= HF_HUB_OFFLINE=1 UV_OFFLINE=true OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 RAYON_NUM_THREADS=1 TMPDIR=/dev/shm/bio-reward-fixed.2uNTBtrq TEMP=/dev/shm/bio-reward-fixed.2uNTBtrq TMP=/dev/shm/bio-reward-fixed.2uNTBtrq && uv run --no-sync python -m pytest -q tests/test_perf_regression.py::test_live_throughput_budget_gate_passes --tb=short",
+          "exit_code": 1,
+          "log_sha256": "201cf5c90b43a66a385daf3fb17e4d94925a8f84dc128006a0ac0eebb4f65dad",
+          "duration_ms": 5912
+        }
+      ]
+    }
+  },
+  "throughput_comparison": {
+    "ordering": [
+      "prior",
+      "fixed",
+      "fixed",
+      "prior"
+    ],
+    "checks": [
+      {
+        "passed": true,
+        "exit_code": 0,
+        "log_sha256": "f845ef7ac2b45fe8666f12667be7ecab5ea94f0c7c11facc73bd757840bc73d8",
+        "slowdown_x": null
+      },
+      {
+        "passed": false,
+        "exit_code": 1,
+        "log_sha256": "b0682b39810c65fb3f4801a69f93c39e6398f6848d9764153748593b55196cda",
+        "slowdown_x": 2.33
+      },
+      {
+        "passed": false,
+        "exit_code": 1,
+        "log_sha256": "914c6a94eb87d69c85ea2d8ec68ea3f0c8e6c0fd1ad3c68a9e8d87c079454d4e",
+        "slowdown_x": 2.18
+      },
+      {
+        "passed": false,
+        "exit_code": 1,
+        "log_sha256": "201cf5c90b43a66a385daf3fb17e4d94925a8f84dc128006a0ac0eebb4f65dad",
+        "slowdown_x": 2.17
+      }
+    ]
+  }
+}
