@@ -250,3 +250,25 @@ reward-driven update.
   source, test and DSR evidence. Keep full GSM8K effectiveness open
   unless the staged starting policy earns diverse rewards in a
   matched evaluation at the appropriate scale.
+
+### Registered local direction diagnostic
+
+Measure whether the fixed 0.03 rule points toward better reward before
+either arm takes an optimizer step. Use the eight supervised starts
+registered above. Freeze each policy, and draw four completions for
+each of 128 new questions from seed `6000000 + model_seed`. Use a
+separate sampler seeded with `7000000 + model_seed` and a within-group
+shuffle seeded with `8000000 + 128 * model_seed + group_index`. Use the
+same questions and actions for both writes. Keep both directions in
+their native layerwise scale and make one write with the usual 512
+rollout denominator.
+
+Use 512 further questions from seed 104552. Measure the dot product
+between each jointly applied slow-matrix perturbation and the gradient
+of exact expected reward on these questions. Cross-check by a central
+difference of the same objective at plus and minus one write. Match
+each nonzero aligned layer's write norm in an ascent-direction positive
+control. Report every seed and retain the original trial outcome.
+The diagnostic favors action-specific credit only if the mean aligned
+derivative is positive and exceeds the shuffled derivative in at least
+six seeds with a one-sided exact sign-flip `p ≤ 0.025`.
