@@ -218,7 +218,7 @@ different training rules. [Fast-weight programmers](https://proceedings.mlr.pres
     initialization, training-token hashes and 4,096 trace observations per
     checkpoint. Log nonzero fast-weight norms and check finite loss,
     gradients and checkpoint tensors. Archive the eight checkpoint digests.
-- [ ] Score every checkpoint on the same 128 complete or prefix-truncated
+- [x] Score every checkpoint on the same 128 complete or prefix-truncated
   documents drawn in order from the midpoint validation row group and
   subsequent groups. Use the first at most 512 tokens of each document,
   require at least 256 tokens, reject duplicate document hashes, and reset
@@ -235,7 +235,13 @@ different training rules. [Fast-weight programmers](https://proceedings.mlr.pres
     row group (26) supplies all 128 documents and 44,505 scored positions
     covering 220,244 target bytes. The preflight found zero exact selected
     prefixes inside any of the 128 training windows.
-- [ ] Publish complete per-document bits, bytes, first-block invariance,
+  - [x] Check all 12 checkpoint states on the same documents. Score the
+    initialization and both training arms for each seed. Verify all
+    checkpoint digests, first-block equality, matched trace-call counts,
+    and a later-logit change in every state. Archive 1,536 paired rows.
+  - [x] Re-execute all read conditions on a held-out document on the other
+    RTX 4090. Check the archived document record across all three states.
+- [x] Publish complete per-document bits, bytes, first-block invariance,
   checkpoint and input digests, probe counts, per-arm throughput and all
   statistical decisions. Advance a claim of learned pairing only if the
   paired-trained identity read saves at least 0.005 BPB against **both**
@@ -247,7 +253,7 @@ different training rules. [Fast-weight programmers](https://proceedings.mlr.pres
   bootstrap draws over the seed-averaged loss differences. The document
   bounds condition on these four seeds. Report other read contrasts as
   descriptive.
-- [ ] Recompute every decision from the raw held-out scores, perform static
+- [x] Recompute every decision from the raw held-out scores, perform static
   and runtime qualification through DSR, and close only the verified scope
   in Beads. D1 scale and reward-gated training retain distinct acceptance.
   - [x] Run Linux Ruff, ty, the three focused apparatus checks and UBS. UBS
@@ -258,6 +264,10 @@ different training rules. [Fast-weight programmers](https://proceedings.mlr.pres
     throughput gate at 2.13× against a 2.00× budget. A same-host replay in
     prior / current / current / prior order returned 2.21×, 2.14×, 2.26×,
     and 2.27×. Both revisions missed the gate twice.
+  - [x] Recompute 36 BPBs and all four decisions from 1,536 archived rows
+    with an independent implementation of the paired bootstrap.
+  - [x] Match 21 saved loss numerators on the opposite RTX 4090, with a
+    maximum absolute discrepancy of `2.28e-13` bits.
 
 ### Running the experiment
 
@@ -287,4 +297,40 @@ and tensor digests before reading it. Each shuffled score averages four
 draws of the normalized update, including each draw's effect on later
 activations. This estimates a finite ensemble, which differs from the
 analytic mean of a raw single write conditional on fixed activations.
+
+### Result at 131,072 training tokens per checkpoint
+
+**One of four registered contrasts passed.** Paired training increased the
+advantage of true pairings over shuffled pairings by 0.012030 bits per byte
+(BPB) compared with shuffle training. The sign agreed across all four seeds.
+For the paired-trained checkpoints, true pairings saved only 0.000560 BPB
+over their own frozen reads. One seed improved and three regressed.
+
+The lower bounds come from paired document resampling conditional on the
+four training seeds. Positive numbers favor the registered hypothesis.
+Each contrast also required at least 0.005 BPB in the mean and a positive
+effect in all four seeds.
+
+| Registered contrast | Mean Δ BPB | Simultaneous lower bound | Seeds favoring true pairing | Passed |
+| --- | ---: | ---: | ---: | :---: |
+| Paired-trained read over the same model's shuffled ensemble | +0.004676 | +0.004286 | 4/4 | No |
+| Paired-trained read over the same model's frozen read | +0.000560 | +0.000332 | 1/4 | No |
+| Growth in the paired-vs-shuffled read advantage from initialization | +0.004784 | +0.004337 | 4/4 | No |
+| Growth in that advantage compared with shuffle training | +0.012030 | +0.011243 | 4/4 | Yes |
+
+Seed 6313 contributed about 82% of the last contrast's pooled effect. The
+individual effects were +0.002900, +0.002709, +0.039310 and +0.003202 BPB.
+The full experiment establishes that exposure to actual pairing affected
+the later cost of shuffling. Its registered evidence for improved language
+prediction from active writes stayed below the advancement bar. Longer
+training and reward-gated writes are open in `hwxb.4.4`.
+
+The randomized-symbol recall assay got zero exact answers in 9,216
+predictions across the 12 checkpoint states, six reads and 128 examples
+per state. All checkpoint digest, first-block and write-count checks
+passed. [Full results and execution receipts](../results/trained_hebbian_binding_2026-11-23.json) · [Per-document losses](../results/trained_hebbian_binding_2026-11-23.jsonl.gz)
+
+To replay the statistics in DSR without checkpoints or a GPU, extract
+`executed_verifier_source` from the results JSON to a new scratch file and
+run `uv run --no-sync python "$SCRATCH/verify_binding.py" results`.
 
