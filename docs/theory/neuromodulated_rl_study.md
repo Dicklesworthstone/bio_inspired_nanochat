@@ -691,3 +691,57 @@ the `train` and `eval` objects for each arm. Write them as
 fresh scratch directory. Pass that directory and a result path to
 `audit_gsm_sft.py` in a DSR check.
 [Qualification, checkpoint locations and DSR receipts](../../results/gsm8k_sft_2026-11-23.json) · [Training and scoring traces](../../results/gsm8k_sft_2026-11-23.json.gz)
+
+## Fresh arithmetic qualification of the public D20 checkpoint
+
+The pinned public weights predate these generated questions. Each
+pair changes one quantity and the correct answer. The four-choice
+version keeps the answer options and their order fixed across both
+variants. Comparing true labels with labels exchanged within each
+pair checks whether the change in the question affects the answer
+distribution. The official GSM8K test split stays reserved.
+
+- [ ] Generate and hash four disjoint 32-question panels before
+  model execution. Each panel has 16 pairs, with four pairs each
+  of addition, subtraction, equal rows and fair shares. Keep the
+  two different correct answers out of the displayed quantities.
+  In each choice panel, each correct letter appears eight times.
+  Reserve the panels for screening, confirmation, adaptation and
+  transfer, respectively.
+- [ ] On the screen panel, run four free-form completions per
+  question with the native engine, temperature 1, top-k 50 and
+  a 96-token limit. Prompt for the final integer after `####`.
+  Require 12 of 128 correct, eight of 32 mixed groups and four
+  distinct correct values. Require strictly more successes than
+  the best constant integer on the panel, at least four more
+  than against exchanged pair labels and a one-sided exact
+  pair-sign-flip p-value at most 0.025. If it passes, confirm
+  on the separate panel under the same rule and test exact
+  cached credit on its first genuine mixed group.
+- [ ] Score the screen and confirmation panels separately with
+  a policy restricted to ` A`, ` B`, ` C`, and ` D`, each verified
+  as one token. Use the temperature-1 softmax over those four
+  native logits and draw four samples per question. On both
+  panels require mean exact expected accuracy at least 0.35,
+  an expected true-minus-exchanged accuracy gap at least 0.08,
+  at least eight mixed groups, four distinct correct integers
+  in the samples and a one-sided exact pair-sign-flip
+  `p ≤ 0.025` for the probability gap.
+- [ ] Use a genuinely sampled mixed four-choice group to compare
+  the exact trace against masked autograd. If both choice
+  panels qualify, use the adaptation panel for eight updates,
+  four questions and four sampled choices each. Freeze the
+  entire D20 model except the zero-initialized last-projection
+  adapter. Compare exact late credit with the same centered
+  policy-gradient update from autograd replay, no extra update,
+  and within-question shuffled credit. Use a fixed 0.02
+  Frobenius-norm write for each nonzero score. Keep the sampling
+  and question seeds matched and report state parity between
+  exact and replay. On the untouched transfer panel, report
+  expected accuracy before and after. Any advancement requires
+  a mean gain of at least two percentage points over both off
+  and shuffled with a one-sided exact pair-sign-flip
+  `p ≤ 0.025` for each.
+- [ ] Independently check prompts, rewards, paired contrasts,
+  scope and DSR receipts. Track arithmetic-panel qualification
+  separately from the original GSM8K checkpoint and RL gates.
