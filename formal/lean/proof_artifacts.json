@@ -1244,6 +1244,29 @@
         "sha256": "b775688487e4a263cf3c647e86e3db806bba92c05a808edab91a07bb43354408"
       }],
       "change_scope": "Only the benchmark recommendation test changed. It now requires a measured baseline and excludes approximate Flex from the dense synaptic comparison. The forward and parity checks in the same module are unchanged. DSR fa70f3bb-0971-4a08-994a-23cfd263d85f rejected the old digest. This binding makes no theorem claim about recommendation policy or hardware speed."
+    },
+    {
+      "cycle_id": "same-episode-reward-runtime-binding-2026-11-23",
+      "frog_id": "bio_inspired_nanochat-hwxb.4.4.2",
+      "hash_scope": "formal/lean/BioInspiredNanochat.lean",
+      "artifact_hash": "sha256:831498bc2853d86701250ea89024ab5f5f6190d2e3a5a9ae66f93a7d5d42d963",
+      "theorem_ids": [
+        "BioInspiredNanochat.Metriplectic.energyRate_zero"
+      ],
+      "axioms": [
+        "propext",
+        "Classical.choice",
+        "Quot.sound"
+      ],
+      "sorry_or_admit_present": false,
+      "runtime_mapping": [
+        {
+          "path": "bio_inspired_nanochat/synaptic.py",
+          "sha256": "7d1c194e0d34ae9116685e99cc62ae3dd7c47b9a54c367720229646f1c0fd7e9",
+          "change": "The only edit is to SynapticLinear's deferred Hebbian write. The normal forward calls the same write using the same stored gate and current gains. The reward harness may now commit it directly after backward. The calcium, buffer and heat state and the metriplectic integration code retain their previous transitions."
+        }
+      ],
+      "change_scope": "The preceding full CPU suite passed 2081 tests and rejected this source only at the stale runtime binding. DSR A19D3300-5ECA-4915-BBA8-E6421B4ABE79 independently observed all 140 reward-step write commits. The proof file is byte-identical. Energy conservation remains a statement about the original metriplectic transition."
     }
   ]
 }

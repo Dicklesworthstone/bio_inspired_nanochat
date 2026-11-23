@@ -153,7 +153,7 @@ def train_reward_policy(
         logits, _ = model(batch.inputs, train_mode=True)
         policy = torch.distributions.Categorical(probs=F.softmax(logits[:, -1, :], dim=-1))
         actions = policy.sample()
-        rewards = reward_fn(actions)
+        rewards = reward_fn(actions).to(actions.device)
         reward = float(rewards.mean())
         advantage = rewards - rewards.mean()
         loss = -(policy.log_prob(actions) * advantage.detach()).mean()
