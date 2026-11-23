@@ -179,7 +179,7 @@ different training rules. [Fast-weight programmers](https://proceedings.mlr.pres
 
 ### Registered experiment
 
-- [ ] Pin the implementation, tokenizer, staged train and validation shards,
+- [x] Pin the implementation, tokenizer, staged train and validation shards,
   GPU identity, torch build and both random streams. Seeds are 6311–6314.
   Within each seed, initialize both training arms identically. Use a
   depth-two, width-192, three-head, tied-head GPTSynaptic with a 1,024-token
@@ -191,13 +191,13 @@ different training rules. [Fast-weight programmers](https://proceedings.mlr.pres
   training-only apparatus run with the ordinary unit-scale tied embedding
   started above 22 nats per token. A shared small initialization avoids
   starting either AdamW arm in widespread softcap saturation.
-- [ ] Exercise the real chunked-backpropagation path on a time-boxed
+- [x] Exercise the real chunked-backpropagation path on a time-boxed
   apparatus run. Use one sequence per step and 128-token chunks. Verify that
   the fresh model's first chunk is identical before an intervention can take
   effect, both active read arms perform the same number of writes, and a
   later chunk registers a change. Verify lane-local marginal preservation
   and restoration of the original method.
-- [ ] Train two models per seed for 768 AdamW updates at `3e-4`, no weight
+- [x] Train two models per seed for up to 768 AdamW updates at `3e-4`, no weight
   decay, global gradient clipping at 1, with an identical 786,432-token
   training exposure per arm. Check loss, gradients, checkpoints, write
   activity, memory and wall time. Use independently seeded uniform
@@ -211,6 +211,13 @@ different training rules. [Fast-weight programmers](https://proceedings.mlr.pres
   Apply the same time rule to the shorter exposures. Select the exposure
   from training time alone, before reading any held-out score. Conclusions
   from a shortened run apply to that early stage of training.
+  - [x] Freeze the exposure before evaluation. The timing probe projected
+    10,052.92 seconds per card at 768 updates and 1,675.49 seconds at 128.
+    Use 131,072 tokens per checkpoint for the registered shorter run.
+  - [x] Complete all eight cells at the admitted exposure and verify matched
+    initialization, training-token hashes and 4,096 trace observations per
+    checkpoint. Log nonzero fast-weight norms and check finite loss,
+    gradients and checkpoint tensors. Archive the eight checkpoint digests.
 - [ ] Score every checkpoint on the same 128 complete or prefix-truncated
   documents drawn in order from the midpoint validation row group and
   subsequent groups. Use the first at most 512 tokens of each document,
@@ -224,6 +231,10 @@ different training rules. [Fast-weight programmers](https://proceedings.mlr.pres
   64 held-out examples apiece. These probe exact recall using randomized
   symbols and serve as descriptive checks on models trained on text. Pad with
   BOS between the examples and query to put the query in the next chunk.
+  - [x] Verify the selected validation rows and training stream. The midpoint
+    row group (26) supplies all 128 documents and 44,505 scored positions
+    covering 220,244 target bytes. The preflight found zero exact selected
+    prefixes inside any of the 128 training windows.
 - [ ] Publish complete per-document bits, bytes, first-block invariance,
   checkpoint and input digests, probe counts, per-arm throughput and all
   statistical decisions. Advance a claim of learned pairing only if the
@@ -239,6 +250,14 @@ different training rules. [Fast-weight programmers](https://proceedings.mlr.pres
 - [ ] Recompute every decision from the raw held-out scores, perform static
   and runtime qualification through DSR, and close only the verified scope
   in Beads. D1 scale and reward-gated training retain distinct acceptance.
+  - [x] Run Linux Ruff, ty, the three focused apparatus checks and UBS. UBS
+    returned zero with three warnings on JSON parsing of experiment inputs.
+    The harness aborts on malformed JSON.
+  - [x] Run the full locked CPU suite against the exact implementation. It
+    recorded 2,080 passes, 11 skips and one failure in the standing training
+    throughput gate at 2.13× against a 2.00× budget. A same-host replay in
+    prior / current / current / prior order returned 2.21×, 2.14×, 2.26×,
+    and 2.27×. Both revisions missed the gate twice.
 
 ### Running the experiment
 
