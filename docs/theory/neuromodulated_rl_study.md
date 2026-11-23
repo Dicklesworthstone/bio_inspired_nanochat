@@ -109,3 +109,25 @@ established way to make earlier activity available to delayed feedback.
   E2E harness. GRPO and full-model recall remain separate.
 - [ ] Recompute the decision independently, run DSR quality checks and
   record the bounded outcome in Beads.
+
+### Supervised initialization follow-up
+
+The cold-start policy stayed near the 1-in-64 chance rate. At an equal
+128-step exposure, a diagnostic given correct answers reached 0.278
+expected reward with updates from the Hebbian layer disabled. The task
+can support learning by this architecture.
+
+- [ ] Use eight fresh seeds, 40521 through 47521 in steps of 1000. Train
+  each starting model for 128 supervised updates with the same batch size,
+  optimizer, learning rate and clipping as the cold study. Use task seeds
+  1,000,000 plus the model seed plus step for this initialization phase.
+  Disable online writes during supervision. Save a digest of the trained
+  state and give an identical copy to each feedback policy.
+- [ ] Apply the same 128-step contextual-bandit schedules and advancement
+  thresholds from the cold study. Use 512 fresh contexts from seed 101004
+  for evaluation. Require at least six starting policies to score at
+  least 0.10 expected reward for this result to qualify as a test on
+  competent policies. Record early reward, end reward and total writes
+  for every arm and seed.
+- [ ] Keep the cold-start and supervised-initialization decisions visible
+  and independently reproducible.
