@@ -213,20 +213,20 @@ reward-driven update.
 
 ### Registered work
 
-- [ ] Stage an opt-in chat trainer path with signed group-centered credit.
+- [x] Stage an opt-in chat trainer path with signed group-centered credit.
   Match the gradient path in the `off`, `aligned` and `shuffled` modes
   by disabling ordinary online updates in these three modes. Keep the
   existing default. Shuffle advantages within each full question group
   before slicing microbatches. Apply one finite, globally normalized update
   after the optimizer. Preserve the action mask for padding, prompts and
   forced tool tokens.
-- [ ] Check individually computed trace products, cancellation, zero
+- [x] Check individually computed trace products, cancellation, zero
   advantages, permutation and microbatch remainder, post-backward mutation,
   and two-rank reduction. Verify that large CUDA batches retain all
   policy log probabilities. Use the actual GSM8K runner with archived
   official rows. Explicitly record if the starting checkpoint produces
   only one reward value in each group.
-- [ ] On the synthetic copy-first task, initialize eight fresh models
+- [x] On the synthetic copy-first task, initialize eight fresh models
   (seeds 70521–77521, spaced by 1000) with 128 supervised updates,
   batch size 16, on task seeds `2000000 + model_seed + update`. Use
   the existing depth-2, width-64 model and AdamW at `0.002`, clip 1,
@@ -237,7 +237,7 @@ reward-driven update.
   `α=0.03` for the aligned and shuffled arms. Turn off stochastic release
   in this comparison so that sampler and training forwards share the
   same biological setting.
-- [ ] Evaluate expected reward on the same 512 fresh contexts from seed
+- [x] Evaluate expected reward on the same 512 fresh contexts from seed
   102004 at updates 0, 32, 64 and 96. Require at least six starting
   checkpoints above 0.10 and nonconstant reward groups in every seed.
   Test aligned versus off and aligned versus shuffled on the mean of
@@ -246,7 +246,7 @@ reward-driven update.
   and paired one-sided exact sign-flip `p ≤ 0.025` in both contrasts.
   Archive missing, null and failed runs. The controlled bandit and
   official GSM8K runner smoke have distinct scopes.
-- [ ] Independently verify the comparisons and publish the executed
+- [x] Independently verify the comparisons and publish the executed
   source, test and DSR evidence. Keep full GSM8K effectiveness open
   unless the staged starting policy earns diverse rewards in a
   matched evaluation at the appropriate scale.
@@ -290,11 +290,11 @@ learning. [Lillicrap et al., 2016](https://www.nature.com/articles/ncomms13276)
 
 ### Registered projection-independent comparison
 
-- [ ] Use new supervised starts at seeds 80521 through 87521, spaced
+- [x] Use new supervised starts at seeds 80521 through 87521, spaced
   by 1000, and holdout seed 107112. Use the original initialization,
   rollout, optimizer and evaluation budgets. Match arms within seed
   and measure competence at initialization.
-- [ ] Compare four policies: off, projected aligned, direct aligned,
+- [x] Compare four policies: off, projected aligned, direct aligned,
   and direct shuffled. The direct rule replaces the unit direction
   alone with `C / ‖C‖` for nonzero masked co-activity. It retains the
   0.03 step size, reward coefficients, action mask, and rollout
@@ -302,9 +302,80 @@ learning. [Lillicrap et al., 2016](https://www.nature.com/articles/ncomms13276)
   the same outer product, multiplied by the sign of
   `yᵀ Pout Pinᵀ x`. Use the production collector with the direct
   direction substituted only in the experimental driver.
-- [ ] Evaluate the mean of checkpoints 32, 64 and 96. Require all
+- [x] Evaluate the mean of checkpoints 32, 64 and 96. Require all
   three comparisons with direct aligned to have a mean gain of at
   least one percentage point, at least six positive seeds, and a
   one-sided exact sign-flip `p ≤ 0.0125`. Require at least six of
   eight starts above 0.10 and mixed reward groups in every seed.
   Publish the result even if the comparison declines advancement.
+
+### Results
+
+All 16 supervised starts qualified and all 56 training runs had mixed
+reward groups. The original 24 runs reproduced every recorded value in
+a second execution that retained each holdout row. The 32 runs of the
+projection-independent comparison reproduced byte for byte. Independent scoring
+reconstructed 114,688 holdout scores and 86,016 sampled action rewards
+across the two comparisons. Gains are absolute percentage points of
+expected reward, averaged over the three registered policy checkpoints.
+
+| Treatment | Comparator | Gain (percentage points) | Positive seeds | One-sided exact p |
+| --- | --- | ---: | ---: | ---: |
+| Projected aligned | Off | −0.335194 | 3/8 | 0.824219 |
+| Projected aligned | Projected shuffled | −0.538595 | 2/8 | 0.984375 |
+| Direct aligned | Off | +0.025953 | 3/8 | 0.464844 |
+| Direct aligned | Projected aligned | +0.094841 | 5/8 | 0.339844 |
+| Direct aligned | Direct shuffled | +0.273553 | 5/8 | 0.136719 |
+
+Both trials declined advancement. Removing the random sign left small
+differences that fell short of the one-percentage-point threshold
+against every control. The direct direction remains experimental.
+
+The frozen-policy diagnostic measured a mean aligned derivative of
+−5.20 × 10⁻⁷, compared with −5.80 × 10⁻⁸ for the shuffle and
++5.58 × 10⁻⁵ for the matched-norm ascent control. Aligned beat the
+shuffle in three of eight seeds with p = 0.824219. The sign reflection
+preserved all eight frozen holdout objectives exactly and reversed the
+slow-weight writes, with maximum cancellation error 3.73 × 10⁻⁹.
+Two-scale finite differences reproduced the analytic derivatives
+within 1.04 × 10⁻⁷ absolute error. The archive retains the earlier
+diagnostic attempts and the switch to a frozen evaluation forward.
+
+The official GSM8K Parquet splits matched all 7,473 train and 1,319
+test rows from OpenAI's original JSONL in order. Six sampled training
+completions and four held-out completions all received zero reward
+from the archived FineWeb starting policy. The chat trainer processed
+four policy microbatches, reported zero credited rollouts, and exported
+a checkpoint that the normal loader recovered. The two-GPU trainer
+processed the same total number of rollouts and wrote a byte-identical
+checkpoint. The GSM8K
+sample-efficiency study remains open (`hy8.3`).
+[OpenAI GSM8K data](https://huggingface.co/datasets/openai/gsm8k/tree/740312add88f781978c0658806c59bc2815b9866) · [Original GSM8K release](https://github.com/openai/grade-school-math/tree/3101c7d5072418e28b9008a6636bde82a006892c/grade_school_math/data)
+
+Two-rank Gloo and NCCL tests matched serial updates with mixed reward
+on both ranks, an empty rank and zero credit on every rank. The native
+RTX 4090 test matched a full-head reference at 2,052 token positions
+and across 26 gradient tensors. Editing the terminal token changed
+none of the earlier log probabilities. Twelve legacy-mode updates
+matched the earlier path bit for bit across token log probabilities,
+gradients, and resulting model state.
+
+Ruff, ty, scoped UBS and all eight targeted tests passed. The final
+Linux CPU suite had 2,087 passes, 11 skips and one failure. The live
+synaptic training benchmark was 2.11× slower than the standard
+transformer against a 2.00× limit. A single DSR invocation tested the
+baseline, patch, patch and baseline in that order. The slowdowns were
+2.39×, 2.30×, 2.35× and 2.30×. The benchmark and its threshold stayed
+intact. The standing DSR qualification is tracked in `u0fl.1`.
+[Results and replay drivers](../../results/rollout_credit_2026-11-23.json) · [Rollout and holdout traces](../../results/rollout_credit_2026-11-23.json.gz)
+
+For a replay, write each `study_sources` entry's `content` to its
+named file in a fresh scratch directory. In DSR, run the drivers
+with `PYTHONPATH=.` from the recorded implementation checkout.
+`credit_bandit.py` and `credit_direct_trial.py` each take an output
+JSON path. The gzip archive contains their full `projected` and
+`direct` rows. Pass the direct rows and a fresh result path to
+`verify_direct_trial.py`. The projected verifier takes the original
+trace without the two per-example holdout arrays, the replay trace
+with those arrays, and an output path. It compares all retained
+values and recomputes the registered statistics.

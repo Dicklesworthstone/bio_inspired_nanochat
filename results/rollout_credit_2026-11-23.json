@@ -1,0 +1,2654 @@
+{
+  "dsr": {
+    "credit-archive-roundtrip": {
+      "checks": [
+        {
+          "duration_ms": 559,
+          "exit_code": 0,
+          "log_sha256": "f76fe6de5c109fc0200ef321f6c5bf9a71d3c5ee0272590cb6f3a8f7d119bade",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "be2dc0fb9636d074d882f53b8eee7354c848635677c2f088beac858ab8ee962f",
+      "exit_code": 0,
+      "receipt_sha256": "483cf22820c8f8d717eba29037a3d1540336b71c7ce9d4280dc32ad594db7dba",
+      "run_id": "C1165581-8834-423A-BB38-11822FCB0C0F",
+      "source_after": "2369a7ff2c07a93aae4ced4dfa17b87031ddb2d0|1754b59a177e033e98e491d089107f743a33c5e2a940243aa4249c22fcc6e0d5|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "2369a7ff2c07a93aae4ced4dfa17b87031ddb2d0|1754b59a177e033e98e491d089107f743a33c5e2a940243aa4249c22fcc6e0d5|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "started_at": "2026-11-23T19:36:11Z",
+      "status": "success"
+    },
+    "credit-bandit": {
+      "checks": [
+        {
+          "duration_ms": 61099,
+          "exit_code": 0,
+          "log_sha256": "35654f84776d341ae6c67d0253472a71178c7faa84931cecefae9dbc604f62c4",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "6cdac5d02215101702e8baca8c90787a10c981060ae45dea53d5e3b68107b7bf",
+      "exit_code": 0,
+      "receipt_sha256": "489d7e7ff9ccf35250b6926a1464b80e24bc444474dd9f18978795b223bac21e",
+      "run_id": "2650CEE0-D0DC-4EF4-950B-034EB74E63AE",
+      "source_after": "cb7e59a150cb6c92f5793b65449ba0114ee8a7ae|dcce2bb41d372d8b7ce4b24ba9cdc0a76093c16d6297efe8b6ae82f2f99aaf7c|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "cb7e59a150cb6c92f5793b65449ba0114ee8a7ae|dcce2bb41d372d8b7ce4b24ba9cdc0a76093c16d6297efe8b6ae82f2f99aaf7c|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "started_at": "2026-11-23T19:20:13Z",
+      "status": "success"
+    },
+    "credit-bandit-audit-replay": {
+      "checks": [
+        {
+          "duration_ms": 60874,
+          "exit_code": 0,
+          "log_sha256": "9624153e598ade15e791f65462751de98a9dae03723ccdf844f1640e06c6cbb7",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "2ecc0192fd01c4b0d72c5a6cd66c6974ca700b1dd03b16d60c08c0273b2f72fa",
+      "exit_code": 0,
+      "receipt_sha256": "049dd111aeecb0fa390da3764c6f64e9c2c65f008673366ede4378ba0a9f3fa0",
+      "run_id": "D2EAFAF2-0D2E-45ED-87DD-C23713324C2A",
+      "source_after": "cb7e59a150cb6c92f5793b65449ba0114ee8a7ae|dcce2bb41d372d8b7ce4b24ba9cdc0a76093c16d6297efe8b6ae82f2f99aaf7c|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "cb7e59a150cb6c92f5793b65449ba0114ee8a7ae|dcce2bb41d372d8b7ce4b24ba9cdc0a76093c16d6297efe8b6ae82f2f99aaf7c|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "started_at": "2026-11-23T19:22:32Z",
+      "status": "success"
+    },
+    "credit-cpu-full": {
+      "checks": [
+        {
+          "duration_ms": 603,
+          "exit_code": 0,
+          "log_sha256": "7b86190b85965ac79d9172e549142c7f724d1c61dec079a459b6f69058d0ee41",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 389,
+          "exit_code": 0,
+          "log_sha256": "b97f51f31a864b02ad8e570cf9f2c1975d594d4a20a04fa79d49dd3c044812cd",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 385024,
+          "exit_code": 143,
+          "log_sha256": "0d8085b1ed586fbd78c90dd14a93a3c9ee0e3c4dabf130c0714d1109136d2d8c",
+          "status": "failed"
+        }
+      ],
+      "config_sha256": "48ba04bb53cc7581be653d651b64d9babc621abb1babbb01113451d4360255a6",
+      "exit_code": 1,
+      "receipt_sha256": "42dc121967f63b24d3320c9e78df6719012c42d44d4a0048c490215cd2c26d2e",
+      "run_id": "02ea36d6-e6fd-464c-87aa-a57ff1d4f2bc",
+      "source_after": "50916081a737c72e41bf92820fd92eda55973c23|02bd3d22b6e29aaca459b324ce6494e75f7db817000ac9ffe1257f8761f244a1|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "50916081a737c72e41bf92820fd92eda55973c23|02bd3d22b6e29aaca459b324ce6494e75f7db817000ac9ffe1257f8761f244a1|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "started_at": "2026-11-23T19:21:19Z",
+      "status": "failure"
+    },
+    "credit-direct-exact-replay": {
+      "checks": [
+        {
+          "duration_ms": 71345,
+          "exit_code": 0,
+          "log_sha256": "f3cabd70d6aa60a558716944fd6bd32a16fb7b29cb5242078afddd73f8c835ef",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "295a9e373e1f7f702186ad3c98c676cff28740b32dff087406536ea570b47dd5",
+      "exit_code": 0,
+      "receipt_sha256": "6fe5fb4900bc61d6ae61a6150d338d287cda7b77cb6d623e8c39ee8c3f4fb9bc",
+      "run_id": "18D35F0E-E1F1-4197-9624-1C2648BA96C0",
+      "source_after": "2369a7ff2c07a93aae4ced4dfa17b87031ddb2d0|1754b59a177e033e98e491d089107f743a33c5e2a940243aa4249c22fcc6e0d5|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "2369a7ff2c07a93aae4ced4dfa17b87031ddb2d0|1754b59a177e033e98e491d089107f743a33c5e2a940243aa4249c22fcc6e0d5|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "started_at": "2026-11-23T19:37:04Z",
+      "status": "success"
+    },
+    "credit-direct-fresh-cohort": {
+      "checks": [
+        {
+          "duration_ms": 75548,
+          "exit_code": 0,
+          "log_sha256": "d4a92134432a7f37ed52946c6475f6b8b09a4500f77230c61b7c487fa514df04",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "39c47821de3523ec996ebd223c27c988b0f9267b6040e0dadaf945fc5d305b74",
+      "exit_code": 0,
+      "receipt_sha256": "a4ec3d6cee71ac455ba6a9f02b776e747d423ccac706a4d68a1869e817cbeb2a",
+      "run_id": "18551263-486B-4B3C-8632-3AAF118D47C0",
+      "source_after": "2369a7ff2c07a93aae4ced4dfa17b87031ddb2d0|1754b59a177e033e98e491d089107f743a33c5e2a940243aa4249c22fcc6e0d5|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "2369a7ff2c07a93aae4ced4dfa17b87031ddb2d0|1754b59a177e033e98e491d089107f743a33c5e2a940243aa4249c22fcc6e0d5|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "started_at": "2026-11-23T19:31:50Z",
+      "status": "success"
+    },
+    "credit-direct-independent-audit": {
+      "checks": [
+        {
+          "duration_ms": 533,
+          "exit_code": 0,
+          "log_sha256": "93931462bb70240a12e1c69f1c2cde2501d30f25efc1aaa2dd9e51ccbb879261",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "7ff7176229b1068d1f9595da0588af7b0a93aa24d16abc9cf6d9bc45a8584595",
+      "exit_code": 0,
+      "receipt_sha256": "cec141264dc1961c6326260b2e3d5c0338f0962b939eac2f66a3e36f6a9fe7b1",
+      "run_id": "6F93B646-044E-446A-955A-C5791B19F988",
+      "source_after": "2369a7ff2c07a93aae4ced4dfa17b87031ddb2d0|1754b59a177e033e98e491d089107f743a33c5e2a940243aa4249c22fcc6e0d5|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "2369a7ff2c07a93aae4ced4dfa17b87031ddb2d0|1754b59a177e033e98e491d089107f743a33c5e2a940243aa4249c22fcc6e0d5|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "started_at": "2026-11-23T19:32:09Z",
+      "status": "success"
+    },
+    "credit-direction-finite-difference": {
+      "checks": [
+        {
+          "duration_ms": 16667,
+          "exit_code": 0,
+          "log_sha256": "cfad1a57970315366525b3f892b0c9217ca599a1310c283e112e44d89f993afc",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "4e584be4c82627916496488dec7661ae1c9378435c35e36e363982afa7d09b22",
+      "exit_code": 0,
+      "receipt_sha256": "60614a9e8d08696878dc48c44f16975a9f119cb26bfb11e4afbef6e7ada7ad25",
+      "run_id": "1F697EF8-979D-4BBD-8CDE-177EABF0B66C",
+      "source_after": "2369a7ff2c07a93aae4ced4dfa17b87031ddb2d0|1754b59a177e033e98e491d089107f743a33c5e2a940243aa4249c22fcc6e0d5|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "2369a7ff2c07a93aae4ced4dfa17b87031ddb2d0|1754b59a177e033e98e491d089107f743a33c5e2a940243aa4249c22fcc6e0d5|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "started_at": "2026-11-23T19:30:09Z",
+      "status": "success"
+    },
+    "credit-direction-two-scales": {
+      "checks": [
+        {
+          "duration_ms": 16915,
+          "exit_code": 1,
+          "log_sha256": "5e7f5ecbe332ed3328b55712463bb6bf3cfb3f0f1726ba28143720f176e5613e",
+          "status": "failed"
+        }
+      ],
+      "config_sha256": "597f313255b572a5d77329077dae36dd1e8471ea726982c96a307efb7b05969b",
+      "exit_code": 1,
+      "receipt_sha256": "374aecf54f90020f09fef95f1404b8679e91bb2e37f35001c087470975a2e2c9",
+      "run_id": "B9FA1FC2-FB62-44E4-91F0-2DE73B7F8BC8",
+      "source_after": "2369a7ff2c07a93aae4ced4dfa17b87031ddb2d0|1754b59a177e033e98e491d089107f743a33c5e2a940243aa4249c22fcc6e0d5|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "2369a7ff2c07a93aae4ced4dfa17b87031ddb2d0|1754b59a177e033e98e491d089107f743a33c5e2a940243aa4249c22fcc6e0d5|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "started_at": "2026-11-23T19:29:12Z",
+      "status": "failure"
+    },
+    "credit-direction-with-reflection": {
+      "checks": [
+        {
+          "duration_ms": 10370,
+          "exit_code": 1,
+          "log_sha256": "92fb67834bcb864e10981ab1ef06b9d1db3ad3219418fa5d63220619714da405",
+          "status": "failed"
+        }
+      ],
+      "config_sha256": "788b66e25ad1cc187d91c79b2583ced3bc07a09ccf3146fbab912263b98924b7",
+      "exit_code": 1,
+      "receipt_sha256": "ad480f1286bb4e54dc017fdcf965b71109654e7d8cc925c3a2489bcf1b379e4e",
+      "run_id": "4B364489-AC51-4665-8500-C475C188A48B",
+      "source_after": "2369a7ff2c07a93aae4ced4dfa17b87031ddb2d0|1754b59a177e033e98e491d089107f743a33c5e2a940243aa4249c22fcc6e0d5|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "2369a7ff2c07a93aae4ced4dfa17b87031ddb2d0|1754b59a177e033e98e491d089107f743a33c5e2a940243aa4249c22fcc6e0d5|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "started_at": "2026-11-23T19:28:20Z",
+      "status": "failure"
+    },
+    "credit-final-linux-full": {
+      "checks": [
+        {
+          "duration_ms": 715079,
+          "exit_code": 1,
+          "log_sha256": "bbab93df993304c20b6863996f7231de7a74803492025e53bbe22b7108128581",
+          "status": "failed"
+        }
+      ],
+      "config_sha256": "234b729a0d90274cb986edfe8bea99982d877ea5929247947585e54539c4b1ab",
+      "exit_code": 1,
+      "receipt_sha256": "4e47f5d1d4b286b2866ff6fe1c5b64cb38b1b7ad30aa80eacd499848bdc3d841",
+      "run_id": "cf72cff7-fc87-49ed-956b-6327b2db1b95",
+      "source_after": "50916081a737c72e41bf92820fd92eda55973c23|31f9a94738e4c14ed025717ba182076eaf0675639caa5a94ad7a9bb10a9bfb23|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "50916081a737c72e41bf92820fd92eda55973c23|31f9a94738e4c14ed025717ba182076eaf0675639caa5a94ad7a9bb10a9bfb23|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "started_at": "2026-11-23T19:30:23Z",
+      "status": "failure"
+    },
+    "credit-final-local": {
+      "checks": [
+        {
+          "duration_ms": 9504,
+          "exit_code": 0,
+          "log_sha256": "204a261be0420f8655f102df620353ed378761d8580104e8e854a7cb3ffdd8de",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 16674,
+          "exit_code": 0,
+          "log_sha256": "172b0198acacd5611b5c3a043b45c1a3c160ec34cad7a87324190b6c0481e541",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "9fbe45c702870d646e3444c74ed086d360aec5eabf2873a3008129bc8fc6a895",
+      "exit_code": 0,
+      "receipt_sha256": "032b022814757344c607d4321e13d0c5929653f59025fafd3d2d93eacbe3c822",
+      "run_id": "84B4712D-32FA-4B14-8695-A93F702346EE",
+      "source_after": "cb7e59a150cb6c92f5793b65449ba0114ee8a7ae|dcce2bb41d372d8b7ce4b24ba9cdc0a76093c16d6297efe8b6ae82f2f99aaf7c|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "cb7e59a150cb6c92f5793b65449ba0114ee8a7ae|dcce2bb41d372d8b7ce4b24ba9cdc0a76093c16d6297efe8b6ae82f2f99aaf7c|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "started_at": "2026-11-23T19:19:00Z",
+      "status": "success"
+    },
+    "credit-final-static": {
+      "checks": [
+        {
+          "duration_ms": 60688,
+          "exit_code": 0,
+          "log_sha256": "e68d62c51f72394eb43a1ff4c790f1d8afbde77b25c7ac5334b2c2876a1ad7cd",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "7b5eced9f44ab3af0dab631a22c9c0a30320f7e719954828c12d4085d3eb1877",
+      "exit_code": 0,
+      "receipt_sha256": "09c7346583b012042a2f6ffc1c911fe549ee1b803ad0ffc52f2bb2a139a63bb4",
+      "run_id": "f56764e6-c1b0-4256-b590-f91ca0e856bb",
+      "source_after": "50916081a737c72e41bf92820fd92eda55973c23|31f9a94738e4c14ed025717ba182076eaf0675639caa5a94ad7a9bb10a9bfb23|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "50916081a737c72e41bf92820fd92eda55973c23|31f9a94738e4c14ed025717ba182076eaf0675639caa5a94ad7a9bb10a9bfb23|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "started_at": "2026-11-23T19:22:21Z",
+      "status": "success"
+    },
+    "credit-frozen-direction": {
+      "checks": [
+        {
+          "duration_ms": 7982,
+          "exit_code": 1,
+          "log_sha256": "43c79ad0128a74fa68fee3af584e7ec24ac48f9628ddd5c0cddcd97b48fc76d7",
+          "status": "failed"
+        }
+      ],
+      "config_sha256": "4a3dc94e06de4a0477e55556ddb20dbcf1a431b359dbec0a0254b99cd3bf4cce",
+      "exit_code": 1,
+      "receipt_sha256": "18478071c9ae6898688a007f7dad4a37730e54cf0f5d09e66381ca5f2f527c3e",
+      "run_id": "B157D386-35AC-4CEF-8B3B-B4F84409649A",
+      "source_after": "cb7e59a150cb6c92f5793b65449ba0114ee8a7ae|dcce2bb41d372d8b7ce4b24ba9cdc0a76093c16d6297efe8b6ae82f2f99aaf7c|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "cb7e59a150cb6c92f5793b65449ba0114ee8a7ae|dcce2bb41d372d8b7ce4b24ba9cdc0a76093c16d6297efe8b6ae82f2f99aaf7c|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "started_at": "2026-11-23T19:25:25Z",
+      "status": "failure"
+    },
+    "credit-frozen-direction-recheck": {
+      "checks": [
+        {
+          "duration_ms": 15487,
+          "exit_code": 1,
+          "log_sha256": "a77647cff02ea8fe457073678d3167e2bf3788d0a628ff30fadb06cbe15b2e68",
+          "status": "failed"
+        }
+      ],
+      "config_sha256": "f1f048ecaee7bba80bc27562be8735c562a403951c9edac5c2d1ee4e5647ed36",
+      "exit_code": 1,
+      "receipt_sha256": "5deea1031646a1c26204c3fe3d257db21fbec7d94f34ed2685eec2198b8fd68a",
+      "run_id": "8D275798-42C0-4CD0-ADFA-58A908EBCB17",
+      "source_after": "cb7e59a150cb6c92f5793b65449ba0114ee8a7ae|dcce2bb41d372d8b7ce4b24ba9cdc0a76093c16d6297efe8b6ae82f2f99aaf7c|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "cb7e59a150cb6c92f5793b65449ba0114ee8a7ae|dcce2bb41d372d8b7ce4b24ba9cdc0a76093c16d6297efe8b6ae82f2f99aaf7c|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "started_at": "2026-11-23T19:26:26Z",
+      "status": "failure"
+    },
+    "credit-gloo-two-ranks": {
+      "checks": [
+        {
+          "duration_ms": 108725,
+          "exit_code": 0,
+          "log_sha256": "989f04d4539c58030de1903edfaf8329a3752f21bc2e822dc32a28c2bd8714c8",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "b6a265fe6f0dd9d13eb7b66838a882dd9e8dc640a5f50c68f767074d7c0e9b94",
+      "exit_code": 0,
+      "receipt_sha256": "a6582d2eef4598ddbff02a3e7ff363422d563c315edb79f187ba50e0fb398d5f",
+      "run_id": "2169bd2c-b586-4053-a4af-4d0d49d0d90d",
+      "source_after": "50916081a737c72e41bf92820fd92eda55973c23|31f9a94738e4c14ed025717ba182076eaf0675639caa5a94ad7a9bb10a9bfb23|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "50916081a737c72e41bf92820fd92eda55973c23|31f9a94738e4c14ed025717ba182076eaf0675639caa5a94ad7a9bb10a9bfb23|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "started_at": "2026-11-23T19:26:07Z",
+      "status": "success"
+    },
+    "credit-gsm8k-live": {
+      "checks": [
+        {
+          "duration_ms": 389854,
+          "exit_code": 0,
+          "log_sha256": "329472e62979f9b8d8d9c2a31dc387f9a8bbf50af02721b2326a713c7fb5481b",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "3d001a716aab6a471515bb1c83afc7ffd9f7c34aaf7b6157cbc44fa7f60c1789",
+      "exit_code": 0,
+      "receipt_sha256": "a7ab84d8381e24abfeb40a89be6aea61d6d8dee724bd6cd258c3299038f9e1b7",
+      "run_id": "1e1eb9b9-f576-4c55-96be-0d617bd590b6",
+      "source_after": "50916081a737c72e41bf92820fd92eda55973c23|31f9a94738e4c14ed025717ba182076eaf0675639caa5a94ad7a9bb10a9bfb23|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "50916081a737c72e41bf92820fd92eda55973c23|31f9a94738e4c14ed025717ba182076eaf0675639caa5a94ad7a9bb10a9bfb23|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "started_at": "2026-11-23T19:29:48Z",
+      "status": "success"
+    },
+    "credit-gsm8k-two-gpu": {
+      "checks": [
+        {
+          "duration_ms": 167262,
+          "exit_code": 0,
+          "log_sha256": "b70d21e67a35076e2c236d7c46aa0ac8d2ec0387c68abfec70663453c0292af5",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "34904b8fe9f65e9d080bd9a87895786848d7ac821ca8f11038f0e89b4576dfb8",
+      "exit_code": 0,
+      "receipt_sha256": "51804a5830e5f29114c6053d2d4d68b3ef1fc3c35fa00c0c983aaafe3e530930",
+      "run_id": "58a9dfba-a1d8-4487-9f97-296e72f75d7d",
+      "source_after": "50916081a737c72e41bf92820fd92eda55973c23|2096f6e718aaae5ed5ec09a0e7bf27d73571bbe0697e646edcd893355d10ad1f|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "50916081a737c72e41bf92820fd92eda55973c23|2096f6e718aaae5ed5ec09a0e7bf27d73571bbe0697e646edcd893355d10ad1f|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "started_at": "2026-11-23T19:40:50Z",
+      "status": "success"
+    },
+    "credit-legacy-matched-replay": {
+      "checks": [
+        {
+          "duration_ms": 4918,
+          "exit_code": 0,
+          "log_sha256": "8b94f6296f3bf3a17688b1e5e7e96c0f86571c22c216404c2a7476371e5fce5c",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "9eec037d027592019a7fd66c404c0c3a92d0799e7fad39201a0846b1735a5ddb",
+      "exit_code": 0,
+      "receipt_sha256": "a5c9377f4606dfe62cfd102216a605656d29a93002b5c3945119a6ddbdc493cf",
+      "run_id": "A1453441-F9E2-4C6F-A4D1-1B1DCB7C1C47",
+      "source_after": "2369a7ff2c07a93aae4ced4dfa17b87031ddb2d0|1754b59a177e033e98e491d089107f743a33c5e2a940243aa4249c22fcc6e0d5|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "2369a7ff2c07a93aae4ced4dfa17b87031ddb2d0|1754b59a177e033e98e491d089107f743a33c5e2a940243aa4249c22fcc6e0d5|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "started_at": "2026-11-23T19:37:09Z",
+      "status": "success"
+    },
+    "credit-local-fixed": {
+      "checks": [
+        {
+          "duration_ms": 7336,
+          "exit_code": 0,
+          "log_sha256": "856159e429df69a2201558445136cc960ce947bde084b86d72690f01aea9074c",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 10920,
+          "exit_code": 0,
+          "log_sha256": "e6f119eec8d871024c869139d5fa6aef25efd3c94e3cb008c6889eeb0e63bb56",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "e5ae4cc06cfcd2ce0429753d05ab4bc4546a9deda17a997123f81ae3a42a8081",
+      "exit_code": 0,
+      "receipt_sha256": "3fc0475269d47b4966f2a6218e496b74ee9c2c6a2236c14dd2d61b11fec20158",
+      "run_id": "DD9994F0-FCD4-4C4A-BE86-260742C72FD4",
+      "source_after": "50916081a737c72e41bf92820fd92eda55973c23|02bd3d22b6e29aaca459b324ce6494e75f7db817000ac9ffe1257f8761f244a1|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "50916081a737c72e41bf92820fd92eda55973c23|02bd3d22b6e29aaca459b324ce6494e75f7db817000ac9ffe1257f8761f244a1|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "started_at": "2026-11-23T19:15:17Z",
+      "status": "success"
+    },
+    "credit-local-tests": {
+      "checks": [
+        {
+          "duration_ms": 7860,
+          "exit_code": 1,
+          "log_sha256": "3a4a395c20eb35ac177b24894ea01c72303bf48be236b32f2a1ab499e1ddcd9b",
+          "status": "failed"
+        }
+      ],
+      "config_sha256": "1826b0f8d1389ced6ce2f0d58d044fd83da7b95b073e87a2744ed85e85c24ebe",
+      "exit_code": 1,
+      "receipt_sha256": "3db0cfe4ac9887b61e4a2f4146e827270cc1d5a8acba8f290183bcf4a60bdcb6",
+      "run_id": "3BC3B03C-93E8-455B-BDC5-E0BF8CDC3F0E",
+      "source_after": "50916081a737c72e41bf92820fd92eda55973c23|4bcdceb7abf0d8cc25e6532acf2e95362aed09097587594fe1d7d896d3afca9e|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "50916081a737c72e41bf92820fd92eda55973c23|4bcdceb7abf0d8cc25e6532acf2e95362aed09097587594fe1d7d896d3afca9e|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "started_at": "2026-11-23T19:13:50Z",
+      "status": "failure"
+    },
+    "credit-native-linux-throughput": {
+      "checks": [
+        {
+          "duration_ms": 77140,
+          "exit_code": 1,
+          "log_sha256": "ac2ae74877e9934b2f78ea8170c651d4a9ec375a8ff32f593914646c34b2d847",
+          "status": "failed"
+        }
+      ],
+      "config_sha256": "e3a2914ff861399379314563377b5915911cdb45316a7e7fb36ee5a47fc6f086",
+      "exit_code": 1,
+      "receipt_sha256": "245fa2459e773723f46138109ab9c9cf2b080dcefc06c312a35aa0769c78eeac",
+      "run_id": "dcca3285-f852-41db-9e00-30239b0289bf",
+      "source_after": "50916081a737c72e41bf92820fd92eda55973c23|2096f6e718aaae5ed5ec09a0e7bf27d73571bbe0697e646edcd893355d10ad1f|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "50916081a737c72e41bf92820fd92eda55973c23|2096f6e718aaae5ed5ec09a0e7bf27d73571bbe0697e646edcd893355d10ad1f|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "started_at": "2026-11-23T19:36:38Z",
+      "status": "failure"
+    },
+    "credit-nccl-and-head": {
+      "checks": [
+        {
+          "duration_ms": 252365,
+          "exit_code": 0,
+          "log_sha256": "8469a9d894a2de693330cbb8e98ee5f9fcdc2f2da835b780d2b2d1d4a5a3d642",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "2d2bf15cfa8e84e3a811371160da8ca550d40bcb96d9ecb1390a169c345a616e",
+      "exit_code": 0,
+      "receipt_sha256": "dc3693f4c0ff62df742d9f9d2a60a576c6ef49cbdeb3ff7f5b4f49d60815e51f",
+      "run_id": "fb5be1df-39f5-4ff8-b86a-49d7af5388c0",
+      "source_after": "50916081a737c72e41bf92820fd92eda55973c23|31f9a94738e4c14ed025717ba182076eaf0675639caa5a94ad7a9bb10a9bfb23|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "50916081a737c72e41bf92820fd92eda55973c23|31f9a94738e4c14ed025717ba182076eaf0675639caa5a94ad7a9bb10a9bfb23|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "started_at": "2026-11-23T19:28:25Z",
+      "status": "success"
+    },
+    "credit-numerical-audit": {
+      "checks": [
+        {
+          "duration_ms": 876,
+          "exit_code": 0,
+          "log_sha256": "a5a4044ae7e72d6641cfd23fdcd2ce828883e034e7a986762f02c6b6ce47d65d",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "c7028833860585ca958b5d1a1d145c391463261fef818d402401e41105dd27f1",
+      "exit_code": 0,
+      "receipt_sha256": "7bfa3654f8734d446a8eb439c2597e3f8371d96e8dcbe4227a48b8d99666a861",
+      "run_id": "002ADC4F-2556-4B00-B6B7-82C35ED4001C",
+      "source_after": "cb7e59a150cb6c92f5793b65449ba0114ee8a7ae|dcce2bb41d372d8b7ce4b24ba9cdc0a76093c16d6297efe8b6ae82f2f99aaf7c|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "cb7e59a150cb6c92f5793b65449ba0114ee8a7ae|dcce2bb41d372d8b7ce4b24ba9cdc0a76093c16d6297efe8b6ae82f2f99aaf7c|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "started_at": "2026-11-23T19:23:05Z",
+      "status": "success"
+    },
+    "credit-release-focused": {
+      "checks": [
+        {
+          "duration_ms": 6786,
+          "exit_code": 0,
+          "log_sha256": "64bb3c7a0788d74d6447d07454876fd8a42d314c2c7160244a69178258f21118",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "d218313be40632055cf67f9672d67b358a9640b38adcee6736656b32e4630cb0",
+      "exit_code": 0,
+      "receipt_sha256": "f4e22bbaa52ea8cd4ca1f49e64fed99f78c32f897f9b8f6c83acfb9aa44b197e",
+      "run_id": "57DD734C-E91D-4E42-9BE2-D35CADDAE4E4",
+      "source_after": "2369a7ff2c07a93aae4ced4dfa17b87031ddb2d0|1754b59a177e033e98e491d089107f743a33c5e2a940243aa4249c22fcc6e0d5|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "2369a7ff2c07a93aae4ced4dfa17b87031ddb2d0|1754b59a177e033e98e491d089107f743a33c5e2a940243aa4249c22fcc6e0d5|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "started_at": "2026-11-23T19:38:36Z",
+      "status": "success"
+    },
+    "credit-release-gsm8k": {
+      "checks": [
+        {
+          "duration_ms": 251393,
+          "exit_code": 0,
+          "log_sha256": "6909d9d7910c7fd040a61cc4765b6400ff2912ed934ba1942fcfb1753c861409",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "badbbe079ac08f6b9267978ab6caa5262a05d7a27765f56b841f51d335625496",
+      "exit_code": 0,
+      "receipt_sha256": "64ecae5ec04f68998e7ca5bf0799074e9baf3e107462d394d6def0d9a15ca0fc",
+      "run_id": "e4c5c9a0-b939-4342-a4f7-89b8a5ca8a2c",
+      "source_after": "50916081a737c72e41bf92820fd92eda55973c23|2096f6e718aaae5ed5ec09a0e7bf27d73571bbe0697e646edcd893355d10ad1f|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "50916081a737c72e41bf92820fd92eda55973c23|2096f6e718aaae5ed5ec09a0e7bf27d73571bbe0697e646edcd893355d10ad1f|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "started_at": "2026-11-23T19:35:08Z",
+      "status": "success"
+    },
+    "credit-release-linux-full": {
+      "checks": [
+        {
+          "duration_ms": 727001,
+          "exit_code": 1,
+          "log_sha256": "e04bd685250377acde8d48ba24acfa98f47dffbbe22f63910a7807665c35467b",
+          "status": "failed"
+        }
+      ],
+      "config_sha256": "5917bf139f2e5222acac3cad37cf1d281f7931db38e5ec6a677fd7a9c23d75f9",
+      "exit_code": 1,
+      "receipt_sha256": "95e5ef22260eefb86f9a30d507d8b0c70d5b9acc3dec0d3732011f78de0f4def",
+      "run_id": "aec06640-11a6-4e94-990e-409e418d12d2",
+      "source_after": "50916081a737c72e41bf92820fd92eda55973c23|2096f6e718aaae5ed5ec09a0e7bf27d73571bbe0697e646edcd893355d10ad1f|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "50916081a737c72e41bf92820fd92eda55973c23|2096f6e718aaae5ed5ec09a0e7bf27d73571bbe0697e646edcd893355d10ad1f|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "started_at": "2026-11-23T19:39:42Z",
+      "status": "failure"
+    },
+    "credit-release-static": {
+      "checks": [
+        {
+          "duration_ms": 49112,
+          "exit_code": 0,
+          "log_sha256": "e8e61eba6acc01740157e4d21584197b45eb7348011b7d2132d23a94e11efb3c",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "6133d16991d7af013cb5ab1409fa3eb57eca5d8a6c449d2305aa9d2fa6f82083",
+      "exit_code": 0,
+      "receipt_sha256": "f4e6f3a36bd9bf952f0c35bb75f970e9a2140a9599ebe70c20eb0d69c8cc35d2",
+      "run_id": "50801da3-9853-42c9-b40b-68d7b1dacbf2",
+      "source_after": "50916081a737c72e41bf92820fd92eda55973c23|2096f6e718aaae5ed5ec09a0e7bf27d73571bbe0697e646edcd893355d10ad1f|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "50916081a737c72e41bf92820fd92eda55973c23|2096f6e718aaae5ed5ec09a0e7bf27d73571bbe0697e646edcd893355d10ad1f|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "started_at": "2026-11-23T19:31:48Z",
+      "status": "success"
+    },
+    "credit-throughput-abba": {
+      "checks": [
+        {
+          "duration_ms": 19189,
+          "exit_code": 1,
+          "log_sha256": "ea2d4232bab9b753b1edbf85b15dad720a3b732ff3cc91e9e4466f733c2718e2",
+          "status": "failed"
+        }
+      ],
+      "config_sha256": "461e06ac185838f4f0895430a4479d28b6244b9a904d3081857ed45b96a83c21",
+      "exit_code": 1,
+      "receipt_sha256": "6d453a70d2e475cf381c19fa8d9e4bb21acf0f484730c3160afeb112cf762fe3",
+      "run_id": "cdee4bec-6e47-4679-a365-af6189083a2b",
+      "source_after": "50916081a737c72e41bf92820fd92eda55973c23|2096f6e718aaae5ed5ec09a0e7bf27d73571bbe0697e646edcd893355d10ad1f|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "50916081a737c72e41bf92820fd92eda55973c23|2096f6e718aaae5ed5ec09a0e7bf27d73571bbe0697e646edcd893355d10ad1f|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "started_at": "2026-11-23T19:31:37Z",
+      "status": "failure"
+    },
+    "credit-ubs-release": {
+      "checks": [
+        {
+          "duration_ms": 9320,
+          "exit_code": 0,
+          "log_sha256": "68e55beb7639c7200fca0852788f79640d952f583e11268c0493361c48bb944c",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "446f51919edc3b15ae0bd83b9a7625fe74f6e90cc0ec64e01f74a77495760286",
+      "exit_code": 0,
+      "receipt_sha256": "7acd33bbe9332b0c95d4097e05fedc0ff291386d83dbb7be6c38cc472d18c298",
+      "run_id": "86970EDF-06A3-46EE-9528-992B63267281",
+      "source_after": "2369a7ff2c07a93aae4ced4dfa17b87031ddb2d0|1754b59a177e033e98e491d089107f743a33c5e2a940243aa4249c22fcc6e0d5|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "2369a7ff2c07a93aae4ced4dfa17b87031ddb2d0|1754b59a177e033e98e491d089107f743a33c5e2a940243aa4249c22fcc6e0d5|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "started_at": "2026-11-23T19:27:46Z",
+      "status": "success"
+    }
+  },
+  "frozen_direction": {
+    "aligned_mean": -5.198171577269095e-07,
+    "ascent_control_mean": 5.5752133853486865e-05,
+    "exact_p": 0.82421875,
+    "positive_differences": 3,
+    "seeds": {
+      "70521": {
+        "aligned": {
+          "analytic": -1.173093453463283e-06,
+          "central_difference": -1.1598754703912029e-06,
+          "credit": {
+            "local_credited_rollouts": 400,
+            "local_rollouts": 512,
+            "max_update_norm": 0.000558580388315022
+          },
+          "extrapolated_difference": -1.1721740495092743e-06,
+          "extrapolation_error": 9.194039540088038e-10,
+          "half_step_minus_objective": 0.2788242257909408,
+          "half_step_plus_objective": 0.27882305669153606,
+          "layer_norms": [
+            0.0005432908656075597,
+            0.0005585805047303438,
+            0.0005070423358120024,
+            0.000368748587789014
+          ],
+          "minus_objective": 0.27882480078637073,
+          "plus_objective": 0.27882248103542995
+        },
+        "ascent_control": {
+          "analytic": 3.549819812556154e-05,
+          "central_difference": 3.545429523782451e-05,
+          "extrapolated_difference": 3.545000354771011e-05,
+          "extrapolation_error": 4.819457785143407e-08,
+          "half_step_minus_objective": 0.2788059077497183,
+          "half_step_plus_objective": 0.27884135882618855,
+          "layer_norms": [
+            0.000543290632776916,
+            0.0005585806793533266,
+            0.0005070425104349852,
+            0.000368748587789014
+          ],
+          "minus_objective": 0.27878815118741085,
+          "plus_objective": 0.2788590597778865
+        },
+        "changed_shuffles": 78,
+        "frozen_model_hash": "b7875fc433ffb549e3a110c761aabb3a304135a9522bd9f074dbfc1e310932c0",
+        "holdout_expected_reward": 0.2788236414329064,
+        "mixed_groups": 100,
+        "projection_reflection": {
+          "analytic": 1.1730948719760182e-06,
+          "central_difference": 1.1594913003065699e-06,
+          "credit": {
+            "local_credited_rollouts": 400,
+            "local_rollouts": 512,
+            "max_update_norm": 0.000558580388315022
+          },
+          "extrapolated_difference": 1.172093791505328e-06,
+          "extrapolation_error": 1.001080470690249e-09,
+          "half_step_minus_objective": 0.2788230554730654,
+          "half_step_plus_objective": 0.2788242244162341,
+          "identical_initial_objective": true,
+          "layer_norms": [
+            0.0005432908656075597,
+            0.0005585805047303438,
+            0.0005070423358120024,
+            0.000368748587789014
+          ],
+          "max_cancel_error": 1.862645149230957e-09,
+          "minus_objective": 0.27882248164146917,
+          "plus_objective": 0.2788248006240698
+        },
+        "shuffled": {
+          "analytic": 7.342220131864453e-08,
+          "central_difference": 6.871705449107424e-08,
+          "credit": {
+            "local_credited_rollouts": 400,
+            "local_rollouts": 512,
+            "max_update_norm": 0.0005447812145575881
+          },
+          "extrapolated_difference": 7.364861254188781e-08,
+          "extrapolation_error": 2.2641122324328905e-10,
+          "half_step_minus_objective": 0.27882360573182036,
+          "half_step_plus_objective": 0.2788236781475434,
+          "layer_norms": [
+            0.0005447812145575881,
+            0.00048570529907010496,
+            0.0005355842295102775,
+            0.0003833555383607745
+          ],
+          "minus_objective": 0.27882357124674617,
+          "plus_objective": 0.27882370868085515
+        }
+      },
+      "71521": {
+        "aligned": {
+          "analytic": -5.426299812374057e-07,
+          "central_difference": -5.47945035955788e-07,
+          "credit": {
+            "local_credited_rollouts": 396,
+            "local_rollouts": 512,
+            "max_update_norm": 0.0006048486102372408
+          },
+          "extrapolated_difference": -5.634474984546797e-07,
+          "extrapolation_error": 2.0817517217274e-08,
+          "half_step_minus_objective": 0.38176183890043747,
+          "half_step_plus_objective": 0.38176127932855464,
+          "layer_norms": [
+            0.0006048497743904591,
+            0.0005122948787175119,
+            0.0005751797580160201,
+            0.0005329126142896712
+          ],
+          "minus_objective": 0.38176211273442096,
+          "plus_objective": 0.38176101684434904
+        },
+        "ascent_control": {
+          "analytic": 4.100909072811298e-05,
+          "central_difference": 4.100848362986742e-05,
+          "extrapolated_difference": 4.10051451236552e-05,
+          "extrapolation_error": 3.945604457779718e-09,
+          "half_step_minus_objective": 0.38174106115447237,
+          "half_step_plus_objective": 0.3817820671342226,
+          "layer_norms": [
+            0.0006048499490134418,
+            0.0005122952279634774,
+            0.0005751801072619855,
+            0.0005329126724973321
+          ],
+          "minus_objective": 0.38172052061344436,
+          "plus_objective": 0.3818025375807041
+        },
+        "changed_shuffles": 75,
+        "frozen_model_hash": "fe2ef278d84f2d5e7036b4f56086b8ca2e1e0cde7b6af60ae96eba93f406102a",
+        "holdout_expected_reward": 0.3817615713778615,
+        "mixed_groups": 99,
+        "projection_reflection": {
+          "analytic": 5.426289446884371e-07,
+          "central_difference": 5.471434114945328e-07,
+          "credit": {
+            "local_credited_rollouts": 396,
+            "local_rollouts": 512,
+            "max_update_norm": 0.0006048486102372408
+          },
+          "extrapolated_difference": 5.641955239203226e-07,
+          "extrapolation_error": 2.1566579231885465e-08,
+          "half_step_minus_objective": 0.3817612796158854,
+          "half_step_plus_objective": 0.3817618395483812,
+          "identical_initial_objective": true,
+          "layer_norms": [
+            0.0006048497161827981,
+            0.0005122948787175119,
+            0.0005751797580160201,
+            0.0005329126724973321
+          ],
+          "max_cancel_error": 3.725290298461914e-09,
+          "minus_objective": 0.3817610181502999,
+          "plus_objective": 0.3817621124371229
+        },
+        "shuffled": {
+          "analytic": -3.6274894050178836e-07,
+          "central_difference": -4.031242086532938e-07,
+          "credit": {
+            "local_credited_rollouts": 396,
+            "local_rollouts": 512,
+            "max_update_norm": 0.0005696541047655046
+          },
+          "extrapolated_difference": -4.0951369333538007e-07,
+          "extrapolation_error": 4.676475283359171e-08,
+          "half_step_minus_objective": 0.3817617678574773,
+          "half_step_plus_objective": 0.3817613599411551,
+          "layer_norms": [
+            0.0005696542211808264,
+            0.000486070173792541,
+            0.0005237635341472924,
+            0.00041402893839403987
+          ],
+          "minus_objective": 0.3817619710989694,
+          "plus_objective": 0.3817611648505521
+        }
+      },
+      "72521": {
+        "aligned": {
+          "analytic": 1.4730692139308381e-06,
+          "central_difference": 1.466067047262154e-06,
+          "credit": {
+            "local_credited_rollouts": 356,
+            "local_rollouts": 512,
+            "max_update_norm": 0.00048701936611905694
+          },
+          "extrapolated_difference": 1.4643874837368582e-06,
+          "extrapolation_error": 8.681730193979887e-09,
+          "half_step_minus_objective": 0.2537507738051207,
+          "half_step_plus_objective": 0.2537522386124953,
+          "layer_norms": [
+            0.000465613033156842,
+            0.00046259781811386347,
+            0.0004870193952228874,
+            0.00042494238005019724
+          ],
+          "minus_objective": 0.25375004226223763,
+          "plus_objective": 0.25375297439633215
+        },
+        "ascent_control": {
+          "analytic": 4.590007383361687e-05,
+          "central_difference": 4.592121615479283e-05,
+          "extrapolated_difference": 4.5929942040917604e-05,
+          "extrapolation_error": 2.986820730073301e-08,
+          "half_step_minus_objective": 0.2537285336820601,
+          "half_step_plus_objective": 0.2537744614426295,
+          "layer_norms": [
+            0.0004656130913645029,
+            0.0004625978763215244,
+            0.0004870197153650224,
+            0.00042494211811572313
+          ],
+          "minus_objective": 0.25370554931351347,
+          "plus_objective": 0.25379739174582305
+        },
+        "changed_shuffles": 72,
+        "frozen_model_hash": "1cc52c6599dba1a72567a6426b85a16c9cc814a1f22fb86d426bb4e01eeeeb30",
+        "holdout_expected_reward": 0.25375150879858943,
+        "mixed_groups": 89,
+        "projection_reflection": {
+          "analytic": -1.4730691709867382e-06,
+          "central_difference": -1.4665872729302531e-06,
+          "credit": {
+            "local_credited_rollouts": 356,
+            "local_rollouts": 512,
+            "max_update_norm": 0.00048701936611905694
+          },
+          "extrapolated_difference": -1.4639230425013878e-06,
+          "extrapolation_error": 9.14612848535039e-09,
+          "half_step_minus_objective": 0.2537522386124953,
+          "half_step_plus_objective": 0.2537507740233952,
+          "identical_initial_objective": true,
+          "layer_norms": [
+            0.00046561306226067245,
+            0.000462597789010033,
+            0.0004870193952228874,
+            0.0004249424091540277
+          ],
+          "max_cancel_error": 1.862645149230957e-09,
+          "minus_objective": 0.2537529747188685,
+          "plus_objective": 0.2537500415443226
+        },
+        "shuffled": {
+          "analytic": 1.6724735784318261e-07,
+          "central_difference": 1.6280119460865272e-07,
+          "credit": {
+            "local_credited_rollouts": 356,
+            "local_rollouts": 512,
+            "max_update_norm": 0.00046749666216783226
+          },
+          "extrapolated_difference": 1.6546183901714842e-07,
+          "extrapolation_error": 1.785518826034192e-09,
+          "half_step_minus_objective": 0.25375142449729193,
+          "half_step_plus_objective": 0.25375158929396985,
+          "layer_norms": [
+            0.0004219593829475343,
+            0.00039199882303364575,
+            0.00039952521910890937,
+            0.00046749666216783226
+          ],
+          "minus_objective": 0.2537513410237436,
+          "plus_objective": 0.2537516666261328
+        }
+      },
+      "73521": {
+        "aligned": {
+          "analytic": -3.729559253199672e-08,
+          "central_difference": -4.661125160843049e-08,
+          "credit": {
+            "local_credited_rollouts": 412,
+            "local_rollouts": 512,
+            "max_update_norm": 0.0006980594480410218
+          },
+          "extrapolated_difference": -4.3859669868195894e-08,
+          "extrapolation_error": 6.5640773361991755e-09,
+          "half_step_minus_objective": 0.4152450311369873,
+          "half_step_plus_objective": 0.415244986589422,
+          "layer_norms": [
+            0.000671240093652159,
+            0.0006980598554946482,
+            0.0006320917746052146,
+            0.0005227842484600842
+          ],
+          "minus_objective": 0.41524505104906423,
+          "plus_objective": 0.415244957826561
+        },
+        "ascent_control": {
+          "analytic": 8.559756114383138e-05,
+          "central_difference": 8.569909489755667e-05,
+          "extrapolated_difference": 8.569574948749659e-05,
+          "extrapolation_error": 9.818834366520624e-08,
+          "half_step_minus_objective": 0.41520209760241567,
+          "half_step_plus_objective": 0.4152877941882557,
+          "layer_norms": [
+            0.0006712402100674808,
+            0.0006980595644563437,
+            0.0006320917746052146,
+            0.000522784364875406
+          ],
+          "minus_objective": 0.4151590527194685,
+          "plus_objective": 0.4153304509092636
+        },
+        "changed_shuffles": 84,
+        "frozen_model_hash": "149a44863df1ecfc7cf87beab7687e49bd727fab968df779614f0172f552fb15",
+        "holdout_expected_reward": 0.41524501043694906,
+        "mixed_groups": 103,
+        "projection_reflection": {
+          "analytic": 3.729436645857868e-08,
+          "central_difference": 4.682036558456559e-08,
+          "credit": {
+            "local_credited_rollouts": 412,
+            "local_rollouts": 512,
+            "max_update_norm": 0.0006980594480410218
+          },
+          "extrapolated_difference": 4.323632629699148e-08,
+          "extrapolation_error": 5.941959838412797e-09,
+          "half_step_minus_objective": 0.41524498700239143,
+          "half_step_plus_objective": 0.41524503113472755,
+          "identical_initial_objective": true,
+          "layer_norms": [
+            0.0006712401518598199,
+            0.0006980598554946482,
+            0.0006320917163975537,
+            0.0005227842484600842
+          ],
+          "max_cancel_error": 1.862645149230957e-09,
+          "minus_objective": 0.4152449572471032,
+          "plus_objective": 0.41524505088783437
+        },
+        "shuffled": {
+          "analytic": -1.5207171847811007e-07,
+          "central_difference": -1.5991451340902074e-07,
+          "credit": {
+            "local_credited_rollouts": 412,
+            "local_rollouts": 512,
+            "max_update_norm": 0.0006654262542724609
+          },
+          "extrapolated_difference": -1.634164781272318e-07,
+          "extrapolation_error": 1.134475964912174e-08,
+          "half_step_minus_objective": 0.4152450881821921,
+          "half_step_plus_objective": 0.41524492564120513,
+          "layer_norms": [
+            0.0005491332267411053,
+            0.0005348327104002237,
+            0.00046219700016081333,
+            0.0006654253229498863
+          ],
+          "minus_objective": 0.415245162503729,
+          "plus_objective": 0.4152448426747022
+        }
+      },
+      "74521": {
+        "aligned": {
+          "analytic": -5.156610552341753e-07,
+          "central_difference": -5.031467005811585e-07,
+          "credit": {
+            "local_credited_rollouts": 404,
+            "local_rollouts": 512,
+            "max_update_norm": 0.0007809483213350177
+          },
+          "extrapolated_difference": -4.808340404172107e-07,
+          "extrapolation_error": 3.4827014816964676e-08,
+          "half_step_minus_objective": 0.3503793686025649,
+          "half_step_plus_objective": 0.35037888219035945,
+          "layer_norms": [
+            0.0006111536640673876,
+            0.0006064145127311349,
+            0.0007809493108652532,
+            0.0004830897378269583
+          ],
+          "minus_objective": 0.3503796211281951,
+          "plus_objective": 0.35037861483479393
+        },
+        "ascent_control": {
+          "analytic": 5.474675483255734e-05,
+          "central_difference": 5.4715927723436586e-05,
+          "extrapolated_difference": 5.4706374492711575e-05,
+          "extrapolation_error": 4.038033984576537e-08,
+          "half_step_minus_objective": 0.3503517527587672,
+          "half_step_plus_objective": 0.35040646152156757,
+          "layer_norms": [
+            0.0006111534894444048,
+            0.000606414454523474,
+            0.0007809491944499314,
+            0.0004830894758924842
+          ],
+          "minus_objective": 0.35032432143724623,
+          "plus_objective": 0.3504337532926931
+        },
+        "changed_shuffles": 85,
+        "frozen_model_hash": "ac7261e8d197d92169e49c9d71c90460ec6224b56b094ee825b0444538ecddfb",
+        "holdout_expected_reward": 0.3503791333339473,
+        "mixed_groups": 101,
+        "projection_reflection": {
+          "analytic": 5.156617362910072e-07,
+          "central_difference": 5.037164932664151e-07,
+          "credit": {
+            "local_credited_rollouts": 404,
+            "local_rollouts": 512,
+            "max_update_norm": 0.0007809483213350177
+          },
+          "extrapolated_difference": 4.836731971695022e-07,
+          "extrapolation_error": 3.1988539121504975e-08,
+          "half_step_minus_objective": 0.3503788819476044,
+          "half_step_plus_objective": 0.3503793706316256,
+          "identical_initial_objective": true,
+          "layer_norms": [
+            0.0006111537222750485,
+            0.0006064145127311349,
+            0.0007809491944499314,
+            0.0004830897378269583
+          ],
+          "max_cancel_error": 3.725290298461914e-09,
+          "minus_objective": 0.3503786143808583,
+          "plus_objective": 0.35037962181384485
+        },
+        "shuffled": {
+          "analytic": 7.162639330133212e-07,
+          "central_difference": 6.885116818622361e-07,
+          "credit": {
+            "local_credited_rollouts": 404,
+            "local_rollouts": 512,
+            "max_update_norm": 0.000537825864739716
+          },
+          "extrapolated_difference": 6.897152763825817e-07,
+          "extrapolation_error": 2.6548656630739568e-08,
+          "half_step_minus_objective": 0.3503787863654887,
+          "half_step_plus_objective": 0.35037947577986644,
+          "layer_norms": [
+            0.0004891203134320676,
+            0.0004241079150233418,
+            0.0004522691306192428,
+            0.0005378268542699516
+          ],
+          "minus_objective": 0.3503784384632063,
+          "plus_objective": 0.35037981548657005
+        }
+      },
+      "75521": {
+        "aligned": {
+          "analytic": 5.908726666551626e-07,
+          "central_difference": 6.064053701126948e-07,
+          "credit": {
+            "local_credited_rollouts": 324,
+            "local_rollouts": 512,
+            "max_update_norm": 0.0005545699968934059
+          },
+          "extrapolated_difference": 5.953251912271806e-07,
+          "extrapolation_error": 4.452524572018039e-09,
+          "half_step_minus_objective": 0.2632643243101565,
+          "half_step_plus_objective": 0.26326492240539245,
+          "layer_norms": [
+            0.0005545718595385551,
+            0.0004164515121374279,
+            0.00040956222801469266,
+            0.00048695330042392015
+          ],
+          "minus_objective": 0.2632640110938609,
+          "plus_objective": 0.2632652239046011
+        },
+        "ascent_control": {
+          "analytic": 3.113999564983081e-05,
+          "central_difference": 3.1119962001946444e-05,
+          "extrapolated_difference": 3.110676088078727e-05,
+          "extrapolation_error": 3.3234769043545304e-08,
+          "half_step_minus_objective": 0.26324906436298645,
+          "half_step_plus_objective": 0.26328017442414753,
+          "layer_norms": [
+            0.0005545716849155724,
+            0.0004164516576565802,
+            0.00040956222801469266,
+            0.00048695356235839427
+          ],
+          "minus_objective": 0.2632334805231845,
+          "plus_objective": 0.2632957204471884
+        },
+        "changed_shuffles": 64,
+        "frozen_model_hash": "17bf459a0c1fa7144168c470069061c0205d8ff1067acf0d30323c40e9e2a2a2",
+        "holdout_expected_reward": 0.2632646238859352,
+        "mixed_groups": 81,
+        "projection_reflection": {
+          "analytic": -5.908722988869623e-07,
+          "central_difference": -6.066369319102094e-07,
+          "credit": {
+            "local_credited_rollouts": 324,
+            "local_rollouts": 512,
+            "max_update_norm": 0.0005545699968934059
+          },
+          "extrapolated_difference": -5.949820481854218e-07,
+          "extrapolation_error": 4.109749298459462e-09,
+          "half_step_minus_objective": 0.2632649220322556,
+          "half_step_plus_objective": 0.2632643241364865,
+          "identical_initial_objective": true,
+          "layer_norms": [
+            0.0005545718013308942,
+            0.0004164515121374279,
+            0.00040956222801469266,
+            0.00048695330042392015
+          ],
+          "max_cancel_error": 1.862645149230957e-09,
+          "minus_objective": 0.26326522426996224,
+          "plus_objective": 0.2632640109960984
+        },
+        "shuffled": {
+          "analytic": -6.573217639920447e-08,
+          "central_difference": -8.077989524513107e-08,
+          "credit": {
+            "local_credited_rollouts": 324,
+            "local_rollouts": 512,
+            "max_update_norm": 0.0004397117008920759
+          },
+          "extrapolated_difference": -8.574028671308002e-08,
+          "extrapolation_error": 2.0008110313875554e-08,
+          "half_step_minus_objective": 0.26326466603306087,
+          "half_step_plus_objective": 0.263264581532872,
+          "layer_norms": [
+            0.0004397132433950901,
+            0.00039300895878113806,
+            0.0004008467949461192,
+            0.0002676286385394633
+          ],
+          "minus_objective": 0.2632647009844201,
+          "plus_objective": 0.26326453942462963
+        }
+      },
+      "76521": {
+        "aligned": {
+          "analytic": -3.028474346814861e-06,
+          "central_difference": -2.993252151028969e-06,
+          "credit": {
+            "local_credited_rollouts": 400,
+            "local_rollouts": 512,
+            "max_update_norm": 0.0007950905128382146
+          },
+          "extrapolated_difference": -2.997552284463486e-06,
+          "extrapolation_error": 3.092206235137529e-08,
+          "half_step_minus_objective": 0.4409180447769955,
+          "half_step_plus_objective": 0.44091504829974437,
+          "layer_norms": [
+            0.0006929768715053797,
+            0.0006520308088511229,
+            0.0007073783781379461,
+            0.0007950922008603811
+          ],
+          "minus_objective": 0.4409195314802975,
+          "plus_objective": 0.44091354497599544
+        },
+        "ascent_control": {
+          "analytic": 8.500894533912241e-05,
+          "central_difference": 8.503278837176942e-05,
+          "extrapolated_difference": 8.503641887185516e-05,
+          "extrapolation_error": 2.7473532732751548e-08,
+          "half_step_minus_objective": 0.44087383197788765,
+          "half_step_plus_objective": 0.4409588674891345,
+          "layer_norms": [
+            0.0006929769297130406,
+            0.0006520313327200711,
+            0.0007073783781379461,
+            0.0007950919098220766
+          ],
+          "minus_objective": 0.44083070650982537,
+          "plus_objective": 0.4410007720865689
+        },
+        "changed_shuffles": 83,
+        "frozen_model_hash": "b66b6d2ad83eceec45f6aa8ec3df59be62bc87d9cb3aef7f40da637e8e82ba0d",
+        "holdout_expected_reward": 0.44091654867482216,
+        "mixed_groups": 100,
+        "projection_reflection": {
+          "analytic": 3.0284732176449656e-06,
+          "central_difference": 2.993027800213266e-06,
+          "credit": {
+            "local_credited_rollouts": 400,
+            "local_rollouts": 512,
+            "max_update_norm": 0.0007950905128382146
+          },
+          "extrapolated_difference": 2.996514365990096e-06,
+          "extrapolation_error": 3.195885165486975e-08,
+          "half_step_minus_objective": 0.44091504922418456,
+          "half_step_plus_objective": 0.4409180448669091,
+          "identical_initial_objective": true,
+          "layer_norms": [
+            0.0006929768715053797,
+            0.0006520308088511229,
+            0.0007073783781379461,
+            0.0007950922008603811
+          ],
+          "max_cancel_error": 1.862645149230957e-09,
+          "minus_objective": 0.44091354591790033,
+          "plus_objective": 0.44091953197350076
+        },
+        "shuffled": {
+          "analytic": -4.2665077998361314e-07,
+          "central_difference": -5.135362461661241e-07,
+          "credit": {
+            "local_credited_rollouts": 400,
+            "local_rollouts": 512,
+            "max_update_norm": 0.0005146435578353703
+          },
+          "extrapolated_difference": -5.059764058938191e-07,
+          "extrapolation_error": 7.932562591020596e-08,
+          "half_step_minus_objective": 0.4409168025250989,
+          "half_step_plus_objective": 0.44091629465873294,
+          "layer_norms": [
+            0.00043046395876444876,
+            0.0005146447801962495,
+            0.0004289176140446216,
+            0.0004588204901665449
+          ],
+          "minus_objective": 0.44091706734256375,
+          "plus_objective": 0.4409160402700714
+        }
+      },
+      "77521": {
+        "aligned": {
+          "analytic": -9.253247131195543e-07,
+          "central_difference": -9.257842929211169e-07,
+          "credit": {
+            "local_credited_rollouts": 396,
+            "local_rollouts": 512,
+            "max_update_norm": 0.0006561538320966065
+          },
+          "extrapolated_difference": -9.2462387438208e-07,
+          "extrapolation_error": 7.008387374742338e-10,
+          "half_step_minus_objective": 0.3553551781669669,
+          "half_step_plus_objective": 0.35535425325298786,
+          "layer_norms": [
+            0.0006076100398786366,
+            0.0006096814176999032,
+            0.0006561542395502329,
+            0.00045830500312149525
+          ],
+          "minus_objective": 0.3553556385886321,
+          "plus_objective": 0.3553537870200463
+        },
+        "ascent_control": {
+          "analytic": 6.711645117526159e-05,
+          "central_difference": 6.700153729849445e-05,
+          "extrapolated_difference": 6.701266669560206e-05,
+          "extrapolation_error": 1.0378447965953192e-07,
+          "half_step_minus_objective": 0.3553211431017017,
+          "half_step_plus_objective": 0.35538815298604803,
+          "layer_norms": [
+            0.0006076103309169412,
+            0.0006096817669458687,
+            0.000656154181342572,
+            0.0004583052941597998
+          ],
+          "minus_objective": 0.3552874343866398,
+          "plus_objective": 0.3554214374612368
+        },
+        "changed_shuffles": 78,
+        "frozen_model_hash": "a94d9d00ad589b5bdc9a6ccfd4276269d3ec9be1c218a633ae3d9121e1a28f18",
+        "holdout_expected_reward": 0.3553547213812919,
+        "mixed_groups": 99,
+        "projection_reflection": {
+          "analytic": 9.253247103662529e-07,
+          "central_difference": 9.256785294398107e-07,
+          "credit": {
+            "local_credited_rollouts": 396,
+            "local_rollouts": 512,
+            "max_update_norm": 0.0006561538320966065
+          },
+          "extrapolated_difference": 9.231021592115418e-07,
+          "extrapolation_error": 2.2225511547111157e-09,
+          "half_step_minus_objective": 0.3553542534545995,
+          "half_step_plus_objective": 0.35535517720085125,
+          "identical_initial_objective": true,
+          "layer_norms": [
+            0.0006076100980862975,
+            0.0006096812430769205,
+            0.0006561542395502329,
+            0.00045830500312149525
+          ],
+          "max_cancel_error": 3.725290298461914e-09,
+          "minus_objective": 0.3553537864278823,
+          "plus_objective": 0.35535563778494117
+        },
+        "shuffled": {
+          "analytic": -4.133753642384104e-07,
+          "central_difference": -4.3119280390691017e-07,
+          "credit": {
+            "local_credited_rollouts": 396,
+            "local_rollouts": 512,
+            "max_update_norm": 0.00046310052857734263
+          },
+          "extrapolated_difference": -4.2991842419404236e-07,
+          "extrapolation_error": 1.6543059955631935e-08,
+          "half_step_minus_objective": 0.35535493077233143,
+          "half_step_plus_objective": 0.3553545005353123,
+          "layer_norms": [
+            0.00044179148972034454,
+            0.00045147290802560747,
+            0.0003959159948863089,
+            0.0004631007323041558
+          ],
+          "minus_objective": 0.3553551426618087,
+          "plus_objective": 0.35535428027620086
+        }
+      }
+    },
+    "shuffled_mean": -5.795568592824726e-08,
+    "supports_local_direction": false
+  },
+  "gsm8k": {
+    "changes_after_initial_smoke": "Limit opt-in generation to the checkpoint context and close the decorated batch generator before interpreter shutdown.",
+    "final_smoke": {
+      "checkpoint_meta_sha256": "c222815d0e8374f51ddd376f5e9be67c780d9da4f5b93b1c7141b60906366800",
+      "finiteness": true,
+      "gradient_microbatches": 4,
+      "max_update_norm": 0,
+      "model_state_sha256": "c4a78aad18e9ab14db9ba3da434ef89b4d55c20be7ef5d3e15d837c44ed80e0d",
+      "on_policy_eval_rewards": {
+        "positive": 0,
+        "zero": 4
+      },
+      "on_policy_train_rewards": {
+        "positive": 0,
+        "zero": 6
+      },
+      "trainer_log_sha256": "3d935659f0112ad759b67a5b3fd69b29484957b2c944b952af42576906b42ff4"
+    },
+    "impact_status": "open_no_mixed_on_policy_rewards",
+    "initial_smoke": {
+      "checkpoint_meta_sha256": "c222815d0e8374f51ddd376f5e9be67c780d9da4f5b93b1c7141b60906366800",
+      "finiteness": true,
+      "gradient_microbatches": 4,
+      "max_update_norm": 0,
+      "model_state_sha256": "c4a78aad18e9ab14db9ba3da434ef89b4d55c20be7ef5d3e15d837c44ed80e0d",
+      "on_policy_eval_rewards": {
+        "positive": 0,
+        "zero": 4
+      },
+      "on_policy_train_rewards": {
+        "positive": 0,
+        "zero": 6
+      },
+      "trainer_log_sha256": "33e4e0a01d5b1c0a1d406e02770ec2bdf142092c727edfcd23c0bed7fe6c6c68"
+    },
+    "inputs": {
+      "base_state_sha256": "c4a78aad18e9ab14db9ba3da434ef89b4d55c20be7ef5d3e15d837c44ed80e0d",
+      "checkpoint_sha256": "5ce42a4b8b227c53c0b1331ebc218fe4f5fd6507b52bcaab74eca2d587f115c8",
+      "official_fixed_reward_controls": 16,
+      "official_split_parity": {
+        "test": {
+          "jsonl_sha256": "3730d312f6e3440559ace48831e51066acaca737f6eabec99bccb9e4b3c39d14",
+          "parquet_sha256": "ee7b8da9e381df27b9e3f7758a159ab2bdaa4dbaa910546cbbc47e0cb44e4f59",
+          "rows_equal_in_order": 1319
+        },
+        "train": {
+          "jsonl_sha256": "17f347dc51477c50d4efb83959dbb7c56297aba886e5544ee2aaed3024813465",
+          "parquet_sha256": "ea82612ea9582142387730c793eb67d3b12849002bc0b7fa6f8efafa7351419d",
+          "rows_equal_in_order": 7473
+        }
+      },
+      "revision": "740312add88f781978c0658806c59bc2815b9866",
+      "tokenizer": {
+        "token_bytes.pt": "ae39c27aae519d14071efc95f9a558ba0b7ede47e7d83ad4f198422b44c5f70e",
+        "tokenizer.json": "45d958866dbe10af5f33f4cd360d7fe30cfabdd7dbe5cd3aaec27f25e579e46b"
+      }
+    },
+    "two_gpu_smoke": {
+      "aggregate_pass_at_1": 0.0,
+      "aggregate_pass_at_2": 0.0,
+      "aggregate_training_reward": 0.0,
+      "checkpoint_bytes_equal_to_single_rank": true,
+      "checkpoint_sha256": "5ce42a4b8b227c53c0b1331ebc218fe4f5fd6507b52bcaab74eca2d587f115c8",
+      "gpu": "NVIDIA GeForce RTX 4090",
+      "rank_zero_credited_rollouts": 0,
+      "ranks": 2,
+      "reduced_max_write_norm": 0.0,
+      "sampled_rollouts_rank_zero": 3,
+      "sampled_rollouts_total": 6,
+      "trainer_log_sha256": "e49e69479cf9ef1d0b29eafa223778bbf8ba3df4a1116dd0e5f2fa1a4bf8206e"
+    }
+  },
+  "implementation_commit": "bd82053001ae509d850ab3aa5aeedd97b2fba88a",
+  "projected_trial": {
+    "advance": false,
+    "comparisons": {
+      "off": {
+        "effect": -0.0033519385397386596,
+        "exact_p": 0.82421875,
+        "paired_delta": {
+          "70521": 0.002101465072676519,
+          "71521": -0.0220028711164801,
+          "72521": -0.005189516731915487,
+          "73521": -0.005800998401068939,
+          "74521": -0.0012871022395870753,
+          "75521": 0.007593887867205902,
+          "76521": 0.00042744761530840353,
+          "77521": -0.0026578203840485017
+        },
+        "passed": false,
+        "positive_seeds": 3,
+        "sign_configurations": 256,
+        "tail_count": 211
+      },
+      "shuffled": {
+        "effect": -0.005385949177167028,
+        "exact_p": 0.984375,
+        "paired_delta": {
+          "70521": 0.0016185531468931775,
+          "71521": -0.00509114872948709,
+          "72521": -0.007285553695425051,
+          "73521": -0.0143474621578459,
+          "74521": -0.008421590964419265,
+          "75521": 0.0011762294434974618,
+          "76521": -0.0023920505105006575,
+          "77521": -0.008344569950048897
+        },
+        "passed": false,
+        "positive_seeds": 2,
+        "sign_configurations": 256,
+        "tail_count": 252
+      }
+    },
+    "competent_initializations": 8,
+    "exact_numeric_replays": 24,
+    "rows_audited": 49152,
+    "seed_results": {
+      "70521": {
+        "aligned": {
+          "changed_shuffle_groups": 0,
+          "expected_reward": {
+            "0": 0.2870972153492022,
+            "32": 0.17960410322220852,
+            "64": 0.2045087657316184,
+            "96": 0.25945333829962614
+          },
+          "final_hash": "18f921b19c040963b2516677a545c4c82e0456028c9f9db5b3386ecdab211690",
+          "initial_hash": "b7875fc433ffb549e3a110c761aabb3a304135a9522bd9f074dbfc1e310932c0",
+          "largest_update_norm": 0.004912989679723978,
+          "mixed_groups": 191,
+          "nonzero_update_steps": 88,
+          "positive_sampled_actions": 314
+        },
+        "off": {
+          "changed_shuffle_groups": 0,
+          "expected_reward": {
+            "0": 0.2870972153492022,
+            "32": 0.1795020562232666,
+            "64": 0.20296304821726238,
+            "96": 0.25479670759489453
+          },
+          "final_hash": "5cfbfc2b2554e5f2177055fb8c21b2272ca64facdc4360ce3c71685168905ee0",
+          "initial_hash": "b7875fc433ffb549e3a110c761aabb3a304135a9522bd9f074dbfc1e310932c0",
+          "largest_update_norm": 0.0,
+          "mixed_groups": 187,
+          "nonzero_update_steps": 0,
+          "positive_sampled_actions": 310
+        },
+        "shuffled": {
+          "changed_shuffle_groups": 153,
+          "expected_reward": {
+            "0": 0.2870972153492022,
+            "32": 0.1795261584564315,
+            "64": 0.1969894910542377,
+            "96": 0.26219489830210435
+          },
+          "final_hash": "6a693c272472340ab5d12dbd4bcba1d495e7d1420ed675d7e300ef9fee41a268",
+          "initial_hash": "b7875fc433ffb549e3a110c761aabb3a304135a9522bd9f074dbfc1e310932c0",
+          "largest_update_norm": 0.00427097687497735,
+          "mixed_groups": 189,
+          "nonzero_update_steps": 87,
+          "positive_sampled_actions": 307
+        }
+      },
+      "71521": {
+        "aligned": {
+          "changed_shuffle_groups": 0,
+          "expected_reward": {
+            "0": 0.3868758310722083,
+            "32": 0.3138274657861815,
+            "64": 0.38124999907258744,
+            "96": 0.4396930675353441
+          },
+          "final_hash": "0ed61c268996ee1ae0786ff3b1f172039f2bf2d32971f7ef4d6158659fcf3200",
+          "initial_hash": "fe2ef278d84f2d5e7036b4f56086b8ca2e1e0cde7b6af60ae96eba93f406102a",
+          "largest_update_norm": 0.005385519936680794,
+          "mixed_groups": 261,
+          "nonzero_update_steps": 95,
+          "positive_sampled_actions": 493
+        },
+        "off": {
+          "changed_shuffle_groups": 0,
+          "expected_reward": {
+            "0": 0.3868758310722083,
+            "32": 0.3263174775612978,
+            "64": 0.4154943598341499,
+            "96": 0.4589673083481056
+          },
+          "final_hash": "e4664e4da252b29c30b5835e40d402f9e2e1309cf3fd382a88aa26043e0c39af",
+          "initial_hash": "fe2ef278d84f2d5e7036b4f56086b8ca2e1e0cde7b6af60ae96eba93f406102a",
+          "largest_update_norm": 0.0,
+          "mixed_groups": 274,
+          "nonzero_update_steps": 0,
+          "positive_sampled_actions": 507
+        },
+        "shuffled": {
+          "changed_shuffle_groups": 228,
+          "expected_reward": {
+            "0": 0.3868758310722083,
+            "32": 0.3235081772618006,
+            "64": 0.3956775535359625,
+            "96": 0.4308582477848112
+          },
+          "final_hash": "61efb3ec9cb6cf673e287a018b239c74525a09c7754de99ab0558bcbbd4f9727",
+          "initial_hash": "fe2ef278d84f2d5e7036b4f56086b8ca2e1e0cde7b6af60ae96eba93f406102a",
+          "largest_update_norm": 0.004631261806935072,
+          "mixed_groups": 270,
+          "nonzero_update_steps": 96,
+          "positive_sampled_actions": 498
+        }
+      },
+      "72521": {
+        "aligned": {
+          "changed_shuffle_groups": 0,
+          "expected_reward": {
+            "0": 0.25433745141865455,
+            "32": 0.20416070549212018,
+            "64": 0.2721055270510391,
+            "96": 0.3037595918454392
+          },
+          "final_hash": "c1eb677398ddbea666a06b3b830b062ac5889be6b2477ea5c066d9978c8c02cd",
+          "initial_hash": "1cc52c6599dba1a72567a6426b85a16c9cc814a1f22fb86d426bb4e01eeeeb30",
+          "largest_update_norm": 0.004781702067703009,
+          "mixed_groups": 212,
+          "nonzero_update_steps": 93,
+          "positive_sampled_actions": 352
+        },
+        "off": {
+          "changed_shuffle_groups": 0,
+          "expected_reward": {
+            "0": 0.25433745141865455,
+            "32": 0.20446255694869706,
+            "64": 0.2658227391012905,
+            "96": 0.32530907853435737
+          },
+          "final_hash": "6ad6dc933b78886b940164531d1b07fa695e73da7c65b97afb81f4842627465c",
+          "initial_hash": "1cc52c6599dba1a72567a6426b85a16c9cc814a1f22fb86d426bb4e01eeeeb30",
+          "largest_update_norm": 0.0,
+          "mixed_groups": 222,
+          "nonzero_update_steps": 0,
+          "positive_sampled_actions": 363
+        },
+        "shuffled": {
+          "changed_shuffle_groups": 175,
+          "expected_reward": {
+            "0": 0.25433745141865455,
+            "32": 0.2040287407111846,
+            "64": 0.2753514505223502,
+            "96": 0.3225022942413388
+          },
+          "final_hash": "e54203513e3745d1fef42341fca2eecfcf13f111ef404c37dd8b94a207b0adda",
+          "initial_hash": "1cc52c6599dba1a72567a6426b85a16c9cc814a1f22fb86d426bb4e01eeeeb30",
+          "largest_update_norm": 0.004294310696423054,
+          "mixed_groups": 217,
+          "nonzero_update_steps": 93,
+          "positive_sampled_actions": 359
+        }
+      },
+      "73521": {
+        "aligned": {
+          "changed_shuffle_groups": 0,
+          "expected_reward": {
+            "0": 0.41419147426546676,
+            "32": 0.34459860515545415,
+            "64": 0.3703518953588478,
+            "96": 0.44695595594955567
+          },
+          "final_hash": "b525e6caf084ea5bea45bf9f4b1cf32e62eecf7b048483d62ecdca8b7617f79a",
+          "initial_hash": "149a44863df1ecfc7cf87beab7687e49bd727fab968df779614f0172f552fb15",
+          "largest_update_norm": 0.005660557188093662,
+          "mixed_groups": 271,
+          "nonzero_update_steps": 95,
+          "positive_sampled_actions": 561
+        },
+        "off": {
+          "changed_shuffle_groups": 0,
+          "expected_reward": {
+            "0": 0.41419147426546676,
+            "32": 0.3446440655369909,
+            "64": 0.3936971043805648,
+            "96": 0.44096828174950875
+          },
+          "final_hash": "ea88faed1324d3d8ed4e0d79126df9d350a9874d411af3a113c17ede992d3d6c",
+          "initial_hash": "149a44863df1ecfc7cf87beab7687e49bd727fab968df779614f0172f552fb15",
+          "largest_update_norm": 0.0,
+          "mixed_groups": 271,
+          "nonzero_update_steps": 0,
+          "positive_sampled_actions": 564
+        },
+        "shuffled": {
+          "changed_shuffle_groups": 221,
+          "expected_reward": {
+            "0": 0.41419147426546676,
+            "32": 0.344619412368445,
+            "64": 0.38924481018290225,
+            "96": 0.4710846203860481
+          },
+          "final_hash": "7b812b72fdf04917d4859e7c553dea97e72d740c825952b6de025db58a47890c",
+          "initial_hash": "149a44863df1ecfc7cf87beab7687e49bd727fab968df779614f0172f552fb15",
+          "largest_update_norm": 0.0045706480741500854,
+          "mixed_groups": 279,
+          "nonzero_update_steps": 96,
+          "positive_sampled_actions": 577
+        }
+      },
+      "74521": {
+        "aligned": {
+          "changed_shuffle_groups": 0,
+          "expected_reward": {
+            "0": 0.3456587062177212,
+            "32": 0.28641770959937235,
+            "64": 0.3217960908018677,
+            "96": 0.35987294409440346
+          },
+          "final_hash": "a352ec9ed369273cb6d92909427b00afdf6263b07e5db36c79af6c6f28d692c9",
+          "initial_hash": "ac7261e8d197d92169e49c9d71c90460ec6224b56b094ee825b0444538ecddfb",
+          "largest_update_norm": 0.006581443827599287,
+          "mixed_groups": 221,
+          "nonzero_update_steps": 91,
+          "positive_sampled_actions": 413
+        },
+        "off": {
+          "changed_shuffle_groups": 0,
+          "expected_reward": {
+            "0": 0.3456587062177212,
+            "32": 0.28342415562317297,
+            "64": 0.3165724014225612,
+            "96": 0.37195149416867057
+          },
+          "final_hash": "c12fb7232cb1ebda1f9c8eb1580b06623f97bf1a276b63fb01c975ab8006c0ff",
+          "initial_hash": "ac7261e8d197d92169e49c9d71c90460ec6224b56b094ee825b0444538ecddfb",
+          "largest_update_norm": 0.0,
+          "mixed_groups": 230,
+          "nonzero_update_steps": 0,
+          "positive_sampled_actions": 427
+        },
+        "shuffled": {
+          "changed_shuffle_groups": 178,
+          "expected_reward": {
+            "0": 0.3456587062177212,
+            "32": 0.28339467882655067,
+            "64": 0.3292724266597126,
+            "96": 0.380684411902638
+          },
+          "final_hash": "f1df41141cc5e9e80778e08823441c58f163ed6faae0efe8386328000291da4b",
+          "initial_hash": "ac7261e8d197d92169e49c9d71c90460ec6224b56b094ee825b0444538ecddfb",
+          "largest_update_norm": 0.0056952619925141335,
+          "mixed_groups": 232,
+          "nonzero_update_steps": 92,
+          "positive_sampled_actions": 430
+        }
+      },
+      "75521": {
+        "aligned": {
+          "changed_shuffle_groups": 0,
+          "expected_reward": {
+            "0": 0.25906972457422284,
+            "32": 0.2126604404750128,
+            "64": 0.26804288594932063,
+            "96": 0.2975082353222548
+          },
+          "final_hash": "c2c1498a1a27902a24625eafe5367d26f5a37cc17c34916713b25dc960c448ac",
+          "initial_hash": "17bf459a0c1fa7144168c470069061c0205d8ff1067acf0d30323c40e9e2a2a2",
+          "largest_update_norm": 0.0061423094011843204,
+          "mixed_groups": 224,
+          "nonzero_update_steps": 94,
+          "positive_sampled_actions": 389
+        },
+        "off": {
+          "changed_shuffle_groups": 0,
+          "expected_reward": {
+            "0": 0.25906972457422284,
+            "32": 0.2127209961157171,
+            "64": 0.2549944362802245,
+            "96": 0.2877144657490289
+          },
+          "final_hash": "e6c4d27c1c4a73461dba5c69a1d0a37c066081e0b962e615cc0783c21118bf30",
+          "initial_hash": "17bf459a0c1fa7144168c470069061c0205d8ff1067acf0d30323c40e9e2a2a2",
+          "largest_update_norm": 0.0,
+          "mixed_groups": 231,
+          "nonzero_update_steps": 0,
+          "positive_sampled_actions": 389
+        },
+        "shuffled": {
+          "changed_shuffle_groups": 180,
+          "expected_reward": {
+            "0": 0.25906972457422284,
+            "32": 0.21043346314662345,
+            "64": 0.25989993457870286,
+            "96": 0.30434947569076953
+          },
+          "final_hash": "aa42340edea468397ebd4e08cffec1db385a4e54ff1239c0057df66a680ff64f",
+          "initial_hash": "17bf459a0c1fa7144168c470069061c0205d8ff1067acf0d30323c40e9e2a2a2",
+          "largest_update_norm": 0.004616815596818924,
+          "mixed_groups": 229,
+          "nonzero_update_steps": 93,
+          "positive_sampled_actions": 404
+        }
+      },
+      "76521": {
+        "aligned": {
+          "changed_shuffle_groups": 0,
+          "expected_reward": {
+            "0": 0.42999433126050757,
+            "32": 0.3574957591356708,
+            "64": 0.4243026278412508,
+            "96": 0.4985213966472262
+          },
+          "final_hash": "503268f34a8d6dc7503798d3e51d87ded6dc5e8c87a51613daafe11560838dd2",
+          "initial_hash": "b66b6d2ad83eceec45f6aa8ec3df59be62bc87d9cb3aef7f40da637e8e82ba0d",
+          "largest_update_norm": 0.005323946475982666,
+          "mixed_groups": 292,
+          "nonzero_update_steps": 96,
+          "positive_sampled_actions": 639
+        },
+        "off": {
+          "changed_shuffle_groups": 0,
+          "expected_reward": {
+            "0": 0.42999433126050757,
+            "32": 0.36142998905398793,
+            "64": 0.42836662351349764,
+            "96": 0.489240828210737
+          },
+          "final_hash": "1deedaa16092354eda6a8c9501f041ca589fc8e8ecd95a5fb2f37c10fe281901",
+          "initial_hash": "b66b6d2ad83eceec45f6aa8ec3df59be62bc87d9cb3aef7f40da637e8e82ba0d",
+          "largest_update_norm": 0.0,
+          "mixed_groups": 285,
+          "nonzero_update_steps": 0,
+          "positive_sampled_actions": 632
+        },
+        "shuffled": {
+          "changed_shuffle_groups": 216,
+          "expected_reward": {
+            "0": 0.42999433126050757,
+            "32": 0.36150896789107007,
+            "64": 0.4335688085617964,
+            "96": 0.49241815870278327
+          },
+          "final_hash": "488b6ee22c573af42f51bce9f27b75891384cb0a2ee53d2f0da94db7e67f88f0",
+          "initial_hash": "b66b6d2ad83eceec45f6aa8ec3df59be62bc87d9cb3aef7f40da637e8e82ba0d",
+          "largest_update_norm": 0.004791290499269962,
+          "mixed_groups": 285,
+          "nonzero_update_steps": 96,
+          "positive_sampled_actions": 642
+        }
+      },
+      "77521": {
+        "aligned": {
+          "changed_shuffle_groups": 0,
+          "expected_reward": {
+            "0": 0.3463825362044809,
+            "32": 0.24857273744727182,
+            "64": 0.30836032864821206,
+            "96": 0.38488808507206446
+          },
+          "final_hash": "8374e148e01bbceb76b09e5ee7311000b04573dcc0aae90bb449bb5465667af9",
+          "initial_hash": "a94d9d00ad589b5bdc9a6ccfd4276269d3ec9be1c218a633ae3d9121e1a28f18",
+          "largest_update_norm": 0.005465248133987188,
+          "mixed_groups": 249,
+          "nonzero_update_steps": 93,
+          "positive_sampled_actions": 457
+        },
+        "off": {
+          "changed_shuffle_groups": 0,
+          "expected_reward": {
+            "0": 0.3463825362044809,
+            "32": 0.2456072653693627,
+            "64": 0.31607647694740915,
+            "96": 0.388110870002922
+          },
+          "final_hash": "adaa40ef6fe170b9cda6ba3e476576df9dc6c6f1372df0263074c6c5c7489f08",
+          "initial_hash": "a94d9d00ad589b5bdc9a6ccfd4276269d3ec9be1c218a633ae3d9121e1a28f18",
+          "largest_update_norm": 0.0,
+          "mixed_groups": 253,
+          "nonzero_update_steps": 0,
+          "positive_sampled_actions": 466
+        },
+        "shuffled": {
+          "changed_shuffle_groups": 187,
+          "expected_reward": {
+            "0": 0.3463825362044809,
+            "32": 0.24892616594486838,
+            "64": 0.31284721400916604,
+            "96": 0.4050814810636606
+          },
+          "final_hash": "aaa67371ca44a7a3cc861cb58b968837d7bb37bff2cf0b646f25eece381b4669",
+          "initial_hash": "a94d9d00ad589b5bdc9a6ccfd4276269d3ec9be1c218a633ae3d9121e1a28f18",
+          "largest_update_norm": 0.00530261592939496,
+          "mixed_groups": 251,
+          "nonzero_update_steps": 93,
+          "positive_sampled_actions": 472
+        }
+      }
+    },
+    "train_actions_audited": 36864
+  },
+  "projection_independent_trial": {
+    "advance": false,
+    "comparisons": {
+      "direct_shuffled": {
+        "by_seed": {
+          "80521": 0.0003899301802544238,
+          "81521": 0.0038493606483585205,
+          "82521": -0.0031928894031062007,
+          "83521": -0.005183285715472423,
+          "84521": 0.014484407546368002,
+          "85521": 0.004835959148662657,
+          "86521": 0.007351902495811145,
+          "87521": -0.0006511359099900157
+        },
+        "exact_p": 0.13671875,
+        "mean_difference": 0.0027355311238607635,
+        "passed": false,
+        "positive_seeds": 5,
+        "sign_configurations": 256,
+        "tail_count": 35
+      },
+      "off": {
+        "by_seed": {
+          "80521": -0.006219186134105288,
+          "81521": -0.0021959294331931334,
+          "82521": -0.008459666798043173,
+          "83521": -0.005919505795936364,
+          "84521": -0.002080024939889532,
+          "85521": 0.010708228788992469,
+          "86521": 0.015808094838811487,
+          "87521": 0.00043426385205906176
+        },
+        "exact_p": 0.46484375,
+        "mean_difference": 0.00025953429733694094,
+        "passed": false,
+        "positive_seeds": 3,
+        "sign_configurations": 256,
+        "tail_count": 119
+      },
+      "projected_aligned": {
+        "by_seed": {
+          "80521": -0.006427671286292476,
+          "81521": -0.009366017205140104,
+          "82521": 0.005042913183063352,
+          "83521": 0.001075919053208696,
+          "84521": 0.0021799747153584494,
+          "85521": 0.010849698599159352,
+          "86521": 0.005248208650150373,
+          "87521": -0.001015715898237457
+        },
+        "exact_p": 0.33984375,
+        "mean_difference": 0.0009484137264087731,
+        "passed": false,
+        "positive_seeds": 5,
+        "sign_configurations": 256,
+        "tail_count": 87
+      }
+    },
+    "competent_initializations": 8,
+    "rows_audited": 65536,
+    "seed_results": {
+      "80521": {
+        "direct_aligned": {
+          "changed_shuffle_groups": 0,
+          "expected_reward": {
+            "0": 0.42352234766275626,
+            "32": 0.29900517421851136,
+            "64": 0.39455408348070914,
+            "96": 0.4688960849555067
+          },
+          "final_hash": "57e2d5753c5af87e031565c852be87dad9d158899ed52c839fada7e412939eae",
+          "initial_hash": "94558d91aa2cf2412859a0a7d6b10ed9865038553db8ceb569ded57882a40f99",
+          "largest_update_norm": 0.004365976899862289,
+          "mixed_groups": 266,
+          "nonzero_update_steps": 95,
+          "positive_sampled_actions": 559
+        },
+        "direct_shuffled": {
+          "changed_shuffle_groups": 212,
+          "expected_reward": {
+            "0": 0.42352234766275626,
+            "32": 0.29976384553370783,
+            "64": 0.4007451379229234,
+            "96": 0.46077656865733274
+          },
+          "final_hash": "61a53fe5eac2d534a8f3aa6cad0fa5bce666e467e84bb1a7b1f1a3c28564ee48",
+          "initial_hash": "94558d91aa2cf2412859a0a7d6b10ed9865038553db8ceb569ded57882a40f99",
+          "largest_update_norm": 0.004172163549810648,
+          "mixed_groups": 271,
+          "nonzero_update_steps": 94,
+          "positive_sampled_actions": 570
+        },
+        "off": {
+          "changed_shuffle_groups": 0,
+          "expected_reward": {
+            "0": 0.42352234766275626,
+            "32": 0.299119828691672,
+            "64": 0.40715834206718277,
+            "96": 0.47483473029818835
+          },
+          "final_hash": "f0254cbe35c87ed1e7d7eda31cafbe0898eb53d8354c29ef14f453af2e457af2",
+          "initial_hash": "94558d91aa2cf2412859a0a7d6b10ed9865038553db8ceb569ded57882a40f99",
+          "largest_update_norm": 0.0,
+          "mixed_groups": 273,
+          "nonzero_update_steps": 0,
+          "positive_sampled_actions": 572
+        },
+        "projected_aligned": {
+          "changed_shuffle_groups": 0,
+          "expected_reward": {
+            "0": 0.42352234766275626,
+            "32": 0.3006088606443621,
+            "64": 0.4009127265818292,
+            "96": 0.48021676928741336
+          },
+          "final_hash": "84c725ce9e9ccc1e5af6284ca997fa46b032adc15bc41b982e5d67bd4cbbeb3a",
+          "initial_hash": "94558d91aa2cf2412859a0a7d6b10ed9865038553db8ceb569ded57882a40f99",
+          "largest_update_norm": 0.0050477213226258755,
+          "mixed_groups": 265,
+          "nonzero_update_steps": 95,
+          "positive_sampled_actions": 560
+        }
+      },
+      "81521": {
+        "direct_aligned": {
+          "changed_shuffle_groups": 0,
+          "expected_reward": {
+            "0": 0.2953575268517862,
+            "32": 0.2389992163656227,
+            "64": 0.2850305413070215,
+            "96": 0.3420388559660653
+          },
+          "final_hash": "17cf741ef1002820f87549b003cd1ac35b162603e6dd1c2632963815cb44d1d6",
+          "initial_hash": "35dca1d2f7f729f25559c5c4d471ac13b56a54c6dc9faf545bb6a07e67a22cec",
+          "largest_update_norm": 0.004386489745229483,
+          "mixed_groups": 234,
+          "nonzero_update_steps": 94,
+          "positive_sampled_actions": 404
+        },
+        "direct_shuffled": {
+          "changed_shuffle_groups": 175,
+          "expected_reward": {
+            "0": 0.2953575268517862,
+            "32": 0.2354941019615036,
+            "64": 0.3010033690653494,
+            "96": 0.31802306066678093
+          },
+          "final_hash": "098bb26fbb02d96dcc4f257d8d1b4ce19ef243d95d0b3fd582419a30d8ec557e",
+          "initial_hash": "35dca1d2f7f729f25559c5c4d471ac13b56a54c6dc9faf545bb6a07e67a22cec",
+          "largest_update_norm": 0.004070395603775978,
+          "mixed_groups": 243,
+          "nonzero_update_steps": 94,
+          "positive_sampled_actions": 417
+        },
+        "off": {
+          "changed_shuffle_groups": 0,
+          "expected_reward": {
+            "0": 0.2953575268517862,
+            "32": 0.23563988808305986,
+            "64": 0.3023709870869885,
+            "96": 0.33464552676824055
+          },
+          "final_hash": "18666c9e29dcb645f0d37eb8b2ef81e510986cef944f1df0d669c501e8d2f08a",
+          "initial_hash": "35dca1d2f7f729f25559c5c4d471ac13b56a54c6dc9faf545bb6a07e67a22cec",
+          "largest_update_norm": 0.0,
+          "mixed_groups": 242,
+          "nonzero_update_steps": 0,
+          "positive_sampled_actions": 429
+        },
+        "projected_aligned": {
+          "changed_shuffle_groups": 0,
+          "expected_reward": {
+            "0": 0.2953575268517862,
+            "32": 0.23563662974839336,
+            "64": 0.31777902174461486,
+            "96": 0.3407510137611216
+          },
+          "final_hash": "05bc7eb47e4defa16ddc3af0d16ca9a6e07b29943913ac8868b69bc098e2b2cc",
+          "initial_hash": "35dca1d2f7f729f25559c5c4d471ac13b56a54c6dc9faf545bb6a07e67a22cec",
+          "largest_update_norm": 0.005448303185403347,
+          "mixed_groups": 241,
+          "nonzero_update_steps": 94,
+          "positive_sampled_actions": 423
+        }
+      },
+      "82521": {
+        "direct_aligned": {
+          "changed_shuffle_groups": 0,
+          "expected_reward": {
+            "0": 0.2775115023506751,
+            "32": 0.2268573344168909,
+            "64": 0.2853138183007184,
+            "96": 0.3418600784683508
+          },
+          "final_hash": "8e86119a9ca492bc5291b12b60f53d9ebbb13767524bee24d4be3d7c27f1d93a",
+          "initial_hash": "075db608b6a49179e7f8cb44bb557c6b924acc872afdecd9b8731e4576811236",
+          "largest_update_norm": 0.005269182380288839,
+          "mixed_groups": 251,
+          "nonzero_update_steps": 91,
+          "positive_sampled_actions": 456
+        },
+        "direct_shuffled": {
+          "changed_shuffle_groups": 202,
+          "expected_reward": {
+            "0": 0.2775115023506751,
+            "32": 0.22791491505884465,
+            "64": 0.2928272741045517,
+            "96": 0.34286771023188234
+          },
+          "final_hash": "dc2ee9195c0bc852be8187503dbde95e761ba82eed50ced83e8c8cba0e1de9f4",
+          "initial_hash": "075db608b6a49179e7f8cb44bb557c6b924acc872afdecd9b8731e4576811236",
+          "largest_update_norm": 0.003992037381976843,
+          "mixed_groups": 261,
+          "nonzero_update_steps": 94,
+          "positive_sampled_actions": 471
+        },
+        "off": {
+          "changed_shuffle_groups": 0,
+          "expected_reward": {
+            "0": 0.2775115023506751,
+            "32": 0.22796990208337264,
+            "64": 0.29154731457385225,
+            "96": 0.35989301492286474
+          },
+          "final_hash": "ab64f64815cdb4eb6e646ebdf598ad4d7a5d37c7bc92db285e611491ef4c7cbe",
+          "initial_hash": "075db608b6a49179e7f8cb44bb557c6b924acc872afdecd9b8731e4576811236",
+          "largest_update_norm": 0.0,
+          "mixed_groups": 259,
+          "nonzero_update_steps": 0,
+          "positive_sampled_actions": 466
+        },
+        "projected_aligned": {
+          "changed_shuffle_groups": 0,
+          "expected_reward": {
+            "0": 0.2775115023506751,
+            "32": 0.22811581464637637,
+            "64": 0.29590198958244696,
+            "96": 0.31488468740794673
+          },
+          "final_hash": "162cac316fe866f079047bed03d46508230bfe23ae415554f97ac0696e11ea12",
+          "initial_hash": "075db608b6a49179e7f8cb44bb557c6b924acc872afdecd9b8731e4576811236",
+          "largest_update_norm": 0.005666461773216724,
+          "mixed_groups": 254,
+          "nonzero_update_steps": 95,
+          "positive_sampled_actions": 457
+        }
+      },
+      "83521": {
+        "direct_aligned": {
+          "changed_shuffle_groups": 0,
+          "expected_reward": {
+            "0": 0.31040862044786854,
+            "32": 0.2591314163865604,
+            "64": 0.33305615289821455,
+            "96": 0.37918876802662804
+          },
+          "final_hash": "ae3f190c1962b5ff89a2ab2a87f8acab6469772d76a1d4abce40e3da484d11d0",
+          "initial_hash": "5ac2cb4a994994ec893348c8ce2f53a022f362a02f074bcf147c9ce55c0fc5b3",
+          "largest_update_norm": 0.0044202255085110664,
+          "mixed_groups": 245,
+          "nonzero_update_steps": 95,
+          "positive_sampled_actions": 465
+        },
+        "direct_shuffled": {
+          "changed_shuffle_groups": 183,
+          "expected_reward": {
+            "0": 0.31040862044786854,
+            "32": 0.2618778727587967,
+            "64": 0.3245319582609502,
+            "96": 0.40051636343807334
+          },
+          "final_hash": "f4473c6c637d585cb508b2285bc3494707fd9c34fa37f8b8c9a9338dde879f9f",
+          "initial_hash": "5ac2cb4a994994ec893348c8ce2f53a022f362a02f074bcf147c9ce55c0fc5b3",
+          "largest_update_norm": 0.003560966346412897,
+          "mixed_groups": 252,
+          "nonzero_update_steps": 96,
+          "positive_sampled_actions": 463
+        },
+        "off": {
+          "changed_shuffle_groups": 0,
+          "expected_reward": {
+            "0": 0.31040862044786854,
+            "32": 0.2674741611597542,
+            "64": 0.32557167750646293,
+            "96": 0.39608901603299496
+          },
+          "final_hash": "7b4e771d4e027f69749625eea225662bf3a0acbb0941a83e70177762bfcace29",
+          "initial_hash": "5ac2cb4a994994ec893348c8ce2f53a022f362a02f074bcf147c9ce55c0fc5b3",
+          "largest_update_norm": 0.0,
+          "mixed_groups": 248,
+          "nonzero_update_steps": 0,
+          "positive_sampled_actions": 467
+        },
+        "projected_aligned": {
+          "changed_shuffle_groups": 0,
+          "expected_reward": {
+            "0": 0.31040862044786854,
+            "32": 0.2624813016882986,
+            "64": 0.3259972330227662,
+            "96": 0.37967004544071215
+          },
+          "final_hash": "9f792bdf9a0e3ad855562836ea103f549c53c48751643d50c09b2573764ea788",
+          "initial_hash": "5ac2cb4a994994ec893348c8ce2f53a022f362a02f074bcf147c9ce55c0fc5b3",
+          "largest_update_norm": 0.005423402413725853,
+          "mixed_groups": 247,
+          "nonzero_update_steps": 95,
+          "positive_sampled_actions": 466
+        }
+      },
+      "84521": {
+        "direct_aligned": {
+          "changed_shuffle_groups": 0,
+          "expected_reward": {
+            "0": 0.4754227302782417,
+            "32": 0.3969410420897295,
+            "64": 0.46263819473720325,
+            "96": 0.5303770618063378
+          },
+          "final_hash": "43845c913db8a9ed39860bac3671513403735d0a7621be0058bbd94637f5e1d6",
+          "initial_hash": "9efb8e0982b9d1ba23c1a54c3e4106b74b82aa47cb08d5d5b9037b70353733af",
+          "largest_update_norm": 0.004503816831856966,
+          "mixed_groups": 295,
+          "nonzero_update_steps": 96,
+          "positive_sampled_actions": 668
+        },
+        "direct_shuffled": {
+          "changed_shuffle_groups": 219,
+          "expected_reward": {
+            "0": 0.4754227302782417,
+            "32": 0.37169454411611685,
+            "64": 0.45328948156405646,
+            "96": 0.5215190503139933
+          },
+          "final_hash": "67063b75a38b93819de974759ce202b7ad01add2622c5687121d7450484468db",
+          "initial_hash": "9efb8e0982b9d1ba23c1a54c3e4106b74b82aa47cb08d5d5b9037b70353733af",
+          "largest_update_norm": 0.0037608742713928223,
+          "mixed_groups": 286,
+          "nonzero_update_steps": 96,
+          "positive_sampled_actions": 661
+        },
+        "off": {
+          "changed_shuffle_groups": 0,
+          "expected_reward": {
+            "0": 0.4754227302782417,
+            "32": 0.3969233400503054,
+            "64": 0.46571980274275476,
+            "96": 0.533553230659879
+          },
+          "final_hash": "2e7ed9d9c945b65e7f29f3e23144642cdc8b054eb9f89e2c75f7cf53367ed608",
+          "initial_hash": "9efb8e0982b9d1ba23c1a54c3e4106b74b82aa47cb08d5d5b9037b70353733af",
+          "largest_update_norm": 0.0,
+          "mixed_groups": 293,
+          "nonzero_update_steps": 0,
+          "positive_sampled_actions": 663
+        },
+        "projected_aligned": {
+          "changed_shuffle_groups": 0,
+          "expected_reward": {
+            "0": 0.4754227302782417,
+            "32": 0.39688755995938574,
+            "64": 0.45096017382994347,
+            "96": 0.535568640697866
+          },
+          "final_hash": "33bbde889b1ec05784a4b73c21fe448ecc850e27829698d65498d35bf7829304",
+          "initial_hash": "9efb8e0982b9d1ba23c1a54c3e4106b74b82aa47cb08d5d5b9037b70353733af",
+          "largest_update_norm": 0.0057283989153802395,
+          "mixed_groups": 287,
+          "nonzero_update_steps": 96,
+          "positive_sampled_actions": 651
+        }
+      },
+      "85521": {
+        "direct_aligned": {
+          "changed_shuffle_groups": 0,
+          "expected_reward": {
+            "0": 0.46899216203653027,
+            "32": 0.38785411249554463,
+            "64": 0.4652695689623478,
+            "96": 0.5223934079242366
+          },
+          "final_hash": "a8e2d04736eae47fa5b989c4fc74cb6bf9c1d0b39521fa7b6d5315f4519b7305",
+          "initial_hash": "9601ee4cdaa278e4a77fd8c37120fd56ed373215e06bf855396b9ad1d1887251",
+          "largest_update_norm": 0.004721187986433506,
+          "mixed_groups": 308,
+          "nonzero_update_steps": 96,
+          "positive_sampled_actions": 709
+        },
+        "direct_shuffled": {
+          "changed_shuffle_groups": 225,
+          "expected_reward": {
+            "0": 0.46899216203653027,
+            "32": 0.3761199339544194,
+            "64": 0.4726247957860634,
+            "96": 0.5122644821956582
+          },
+          "final_hash": "f9b51b1fbc7cdc79d00853afd08a223570f64f6d4940c555bd4a788858b15451",
+          "initial_hash": "9601ee4cdaa278e4a77fd8c37120fd56ed373215e06bf855396b9ad1d1887251",
+          "largest_update_norm": 0.003939022775739431,
+          "mixed_groups": 305,
+          "nonzero_update_steps": 96,
+          "positive_sampled_actions": 725
+        },
+        "off": {
+          "changed_shuffle_groups": 0,
+          "expected_reward": {
+            "0": 0.46899216203653027,
+            "32": 0.3827744200528191,
+            "64": 0.46202996131945845,
+            "96": 0.4985880216428741
+          },
+          "final_hash": "18e0de97c8968d593cb529c5395e9dd22aecff4b0297831bc2e8cb14d983d546",
+          "initial_hash": "9601ee4cdaa278e4a77fd8c37120fd56ed373215e06bf855396b9ad1d1887251",
+          "largest_update_norm": 0.0,
+          "mixed_groups": 295,
+          "nonzero_update_steps": 0,
+          "positive_sampled_actions": 700
+        },
+        "projected_aligned": {
+          "changed_shuffle_groups": 0,
+          "expected_reward": {
+            "0": 0.46899216203653027,
+            "32": 0.3878915148085053,
+            "64": 0.4559680661006505,
+            "96": 0.49910841267549516
+          },
+          "final_hash": "cf2854f281297fe84ccc35dde3263cb396ecf2379c04bc904f6aec7c2adc1251",
+          "initial_hash": "9601ee4cdaa278e4a77fd8c37120fd56ed373215e06bf855396b9ad1d1887251",
+          "largest_update_norm": 0.00586595106869936,
+          "mixed_groups": 306,
+          "nonzero_update_steps": 96,
+          "positive_sampled_actions": 680
+        }
+      },
+      "86521": {
+        "direct_aligned": {
+          "changed_shuffle_groups": 0,
+          "expected_reward": {
+            "0": 0.27525320407988985,
+            "32": 0.24447349745402516,
+            "64": 0.30753618314729064,
+            "96": 0.36219940129939715
+          },
+          "final_hash": "036acd0176e6f677f2cb210f3df3c3a6a7856d413857b687664838df005a36c0",
+          "initial_hash": "015e1b49c3d9512f6cd399bd2aa31fcf62ce901668b8625a048dfef1d7ce87df",
+          "largest_update_norm": 0.00424503767862916,
+          "mixed_groups": 237,
+          "nonzero_update_steps": 94,
+          "positive_sampled_actions": 414
+        },
+        "direct_shuffled": {
+          "changed_shuffle_groups": 167,
+          "expected_reward": {
+            "0": 0.27525320407988985,
+            "32": 0.24461767581470545,
+            "64": 0.29423812886399675,
+            "96": 0.3532975697345773
+          },
+          "final_hash": "d5af189be89e0942afbe3fc9fd39df596eae9cbe40ff954e844c7a403aa356ea",
+          "initial_hash": "015e1b49c3d9512f6cd399bd2aa31fcf62ce901668b8625a048dfef1d7ce87df",
+          "largest_update_norm": 0.004065934102982283,
+          "mixed_groups": 226,
+          "nonzero_update_steps": 91,
+          "positive_sampled_actions": 396
+        },
+        "off": {
+          "changed_shuffle_groups": 0,
+          "expected_reward": {
+            "0": 0.27525320407988985,
+            "32": 0.24406219564746118,
+            "64": 0.2893480224984883,
+            "96": 0.333374579238329
+          },
+          "final_hash": "976eef537c5b7ae821472e61aa8321edf216922fc9809caa2fd786058da062ca",
+          "initial_hash": "015e1b49c3d9512f6cd399bd2aa31fcf62ce901668b8625a048dfef1d7ce87df",
+          "largest_update_norm": 0.0,
+          "mixed_groups": 218,
+          "nonzero_update_steps": 0,
+          "positive_sampled_actions": 390
+        },
+        "projected_aligned": {
+          "changed_shuffle_groups": 0,
+          "expected_reward": {
+            "0": 0.27525320407988985,
+            "32": 0.24599263920450817,
+            "64": 0.29076471454864095,
+            "96": 0.3617071021971127
+          },
+          "final_hash": "eed1d328893f99239f8fed698da3962752e308b5459e3f6657b9edb64d89bc1e",
+          "initial_hash": "015e1b49c3d9512f6cd399bd2aa31fcf62ce901668b8625a048dfef1d7ce87df",
+          "largest_update_norm": 0.005263065919280052,
+          "mixed_groups": 233,
+          "nonzero_update_steps": 93,
+          "positive_sampled_actions": 405
+        }
+      },
+      "87521": {
+        "direct_aligned": {
+          "changed_shuffle_groups": 0,
+          "expected_reward": {
+            "0": 0.3439213699629838,
+            "32": 0.2993120688036758,
+            "64": 0.3563093297182233,
+            "96": 0.4132021155840456
+          },
+          "final_hash": "8ea55647962a8f9fe91cc0531cbedcc5fc2d70c0815f36c5168dd12795e94760",
+          "initial_hash": "c0cb93db48b49f4958d6f7a796435fbef16135b8f59a6f8f2ac71bc1db71cf64",
+          "largest_update_norm": 0.0051277452148497105,
+          "mixed_groups": 276,
+          "nonzero_update_steps": 96,
+          "positive_sampled_actions": 517
+        },
+        "direct_shuffled": {
+          "changed_shuffle_groups": 218,
+          "expected_reward": {
+            "0": 0.3439213699629838,
+            "32": 0.29720361757876285,
+            "64": 0.34906657999197643,
+            "96": 0.4245067242651755
+          },
+          "final_hash": "0ca592220b25a8eb4dfbab650d30572f2707b3e59222f51a9b4f719df939b5b9",
+          "initial_hash": "c0cb93db48b49f4958d6f7a796435fbef16135b8f59a6f8f2ac71bc1db71cf64",
+          "largest_update_norm": 0.0037923306226730347,
+          "mixed_groups": 276,
+          "nonzero_update_steps": 95,
+          "positive_sampled_actions": 509
+        },
+        "off": {
+          "changed_shuffle_groups": 0,
+          "expected_reward": {
+            "0": 0.3439213699629838,
+            "32": 0.29711923512073984,
+            "64": 0.3533608232402602,
+            "96": 0.4170406641887675
+          },
+          "final_hash": "1558d5b18e94760dea2c463861b2bb5289344e57a7989b64f031862e7650f633",
+          "initial_hash": "c0cb93db48b49f4958d6f7a796435fbef16135b8f59a6f8f2ac71bc1db71cf64",
+          "largest_update_norm": 0.0,
+          "mixed_groups": 279,
+          "nonzero_update_steps": 0,
+          "positive_sampled_actions": 510
+        },
+        "projected_aligned": {
+          "changed_shuffle_groups": 0,
+          "expected_reward": {
+            "0": 0.3439213699629838,
+            "32": 0.29980225617252215,
+            "64": 0.3623526994017255,
+            "96": 0.40971570622640946
+          },
+          "final_hash": "60420b4276f801965c7957b411e289b4032e27a5f4be31aa931ee63326bb1b16",
+          "initial_hash": "c0cb93db48b49f4958d6f7a796435fbef16135b8f59a6f8f2ac71bc1db71cf64",
+          "largest_update_norm": 0.005795465782284737,
+          "mixed_groups": 281,
+          "nonzero_update_steps": 95,
+          "positive_sampled_actions": 523
+        }
+      }
+    },
+    "train_actions_audited": 49152
+  },
+  "protocol_commits": {
+    "frozen_direction": "2369a7ff2c07a93aae4ced4dfa17b87031ddb2d0",
+    "post_action_amendment": "cb7e59a150cb6c92f5793b65449ba0114ee8a7ae",
+    "projected_registration": "50916081a737c72e41bf92820fd92eda55973c23",
+    "projection_independent": "a4f4f828d4e627944d4737cc28c277e6694abbcd"
+  },
+  "runtime": {
+    "cpu_rank_case": {
+      "backend": "gloo",
+      "cases": {
+        "empty_credit_everywhere": [
+          {
+            "distributed": {
+              "local_credited_rollouts": 0,
+              "local_rollouts": 2,
+              "max_update_norm": 0.0
+            },
+            "max_parameter_error": 0.0,
+            "rank": 0,
+            "serial": {
+              "local_credited_rollouts": 0,
+              "local_rollouts": 4,
+              "max_update_norm": 0.0
+            }
+          },
+          {
+            "distributed": {
+              "local_credited_rollouts": 0,
+              "local_rollouts": 2,
+              "max_update_norm": 0.0
+            },
+            "max_parameter_error": 0.0,
+            "rank": 1,
+            "serial": {
+              "local_credited_rollouts": 0,
+              "local_rollouts": 4,
+              "max_update_norm": 0.0
+            }
+          }
+        ],
+        "empty_credit_on_one_rank": [
+          {
+            "distributed": {
+              "local_credited_rollouts": 2,
+              "local_rollouts": 2,
+              "max_update_norm": 0.0053413137793540955
+            },
+            "max_parameter_error": 0.0,
+            "rank": 0,
+            "serial": {
+              "local_credited_rollouts": 2,
+              "local_rollouts": 4,
+              "max_update_norm": 0.0053413137793540955
+            }
+          },
+          {
+            "distributed": {
+              "local_credited_rollouts": 0,
+              "local_rollouts": 2,
+              "max_update_norm": 0.0053413137793540955
+            },
+            "max_parameter_error": 0.0,
+            "rank": 1,
+            "serial": {
+              "local_credited_rollouts": 2,
+              "local_rollouts": 4,
+              "max_update_norm": 0.0053413137793540955
+            }
+          }
+        ],
+        "mixed_both_ranks": [
+          {
+            "distributed": {
+              "local_credited_rollouts": 2,
+              "local_rollouts": 2,
+              "max_update_norm": 0.007230128161609173
+            },
+            "max_parameter_error": 3.725290298461914e-09,
+            "rank": 0,
+            "serial": {
+              "local_credited_rollouts": 4,
+              "local_rollouts": 4,
+              "max_update_norm": 0.007230128161609173
+            }
+          },
+          {
+            "distributed": {
+              "local_credited_rollouts": 2,
+              "local_rollouts": 2,
+              "max_update_norm": 0.007230128161609173
+            },
+            "max_parameter_error": 3.725290298461914e-09,
+            "rank": 1,
+            "serial": {
+              "local_credited_rollouts": 4,
+              "local_rollouts": 4,
+              "max_update_norm": 0.007230128161609173
+            }
+          }
+        ]
+      }
+    },
+    "cpu_throughput_reference": {
+      "budget": 2.0,
+      "rounds": [
+        {
+          "code": "baseline",
+          "slowdown": 2.39
+        },
+        {
+          "code": "release",
+          "slowdown": 2.3
+        },
+        {
+          "code": "release",
+          "slowdown": 2.35
+        },
+        {
+          "code": "baseline",
+          "slowdown": 2.3
+        }
+      ]
+    },
+    "focused_tests": {
+      "passed": 8
+    },
+    "gpu_rank_case": {
+      "backend": "nccl",
+      "cases": {
+        "empty_credit_everywhere": [
+          {
+            "distributed": {
+              "local_credited_rollouts": 0,
+              "local_rollouts": 2,
+              "max_update_norm": 0.0
+            },
+            "max_parameter_error": 0.0,
+            "rank": 0,
+            "serial": {
+              "local_credited_rollouts": 0,
+              "local_rollouts": 4,
+              "max_update_norm": 0.0
+            }
+          },
+          {
+            "distributed": {
+              "local_credited_rollouts": 0,
+              "local_rollouts": 2,
+              "max_update_norm": 0.0
+            },
+            "max_parameter_error": 0.0,
+            "rank": 1,
+            "serial": {
+              "local_credited_rollouts": 0,
+              "local_rollouts": 4,
+              "max_update_norm": 0.0
+            }
+          }
+        ],
+        "empty_credit_on_one_rank": [
+          {
+            "distributed": {
+              "local_credited_rollouts": 2,
+              "local_rollouts": 2,
+              "max_update_norm": 0.005341312848031521
+            },
+            "max_parameter_error": 0.0,
+            "rank": 0,
+            "serial": {
+              "local_credited_rollouts": 2,
+              "local_rollouts": 4,
+              "max_update_norm": 0.005341312848031521
+            }
+          },
+          {
+            "distributed": {
+              "local_credited_rollouts": 0,
+              "local_rollouts": 2,
+              "max_update_norm": 0.005341312848031521
+            },
+            "max_parameter_error": 0.0,
+            "rank": 1,
+            "serial": {
+              "local_credited_rollouts": 2,
+              "local_rollouts": 4,
+              "max_update_norm": 0.005341312848031521
+            }
+          }
+        ],
+        "mixed_both_ranks": [
+          {
+            "distributed": {
+              "local_credited_rollouts": 2,
+              "local_rollouts": 2,
+              "max_update_norm": 0.007230128161609173
+            },
+            "max_parameter_error": 1.862645149230957e-09,
+            "rank": 0,
+            "serial": {
+              "local_credited_rollouts": 4,
+              "local_rollouts": 4,
+              "max_update_norm": 0.007230128161609173
+            }
+          },
+          {
+            "distributed": {
+              "local_credited_rollouts": 2,
+              "local_rollouts": 2,
+              "max_update_norm": 0.007230128161609173
+            },
+            "max_parameter_error": 1.862645149230957e-09,
+            "rank": 1,
+            "serial": {
+              "local_credited_rollouts": 4,
+              "local_rollouts": 4,
+              "max_update_norm": 0.007230128161609173
+            }
+          }
+        ]
+      }
+    },
+    "legacy_replay": {
+      "gradient_tensors_bitwise_equal": 312,
+      "steps_bitwise_equal": 12,
+      "token_log_probabilities_bitwise_equal": 648
+    },
+    "linux_full_final": {
+      "errors": 0,
+      "failures": 1,
+      "failures_by_test": [
+        {
+          "details": "AssertionError: synaptic_transformer_train (5086.9 tok/s) vs standard_transformer_train (10723.0 tok/s): slowdown=2.11x (budget <= 2.00x)\nassert False\n +  where False = BudgetComparison(mode='train', standard_name='standard_transformer_train', synaptic_name='synaptic_transformer_train',...ptic_transformer_train (5086.9 tok/s) vs standard_transformer_train (10723.0 tok/s): slowdown=2.11x (budget <= 2.00x)').passed",
+          "test": "tests.test_perf_regression::test_live_throughput_budget_gate_passes"
+        }
+      ],
+      "passed": 2087,
+      "skipped": 11,
+      "tests": 2099,
+      "xml_sha256": "1137109e77b42ac1c8ee95e0f7005e506eebe1964057ebf90608668f415ef621"
+    },
+    "linux_full_pre_cleanup": {
+      "errors": 0,
+      "failures": 1,
+      "failures_by_test": [
+        {
+          "details": "AssertionError: synaptic_transformer_train (5201.5 tok/s) vs standard_transformer_train (11140.3 tok/s): slowdown=2.14x (budget <= 2.00x)\nassert False\n +  where False = BudgetComparison(mode='train', standard_name='standard_transformer_train', synaptic_name='synaptic_transformer_train',...ptic_transformer_train (5201.5 tok/s) vs standard_transformer_train (11140.3 tok/s): slowdown=2.14x (budget <= 2.00x)').passed",
+          "test": "tests.test_perf_regression::test_live_throughput_budget_gate_passes"
+        }
+      ],
+      "passed": 2087,
+      "skipped": 11,
+      "tests": 2099,
+      "xml_sha256": "ef0db3d25afe5f6e04d78c37abcccfce1ec18744475f7a177bb6729d7fe7fad6"
+    },
+    "native_large_head": {
+      "active_targets": 1904,
+      "gpu": "NVIDIA GeForce RTX 4090",
+      "gradient_tensors": 26,
+      "max_gradient_error": 3.259629011154175e-09,
+      "max_logp_error": 4.76837158203125e-07,
+      "max_prefix_logp_error_after_terminal_edit": 0.0,
+      "total_positions": 2052
+    }
+  },
+  "setup_failures": {
+    "credit-cpu-full": "The initial Linux suite was stopped after the post-action correction. It ran the earlier source.",
+    "credit-direction-two-scales": "The largest tested positive-control disagreement still exceeded the uniform 1e-7 absolute floor. The final diagnostic reports the absolute disagreement and uses a 1% relative tolerance for derivatives above 1e-5.",
+    "credit-direction-with-reflection": "The unit-step central finite difference for the positive control differed by 1.015e-7; both signed evaluations are reported in the final diagnostic along with the half-step difference.",
+    "credit-frozen-direction": "A train-mode observation forward altered persistent state. The final diagnostic uses frozen evaluation forwards.",
+    "credit-frozen-direction-recheck": "A uniform 1e-7 absolute cross-check was overly strict for a matched-norm ascent positive control.",
+    "credit-local-tests": "Duplicate rows differed at floating-point roundoff. The regression uses a roundoff tolerance for identical action cancellation and exact zero plus no mutation for an all-zero reward group."
+  },
+  "source_sha256": {
+    "bio_inspired_nanochat/rollout_credit.py": "b19cf2e3e35eb469896cae085b8cdc630ac6bbfc492f3f462aadd6dc1b860c2a",
+    "scripts/chat_rl.py": "e5c9af87ef83394630cbec6b6e3696c53bb84e0c5506da9af28c5e35f8572d27",
+    "tasks/gsm8k.py": "be6d2f0fc710948732108800d9ce857bee2542ade6ee7ba5298551866f2a60f9",
+    "tests/test_rollout_credit.py": "6306f187f628db732f22e0a0c1bdd6e5432ccd9203bfb5d307bf949841dd69e6"
+  },
+  "study_sources": {
+    "credit_archive_roundtrip.py": {
+      "content": "\"\"\"Read archived traces and independently match the generated trial files.\"\"\"\nimport gzip\nimport json\nimport sys\nfrom pathlib import Path\n\n\narchive, scratch = (Path(name) for name in sys.argv[1:])\nwith gzip.open(archive, \"rt\") as stream:\n    loaded = json.load(stream)\nassert set(loaded) == {\"projected\", \"direct\"}\nfor key, filename in ((\"projected\", \"bandit-replay.json\"), (\"direct\", \"direct.json\")):\n    assert loaded[key] == json.loads((scratch / filename).read_text())\n",
+      "sha256": "2a77cb690a95f9b2143e1294beb4af16de6a700784f357ac1721e344dcba447b"
+    },
+    "credit_bandit.py": {
+      "content": "\"\"\"Execute the registered three-arm one-token on-policy trial.\"\"\"\nimport copy\nimport hashlib\nimport json\nimport sys\nfrom pathlib import Path\n\nimport torch\nfrom rich.console import Console\n\nfrom bio_inspired_nanochat.rollout_credit import RolloutCredit, pack_rollout_tokens, permute_advantages, synaptic_token_logp\nfrom bio_inspired_nanochat.synthetic_tasks import reward_task\nfrom scripts.e2e.neuromod_rl import NeuromodRLE2EConfig, _build_model\n\n\ndef data(cfg, seed, count):\n    return reward_task(batch=count, context_len=cfg.context_len, vocab_size=cfg.vocab_size, seed=seed)[0]\n\n\ndef optimizer_for(model):\n    return torch.optim.AdamW(model.parameters(), lr=0.002, weight_decay=0.0001)\n\n\ndef optim_update(model, optimizer):\n    norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0, error_if_nonfinite=True)\n    optimizer.step()\n    return float(norm)\n\n\n@torch.no_grad()\ndef evaluate(model, heldout):\n    model.eval()\n    logits, _ = model(heldout.inputs, train_mode=False, update_mem=False)\n    last = logits[:, -1].float()\n    gold = heldout.targets[:, -1]\n    logp = last.log_softmax(-1).gather(1, gold[:, None])[:, 0]\n    greedy = last.argmax(-1) == gold\n    return {\"expected_reward\": float(logp.exp().mean()), \"gold_nll\": -float(logp.mean()),\n            \"greedy_hits\": int(greedy.sum()), \"examples\": int(gold.numel()),\n            \"gold_logp_rows\": logp.tolist(), \"greedy_match_rows\": greedy.tolist()}\n\n\ndef digest(model):\n    result = hashlib.sha256()\n    for name, tensor in sorted(model.state_dict().items()):\n        result.update(name.encode())\n        result.update(tensor.detach().contiguous().numpy().tobytes())\n    return result.hexdigest()\n\n\ndef run_arm(cfg, start, arm, heldout):\n    model = copy.deepcopy(start)\n    initial_hash = digest(model)\n    optimizer = optimizer_for(model)\n    credit = RolloutCredit(model, lr=0.03, rollouts_per_rank=16) if arm != \"off\" else None\n    observations = {\"0\": evaluate(model, heldout)}\n    steps = []\n    for update in range(1, 97):\n        questions = data(cfg, 3_000_000 + cfg.seed + update, 4)\n        model.eval()\n        with torch.no_grad():\n            logits, _ = model(questions.inputs, train_mode=False, update_mem=False)\n            rng = torch.Generator().manual_seed(4_000_000 + cfg.seed + update)\n            actions = torch.multinomial(logits[:, -1].float().softmax(-1), 4, replacement=True, generator=rng)\n        gold = questions.targets[:, -1]\n        rewards = (actions == gold[:, None]).float()\n        advantages = rewards - rewards.mean(dim=1, keepdim=True)\n        model.train()\n        optimizer.zero_grad()\n        losses, writes = [], []\n        for question in range(4):\n            ids = torch.cat((questions.inputs[question].expand(4, -1), actions[question, :, None]), dim=1)\n            sampled = torch.zeros_like(ids, dtype=torch.bool)\n            sampled[:, -1] = True\n            inputs, targets, observed = pack_rollout_tokens(ids, sampled, include_last=True)\n            correct = advantages[question]\n            applied = correct\n            if arm == \"shuffled\":\n                applied = permute_advantages(correct, 5_000_000 + cfg.seed * 512 + update * 4 + question)\n            if credit is None:\n                logp = synaptic_token_logp(model, inputs, targets, update_mem=False)\n            else:\n                with credit.observe(observed, applied):\n                    logp = synaptic_token_logp(model, inputs, targets, update_mem=False)\n            loss = -(logp * correct[:, None]).sum() / 16\n            loss.backward()\n            losses.append(float(loss.detach()))\n            writes.append(applied.tolist())\n        norm = optim_update(model, optimizer)\n        stats = credit.commit() if credit is not None else None\n        steps.append({\"step\": update, \"gold\": gold.tolist(), \"actions\": actions.tolist(), \"rewards\": rewards.tolist(),\n                      \"gradient_advantages\": advantages.tolist(), \"write_advantages\": writes if credit else None,\n                      \"loss\": sum(losses), \"gradient_norm\": norm, \"credit\": stats})\n        if update in (32, 64, 96):\n            observations[str(update)] = evaluate(model, heldout)\n    assert all(torch.isfinite(value).all() for value in model.state_dict().values())\n    return {\"initial_hash\": initial_hash, \"final_hash\": digest(model), \"eval\": observations, \"steps\": steps}\n\n\ndef main():\n    torch.set_num_threads(1)\n    console = Console()\n    cohort = {}\n    for seed in range(70521, 77522, 1000):\n        cfg = NeuromodRLE2EConfig(seed=seed, batch_size=16, rl_steps=96)\n        start = _build_model(cfg).train()\n        start.config.syn_cfg.stochastic_train_frac = 0.0\n        optimizer = optimizer_for(start)\n        for update in range(1, 129):\n            batch = data(cfg, 2_000_000 + seed + update, 16)\n            optimizer.zero_grad()\n            loss = -synaptic_token_logp(start, batch.inputs, batch.targets, update_mem=False)[:, -1].mean()\n            loss.backward()\n            optim_update(start, optimizer)\n        heldout = data(cfg, 102004, 512)\n        cohort[str(seed)] = {arm: run_arm(cfg, start, arm, heldout) for arm in (\"off\", \"aligned\", \"shuffled\")}\n        console.print(f\"Completed {seed} with {cohort[str(seed)]['off']['eval']['0']['expected_reward']:.6f} starting reward\")\n    Path(sys.argv[1]).write_text(json.dumps(cohort, sort_keys=True, separators=(\",\", \":\"), allow_nan=False) + \"\\n\")\n\n\nif __name__ == \"__main__\":\n    main()\n",
+      "sha256": "a54505bd816f2d687a89d2576df9fb8473be3e6d6fc9d9e37fde16ebc78f2651"
+    },
+    "credit_direct_trial.py": {
+      "content": "\"\"\"Run the registered holdout trial without the random projection sign.\"\"\"\nimport json\nimport math\nimport sys\nfrom pathlib import Path\n\nimport torch\nfrom rich.console import Console\n\nfrom bio_inspired_nanochat import rollout_credit\nfrom credit_bandit import (\n    NeuromodRLE2EConfig, _build_model, data, optim_update, optimizer_for, run_arm,\n)\n\n\ndef direct_direction(x, y, mask, _pin, _pout):\n    keep = mask.unsqueeze(-1)\n    cross = torch.where(keep, x, 0).T @ torch.where(keep, y, 0)\n    norm = cross.norm()\n    safe = torch.where(norm.isfinite(), norm.clamp_min(1e-12), torch.full_like(norm, math.nan))\n    return torch.where(norm <= 1e-12, 0, cross / safe)\n\n\ndef compare_on_single_token(projected):\n    rng = torch.Generator().manual_seed(19)\n    x = torch.randn(3, 8, generator=rng)\n    y = torch.randn(3, 6, generator=rng)\n    pin, pout = torch.randn(8, 4, generator=rng), torch.randn(6, 4, generator=rng)\n    mask = torch.tensor([False, True, False])\n    direct = direct_direction(x, y, mask, pin, pout)\n    sign = torch.sign((x[1] @ pin) @ (y[1] @ pout))\n    assert sign.abs().item() == 1\n    torch.testing.assert_close(direct * sign, projected(x, y, mask, pin, pout))\n    torch.testing.assert_close(direct, direct_direction(x, y, mask, -pin, -pout))\n\n\ndef main(output):\n    torch.set_num_threads(1)\n    projected = rollout_credit.rollout_direction\n    compare_on_single_token(projected)\n    console = Console()\n    cohort = {}\n    for seed in range(80521, 87522, 1000):\n        cfg = NeuromodRLE2EConfig(seed=seed, batch_size=16, rl_steps=96)\n        start = _build_model(cfg).train()\n        start.config.syn_cfg.stochastic_train_frac = 0.0\n        optimizer = optimizer_for(start)\n        for update in range(1, 129):\n            batch = data(cfg, 2_000_000 + seed + update, 16)\n            optimizer.zero_grad()\n            loss = -rollout_credit.synaptic_token_logp(start, batch.inputs, batch.targets, update_mem=False)[:, -1].mean()\n            loss.backward()\n            optim_update(start, optimizer)\n        holdout = data(cfg, 107112, 512)\n        cohort[str(seed)] = {\n            \"off\": run_arm(cfg, start, \"off\", holdout),\n            \"projected_aligned\": run_arm(cfg, start, \"aligned\", holdout),\n        }\n        rollout_credit.rollout_direction = direct_direction\n        try:\n            cohort[str(seed)][\"direct_aligned\"] = run_arm(cfg, start, \"aligned\", holdout)\n            cohort[str(seed)][\"direct_shuffled\"] = run_arm(cfg, start, \"shuffled\", holdout)\n        finally:\n            rollout_credit.rollout_direction = projected\n        console.print(f\"Completed the four matched arms for seed {seed}\")\n    output.write_text(json.dumps(cohort, sort_keys=True, separators=(\",\", \":\"), allow_nan=False) + \"\\n\")\n\n\nif __name__ == \"__main__\":\n    main(Path(sys.argv[1]))\n",
+      "sha256": "85f48aa3a6ef8e0aa4c6abb7749424b7f5eebb3ac5d8ec14f96dcc0b2914713b"
+    },
+    "credit_direction.py": {
+      "content": "\"\"\"Diagnose each registered rollout update on an independent expected-reward objective.\"\"\"\nimport itertools\nimport json\nimport math\nimport statistics\nimport sys\nfrom pathlib import Path\n\nimport torch\nfrom rich.console import Console\n\nfrom bio_inspired_nanochat.rollout_credit import RolloutCredit, permute_advantages, synaptic_token_logp\nfrom credit_bandit import NeuromodRLE2EConfig, _build_model, data, digest, optim_update, optimizer_for\n\n\ndef objective(model, holdout):\n    model.eval()\n    logits, _ = model(holdout.inputs, train_mode=False, update_mem=False)\n    logp = logits[:, -1].double().log_softmax(dim=-1)\n    return logp.gather(1, holdout.targets[:, -1:]).exp().mean()\n\n\n@torch.no_grad()\ndef sets(matrices, initial, directions, sign):\n    for matrix, value, direction in zip(matrices, initial, directions, strict=True):\n        matrix.copy_(value + sign * direction)\n\n\n@torch.no_grad()\ndef applied_directions(model, initial, tokens, advantages):\n    collector = RolloutCredit(model, lr=0.03, rollouts_per_rank=512)\n    model.eval()\n    for ids, advantage in zip(tokens.split(32), advantages.reshape(-1).split(32), strict=True):\n        sampled = torch.zeros_like(ids, dtype=torch.bool)\n        sampled[:, -1] = True\n        with collector.observe(sampled, advantage):\n            model._forward_hidden(ids, train_mode=False, update_mem=False)\n    stats = collector.commit()\n    perturbations = [(layer.w_slow - start).detach() for layer, start in zip(collector.layers, initial, strict=True)]\n    return perturbations, stats\n\n\n@torch.no_grad()\ndef measure(model, holdout, matrices, initial, direction, gradients):\n    derivative = math.fsum(float((delta.double() * grad.double()).sum())\n                           for delta, grad in zip(direction, gradients, strict=True))\n    def pair(scale):\n        values = []\n        for sign in (-1, 1):\n            sets(matrices, initial, direction, sign * scale)\n            with torch.enable_grad():\n                values.append(float(objective(model, holdout).detach()))\n        return values\n\n    lo, hi = pair(1.0)\n    half_lo, half_hi = pair(0.5)\n    sets(matrices, initial, direction, 0)\n    fd = (hi - lo) / 2\n    extrapolated = (4 * (half_hi - half_lo) - fd) / 3\n    absolute_error = abs(extrapolated - derivative)\n    # The holdout objective has a float32 trunk. Compare weak writes at\n    # an absolute floor and stronger writes at 1% of their magnitude.\n    assert absolute_error <= max(1e-7, 0.01 * abs(derivative)), (fd, extrapolated, derivative)\n    return {\"analytic\": derivative, \"central_difference\": fd, \"minus_objective\": lo, \"plus_objective\": hi,\n            \"half_step_minus_objective\": half_lo, \"half_step_plus_objective\": half_hi,\n            \"extrapolated_difference\": extrapolated, \"extrapolation_error\": absolute_error,\n            \"layer_norms\": [float(delta.norm()) for delta in direction]}\n\n\ndef examine(seed, initial_proof):\n    cfg = NeuromodRLE2EConfig(seed=seed, batch_size=16, rl_steps=96)\n    model = _build_model(cfg).train()\n    model.config.syn_cfg.stochastic_train_frac = 0.0\n    optimizer = optimizer_for(model)\n    for update in range(1, 129):\n        batch = data(cfg, 2_000_000 + seed + update, 16)\n        optimizer.zero_grad()\n        loss = -synaptic_token_logp(model, batch.inputs, batch.targets, update_mem=False)[:, -1].mean()\n        loss.backward()\n        optim_update(model, optimizer)\n    assert digest(model) == initial_proof\n    holdout = data(cfg, 104552, 512)\n    layers = RolloutCredit(model, lr=0.03, rollouts_per_rank=512).layers\n    matrices = [layer.w_slow for layer in layers]\n    initial = [matrix.detach().clone() for matrix in matrices]\n    base = objective(model, holdout)\n    gradients = torch.autograd.grad(base, matrices)\n    questions = data(cfg, 6_000_000 + seed, 128)\n    with torch.no_grad():\n        logits, _ = model(questions.inputs, train_mode=False, update_mem=False)\n        rng = torch.Generator().manual_seed(7_000_000 + seed)\n        sampled = torch.multinomial(logits[:, -1].float().softmax(-1), 4, replacement=True, generator=rng)\n    rewards = (sampled == questions.targets[:, -1:]).float()\n    advantages = rewards - rewards.mean(dim=1, keepdim=True)\n    shuffled = torch.stack([permute_advantages(row, 8_000_000 + 128 * seed + group)\n                            for group, row in enumerate(advantages)])\n    tokens = torch.cat((questions.inputs.repeat_interleave(4, dim=0), sampled.reshape(-1, 1)), dim=1)\n    measurements = {}\n    for arm, values in ((\"aligned\", advantages), (\"shuffled\", shuffled)):\n        direction, credit = applied_directions(model, initial, tokens, values)\n        measurements[arm] = {**measure(model, holdout, matrices, initial, direction, gradients), \"credit\": credit}\n        if arm == \"aligned\":\n            with torch.no_grad():\n                for layer in layers:\n                    layer.proj_out.neg_()\n            with torch.enable_grad():\n                mirrored_base = objective(model, holdout)\n            assert float(mirrored_base.detach()) == float(base.detach())\n            reflected, reflected_credit = applied_directions(model, initial, tokens, values)\n            reflected_magnitude_error = max(float((actual + expected).abs().max())\n                                            for actual, expected in zip(reflected, direction, strict=True))\n            assert reflected_magnitude_error <= 1e-7\n            reflected_objective = measure(model, holdout, matrices, initial, reflected, gradients)\n            assert abs(reflected_objective[\"analytic\"] + measurements[\"aligned\"][\"analytic\"]) <= 1e-7\n            with torch.no_grad():\n                for layer in layers:\n                    layer.proj_out.neg_()\n            measurements[\"projection_reflection\"] = {\"max_cancel_error\": reflected_magnitude_error,\n                                                     \"identical_initial_objective\": True,\n                                                     \"credit\": reflected_credit, **reflected_objective}\n    control = [norm * grad / grad.norm().clamp_min(1e-12)\n               for grad, norm in zip(gradients, measurements[\"aligned\"][\"layer_norms\"], strict=True)]\n    measurements[\"ascent_control\"] = measure(model, holdout, matrices, initial, control, gradients)\n    assert measurements[\"ascent_control\"][\"central_difference\"] > 0\n    assert digest(model) == initial_proof\n    return {\"frozen_model_hash\": initial_proof, \"holdout_expected_reward\": float(base.detach()),\n            \"mixed_groups\": int(((rewards.sum(dim=1) > 0) & (rewards.sum(dim=1) < 4)).sum()),\n            \"changed_shuffles\": int((advantages != shuffled).any(dim=1).sum()), **measurements}\n\n\ndef main(audit, out):\n    torch.set_num_threads(1)\n    console = Console()\n    cohort = {}\n    for seed, evidence in json.loads(audit.read_text())[\"seed_results\"].items():\n        row = examine(int(seed), evidence[\"off\"][\"initial_hash\"])\n        cohort[seed] = row\n        console.print(seed, {arm: row[arm][\"analytic\"] for arm in (\"aligned\", \"shuffled\", \"ascent_control\")})\n    differences = [row[\"aligned\"][\"analytic\"] - row[\"shuffled\"][\"analytic\"] for row in cohort.values()]\n    total = math.fsum(differences)\n    null = [math.fsum(sign * delta for sign, delta in zip(signs, differences, strict=True))\n            for signs in itertools.product((-1, 1), repeat=len(differences))]\n    p = sum(value >= total - 1e-12 for value in null) / len(null)\n    aligned = statistics.mean(row[\"aligned\"][\"analytic\"] for row in cohort.values())\n    positives = sum(delta > 0 for delta in differences)\n    outcome = {\"aligned_mean\": aligned, \"shuffled_mean\": statistics.mean(row[\"shuffled\"][\"analytic\"] for row in cohort.values()),\n               \"ascent_control_mean\": statistics.mean(row[\"ascent_control\"][\"analytic\"] for row in cohort.values()),\n               \"positive_differences\": positives, \"exact_p\": p, \"supports_local_direction\": aligned > 0 and positives >= 6 and p <= 0.025,\n               \"seeds\": cohort}\n    out.write_text(json.dumps(outcome, indent=2, sort_keys=True, allow_nan=False) + \"\\n\")\n\n\nif __name__ == \"__main__\":\n    main(Path(sys.argv[1]), Path(sys.argv[2]))\n",
+      "sha256": "0b40ef90a92bb98951dd10ac84220f783e5b5ec5e000a924aaaf06d0e8034279"
+    },
+    "credit_gsm.py": {
+      "content": "\"\"\"Verify official row identity and stage/reload the real chat RL checkpoint.\"\"\"\nimport hashlib\nimport json\nimport sys\nfrom pathlib import Path\n\nimport pyarrow.parquet as pq\nimport torch\nfrom rich.console import Console\n\nfrom bio_inspired_nanochat.checkpoint_manager import (\n    checkpoint_model_config,\n    config_provenance,\n    load_model,\n    save_checkpoint,\n    synaptic_config_to_meta,\n)\nfrom bio_inspired_nanochat.common import get_base_dir\nfrom bio_inspired_nanochat.tokenizer import get_tokenizer\nfrom scripts.e2e.trained_hebbian_binding import model_for, tensor_digest\nfrom tasks.gsm8k import GSM8K, GSM8K_REVISION\n\n\ndef sha(path):\n    with path.open(\"rb\") as stream:\n        return hashlib.file_digest(stream, \"sha256\").hexdigest()\n\n\ndef stage(scratch, raw_state):\n    cache = Path(get_base_dir())\n    official = {}\n    for split, count in ((\"train\", 7473), (\"test\", 1319)):\n        parquet = scratch / \"gsm8k\" / \"main\" / f\"{split}-00000-of-00001.parquet\"\n        source = scratch / f\"official-{split}.jsonl\"\n        rows = [json.loads(row) for row in source.read_text().splitlines()]\n        table = pq.read_table(parquet).to_pylist()\n        assert len(rows) == count and table == rows, (split, len(rows), len(table))\n        task = GSM8K(\"main\", split, data_dir=scratch / \"gsm8k\")\n        assert len(task) == count\n        official[split] = {\"rows_equal_in_order\": count, \"parquet_sha256\": sha(parquet), \"jsonl_sha256\": sha(source)}\n    comparison = GSM8K(\"main\", \"train\", stop=16, data_dir=scratch / \"gsm8k\")\n    hits = 0\n    for index in range(len(comparison)):\n        conv = comparison[index]\n        truth = conv[\"messages\"][-1][\"content\"][-1][\"text\"]\n        hits += int(comparison.reward(conv, truth) == 1 and comparison.reward(conv, \"no numerical answer\") == 0)\n    assert hits == 16\n    token_hashes = json.loads(Path(\"results/vanilla_matched_counts_2026-11-23.json\").read_text())[\"dataset_identity\"][\"tokenizer\"]\n    assert {name: sha(cache / \"tokenizer\" / name) for name in token_hashes} == token_hashes\n    recorded = json.loads(Path(\"results/trained_hebbian_binding_2026-11-23.json\").read_text())\n    assert sha(raw_state) == recorded[\"training\"][\"6311\"][\"model\"][\"paired\"][\"checkpoint_sha256\"]\n    tokenizer = get_tokenizer()\n    model = model_for(6311, tokenizer.get_vocab_size(), torch.device(\"cpu\"))\n    model.load_state_dict(torch.load(raw_state, map_location=\"cpu\", weights_only=True), strict=True)\n    cfg = model.config.syn_cfg\n    assert not cfg.enable_stdp and cfg.enable_hebbian\n    meta = {\"step\": 0, \"synapses\": True, \"model_config\": checkpoint_model_config(model, {}),\n            \"synaptic_config\": synaptic_config_to_meta(cfg), \"provenance\": config_provenance(cfg)}\n    save_checkpoint(cache / \"base_checkpoints\" / \"credit-smoke\", 0, model.state_dict(), None, meta)\n    loaded, _, _ = load_model(\"base\", torch.device(\"cpu\"), phase=\"eval\")\n    assert tensor_digest(loaded.state_dict()) == tensor_digest(model.state_dict())\n    evidence = {\"official_split_parity\": official, \"revision\": GSM8K_REVISION,\n                \"official_fixed_reward_controls\": hits, \"checkpoint_sha256\": sha(raw_state),\n                \"base_state_sha256\": tensor_digest(loaded.state_dict()), \"tokenizer\": token_hashes}\n    (scratch / \"gsm-stage.json\").write_text(json.dumps(evidence, indent=2, sort_keys=True) + \"\\n\")\n    Console().print(evidence)\n\n\ndef reload(scratch):\n    model, tokenizer, meta = load_model(\"rl\", torch.device(\"cpu\"), phase=\"eval\")\n    assert meta[\"synapses\"] and meta[\"step\"] == 0\n    assert meta[\"user_config\"][\"reward_credit\"] == \"aligned\" and meta[\"user_config\"][\"max_steps\"] == 1\n    assert tokenizer.get_vocab_size() == model.config.vocab_size\n    log = (scratch / \"gsm-train.log\").read_text()\n    assert \"'local_rollouts': 6\" in log and \"'local_credited_rollouts': 0\" in log\n    assert \"'max_update_norm': 0.0\" in log and \"\u2705 Saved model checkpoint\" in log\n    assert log.count(\"Average reward: 0.0\") == 5\n    assert \"Pass@1: 0.0000, Pass@2: 0.0000\" in log\n    evidence = {\"on_policy_train_rewards\": {\"zero\": 6, \"positive\": 0},\n                \"on_policy_eval_rewards\": {\"zero\": 4, \"positive\": 0},\n                \"model_state_sha256\": tensor_digest(model.state_dict()), \"max_update_norm\": 0,\n                \"gradient_microbatches\": 4, \"finiteness\": all(torch.isfinite(v).all().item() for v in model.state_dict().values()),\n                \"checkpoint_meta_sha256\": sha(Path(get_base_dir()) / \"chatrl_checkpoints/d2/meta_000000.json\"),\n                \"trainer_log_sha256\": sha(scratch / \"gsm-train.log\")}\n    assert evidence[\"finiteness\"]\n    (scratch / \"gsm-reload.json\").write_text(json.dumps(evidence, indent=2, sort_keys=True) + \"\\n\")\n    Console().print(evidence)\n\n\nif __name__ == \"__main__\":\n    scratch = Path(sys.argv[2])\n    if sys.argv[1] == \"stage\":\n        stage(scratch, Path(sys.argv[3]))\n    else:\n        reload(scratch)\n",
+      "sha256": "1142a3fb8af0ab9beef7920cf6346d24604437e829615314487181f57f3b92d8"
+    },
+    "credit_legacy_replay.py": {
+      "content": "\"\"\"Compare the legacy policy forward before and after the token-head repair.\"\"\"\nimport copy\nimport json\nimport sys\nfrom pathlib import Path\n\nimport torch\nimport torch.nn.functional as F\n\nfrom bio_inspired_nanochat.rollout_credit import synaptic_token_logp\nfrom test_rollout_credit import make_model\n\n\ntorch.set_num_threads(1)\nmodel = make_model()\nmodel.config.syn_cfg.stochastic_train_frac = 0.0\nreference = copy.deepcopy(model)\nopt = torch.optim.AdamW(model.parameters(), lr=0.002)\nref_opt = torch.optim.AdamW(reference.parameters(), lr=0.002)\nrng = torch.Generator().manual_seed(19820)\nparameters_checked = 0\nfor step in range(12):\n    tokens = torch.randint(0, 31, (3, 18), generator=rng)\n    labels = tokens.roll(-1, dims=1)\n    labels[:, :4] = -1\n    labels[:, -1] = -1\n    advantage = torch.tensor([2.0, -1.0, -1.0]) / 3\n    logits, _ = reference(tokens, labels, train_mode=True)\n    expected = -F.cross_entropy(logits.flatten(0, 1), labels.flatten(), ignore_index=-1, reduction=\"none\").view_as(labels)\n    actual = synaptic_token_logp(model, tokens, labels, update_mem=True)\n    torch.testing.assert_close(actual, expected, atol=0, rtol=0)\n    for selected in (actual, expected):\n        (-selected.mul(advantage[:, None]).mean()).backward()\n    for actual_parameter, expected_parameter in zip(model.parameters(), reference.parameters(), strict=True):\n        torch.testing.assert_close(actual_parameter.grad, expected_parameter.grad, atol=0, rtol=0)\n        parameters_checked += actual_parameter.grad is not None\n    for optimizer in (opt, ref_opt):\n        optimizer.step()\n        optimizer.zero_grad(set_to_none=True)\n    for name, state in model.state_dict().items():\n        torch.testing.assert_close(state, reference.state_dict()[name], atol=0, rtol=0)\n\nsummary = {\"steps_bitwise_equal\": 12, \"gradient_tensors_bitwise_equal\": parameters_checked,\n           \"token_log_probabilities_bitwise_equal\": 12 * 3 * 18}\nPath(sys.argv[1]).write_text(json.dumps(summary, indent=2, sort_keys=True) + \"\\n\")\n",
+      "sha256": "6b64f087620bd9aba0ce4890a6e739cd18f97d5b73dc3635e1911f4f96dd447d"
+    },
+    "credit_parallel.py": {
+      "content": "\"\"\"Check rank averaging and the native CUDA head against independent references.\"\"\"\nimport copy\nimport json\nimport sys\nfrom pathlib import Path\n\nimport torch\nimport torch.distributed as dist\nfrom torch.nn import functional as F\n\nfrom bio_inspired_nanochat.rollout_credit import RolloutCredit, pack_rollout_tokens, synaptic_token_logp\nfrom test_rollout_credit import make_model\n\n\ndef execute(model, tokens, advantages, reduce=None):\n    opt = torch.optim.SGD(model.parameters(), lr=0.001)\n    sampled = torch.zeros_like(tokens, dtype=torch.bool)\n    sampled[:, -1] = True\n    inputs, targets, mask = pack_rollout_tokens(tokens, sampled, include_last=True)\n    credit = RolloutCredit(model, lr=0.03, rollouts_per_rank=len(tokens))\n    with credit.observe(mask, advantages):\n        logp = synaptic_token_logp(model, inputs, targets, update_mem=False)\n    assert torch.isfinite(logp).all()\n    (-logp.mul(advantages[:, None]).sum() / len(tokens)).backward()\n    if reduce is not None:\n        for parameter in model.parameters():\n            if parameter.grad is not None:\n                reduce(parameter.grad)\n    opt.step()\n    return credit.commit(average_replicas=reduce)\n\n\ndef rank_check(backend, outfile):\n    dist.init_process_group(backend)\n    rank = dist.get_rank()\n    assert dist.get_world_size() == 2\n    device = torch.device(\"cpu\") if backend == \"gloo\" else torch.device(\"cuda\", rank)\n    if backend == \"nccl\":\n        torch.cuda.set_device(device)\n\n    def reduce(update):\n        dist.all_reduce(update, op=dist.ReduceOp.SUM)\n        update.div_(dist.get_world_size())\n\n    tokens = torch.tensor([[1, 4, 11, 8], [1, 4, 11, 17], [1, 7, 10, 13], [1, 7, 10, 20]], device=device)\n    results = {}\n    for label, values in {\n        \"mixed_both_ranks\": [0.5, -0.5, -0.5, 0.5],\n        \"empty_credit_on_one_rank\": [0.5, -0.5, 0.0, 0.0],\n        \"empty_credit_everywhere\": [0.0, 0.0, 0.0, 0.0],\n    }.items():\n        base = make_model().to(device)\n        distributed_model = copy.deepcopy(base)\n        advances = torch.tensor(values, device=device)\n        sample = slice(rank * 2, (rank + 1) * 2)\n        serial = execute(base, tokens, advances)\n        parallel = execute(distributed_model, tokens[sample], advances[sample], reduce)\n        assert parallel[\"local_rollouts\"] == 2\n        assert parallel[\"local_credited_rollouts\"] == int((advances[sample] != 0).sum())\n        assert parallel[\"max_update_norm\"] > 0 if any(values) else parallel[\"max_update_norm\"] == 0\n        assert abs(parallel[\"max_update_norm\"] - serial[\"max_update_norm\"]) <= 1e-7\n        max_error = 0.0\n        for expected, actual in zip(base.parameters(), distributed_model.parameters(), strict=True):\n            torch.testing.assert_close(expected, actual, atol=1e-7, rtol=1e-6)\n            max_error = max(max_error, float((actual.detach() - expected.detach()).abs().max()))\n        local = {\"rank\": rank, \"serial\": serial, \"distributed\": parallel, \"max_parameter_error\": max_error}\n        rows = [None, None]\n        dist.all_gather_object(rows, local)\n        results[label] = rows\n    if rank == 0:\n        outfile.write_text(json.dumps({\"backend\": backend, \"cases\": results}, indent=2, sort_keys=True) + \"\\n\")\n    dist.destroy_process_group()\n\n\ndef cuda_head(outfile):\n    torch.manual_seed(110)\n    selected = make_model().to(\"cuda\")\n    reference = copy.deepcopy(selected)\n    tokens = torch.randint(0, 31, (4, 513), device=\"cuda\")\n    targets = tokens.roll(-1, dims=1)\n    targets[:, 40::13] = -1\n    actual = synaptic_token_logp(selected, tokens, targets, update_mem=False)\n    hidden, _ = reference._forward_hidden(tokens, train_mode=True, structural_training=True, update_mem=False)\n    logits = reference.hidden_to_logits(hidden, for_loss=True)\n    expected = -F.cross_entropy(logits.flatten(0, 1), targets.flatten(), ignore_index=-1, reduction=\"none\").view_as(targets)\n    assert actual.shape == targets.shape and actual.numel() == 2052\n    torch.testing.assert_close(actual, expected, atol=1e-6, rtol=1e-6)\n    actual.mean().backward()\n    expected.mean().backward()\n    max_grad_error = 0.0\n    gradients = 0\n    for a, b in zip(selected.parameters(), reference.parameters(), strict=True):\n        if b.grad is not None:\n            torch.testing.assert_close(a.grad, b.grad, atol=1e-6, rtol=1e-6)\n            max_grad_error = max(max_grad_error, float((a.grad - b.grad).abs().max()))\n            gradients += 1\n    with torch.no_grad():\n        edited = tokens.clone()\n        edited[:, -1] = (edited[:, -1] + 1) % 31\n        changed = synaptic_token_logp(selected, edited, targets, update_mem=False)\n        torch.testing.assert_close(actual[:, :-1], changed[:, :-1], atol=1e-6, rtol=1e-6)\n    evidence = {\"gpu\": torch.cuda.get_device_name(), \"total_positions\": actual.numel(),\n                \"active_targets\": int((targets >= 0).sum()), \"gradient_tensors\": gradients,\n                \"max_gradient_error\": max_grad_error, \"max_logp_error\": float((actual.detach() - expected.detach()).abs().max()),\n                \"max_prefix_logp_error_after_terminal_edit\": float((actual.detach()[:, :-1] - changed[:, :-1]).abs().max())}\n    outfile.write_text(json.dumps(evidence, indent=2, sort_keys=True) + \"\\n\")\n\n\nif __name__ == \"__main__\":\n    torch.set_num_threads(1)\n    path = Path(sys.argv[2])\n    if sys.argv[1] == \"cuda\":\n        cuda_head(path)\n    else:\n        rank_check(sys.argv[1], path)\n",
+      "sha256": "9a4b8ba3da7d1fc29428dc72857f8a60394dd78091a6054f23c69dc0ccc1e0cb"
+    },
+    "verify_credit_trial.py": {
+      "content": "\"\"\"Independently score the registered bandit from archived actions and holdout rows.\"\"\"\nimport itertools\nimport json\nimport math\nimport statistics\nimport sys\nfrom pathlib import Path\n\n\ndef score(trajectory):\n    assert [row[\"step\"] for row in trajectory[\"steps\"]] == list(range(1, 97))\n    assert set(trajectory[\"eval\"]) == {\"0\", \"32\", \"64\", \"96\"}\n    scores = {}\n    for checkpoint, row in trajectory[\"eval\"].items():\n        assert len(row[\"gold_logp_rows\"]) == len(row[\"greedy_match_rows\"]) == row[\"examples\"] == 512\n        p = statistics.mean(math.exp(logp) for logp in row[\"gold_logp_rows\"])\n        assert abs(row[\"expected_reward\"] - p) <= 1e-7\n        assert abs(row[\"gold_nll\"] + statistics.mean(row[\"gold_logp_rows\"])) <= 1e-6\n        assert row[\"greedy_hits\"] == sum(row[\"greedy_match_rows\"])\n        scores[checkpoint] = p\n    return scores\n\n\ndef audit_steps(steps, arm):\n    mixed = positive_actions = changed_groups = active_writes = 0\n    largest_norm = 0.0\n    for step in steps:\n        assert all(math.isfinite(step[key]) for key in (\"loss\", \"gradient_norm\"))\n        credited = 0\n        if arm == \"off\":\n            assert step[\"write_advantages\"] is None and step[\"credit\"] is None\n        else:\n            assert len(step[\"write_advantages\"]) == 4\n        assert len(step[\"gold\"]) == len(step[\"actions\"]) == len(step[\"rewards\"]) == 4\n        for index, (gold, actions) in enumerate(zip(step[\"gold\"], step[\"actions\"], strict=True)):\n            assert len(actions) == 4\n            rewards = [int(action == gold) for action in actions]\n            assert rewards == step[\"rewards\"][index]\n            positive_actions += sum(rewards)\n            mixed += 0 < sum(rewards) < 4\n            correct = [reward - sum(rewards) / 4 for reward in rewards]\n            assert correct == step[\"gradient_advantages\"][index] and sum(correct) == 0\n            if arm == \"off\":\n                continue\n            applied = step[\"write_advantages\"][index]\n            if arm == \"aligned\":\n                assert applied == correct\n            else:\n                assert sorted(applied) == sorted(correct)\n            changed_groups += applied != correct\n            credited += sum(advantage != 0 for advantage in applied)\n        if arm != \"off\":\n            credit = step[\"credit\"]\n            norm = credit[\"max_update_norm\"]\n            assert credit[\"local_rollouts\"] == 16 and credit[\"local_credited_rollouts\"] == credited\n            assert math.isfinite(norm) and 0 <= norm <= 0.03 + 1e-7\n            if credited == 0:\n                assert norm == 0\n            else:\n                assert norm > 0\n            largest_norm = max(largest_norm, norm)\n            active_writes += norm > 0\n    assert mixed > 0\n    return {\"mixed_groups\": mixed, \"positive_sampled_actions\": positive_actions,\n            \"nonzero_update_steps\": active_writes, \"changed_shuffle_groups\": changed_groups,\n            \"largest_update_norm\": largest_norm}\n\n\ndef compare(summaries, control):\n    differences = {}\n    for seed, arms in summaries.items():\n        treatment, comparison = (arms[arm][\"expected_reward\"] for arm in (\"aligned\", control))\n        differences[seed] = statistics.mean(treatment[str(step)] - comparison[str(step)] for step in (32, 64, 96))\n    deltas = list(differences.values())\n    total = math.fsum(deltas)\n    null = [math.fsum(sign * delta for sign, delta in zip(signs, deltas, strict=True))\n            for signs in itertools.product((-1, 1), repeat=len(deltas))]\n    tail = sum(draw >= total - 1e-12 for draw in null)\n    p = tail / len(null)\n    effect = total / len(deltas)\n    wins = sum(delta > 0 for delta in deltas)\n    return {\"paired_delta\": differences, \"effect\": effect, \"positive_seeds\": wins, \"exact_p\": p,\n            \"tail_count\": tail, \"sign_configurations\": len(null), \"passed\": effect >= 0.01 and wins >= 6 and p <= 0.025}\n\n\ndef main(original, replay, output):\n    assert list(replay) == list(original) == [str(seed) for seed in range(70521, 77522, 1000)]\n    stats = {}\n    for seed, arm_runs in replay.items():\n        assert set(arm_runs) == {\"off\", \"aligned\", \"shuffled\"}\n        assert len({arm[\"initial_hash\"] for arm in arm_runs.values()}) == 1\n        initial = [arm[\"eval\"][\"0\"] for arm in arm_runs.values()]\n        assert all(value == initial[0] for value in initial)\n        stats[seed] = {}\n        for arm, trajectory in arm_runs.items():\n            scores = score(trajectory)\n            step_stats = audit_steps(trajectory[\"steps\"], arm)\n            for row in trajectory[\"eval\"].values():\n                row.pop(\"gold_logp_rows\")\n                row.pop(\"greedy_match_rows\")\n            assert trajectory == original[seed][arm]\n            stats[seed][arm] = {\"initial_hash\": trajectory[\"initial_hash\"],\n                                \"final_hash\": trajectory[\"final_hash\"], \"expected_reward\": scores, **step_stats}\n    competence = sum(seed[\"off\"][\"expected_reward\"][\"0\"] > 0.10 for seed in stats.values())\n    comparisons = {arm: compare(stats, arm) for arm in (\"off\", \"shuffled\")}\n    result = {\"rows_audited\": 8 * 3 * 4 * 512, \"train_actions_audited\": 8 * 3 * 96 * 16,\n              \"exact_numeric_replays\": 24, \"competent_initializations\": competence,\n              \"comparisons\": comparisons, \"seed_results\": stats,\n              \"advance\": competence >= 6 and all(row[\"passed\"] for row in comparisons.values())}\n    output.write_text(json.dumps(result, indent=2, sort_keys=True, allow_nan=False) + \"\\n\")\n\n\nif __name__ == \"__main__\":\n    main(*(json.loads(Path(name).read_text()) for name in sys.argv[1:3]), Path(sys.argv[3]))\n",
+      "sha256": "c50600b41f17fbcf06dedea0e32fd3b72f8546cf4963552b08cc450bb22df533"
+    },
+    "verify_direct_trial.py": {
+      "content": "\"\"\"Audit the four-arm comparison without importing the trainer or Torch.\"\"\"\nimport itertools\nimport json\nimport math\nimport statistics\nimport sys\nfrom pathlib import Path\n\nfrom verify_credit_trial import audit_steps, score\n\n\ndef main(source, output):\n    cohort = json.loads(source.read_text())\n    assert list(cohort) == [str(seed) for seed in range(80521, 87522, 1000)]\n    kinds = {\"off\": \"off\", \"projected_aligned\": \"aligned\",\n             \"direct_aligned\": \"aligned\", \"direct_shuffled\": \"shuffled\"}\n    stats = {}\n    for seed, runs in cohort.items():\n        assert set(runs) == kinds.keys()\n        assert len({run[\"initial_hash\"] for run in runs.values()}) == 1\n        assert all(run[\"eval\"][\"0\"] == runs[\"off\"][\"eval\"][\"0\"] for run in runs.values())\n        stats[seed] = {arm: {\"expected_reward\": score(run), \"initial_hash\": run[\"initial_hash\"],\n                            \"final_hash\": run[\"final_hash\"], **audit_steps(run[\"steps\"], kinds[arm])}\n                       for arm, run in runs.items()}\n        first_actions = [run[\"steps\"][0][\"actions\"] for run in runs.values()]\n        assert all(actions == first_actions[0] for actions in first_actions), seed\n    comparisons = {}\n    for control in (\"off\", \"projected_aligned\", \"direct_shuffled\"):\n        by_seed = {seed: statistics.mean(arms[\"direct_aligned\"][\"expected_reward\"][step]\n                                          - arms[control][\"expected_reward\"][step]\n                                          for step in (\"32\", \"64\", \"96\")) for seed, arms in stats.items()}\n        deltas = list(by_seed.values())\n        observed = math.fsum(deltas)\n        null = [math.fsum(delta * sign for delta, sign in zip(deltas, signs, strict=True))\n                for signs in itertools.product((-1, 1), repeat=len(deltas))]\n        tail = sum(value >= observed - 1e-12 for value in null)\n        p = tail / len(null)\n        positives = sum(delta > 0 for delta in deltas)\n        effect = observed / len(deltas)\n        comparisons[control] = {\"mean_difference\": effect, \"positive_seeds\": positives,\n                                \"exact_p\": p, \"sign_configurations\": len(null), \"tail_count\": tail,\n                                \"by_seed\": by_seed, \"passed\": effect >= 0.01 and positives >= 6 and p <= 0.0125}\n    competent = sum(arms[\"off\"][\"expected_reward\"][\"0\"] > 0.10 for arms in stats.values())\n    result = {\"comparisons\": comparisons, \"competent_initializations\": competent, \"seed_results\": stats,\n              \"rows_audited\": 8 * 4 * 4 * 512, \"train_actions_audited\": 8 * 4 * 96 * 16,\n              \"advance\": competent >= 6 and all(row[\"passed\"] for row in comparisons.values())}\n    output.write_text(json.dumps(result, indent=2, sort_keys=True, allow_nan=False) + \"\\n\")\n\n\nif __name__ == \"__main__\":\n    main(*(Path(name) for name in sys.argv[1:]))\n",
+      "sha256": "67e30078d4b476ebb9673a388bf56617199a4980edc86e0c4d0b5eae8aafe41c"
+    }
+  },
+  "trace_archive": {
+    "filename": "rollout_credit_2026-11-23.json.gz",
+    "initial_projected_trace_sha256": "5cc1ad2cb7d5f91eacda4c0d4c355fb26263a7d11f4cfb60d79d7f94d66feca3",
+    "projected_audit_replay_sha256": "31b906ae884017331c3417dd3e9fe11b9f663833a38858fd3ad855c19140704f",
+    "projection_independent_replay_sha256": "095486628169b68054c7b0f73d1b61367bfbeeaaa6dabbdd4790373a0b9fd64a",
+    "projection_independent_sha256": "095486628169b68054c7b0f73d1b61367bfbeeaaa6dabbdd4790373a0b9fd64a",
+    "sha256": "12f042d11ec4f55a9b55feb798126e84d38e4ded8ecb580f02bfecb1abf5f58b"
+  }
+}
