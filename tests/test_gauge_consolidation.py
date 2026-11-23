@@ -63,30 +63,17 @@ def test_fisher_natural_consolidator_penalty():
     assert p1.item() > 0.0
 
 
-def test_holonomy_predicts_continual_forgetting():
-    """Holonomy displacement ||Hol(A) - I|| correlates positively with Task A loss degradation."""
-    model = nn.Sequential(nn.Linear(8, 8), nn.Linear(8, 4))
-    consolidator = FisherNaturalConsolidator(model)
-
-    task_a_data = [(torch.randn(8, 8), torch.randint(0, 4, (8,)))]
-    consolidator.update_fisher_estimates(task_a_data, num_samples=8)
-
-    # Initial loss on Task A
-    with torch.no_grad():
-        x, y = task_a_data[0]
-        init_loss = nn.functional.cross_entropy(model(x), y).item()
-
-    # Perturb weights with different displacement magnitudes
-    perturbations = [0.01, 0.05, 0.2]
-    forgetting_deltas: list[float] = []
-
-    for eps in perturbations:
-        with torch.no_grad():
-            for p, ref in zip(model.parameters(), consolidator.reference_params.values()):
-                p.copy_(ref + eps)
-            loss_now = nn.functional.cross_entropy(model(x), y).item()
-            forgetting_deltas.append(loss_now - init_loss)
-
-    # Monotonic correlation: larger holonomy displacement -> higher forgetting
-    assert forgetting_deltas[0] < forgetting_deltas[1] < forgetting_deltas[2]
+def test_parameter_displacement_can_leave_task_predictions_unchanged():
+    """A common class-logit offset changes parameters while preserving every softmax probability."""
+    with torch.random.fork_rng(devices=[]), torch.no_grad():
+        torch.manual_seed(73)
+        model = nn.Linear(8, 4)
+        x = torch.randn(16, 8)
+        target = torch.arange(16) % 4
+        before = model(x)
+        model.bias.add_(2.0)
+        after = model(x)
+        torch.testing.assert_close(after - before, torch.full_like(before, 2.0))
+        torch.testing.assert_close(before.softmax(-1), after.softmax(-1))
+        torch.testing.assert_close(nn.functional.cross_entropy(before, target), nn.functional.cross_entropy(after, target))
 

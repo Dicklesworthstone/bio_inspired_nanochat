@@ -1,0 +1,390 @@
+{
+  "seed": 10,
+  "mode": "bio_no_sleep",
+  "unchanged_input_and_parameter_trajectory_at_failure": true,
+  "failed_arm": {
+    "phase": "C",
+    "step_in_phase": 26,
+    "reason": "non-finite training cross entropy",
+    "last_finite_training_loss": 2.0794413089752197,
+    "wake_layer_writes_at_stop": 178,
+    "parameter_sha256_at_stop": "95a6571b5a1bfdda35ccf0c4af867860cb8b15e24eb6de036589d25c2fabd299"
+  },
+  "scope": "First nonfinite observation among traced tensor outputs, registered parameter gradients, Hebbian function return locals, buffers/parameters after writes and optimizer steps. Finite maxima refer to earlier observations at the same site. Hooks return all training values unchanged.",
+  "first_events": [
+    {
+      "phase": "C",
+      "step": 24,
+      "site": "plasticity/_apply_hebb_weight_writes",
+      "tensor": "h.0.mlp.mlp.proj.dn",
+      "previous_observed_finite_max_abs": 1.5548840441217548e+19,
+      "dtype": "torch.float32",
+      "shape": [],
+      "finite": 0,
+      "total": 1,
+      "nan": 0,
+      "positive_inf": 1,
+      "negative_inf": 0,
+      "finite_max_abs": null
+    },
+    {
+      "phase": "C",
+      "step": 25,
+      "site": "plasticity/hebb_fast",
+      "tensor": "h.0.mlp.mlp.proj.post.trace_product",
+      "previous_observed_finite_max_abs": 7.080455618904559e+33,
+      "dtype": "torch.float32",
+      "shape": [
+        64,
+        16
+      ],
+      "finite": 0,
+      "total": 1024,
+      "nan": 0,
+      "positive_inf": 560,
+      "negative_inf": 464,
+      "finite_max_abs": null
+    },
+    {
+      "phase": "C",
+      "step": 25,
+      "site": "plasticity/hebb_fast",
+      "tensor": "h.0.mlp.mlp.proj.post.delta",
+      "previous_observed_finite_max_abs": 2.7998406694421056e+32,
+      "dtype": "torch.float32",
+      "shape": [
+        16
+      ],
+      "finite": 0,
+      "total": 16,
+      "nan": 16,
+      "positive_inf": 0,
+      "negative_inf": 0,
+      "finite_max_abs": null
+    },
+    {
+      "phase": "C",
+      "step": 25,
+      "site": "parameter/hebb_fast",
+      "tensor": "h.0.mlp.mlp.proj.post.fast",
+      "previous_observed_finite_max_abs": 4.199761073676393e+29,
+      "dtype": "torch.float32",
+      "shape": [
+        16
+      ],
+      "finite": 0,
+      "total": 16,
+      "nan": 16,
+      "positive_inf": 0,
+      "negative_inf": 0,
+      "finite_max_abs": null
+    },
+    {
+      "phase": "C",
+      "step": 25,
+      "site": "plasticity/consolidate",
+      "tensor": "h.0.mlp.mlp.proj.post.trace_product",
+      "previous_observed_finite_max_abs": 7.080455618904559e+33,
+      "dtype": "torch.float32",
+      "shape": [
+        64,
+        16
+      ],
+      "finite": 0,
+      "total": 1024,
+      "nan": 0,
+      "positive_inf": 560,
+      "negative_inf": 464,
+      "finite_max_abs": null
+    },
+    {
+      "phase": "C",
+      "step": 25,
+      "site": "plasticity/consolidate",
+      "tensor": "h.0.mlp.mlp.proj.post.delta",
+      "previous_observed_finite_max_abs": 2.7998406694421056e+32,
+      "dtype": "torch.float32",
+      "shape": [
+        16
+      ],
+      "finite": 0,
+      "total": 16,
+      "nan": 16,
+      "positive_inf": 0,
+      "negative_inf": 0,
+      "finite_max_abs": null
+    },
+    {
+      "phase": "C",
+      "step": 25,
+      "site": "plasticity/consolidate",
+      "tensor": "h.0.mlp.mlp.proj.post.delta_mag",
+      "previous_observed_finite_max_abs": 2.7998406694421056e+32,
+      "dtype": "torch.float32",
+      "shape": [
+        16
+      ],
+      "finite": 0,
+      "total": 16,
+      "nan": 16,
+      "positive_inf": 0,
+      "negative_inf": 0,
+      "finite_max_abs": null
+    },
+    {
+      "phase": "C",
+      "step": 25,
+      "site": "plasticity/consolidate",
+      "tensor": "h.0.mlp.mlp.proj.post.update",
+      "previous_observed_finite_max_abs": 1.06910731505244e+29,
+      "dtype": "torch.float32",
+      "shape": [
+        16
+      ],
+      "finite": 0,
+      "total": 16,
+      "nan": 16,
+      "positive_inf": 0,
+      "negative_inf": 0,
+      "finite_max_abs": null
+    },
+    {
+      "phase": "C",
+      "step": 25,
+      "site": "buffer/consolidate",
+      "tensor": "h.0.mlp.mlp.proj.post._last_hebb_delta_mag",
+      "previous_observed_finite_max_abs": 2.491629238793208e+31,
+      "dtype": "torch.float32",
+      "shape": [
+        1
+      ],
+      "finite": 0,
+      "total": 1,
+      "nan": 1,
+      "positive_inf": 0,
+      "negative_inf": 0,
+      "finite_max_abs": null
+    },
+    {
+      "phase": "C",
+      "step": 25,
+      "site": "parameter/consolidate",
+      "tensor": "h.0.mlp.mlp.proj.post.fast",
+      "previous_observed_finite_max_abs": 4.199761073676393e+29,
+      "dtype": "torch.float32",
+      "shape": [
+        16
+      ],
+      "finite": 0,
+      "total": 16,
+      "nan": 16,
+      "positive_inf": 0,
+      "negative_inf": 0,
+      "finite_max_abs": null
+    },
+    {
+      "phase": "C",
+      "step": 25,
+      "site": "plasticity/_apply_hebb_weight_writes",
+      "tensor": "h.0.mlp.mlp.proj.delta",
+      "previous_observed_finite_max_abs": 2.8321824332528296e+33,
+      "dtype": "torch.float32",
+      "shape": [
+        64,
+        16
+      ],
+      "finite": 0,
+      "total": 1024,
+      "nan": 0,
+      "positive_inf": 560,
+      "negative_inf": 464,
+      "finite_max_abs": null
+    },
+    {
+      "phase": "C",
+      "step": 25,
+      "site": "plasticity/_apply_hebb_weight_writes",
+      "tensor": "h.0.mlp.mlp.proj.direction",
+      "previous_observed_finite_max_abs": 0.5768604278564453,
+      "dtype": "torch.float32",
+      "shape": [
+        64,
+        16
+      ],
+      "finite": 0,
+      "total": 1024,
+      "nan": 1024,
+      "positive_inf": 0,
+      "negative_inf": 0,
+      "finite_max_abs": null
+    },
+    {
+      "phase": "C",
+      "step": 25,
+      "site": "plasticity/_apply_hebb_weight_writes",
+      "tensor": "h.0.mlp.mlp.proj.wn",
+      "previous_observed_finite_max_abs": 1.4600318670272827,
+      "dtype": "torch.float32",
+      "shape": [],
+      "finite": 0,
+      "total": 1,
+      "nan": 1,
+      "positive_inf": 0,
+      "negative_inf": 0,
+      "finite_max_abs": null
+    },
+    {
+      "phase": "C",
+      "step": 25,
+      "site": "parameter/_apply_hebb_weight_writes",
+      "tensor": "h.0.mlp.mlp.proj.w_slow",
+      "previous_observed_finite_max_abs": 0.3792939782142639,
+      "dtype": "torch.float32",
+      "shape": [
+        64,
+        16
+      ],
+      "finite": 0,
+      "total": 1024,
+      "nan": 1024,
+      "positive_inf": 0,
+      "negative_inf": 0,
+      "finite_max_abs": null
+    },
+    {
+      "phase": "C",
+      "step": 25,
+      "site": "parameter/_apply_hebb_weight_writes",
+      "tensor": "h.0.mlp.mlp.proj.w_fast",
+      "previous_observed_finite_max_abs": 0.35739126801490784,
+      "dtype": "torch.float32",
+      "shape": [
+        64,
+        16
+      ],
+      "finite": 0,
+      "total": 1024,
+      "nan": 1024,
+      "positive_inf": 0,
+      "negative_inf": 0,
+      "finite_max_abs": null
+    },
+    {
+      "phase": "C",
+      "step": 26,
+      "site": "plasticity/update",
+      "tensor": "h.0.mlp.mlp.proj.post.y",
+      "previous_observed_finite_max_abs": 9.760258736096086e+31,
+      "dtype": "torch.float32",
+      "shape": [
+        8,
+        4,
+        16
+      ],
+      "finite": 0,
+      "total": 512,
+      "nan": 512,
+      "positive_inf": 0,
+      "negative_inf": 0,
+      "finite_max_abs": null
+    }
+  ],
+  "first_per_category": [
+    {
+      "category": "plasticity",
+      "phase": "C",
+      "step": 24,
+      "site": "plasticity/_apply_hebb_weight_writes",
+      "tensor": "h.0.mlp.mlp.proj.dn",
+      "previous_observed_finite_max_abs": 1.5548840441217548e+19,
+      "dtype": "torch.float32",
+      "shape": [],
+      "finite": 0,
+      "total": 1,
+      "nan": 0,
+      "positive_inf": 1,
+      "negative_inf": 0,
+      "finite_max_abs": null
+    },
+    {
+      "category": "parameter",
+      "phase": "C",
+      "step": 25,
+      "site": "parameter/hebb_fast",
+      "tensor": "h.0.mlp.mlp.proj.post.fast",
+      "previous_observed_finite_max_abs": 4.199761073676393e+29,
+      "dtype": "torch.float32",
+      "shape": [
+        16
+      ],
+      "finite": 0,
+      "total": 16,
+      "nan": 16,
+      "positive_inf": 0,
+      "negative_inf": 0,
+      "finite_max_abs": null
+    },
+    {
+      "category": "buffer",
+      "phase": "C",
+      "step": 25,
+      "site": "buffer/consolidate",
+      "tensor": "h.0.mlp.mlp.proj.post._last_hebb_delta_mag",
+      "previous_observed_finite_max_abs": 2.491629238793208e+31,
+      "dtype": "torch.float32",
+      "shape": [
+        1
+      ],
+      "finite": 0,
+      "total": 1,
+      "nan": 1,
+      "positive_inf": 0,
+      "negative_inf": 0,
+      "finite_max_abs": null
+    },
+    {
+      "category": "forward",
+      "phase": "C",
+      "step": 26,
+      "site": "forward/SynapticMLP",
+      "tensor": "h.0.mlp.mlp.output[0]",
+      "previous_observed_finite_max_abs": 9.760258736096086e+31,
+      "dtype": "torch.float32",
+      "shape": [
+        8,
+        4,
+        16
+      ],
+      "finite": 0,
+      "total": 512,
+      "nan": 512,
+      "positive_inf": 0,
+      "negative_inf": 0,
+      "finite_max_abs": null
+    },
+    {
+      "category": "prediction",
+      "phase": "C",
+      "step": 26,
+      "site": "prediction/logits",
+      "tensor": "model.logits",
+      "previous_observed_finite_max_abs": 3.217622756958008,
+      "dtype": "torch.float32",
+      "shape": [
+        8,
+        4,
+        8
+      ],
+      "finite": 0,
+      "total": 256,
+      "nan": 256,
+      "positive_inf": 0,
+      "negative_inf": 0,
+      "finite_max_abs": null
+    }
+  ],
+  "original_result_sha256": "4a6ba7d3a25ffbc0896942e65c3f4dceb00bdcc10294ec5ba14240e57c68b536",
+  "evaluator_sha256": "d0d405ca641b74a5263e2057908000348598563285d3f7db698f0be8305e353b",
+  "diagnostic_source_sha256": "9fdb027bfc9c802ed565ff212b45a2e4854ead0d0ff1bcf3c014d11c89b6c513",
+  "diagnostic_source": "\"\"\"Observe one unchanged training trajectory after the scientific study has finished.\"\"\"\nimport hashlib\nimport json\nimport sys\nfrom pathlib import Path\n\nimport torch\nfrom scripts.e2e import continual_learning_eval as study\n\nroot = Path(__file__).parent\noriginal = json.loads((root / 'result.json').read_text())\nfailed = next(r for r in original['failed_arms'] if r['mode'] == 'bio_no_sleep')\nseed = failed['seed']\nconfig = study.ContinualEvalConfig()\nprobe, streams = study._inputs(config, seed)\nmodel = None\nnames = {}\nfirst = []\nmilestones = []\nseen = set()\npeak = {}\nphase = None\nstep = 0\nhandles = []\n\n\ndef describe(tensor):\n    a = tensor.detach()\n    finite = torch.isfinite(a)\n    return {'dtype': str(a.dtype), 'shape': list(a.shape), 'finite': int(finite.sum()), 'total': a.numel(),\n            'nan': int(a.isnan().sum()), 'positive_inf': int(a.isposinf().sum()), 'negative_inf': int(a.isneginf().sum()),\n            'finite_max_abs': float(a[finite].abs().max()) if finite.any() else None}\n\n\ndef observe(stage, name, value):\n    if not isinstance(value, torch.Tensor) or not value.is_floating_point() or not value.numel():\n        return\n    key = stage + ':' + name\n    v = value.detach()\n    if torch.isfinite(v).all():\n        maximum = float(v.abs().max())\n        if maximum > peak.get(key, 0.0):\n            peak[key] = maximum\n        return\n    if key in seen:\n        return\n    seen.add(key)\n    event = {'phase': phase, 'step': step, 'site': stage, 'tensor': name, 'previous_observed_finite_max_abs': peak.get(key), **describe(v)}\n    if len(first) < 16:\n        first.append(event)\n    category = stage.split('/')[0]\n    if not any(r['category'] == category for r in milestones):\n        milestones.append({'category': category, **event})\n\n\ndef profile(frame, event, arg):\n    global model, names, phase, step\n    path = frame.f_code.co_filename\n    fn = frame.f_code.co_name\n    if event == 'return' and fn == '_model' and path.endswith('/continual_learning_eval.py'):\n        model = arg\n        names = {id(m): n or 'model' for n, m in model.named_modules()}\n        for name, p in model.named_parameters():\n            if p.requires_grad:\n                def inspect_gradient(grad, name=name):\n                    observe('gradient/backward', name, grad)\n                    return None\n                handles.append(p.register_hook(inspect_gradient))\n    if event == 'call' and fn == '_logits' and path.endswith('/continual_learning_eval.py'):\n        caller = frame.f_back\n        if 'phase' in caller.f_locals:\n            phase = caller.f_locals['phase']\n            step = caller.f_locals.get('step', 0)\n    if model is None or event != 'return':\n        return\n    owner = frame.f_locals.get('self')\n    if path.endswith('/synaptic.py') and fn in ('_apply_hebb_weight_writes', '_update_hebb_traces', 'hebb_fast', 'consolidate', 'update'):\n        module_name = names.get(id(owner))\n        if module_name is None:\n            return\n        for k, v in frame.f_locals.items():\n            observe('plasticity/' + fn, module_name + '.' + k, v)\n        for k, v in owner.named_buffers(recurse=False):\n            observe('buffer/' + fn, module_name + '.' + k, v)\n        for k, v in owner.named_parameters(recurse=False):\n            observe('parameter/' + fn, module_name + '.' + k, v)\n    if path.endswith('/adamw.py') and fn == 'step':\n        for k, v in model.named_parameters():\n            observe('optimizer/step', k, v)\n    if path.endswith('/continual_learning_eval.py') and fn == '_logits':\n        observe('prediction/logits', 'model.logits', arg)\n\n\ndef on_forward(module, _inputs, output):\n    name = names.get(id(module))\n    if name is None:\n        return\n    for index, value in enumerate(output if isinstance(output, tuple) else (output,)):\n        observe('forward/' + type(module).__name__, name + f'.output[{index}]', value)\n\n\nfh = torch.nn.modules.module.register_module_forward_hook(on_forward)\ntry:\n    sys.setprofile(profile)\n    with torch.random.fork_rng(devices=[]):\n        result = study._run_arm(config, seed, 'bio_no_sleep', probe, streams)\nfinally:\n    sys.setprofile(None)\n    fh.remove()\n    for handle in handles:\n        handle.remove()\nif not first or any(result[k] != failed[k] for k in ('phase', 'step_in_phase', 'reason', 'parameter_sha256_at_stop', 'last_finite_training_loss')):\n    raise RuntimeError('instrumented trajectory did not reproduce the scientific failure')\nreport = {'seed': seed, 'mode': 'bio_no_sleep', 'unchanged_input_and_parameter_trajectory_at_failure': True,\n          'failed_arm': {k: failed[k] for k in ('phase','step_in_phase','reason','last_finite_training_loss','wake_layer_writes_at_stop','parameter_sha256_at_stop')},\n          'scope': 'First nonfinite observation among traced tensor outputs, registered parameter gradients, Hebbian function return locals, buffers/parameters after writes and optimizer steps. Finite maxima refer to earlier observations at the same site. Hooks return all training values unchanged.',\n          'first_events': first, 'first_per_category': milestones, 'original_result_sha256': hashlib.sha256((root/'result.json').read_bytes()).hexdigest(),\n          'evaluator_sha256': original['source_sha256'], 'diagnostic_source_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),\n          'diagnostic_source': Path(__file__).read_text()}\n(root / 'first_nonfinite.json').write_text(json.dumps(report, allow_nan=False, indent=2) + '\\n')\n"
+}

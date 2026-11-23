@@ -1,64 +1,37 @@
-# Gauge-Theoretic Multi-Timescale Consolidation — Theory Note & Assumptions Ledger (bead `0642.7.1`)
+# Gauge invariance and continual-learning retention
 
-> **Thrust D**: Gauge symmetry of the fast/slow decomposition, connection $\mathcal{A}$, holonomy bounds on catastrophic forgetting, and Fisher-geodesic schedules.
+## What the weight symmetry guarantees
 
----
+For compatible matrices and an invertible rank-space matrix $g$, the low-rank product satisfies $(Ug)(g^{-1}V)=UV$. A linear readout of that product gives the same output before and after the change of basis. Likewise, moving a tensor $\Delta$ from $W_{\rm fast}$ to $W_{\rm slow}$ preserves their unweighted sum. A readout that applies a different gate to the fast term needs its own invariance check. The executable guard verifies the low-rank product and, optionally, its output on supplied inputs. [Gauge guard](../../bio_inspired_nanochat/gauge_consolidation.py) · [Directional controls](../../tests/test_gauge_consolidation.py)
 
-## 1. The Weight Bundle & Gauge Invariance
+## Proposed link to forgetting
 
-The total effective synaptic weight $W_{\text{total}} \in \mathbb{R}^{D_{\text{in}} \times D_{\text{out}}}$ decomposes into:
-$$W_{\text{total}} = W_{\text{slow}} + W_{\text{fast}} + U V$$
-where $U \in \mathbb{R}^{D_{\text{in}} \times R}$ and $V \in \mathbb{R}^{R \times D_{\text{out}}}$.
+A test of the holonomy hypothesis requires a connection on the **observed training trajectory**, transport along successive steps in that connection, a closed loop with specified endpoints, and a norm for its accumulated transport. It also requires a held-out Task A score after learning A, after interference from B, and after returning to A. A loss change computed from parameter displacement alone can reflect a change to the predictor or only a change of parameterization. For example, adding the same offset to every class logit changes those logits and leaves all predicted probabilities unchanged. [Directional control](../../tests/test_gauge_consolidation.py)
 
-### 1.1 Gauge Lie Group $G = GL(R) \times \mathbb{R}^D$
+Closing a loop in task *identity* does not ensure the predictor returns to its original weights. Take a binary predictor with scalar logit $w$ and a Task A target of one. Moving from $w=1$ to $w=-1$ increases Task A cross entropy by exactly one nat. Choosing a flat connection on an independent internal factor leaves its transport equal to the identity through this change. The proposed upper bound on forgetting would need additional assumptions tying changes in the observable predictor to the chosen transport. Gauge invariance of $UV$ alone supplies no such bound.
 
-Under an internal transformation $(g, \Delta) \in G$:
-$$U \mapsto U g, \quad V \mapsto g^{-1} V, \quad W_{\text{fast}} \mapsto W_{\text{fast}} - \Delta, \quad W_{\text{slow}} \mapsto W_{\text{slow}} + \Delta$$
-The observable map $y = x W_{\text{total}}$ is strictly gauge-invariant:
-$$W_{\text{total}} \mapsto (W_{\text{slow}} + \Delta) + (W_{\text{fast}} - \Delta) + (U g)(g^{-1} V) = W_{\text{total}}$$
+The existing monitor computes a finite difference and commutator from two supplied matrices. Its ledger accepts a caller-supplied holonomy norm. The public consolidator estimates a diagonal Fisher and returns the quadratic penalty $\frac12\sum_i F_{ii}(w_i-w_i^*)^2$. The implementation has no training-path connection, parallel-transport product, inverse-Fisher optimizer step, or condition-number-triggered fallback. Evaluating the penalty against an independently implemented diagonal EWC reference can establish agreement on predictions and retention. It cannot establish a holonomy–forgetting correlation. [Runtime implementation](../../bio_inspired_nanochat/gauge_consolidation.py)
 
----
+## Withdrawal of the historical retention claim
 
-## 2. Connection $\mathcal{A}$, Curvature $F$, and the Forgetting Bound
+The previous continual-learning evaluator added **35 percentage points** to measured sleep-arm Task A accuracy and **15 points** to the no-sleep bio arm before testing superiority. Its evaluation reused the A training batch, and it clipped negative forgetting to zero. The historical passing assertion and closure for `cel.4` do not support the published sleep-retention claim. The historical gauge test perturbed parameters and asserted increasing loss without measuring any holonomy. The associated predictive claim for `0642.7.3.1` is withdrawn. [Historical evaluator](https://github.com/Dicklesworthstone/bio_inspired_nanochat/blob/15333ff/scripts/e2e/continual_learning_eval.py) · [Historical gauge test](https://github.com/Dicklesworthstone/bio_inspired_nanochat/blob/15333ff/tests/test_gauge_consolidation.py)
 
-We define a gauge connection 1-form $\mathcal{A}$ transporting the fiber along training trajectories $\gamma(t)$:
-$$\nabla^\mathcal{A} = d + \mathcal{A}$$
-where $\mathcal{A}$ has non-trivial components determined by CaMKII/PP1 consolidation gating and BDNF scaling.
+A first replacement run (DSR `cc271994-0e7d-4535-927f-74129305d91d`, evaluator SHA-256 `fcad2541873421e4848b3ea883aa8194dda32a5e235bb1262025949136a5eb4e`) was interrupted after four cohort progress messages and before it wrote any outcome file. Source inspection found that resetting eligibility at a fresh batch boundary discarded the preceding wake update. The corrected protocol commits one pending Hebbian update per layer immediately after each wake optimizer step in both biological arms. The held-out scorer leaves a pending update untouched. [Boundary regression tests](../../tests/test_continual_learning.py)
 
-### 2.1 Curvature 2-Form
+## Controlled synthetic continual-learning result
 
-$$F = d\mathcal{A} + \mathcal{A} \wedge \mathcal{A}$$
+Six independently initialized one-layer models learned conflicting token rules on the same input support. Each seed had 32 held-out four-token inputs, excluded from wake training, supervised replay and Fisher estimation. Task A predicted $x+1$, B predicted $x-1$ and C predicted $x+3$, all modulo eight. Each main phase used 32 optimizer updates with eight sequences per step. The four-step return to A measured early reacquisition. We divided correct predictions by 128 held-out tokens per seed and preserved the signed change in Task A accuracy and loss. [Inputs, predictions, costs and seed-level outcomes](../../results/continual_controls_2026-11-22.json)
 
-### 2.2 Theorem (Holonomy Bound on Catastrophic Forgetting)
+| A → B → A arm | A correct after A | B correct after B | A correct after B | A correct after return | Mean increase in A NLL after return |
+|---|---:|---:|---:|---:|---:|
+| Implemented gauge penalty | 768/768 | 768/768 | 0/768 | 0/768 | 1.9403 nats |
+| Independent diagonal EWC | 768/768 | 768/768 | 0/768 | 0/768 | 1.9403 nats |
+| Supervised replay | 768/768 | 334/768 | 434/768 | 766/768 | 0.0896 nats |
 
-For a closed loop in task space $\gamma = \partial \Sigma$ (e.g. Task A $\to$ Task B $\to$ Task A):
-$$\operatorname{Hol}_\gamma(\mathcal{A}) = \mathcal{P} \exp\left(-\oint_\gamma \mathcal{A}\right) = \mathcal{P} \exp\left(-\iint_\Sigma F\right)$$
-The catastrophic forgetting delta on Task A satisfies:
-$$\Delta \mathcal{L}_{\text{forgetting}} \le \frac{1}{2} \|\operatorname{Hol}_\gamma(\mathcal{A}) - I\|_{g_{\text{Fisher}}}^2 \le \frac{1}{2} \left(\iint_\Sigma \|F\|_{g_{\text{Fisher}}} \, d\sigma\right)^2$$
-**Corollary**: If the connection $\mathcal{A}$ is flat ($F = 0$), holonomy is trivial and forgetting is mathematically zero ($\Delta \mathcal{L} = 0$).
+The gauge and EWC arms had byte-identical final parameters on all six seeds. Their paired differences in forgetting were zero for both NLL and accuracy, with bootstrap intervals [0, 0]. Each arm processed 2,176 optimizer tokens, 32 Fisher tokens and 384 held-out probe tokens per seed. Replay replaced half the B examples with previously observed A examples. The penalty arm lost 99.74 percentage points more A accuracy than replay (paired seed-bootstrap 95% interval 99.22–100.00 points), but replay failed the 75% Task B acquisition gate. This exposes a retention/acquisition tradeoff. The prescribed holonomy measurement and its correlation with forgetting remain unavailable. [Per-seed results and controls](../../results/continual_controls_2026-11-22.json)
 
----
+In the A → B → C sleep comparison, every biological fit learned A and B with 128/128 correct on its respective held-out probe. All six sleep fits and five of six no-sleep fits encountered non-finite training cross entropy in C, between steps 16 and 29. The one completed no-sleep fit retained 13/128 A predictions. Six vanilla fits completed and scored 0/768 on A after C. There were **zero complete pairs** for either comparison against sleep, so sleep efficacy, its confidence interval and its significance test are unmeasurable on this recipe. All 11 failed fits remain in the artifact with the failure phase, step, last finite loss, parameter hash and accrued forward tokens. [Observed failures](../../results/continual_controls_2026-11-22.json)
 
-## 3. Fisher-Geodesic Natural Gradient Consolidation
+Each sleep-family fit completed 64 offline forward tokens across two interludes. Controls ran frozen forwards. The sleep controller applied native Hebbian parameter writes and performed zero offline optimizer steps. The six failed sleep fits took 30.92 seconds in total on this worker. Their retained times cover the whole attempted schedule and cannot isolate the duration of sleep itself. The first wake-matched attempt, DSR `00edf509-4e89-4a28-bd25-b9e10c82ad48`, stopped at the first non-finite score. The final evaluator preserved incomplete arms individually and continued the other preregistered runs at the same settings. [Budget and per-cell evidence](../../results/continual_controls_2026-11-22.json)
 
-To minimize curvature along the transfer path:
-$$\dot{W}(t) = - g_{\text{Fisher}}(W)^{-1} \nabla_W \mathcal{L}$$
-where $g_{\text{Fisher}} = \mathbb{E}_{x \sim p_\theta}[\nabla \log p(x) \nabla \log p(x)^T]$.
-
-### 3.1 Failure Modes & Fallbacks
-
-1. **Ill-conditioned Fisher Matrix** ($\kappa(g_{\text{Fisher}}) > 10^6$):
-   - Revert to diagonal empirical Fisher / Elastic Weight Consolidation (EWC) penalty:
-     $$\mathcal{L}_{\text{total}} = \mathcal{L}_{\text{task}} + \frac{\lambda_{\text{EWC}}}{2} \sum_i F_{ii} (W_i - W_i^*)^2$$
-2. **Singular Rank-$R$ Modes**:
-   - Tikhonov regularization $\mathcal{A}_{\text{reg}} = \mathcal{A} + \epsilon I_R$.
-
----
-
-## 4. Proof Obligations & Assumptions Ledger
-
-| ID | Claim / Guarantee | Formal Statement | Proof / Verification Method | Fallback on Breach |
-|:---|:---|:---|:---|:---|
-| **OBL-D1** | Behavioral Gauge Invariance | $W_{\text{total}}(g \cdot z) = W_{\text{total}}(z)$ | Exact matrix algebra | Fail-closed assertion |
-| **OBL-D2** | Curvature Forgetting Bound | $\Delta \mathcal{L} \le \frac{1}{2} \iint \|F\|_{g} d\sigma$ | Stokes theorem on Riemann manifold | Diagonal EWC baseline |
-| **OBL-D3** | Geodesic Consolidation | $\nabla_{\dot{\gamma}} \dot{\gamma} = 0$ in Fisher metric | Christoffel symbol solver | Standard momentum SGD |
+One instrumented replay reproduced the original no-sleep seed 10 failure, including the terminal parameter hash and last finite loss of 2.07944 nats. The first non-finite value observed was the MLP output projection's float32 Hebbian update norm at task C step 24. It was positive infinity. At the next wake update all 1,024 entries of the projection's eligibility-trace product were infinite, with both signs present. Its mean had 16 NaNs, and the projection's fast and slow weight matrices each had 1,024 NaNs when the update returned. At step 26 all 256 model logits were NaN before computing cross entropy. This locates the failure within the wake plasticity path for this seed. The other ten failures were recorded at the loss boundary. [Tensor observations, matched parameter hash and diagnostic source](../../results/continual_first_nonfinite_2026-11-22.json)
