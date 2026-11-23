@@ -90,3 +90,21 @@ The node-monitor audit records the following quantities when its JSONL output is
 - `is_certified`: The node operator has a numerical kernel and a positive spectral gap.
 - `h1_dimension`: Edge-space dimension minus numerical rank, when supplied for a graph.
 - `h1_obstruction`: Unknown for node-only observations. Output correctness requires independent labels.
+
+## Held-out command composition
+
+Eight paired seeds each trained two 21,310-parameter models on 228 synthetic commands.
+Both models saw all twelve atomic commands. Seventy-two combinations of familiar atoms
+were withheld. At the primary 400-update checkpoint the plain model solved 87/576
+examples and three-step sheaf diffusion solved 52/576. The paired difference was
+−6.08 percentage points (two-sided exact sign-flip p = 0.125).
+
+The triangle's first cohomology had dimension four throughout. We measured the
+specific class represented by the two predicted atomic action counts minus the predicted
+composite count. All 52 correct diffusion outputs had zero residual, as did 32 wrong
+outputs. Reversing a sequence preserves counts and can change its meaning. This
+explains how a count-based score can rank errors well (mean per-seed AUROC 0.970)
+while failing as a correctness certificate. The registered joint endpoint failed.
+An independent recomputation checked 3,456 row-level predictions at all three budgets,
+their 10,368 edge observations and all 256 paired sign assignments.
+[Study](../../results/sheaf_compositional_2026-11-22.json) · [Raw predictions](../../results/sheaf_compositional_2026-11-22.jsonl.gz)

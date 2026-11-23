@@ -14,6 +14,10 @@ revision. [Current protocol](ablation_matrix.md) · [Follow-up DSR receipts](../
 - [x] Rebuild the native CPU extension, exercise the public Quick Start, and compare
   repeated native and repeated reference training separately. The cross-backend trained
   logits still miss the registered tolerance. Keep `u0fl.4` open.
+  - [x] Repair the macOS arm64 CPU dependency boundary. A fresh Python 3.14.6
+    environment loaded the checkout's native ABI 1 extension and PyTorch 2.9.1
+    without Triton. All ten Quick Start tests passed using the exact locked wheel
+    contents. The Linux dependency still includes Triton.
 - [x] Run identical standalone launcher/scorer commands through actual training,
   checkpoint reload and held-out evaluation. Verify candidate isolation in a real
   two-rank optimizer run. These results cover execution and provenance.
@@ -44,6 +48,12 @@ revision. [Current protocol](ablation_matrix.md) · [Follow-up DSR receipts](../
     The 13 registered timing steps took 72.14 seconds. Applying the frozen
     allowance for startup, saves and variability projected 23,580 seconds against
     a 12,570-second training allocation. The 498,073,600-token run was declined.
+    [Checkpoint index, curves, scores and admission rule](../results/vanilla_pilot_2026-11-22.json)
+  - [x] Fit the empirical count comparator on the full 498,073,600 training pairs,
+    split equally between the two real rank streams. On the same 5,053,422 held-out
+    target bytes, unigram scored 2.32499 and smoothed bigram scored 1.81318 bits
+    per byte. The neural pilot saw only 6,291,456 pairs. A matched-exposure neural
+    comparison remains open. [Count numerators and stream hashes](../results/vanilla_ngram_2026-11-22.json)
 - [x] Test repetition on the same step-50 checkpoint with presynaptic release enabled
   and disabled. Greedy repeated trigrams fell from 256/352 to 242/352 slots across 16
   documents. Seeded sampling produced zero in both arms. Next-token loss differed by
@@ -52,8 +62,15 @@ revision. [Current protocol](ablation_matrix.md) · [Follow-up DSR receipts](../
 - [x] Evaluate the sheaf detector on actual labelled predictions. Eight trained
   variable-binding models got 46/512 held-out answers right. Obstruction AUROC was
   0.5467, cosine 0.5470 and random 0.5609. All adjusted p-values were 1. The
-  detector missed the registered superiority threshold. The separate systematic
-  generalization and cohomology test remains open (`0642.8.3.1`).
+  detector missed the registered superiority threshold.
+  - [x] Compare command composition with and without diffusion on eight paired seeds.
+    Diffusion solved 52/576 held-out commands and plain attention solved 87/576.
+    A zero cycle residual occurred on 32 wrong diffusion outputs. The independent
+    verifier reconstructed all 3,456 saved predictions across training budgets.
+    [Systematic split and counterexample](theory/sheaf_binding.md#held-out-command-composition)
+  - [x] Run actual self-correction on eight trained models and 256 paired requests.
+    Correct answers fell from 29 to 14. It rescued none of the 227 initial errors
+    and used 3.139× as many backbone calls. [Per-request results](../results/self_correction_binding_2026-11-22.json)
 - [ ] Qualify the standing main/nightly DSR gates, reconcile the full Python run,
   and check the final published revision and generated evidence (`u0fl`).
   - [x] Exercise both standing Linux CPU lanes. The main lane caught an optimizer
@@ -70,6 +87,17 @@ revision. [Current protocol](ablation_matrix.md) · [Follow-up DSR receipts](../
     Against eager synaptic inference the fused primitive was 7.25× faster and the
     cached model 2.00× faster. Against vanilla the synaptic model took 2.29× as
     long to train and 2.34× as long to decode a token. Both relative gates failed.
+  - [x] Reproduce four Nsight windows end to end. Both captures measured 124
+    launches per cached synaptic token versus 75 for vanilla.
+    [Timeline and reproduction command](../TESTING.md#reproduce-the-cuda-timeline)
+  - [x] Test one fused cached FP32 RoPE/RMS transform on an RTX 4090. It passed
+    all 90 primitive cases and matched 156 token decisions and 36 cache snapshots.
+    Across 12 balanced rounds its median speedup was 1.107× (paired bootstrap
+    95% interval 0.873–1.264×). The candidate missed the adoption rule.
+    [All round timings](../results/profiles/cached_rope_rms_candidate_2026-11-23.json)
+  - [x] Measure eager attention at sequence lengths 128 and 1024. Four cases
+    completed at each length. The combined five-case CLI now exits nonzero on the
+    unsupported Flex case. [Hardware rows](../results/profiles/attention_rtx4090_2026-11-23.json)
   - [x] Repair the 15 floating type diagnostics and validate the affected callers
     with 340 tests. The full-tree scanner is a separate standing-main gate.
   - [x] Close the shared-cache tokenizer deserialization gap. All 18 cases passed,

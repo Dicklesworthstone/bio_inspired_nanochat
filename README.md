@@ -28,7 +28,7 @@ The most informative CPU comparisons answer different questions. On 614,400 Wiki
 - ✅ **Stochastic release · BDNF metaplasticity · dual fast/slow weights** — implemented and toggleable.
 - ✅ **Fused presynaptic kernels** — `native_presyn` selects Rust on supported CPU paths and Triton on supported CUDA paths. At the recorded FP32 decode shapes on one 4090, Triton improved release time 6.84× and cached synaptic-model decode 1.88× over eager execution. [Accepted GPU benchmark](results/presyn_live_rtx4090.json) · [Rust decode benchmark](results/presyn_rust_decode_bench_2026-10-13.json)
 - **Systematic optimization.** Each distributed language-model search candidate now has its own optimizers. Two CPU ranks reproduced serial candidate scores and learned weights within each tested backend, including when a sibling failed. The October pilot used the earlier implementation. A new FineWeb search remains open. [Isolation tests](tests/test_e2e_cmaes.py) · [October pilot](results/cmaes_phase1_lm_2026-10-13.json)
-- **Matched evaluation.** The D1 screen trains 18 columns on two seeds with explicit prerequisite controls. Its launcher binds source, data, budget and checkpoint to held-out scoring. The tiny dense and MoE rehearsals completed. The registered GPU study and its verdict remain open. [D1 protocol and commands](docs/ablation_matrix.md)
+- **Matched evaluation.** The registered D1 screen calls for 18 columns and two seeds. The two-GPU vanilla feasibility pilot scored 3.19468 validation bits per byte after 6.29M training tokens. Its measured rate missed the budget for 498.07M tokens. A bigram model fitted on all 498.07M training pairs scored 1.81318 on the same held-out bytes. Whether synaptic mechanisms improve a matched, trained language model remains open. [D1 protocol](docs/ablation_matrix.md) · [Pilot and counts](docs/bridge_plan.md#execution-order-for-the-remaining-research-work)
 - ✅ **Fail-closed certificate-policy model cards** — `certificate_bundle.py` strictly composes declared-identity stability, retention, predictive-calibration, tropical-radius, and configured-timescale evidence into a bounded same-process authorization; serialized manifests are audit/report inputs only and cannot recreate live runtime attestation. Well-formed failed, stale, fallback-covered, or out-of-scope evidence is rendered transparently and refused; malformed input is rejected before artifacts are created. No passing production-model card is bundled. See [`docs/certified_model_card.md`](docs/certified_model_card.md).
 
 ---
@@ -455,14 +455,15 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 # Choose the extra for the target host. On CUDA Linux use
 uv sync --extra gpu
 
-# For a supported CPU Linux host use
+# For CPU Linux or macOS arm64 use
 uv sync --extra cpu
 ```
 
 The project build installs the Rust extension. Use the extension built from the same
-revision as the checkout. An older installed wheel failed the Quick Start before its
-first optimizer update. The frozen CPU extra also failed to resolve on macOS arm64
-with Python 3.14.6 because of its Triton dependency. [Runtime audit](docs/bridge_plan.md)
+revision as the checkout. On macOS arm64 the CPU extra uses PyTorch without Triton.
+The native Python 3.14.6 build passed all ten Quick Start tests, including training,
+held-out checkpoint scoring and chat generation. The installation test used a local
+mirror of 91 hash-verified archives from the lockfile. [Build and test receipts](results/reality_check_followup_2026-11-22.json)
 
 ### 1.5. Quality Gate (recommended)
 

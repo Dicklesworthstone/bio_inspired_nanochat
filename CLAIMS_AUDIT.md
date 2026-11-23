@@ -2,6 +2,16 @@
 
 First audit on 2026-06-10 under `bio_inspired_nanochat-8j9.1`. Evidence reviewed on 2026-11-22 against committed code and results.
 
+The November 22–23 follow-up measured three claims directly. On held-out command
+composition, diffusion solved 52/576 examples versus 87/576 for plain attention,
+and 32 wrong outputs had zero cycle residual. In the repaired continual-learning
+experiment all three arms retained 0/768 first-task targets after the third task.
+A two-GPU vanilla pilot reached 3.19468 validation bits per byte on 6.29M training
+tokens. Its measured cost exceeded the registered allowance for a full neural
+reference. [Command composition](results/sheaf_compositional_2026-11-22.json) ·
+[Continual learning](results/continual_controls_bounded_hebbian_2026-11-22.json) ·
+[Pilot and admission](results/vanilla_pilot_2026-11-22.json)
+
 **Status legend**
 - **SOLID** — implemented and on the live model path.
 - **PARTIAL** — exists but limited, not on the live path, or test-only.

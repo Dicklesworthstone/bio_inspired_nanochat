@@ -1,5 +1,21 @@
 # Testing Guide
 
+### Reproduce the CUDA timeline
+
+On a qualified RTX 4090 worker with the project GPU environment and Nsight Systems on PATH, run
+
+```bash
+DSR_REPOS_FILE="$PWD/dsr/quality.yaml" dsr --json quality --tool bio_inspired_nanochat-cuda-atlas --work-dir "$PWD" --check-timeout 1800
+```
+
+Open `runs/dsr/$DSR_RUN_ID/atlas/atlas.svg` and compare its four named windows to the
+[recorded timeline](results/profiles/rtx4090_cuda_atlas_2026-11-22.svg).
+The [timing data](results/profiles/rtx4090_cuda_atlas_2026-11-22.json) record kernel counts,
+the union of their active intervals and time in CUDA runtime calls. The cached synaptic
+model launched 124 kernels per token versus 75 for vanilla. Kernels occupied 40.1 ms
+of its 5,259 ms profiled window versus 27.9 ms of 2,380 ms for vanilla. Host scheduling
+and tracing overhead enter both wall times. Use the ordinary throughput gate for speed claims.
+
 > The test discipline for `bio_inspired_nanochat`. Established by bead **eqyk.1**
 > (*Unit-test framework, conventions, fixtures & coverage gate*) — the foundation
 > every later "unit tests + e2e + detailed logging" bead builds on.
