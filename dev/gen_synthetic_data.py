@@ -31,13 +31,13 @@ NOTE: For more details see this discussion: https://github.com/karpathy/nanochat
 import requests
 import json
 import os
-import copy
 import random
+from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from bio_inspired_nanochat.common import get_base_dir
 
-api_key = open("openroutertoken.txt", "r", encoding="utf-8").read().strip()
+api_key = Path("openroutertoken.txt").read_text(encoding="utf-8").strip()
 
 url = "https://openrouter.ai/api/v1/chat/completions"
 headers = {
@@ -45,7 +45,7 @@ headers = {
   "Content-Type": "application/json"
 }
 
-readme = open("README.md", "r", encoding="utf-8").read().strip()
+readme = Path("README.md").read_text(encoding="utf-8").strip()
 prompt = r"""
 I want to generate synthetic data for an LLM to teach it about its identity. Here is the identity I want:
 
@@ -327,9 +327,8 @@ def generate_conversation(idx: int):
     # pick 5 example user first messages and insert them into prompt as inspiration
     rng = random.Random(idx) # use idx as seed to the rng
     user_first_prompt = "\n".join(rng.choice(user_first_prompts) for _ in range(5))
-    payload = copy.deepcopy(base_payload)
     modified_prompt = prompt.replace("%USER_FIRST_PROMPTS%", user_first_prompt)
-    payload['messages'] = [{"role": "user", "content": modified_prompt}]
+    payload = {**base_payload, "messages": [{"role": "user", "content": modified_prompt}]}
 
     response = requests.post(url, headers=headers, json=payload, timeout=60)
     result = response.json()
@@ -369,7 +368,8 @@ with ThreadPoolExecutor(max_workers=num_workers) as executor:
             # Lightly validate the conversation structure
             for i, message in enumerate(messages):
                 expected_role = "user" if i % 2 == 0 else "assistant"
-                assert message['role'] == expected_role, f"Message {i} has role {message['role']} but should be {expected_role}"
+                if message['role'] != expected_role:
+                    raise ValueError(f"Message {i} has role {message['role']} but should be {expected_role}")
 
             # If all looks good, write the messages to file
             with open(output_file, 'a') as f:
