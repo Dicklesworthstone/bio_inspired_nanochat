@@ -1105,6 +1105,438 @@
           "sha256": "8c24d918e74f7e9210b91f997c444932587cabd67cfefdff85c22eb919cb3df9"
         }
       ]
+    },
+    {
+      "probe": "bio-full-cpu",
+      "observation": "Complete CPU suite at the original isolated qualification snapshot: 2,003 passed, 14 failed, 11 skipped in 10,853.78s. Current targeted and full checks are separate.",
+      "run_id": "09e9954d-427d-4120-800f-1be7a25f9080",
+      "exit": 1,
+      "source": "320ffdc8fe558da8e42fd031f39fd5555df7af72|d73422a02000c09c5ae4cdfaabbadfa23c8eae344e604c94dfb376ded0420603|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 1,
+          "sha256": "68f632562d0b8b4bf8775b5033b810f7a6e6c12d4b5e839b803c714b3498450a"
+        }
+      ]
+    },
+    {
+      "probe": "bio-hebb-formal",
+      "observation": "At the normalized-Hebbian snapshot, 288 mapped tests passed, three skipped and all 19 resolved Lean declarations passed the axiom audit.",
+      "run_id": "6636eed1-5205-4679-af64-0c530fa6006d",
+      "exit": 0,
+      "source": "542f5c14f12a3d84171a5119817fd26159f76602|51c37ffef0509e266729dd55feae151178707087e6c3814bb2fbcd7ef91632af|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "c14d92a727f6b3db58d2cbdce7b69b71ebeeb8b1470974167477628b2b1fb794"
+        }
+      ]
+    },
+    {
+      "probe": "bio-cuda-atlas",
+      "observation": "Nsight Systems NVTX tracing and SQLite export for two train and two decode windows on a physical RTX 4090.",
+      "run_id": "5637e7d6-431c-4038-863a-99abd1930103",
+      "exit": 0,
+      "source": "3fdf344ee10a6841143ef443dfc0fb4c243732b0|a3884b62db502513af399528c80719209a6476c95943802c648086221329e9bd|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "be86934728c55ed9b9e08af61fe0814ec6926b831849d85703b659bf8df81c4d"
+        },
+        {
+          "exit": 0,
+          "sha256": "e50666c076df8a6e14f1d9f96bb8d5782cbc7f00bc5b86a82af99debe609e704"
+        }
+      ]
+    },
+    {
+      "probe": "bio-atlas-render",
+      "observation": "Four measured timing windows rendered to JSON/SVG; the separate quality command exited 2 in the scanner.",
+      "run_id": "3bad2325-71a0-4361-b59e-77a3f26cc0ee",
+      "exit": 1,
+      "source": "f797bed286595ad8ef0495a496420ff4323b4dc3|1d081249e7459c7859521a4751ad082a0bb9236e9b57494b72de955e5c978020|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "5825923cdbe7fd61945ff0a9bde9d61925edcc628299664b72ef2ffd7e28e8ea"
+        },
+        {
+          "exit": 2,
+          "sha256": "9d71892f2cf116ea1d57b17499fb32a83c65a530bb375beef57b96cdd2153583"
+        }
+      ]
+    },
+    {
+      "probe": "bio-attention-validation",
+      "observation": "Six attention benchmark tests passed and one skipped; Ruff, ty and the scoped scanner passed.",
+      "run_id": "ff29facd-381a-44fe-8f69-8e611cdd754f",
+      "exit": 0,
+      "source": "f797bed286595ad8ef0495a496420ff4323b4dc3|243115f64fab7474a87311cdb8395fb21c6134f63c719b79ebe18c43a1f69f5a|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "92ece6a726f1501984acced4bf3275ed7dd0a10b1aa6695626f460aaf544de00"
+        },
+        {
+          "exit": 0,
+          "sha256": "7d0e88e7af68f11bdf0d4ff84807014883b8a733e7403b713ce3fc3c52054d63"
+        }
+      ]
+    },
+    {
+      "probe": "bio-4090-attention",
+      "observation": "Original attention tool returned zero even when all five compiled rows failed on Python 3.14. Four eager rows completed at both T128 and T1024.",
+      "run_id": "dad8242a-28c6-4498-aba1-8791040f84ca",
+      "exit": 0,
+      "source": "f797bed286595ad8ef0495a496420ff4323b4dc3|abefba1d3bebbe45eaa47b05b7aa32fc925f803f615cc1f8aaae609c71ff62ba|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "39a165a211422fc3411a57fd7519ae66e3540a0652dca56ba16182fbe17a836f"
+        },
+        {
+          "exit": 0,
+          "sha256": "caba66be8ce66b70e0edf74bf43d772fe5596157e875b653a209923a4e311d7e"
+        },
+        {
+          "exit": 0,
+          "sha256": "b31be517367c7b782806f7186b02cc1d695747d4032bc22c608886732200c54c"
+        }
+      ]
+    },
+    {
+      "probe": "bio-nov23-flex-supported",
+      "observation": "Corrected RTX4090 CLI: the four requested supported rows exited 0, then the five-row matrix retained all rows and exited 2 on the unsupported Flex path.",
+      "run_id": "2d584e55-b793-4764-a8cf-c449787e06f5",
+      "exit": 1,
+      "source": "129fb695b43fde9a369721517f5ff7bbb9456321|f3f45c60cf381ebabbb527287f99fc0627cd7a60624fb3426f508b1e4f876c60|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "005260d90b5010636be2fce18d55951c3e4052b508b868dff93d85e57a3e55ff"
+        },
+        {
+          "exit": 2,
+          "sha256": "938d3debb05f261ce8ca1ee6484c7b7529a08a512df3677e7c9939b260516e6c"
+        }
+      ]
+    },
+    {
+      "probe": "bio-systematic-sheaf-qualified",
+      "observation": "Eight paired seeds, diffusion and plain baseline trained on 228 synthetic commands. At 400 steps, 52 versus 87 correct out of 576 per arm.",
+      "run_id": "e60056b4-ff27-4130-8434-641c8ec57251",
+      "exit": 0,
+      "source": "3369e57e8b1560b7af0d5ec564acf448c0f07a1f|2a88ef5f9aa6f7279fda5c2e05fe2fb1c21f352141a3f97c499a1fcd3f815c49|no-lockfile",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "1c0b243f58ed3c7f8959690cfa149ec5227ffbf54103424d7f06b8e967d93283"
+        }
+      ]
+    },
+    {
+      "probe": "bio-systematic-checks-qualified",
+      "observation": "Checked the study harness and its analytical controls; raw results independently replayed in a separate run.",
+      "run_id": "f20d485e-61f4-485a-98df-2207c557fbe1",
+      "exit": 0,
+      "source": "3369e57e8b1560b7af0d5ec564acf448c0f07a1f|2a88ef5f9aa6f7279fda5c2e05fe2fb1c21f352141a3f97c499a1fcd3f815c49|no-lockfile",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "fe01a2b5812de2af9873f5116d7657275994e34dd6507eeb5570db09e84d859d"
+        },
+        {
+          "exit": 0,
+          "sha256": "8967920e77cdaae4dad1dbfc2bfb10bec00c63b1a9e3322fc5d9a2ae326fa043"
+        },
+        {
+          "exit": 0,
+          "sha256": "6a60110c7b0ca5f94453ec8a48358cfcbadca68a5e2c859e1b79ad66a6bcb32f"
+        }
+      ]
+    },
+    {
+      "probe": "bio-sheaf-verify-final",
+      "observation": "Independent verifier checked 3456 predictions, 10368 edge observations, exact paired comparisons and all 360 analytic controls.",
+      "run_id": "15d47be7-55c0-4ab6-91c8-fd3a94d13d4b",
+      "exit": 0,
+      "source": "3369e57e8b1560b7af0d5ec564acf448c0f07a1f|2a88ef5f9aa6f7279fda5c2e05fe2fb1c21f352141a3f97c499a1fcd3f815c49|no-lockfile",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "0ce3f0b00b31150b2467a3d82b17c7e9955259c9a49ce25f221f271083685efb"
+        }
+      ]
+    },
+    {
+      "probe": "counts-dsr",
+      "observation": "Counted both complete 249036800-pair rank-local training streams.",
+      "run_id": "cd4400d1-28af-45b3-9c6e-da65e4685fbb",
+      "exit": 0,
+      "source": "b057a50fe3538fbadb13bf49e591a9bc2a7aaf87|4e3d4e4603b25cb95ac40343958f8de5e1779072316f32a38265e86671d5602f|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "d7c054939f1c1aedce7808f75b4a0f1c83c7a563c7276eb2b137899d679430af"
+        }
+      ]
+    },
+    {
+      "probe": "count-release-dsr",
+      "observation": "Verified smoothed unigram and bigram scores on 5053422 held-out target bytes; full count-model exposure, pilot-only neural exposure.",
+      "run_id": "dca93fa6-b000-4845-9173-287d05c189b9",
+      "exit": 0,
+      "source": "b057a50fe3538fbadb13bf49e591a9bc2a7aaf87|4e3d4e4603b25cb95ac40343958f8de5e1779072316f32a38265e86671d5602f|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "3b55c6f13ef4e88a4860ce1dbebbddef52e0c7a5e56691227a196b2e5390f581"
+        },
+        {
+          "exit": 0,
+          "sha256": "8e26fd2231e1f822ef6faf0beb0552a944fd2f3431baaa6f593f97e1b1326a54"
+        }
+      ]
+    },
+    {
+      "probe": "archive-pilot-dsr",
+      "observation": "Verified both physical checkpoint generations and archived training curves, retrieval tests, generated samples and standalone scoring.",
+      "run_id": "6134505b-268f-4c35-938d-102f84f38fc3",
+      "exit": 0,
+      "source": "b057a50fe3538fbadb13bf49e591a9bc2a7aaf87|4e3d4e4603b25cb95ac40343958f8de5e1779072316f32a38265e86671d5602f|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "eec79800688b3066c81dbe811fc637cea5a5e0db9ffa99aace81efa37ff395fd"
+        }
+      ]
+    },
+    {
+      "probe": "bio-nov23-nas",
+      "observation": "Fresh default structural NAS protocol cc21c16f5e99. Sixteen equal-work outcomes and eight paired seeds, all invariants passed. NAS final loss increased 0.003267; the experiment returned its regression status.",
+      "run_id": "168ac172-ca16-4024-abb0-bc51b5d40df7",
+      "exit": 1,
+      "source": "129fb695b43fde9a369721517f5ff7bbb9456321|f3f45c60cf381ebabbb527287f99fc0627cd7a60624fb3426f508b1e4f876c60|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 1,
+          "sha256": "26802534cdca981705a0721ab6754c0db67b95d405de5231a696f137dd631150"
+        }
+      ]
+    },
+    {
+      "probe": "bio-nov23-formal-before",
+      "observation": "Old manifest rejected the exact changed Flex benchmark test digest at 129fb69.",
+      "run_id": "fa70f3bb-0971-4a08-994a-23cfd263d85f",
+      "exit": 1,
+      "source": "129fb695b43fde9a369721517f5ff7bbb9456321|f3f45c60cf381ebabbb527287f99fc0627cd7a60624fb3426f508b1e4f876c60|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 1,
+          "sha256": "6f83a09c7891329ac29f42bcc846d061da651a1e23c740bacf9fc2fdc07e0078"
+        }
+      ]
+    },
+    {
+      "probe": "bio-nov23-replay",
+      "observation": "At 129fb69, 11/12 affected cases failed under the shared worker environment, including a wrong global pytest interpreter, 6 deadlines, two stale audit classifications, a missing current structural result, and the normalized readout mismatch.",
+      "run_id": "4e3112fd-8680-4f9b-bf75-ff2f763925b0",
+      "exit": 1,
+      "source": "129fb695b43fde9a369721517f5ff7bbb9456321|f3f45c60cf381ebabbb527287f99fc0627cd7a60624fb3426f508b1e4f876c60|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 1,
+          "sha256": "7f03e04f08f18d4a7a92d140e1fe4c138be54828ea8515723791bef04483d6a7"
+        }
+      ]
+    },
+    {
+      "probe": "bio-nov23-fixed-contracts",
+      "observation": "The real working-memory demo, structural report and matrix column repairs passed. Of 32 selected tests the remaining first-pass failure was the new real core import of configurator; Ruff and ty passed.",
+      "run_id": "94ade3fe-f47c-468b-805c-f9b45210348a",
+      "exit": 1,
+      "source": "129fb695b43fde9a369721517f5ff7bbb9456321|3d65e9103d21833ba3c650f332b61a93dc4bef2ba65574cfe0845542033670ba|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 1,
+          "sha256": "c833a88deff1c442f32ee4d2e8938639ab803653a25325a4373c9eaedb869de0"
+        },
+        {
+          "exit": 0,
+          "sha256": "b1ddbc064ebd35ababd452ea28a211b89ac31c6c25766498fe5164c278b1c75d"
+        }
+      ]
+    },
+    {
+      "probe": "bio-nov23-validator",
+      "observation": "After switching to project-interpreter pytest the nested runner loaded Torch; on the shared filesystem it reached its existing 45-second timeout.",
+      "run_id": "60436fe9-441a-4c35-9146-9119c2938ec9",
+      "exit": 1,
+      "source": "129fb695b43fde9a369721517f5ff7bbb9456321|b70d91af47316a199346a243be5d76867b1a696728236375af8fd9dcf6852340|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 1,
+          "sha256": "555402bbc604e650b7ae85d4f879d5de396376a3aec6fa30bdaade1d8e47b0dd"
+        },
+        {
+          "exit": 0,
+          "sha256": "ee4c8e54a276feb973a757bb720f1b84cb80e0dc56b7faeb7ab7c0cb5b8457ef"
+        }
+      ]
+    },
+    {
+      "probe": "bio-perf-profile-contracts",
+      "observation": "CPU live performance exceeded its fixed threshold; separate source and type checks passed. See per-check log hashes.",
+      "run_id": "42e592bc-c4c0-4e2b-b862-828c9853e8d3",
+      "exit": 1,
+      "source": "f797bed286595ad8ef0495a496420ff4323b4dc3|abefba1d3bebbe45eaa47b05b7aa32fc925f803f615cc1f8aaae609c71ff62ba|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 1,
+          "sha256": "7b4dff346a02ae34d22412cea079efe9f5d95362c8d964ebe4993ac8518c2ec8"
+        },
+        {
+          "exit": 0,
+          "sha256": "68d36e4a4624686b518217e0b68e8e0702400bd3cf2a05c5e8e3dcbe05a35141"
+        }
+      ]
+    },
+    {
+      "probe": "bio-nov23-atlas",
+      "observation": "Standing one-command Nsight capture, SQLite export and JSON/SVG render succeeded. All four CUDA launch counts exactly reproduced the first atlas: 1145/2150 in five training steps and 15000/24800 in 200 cached tokens.",
+      "run_id": "94dd2477-d2d4-4e15-b726-16f0fca5c16d",
+      "exit": 0,
+      "source": "129fb695b43fde9a369721517f5ff7bbb9456321|b4ef35ce9354dc64d1fec93b03e3d6da1a88acf6cf3c591ce183bc41a3bde6c3|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "517bad06c0260c359316ba8ea6930802ed3e2fba537271bae2bc62251f5fe2b7"
+        }
+      ]
+    },
+    {
+      "probe": "bio-nov23-qk",
+      "observation": "Unshipped FP32 cached RoPE/RMS candidate. All 90 primitive cases, 156 token logits/argmax and 36 KV steps passed. Twelve balanced same-GPU rounds: median candidate/incumbent 1.1066x, paired 95% bootstrap 0.8735\u20131.2644. Failed prespecified lower bound; vanilla/candidate median 2.2467x.",
+      "run_id": "4d9796c5-82e3-44ed-8c57-37633e1c94b7",
+      "exit": 0,
+      "source": "129fb695b43fde9a369721517f5ff7bbb9456321|6cb5434799bde6bc3b85ff94fbd585e6f1eb55f86eaf743a456f1ece7fd9df08|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "8229bfe969e2ae19ab7144b9f4bb83c5eae7d384f325e6b28e4914e22ba9be1c"
+        }
+      ]
+    },
+    {
+      "probe": "bio-nov23-csd-deadlines",
+      "observation": "Second Linux worker, PyTorch 2.9.1+cpu and native ABI 1: all 40 selected tests passed. Distributed AdamW/Muon, child termination, CPU Triton interpreter, normalized working-memory head, actual NAS report, matrix controls, reviewed footprint and validation subprocess retained their original bounds.",
+      "run_id": "5c3a01fa-6d91-4484-8d7b-d259bda245f2",
+      "exit": 0,
+      "source": "129fb695b43fde9a369721517f5ff7bbb9456321|e7e1801212d7ab674a169d49b3e8d23feb53c3a93f1684da0c4cf9266c631119|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "84603ed6561b51f497adcbd298ce75e3731f8a3fdc9e4b79b7b2ffb94ea308b1"
+        },
+        {
+          "exit": 0,
+          "sha256": "2c91fef79debeb195741cc2ff609bcdd5ea15e62199237899bd19850bb7e32c2"
+        }
+      ]
+    },
+    {
+      "probe": "bio-nov23-csd-types",
+      "observation": "Repository-wide Ruff and the installed locked ty both passed on the second Linux worker.",
+      "run_id": "1c9f99a2-bc26-49e3-98e5-e0e1b2760e03",
+      "exit": 0,
+      "source": "129fb695b43fde9a369721517f5ff7bbb9456321|e7e1801212d7ab674a169d49b3e8d23feb53c3a93f1684da0c4cf9266c631119|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "4933885d538e3227816192d1906765de1a7d63e71bac15d7db3a01f3dd2c24e3"
+        }
+      ]
+    },
+    {
+      "probe": "bio-nov23-mac-before314",
+      "observation": "Fresh Darwin arm64 CPU extra with Python 3.14.6: the original frozen project requested Triton, which had no compatible Darwin wheel.",
+      "run_id": "C7A80CC1-5A1E-4110-A1AB-CB80774BEFCA",
+      "exit": 1,
+      "source": "129fb695b43fde9a369721517f5ff7bbb9456321|f3f45c60cf381ebabbb527287f99fc0627cd7a60624fb3426f508b1e4f876c60|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 2,
+          "sha256": "b3572b0656914117cd578d7f501032ada20104e020f1e99e01160b0f2207c79c"
+        }
+      ]
+    },
+    {
+      "probe": "bio-nov23-mac-lock",
+      "observation": "Repaired manifest and lock validated (137 packages). Native CPU dry-run selected the Darwin Torch wheel and omitted Triton. Cold offline installation lacked the Torch archive.",
+      "run_id": "0DFD3422-21C2-428E-8A2E-03348AF1BE2A",
+      "exit": 1,
+      "source": "129fb695b43fde9a369721517f5ff7bbb9456321|f3f45c60cf381ebabbb527287f99fc0627cd7a60624fb3426f508b1e4f876c60|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "578351f18b21bf2a7da057b4d297cd8fd9aa0ecabb395a46ec258a3325155467"
+        },
+        {
+          "exit": 0,
+          "sha256": "839b397b337409b427ce2e611155e861f3b657a051ec46d88d0cb4609264d2d0"
+        },
+        {
+          "exit": 1,
+          "sha256": "c6df24f895ec8301a16e7b4ff9602c63f93aca53121fc2c9537580b4c2097713"
+        }
+      ]
+    },
+    {
+      "probe": "bio-nov23-mac-native",
+      "observation": "Installed the full CPU+dev project into a new native macOS arm64 Python 3.14.6 environment. Offline wheel input used 91 archives matched by lockfile hash, including the project build backend. Cargo fetched missing pinned inputs with the project user-agent.",
+      "run_id": "6E93C99E-0A03-4E25-AD74-9490C7D1B7DC",
+      "exit": 0,
+      "source": "129fb695b43fde9a369721517f5ff7bbb9456321|f3f45c60cf381ebabbb527287f99fc0627cd7a60624fb3426f508b1e4f876c60|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "129012251e1b3054924a81925ca17d40364221fe0ed0460dad9213c677537bf7"
+        }
+      ]
+    },
+    {
+      "probe": "bio-nov23-mac-quickstart",
+      "observation": "Native ABI 1 and PyTorch 2.9.1 loaded with no Triton installed. All ten end-to-end public Quick Start tests passed on arm64 macOS, including tokenizer, real train, checkpoint validation and chat.",
+      "run_id": "E9F92EA3-3574-4190-852F-8AF3ED1B61E1",
+      "exit": 0,
+      "source": "129fb695b43fde9a369721517f5ff7bbb9456321|f3f45c60cf381ebabbb527287f99fc0627cd7a60624fb3426f508b1e4f876c60|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "6e1d000c783175a46cd134c711a8f1245b9cfbc707dc112c7bd67743ace2ca54"
+        },
+        {
+          "exit": 0,
+          "sha256": "720bcb9952ca8d89ca6db88e351665c10a9bc1998e1bd2a404c3d3efb242e4f5"
+        }
+      ]
+    },
+    {
+      "probe": "bio-nov23-portable-verification",
+      "observation": "Rechecked published study raw bytes with the independent verifier and matched pilot observations, count numerator and original Nsight SQLite digest.",
+      "run_id": "999C8AE6-BE50-4E12-8E90-14BC1BB4C777",
+      "exit": 0,
+      "source": "129fb695b43fde9a369721517f5ff7bbb9456321|f3f45c60cf381ebabbb527287f99fc0627cd7a60624fb3426f508b1e4f876c60|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "5bbfcb58db4849cdf55772a31e2972a91317fa43f707e51003c6f77e849757ff"
+        },
+        {
+          "exit": 0,
+          "sha256": "ab215c9d65d78d277c45d02b20ca249f3af1971f563b45521c78142aa53f39c3"
+        }
+      ]
     }
   ],
   "reference_feasibility": {

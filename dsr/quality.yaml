@@ -13,3 +13,14 @@ tools:
     repo: Dicklesworthstone/bio_inspired_nanochat
     required_checks:
       - bash dsr/gpu-quality.sh
+  bio_inspired_nanochat-cuda-atlas:
+    repo: Dicklesworthstone/bio_inspired_nanochat
+    required_checks:
+      - >-
+        out="runs/dsr/${DSR_RUN_ID:?}/atlas" &&
+        mkdir -p "$out" &&
+        OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 uv run --no-sync nsys profile
+        --trace=cuda,nvtx --sample=none --cpuctxsw=none --output="$out/bench"
+        python -m scripts.perf_regression_gate --mode profile --device cuda &&
+        nsys export --type=sqlite --output="$out/bench.sqlite" "$out/bench.nsys-rep" &&
+        uv run --no-sync python -m scripts.cuda_profile_atlas "$out/bench.sqlite" --out "$out/atlas"

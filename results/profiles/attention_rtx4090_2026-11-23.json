@@ -1,0 +1,494 @@
+{
+  "scope": "First three invocations used the earlier benchmark. Last two used the finite-gradient and complete-matrix checks. Each row measures training steps.",
+  "runs": {
+    "attention-compiled": {
+      "metadata": {
+        "batch_size": 1,
+        "benchmark_steps": 5,
+        "compiled": true,
+        "compute_capability": [
+          8,
+          9
+        ],
+        "created_at": "2026-11-23T03:27:50.825418+00:00",
+        "cuda_version": "12.8",
+        "device_name": "NVIDIA GeForce RTX 4090",
+        "dtype": "bfloat16",
+        "flash_note": "vanilla_sdpa_flash strictly forces PyTorch's FLASH_ATTENTION SDPA backend. PyTorch does not expose a FlashAttention-2/3 generation label here; do not infer one from this artifact. The synaptic dense path needs an additive biological score bias. Synaptic FlexAttention uses per-key calcium in place of per-edge influx and is timed as an experimental approximation. Comparable-case recommendations require the corresponding baseline to finish in the same invocation.",
+        "host": "threadripperje",
+        "n_embd": 256,
+        "n_head": 4,
+        "n_layer": 2,
+        "schema_version": 1,
+        "seed": 42,
+        "sequence_length": 128,
+        "torch_version": "2.9.1+cu128",
+        "warmup_steps": 2
+      },
+      "recommendations": [],
+      "results": [
+        {
+          "case": "vanilla_sdpa_auto",
+          "latency_ms": null,
+          "model_path": "vanilla",
+          "peak_allocated_gib": null,
+          "peak_reserved_gib": null,
+          "reason": "RuntimeError: torch.compile is not supported on Python 3.14+",
+          "sdpa_backend": "auto",
+          "status": "failed",
+          "tokens_per_second": null,
+          "use_flex_attention": false
+        },
+        {
+          "case": "vanilla_sdpa_flash",
+          "latency_ms": null,
+          "model_path": "vanilla",
+          "peak_allocated_gib": null,
+          "peak_reserved_gib": null,
+          "reason": "RuntimeError: torch.compile is not supported on Python 3.14+",
+          "sdpa_backend": "flash",
+          "status": "failed",
+          "tokens_per_second": null,
+          "use_flex_attention": false
+        },
+        {
+          "case": "vanilla_sdpa_math",
+          "latency_ms": null,
+          "model_path": "vanilla",
+          "peak_allocated_gib": null,
+          "peak_reserved_gib": null,
+          "reason": "RuntimeError: torch.compile is not supported on Python 3.14+",
+          "sdpa_backend": "math",
+          "status": "failed",
+          "tokens_per_second": null,
+          "use_flex_attention": false
+        },
+        {
+          "case": "synaptic_dense",
+          "latency_ms": null,
+          "model_path": "synaptic",
+          "peak_allocated_gib": null,
+          "peak_reserved_gib": null,
+          "reason": "RuntimeError: torch.compile is not supported on Python 3.14+",
+          "sdpa_backend": null,
+          "status": "failed",
+          "tokens_per_second": null,
+          "use_flex_attention": false
+        },
+        {
+          "case": "synaptic_flex",
+          "latency_ms": null,
+          "model_path": "synaptic",
+          "peak_allocated_gib": null,
+          "peak_reserved_gib": null,
+          "reason": "RuntimeError: torch.compile is not supported on Python 3.14+",
+          "sdpa_backend": null,
+          "status": "failed",
+          "tokens_per_second": null,
+          "use_flex_attention": true
+        }
+      ]
+    },
+    "attention-128": {
+      "metadata": {
+        "batch_size": 1,
+        "benchmark_steps": 5,
+        "compiled": false,
+        "compute_capability": [
+          8,
+          9
+        ],
+        "created_at": "2026-11-23T03:29:52.815296+00:00",
+        "cuda_version": "12.8",
+        "device_name": "NVIDIA GeForce RTX 4090",
+        "dtype": "bfloat16",
+        "flash_note": "vanilla_sdpa_flash strictly forces PyTorch's FLASH_ATTENTION SDPA backend. PyTorch does not expose a FlashAttention-2/3 generation label here; do not infer one from this artifact. The synaptic dense path needs an additive biological score bias. Synaptic FlexAttention uses per-key calcium in place of per-edge influx and is timed as an experimental approximation. Comparable-case recommendations require the corresponding baseline to finish in the same invocation.",
+        "host": "threadripperje",
+        "n_embd": 256,
+        "n_head": 4,
+        "n_layer": 2,
+        "schema_version": 1,
+        "seed": 42,
+        "sequence_length": 128,
+        "torch_version": "2.9.1+cu128",
+        "warmup_steps": 2
+      },
+      "recommendations": [
+        {
+          "baseline_case": "vanilla_sdpa_auto",
+          "model_path": "vanilla",
+          "recommended_case": "vanilla_sdpa_auto",
+          "throughput_delta_percent": 0.0
+        },
+        {
+          "baseline_case": "synaptic_dense",
+          "model_path": "synaptic",
+          "recommended_case": "synaptic_dense",
+          "throughput_delta_percent": 0.0
+        }
+      ],
+      "results": [
+        {
+          "case": "vanilla_sdpa_auto",
+          "latency_ms": 31.248892191797495,
+          "model_path": "vanilla",
+          "peak_allocated_gib": 0.15416240692138672,
+          "peak_reserved_gib": 0.197265625,
+          "reason": null,
+          "sdpa_backend": "auto",
+          "status": "passed",
+          "tokens_per_second": 4096.145207784315,
+          "use_flex_attention": false
+        },
+        {
+          "case": "vanilla_sdpa_flash",
+          "latency_ms": 32.17801218852401,
+          "model_path": "vanilla",
+          "peak_allocated_gib": 0.15416240692138672,
+          "peak_reserved_gib": 0.197265625,
+          "reason": null,
+          "sdpa_backend": "flash",
+          "status": "passed",
+          "tokens_per_second": 3977.8715742313634,
+          "use_flex_attention": false
+        },
+        {
+          "case": "vanilla_sdpa_math",
+          "latency_ms": 47.74098424240947,
+          "model_path": "vanilla",
+          "peak_allocated_gib": 0.15501117706298828,
+          "peak_reserved_gib": 0.19921875,
+          "reason": null,
+          "sdpa_backend": "math",
+          "status": "passed",
+          "tokens_per_second": 2681.1345017536214,
+          "use_flex_attention": false
+        },
+        {
+          "case": "synaptic_dense",
+          "latency_ms": 1701.6764148138463,
+          "model_path": "synaptic",
+          "peak_allocated_gib": 0.1621851921081543,
+          "peak_reserved_gib": 0.20703125,
+          "reason": null,
+          "sdpa_backend": null,
+          "status": "passed",
+          "tokens_per_second": 75.21994128008319,
+          "use_flex_attention": false
+        },
+        {
+          "case": "synaptic_flex",
+          "latency_ms": null,
+          "model_path": "synaptic",
+          "peak_allocated_gib": null,
+          "peak_reserved_gib": null,
+          "reason": "RuntimeError: flex_attention requires dynamo support",
+          "sdpa_backend": null,
+          "status": "failed",
+          "tokens_per_second": null,
+          "use_flex_attention": true
+        }
+      ]
+    },
+    "attention-1024": {
+      "metadata": {
+        "batch_size": 1,
+        "benchmark_steps": 5,
+        "compiled": false,
+        "compute_capability": [
+          8,
+          9
+        ],
+        "created_at": "2026-11-23T03:33:04.112773+00:00",
+        "cuda_version": "12.8",
+        "device_name": "NVIDIA GeForce RTX 4090",
+        "dtype": "bfloat16",
+        "flash_note": "vanilla_sdpa_flash strictly forces PyTorch's FLASH_ATTENTION SDPA backend. PyTorch does not expose a FlashAttention-2/3 generation label here; do not infer one from this artifact. The synaptic dense path needs an additive biological score bias. Synaptic FlexAttention uses per-key calcium in place of per-edge influx and is timed as an experimental approximation. Comparable-case recommendations require the corresponding baseline to finish in the same invocation.",
+        "host": "threadripperje",
+        "n_embd": 256,
+        "n_head": 4,
+        "n_layer": 2,
+        "schema_version": 1,
+        "seed": 42,
+        "sequence_length": 1024,
+        "torch_version": "2.9.1+cu128",
+        "warmup_steps": 2
+      },
+      "recommendations": [
+        {
+          "baseline_case": "vanilla_sdpa_auto",
+          "model_path": "vanilla",
+          "recommended_case": "vanilla_sdpa_flash",
+          "throughput_delta_percent": 318.41528280824616
+        },
+        {
+          "baseline_case": "synaptic_dense",
+          "model_path": "synaptic",
+          "recommended_case": "synaptic_dense",
+          "throughput_delta_percent": 0.0
+        }
+      ],
+      "results": [
+        {
+          "case": "vanilla_sdpa_auto",
+          "latency_ms": 72.64691852033138,
+          "model_path": "vanilla",
+          "peak_allocated_gib": 0.7661838531494141,
+          "peak_reserved_gib": 0.982421875,
+          "reason": null,
+          "sdpa_backend": "auto",
+          "status": "passed",
+          "tokens_per_second": 14095.57378147316,
+          "use_flex_attention": false
+        },
+        {
+          "case": "vanilla_sdpa_flash",
+          "latency_ms": 17.36239604651928,
+          "model_path": "vanilla",
+          "peak_allocated_gib": 0.7661838531494141,
+          "peak_reserved_gib": 0.982421875,
+          "reason": null,
+          "sdpa_backend": "flash",
+          "status": "passed",
+          "tokens_per_second": 58978.03490119591,
+          "use_flex_attention": false
+        },
+        {
+          "case": "vanilla_sdpa_math",
+          "latency_ms": 27.290033362805843,
+          "model_path": "vanilla",
+          "peak_allocated_gib": 0.8003311157226562,
+          "peak_reserved_gib": 1.033203125,
+          "reason": null,
+          "sdpa_backend": "math",
+          "status": "passed",
+          "tokens_per_second": 37522.856289198644,
+          "use_flex_attention": false
+        },
+        {
+          "case": "synaptic_dense",
+          "latency_ms": 11050.430447421968,
+          "model_path": "synaptic",
+          "peak_allocated_gib": 0.8435640335083008,
+          "peak_reserved_gib": 1.091796875,
+          "reason": null,
+          "sdpa_backend": null,
+          "status": "passed",
+          "tokens_per_second": 92.66607349570678,
+          "use_flex_attention": false
+        },
+        {
+          "case": "synaptic_flex",
+          "latency_ms": null,
+          "model_path": "synaptic",
+          "peak_allocated_gib": null,
+          "peak_reserved_gib": null,
+          "reason": "RuntimeError: flex_attention requires dynamo support",
+          "sdpa_backend": null,
+          "status": "failed",
+          "tokens_per_second": null,
+          "use_flex_attention": true
+        }
+      ]
+    },
+    "nov23-supported": {
+      "metadata": {
+        "batch_size": 1,
+        "benchmark_steps": 5,
+        "compiled": false,
+        "compute_capability": [
+          8,
+          9
+        ],
+        "created_at": "2026-11-23T05:17:49.856024+00:00",
+        "cuda_version": "12.8",
+        "device_name": "NVIDIA GeForce RTX 4090",
+        "dtype": "bfloat16",
+        "flash_note": "vanilla_sdpa_flash strictly forces PyTorch's FLASH_ATTENTION SDPA backend. PyTorch does not expose a FlashAttention-2/3 generation label here; do not infer one from this artifact. The synaptic dense path needs an additive biological score bias. Synaptic FlexAttention uses per-key calcium in place of per-edge influx and is timed as an experimental approximation. Comparable-case recommendations require the corresponding baseline to finish in the same invocation.",
+        "host": "threadripperje",
+        "n_embd": 256,
+        "n_head": 4,
+        "n_layer": 2,
+        "schema_version": 1,
+        "seed": 42,
+        "sequence_length": 128,
+        "torch_version": "2.9.1+cu128",
+        "warmup_steps": 2
+      },
+      "recommendations": [
+        {
+          "baseline_case": "vanilla_sdpa_auto",
+          "model_path": "vanilla",
+          "recommended_case": "vanilla_sdpa_auto",
+          "throughput_delta_percent": 0.0
+        },
+        {
+          "baseline_case": "synaptic_dense",
+          "model_path": "synaptic",
+          "recommended_case": "synaptic_dense",
+          "throughput_delta_percent": 0.0
+        }
+      ],
+      "results": [
+        {
+          "case": "vanilla_sdpa_auto",
+          "final_loss": 11.050552368164062,
+          "latency_ms": 55.25176841765642,
+          "model_path": "vanilla",
+          "peak_allocated_gib": 0.15416240692138672,
+          "peak_reserved_gib": 0.197265625,
+          "reason": null,
+          "sdpa_backend": "auto",
+          "status": "passed",
+          "tokens_per_second": 2316.6679305615844,
+          "use_flex_attention": false
+        },
+        {
+          "case": "vanilla_sdpa_flash",
+          "final_loss": 11.050552368164062,
+          "latency_ms": 96.19624586775899,
+          "model_path": "vanilla",
+          "peak_allocated_gib": 0.15416240692138672,
+          "peak_reserved_gib": 0.181640625,
+          "reason": null,
+          "sdpa_backend": "flash",
+          "status": "passed",
+          "tokens_per_second": 1330.6132567372915,
+          "use_flex_attention": false
+        },
+        {
+          "case": "vanilla_sdpa_math",
+          "final_loss": 11.050718307495117,
+          "latency_ms": 168.09540400281549,
+          "model_path": "vanilla",
+          "peak_allocated_gib": 0.15501117706298828,
+          "peak_reserved_gib": 0.18359375,
+          "reason": null,
+          "sdpa_backend": "math",
+          "status": "passed",
+          "tokens_per_second": 761.4723362564754,
+          "use_flex_attention": false
+        },
+        {
+          "case": "synaptic_dense",
+          "final_loss": 10.936994552612305,
+          "latency_ms": 1895.4526874236763,
+          "model_path": "synaptic",
+          "peak_allocated_gib": 0.1621851921081543,
+          "peak_reserved_gib": 0.19140625,
+          "reason": null,
+          "sdpa_backend": null,
+          "status": "passed",
+          "tokens_per_second": 67.53004221592006,
+          "use_flex_attention": false
+        }
+      ]
+    },
+    "nov23-requested": {
+      "metadata": {
+        "batch_size": 1,
+        "benchmark_steps": 5,
+        "compiled": false,
+        "compute_capability": [
+          8,
+          9
+        ],
+        "created_at": "2026-11-23T05:19:50.744756+00:00",
+        "cuda_version": "12.8",
+        "device_name": "NVIDIA GeForce RTX 4090",
+        "dtype": "bfloat16",
+        "flash_note": "vanilla_sdpa_flash strictly forces PyTorch's FLASH_ATTENTION SDPA backend. PyTorch does not expose a FlashAttention-2/3 generation label here; do not infer one from this artifact. The synaptic dense path needs an additive biological score bias. Synaptic FlexAttention uses per-key calcium in place of per-edge influx and is timed as an experimental approximation. Comparable-case recommendations require the corresponding baseline to finish in the same invocation.",
+        "host": "threadripperje",
+        "n_embd": 256,
+        "n_head": 4,
+        "n_layer": 2,
+        "schema_version": 1,
+        "seed": 42,
+        "sequence_length": 128,
+        "torch_version": "2.9.1+cu128",
+        "warmup_steps": 2
+      },
+      "recommendations": [
+        {
+          "baseline_case": "vanilla_sdpa_auto",
+          "model_path": "vanilla",
+          "recommended_case": "vanilla_sdpa_flash",
+          "throughput_delta_percent": 51.5361165897791
+        },
+        {
+          "baseline_case": "synaptic_dense",
+          "model_path": "synaptic",
+          "recommended_case": "synaptic_dense",
+          "throughput_delta_percent": 0.0
+        }
+      ],
+      "results": [
+        {
+          "case": "vanilla_sdpa_auto",
+          "final_loss": 11.050552368164062,
+          "latency_ms": 98.42191645875573,
+          "model_path": "vanilla",
+          "peak_allocated_gib": 0.15416240692138672,
+          "peak_reserved_gib": 0.197265625,
+          "reason": null,
+          "sdpa_backend": "auto",
+          "status": "passed",
+          "tokens_per_second": 1300.5233448551994,
+          "use_flex_attention": false
+        },
+        {
+          "case": "vanilla_sdpa_flash",
+          "final_loss": 11.050552368164062,
+          "latency_ms": 64.94947783648968,
+          "model_path": "vanilla",
+          "peak_allocated_gib": 0.15416240692138672,
+          "peak_reserved_gib": 0.181640625,
+          "reason": null,
+          "sdpa_backend": "flash",
+          "status": "passed",
+          "tokens_per_second": 1970.7625721370698,
+          "use_flex_attention": false
+        },
+        {
+          "case": "vanilla_sdpa_math",
+          "final_loss": 11.050718307495117,
+          "latency_ms": 81.6560024395585,
+          "model_path": "vanilla",
+          "peak_allocated_gib": 0.15501117706298828,
+          "peak_reserved_gib": 0.18359375,
+          "reason": null,
+          "sdpa_backend": "math",
+          "status": "passed",
+          "tokens_per_second": 1567.5516333872108,
+          "use_flex_attention": false
+        },
+        {
+          "case": "synaptic_dense",
+          "final_loss": 10.936994552612305,
+          "latency_ms": 1720.0002260506153,
+          "model_path": "synaptic",
+          "peak_allocated_gib": 0.1621851921081543,
+          "peak_reserved_gib": 0.19140625,
+          "reason": null,
+          "sdpa_backend": null,
+          "status": "passed",
+          "tokens_per_second": 74.41859487071561,
+          "use_flex_attention": false
+        },
+        {
+          "case": "synaptic_flex",
+          "final_loss": null,
+          "latency_ms": null,
+          "model_path": "synaptic",
+          "peak_allocated_gib": null,
+          "peak_reserved_gib": null,
+          "reason": "RuntimeError: flex_attention requires dynamo support",
+          "sdpa_backend": null,
+          "status": "failed",
+          "tokens_per_second": null,
+          "use_flex_attention": true
+        }
+      ]
+    }
+  }
+}

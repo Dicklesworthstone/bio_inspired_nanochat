@@ -1,0 +1,154 @@
+{
+  "torch": "2.9.1+cu128",
+  "device": "NVIDIA GeForce RTX 4090",
+  "source": {
+    "synaptic.py": "a9d98eef3a92fb4c6f80231d6dd880e0eca208e80e0c4dcf5461645af587af62",
+    "nov23-qk-reference.py": "6357b25cf14a145df46d5b77db4c9fe6028983b8b86d66cae45871ec8c27f10b",
+    "attention_fused.py": "6cec4f4043c128a5fbdedd969940e8fdc3c42594b6e3677e16368d4f9358e745",
+    "nov23-qk-experiment.py": "80673735c89724756a78ed8fc393f84c1f47c73fad0f1ce0ae3810b4060edd63"
+  },
+  "primitives": 90,
+  "logit_rows": 156,
+  "cache_steps": 36,
+  "rounds": [
+    {
+      "order": [
+        "incumbent",
+        "candidate",
+        "vanilla"
+      ],
+      "seed": 84,
+      "incumbent": 40.839785534585985,
+      "candidate": 34.96148790701733,
+      "vanilla": 123.23875004215722
+    },
+    {
+      "order": [
+        "incumbent",
+        "vanilla",
+        "candidate"
+      ],
+      "seed": 85,
+      "incumbent": 60.663795682487724,
+      "vanilla": 125.16581441294674,
+      "candidate": 77.02246304359078
+    },
+    {
+      "order": [
+        "candidate",
+        "incumbent",
+        "vanilla"
+      ],
+      "seed": 86,
+      "candidate": 58.091040315627595,
+      "incumbent": 36.433829879055445,
+      "vanilla": 120.98654680060268
+    },
+    {
+      "order": [
+        "candidate",
+        "vanilla",
+        "incumbent"
+      ],
+      "seed": 87,
+      "candidate": 36.89480049355129,
+      "vanilla": 104.28366811114203,
+      "incumbent": 30.741678028093027
+    },
+    {
+      "order": [
+        "vanilla",
+        "incumbent",
+        "candidate"
+      ],
+      "seed": 88,
+      "vanilla": 85.8046625342054,
+      "incumbent": 29.60990634904339,
+      "candidate": 35.46758886165231
+    },
+    {
+      "order": [
+        "vanilla",
+        "candidate",
+        "incumbent"
+      ],
+      "seed": 89,
+      "vanilla": 120.29085061403238,
+      "candidate": 65.80129765703371,
+      "incumbent": 151.4649423430606
+    },
+    {
+      "order": [
+        "incumbent",
+        "candidate",
+        "vanilla"
+      ],
+      "seed": 90,
+      "incumbent": 75.10182308829032,
+      "candidate": 68.12061553277982,
+      "vanilla": 145.6141674871966
+    },
+    {
+      "order": [
+        "incumbent",
+        "vanilla",
+        "candidate"
+      ],
+      "seed": 91,
+      "incumbent": 28.28932158054287,
+      "vanilla": 96.74081592607469,
+      "candidate": 58.26917093428881
+    },
+    {
+      "order": [
+        "candidate",
+        "incumbent",
+        "vanilla"
+      ],
+      "seed": 92,
+      "candidate": 67.84625893111851,
+      "incumbent": 76.15242614830814,
+      "vanilla": 93.9807550092317
+    },
+    {
+      "order": [
+        "candidate",
+        "vanilla",
+        "incumbent"
+      ],
+      "seed": 93,
+      "candidate": 56.07677663829849,
+      "vanilla": 141.05537125274768,
+      "incumbent": 44.53682928643186
+    },
+    {
+      "order": [
+        "vanilla",
+        "incumbent",
+        "candidate"
+      ],
+      "seed": 94,
+      "vanilla": 186.69849558732486,
+      "incumbent": 48.6224916252645,
+      "candidate": 49.36544823133002
+    },
+    {
+      "order": [
+        "vanilla",
+        "candidate",
+        "incumbent"
+      ],
+      "seed": 95,
+      "vanilla": 101.69971889997862,
+      "candidate": 43.16842844448762,
+      "incumbent": 68.6864160297554
+    }
+  ],
+  "median_speedup": 1.1065542864597826,
+  "bootstrap_95": [
+    0.8734957589874945,
+    1.2643856690844855
+  ],
+  "vanilla_over_candidate": 2.246737567861658,
+  "admitted": false
+}

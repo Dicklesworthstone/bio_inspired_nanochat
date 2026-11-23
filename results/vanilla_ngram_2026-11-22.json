@@ -1,0 +1,31 @@
+{
+  "bigram_bpb": 1.813176340417576,
+  "bigram_cross_entropy_bits": 9162745.208545668,
+  "eval_pair_sha256": "6592136f9311d0a9a261456919c49e3bab77adee5a1e1be55ee65f34b74d2980",
+  "fit_reference": "Fit on all optimizer input/target pairs from the actual two rank-local train loaders, including train BOS outcomes. Unigram probabilities are (N_y+0.5)/(N+0.5*V). Bigram probabilities are (N_xy+p_unigram(y))/(N_x+1). Evaluate only positive-byte targets and divide total bits by the original token byte lengths. Validation pairs select sparse sufficient-statistic storage only; all training windows and denominators are counted.",
+  "heldout_target_bytes": 5053422,
+  "heldout_token_positions": 1048576,
+  "input_selection": "BPB second 1,048,576 target window after the standalone scorer consumes its first 1,048,576 targets for token CE/PPL/ECE.",
+  "positive_byte_positions": 1047510,
+  "rank_count_archive_sha256": [
+    "c198ec85e61e561ff4cabaa7482b2efaed7d1b69bb81597869ffb7467178b27b",
+    "bb4b322809cf61badc43c5c9ccf37a8da599365b30b502e3cf6fe7f33f645681"
+  ],
+  "rank_pair_stream_sha256": [
+    "1b0b807b8eeec648c76b4d3b9b7e9395aace669e16f487c81948c87329ec235e",
+    "2cdcb0403b07b906180bd5c6144b1f7d00b0d072562ac29714b758e697a9a259"
+  ],
+  "run_provenance": {
+    "commit": "b057a50fe3538fbadb13bf49e591a9bc2a7aaf87",
+    "source_sha256": "7a55712432db2a08e6ccde9c0e2e71a0c8e72077daf18c706bfafdbaf1534e3e",
+    "tokenizer": "32b10bf4f351cb5daa2f95ba9f05b94140a541d7ec14ca123101e42f5b1484f5",
+    "train": "b7b4d3725126f3a7892b34b1dd98d769732f1eb33701b563922a07605cf49435",
+    "validation": "ed9409a4d91be0e5a9f786556b9afad38f0d213394d20929bde55418f3e0ae0c"
+  },
+  "train_exposure_per_rank": [
+    249036800,
+    249036800
+  ],
+  "unigram_bpb": 2.324990673812024,
+  "unigram_cross_entropy_bits": 11749159.020836506
+}
