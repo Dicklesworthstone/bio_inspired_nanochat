@@ -195,9 +195,13 @@ objective. Each group consists of completions for one question. The
 original GRPO formulation includes additional normalization and a
 reference policy. [DeepSeekMath](https://arxiv.org/abs/2402.03300)
 
-For rollout `i`, form the two ordinary co-activity trace factors from
-tokens at positions whose next-token targets were actually sampled by the
-policy. Compute the unit Frobenius direction `Dᵢ` of their product before
+For rollout `i`, form the two ordinary co-activity trace factors at input
+positions that consumed tokens sampled by the policy. Keep the final
+sampled token in the forward. The separate loss mask scores each action
+at the preceding prediction position and ignores the added terminal
+position. Prediction states before the first action are the same across
+a question group, so their identical eligibility would cancel under
+centered reward. Compute the unit Frobenius direction `Dᵢ` before
 any results are combined. For each slow matrix, add
 `α Σᵢ (rᵢ − mean_group(r)) Dᵢ / N` after the optimizer step, with `N`
 the number of rollouts processed across all groups and ranks at that
@@ -230,7 +234,9 @@ reward-driven update.
   policy arms. Train for 96 policy updates with four questions and four
   sampled one-token rollouts each. Use the fresh question stream
   `3000000 + model_seed + update`, a common seeded sampler, and
-  `α=0.03` for the aligned and shuffled arms.
+  `α=0.03` for the aligned and shuffled arms. Turn off stochastic release
+  in this comparison so that sampler and training forwards share the
+  same biological setting.
 - [ ] Evaluate expected reward on the same 512 fresh contexts from seed
   102004 at updates 0, 32, 64 and 96. Require at least six starting
   checkpoints above 0.10 and nonconstant reward groups in every seed.
