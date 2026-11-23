@@ -1,0 +1,189 @@
+{
+  "source_sha256": "410534a17e523c7fa69c5436e875b600d4002e496fb83a6efaf6c3a7196b37a2",
+  "torch": "2.9.1+cu128",
+  "device": "NVIDIA GeForce RTX 4090",
+  "prior_documents_sha256": "7239144ae469366ca2b9f5b46798d958372ca1f3f63c0a4f771f9986d2f28578",
+  "inputs": {
+    "model.safetensors": "29d2e457a664e41c12c735f20a36dc0956a665f614a54ce5db21a32e75965270",
+    "config.json": "76eb275107220e450d31258f792a2efcbee109d8b62ae0088260057dec06362f",
+    "tokenizer.json": "c24618a1b3e6a38167beff1c72cffd126c3a66254347304b50547d12c5f25624",
+    "shard_00027.parquet": "4bbe362eb1ab719547b26608ca3f81d8b39262f31285dfb28c3d15a4c01db017",
+    "wiki.parquet": "5f1bea067869d04849c0f975a2b29c4ff47d867f484f5010ea5e861eab246d91",
+    "episodic_write_policy_2026-11-23.jsonl.gz": "7239144ae469366ca2b9f5b46798d958372ca1f3f63c0a4f771f9986d2f28578"
+  },
+  "corpora": {
+    "fineweb": {
+      "test_docs": 96,
+      "test_bytes": 178513,
+      "test_tokens": 38723,
+      "settings": {
+        "binding": {
+          "arm": "binding",
+          "index": 2,
+          "mixture": 0.03,
+          "temperature": 0
+        },
+        "exchangeable": {
+          "arm": "exchangeable",
+          "index": 1,
+          "mixture": 0.01,
+          "temperature": 0
+        },
+        "lexical": {
+          "arm": "lexical",
+          "index": 0,
+          "mixture": 0.0,
+          "temperature": 0
+        },
+        "continuous": {
+          "arm": "cosine_1",
+          "index": 0,
+          "mixture": 0.0,
+          "temperature": 1
+        },
+        "frozen": {
+          "arm": "binding",
+          "index": 0,
+          "mixture": 0.0
+        },
+        "exchangeable_same": {
+          "arm": "exchangeable",
+          "index": 2,
+          "mixture": 0.03,
+          "temperature": 0
+        }
+      },
+      "bpb": {
+        "binding": 1.024009700869901,
+        "exchangeable": 1.0242616720641236,
+        "lexical": 1.0243873790538143,
+        "continuous": 1.0243873790538143,
+        "frozen": 1.0243873790538143,
+        "exchangeable_same": 1.0244921109614582
+      },
+      "contrasts": {
+        "frozen": {
+          "saving_bpb": 0.0003776781839133214,
+          "lower_bpb": 1.3250014373973364e-05,
+          "pass": false
+        },
+        "exchangeable_same": {
+          "saving_bpb": 0.00048241009155725045,
+          "lower_bpb": 0.00014176074249888066,
+          "pass": false
+        },
+        "exchangeable": {
+          "saving_bpb": 0.00025197119422259995,
+          "lower_bpb": -7.929329753702686e-05,
+          "pass": false
+        },
+        "lexical": {
+          "saving_bpb": 0.0003776781839133214,
+          "lower_bpb": 1.3250014373973364e-05,
+          "pass": false
+        },
+        "continuous": {
+          "saving_bpb": 0.0003776781839133214,
+          "lower_bpb": 1.3250014373973364e-05,
+          "pass": false
+        }
+      },
+      "calibration_docs": 32,
+      "intake": {
+        "considered": 132,
+        "short": 4,
+        "roundtrip": 0,
+        "duplicate": 0,
+        "prior_overlap": 0
+      }
+    },
+    "wikitext": {
+      "test_docs": 45,
+      "test_bytes": 91660,
+      "test_tokens": 20110,
+      "settings": {
+        "binding": {
+          "arm": "binding",
+          "index": 2,
+          "mixture": 0.03,
+          "temperature": 0
+        },
+        "exchangeable": {
+          "arm": "exchangeable",
+          "index": 1,
+          "mixture": 0.01,
+          "temperature": 0
+        },
+        "lexical": {
+          "arm": "lexical",
+          "index": 1,
+          "mixture": 0.01,
+          "temperature": 0
+        },
+        "continuous": {
+          "arm": "cosine_50",
+          "index": 1,
+          "mixture": 0.01,
+          "temperature": 50
+        },
+        "frozen": {
+          "arm": "binding",
+          "index": 0,
+          "mixture": 0.0
+        },
+        "exchangeable_same": {
+          "arm": "exchangeable",
+          "index": 2,
+          "mixture": 0.03,
+          "temperature": 0
+        }
+      },
+      "bpb": {
+        "binding": 1.0905701217494816,
+        "exchangeable": 1.0904609097266684,
+        "lexical": 1.0878438524717933,
+        "continuous": 1.0876525322602455,
+        "frozen": 1.0906812221464035,
+        "exchangeable_same": 1.0905874926523702
+      },
+      "contrasts": {
+        "frozen": {
+          "saving_bpb": 0.00011110039692185936,
+          "lower_bpb": -0.00021309435089250685,
+          "pass": false
+        },
+        "exchangeable_same": {
+          "saving_bpb": 1.737090288855825e-05,
+          "lower_bpb": -0.0006609048593180021,
+          "pass": false
+        },
+        "exchangeable": {
+          "saving_bpb": -0.00010921202281322095,
+          "lower_bpb": -0.0006384228126991282,
+          "pass": false
+        },
+        "lexical": {
+          "saving_bpb": -0.0027262692776883757,
+          "lower_bpb": -0.004532791510109236,
+          "pass": false
+        },
+        "continuous": {
+          "saving_bpb": -0.00291758948923615,
+          "lower_bpb": -0.004726187756156005,
+          "pass": false
+        }
+      },
+      "calibration_docs": 16,
+      "intake": {
+        "considered": 62,
+        "short": 1,
+        "roundtrip": 0,
+        "duplicate": 0,
+        "prior_overlap": 0
+      }
+    }
+  },
+  "mechanism_pass": false,
+  "competitive_pass": false,
+  "documents_sha256": "ff6202e3a0633e6972f69ab8aa200adeaf90eabeb19b201a4d90e3b4cef07a12"
+}

@@ -1,0 +1,265 @@
+{
+  "source_sha256": "5991d827ca169525b8b758ba571bc2f70b2a10a3ceda8dc292af6a2be2f9af5f",
+  "stream_sha256": "6592136f9311d0a9a261456919c49e3bab77adee5a1e1be55ee65f34b74d2980",
+  "complete_unique_documents": 1003,
+  "duplicate_documents": 0,
+  "scored_positions": 857692,
+  "priors": {
+    "pilot": {
+      "archive": {
+        "train_pairs": 6291456,
+        "whole_stream_bits": 11290115.802239073,
+        "whole_stream_bytes": 5053422,
+        "whole_stream_bpb": 2.2341525806154867
+      },
+      "panels": [
+        {
+          "documents": 489,
+          "bytes": 2052047,
+          "bpb": {
+            "gain": 2.1781134776443336,
+            "frozen": 2.2325556088470955,
+            "uniform": 2.201135808386277,
+            "recency": 2.199267938056529,
+            "rarity": 2.1925362712215435,
+            "surprise": 2.1814416476351046,
+            "frequency_surprise": 2.1728550465241385,
+            "uniform_order2": 2.201224728879513,
+            "frequency_surprise_order2": 2.1736552985885864,
+            "dense": 2.1576394889734214
+          },
+          "contrasts": {
+            "frozen": {
+              "saving_bpb": 0.05444213120276187,
+              "lower_bpb": 0.036927375091649006,
+              "pass": true
+            },
+            "uniform": {
+              "saving_bpb": 0.023022330741943264,
+              "lower_bpb": 0.016552672448902794,
+              "pass": true
+            },
+            "recency": {
+              "saving_bpb": 0.021154460412195597,
+              "lower_bpb": 0.015020890672006645,
+              "pass": true
+            },
+            "rarity": {
+              "saving_bpb": 0.01442279357720988,
+              "lower_bpb": 0.006262469031948186,
+              "pass": true
+            },
+            "surprise": {
+              "saving_bpb": 0.0033281699907710127,
+              "lower_bpb": -0.004409009666465632,
+              "pass": false
+            },
+            "frequency_surprise": {
+              "saving_bpb": -0.005258431120195084,
+              "lower_bpb": -0.008485007460116045,
+              "pass": false
+            },
+            "uniform_order2": {
+              "saving_bpb": 0.02311125123517943,
+              "lower_bpb": 0.01695091008597553,
+              "pass": true
+            },
+            "frequency_surprise_order2": {
+              "saving_bpb": -0.004458179055747191,
+              "lower_bpb": -0.007827158450451956,
+              "pass": false
+            }
+          }
+        },
+        {
+          "documents": 514,
+          "bytes": 2108574,
+          "bpb": {
+            "gain": 2.1332120449709864,
+            "frozen": 2.1778012915595197,
+            "uniform": 2.155523016553406,
+            "recency": 2.152611246780541,
+            "rarity": 2.142293621753253,
+            "surprise": 2.130023722077211,
+            "frequency_surprise": 2.1251626916207442,
+            "uniform_order2": 2.1556972496518982,
+            "frequency_surprise_order2": 2.125886708691072,
+            "dense": 2.1175276701489256
+          },
+          "contrasts": {
+            "frozen": {
+              "saving_bpb": 0.04458924658853336,
+              "lower_bpb": 0.030291756174488992,
+              "pass": true
+            },
+            "uniform": {
+              "saving_bpb": 0.02231097158241946,
+              "lower_bpb": 0.01569206957822324,
+              "pass": true
+            },
+            "recency": {
+              "saving_bpb": 0.01939920180955479,
+              "lower_bpb": 0.012654974649746959,
+              "pass": true
+            },
+            "rarity": {
+              "saving_bpb": 0.00908157678226651,
+              "lower_bpb": 0.0044210282809652715,
+              "pass": true
+            },
+            "surprise": {
+              "saving_bpb": -0.0031883228937754637,
+              "lower_bpb": -0.006710443221772912,
+              "pass": false
+            },
+            "frequency_surprise": {
+              "saving_bpb": -0.00804935335024215,
+              "lower_bpb": -0.011701323462185687,
+              "pass": false
+            },
+            "uniform_order2": {
+              "saving_bpb": 0.022485204680911863,
+              "lower_bpb": 0.016017029711739603,
+              "pass": true
+            },
+            "frequency_surprise_order2": {
+              "saving_bpb": -0.007325336279914385,
+              "lower_bpb": -0.011101385143460483,
+              "pass": false
+            }
+          }
+        }
+      ]
+    },
+    "full": {
+      "archive": {
+        "train_pairs": 498073600,
+        "whole_stream_bits": 9162745.208545668,
+        "whole_stream_bytes": 5053422,
+        "whole_stream_bpb": 1.813176340417576
+      },
+      "panels": [
+        {
+          "documents": 489,
+          "bytes": 2052047,
+          "bpb": {
+            "gain": 1.8000183575931685,
+            "frozen": 1.8164585844939676,
+            "uniform": 1.8008418310861267,
+            "recency": 1.79961899239191,
+            "rarity": 1.80107149498706,
+            "surprise": 1.8036530996230917,
+            "frequency_surprise": 1.7969154396852867,
+            "uniform_order2": 1.8009430558067665,
+            "frequency_surprise_order2": 1.7982068343070523,
+            "dense": 1.7725514723315121
+          },
+          "contrasts": {
+            "frozen": {
+              "saving_bpb": 0.01644022690079905,
+              "lower_bpb": 0.004171040110500032,
+              "pass": true
+            },
+            "uniform": {
+              "saving_bpb": 0.0008234734929581933,
+              "lower_bpb": -0.003268765861567217,
+              "pass": false
+            },
+            "recency": {
+              "saving_bpb": -0.00039936520125860575,
+              "lower_bpb": -0.005128334648361028,
+              "pass": false
+            },
+            "rarity": {
+              "saving_bpb": 0.0010531373938915678,
+              "lower_bpb": -0.005401691667097631,
+              "pass": false
+            },
+            "surprise": {
+              "saving_bpb": 0.003634742029923199,
+              "lower_bpb": -0.00041573401196625173,
+              "pass": false
+            },
+            "frequency_surprise": {
+              "saving_bpb": -0.0031029179078818636,
+              "lower_bpb": -0.004686818794793512,
+              "pass": false
+            },
+            "uniform_order2": {
+              "saving_bpb": 0.0009246982135979742,
+              "lower_bpb": -0.002973167977498003,
+              "pass": false
+            },
+            "frequency_surprise_order2": {
+              "saving_bpb": -0.0018115232861162234,
+              "lower_bpb": -0.003599963826316076,
+              "pass": false
+            }
+          }
+        },
+        {
+          "documents": 514,
+          "bytes": 2108574,
+          "bpb": {
+            "gain": 1.7659445720396585,
+            "frozen": 1.7739958908732054,
+            "uniform": 1.7653758126784522,
+            "recency": 1.7635933587999233,
+            "rarity": 1.7626986713090564,
+            "surprise": 1.767376653103771,
+            "frequency_surprise": 1.763329108728422,
+            "uniform_order2": 1.7655712716139467,
+            "frequency_surprise_order2": 1.7646909418090395,
+            "dense": 1.7410118302944921
+          },
+          "contrasts": {
+            "frozen": {
+              "saving_bpb": 0.008051318833546928,
+              "lower_bpb": -0.0004052526333770778,
+              "pass": false
+            },
+            "uniform": {
+              "saving_bpb": -0.0005687593612062614,
+              "lower_bpb": -0.004782457415957594,
+              "pass": false
+            },
+            "recency": {
+              "saving_bpb": -0.002351213239735195,
+              "lower_bpb": -0.006795339173561433,
+              "pass": false
+            },
+            "rarity": {
+              "saving_bpb": -0.003245900730602047,
+              "lower_bpb": -0.006658740914485321,
+              "pass": false
+            },
+            "surprise": {
+              "saving_bpb": 0.0014320810641124115,
+              "lower_bpb": -0.000758119245090612,
+              "pass": false
+            },
+            "frequency_surprise": {
+              "saving_bpb": -0.002615463311236521,
+              "lower_bpb": -0.004263154531754673,
+              "pass": false
+            },
+            "uniform_order2": {
+              "saving_bpb": -0.00037330042571182,
+              "lower_bpb": -0.0044619544301404464,
+              "pass": false
+            },
+            "frequency_surprise_order2": {
+              "saving_bpb": -0.001253630230618974,
+              "lower_bpb": -0.0028579832688673734,
+              "pass": false
+            }
+          }
+        }
+      ]
+    }
+  },
+  "passed_contrasts": 11,
+  "total_contrasts": 32,
+  "decision": "stop",
+  "documents_sha256": "7239144ae469366ca2b9f5b46798d958372ca1f3f63c0a4f771f9986d2f28578"
+}
