@@ -137,6 +137,67 @@
           ]
         }
       }
+    },
+    "serving-buffer": {
+      "source": "\"\"\"Measure actual CUDA prefill allocator use and returned logits for a saved vanilla checkpoint.\"\"\"\nfrom pathlib import Path\nimport sys, json, hashlib\nimport torch\nfrom bio_inspired_nanochat.checkpoint_manager import load_checkpoint_model\nfrom bio_inspired_nanochat.engine import Engine, KVCache\nfrom bio_inspired_nanochat.dataloader import tokenizing_distributed_data_loader\nfrom bio_inspired_nanochat.matrix_manifest import file_digest\nckpt, dest = map(Path, sys.argv[1:])\nmodel, _ = load_checkpoint_model(str(ckpt), 24, torch.device(\"cuda\", 0), \"eval\")\nengine = Engine(model, None)\ncfg = model.config\nrows = []\nfor length in (32, 1024):\n    ids, _ = next(tokenizing_distributed_data_loader(1,length,\"val\",device=\"cuda\"))\n    cache = KVCache(1, cfg.n_kv_head, length+1, cfg.n_embd//cfg.n_head,cfg.n_layer)\n    torch.cuda.synchronize()\n    before = torch.cuda.memory_allocated()\n    torch.cuda.reset_peak_memory_stats()\n    with torch.inference_mode(), torch.autocast(\"cuda\", torch.bfloat16):\n        logits = engine._forward(ids,cache)\n    torch.cuda.synchronize()\n    peak = torch.cuda.max_memory_allocated()-before\n    rows.append(dict(length=length,peak_increase_bytes=peak,logits_bytes=logits.numel()*logits.element_size(),\n                     dtype=str(logits.dtype),tokens_sha256=hashlib.sha256(ids.cpu().numpy().tobytes()).hexdigest(),\n                     logits_sha256=hashlib.sha256(logits.detach().cpu().contiguous().view(torch.uint8).numpy().tobytes()).hexdigest(),last_greedy_token=int(logits[:,-1].argmax()),cache_pos=cache.get_pos()))\n    del cache, logits\nwith dest.open(\"x\") as f:\n    json.dump(dict(checkpoint_sha256=file_digest(ckpt/\"model_000024.pt\"), \n                   common_source_sha256=file_digest(Path(\"bio_inspired_nanochat/common.py\")),model_source_sha256=file_digest(Path(\"bio_inspired_nanochat/gpt.py\")),\n                   scope=\"Public cached forward, B1 BF16 on the same real validation prefix. Peak increase is live CUDA allocator bytes above the model and input; includes KV allocation. T32 precedes T1024 in each process.\",source=Path(__file__).read_text(),rows=rows),f,indent=2)\n    f.write(\"\\n\")\nprint(rows)\n",
+      "arms": {
+        "standard": {
+          "checkpoint_sha256": "0c790b90a62a7a0040ecdb4790f5b36af9604ba3ccc2faa39204e20ef2aa14b2",
+          "common_source_sha256": "219485142259ad23d85fa5d86e2c062ab0023e3183aef62825ba3497326954be",
+          "model_source_sha256": "5230486ae3ea83f910bc57bb8cdf132b2643f47a7ff4688b032b57a84361d2c6",
+          "scope": "Public cached forward, B1 BF16 on the same real validation prefix. Peak increase is live CUDA allocator bytes above the model and input; includes KV allocation. T32 precedes T1024 in each process.",
+          "rows": [
+            {
+              "length": 32,
+              "peak_increase_bytes": 132875264,
+              "logits_bytes": 8388608,
+              "dtype": "torch.float32",
+              "tokens_sha256": "3f8eb871079752ec3fbad418d7442185cdb50a46c3e20441c09bce702ed43886",
+              "logits_sha256": "b23b15b1f4c5ddec9601b8f044777ac84c2caa63dcb51b838731cbed5702c4b6",
+              "last_greedy_token": 261,
+              "cache_pos": 32
+            },
+            {
+              "length": 1024,
+              "peak_increase_bytes": 934437888,
+              "logits_bytes": 268435456,
+              "dtype": "torch.float32",
+              "tokens_sha256": "10e78dc1e458f4214e9ebea230834b935d025f9b6598a8b0802f8eb0d4741832",
+              "logits_sha256": "285f08e69b0fac80d9e100b95553ff5a80245719b728d7d3ab34646b840b951c",
+              "last_greedy_token": 261,
+              "cache_pos": 1024
+            }
+          ]
+        },
+        "reuse": {
+          "checkpoint_sha256": "0c790b90a62a7a0040ecdb4790f5b36af9604ba3ccc2faa39204e20ef2aa14b2",
+          "common_source_sha256": "5b3488fe8102e5637d599ea243a84e276525107b2e42b171d913c122127be478",
+          "model_source_sha256": "5230486ae3ea83f910bc57bb8cdf132b2643f47a7ff4688b032b57a84361d2c6",
+          "scope": "Public cached forward, B1 BF16 on the same real validation prefix. Peak increase is live CUDA allocator bytes above the model and input; includes KV allocation. T32 precedes T1024 in each process.",
+          "rows": [
+            {
+              "length": 32,
+              "peak_increase_bytes": 120685568,
+              "logits_bytes": 8388608,
+              "dtype": "torch.float32",
+              "tokens_sha256": "3f8eb871079752ec3fbad418d7442185cdb50a46c3e20441c09bce702ed43886",
+              "logits_sha256": "b23b15b1f4c5ddec9601b8f044777ac84c2caa63dcb51b838731cbed5702c4b6",
+              "last_greedy_token": 261,
+              "cache_pos": 32
+            },
+            {
+              "length": 1024,
+              "peak_increase_bytes": 531784704,
+              "logits_bytes": 268435456,
+              "dtype": "torch.float32",
+              "tokens_sha256": "10e78dc1e458f4214e9ebea230834b935d025f9b6598a8b0802f8eb0d4741832",
+              "logits_sha256": "285f08e69b0fac80d9e100b95553ff5a80245719b728d7d3ab34646b840b951c",
+              "last_greedy_token": 261,
+              "cache_pos": 1024
+            }
+          ]
+        }
+      }
     }
   }
 }

@@ -75,6 +75,13 @@ early checkpoints. [Vanilla replay](results/profiles/precision_repaired_vanilla_
 [Later vanilla blocks](results/profiles/precision_repaired_holdout_vanilla_2026-11-23.json) ·
 [Later synaptic blocks](results/profiles/precision_repaired_holdout_bio_2026-11-23.json)
 
+During generation the widened softcap reuses its FP32 output buffer. At a
+1,024-token vanilla prefill, peak CUDA allocation above inputs and weights
+was 531,784,704 bytes, the same as the original BF16 head. The first FP32
+implementation used 934,437,888 bytes. All 67,108,864 returned FP32 scores
+had the same byte digest across the two FP32 implementations. At 32 tokens
+all 2,097,152 scores also matched. [Paired allocator readings and tensor hashes](results/profiles/prefill_projection_2026-11-23.json)
+
 > The test discipline for `bio_inspired_nanochat`. Established by bead **eqyk.1**
 > (*Unit-test framework, conventions, fixtures & coverage gate*) — the foundation
 > every later "unit tests + e2e + detailed logging" bead builds on.

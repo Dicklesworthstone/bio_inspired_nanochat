@@ -1,8 +1,8 @@
 # Bridge Plan — bio_inspired_nanochat
 
-## Follow-up at `8e8ad5c`
+## Follow-up experiments, November 22–23, 2026
 
-Training and held-out evaluation now share a sealed run manifest. The prospective D1 roster
+The follow-up began at `8e8ad5c`. Training and held-out evaluation now share a sealed run manifest. The prospective D1 roster
 contains 18 dense columns and two screening seeds. It includes both prerequisite controls.
 The launcher accounts for physical devices and charges standalone scoring. The eight-cell
 CPU rehearsal ran the printed scorer against real checkpoints. Use the prospective protocol
@@ -119,6 +119,11 @@ revision. [Current protocol](ablation_matrix.md) · [Follow-up DSR receipts](../
       choice and exact cache state. The changed matrix shape nevertheless moved
       18–33 of 65,536 logits beyond the existing tolerance in every case.
       The full projection remains in use. [Per-case memory and parity](../results/profiles/prefill_projection_2026-11-23.json)
+    - [x] Recover the widened head's temporary memory without changing its full
+      output. Reusing the FP32 result buffer restored the original BF16 peak
+      allocation at both measured vanilla prompt lengths. At 1,024 tokens the
+      fix saved 384 MiB over the first widened implementation. All 67,108,864
+      output logits had the same byte digest.
   - [x] Repair the 15 floating type diagnostics and validate the affected callers
     with 340 tests. The full-tree scanner is a separate standing-main gate.
   - [x] Re-run the Linux CPU suite after repairing matrix coverage, the working-memory

@@ -1877,6 +1877,61 @@
           "sha256": "2ca001dc34c208889a0d9d8efd3e46cb8bdf90ff01aeee635f108b21826d54e4"
         }
       ]
+    },
+    {
+      "probe": "bio-nov23-head-buffer-static",
+      "observation": "The allocation-preserving serving implementation and its differentiable training-free head path passed whole-project Ruff/ty, all 63 focused tests and UBS with zero warning/critical findings. The four lower-precision witnesses checked exact equality of autograd and inference results plus finite, nonzero selected weight gradients.",
+      "run_id": "0c14e5bb-8b52-4fb3-ade0-7c49cf2cdd38",
+      "exit": 0,
+      "source": "4d22be6733b8d7d7c8125163d9a9fd7e1f871c94|51d592f0a43a20479636ebd9bf767a53649d2bd17df822f335cbbb06b2e7fa83|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "cdd96d3ecc6faa24b327e2327442ebc8961e3af4064cf5bd6d4c16671ab4d521"
+        },
+        {
+          "exit": 0,
+          "sha256": "eb2c05961bf478eeaf320667b18754e4e711b4678ab19f7cdc6fcd6c72244727"
+        },
+        {
+          "exit": 0,
+          "sha256": "ad4f1946cef533631e1d3c7392c7cbb048e7d16478ce0f8151e641434156b1e6"
+        }
+      ]
+    },
+    {
+      "probe": "bio-nov23-serving-mac",
+      "observation": "On native macOS arm64, the serving implementation passed the full 14-case head suite and all ten real Quick Start tests, 24/24 in 70.67s. DSR Ruff --fix completed without changes.",
+      "run_id": "A93A128A-BEC2-4270-9376-BB295A4174EA",
+      "exit": 0,
+      "source": "f9d44cfc23058cfe89b63423c98bd1c1c1277376|9d2da807c70b14a1c92328deed98aa98e1355b2d8213e03d90835f9023c61384|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "24d32f7aa789661c478ee8a25d6b7daa73253a018e087af8450ad3ade9cfdbf0"
+        },
+        {
+          "exit": 0,
+          "sha256": "094da635431663c867153eb62d1bae48a2ed1a3ea7cece2bae9b5605a1bcbee3"
+        }
+      ]
+    },
+    {
+      "probe": "bio-nov23-exact-head-memory",
+      "observation": "Within one DSR invocation, the revised FP32 serving buffer and the original FP32 expression produced identical SHA-256 for every output score at T32 and T1024, covering 2097152 and 67108864 values. T1024 reduced incremental peak from 934437888 to 531784704 bytes (384 MiB), equal to the old low-precision head. T32 saved 11.625 MiB.",
+      "run_id": "8637ef4a-7a40-4204-8304-0673a0be3530",
+      "exit": 0,
+      "source": "4d22be6733b8d7d7c8125163d9a9fd7e1f871c94|51d592f0a43a20479636ebd9bf767a53649d2bd17df822f335cbbb06b2e7fa83|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "d2b605ff8ea88c976cdc174c643f99e837894cd8057218b1da8488012be7d518"
+        },
+        {
+          "exit": 0,
+          "sha256": "61c5cebc41c6483675fa9d239a153d0bb22f6bd586be987327fb8eb926f83519"
+        }
+      ]
     }
   ],
   "reference_feasibility": {
