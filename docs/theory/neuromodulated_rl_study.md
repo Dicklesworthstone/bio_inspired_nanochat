@@ -766,3 +766,11 @@ parameter count. Record it separately from the native NanoChat run.
 - [ ] Report the external result with its own receipts. Use the
   reserved adaptation and transfer panels only on a policy that
   qualifies in the registered four-choice comparison.
+- [ ] If the external reference passes both panels, check a
+  zero-initialized final-projection synaptic residual on the first
+  mixed confirmation group. Require identical starting logits and
+  agreement between the exact detached trace and full autograd for
+  its recorded tokens. Use FP32 and the untruncated softmax in the
+  comparison, with coefficients derived from the recorded on-policy
+  rewards. Keep this numerical transfer check separate from a
+  training trial.
