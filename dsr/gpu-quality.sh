@@ -22,7 +22,7 @@ if getattr(rustbpe, "PRESYN_CPU_ABI", None) != 1:
     raise SystemExit("the installed CPU reference-comparison extension requires ABI 1")
 print({"cards": cards, "torch": torch.__version__, "cuda": torch.version.cuda, "triton": triton.__version__})
 PY
-uv run --no-sync pytest -m gpu -ra --junitxml="$out/gpu-tests.xml"
+uv run --no-sync python -m pytest -m gpu -ra --junitxml="$out/gpu-tests.xml"
 uv run --no-sync python - "$out/gpu-tests.xml" <<'PY'
 import sys
 from xml.etree import ElementTree
@@ -32,7 +32,7 @@ skipped = [case.get("name") for case in cases if case.find("skipped") is not Non
 if not cases or skipped:
     raise SystemExit(f"GPU qualification ran {len(cases) - len(skipped)}/{len(cases)} cases; skipped={skipped}")
 PY
-uv run --no-sync pytest -ra tests/test_presyn_canonical.py tests/test_presyn_golden.py \
+uv run --no-sync python -m pytest -ra tests/test_presyn_canonical.py tests/test_presyn_golden.py \
   tests/test_presyn_rust_dispatch.py tests/test_presyn_rust_parity.py tests/test_rust_kernels.py \
   --junitxml="$out/reference-tests.xml"
 perf_status=0
