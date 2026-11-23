@@ -198,6 +198,8 @@ class PerfRegressionHarness:
 
     def run_benchmark(self, cfg: PerfBenchmarkConfig) -> BenchmarkResult:
         device = _resolve_device(cfg.device)
+        if device.type == "cuda":
+            torch.cuda.reset_peak_memory_stats(device)
         model_sequence_len = cfg.seq_len + (
             cfg.warmup_steps + cfg.measure_steps if cfg.mode == "decode" else 0
         )
@@ -239,6 +241,7 @@ class PerfRegressionHarness:
                 loss.backward()
                 optimizer.step()
 
+            _synchronize_for_timing(device)
             t0 = time.perf_counter()
             for _ in range(cfg.measure_steps):
                 optimizer.zero_grad()
@@ -246,6 +249,7 @@ class PerfRegressionHarness:
                 loss = out[1] if isinstance(out, tuple) else out
                 loss.backward()
                 optimizer.step()
+            _synchronize_for_timing(device)
             elapsed = time.perf_counter() - t0
 
         else:  # decode mode
@@ -293,9 +297,13 @@ class PerfRegressionHarness:
         tok_per_sec = total_tokens / max(1e-6, elapsed)
         latency_ms = (elapsed / cfg.measure_steps) * 1000.0
 
-        # Memory estimate in MB
-        param_bytes = sum(p.numel() * p.element_size() for p in model.parameters())
-        mem_mb = param_bytes / (1024.0 * 1024.0)
+        # CUDA reports the allocator high-water mark. The historical CPU
+        # baseline estimates parameter storage, since CPU has no equivalent counter.
+        memory_bytes = (
+            torch.cuda.max_memory_allocated(device) if device.type == "cuda"
+            else sum(p.numel() * p.element_size() for p in model.parameters())
+        )
+        mem_mb = memory_bytes / (1024.0 * 1024.0)
 
         return BenchmarkResult(
             name=cfg.name,

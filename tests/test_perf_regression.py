@@ -117,6 +117,30 @@ def test_timing_synchronization_targets_cuda_only(monkeypatch):
     assert synchronized == [cuda_device]
 
 
+def test_training_timing_waits_for_completed_optimizer_steps(monkeypatch):
+    events = []
+    step = torch.optim.AdamW.step
+
+    @wraps(step)
+    def observed_step(self, *args, **kwargs):
+        result = step(self, *args, **kwargs)
+        events.append("step")
+        return result
+
+    def clock():
+        events.append("clock")
+        return float(len(events))
+
+    monkeypatch.setattr(torch.optim.AdamW, "step", observed_step)
+    monkeypatch.setattr(perf_regression_module, "_synchronize_for_timing", lambda _: events.append("wait"))
+    monkeypatch.setattr(perf_regression_module, "time", SimpleNamespace(perf_counter=clock))
+    cfg = PerfBenchmarkConfig(name="train", batch_size=1, seq_len=4, vocab_size=32,
+                              n_layer=1, n_head=2, n_embd=16, warmup_steps=1, measure_steps=2)
+    result = PerfRegressionHarness().run_benchmark(cfg)
+    assert events == ["step", "wait", "clock", "step", "step", "wait", "clock"]
+    assert result.tok_per_sec == 2.0
+
+
 def test_committed_baselines_cover_every_standard_scenario():
     baselines = PerfRegressionHarness().load_baselines()
     assert {cfg.name for cfg in STANDARD_BENCHMARK_CONFIGS} <= baselines.keys()
