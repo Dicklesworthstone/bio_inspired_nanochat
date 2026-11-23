@@ -213,6 +213,47 @@ reaching that target on these panels by changing only the switch between
 those two fixed predictions. Richer keys, different memory contents and
 other mixture strengths change the bound.
 
+### A matched control for Nanochat's raw Hebbian write
+
+Bead `4n6i` follows the paired-token experiment back to the project's
+`SynapticLinear._update_hebb_traces`. For a block of `n` observations, arrange
+the inputs and outputs as row matrices `X` and `Y`. Fix the projections
+`Pᵢ, Pₒ`, starting traces `U₀, V₀`, trace decay `d` and step `h = 0.05`.
+The routed 2D branch and the dense branch with STDP off compute
+
+```text
+C = XᵀY / n
+U = d U₀ + h C Pₒ
+V = d V₀ + h Pᵢᵀ C
+```
+
+Shuffle the rows of `Y` once, using the **same permutation in both factors**.
+Let `M = mean(X) mean(Y)ᵀ` and let `Sₓ, Sᵧ` be the two within-block
+covariance matrices with divisor `n`. The raw mean write for `n > 1` is
+
+```text
+E[UV] = (d U₀ + h M Pₒ)(d V₀ + h Pᵢᵀ M)
+        + h² Sₓ Pᵢ Pₒᵀ Sᵧ / (n − 1).
+```
+
+To see the correction, center the rows and write `C = M + Z`. For the same
+shuffled row, the expected product of two centered output coordinates is the
+corresponding entry of `Sᵧ`. At distinct rows it is `−Sᵧ/(n−1)`, by sampling
+without replacement. The centered input rows sum to zero, so summing equal
+and distinct row terms gives
+`E[Zᵢⱼ Zₖₗ] = Sₓ[i,k] Sᵧ[j,l] / (n−1)`. Expanding the product and contracting
+the middle projection yields the expression above. A one-row block has only
+the identity permutation and zero correction. The formula conditions on the
+incoming traces. A nonlinear normalization applied after the product, a
+sequence-dependent STDP update or subsequent training requires its own control.
+
+The prospective check compares with the production layer over every
+permutation of blocks of sizes 1, 2, 4 and 5, in both tensor shapes.
+Use nonzero incoming traces, FP64, rectangular projections, constant-row
+controls and an absolute entrywise tolerance of `1e-10`. Also seek explicit
+counterexamples to dropping the covariance term and to commuting normalization
+with permutation averaging.
+
 ### Reproducing the studies
 
 The prospective protocols are in commits `e633c47` (write selection) and
