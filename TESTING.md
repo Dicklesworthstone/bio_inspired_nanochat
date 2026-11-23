@@ -96,6 +96,13 @@ interpolation, 14 entries in that matrix rounded differently before its Newtonâ€
 iterations. The updated weights differed by up to 0.0003124997. Both instrumented runs reproduced their
 195 final checkpoint tensors exactly.
 
+At the first edge, the scalar Rust sigmoid of the captured drive returned 0.2750027180,
+while the Torch tensor sigmoid returned 0.2750027478. Using Torch to precompute sigmoid
+and softplus for the real Rust scan made that edge match exactly in evaluation and training.
+The resulting model still missed the original tolerance on 889 of 904 logits. Changing
+only the normalization to direct division missed on 885. Both experiments stayed out of
+the production path. [Measured trajectories and DSR receipts](results/cpu_native_trajectory_2026-11-22.json)
+
 To identify the backend in an affected environment, start a fresh process.
 
 ```bash
