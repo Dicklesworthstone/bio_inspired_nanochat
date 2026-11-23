@@ -472,3 +472,22 @@ score coefficient.
   reducing the corrected matrix to the fixed rank-16 basis agrees
   with projecting the full gradient. Use the same valid-token
   denominator for both implementations.
+
+### Registered delayed-update cost check
+
+Compare three ways to compute the same final-matrix update after
+reward arrives. Keep all other weights frozen. Use the archived
+paired FineWeb model with eight fixed 128-token contexts, four
+samples per context, and explicit FP32 on one RTX 4090. Use fixed
+signed coefficients to test update equivalence. This check
+measures score computation with a common input and objective.
+
+- [ ] Compare a retained autograd graph, a fresh autograd replay
+  after reward, and the exact decision-time trace. Use three warmups
+  and 12 timed rounds per method in one invocation, rotating order.
+  Require sampled actions and the final matrix gradient to agree
+  for every timed result.
+- [ ] Measure synchronized end-to-end and post-reward wall time and
+  peak and retained PyTorch tensor allocations. Report the comparison
+  against both autograd methods. This fixture changes one matrix and
+  makes no claim about whole-model training throughput.
