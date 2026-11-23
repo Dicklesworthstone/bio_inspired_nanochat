@@ -379,3 +379,73 @@ JSON path. The gzip archive contains their full `projected` and
 trace without the two per-example holdout arrays, the replay trace
 with those arrays, and an output path. It compares all retained
 values and recomputes the registered statistics.
+
+## Prediction-time score traces
+
+REINFORCE supplies an action-specific eligibility through the score
+`∇ log π(a|s)`. Eligibility propagation also separates a local trace
+from a later learning signal. Here the target is the final dense
+synaptic projection of the existing transformer. The question is how
+much of its score update survives compression when the trace is stored
+at the decision that produced the action. [Williams, 1992](https://doi.org/10.1007/BF00992696) · [Bellec et al., 2020](https://doi.org/10.1038/s41467-020-17236-y)
+
+For a single prediction state, let `x` be the input to the final
+synaptic projection, `B` its postsynaptic linear map and `J` the
+final RMS normalization Jacobian. Let `u_a` be the unembedding row
+for action `a`, multiplied by its logit-softcap derivative. For a
+group with exactly centered coefficients `αᵢ`, the common softmax
+expectation cancels. The group update for the last slow matrix is
+`x ⊗ B Jᵀ (Σᵢ αᵢ u_{aᵢ})`, with feedback vectors written as columns.
+This factorization depends on a shared prediction state and sampler
+normalization. Different prefixes can have different normalizers.
+The hypothesis is that a fixed rank-16 orthogonal projection of the
+feedback retains enough of this signal to support learning after the
+reward arrives.
+
+### Registered work
+
+- [ ] Independently verify exact factorization against the full
+  autograd score with repeated actions, zero rewards, RMS normalization
+  on and off, and saturated and uncapped logits. Verify storage and
+  reward arrival order, and exhibit an unequal-prefix counterexample
+  to canceling the normalizer. Check the abstract cancellation and
+  projection sign identities in Lean.
+- [ ] Reuse the copy-first initialization procedure for eight new
+  seeds, 90521 through 97521 spaced by 1000. Draw four actions for each
+  of 128 questions seeded by `11000000 + model_seed` with sampler seed
+  `12000000 + model_seed`. Use an action-independent random orthogonal
+  rank-16 basis from seed `13000000 + model_seed`. Shuffle only the
+  reward coefficients within each question using seed
+  `14000000 + 128 * model_seed + question_index`. Keep the fixed
+  prediction states, actions and rewards across all directions.
+- [ ] Measure directional derivatives of expected reward over an
+  independent set of 512 questions from seed 108059. Normalize exact,
+  rank-16 and shuffled matrix directions to 0.003 Frobenius norm.
+  Compare with a central finite difference at ±one write, checking
+  a half step as well. Require six or more starting policies above
+  0.10 expected reward, a mixed reward group for every seed, positive
+  exact derivatives in at least seven seeds, a positive mean rank-16
+  derivative at least one quarter of the exact mean, and rank-16
+  aligned beating shuffled in at least six seeds with a one-sided
+  exact sign-flip `p ≤ 0.025`.
+- [ ] If the frozen test qualifies, execute four matched arms on new
+  seeds 100521 through 107521 spaced by 1000. Use the same 128
+  supervised updates and 96 on-policy updates as the previous
+  studies, with 512 new holdout questions from seed 109073. Compare
+  ordinary policy gradient with no extra write, the exact score write,
+  the rank-16 score write, and the rank-16 write with within-question
+  shuffled coefficients. Use the same rank and write norm as the
+  frozen test. The rank-16 arm must beat both off and shuffled by
+  at least one percentage point on the mean of checkpoints 32, 64
+  and 96. Require six positive seeds and a one-sided exact sign-flip
+  `p ≤ 0.025` against each. Record the gap to the exact-score arm
+  and require the mean to be within one percentage point of that arm.
+- [ ] Screen the archived FineWeb synaptic start, both 50-step
+  synaptic scale pilots, and the 150-step vanilla smoke checkpoint.
+  Run 16 fixed questions from the official shuffled training split
+  on each candidate, four samples per question, temperature 1,
+  top-k 50 and a 64-token completion limit. Require four mixed groups,
+  six correct completions and an enabled dense Hebbian checkpoint
+  before using this screen to justify a larger matched GSM8K run.
+  Archive both checkpoint and dataset identities and leave the
+  official test split out of selection.
