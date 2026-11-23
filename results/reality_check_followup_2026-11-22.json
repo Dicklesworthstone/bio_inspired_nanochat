@@ -842,6 +842,108 @@
           "sha256": "c872e035b8ed09db982e17cb953f36973a4d4ce422b3f1086dc4bec970e788dc"
         }
       ]
+    },
+    {
+      "probe": "bio-tokenizer-data",
+      "observation": "Data-only legacy tokenizer with 18/18 direct cases, Ruff and ty passed, scoped UBS 0 critical and 4 warnings.",
+      "run_id": "25c7d471-0936-41bd-a91a-43ea4de55600",
+      "exit": 0,
+      "source": "cf9843a8bb3b60c8a38dbd8e9db3a590e4156c77|a00a4091b70d4ba50fe654cb9802f6adf876d9d97c4c76c6217f2ba8f58d1bc0|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "44b47c9bdbe030bfd20aa6109a8b8e3cc73f53d9d2081a89fa13ecdf9a702e29"
+        },
+        {
+          "exit": 0,
+          "sha256": "b07c932b4e25bd5928e3d229170d44e385334f95cf3dd8e5c3de0e15b316e125"
+        },
+        {
+          "exit": 0,
+          "sha256": "ac9621e8a17feb7118fa6c83f6df11b9f42d5ae47ffe172d276c2b0835590cbe"
+        }
+      ]
+    },
+    {
+      "probe": "bio-saved-val-module",
+      "observation": "Native tiny training followed by validation-only checkpoint reload and scoring of 128 positions passed, Ruff and ty passed, scoped UBS 0 critical and 4 warnings.",
+      "run_id": "b5f5a1dd-f5e7-459f-9015-6a7439cad038",
+      "exit": 0,
+      "source": "cf9843a8bb3b60c8a38dbd8e9db3a590e4156c77|d7e9e16061dfe6111043c6308022f17412913fa777665f31de11b60ca3567749|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "e2e2b30c3c4a5c7cf6cf4854e9c983523903453d25596ebf3c065c845a2c3230"
+        },
+        {
+          "exit": 0,
+          "sha256": "bd0a7b224e8ea1c1b876c70586491827469a1a08294f81a8d561602a47cd708e"
+        }
+      ]
+    },
+    {
+      "probe": "hw-standing",
+      "observation": "Canonical hardware job passed 9/9 CUDA and 61/61 reference/Rust tests, both same-invocation fused speedups and 4/4 absolute drift gates. Failed relative vs vanilla for train (2.29x vs 2.00x) and cached decode (2.34x vs 1.50x).",
+      "run_id": "5c2cfe57-a6d4-4a3c-b6b9-28131cb5b79e",
+      "exit": 1,
+      "source": "cf9843a8bb3b60c8a38dbd8e9db3a590e4156c77|ea0cf85a1c6bfe9d35a723ae6a1262c40f1623e5dad9715d2775e3a6ea8eca13|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 1,
+          "sha256": "46c381d735898d27e1577e51812f783a33df2bf84f812f42044ce9bc58773fd3"
+        }
+      ]
+    },
+    {
+      "probe": "bio-continual-frozen",
+      "observation": "Before the Hebbian repair 25/36 synthetic continual fits completed, with zero complete bio-sleep pairs. Gauge and EWC produced identical final weights in all six seeds. Replay preserved A but missed B acquisition. DSR passed the frozen reporter checks and retained failed scientific arms.",
+      "run_id": "b6235bb6-2edb-4d8c-96ce-ab3b5c803b21",
+      "exit": 0,
+      "source": "c5a4e19e3be28062115ea6907daa6dfe29f6639c|c4b4c8bd057414c52376b3ed344cd328365555c6000e760899f68bc22c8379e9|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "6508215453fc716703b506a89c268a90361cd243b53b231ab28eb5462b5944f7"
+        },
+        {
+          "exit": 0,
+          "sha256": "e4c6b7fe050df3ab1442f3c3b23f8cc09027da7616bc3b6d8f96a5d5a1b9fd9e"
+        },
+        {
+          "exit": 0,
+          "sha256": "d3344a742229ae6513bb255568034b2fa15c06aa897855fae5a31cdada4ddb49"
+        }
+      ]
+    },
+    {
+      "probe": "bio-hebb-drift",
+      "observation": "Pre-rebinding the live formal manifest correctly rejected the changed synaptic.py. The reported new hash was 6357b25cf14a145df46d5b77db4c9fe6028983b8b86d66cae45871ec8c27f10b.",
+      "run_id": "71642668-b712-4516-8075-28446d8b6ca4",
+      "exit": 1,
+      "source": "8f49e72833aef7eb2322f3265fd09a636c8642c0|c28b03763b9ce854e90aee7dc86ffd14403c2cde157f2f569baa242076e089c0|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 1,
+          "sha256": "afdfd2af31f3dcb34c73ba3728702d3f5515d3005ecfd4e66b3f1de42d59e438"
+        }
+      ]
+    },
+    {
+      "probe": "bio-two-limits",
+      "observation": "Four release-current curves, six live molecular fast-weight reconstruction points and an intentionally out-of-domain Bernoulli test: 7/7 tests passed. Ruff, ty and UBS passed (0 critical, 0 warnings).",
+      "run_id": "b0cea86b-d7a6-4cb6-b745-81e8a6bdb012",
+      "exit": 0,
+      "source": "8f49e72833aef7eb2322f3265fd09a636c8642c0|589c5d3e0c263e00dc930a0509feaf0bd6ad5811925fe15a8c8047597cacc693|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "d752ab68623c3c30b663c9399e92fc46309d12b537007a5314a3671644e21f1d"
+        },
+        {
+          "exit": 0,
+          "sha256": "308cb2f74596f59b7a56a651c2c8dece631ba352dd089b5e977e430e383ac01b"
+        }
+      ]
     }
   ],
   "reference_feasibility": {
@@ -1101,5 +1203,405 @@
         }
       ]
     }
+  },
+  "standing_gpu": {
+    "run_id": "5c2cfe57-a6d4-4a3c-b6b9-28131cb5b79e",
+    "artifacts_sha256": {
+      "gpu-tests.xml": "a75e0f67712158a22b57e042702ed4d9e6265889b0efedc7ace959efb0b5e401",
+      "presyn-timings.json": "84f2b224e1e17c30779163ca342b0825c444d26ec147f47197256bb29bd22007",
+      "reference-tests.xml": "0005d77afacb59bc066237bac3ccccd831eee02978440dcac88e3130abd76bc8",
+      "throughput-observations.json": "e5fae3b9df2f5708151991a87cf435b3de0d58685a25e733ae0dcbf4166db475",
+      "throughput.json": "34c073c7605647e0764a2bf8dea0e933fe8518b65accd9b7e06b8915143bfd76"
+    },
+    "tests": {
+      "gpu-tests": 9,
+      "reference-tests": 61
+    },
+    "presyn_benchmark": {
+      "arguments": {
+        "batch": 4,
+        "decode_tokens": 64,
+        "dtype": "float32",
+        "heads": 8,
+        "prefix_len": 512,
+        "t_key": 2048,
+        "topk": 32,
+        "trials": 30,
+        "warmup": 10
+      },
+      "dtype": "float32",
+      "gates": {
+        "acceptance_eligible": true,
+        "hardware_passed": true,
+        "model_passed": true,
+        "model_speedup_min": 1.05,
+        "release_passed": true,
+        "release_speedup_min": 1.2
+      },
+      "git": {
+        "benchmark_source_tracked": true,
+        "branch": "qualification",
+        "commit": "cf9843a8bb3b60c8a38dbd8e9db3a590e4156c77",
+        "tracked_worktree_clean": true
+      },
+      "gpu": {
+        "capability": [
+          8,
+          9
+        ],
+        "multiprocessor_count": 128,
+        "name": "NVIDIA GeForce RTX 4090",
+        "rtx_4090_eligible": true,
+        "total_memory_bytes": 25252724736
+      },
+      "model_decode": {
+        "correctness": {
+          "kv_max_abs": 1.3709068298339844e-06,
+          "logits_max_abs": 1.3113021850585938e-06,
+          "passed": true,
+          "state_max_abs": 3.814697265625e-06
+        },
+        "eager": {
+          "median_ms": 1597.6832275390625,
+          "minimum_ms": 624.6205444335938,
+          "p95_ms": 2691.990478515625,
+          "trials": 30
+        },
+        "eager_ms_per_token": 24.96380043029785,
+        "fused": {
+          "median_ms": 798.2100524902344,
+          "minimum_ms": 378.44683837890625,
+          "p95_ms": 1385.83447265625,
+          "trials": 30
+        },
+        "fused_ms_per_token": 12.472032070159912,
+        "shape": {
+          "batch": 4,
+          "decode_tokens": 64,
+          "prefix_len": 512
+        },
+        "speedup": 2.001582443812444
+      },
+      "release": {
+        "cold_start_ms": 6181.702710222453,
+        "correctness": {
+          "logits_max_abs": 4.76837158203125e-07,
+          "passed": true,
+          "release_max_abs": 1.430511474609375e-06,
+          "state_max_abs": 1.1920928955078125e-06
+        },
+        "eager": {
+          "median_ms": 3.450368046760559,
+          "minimum_ms": 2.871295928955078,
+          "p95_ms": 8.103936195373535,
+          "trials": 30
+        },
+        "fused": {
+          "median_ms": 0.4756480008363724,
+          "minimum_ms": 0.32767999172210693,
+          "p95_ms": 2.3930881023406982,
+          "trials": 30
+        },
+        "scope": "canonical release plus top-k log-bias injection",
+        "shape": {
+          "batch": 4,
+          "heads": 8,
+          "t_key": 2048,
+          "topk": 32
+        },
+        "speedup": 7.254036684046781
+      },
+      "schema_version": 1,
+      "seed": 1337,
+      "software": {
+        "cuda_runtime": "12.8",
+        "python": "3.14.2",
+        "torch": "2.9.1+cu128",
+        "triton": "3.5.1"
+      }
+    },
+    "vanilla_vs_synaptic": {
+      "results": [
+        {
+          "name": "standard_transformer_train",
+          "mode": "train",
+          "synaptic": false,
+          "tok_per_sec": 829.9706321858716,
+          "latency_ms": 77.11116215214133,
+          "peak_memory_mb": 18.45947265625,
+          "steps_measured": 5,
+          "batch_size": 2,
+          "seq_len": 32,
+          "device": "cuda",
+          "benchmark_config": {
+            "name": "standard_transformer_train",
+            "mode": "train",
+            "synaptic": false,
+            "batch_size": 2,
+            "seq_len": 32,
+            "vocab_size": 128,
+            "n_layer": 2,
+            "n_head": 4,
+            "n_embd": 64,
+            "warmup_steps": 2,
+            "measure_steps": 5,
+            "device": "cuda"
+          },
+          "timestamp": 1795403116.3253043
+        },
+        {
+          "name": "synaptic_transformer_train",
+          "mode": "train",
+          "synaptic": true,
+          "tok_per_sec": 361.7348539005283,
+          "latency_ms": 176.9251685589552,
+          "peak_memory_mb": 19.53564453125,
+          "steps_measured": 5,
+          "batch_size": 2,
+          "seq_len": 32,
+          "device": "cuda",
+          "benchmark_config": {
+            "name": "synaptic_transformer_train",
+            "mode": "train",
+            "synaptic": true,
+            "batch_size": 2,
+            "seq_len": 32,
+            "vocab_size": 128,
+            "n_layer": 2,
+            "n_head": 4,
+            "n_embd": 64,
+            "warmup_steps": 2,
+            "measure_steps": 5,
+            "device": "cuda"
+          },
+          "timestamp": 1795403134.5203238
+        },
+        {
+          "name": "standard_transformer_cached_tq1_decode",
+          "mode": "decode",
+          "synaptic": false,
+          "tok_per_sec": 144.6402138883702,
+          "latency_ms": 6.913706590421498,
+          "peak_memory_mb": 17.0517578125,
+          "steps_measured": 200,
+          "batch_size": 1,
+          "seq_len": 16,
+          "device": "cuda",
+          "benchmark_config": {
+            "name": "standard_transformer_cached_tq1_decode",
+            "mode": "decode",
+            "synaptic": false,
+            "batch_size": 1,
+            "seq_len": 16,
+            "vocab_size": 128,
+            "n_layer": 2,
+            "n_head": 4,
+            "n_embd": 64,
+            "warmup_steps": 20,
+            "measure_steps": 200,
+            "device": "cuda"
+          },
+          "timestamp": 1795403136.3102236
+        },
+        {
+          "name": "synaptic_transformer_cached_tq1_decode",
+          "mode": "decode",
+          "synaptic": true,
+          "tok_per_sec": 61.87889886719944,
+          "latency_ms": 16.16059785010293,
+          "peak_memory_mb": 17.39111328125,
+          "steps_measured": 200,
+          "batch_size": 1,
+          "seq_len": 16,
+          "device": "cuda",
+          "benchmark_config": {
+            "name": "synaptic_transformer_cached_tq1_decode",
+            "mode": "decode",
+            "synaptic": true,
+            "batch_size": 1,
+            "seq_len": 16,
+            "vocab_size": 128,
+            "n_layer": 2,
+            "n_head": 4,
+            "n_embd": 64,
+            "warmup_steps": 20,
+            "measure_steps": 200,
+            "device": "cuda"
+          },
+          "timestamp": 1795403140.9464734
+        }
+      ],
+      "relative_budget": [
+        {
+          "mode": "train",
+          "standard_name": "standard_transformer_train",
+          "synaptic_name": "synaptic_transformer_train",
+          "standard_tok_per_sec": 829.9706321858716,
+          "synaptic_tok_per_sec": 361.7348539005283,
+          "slowdown_ratio": 2.2944170937260613,
+          "max_ratio": 2.0,
+          "passed": false,
+          "detail": "synaptic_transformer_train (361.7 tok/s) vs standard_transformer_train (830.0 tok/s): slowdown=2.29x (budget <= 2.00x)"
+        },
+        {
+          "mode": "decode",
+          "standard_name": "standard_transformer_cached_tq1_decode",
+          "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+          "standard_tok_per_sec": 144.6402138883702,
+          "synaptic_tok_per_sec": 61.87889886719944,
+          "slowdown_ratio": 2.3374723296028237,
+          "max_ratio": 1.5,
+          "passed": false,
+          "detail": "synaptic_transformer_cached_tq1_decode (61.9 tok/s) vs standard_transformer_cached_tq1_decode (144.6 tok/s): slowdown=2.34x (budget <= 1.50x)"
+        }
+      ]
+    },
+    "absolute_regressions": [
+      {
+        "name": "standard_transformer_train",
+        "mode": "train",
+        "observed_tok_per_sec": 829.9706321858716,
+        "baseline_tok_per_sec": 671.2546136029121,
+        "speed_ratio": 1.236446819681525,
+        "passed": true,
+        "detail": "Observed 830.0 tok/s vs baseline 671.3 tok/s (123.64%, tol=45.0%)"
+      },
+      {
+        "name": "synaptic_transformer_train",
+        "mode": "train",
+        "observed_tok_per_sec": 361.7348539005283,
+        "baseline_tok_per_sec": 397.1881561067134,
+        "speed_ratio": 0.9107392764333593,
+        "passed": true,
+        "detail": "Observed 361.7 tok/s vs baseline 397.2 tok/s (91.07%, tol=45.0%)"
+      },
+      {
+        "name": "standard_transformer_cached_tq1_decode",
+        "mode": "decode",
+        "observed_tok_per_sec": 144.6402138883702,
+        "baseline_tok_per_sec": 135.61001337742505,
+        "speed_ratio": 1.0665894817502348,
+        "passed": true,
+        "detail": "Observed 144.6 tok/s vs baseline 135.6 tok/s (106.66%, tol=45.0%)"
+      },
+      {
+        "name": "synaptic_transformer_cached_tq1_decode",
+        "mode": "decode",
+        "observed_tok_per_sec": 61.87889886719944,
+        "baseline_tok_per_sec": 36.032802971279736,
+        "speed_ratio": 1.7172935149264008,
+        "passed": true,
+        "detail": "Observed 61.9 tok/s vs baseline 36.0 tok/s (171.73%, tol=45.0%)"
+      }
+    ]
+  },
+  "reduced_model_limits": {
+    "run_id": "b0cea86b-d7a6-4cb6-b745-81e8a6bdb012",
+    "junit_sha256": "3fdf175d6350425e422d5ec6bae46bd2e10a6c278078e550a0ad7c9d25e0b281",
+    "release": [
+      {
+        "forward": 2,
+        "reverse": 1,
+        "duration": 8,
+        "draws": 65536,
+        "variance_ratio": 0.37310280829214604,
+        "se": 0.0021590761874825406,
+        "exact": 0.375,
+        "entropy_floor": 0.36067376022224085
+      },
+      {
+        "forward": 4,
+        "reverse": 1,
+        "duration": 8,
+        "draws": 65536,
+        "variance_ratio": 0.06950309854473602,
+        "se": 0.00032718190796397783,
+        "exact": 0.06944444444444445,
+        "entropy_floor": 0.06011229337037348
+      },
+      {
+        "forward": 8,
+        "reverse": 1,
+        "duration": 8,
+        "draws": 65536,
+        "variance_ratio": 0.023030766737519713,
+        "se": 0.00010548982353091525,
+        "exact": 0.02295918367346939,
+        "entropy_floor": 0.01717494096296385
+      },
+      {
+        "forward": 16,
+        "reverse": 1,
+        "duration": 8,
+        "draws": 65536,
+        "variance_ratio": 0.009528674823947827,
+        "se": 5.360927762507315e-05,
+        "exact": 0.009444444444444445,
+        "entropy_floor": 0.0060112293370373476
+      }
+    ],
+    "memory": [
+      {
+        "lag": 1,
+        "decay": 0.75,
+        "draws": 65536,
+        "measured_mse": 0.18998240964952506,
+        "se": 0.0010597679161886094,
+        "exact_mmse": 0.18772563176895307,
+        "noise_only_floor": 0.13793103448275862,
+        "measured_gain": 0.7476323176723053
+      },
+      {
+        "lag": 3,
+        "decay": 0.75,
+        "draws": 65536,
+        "measured_mse": 0.5827084158176463,
+        "se": 0.003240854375660864,
+        "exact_mmse": 0.5784860189189814,
+        "noise_only_floor": 0.4872119523930109,
+        "measured_gain": 0.4190707526468739
+      },
+      {
+        "lag": 6,
+        "decay": 0.75,
+        "draws": 65536,
+        "measured_mse": 0.8991103871985693,
+        "se": 0.004975075533788662,
+        "exact_mmse": 0.9008275613169248,
+        "noise_only_floor": 0.8627983112637407,
+        "measured_gain": 0.17978532819188944
+      },
+      {
+        "lag": 1,
+        "decay": 0.9,
+        "draws": 65536,
+        "measured_mse": 0.13992063959893383,
+        "se": 0.0007810595151474306,
+        "exact_mmse": 0.13829787234042554,
+        "noise_only_floor": 0.09999999999999999,
+        "measured_gain": 0.8976322945062131
+      },
+      {
+        "lag": 3,
+        "decay": 0.9,
+        "draws": 65536,
+        "measured_mse": 0.3791680936328988,
+        "se": 0.0021079700111000304,
+        "exact_mmse": 0.37626784846614103,
+        "noise_only_floor": 0.2946004061641381,
+        "measured_gain": 0.7253597698997298
+      },
+      {
+        "lag": 6,
+        "decay": 0.9,
+        "draws": 65536,
+        "measured_mse": 0.6318561459995646,
+        "se": 0.0035003634496101103,
+        "exact_mmse": 0.6348203073006947,
+        "noise_only_floor": 0.5461749704672377,
+        "measured_gain": 0.5317550875068858
+      }
+    ],
+    "negative_control": "Per-tick independent Bernoulli probabilities p=0.9 and q=0.1 violate the continuous-time floor under paired-binomial affinity."
   }
 }

@@ -13,7 +13,7 @@ downstream implementation (`0642.3.2.1`, the TUR certificate + Crooks monitor) a
 1. **Vesicle release is a driven Markov jump process** with an explicit **entropy production** `Σ`,
    and its fluctuation theorems hold (`⟨e^{−Σ}⟩ = 1`, `P(Σ)/P(−Σ) = e^Σ`) (§1, subtask `0642.3.1.1`).
 2. **The Thermodynamic Uncertainty Relation** `Var(J)/⟨J⟩² ≥ 2/⟨Σ⟩` — *precision costs entropy* — a
-   provable lower bound on the relative uncertainty of any release current `J` (§2, `0642.3.1.2`).
+   provable lower bound on the relative uncertainty of the independent Poisson release current (§2, `0642.3.1.2`).
 3. **Crooks / Jarzynski ⟹ a release-trajectory consistency check**: the empirical
    entropy-production histogram must obey an analytic detailed-balance relation. This constrains the
    stochastic release process; it is not, by itself, a guarantee that token probabilities are
@@ -37,7 +37,7 @@ probability), so the **released count** is `K ~ Binomial(N, p)` — the live sto
 Released vesicles are recovered/recycled at rate `rec_rate` (the reverse jump; the
 `vesicle_depletion_refill` conservation law `Δ(RRP+RES+Σdelay) = −released·(1−rec_rate)`).
 
-Two competing jumps define a **two-state-per-vesicle Markov jump process** `Docked ⇌ Released`:
+The reference sampler represents forward and reverse events with two counting processes.
 
 | jump | rate (per unit time) | bio | code |
 |---|---|---|---|
@@ -45,10 +45,12 @@ Two competing jumps define a **two-state-per-vesicle Markov jump process** `Dock
 | `R → D` (recovery) | `b` | ATP-driven endocytosis/recycling | `rec_rate · N` |
 
 The **release current** `J = N₊ − N₋` (releases minus recoveries) is the observable of interest. In
-the Poisson (rare-release-per-step) limit, `N₊ ~ Poisson(a·t)` and `N₋ ~ Poisson(b·t)` are
-independent, so `J` is a **Skellam** random variable. The metabolic drive sustains `a > b`, which is
-exactly what breaks detailed balance: with `a = b` the cycle is at equilibrium (`Σ = 0`); with `a > b`
-the synapse dissipates. `ACh`/temperature (`hy8`) sets the thermal scale `kT`.
+the reference experiment, `N₊ ~ Poisson(a·t)` and `N₋ ~ Poisson(b·t)` are
+independent, so `J` is a **Skellam** random variable. A closed two-state vesicle that strictly
+alternates release and recovery has net current equal to its endpoint occupancy change. The
+independent-count model permits sustained drift and requires a different physical interpretation,
+such as exchange with reservoirs. Its assigned entropy is dimensionless. Establishing a
+conversion to dissipated joules on the model or hardware requires an independent measurement.
 
 ---
 
@@ -91,8 +93,8 @@ simulation only in the near-equilibrium regime where both signs of `J` are sampl
 
 ## 2. The Thermodynamic Uncertainty Relation  → subtask `0642.3.1.2`
 
-For any current `J` of a nonequilibrium steady state, the TUR bounds its **relative uncertainty** by
-the entropy produced:
+For the independent Poisson current with positive, unequal rates, relative uncertainty is bounded
+below by the inverse mean assigned entropy.
 
 ```
         Var(J) / ⟨J⟩²  ≥  2 / ⟨Σ⟩.                                     (TUR)
@@ -102,7 +104,7 @@ the entropy produced:
 `2/⟨Σ⟩ = 2/((a−b)·t·ln(a/b))`, so the TUR reduces to the elementary inequality
 
 ```
-        (a + b)·ln(a/b)  ≥  2·(a − b)          for all a, b > 0,
+        (a + b)·|ln(a/b)|  ≥  2·|a − b|          for all a, b > 0,
 ```
 
 which holds with equality only as `a → b` (linear response): **the TUR is saturated near

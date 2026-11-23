@@ -61,17 +61,33 @@ revision. [Current protocol](ablation_matrix.md) · [Follow-up DSR receipts](../
     establish the first device-specific baseline and replay independently.
     All four absolute comparisons passed. The 1.37× training slowdown met
     the 2.00× budget. Cached decode missed its 1.50× budget at 2.43×.
-  - [ ] Exercise the full GPU-marked test lane, primitive and model timing
-    thresholds. Retain each failing gate and its measurements.
+  - [x] The trusted GPU lane ran 9/9 GPU tests and 61/61 reference and Rust tests.
+    Against eager synaptic inference the fused primitive was 7.25× faster and the
+    cached model 2.00× faster. Against vanilla the synaptic model took 2.29× as
+    long to train and 2.34× as long to decode a token. Both relative gates failed.
+  - [x] Repair the 15 floating type diagnostics and validate the affected callers
+    with 340 tests. The full-tree scanner is a separate standing-main gate.
+  - [x] Close the shared-cache tokenizer deserialization gap. All 18 cases passed,
+    including three archived formats. An independently trained checkpoint also
+    passed held-out-only scoring through the public CLI.
 - [x] Test glial homeostasis × direct metabolic routing with active experts.
   On four paired seeds the mean held-out loss interaction was −0.00010 nats/token
   (95% bootstrap −0.00028 to +0.00005). The original dense experiment's reset
   discarded pending Hebbian updates on all four seeds. Broader interactions
   remain open. [Predictions, routing and paired estimates](../results/mechanism_interaction_moe_2026-11-22.json)
-- [ ] Replace the old continual-learning benchmark's fixed accuracy bonuses
-  with disjoint held-out predictions and signed forgetting, then compare real
-  replay and EWC at matched example budgets (`cel.4`). Measuring holonomy
-  requires a model-derived connection and transport (`0642.7.2.2`).
+- [x] Replace the continual-learning evaluator's accuracy bonuses and reused training
+  probes with disjoint held-out predictions, signed forgetting and matched budgets.
+  Preserve the first 36 runs and replay the first failing wake trace. All six sleep
+  runs and five of six no-sleep bio runs failed. Gauge and independently implemented
+  EWC gave identical final weights on six seeds. Replay retained A but missed the
+  acquisition threshold on B. [First study](../results/continual_controls_2026-11-22.json)
+  · [First nonfinite trace](../results/continual_first_nonfinite_2026-11-22.json)
+  - [ ] Fix the Hebbian overflow, rerun the frozen cohort, compare unchanged-arm
+    hashes, and publish the paired result. Check the affected runtime proof binding.
+  - [ ] A test of holonomy still needs model-derived transport (`0642.7.2.2`).
+- [x] Prove two limits under explicit reduced-model assumptions. Four Poisson
+  current observations and six live leaky-memory observations respected their
+  bounds. A discrete control violated the Poisson bound. [Proofs and curves](theory/impossibility_limits.md)
 
 ## November 22, 2026 — decision at `16ce9fe1979c`
 
