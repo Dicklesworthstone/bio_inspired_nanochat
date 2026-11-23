@@ -951,3 +951,37 @@ official GSM8K test split were unused.
 To replay the gates, extract `replay_ladder.py` and `ladder_audit.py`
 from the report's `sources` mapping. Run the replay script through DSR
 with the report, gzip archive and a fresh working directory as arguments.
+
+## Delayed credit under Qwen's actual sampling support
+
+The full-softmax result uses more candidates than the policy allowed
+when sampling. Repeat the fixed L1 confirmation batch that contains the
+previously selected first mixed group. Use the identical seed, eight
+questions, four BF16 samples per question and 512-token limit.
+
+- [ ] Require all 32 continuations in that batch, up to their archived
+  stop tokens, to match the previous record. Capture the final MLP
+  input and the residual before final RMSNorm at generation time.
+- [ ] Read Transformers' returned post-processor scores for each
+  scored action. Match every finite candidate and score against the
+  original logit at or above its fiftieth-largest value. Account for
+  all boundary ties and require restricted softmax probabilities to
+  agree with the sampler's full masked probabilities within `10⁻⁶`.
+  Verify that intentionally dropping a tied candidate fails.
+- [ ] On all 1,262 scored tokens in the predetermined group, compare
+  the detached analytical update with FP64 autograd. At the zero
+  write, the differentiable score takes the captured sampler logits
+  as its values. Its tangent adds the change produced by a final
+  projection perturbation through real-valued RMSNorm and the
+  unembedding. Hold the sampled actions and support fixed. Require
+  relative Frobenius error at most `10⁻⁴` and maximum absolute error
+  at most `6 × 10⁻⁷`.
+- [ ] Archive all support IDs, logits, cutoffs and selected actions.
+  Independently verify the archive against the prior episode and
+  publish the DSR receipts. The preregistered sampler script SHA-256
+  is `07763d5c3e215448f8f012d9d02131de8082fbc81c9800e9cb623f5c192a0122`.
+- [ ] Proceed to a separate, held-out compression comparison only
+  after sampler and gradient agreement. Register projection ranks,
+  calibration and evaluation groups, retained bytes and stopping
+  thresholds before fitting a basis. Preserve the reserved
+  adaptation and transfer panels for the subsequent learning study.
