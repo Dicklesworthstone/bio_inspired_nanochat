@@ -52,8 +52,13 @@ revision. [Current protocol](ablation_matrix.md) · [Follow-up DSR receipts](../
   - [x] Fit the empirical count comparator on the full 498,073,600 training pairs,
     split equally between the two real rank streams. On the same 5,053,422 held-out
     target bytes, unigram scored 2.32499 and smoothed bigram scored 1.81318 bits
-    per byte. The neural pilot saw only 6,291,456 pairs. A matched-exposure neural
-    comparison remains open. [Count numerators and stream hashes](../results/vanilla_ngram_2026-11-22.json)
+    per byte. [Full-exposure count numerators and stream hashes](../results/vanilla_ngram_2026-11-22.json)
+  - [x] Fit the same estimators on exactly the neural pilot's 6,291,456 training
+    pairs. Both rank-prefix hashes matched the original independent records. On the
+    identical held-out bytes, unigram scored 2.33213, bigram 2.23415 and the neural
+    pilot 3.19468 bits per byte. At this early checkpoint the bigram used 0.96053
+    fewer bits per byte. The 498M-token neural comparison remains open.
+    [Matched scores and identities](../results/vanilla_matched_counts_2026-11-23.json)
 - [x] Test repetition on the same step-50 checkpoint with presynaptic release enabled
   and disabled. Greedy repeated trigrams fell from 256/352 to 242/352 slots across 16
   documents. Seeded sampling produced zero in both arms. Next-token loss differed by
@@ -100,6 +105,14 @@ revision. [Current protocol](ablation_matrix.md) · [Follow-up DSR receipts](../
     unsupported Flex case. [Hardware rows](../results/profiles/attention_rtx4090_2026-11-23.json)
   - [x] Repair the 15 floating type diagnostics and validate the affected callers
     with 340 tests. The full-tree scanner is a separate standing-main gate.
+  - [x] Re-run the Linux CPU suite after repairing matrix coverage, the working-memory
+    margin, package classification, the structural-NAS artifact and the nested pytest
+    interpreter. In the 2,075-test run, 2,063 passed, 11 skipped and one failed.
+    The live training comparison measured 5,305 versus 10,864 tokens/s, or 2.05×
+    against a 2.00× limit. The 40 targeted regressions passed with their original
+    deadlines on the second worker. After the CUDA atlas correction, 2,065 of 2,077
+    passed and 11 skipped. The same training budget failed at 4,643 versus
+    9,669 tokens/s (2.08×). [DSR run and source fingerprints](../results/reality_check_followup_2026-11-22.json)
   - [x] Close the shared-cache tokenizer deserialization gap. All 18 cases passed,
     including three archived formats. An independently trained checkpoint also
     passed held-out-only scoring through the public CLI.
@@ -121,7 +134,10 @@ revision. [Current protocol](ablation_matrix.md) · [Follow-up DSR receipts](../
     Sleep, no-sleep and vanilla each retained 0/768 A targets after C. Both paired
     sleep-effect intervals were [0, 0]. All 24 unaffected final parameter hashes
     matched. [Complete rerun](../results/continual_controls_bounded_hebbian_2026-11-22.json)
-  - [ ] Check all mapped runtime tests and compiled theorem identities after the repair.
+  - [x] Check all mapped runtime tests and compiled theorem identities after the repair.
+    The final binding passed 288 tests, with three environment skips, and the compiled
+    axiom audit verified all 19 mapped declarations. The statements cover the reduced
+    models described in the proof manifest.
   - [ ] A test of holonomy still needs model-derived transport (`0642.7.2.2`).
 - [x] Prove two limits under explicit reduced-model assumptions. Four Poisson
   current observations and six live leaky-memory observations respected their

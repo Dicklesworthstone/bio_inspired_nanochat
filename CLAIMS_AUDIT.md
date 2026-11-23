@@ -7,10 +7,11 @@ composition, diffusion solved 52/576 examples versus 87/576 for plain attention,
 and 32 wrong outputs had zero cycle residual. In the repaired continual-learning
 experiment all three arms retained 0/768 first-task targets after the third task.
 A two-GPU vanilla pilot reached 3.19468 validation bits per byte on 6.29M training
-tokens. Its measured cost exceeded the registered allowance for a full neural
+tokens. A smoothed bigram fitted on those same training pairs scored 2.23415 on
+the identical held-out targets. The pilot's measured cost exceeded the registered allowance for a full neural
 reference. [Command composition](results/sheaf_compositional_2026-11-22.json) ·
 [Continual learning](results/continual_controls_bounded_hebbian_2026-11-22.json) ·
-[Pilot and admission](results/vanilla_pilot_2026-11-22.json)
+[Pilot and admission](results/vanilla_pilot_2026-11-22.json) · [Matched count baseline](results/vanilla_matched_counts_2026-11-23.json)
 
 **Status legend**
 - **SOLID** — implemented and on the live model path.

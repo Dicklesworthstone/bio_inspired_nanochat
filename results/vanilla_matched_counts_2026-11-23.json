@@ -1,0 +1,67 @@
+{
+  "bigram_bpb": 2.2341525806154867,
+  "bigram_cross_entropy_bits": 11290115.802239073,
+  "dataset_identity": {
+    "tokenizer": {
+      "token_bytes.pt": "ae39c27aae519d14071efc95f9a558ba0b7ede47e7d83ad4f198422b44c5f70e",
+      "tokenizer.json": "45d958866dbe10af5f33f4cd360d7fe30cfabdd7dbe5cd3aaec27f25e579e46b"
+    },
+    "tokenizer_sha256": "32b10bf4f351cb5daa2f95ba9f05b94140a541d7ec14ca123101e42f5b1484f5",
+    "train": [
+      "6a3450ea745ee6b6830c09819c0f2c72682eba443022de595bcb50ceb3092c22",
+      "30a72934cb85581f88c701fc4b6f389a7215d2af99ee1d3f65e1a99d16c06adf",
+      "3f90859d36510630529c32990b0269a867bb6967652ddca9e8c8ee69879360e6",
+      "0116631ad3c33debdf292328b24133a9ef5ef35517a844dfa8f08bf62166cf52",
+      "f214985a443999a3599b11a01b6e241ee1b9da51f948e72334a5442c2a374d37",
+      "ddb7eeb20b64e290d68238e9e9ea3651fc123d0ec4fbce3884e7a4f8f9a0a10f",
+      "f88599776e4351a6338242b437683d7162e4a176763a0314b4c2696abef68ca8",
+      "2aca70545cc310fb09b94de74ef23af3f4f442f5b68dfd5cb68578096f0c91d1",
+      "f6b5a838516437ea71cd37b2a958dffc55e3d9d9080b924e298db3e4610b9b7a",
+      "b1525632c48c7a79c2b64f6cc96122b65c99fd517ddabed2d1b81c95c77ca6c6",
+      "fcae67248a149eed43d9f7eb2bfb4f4cbd055d1a8d5178e82f77296f5edc009c",
+      "0ffb8dd421996e93f3d93865e297626a9a61f92d8ed43b9fc054db96b2d27859",
+      "76cf72ba9797c764faea4c09ed1dcb0765e58cf313668f8858be5e5c80c91653",
+      "32f2dc25338ae2551e0501898024d8bd4833838db16602cc8c7f4879561c01a3",
+      "b2c4e47d3531c3e53fa874d4146b3c239970b273fc9ae073a3bc39d8bf30d787",
+      "e6363e580ba98ac578b5593724e816b92f2ba1271d4e21c4e2eb129bdea96eb4",
+      "0e4f1387d5531359c152c50e219b0b5b208ef1793294e43729caecd953a3ab6a",
+      "5bcf3d7b7a7cc27dbd59270f98f79333e677c3533b4e9d824bb8b93eba3af1c4",
+      "000591b1ffab98c4fa842ac34dc6b33a35b5909fcb6b859d3bc6276ffc2c6e4e",
+      "118a8f184715e5868f14c21f51bbfbb81e1226744c1f8fc024e9a2b067bdcb0c",
+      "c171e32e3a6ee237c48e40689f7b6f388d592d6cb7f3f35493c55bdc6a59bf3c",
+      "9966175a568232931ba0d1c6ac9bb0de14d9fd4c23b4eec2e32bdab7a08dbad9",
+      "7753faf71e87ed35550972b371415fc96c5004c7ca0de374a07d5a6ca1df8df9",
+      "f3690651515b10dadde475b0438e3fdf51e926042860726a3bd4ecd40212fe6e",
+      "1fca4c70e055fa3a0c8132d445db4904ef14089730365f6ebffe84201819a276",
+      "3797ac036715170891fa9c9def490cafae71986cfbdb18c2547b6d5c721e4d46",
+      "20b4c7a1842e816041637c4d79e4506222567c5aea6e5f568fa1c3a1c8639386"
+    ],
+    "train_sha256": "b7b4d3725126f3a7892b34b1dd98d769732f1eb33701b563922a07605cf49435",
+    "val": [
+      "4bbe362eb1ab719547b26608ca3f81d8b39262f31285dfb28c3d15a4c01db017"
+    ],
+    "val_sha256": "ed9409a4d91be0e5a9f786556b9afad38f0d213394d20929bde55418f3e0ae0c"
+  },
+  "formula": "Fit on all optimizer input/target pairs from the actual two rank-local train loaders, including train BOS outcomes. Unigram probabilities are (N_y+0.5)/(N+0.5*V). Bigram probabilities are (N_xy+p_unigram(y))/(N_x+1). Evaluate only positive-byte targets and divide total bits by the original token byte lengths. Validation pairs select sparse sufficient-statistic storage only; all training windows and denominators are counted.",
+  "per_rank_pair_stream_sha256": [
+    "b124cf841a3bd0531c3e22a30d9593d14c1c40d0170594e10cf951f4cd68e9d8",
+    "27e61ba719f5b0b3bdb9d0ca7685193ef42bf57b17000cfe09ce28e76fe1d20a"
+  ],
+  "positive_byte_targets": 1047510,
+  "rank_count_archive_sha256": [
+    "116e53ff0b0eb3e1cc09a9753e73f8393189e31f5c694facb8bb591335bc36de",
+    "02421ad88045bd476751c37c674d55dfdbb6414ef56222cd5a7deae5eab890ab"
+  ],
+  "scope": "Matched 24-update, two-rank prefix of the trained vanilla pilot. Scores are observational on one fixed held-out stream.",
+  "source_sha256": {
+    "fit.py": "39b220076a63c2be9c85b49c86b1a8338e8951a3016b4170a55210f603f4ca19",
+    "score.py": "01d26497ba8be83f6ada194cfc7933e65950e144e53b37c28b6fd464cf35508a"
+  },
+  "target_bytes": 5053422,
+  "train_input_pairs": 6291456,
+  "unigram_bpb": 2.332128697880974,
+  "unigram_cross_entropy_bits": 11785230.468703067,
+  "validation_ordered_pairs_sha256": "6592136f9311d0a9a261456919c49e3bab77adee5a1e1be55ee65f34b74d2980",
+  "validation_targets": 1048576,
+  "vanilla_pilot_bpb": 3.194682293670819
+}

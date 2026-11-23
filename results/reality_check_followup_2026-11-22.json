@@ -1605,6 +1605,125 @@
           "sha256": "0b02818228343726c454d7591f04cf260864ab44692f99ecfd221f795da63284"
         }
       ]
+    },
+    {
+      "probe": "bio-nov23-csd-full",
+      "observation": "Full independent CPU qualification on 129fb69 with the working-memory, global pytest, current NAS report, package boundary and matrix repairs: 2063 passed, 11 skipped and 1 failed in 678.87s. Live training measured 5305.4 vs 10863.7 tok/s (2.05x vs the 2.00x limit).",
+      "run_id": "feddea7b-b7f8-4ce8-9383-f165bee0b3da",
+      "exit": 1,
+      "source": "129fb695b43fde9a369721517f5ff7bbb9456321|e7e1801212d7ab674a169d49b3e8d23feb53c3a93f1684da0c4cf9266c631119|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 1,
+          "sha256": "ed9b8cc185616f67c735f962b77bddad1cc5b56290101839d654a12791578848"
+        }
+      ]
+    },
+    {
+      "probe": "bio-nov23-matched-prefix",
+      "observation": "First 6291456 true optimizer pairs, same two independently hashed rank prefixes; same 1048576 validation positions and 5053422 target bytes. Vanilla 3.1946823 BPB, unigram 2.3321287, smoothed bigram 2.2341526. Grouped and per-observation bit numerators agreed.",
+      "run_id": "e1017a1c-d724-4d84-bbc3-c7d014c2e240",
+      "exit": 0,
+      "source": "129fb695b43fde9a369721517f5ff7bbb9456321|abe1e848cea20b0c03df26c2f9f51bec4c99f735b97e2ef098215b4d81d1690c|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "edd68d853250c5beb136bd961b1e2227a2d0c36897bc3e9c6ae8ec77a4e90ec4"
+        }
+      ]
+    },
+    {
+      "probe": "bio-nov23-full-nvme",
+      "observation": "Intentionally stopped a duplicate shared-GPU-worker CPU suite after its checkout was superseded and the independent 2075-test Linux run completed. Exit 143 is not a completed suite.",
+      "run_id": "377ee653-943f-4e37-8765-1fdb331dd70e",
+      "exit": 1,
+      "source": "129fb695b43fde9a369721517f5ff7bbb9456321|5f92f41e30e329fa8d48b41c291adb46d99be57299457832aaefdb9be7354d60|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 143,
+          "sha256": "feb23a64c25a0bec45a87f2ba7de6b6dc5c334f13b7ece04c89edd8b05297d33"
+        }
+      ]
+    },
+    {
+      "probe": "bio-nov23-perfile-ubs",
+      "observation": "All six changed Python files, including the corrected atlas, completed the signed per-file scanner with zero critical findings.",
+      "run_id": "b30de213-4f8e-45ad-8562-d8fbf031eb54",
+      "exit": 0,
+      "source": "b76b0506761314dbf672804086e1d63c3cc0328a|4caade26c6fc9564b12d3a4d217e73248d48197e35bdd0ef203e7f66aba80e7f|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "2d96cf45e890770ab0febd55130f3fd8816c1f6cdc5cd17e1d0f1599591c8f7e"
+        },
+        {
+          "exit": 0,
+          "sha256": "36fd0311a837d81f24abb5a61e723e65efe8d9ff9de49f46490321e13e271f9f"
+        },
+        {
+          "exit": 0,
+          "sha256": "082d1b7c73c6ef8a0594068605886c81790947771100c7ad585f449a9647dada"
+        },
+        {
+          "exit": 0,
+          "sha256": "c5daea6490e0ab385c93509986fb4a4114695a9a0395f06dd7bd21c082859035"
+        },
+        {
+          "exit": 0,
+          "sha256": "9977ea0df031b58903e23eb1013f2d0bda78e1aeefd245c6406f033c5a9f031b"
+        },
+        {
+          "exit": 0,
+          "sha256": "0bd33ce2ed539f2f6ecdfddbd5bb1da167f257ca36b96844059933459a1f8574"
+        }
+      ]
+    },
+    {
+      "probe": "bio-nov23-complete-ubs",
+      "observation": "Scoped UBS ran all six changed Python files together. The scanner completed with zero critical findings, 15 warnings and 50 informational findings.",
+      "run_id": "a8ff37a1-6675-4360-9024-87edfc682648",
+      "exit": 0,
+      "source": "b76b0506761314dbf672804086e1d63c3cc0328a|4caade26c6fc9564b12d3a4d217e73248d48197e35bdd0ef203e7f66aba80e7f|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "55a31a1f3e774a04fed678965fa818da431240b82c0d536f5c8ee67de5fb2aad"
+        }
+      ]
+    },
+    {
+      "probe": "bio-nov23-csd-final",
+      "observation": "The post-atlas Linux CPU suite exercised 2077 cases: 2065 passed, 11 skipped and one failed in 711.14s. The only failure measured 4643.1 synaptic vs 9669.2 vanilla train tokens/s, a 2.08x slowdown at the unchanged 2.00x limit.",
+      "run_id": "8b5804e6-6c9b-4118-a2a1-be8814aeb78e",
+      "exit": 1,
+      "source": "b76b0506761314dbf672804086e1d63c3cc0328a|00a466ab0c081e3afcb977cac65050e34dbc82f223080191275141ba8f3e72d5|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 1,
+          "sha256": "c50450627c3175dc8a572f053fbe10b7b9aeb4c6ccfaa12b6463ff51fbb9cf2f"
+        }
+      ]
+    },
+    {
+      "probe": "bio-nov23-checkpoint-precision",
+      "observation": "First checkpoint-precision harness incorrectly promoted nonpersistent rotary buffers. Vanilla rejected the invalid dtype, the bio arm completed and the static check ran. No format decision uses these measurements.",
+      "run_id": "e2070d38-0925-4b15-90d1-523408c8cf25",
+      "exit": 1,
+      "source": "f1a73788aee3903122af9ccdbfa3d647780ef690|e822aafea3d05014013fcc620d27b0420dcbb4df9feef16b0909fcbff13f4892|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 1,
+          "sha256": "409283e96edf834ea156d41c59aa5a7d2bc0d348f05bf95d781d629e3b868c7b"
+        },
+        {
+          "exit": 0,
+          "sha256": "7896597ee164626d05892824ce582a542bbee5a23098aa03af388ad28bf91aec"
+        },
+        {
+          "exit": 0,
+          "sha256": "527fab80ab0a19e279a600fb7bad38b32f5fdaad9b133b6676fad895847a1535"
+        }
+      ]
     }
   ],
   "reference_feasibility": {
