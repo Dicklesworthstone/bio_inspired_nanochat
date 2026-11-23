@@ -16,6 +16,46 @@ model launched 124 kernels per token versus 75 for vanilla. Kernels occupied 40.
 of its 5,259 ms profiled window versus 27.9 ms of 2,380 ms for vanilla. Host scheduling
 and tracing overhead enter both wall times. Use the ordinary throughput gate for speed claims.
 
+### Check checkpoint arithmetic on an RTX 4090
+
+Give a DSR GPU worker this payload with `NANOCHAT_BASE_DIR` pointing to the
+original tokenizer and train/validation shards. Set `CHECKPOINT` to the directory
+containing the model and metadata, and `STEP` to its saved optimizer step.
+
+```bash
+CUDA_VISIBLE_DEVICES=0 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 RAYON_NUM_THREADS=1 \
+  uv run --no-sync python -m scripts.e2e.precision_sweep \
+  --checkpoint-dir "$CHECKPOINT" --step "$STEP" --out "runs/dsr/$DSR_RUN_ID/precision-$STEP.json"
+```
+
+The reference uses FP32 matrix weights and PyTorch's `highest` matmul setting.
+TF32 allows `high` precision matmuls. BF16 and FP16 use CUDA autocast with
+`high`. Every arm retains the model's rotary tables and stored biological
+state. Each of four held-out blocks supplies 32 prompt tokens and eight cached
+next-token predictions. Each corresponding training block supplies 32 distinct
+training positions for one cold, unscaled AdamW update from the same checkpoint.
+The report includes the individual times, paired intervals, input hashes and
+excluded warmup. Speed ratios above one favor the indicated mode.
+
+| Checkpoint | Mode | Greedy matches with FP32 | Mean absolute block loss difference (nats) | Median training speed ratio | Median cached speed ratio |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Vanilla, step 24 | TF32 | 32/32 | 0.000027 | 1.196 | 1.251 |
+| Vanilla, step 24 | BF16 | 0/32 | 0.004556 | 1.150 | 0.898 |
+| Vanilla, step 24 | FP16 | 0/32 | 0.000373 | 0.943 | 0.954 |
+| Synaptic, step 2 | TF32 | 32/32 | 0.001819 | 1.065 | 0.661 |
+| Synaptic, step 2 | BF16 | 0/32 | 0.009144 | 1.175 | 0.362 |
+| Synaptic, step 2 | FP16 | 2/32 | 0.003224 | 1.213 | 0.385 |
+
+All updates and cached logits were finite. None of the six comparisons met the
+joint rule for accuracy and a reproducible speed gain in either workload. Use
+the FP32 reference for reproducing these greedy decisions. The existing CUDA
+trainer uses BF16 autocast. The public chat CLI accepts `--dtype float32` or
+`--dtype bfloat16` and its shared CUDA initializer enables `high` matmul
+precision. Use the sweep for an explicit `highest` reference. These four
+single-device blocks do not qualify a change to training or serving defaults.
+[Vanilla measurements](results/profiles/precision_vanilla_2026-11-23.json) ·
+[Synaptic measurements](results/profiles/precision_bio_2026-11-23.json)
+
 > The test discipline for `bio_inspired_nanochat`. Established by bead **eqyk.1**
 > (*Unit-test framework, conventions, fixtures & coverage gate*) — the foundation
 > every later "unit tests + e2e + detailed logging" bead builds on.

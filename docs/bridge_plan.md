@@ -103,6 +103,11 @@ revision. [Current protocol](ablation_matrix.md) · [Follow-up DSR receipts](../
   - [x] Measure eager attention at sequence lengths 128 and 1024. Four cases
     completed at each length. The combined five-case CLI now exits nonzero on the
     unsupported Flex case. [Hardware rows](../results/profiles/attention_rtx4090_2026-11-23.json)
+  - [x] Measure FP32, TF32, BF16 and FP16 on both real pilot checkpoints.
+    All 40 single-update trials, including warmups, had finite gradients and weights.
+    TF32 preserved all 64 measured greedy choices. BF16 preserved zero and FP16
+    preserved two. No alternative met the registered speed and accuracy criteria.
+    [Settings, timings and raw records](../TESTING.md#check-checkpoint-arithmetic-on-an-rtx-4090)
   - [x] Repair the 15 floating type diagnostics and validate the affected callers
     with 340 tests. The full-tree scanner is a separate standing-main gate.
   - [x] Re-run the Linux CPU suite after repairing matrix coverage, the working-memory
