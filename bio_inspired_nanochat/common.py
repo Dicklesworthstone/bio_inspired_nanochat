@@ -258,6 +258,10 @@ def softcap_logits(logits: "torch.Tensor", cap: float, *, for_loss: bool) -> "to
     # vocabulary scores to the same maximum before generation selects a token.
     if not for_loss and logits.dtype in (torch.bfloat16, torch.float16):
         logits = logits.float()
+        if not logits.requires_grad:
+            # This conversion owns new storage. Reuse it during serving so a
+            # long prompt needs just one vocabulary-sized FP32 result buffer.
+            return logits.div_(cap).tanh_().mul_(cap)
     return cap * torch.tanh(logits / cap)
 
 

@@ -53,6 +53,11 @@ def test_inference_softcap_resolves_a_low_precision_tie_and_preserves_loss(build
         assert logits.dtype == torch.float32 and logits.argmax().item() == 1
         torch.testing.assert_close(logits, SOFTCAP * torch.tanh(raw.float() / SOFTCAP), rtol=0, atol=0)
         torch.testing.assert_close(model.hidden_to_logits(hidden, for_loss=True), historical, rtol=0, atol=0)
+        with torch.inference_mode():
+            served = model.hidden_to_logits(hidden)
+        torch.testing.assert_close(served, logits, rtol=0, atol=0)
+        logits[..., 1].sum().backward()
+        assert torch.isfinite(model.lm_head.weight.grad).all() and model.lm_head.weight.grad[1, 0] > 0
 
 
 def _blow_up_head(model, factor: float = 1000.0):
