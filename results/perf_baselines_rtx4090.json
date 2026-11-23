@@ -1,0 +1,90 @@
+{
+  "standard_transformer_train": {
+    "name": "standard_transformer_train",
+    "mode": "train",
+    "tok_per_sec": 671.2546136029121,
+    "peak_memory_mb": 18.45947265625,
+    "device": "cuda",
+    "benchmark_config": {
+      "name": "standard_transformer_train",
+      "mode": "train",
+      "synaptic": false,
+      "batch_size": 2,
+      "seq_len": 32,
+      "vocab_size": 128,
+      "n_layer": 2,
+      "n_head": 4,
+      "n_embd": 64,
+      "warmup_steps": 2,
+      "measure_steps": 5,
+      "device": "cuda"
+    },
+    "tolerance": 0.45
+  },
+  "synaptic_transformer_train": {
+    "name": "synaptic_transformer_train",
+    "mode": "train",
+    "tok_per_sec": 397.1881561067134,
+    "peak_memory_mb": 19.53564453125,
+    "device": "cuda",
+    "benchmark_config": {
+      "name": "synaptic_transformer_train",
+      "mode": "train",
+      "synaptic": true,
+      "batch_size": 2,
+      "seq_len": 32,
+      "vocab_size": 128,
+      "n_layer": 2,
+      "n_head": 4,
+      "n_embd": 64,
+      "warmup_steps": 2,
+      "measure_steps": 5,
+      "device": "cuda"
+    },
+    "tolerance": 0.45
+  },
+  "standard_transformer_cached_tq1_decode": {
+    "name": "standard_transformer_cached_tq1_decode",
+    "mode": "decode",
+    "tok_per_sec": 135.61001337742505,
+    "peak_memory_mb": 17.0517578125,
+    "device": "cuda",
+    "benchmark_config": {
+      "name": "standard_transformer_cached_tq1_decode",
+      "mode": "decode",
+      "synaptic": false,
+      "batch_size": 1,
+      "seq_len": 16,
+      "vocab_size": 128,
+      "n_layer": 2,
+      "n_head": 4,
+      "n_embd": 64,
+      "warmup_steps": 20,
+      "measure_steps": 200,
+      "device": "cuda"
+    },
+    "tolerance": 0.45
+  },
+  "synaptic_transformer_cached_tq1_decode": {
+    "name": "synaptic_transformer_cached_tq1_decode",
+    "mode": "decode",
+    "tok_per_sec": 36.032802971279736,
+    "peak_memory_mb": 17.39111328125,
+    "device": "cuda",
+    "benchmark_config": {
+      "name": "synaptic_transformer_cached_tq1_decode",
+      "mode": "decode",
+      "synaptic": true,
+      "batch_size": 1,
+      "seq_len": 16,
+      "vocab_size": 128,
+      "n_layer": 2,
+      "n_head": 4,
+      "n_embd": 64,
+      "warmup_steps": 20,
+      "measure_steps": 200,
+      "device": "cuda"
+    },
+    "tolerance": 0.45
+  }
+}

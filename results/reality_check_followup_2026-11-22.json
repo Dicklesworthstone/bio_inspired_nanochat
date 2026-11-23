@@ -693,6 +693,32 @@
           "sha256": "fc613aabca1988f92eaafb4df399c16b9a15d09a7b4f0839ee5c0a1056804ba3"
         }
       ]
+    },
+    {
+      "probe": "main-recovery",
+      "observation": "Standing DSR main rebuilt the wheel and passed Rust fmt/clippy/tests. The corrected optimizer call eliminated the old type error. The separate floating uvx type checker failed on warnings in multiple modules, while the project-locked CPU tool was independently checked.",
+      "run_id": "8a86bc41-e47a-46b5-8652-0690dec130cc",
+      "exit": 1,
+      "source": "a22697fb07cfb65fcec9e855cb29439fd662af56|93f9a22c1356d2b7fb67b448e4bf7dadbadbe1e3b1d880fe8cd9353b243f26f3|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 1,
+          "sha256": "1756016f77e075f1e0c47c12370302775bdcc1c060aa50b55495b861b0501d48"
+        }
+      ]
+    },
+    {
+      "probe": "bio-d1-fused-loss",
+      "observation": "Saved-config standalone loss evaluation reloaded the exploratory step-2 checkpoint, scored 1,048,576 FineWeb positions per split, then generated samples in 376.58 s on one RTX 4090. Train BPB 5.1592, held-out BPB 5.3024.",
+      "run_id": "a918f7c9-c52e-43b7-bcb7-e6e94cb5842f",
+      "exit": 0,
+      "source": "8e8ad5c7b3eb0d874c29177fc7ef704e688cd0f8|80e2718dc4b044c6a756663d235e8f281a40158f58e61755d5ab5a69d2b3f6b2|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "65777a96c4b2e2115098b2351b73c3f4a50e07559aae10454223c7b3b70bfdc5"
+        }
+      ]
     }
   ],
   "reference_feasibility": {
@@ -733,5 +759,224 @@
     "logged_completed_updates": 0,
     "completed_checkpoints": 0,
     "heldout_bpb": null
+  },
+  "fused_feasibility": {
+    "registered": false,
+    "reference_run_id": "368e91c00ba79768db88e67e1a566261b43fc31af2ee7eb2596c0a30bddcf955",
+    "treatment_change": "native_presyn from false to true",
+    "checkpoint_tag": "probe_d1_fused_2x4090_s1337_20261122",
+    "seed": 1337,
+    "training_world_size": 2,
+    "updates": 2,
+    "training_positions": 131072,
+    "step_wall_ms": [
+      47836.16,
+      15429.29
+    ],
+    "step_tokens_per_second": [
+      1370,
+      4247
+    ],
+    "training_process_exit": 0,
+    "training_wall_seconds": 410.19907448487356,
+    "training_physical_gpu_hours": 0.22788837471381865,
+    "training_cap_gpu_hours": 0.4,
+    "training_receipt_status": "invalidated-moving-source",
+    "tracked_change": "One appended run in results/registry.jsonl",
+    "checkpoint_bpb_distributed": 5.334985910293338,
+    "checkpoint_model_sha256": "ea5b94b4c27c91cb69d7bec2cc77776a6d322eb833175698051cdec5a68f3058",
+    "checkpoint_meta_sha256": "b238ea074f97b94710097e9e2a994e8cdbf3827b4c3d6bea3a14e455cca1f0f4",
+    "checkpoint_commit_sha256": "67eb09b63c42c32c4eeda66f27e0479562ed617a22efdb7ff68fafd3f249f5fb",
+    "standalone_command": "uv run --no-sync python -m scripts.base_loss --model_tag=probe_d1_fused_2x4090_s1337_20261122 --model_step=2 --device_type=cuda --device_batch_size=8 --split_tokens=1048576",
+    "standalone_scorer_world_size": 1,
+    "standalone_positions_per_split": 1048576,
+    "standalone_train_bpb": 5.1592,
+    "standalone_val_bpb": 5.3024,
+    "standalone_wall_seconds_including_samples": 376.58,
+    "standalone_report_sha256": "970ea2ae3f281c6d24750954dce7fbbefd3792726e41c360cc049c93303c9d2f",
+    "interpretation": "The configured kernel produced a complete checkpoint and the saved model scored held-out text. These two updates supply no registered D1 quality comparison or sustained throughput estimate."
+  },
+  "gpu_regression_replay": {
+    "source_revision": "b057a50fe3538fbadb13bf49e591a9bc2a7aaf87",
+    "device": "NVIDIA GeForce RTX 4090",
+    "driver": "595.99.02",
+    "measured_devices": 1,
+    "threads": 1,
+    "baseline": "results/perf_baselines_rtx4090.json",
+    "baseline_sha256": "734ab1d70b2760318b50bfb61b619b59e48feb32b29368cf6d83be6b63984b61",
+    "absolute_checks": [
+      {
+        "name": "standard_transformer_train",
+        "mode": "train",
+        "observed_tok_per_sec": 475.95065227106016,
+        "baseline_tok_per_sec": 671.2546136029121,
+        "speed_ratio": 0.7090463776724429,
+        "passed": true,
+        "detail": "Observed 476.0 tok/s vs baseline 671.3 tok/s (70.90%, tol=45.0%)"
+      },
+      {
+        "name": "synaptic_transformer_train",
+        "mode": "train",
+        "observed_tok_per_sec": 346.6612606603948,
+        "baseline_tok_per_sec": 397.1881561067134,
+        "speed_ratio": 0.8727885142860519,
+        "passed": true,
+        "detail": "Observed 346.7 tok/s vs baseline 397.2 tok/s (87.28%, tol=45.0%)"
+      },
+      {
+        "name": "standard_transformer_cached_tq1_decode",
+        "mode": "decode",
+        "observed_tok_per_sec": 123.77372388345643,
+        "baseline_tok_per_sec": 135.61001337742505,
+        "speed_ratio": 0.9127181747189548,
+        "passed": true,
+        "detail": "Observed 123.8 tok/s vs baseline 135.6 tok/s (91.27%, tol=45.0%)"
+      },
+      {
+        "name": "synaptic_transformer_cached_tq1_decode",
+        "mode": "decode",
+        "observed_tok_per_sec": 50.93134689110465,
+        "baseline_tok_per_sec": 36.032802971279736,
+        "speed_ratio": 1.4134716894408668,
+        "passed": true,
+        "detail": "Observed 50.9 tok/s vs baseline 36.0 tok/s (141.35%, tol=45.0%)"
+      }
+    ],
+    "observations": {
+      "results": [
+        {
+          "name": "standard_transformer_train",
+          "mode": "train",
+          "synaptic": false,
+          "tok_per_sec": 475.95065227106016,
+          "latency_ms": 134.46772200986743,
+          "peak_memory_mb": 18.45947265625,
+          "steps_measured": 5,
+          "batch_size": 2,
+          "seq_len": 32,
+          "device": "cuda",
+          "benchmark_config": {
+            "name": "standard_transformer_train",
+            "mode": "train",
+            "synaptic": false,
+            "batch_size": 2,
+            "seq_len": 32,
+            "vocab_size": 128,
+            "n_layer": 2,
+            "n_head": 4,
+            "n_embd": 64,
+            "warmup_steps": 2,
+            "measure_steps": 5,
+            "device": "cuda"
+          },
+          "timestamp": 1795401631.5710893
+        },
+        {
+          "name": "synaptic_transformer_train",
+          "mode": "train",
+          "synaptic": true,
+          "tok_per_sec": 346.6612606603948,
+          "latency_ms": 184.61826359853148,
+          "peak_memory_mb": 19.53564453125,
+          "steps_measured": 5,
+          "batch_size": 2,
+          "seq_len": 32,
+          "device": "cuda",
+          "benchmark_config": {
+            "name": "synaptic_transformer_train",
+            "mode": "train",
+            "synaptic": true,
+            "batch_size": 2,
+            "seq_len": 32,
+            "vocab_size": 128,
+            "n_layer": 2,
+            "n_head": 4,
+            "n_embd": 64,
+            "warmup_steps": 2,
+            "measure_steps": 5,
+            "device": "cuda"
+          },
+          "timestamp": 1795401651.5463972
+        },
+        {
+          "name": "standard_transformer_cached_tq1_decode",
+          "mode": "decode",
+          "synaptic": false,
+          "tok_per_sec": 123.77372388345643,
+          "latency_ms": 8.079259220976382,
+          "peak_memory_mb": 17.0517578125,
+          "steps_measured": 200,
+          "batch_size": 1,
+          "seq_len": 16,
+          "device": "cuda",
+          "benchmark_config": {
+            "name": "standard_transformer_cached_tq1_decode",
+            "mode": "decode",
+            "synaptic": false,
+            "batch_size": 1,
+            "seq_len": 16,
+            "vocab_size": 128,
+            "n_layer": 2,
+            "n_head": 4,
+            "n_embd": 64,
+            "warmup_steps": 20,
+            "measure_steps": 200,
+            "device": "cuda"
+          },
+          "timestamp": 1795401653.4245746
+        },
+        {
+          "name": "synaptic_transformer_cached_tq1_decode",
+          "mode": "decode",
+          "synaptic": true,
+          "tok_per_sec": 50.93134689110465,
+          "latency_ms": 19.634273606352508,
+          "peak_memory_mb": 17.39111328125,
+          "steps_measured": 200,
+          "batch_size": 1,
+          "seq_len": 16,
+          "device": "cuda",
+          "benchmark_config": {
+            "name": "synaptic_transformer_cached_tq1_decode",
+            "mode": "decode",
+            "synaptic": true,
+            "batch_size": 1,
+            "seq_len": 16,
+            "vocab_size": 128,
+            "n_layer": 2,
+            "n_head": 4,
+            "n_embd": 64,
+            "warmup_steps": 20,
+            "measure_steps": 200,
+            "device": "cuda"
+          },
+          "timestamp": 1795401658.5456328
+        }
+      ],
+      "relative_budget": [
+        {
+          "mode": "train",
+          "standard_name": "standard_transformer_train",
+          "synaptic_name": "synaptic_transformer_train",
+          "standard_tok_per_sec": 475.95065227106016,
+          "synaptic_tok_per_sec": 346.6612606603948,
+          "slowdown_ratio": 1.3729559840761185,
+          "max_ratio": 2.0,
+          "passed": true,
+          "detail": "synaptic_transformer_train (346.7 tok/s) vs standard_transformer_train (476.0 tok/s): slowdown=1.37x (budget <= 2.00x)"
+        },
+        {
+          "mode": "decode",
+          "standard_name": "standard_transformer_cached_tq1_decode",
+          "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+          "standard_tok_per_sec": 123.77372388345643,
+          "synaptic_tok_per_sec": 50.93134689110465,
+          "slowdown_ratio": 2.4302071600049118,
+          "max_ratio": 1.5,
+          "passed": false,
+          "detail": "synaptic_transformer_cached_tq1_decode (50.9 tok/s) vs standard_transformer_cached_tq1_decode (123.8 tok/s): slowdown=2.43x (budget <= 1.50x)"
+        }
+      ]
+    }
   }
 }

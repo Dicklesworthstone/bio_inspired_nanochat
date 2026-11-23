@@ -30,6 +30,12 @@ revision. [Current protocol](ablation_matrix.md) · [Follow-up DSR receipts](../
   pilot reached the 91,165,440-parameter model and timed out with zero logged
   updates, checkpoints or scores. The two GPUs incurred 0.40673 GPU-hours
   against a 0.40 allocation, including shutdown. Keep the 36-cell screen on hold.
+  - [x] Change only the presynaptic backend in an exploratory run at the same
+    geometry. Two updates processed 131,072 positions and produced a complete
+    checkpoint in 0.228 GPU-hours. The trainer appended a tracked registry row,
+    which invalidated its DSR source-stability receipt. Independent reload
+    measured 5.3024 validation BPB on 1,048,576 positions using one GPU. The
+    registered-preset scorer rejected the changed backend as designed.
 - [ ] Train and score the matched vanilla reference, run admissible registered
   contrasts, then record the statistical decision or the measured budget shortfall.
   Select a final checkpoint only after the absolute quality and reproduction gates.
@@ -48,9 +54,13 @@ revision. [Current protocol](ablation_matrix.md) · [Follow-up DSR receipts](../
   - [x] Exercise both standing Linux CPU lanes. The main lane caught an optimizer
     argument type error. Nightly passed the validation battery and uncertainty
     suite, then measured a 1.67× cached-decode slowdown against the 1.50× limit.
-  - [ ] Check the corrected optimizer call with the locked CPU environment.
-  - [ ] Time completed CUDA work in the four standard hardware scenarios,
+  - [x] Check the corrected optimizer call with the locked CPU environment.
+    The locked type checker passed. The standing workflow's additional
+    floating type checker reported 15 diagnostics on newer rules.
+  - [x] Time completed CUDA work in the four standard hardware scenarios,
     establish the first device-specific baseline and replay independently.
+    All four absolute comparisons passed. The 1.37× training slowdown met
+    the 2.00× budget. Cached decode missed its 1.50× budget at 2.43×.
   - [ ] Exercise the full GPU-marked test lane, primitive and model timing
     thresholds. Retain each failing gate and its measurements.
 - [x] Test glial homeostasis × direct metabolic routing with active experts.

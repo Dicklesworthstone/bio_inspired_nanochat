@@ -25,6 +25,15 @@ DSR_REPOS_FILE="$PWD/dsr/quality.yaml" dsr --json quality --tool bio_inspired_na
 
 Beads `u0fl.1` and `u0fl.2` track terminal main, nightly and hardware qualification.
 
+On November 22 the two-layer CUDA regression scenarios ran on one RTX 4090
+with driver 595.99.02 and one host thread. The first acquisition and an
+independent replay used synchronized CUDA timing and peak allocated memory.
+All four absolute comparisons stayed within the 45% tolerance. On replay,
+vanilla and synaptic training reached 476 and 347 tokens/s (1.37× slowdown).
+Cached single-token decoding reached 124 and 51 tokens/s (2.43× slowdown),
+exceeding the 1.50× budget. The relative gate stays red. These measurements
+cover the small single-card test geometry. [First CUDA baseline](results/perf_baselines_rtx4090.json)
+
 The `bio_inspired_nanochat-gpu` profile uses a private checkout and a dedicated uv
 environment on the two-4090 worker. It builds the source-matched native extension,
 runs the CUDA-marked and canonical/Rust parity cases, then executes the registered
