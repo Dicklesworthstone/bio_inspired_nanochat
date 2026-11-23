@@ -862,7 +862,7 @@ depth and number size while retaining exact answer checks. Its aim is to
 find a setting where reward responds to the question and has meaningful
 variation within a group of samples.
 
-- [ ] Seal screening, confirmation, adaptation and transfer panels before
+- [x] Seal screening, confirmation, adaptation and transfer panels before
   model inference. Each has eight pairs per difficulty, split evenly
   between an ordered register and a packing calculation. Each pair
   changes only the starting quantity. Verify both correct answers with
@@ -872,13 +872,13 @@ variation within a group of samples.
   100–999, 1,000–9,999 and 10,000–99,999 respectively. Each round
   adds, multiplies, subtracts and floor-divides in that order. Discard
   pairs whose answers coincide with each other or a printed quantity.
-- [ ] Use the same public checkpoint and published chain-of-thought
+- [x] Use the same public checkpoint and published chain-of-thought
   system prompt, with four independent BF16 samples per question,
   temperature 1, top-k 50, top-p 1 and a 512-token limit. Parse the
   last complete integer-valued boxed answer. Use batches of eight
   questions and derive batch seeds from panel and level, independent
   of which level is selected.
-- [ ] On screening, a level qualifies with at least 48 parseable and
+- [x] On screening, a level qualifies with at least 48 parseable and
   16 correct out of 64 samples, at least 4 mixed groups out of 16,
   correct answers for at least 4 distinct integers, a strict lead over
   the best constant integer, and at least eight more correct than the
@@ -886,7 +886,7 @@ variation within a group of samples.
   Select the lowest qualifying level using screening alone. Run
   confirmation at that level. If no level qualifies on screening,
   keep confirmation and all adaptation panels sealed.
-- [ ] Freeze the selected level and checkpoint for later adaptation
+- [x] Freeze the selected level and checkpoint for later adaptation
   only if confirmation passes the same gates. If confirmation has
   any genuine mixed group, use its first one for a numerical check
   on the exact delayed score of Qwen's final MLP projection. Compare
@@ -894,7 +894,60 @@ variation within a group of samples.
   full-softmax objective and recorded completions. Record the sampled
   actions, reward denominators and gradient error. Keep the official
   GSM8K test split and the adaptation and transfer panels untouched.
-- [ ] Independently reconstruct panel math, rewards, the screen
+- [x] Independently reconstruct panel math, rewards, the screen
   selection, confirmation and the archived evidence. Preserve all
   levels and publish the gate result, including any lack of reward
   variation or a format/length failure.
+
+### Ladder results
+
+An independent integer evaluator verified all 192 questions and the
+exchanged-label construction before inference. Each evaluated stratum has
+16 questions and 64 responses.
+
+| Level | Parseable | Correct | Mixed groups | Distinct correct targets | Best constant | Exchanged labels | Hit limit | Paired exact p |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Screen L1 | 64 | 53 | 6 | 15 | 8 | 0 | 0 | 1/256 |
+| Screen L2 | 47 | 23 | 7 | 10 | 4 | 0 | 18 | 1/128 |
+| Screen L3 | 1 | 0 | 0 | 0 | 4 | 0 | 63 | 1 |
+| Confirmation L1 | 64 | 53 | 4 | 15 | 4 | 0 | 0 | 1/256 |
+
+L1 was the only level to clear screening. L2 missed the parseability
+cutoff by one response. The 512-token limit was binding at L3, so its
+observed accuracy combines the effects of difficulty and response length.
+
+L1 also cleared the independent confirmation gate, with exactly the four
+mixed groups required. Qwen answered all 32 register samples correctly
+on each L1 panel. It answered 21 of 32 packing samples correctly on
+each, and packing supplied all ten mixed groups. An exploratory check
+found that six of the 22 packing errors equal the answer obtained by
+counting one extra copy. This pattern points to a possible wording
+effect. The frozen setting retains both formulations and the original
+sampling budget.
+
+The first mixed confirmation group had rewards `[1, 0, 1, 1]`
+across four responses. Its 1,262 scored tokens occupied 1,252 unique
+prefixes. The centered coefficients summed to zero at the common
+prompt and had nonzero mass at 1,251 prefixes farther along the
+completions. The zero-initialized residual preserved the logits
+bit for bit. The detached update for Qwen's 8,960 × 1,536
+final MLP projection agreed with autograd to a relative Frobenius error
+of `1.20 × 10⁻⁵` and maximum absolute error of `1.70 × 10⁻⁷`.
+The comparison used the FP32 full-softmax score on the recorded
+BF16 top-k responses.
+
+The independent checks reconstructed every gate on both macOS and
+Linux and recovered all 256 response texts from the pinned tokenizer
+and saved token IDs. The next experiment, `hy8.3.6`, will compare
+the score trace with autograd under the sampling support actually
+used at generation time before testing compression and adaptation.
+The native `hy8.3.3` GSM8K checkpoint and the `hy8.3` learning
+study remain open. The adaptation and transfer panels and the
+official GSM8K test split were unused.
+
+[Protocol, source and DSR receipts](../../results/qwen_reward_ladder_2026-11-23.json) ·
+[Panels, samples and exact numerators](../../results/qwen_reward_ladder_2026-11-23.json.gz)
+
+To replay the gates, extract `replay_ladder.py` and `ladder_audit.py`
+from the report's `sources` mapping. Run the replay script through DSR
+with the report, gzip archive and a fresh working directory as arguments.
