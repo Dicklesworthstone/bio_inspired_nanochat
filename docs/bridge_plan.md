@@ -24,8 +24,8 @@ revision. [Current protocol](ablation_matrix.md) · [Follow-up DSR receipts](../
   real process interruption, restarted job and missing-rank negative. Require the
   same next data, weights, optimizers, controller, RNG and validation trace.
 - [ ] Establish admissible D1 rates on staged FineWeb data. The two-card reference
-  pilot reached the 91,165,440-parameter model and timed out before its first
-  completed update, checkpoint or score. The two GPUs incurred 0.40673 GPU-hours
+  pilot reached the 91,165,440-parameter model and timed out with zero logged
+  updates, checkpoints or scores. The two GPUs incurred 0.40673 GPU-hours
   against a 0.40 allocation, including shutdown. Keep the 36-cell screen on hold.
 - [ ] Train and score the matched vanilla reference, run admissible registered
   contrasts, then record the statistical decision or the measured budget shortfall.
@@ -35,9 +35,11 @@ revision. [Current protocol](ablation_matrix.md) · [Follow-up DSR receipts](../
   documents. Seeded sampling produced zero in both arms. Next-token loss differed by
   −0.0164 nats (paired 95% interval −0.0393 to +0.0070). Calibration chose a zero
   frequency penalty. D1 and independent training-seed replication remain `74f.13`.
-- [ ] Evaluate the sheaf detector on actual labelled model outputs. Compare entropy
-  and self-consistency on the same observations. Track graph cohomology separately
-  from node disagreement and per-output correctness (`r00r.5.3`, `0642.8.3.1`).
+- [x] Evaluate the sheaf detector on actual labelled predictions. Eight trained
+  variable-binding models got 46/512 held-out answers right. Obstruction AUROC was
+  0.5467, cosine 0.5470 and random 0.5609. All adjusted p-values were 1. The
+  detector missed the registered superiority threshold. The separate systematic
+  generalization and cohomology test remains open (`0642.8.3.1`).
 - [ ] Qualify the standing main/nightly DSR gates, reconcile the full Python run,
   and check the final published revision and generated evidence (`u0fl`).
 

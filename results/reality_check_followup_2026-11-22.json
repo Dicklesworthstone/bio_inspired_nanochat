@@ -391,6 +391,92 @@
           "sha256": "29100a9333fbfbf3d00fe9c23ac3547a9287f612ebbe73b605c14e4dbe7f0203"
         }
       ]
+    },
+    {
+      "probe": "bio-d1-loader",
+      "observation": "Two real Gloo ranks each read 16 B8\u00d7T1024 CPU batches from train and validation. Distinct rank input hashes. 54,511.6 train and 37,640.8 validation positions/s aggregate; host input only",
+      "run_id": "a6f68abe-7c24-40b8-afb2-a97843dc58cd",
+      "exit": 0,
+      "source": "8e8ad5c7b3eb0d874c29177fc7ef704e688cd0f8|cdbaf9e981accc88bc61f25dea4fa3886fbd6bb0b6053bf9f8abe733559fae0b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "e2fee5a5af147e588e3fe2174dff5ba475e46a5d19368925527770cf281a374d"
+        }
+      ]
+    },
+    {
+      "probe": "bio-watchdog-prior",
+      "observation": "Counterexample against old watchdog: TERM-resistant job consumed 20.139 seconds of a 10-second allocation; test failed as expected",
+      "run_id": "8c3b9983-0a23-4701-9294-0183ef5f3ba0",
+      "exit": 1,
+      "source": "8e8ad5c7b3eb0d874c29177fc7ef704e688cd0f8|5386ea6b3b430b1139fb4b8afc07ae7ee17647993c2df396cf45bf0f6e964414|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 1,
+          "sha256": "b33607e914725744e7230f0b62cb6a6077063a5d3a21b7f428cde79634cc8dab"
+        }
+      ]
+    },
+    {
+      "probe": "bio-gates-repetition",
+      "observation": "16 performance/repetition tests passed; Ruff, ty and UBS passed on the candidate",
+      "run_id": "e3326e1c-1817-436e-b4b7-0fd8cc8ce7b5",
+      "exit": 0,
+      "source": "8e8ad5c7b3eb0d874c29177fc7ef704e688cd0f8|5a3cfbc5a86bf9be1d2a9c6c91f0398fcaf1f0e79cba7528856246db7244d419|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "39126dec608e6bc23e4174bd79c1d7de9d94f997223cd69f941b3644ba083f6c"
+        },
+        {
+          "exit": 0,
+          "sha256": "f0d694c988f0b2f0af8a56bcbfc74f680dbe9eda67bd59c34566a15b53ceff3c"
+        },
+        {
+          "exit": 0,
+          "sha256": "67bef20f94e8c9b01ef27b9809a53edd754d9f28fc12339d502de3157a1d897f"
+        }
+      ]
     }
-  ]
+  ],
+  "reference_feasibility": {
+    "run_id": "368e91c00ba79768db88e67e1a566261b43fc31af2ee7eb2596c0a30bddcf955",
+    "registered": false,
+    "git_revision": "8e8ad5c7b3eb0d874c29177fc7ef704e688cd0f8",
+    "source_sha256": "b804fe48793e4ea11f7a641f1c392ca9a01bfb4a75fda9d4ae4ecf61d3495e02",
+    "columns": [
+      "bio_all"
+    ],
+    "seeds": [
+      1337
+    ],
+    "world_size": 2,
+    "recipe": {
+      "core_metric_every": "-1",
+      "depth": "10",
+      "device_batch_size": "8",
+      "device_type": "cuda",
+      "eval_every": "-1",
+      "eval_tokens": "1048576",
+      "max_seq_len": "1024",
+      "num_iterations": "2",
+      "sample_every": "-1",
+      "tie_embeddings": "1",
+      "total_batch_size": "65536"
+    },
+    "cap_gpu_hours": 0.4,
+    "tokens_per_cell": 131072,
+    "input_sha256": {
+      "tokenizer_sha256": "32b10bf4f351cb5daa2f95ba9f05b94140a541d7ec14ca123101e42f5b1484f5",
+      "train_sha256": "b7b4d3725126f3a7892b34b1dd98d769732f1eb33701b563922a07605cf49435",
+      "val_sha256": "ed9409a4d91be0e5a9f786556b9afad38f0d213394d20929bde55418f3e0ae0c"
+    },
+    "physical_gpu_hours": 0.406728838700025,
+    "elapsed_seconds": 732.1119096600451,
+    "training_return_code": 137,
+    "logged_completed_updates": 0,
+    "completed_checkpoints": 0,
+    "heldout_bpb": null
+  }
 }
