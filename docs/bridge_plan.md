@@ -23,15 +23,18 @@ revision. [Current protocol](ablation_matrix.md) · [Follow-up DSR receipts](../
 - [ ] Complete `hwxb.2.6` on two physical GPUs. Compare the uninterrupted control,
   real process interruption, restarted job and missing-rank negative. Require the
   same next data, weights, optimizers, controller, RNG and validation trace.
-- [ ] Measure the frozen D1 recipe on staged FineWeb data, including held-out scoring.
-  Charge both cards for training. Reconcile the measurement with the screen and
-  confirmation caps before allocating the 36 screening cells.
+- [ ] Establish admissible D1 rates on staged FineWeb data. The two-card reference
+  pilot reached the 91,165,440-parameter model and timed out before its first
+  completed update, checkpoint or score. The two GPUs incurred 0.40673 GPU-hours
+  against a 0.40 allocation, including shutdown. Keep the 36-cell screen on hold.
 - [ ] Train and score the matched vanilla reference, run admissible registered
   contrasts, then record the statistical decision or the measured budget shortfall.
   Select a final checkpoint only after the absolute quality and reproduction gates.
-- [ ] Test repetition against the same checkpoint with presynaptic release enabled
-  and disabled, a calibrated frequency penalty, matched decoding and next-token loss.
-  The small-checkpoint experiment informs the method. D1 acceptance remains `74f.13`.
+- [x] Test repetition on the same step-50 checkpoint with presynaptic release enabled
+  and disabled. Greedy repeated trigrams fell from 256/352 to 242/352 slots across 16
+  documents. Seeded sampling produced zero in both arms. Next-token loss differed by
+  −0.0164 nats (paired 95% interval −0.0393 to +0.0070). Calibration chose a zero
+  frequency penalty. D1 and independent training-seed replication remain `74f.13`.
 - [ ] Evaluate the sheaf detector on actual labelled model outputs. Compare entropy
   and self-consistency on the same observations. Track graph cohomology separately
   from node disagreement and per-output correctness (`r00r.5.3`, `0642.8.3.1`).

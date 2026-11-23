@@ -276,6 +276,121 @@
           "sha256": "457d806a84aeec5ca02e20be89e7166cbc933a853aa4bd0f309c84d22bf2d24b"
         }
       ]
+    },
+    {
+      "probe": "bio-sheaf-probe",
+      "observation": "36/36 graph tests passed; Ruff rejected an ambiguous test variable, later fixed",
+      "run_id": "30a81b4a-f86d-4913-b932-1ab4e36fb87b",
+      "exit": 1,
+      "source": "8e8ad5c7b3eb0d874c29177fc7ef704e688cd0f8|a7493b01eeeb48e74aca4857e17945559ed56aa7d9a84fc6dc8b9090b32eaa90|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "f63395f71dd448f5a0d60eaf99aedea0012fb57e5075e6f8d6fc3e60dbec8dcd"
+        },
+        {
+          "exit": 1,
+          "sha256": "1a34b59e68ba060376287d9b037e4233ce74b6a696d35ddb36e85569e275fc3f"
+        },
+        {
+          "exit": 0,
+          "sha256": "e1854d57a7fdf8f1809f9efe77b4432159286bf2eb929a6ca0b48b2575738e5f"
+        }
+      ]
+    },
+    {
+      "probe": "bio-coupling-graph",
+      "observation": "44/44 graph and coupling tests passed, whole-tree Ruff and ty passed, UBS zero critical and four warnings",
+      "run_id": "74999938-f2f9-485d-a2ea-7c91e8db3496",
+      "exit": 0,
+      "source": "8e8ad5c7b3eb0d874c29177fc7ef704e688cd0f8|ce860aaa0fd1454fa63181f505182c91200cf4a62fbf84c75fadbdb56e1b664a|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "244918da67a111a17453ee409409e92609d6740c394172aec41c201284d5d8ef"
+        },
+        {
+          "exit": 0,
+          "sha256": "4001dcb54c2c3385bd90c71717da5a84f17efb9443e0ab81dbcc16c9b338782d"
+        },
+        {
+          "exit": 0,
+          "sha256": "a35c2e1ea0c20e69707e0bae17e2e3c2b6b784c4464d140c2f72648338c4d82b"
+        }
+      ]
+    },
+    {
+      "probe": "dsr-final",
+      "observation": "Three Rust jobs passed. Verified UBS release runner was rejected by the floating installer before Python quality and dependent jobs",
+      "run_id": "7d55c7ff-3d06-4a06-bbb6-753ecf447758",
+      "exit": 1,
+      "source": "8e8ad5c7b3eb0d874c29177fc7ef704e688cd0f8|b289517078190eabdc22389c550e4a2e61b553d51ec02e26380cec7a39bd8bda|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 1,
+          "sha256": "7bfd6994e48ef540309ed7bb56418ccd323496a1945c15155c1d7d65eb2f69a1"
+        }
+      ]
+    },
+    {
+      "probe": "bio-registry-both",
+      "observation": "Looked up both main/nightly profiles via the installed registry and the repository registry",
+      "run_id": "f2ce142d-d338-46cb-9a08-92caaad48552",
+      "exit": 0,
+      "source": "8e8ad5c7b3eb0d874c29177fc7ef704e688cd0f8|b289517078190eabdc22389c550e4a2e61b553d51ec02e26380cec7a39bd8bda|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "59185fcee92540456ed25b9346c6de634814979cc2733bfe18a319663b8dadc0"
+        }
+      ]
+    },
+    {
+      "probe": "bio-signed-ubs",
+      "observation": "Installed the pinned signed installer and scanner into a fresh runner, verified checksums and tested its CLI; static check passed",
+      "run_id": "a55bfb15-26ec-4de9-955c-8c886137425e",
+      "exit": 0,
+      "source": "8e8ad5c7b3eb0d874c29177fc7ef704e688cd0f8|fc93ecb4b4f40f39c4f1f637e026cd2bdc5854d0238ed2c96ffc80adcb5962d6|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "fb4deeb13d3b8217aaeafa977390d8cf80ab2d2c663107f82715e36cfbda2a66"
+        },
+        {
+          "exit": 0,
+          "sha256": "4fc6ae91279698f00ade16dcb2d96d09117eaa42d24160117db79a9a6db12706"
+        }
+      ]
+    },
+    {
+      "probe": "bio-d1-gpu-pilot",
+      "observation": "Two RTX 4090s, D1 bio_all reference, 91,165,440 parameters, 65,536 tokens/update. The 0.40 GPU-hour watchdog stopped training before any completed update or checkpoint. Charged elapsed 732.11191 seconds \u00d7 2, exit 137",
+      "run_id": "fd427839-0b2e-4604-a008-65e8b5779c63",
+      "exit": 1,
+      "source": "8e8ad5c7b3eb0d874c29177fc7ef704e688cd0f8|cdbaf9e981accc88bc61f25dea4fa3886fbd6bb0b6053bf9f8abe733559fae0b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 137,
+          "sha256": "53e6de12533325bf832034a378ac862da648bbe19e3bbf79b1655afb1ad7b3e8"
+        }
+      ]
+    },
+    {
+      "probe": "nightly-copy",
+      "observation": "Both nightly jobs passed including the full master battery, perf, real eight-cell pipeline and uncertainty; DSR invalidated the run because the shared registry changed while it ran",
+      "run_id": "c7de7d17-f750-44ae-a2d7-6e9c2071947d",
+      "exit": 1,
+      "source": "8e8ad5c7b3eb0d874c29177fc7ef704e688cd0f8|b289517078190eabdc22389c550e4a2e61b553d51ec02e26380cec7a39bd8bda|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "42d0c004a1f2d1df5f5cea47bf92360505ba8e9294750dfe2e882b06c08bfd35"
+        },
+        {
+          "exit": 0,
+          "sha256": "29100a9333fbfbf3d00fe9c23ac3547a9287f612ebbe73b605c14e4dbe7f0203"
+        }
+      ]
     }
   ]
 }

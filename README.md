@@ -39,7 +39,7 @@ The most informative CPU comparisons answer different questions. On 614,400 Wiki
 | :--- | :--- | :--- |
 | **State during chat** | KV cache stores prior keys and values. | Presynaptic release and recovery also modulate cached attention. |
 | **Working memory** | Attention reads the available context. | An opt-in Hebbian probe can write fast weights. Its deciding toy experiment missed the recall threshold. |
-| **Diversity** | The sampler controls temperature. | Vesicle depletion changes attention bias. Its effect on generated repetition remains unmeasured. |
+| **Diversity** | The sampler controls temperature. | On one step-50 checkpoint, enabling presynaptic release reduced greedy trigram repetition on 16 held-out prompts. Seeded sampling produced zero repeated trigrams in both arms. |
 | **Capacity** | Dense layer shapes stay fixed. | An optional training controller can split, merge, or reset experts. |
 | **Optimization** | Uses the upstream training recipe. | Phase-1 CMA-ES can search ten synaptic hyperparameters. |
 | **Kernels** | Standard Transformer attention. | PyTorch reference plus optional Rust CPU and Triton CUDA paths. |
@@ -57,7 +57,7 @@ We map specific cellular mechanisms from the [Synaptic Cleft](https://en.wikiped
 
 **The Math**: We track a fluid reservoir `RRP` (Readily Releasable Pool) for every attention head. High attention scores drain the pool.
 
-**Effect on attention.** Release depletes the available pool and changes the logits used to compute attention. Refill allows the same key to receive attention again. Whether this improves diversity in generated text requires a controlled repetition measurement.
+**Effect on attention.** Release depletes the available pool and changes the attention logits. A same-weight test on 16 held-out document prefixes found 242 repeated greedy trigrams in 352 slots with presynaptic release enabled and 256 with it disabled. Both sampled arms produced zero repeats. Replication on independently trained checkpoints remains open. [Paired generations and held-out likelihood](results/presyn_repetition_smoke_2026-11-22.json)
 
 **Implementation.** The PyTorch reference is `SynapticPresyn.release_canonical`. On supported CUDA configurations, the Triton backend accelerates deterministic FP32 single-query decode at the configured top-k width. The golden and backend-parity tests exercise the frozen decode trajectory across Python, Triton and Rust. [Golden trajectory](tests/test_presyn_golden.py) · [Parity tests](tests/test_presyn_backend_parity.py)
 - **Triton GPU kernel** (`bio_inspired_nanochat/kernels/presyn_fused.py`) accelerates supported FP32 single-query decode on RTX 4090. [Clean-checkout acceptance run](results/presyn_live_rtx4090.json)
