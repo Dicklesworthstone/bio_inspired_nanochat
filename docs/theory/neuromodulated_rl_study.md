@@ -272,3 +272,39 @@ control. Report every seed and retain the original trial outcome.
 The diagnostic favors action-specific credit only if the mean aligned
 derivative is positive and exceeds the shuffled derivative in at least
 six seeds with a one-sided exact sign-flip `p ≤ 0.025`.
+
+### Projection sign symmetry
+
+Let `C = XᵀY` be a rollout's masked co-activity matrix. The raw
+production direction is proportional to `C Pout Pinᵀ C`. Flipping
+`Pout` flips the whole write and leaves its norm unchanged. With
+online writes disabled, the frozen forward uses neither projection,
+so the sampled actions, rewards, and objective gradient are identical
+under the flip. The first conditional mean update and its directional
+derivative are zero under a sign-symmetric projection draw independent
+of the frozen policy. This argument applies to any fixed sequence of
+masked activations and to the sum across a rollout group. Subsequent
+adaptation can make the activations depend on the projection. Feedback
+alignment also relies on the evolution of forward weights during
+learning. [Lillicrap et al., 2016](https://www.nature.com/articles/ncomms13276)
+
+### Registered projection-independent comparison
+
+- [ ] Use new supervised starts at seeds 80521 through 87521, spaced
+  by 1000, and holdout seed 107112. Use the original initialization,
+  rollout, optimizer and evaluation budgets. Match arms within seed
+  and measure competence at initialization.
+- [ ] Compare four policies: off, projected aligned, direct aligned,
+  and direct shuffled. The direct rule replaces the unit direction
+  alone with `C / ‖C‖` for nonzero masked co-activity. It retains the
+  0.03 step size, reward coefficients, action mask, and rollout
+  denominator. For a single consumed token the projected rule uses
+  the same outer product, multiplied by the sign of
+  `yᵀ Pout Pinᵀ x`. Use the production collector with the direct
+  direction substituted only in the experimental driver.
+- [ ] Evaluate the mean of checkpoints 32, 64 and 96. Require all
+  three comparisons with direct aligned to have a mean gain of at
+  least one percentage point, at least six positive seeds, and a
+  one-sided exact sign-flip `p ≤ 0.0125`. Require at least six of
+  eight starts above 0.10 and mixed reward groups in every seed.
+  Publish the result even if the comparison declines advancement.
