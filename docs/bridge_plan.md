@@ -53,8 +53,15 @@ revision. [Current protocol](ablation_matrix.md) · [Follow-up DSR receipts](../
     establish the first device-specific baseline and replay independently.
   - [ ] Exercise the full GPU-marked test lane, primitive and model timing
     thresholds. Retain each failing gate and its measurements.
-- [ ] Test the glial-homeostasis × metabolic-routing interaction on a model
-  with active experts, paired initializations and held-out tokens (`74f.5`).
+- [x] Test glial homeostasis × direct metabolic routing with active experts.
+  On four paired seeds the mean held-out loss interaction was −0.00010 nats/token
+  (95% bootstrap −0.00028 to +0.00005). The original dense experiment's reset
+  discarded pending Hebbian updates on all four seeds. Broader interactions
+  remain open. [Predictions, routing and paired estimates](../results/mechanism_interaction_moe_2026-11-22.json)
+- [ ] Replace the old continual-learning benchmark's fixed accuracy bonuses
+  with disjoint held-out predictions and signed forgetting, then compare real
+  replay and EWC at matched example budgets (`cel.4`). Measuring holonomy
+  requires a model-derived connection and transport (`0642.7.2.2`).
 
 ## November 22, 2026 — decision at `16ce9fe1979c`
 

@@ -1,0 +1,131 @@
+{
+  "date": "2026-11-22",
+  "source_revision": "16a9cbc372130f98b4bd530c35c16eb9525f57c4",
+  "image_digest": "sha256:ad61977da1856917f2c27082f1a7e2511d4b488a3e2657c2c11130e6895764b5",
+  "nightly": {
+    "run_id": "e6b547d0-2e99-46ef-bed1-c0bdedb525e7",
+    "exit_code": 1,
+    "log_sha256": "6eb221458b761ef75ad58ee219fbe138c89a897b7adefd5c3a96baa289601c15",
+    "vanilla_tokens_s": 1698.6,
+    "synaptic_tokens_s": 1016.5,
+    "reported_slowdown": 1.67,
+    "maximum_slowdown": 1.5
+  },
+  "diagnostic": {
+    "run_id": "f9846fca-1bcf-451d-988d-9417e6ec8688",
+    "exit_code": 0,
+    "log_sha256": "49e40262611b82df8a66f3cba4a4acf7f1f291da8ee9fe7c643fa92c71c8fbc5",
+    "raw_profile_sha256": "95e01c8b0e9fbf74ce4660d33aaa24acf1abc283b224310c4dd57cfb779064a2",
+    "same_locked_nightly_container": true,
+    "torch": "2.9.1+cpu",
+    "python": "3.14.2",
+    "cpu_capability": "AVX2",
+    "affinity": [
+      0
+    ],
+    "nice": 5,
+    "load_before": [
+      89.40771484375,
+      101.443359375,
+      113.8232421875
+    ],
+    "load_after": [
+      90.49658203125,
+      101.46923828125,
+      113.7646484375
+    ],
+    "elf_sha256": "0f1325b472317ee0bf87af9ffd88f04852ad2b9978d62684d4f68ca8929d2b49",
+    "native_abi": 1,
+    "seed_per_arm": 20261122,
+    "geometry": {
+      "batch": 1,
+      "layers": 2,
+      "heads": 4,
+      "width": 64,
+      "prompt": 16,
+      "warmup": 20,
+      "measured": 200
+    },
+    "nightly_thread_count": "Unrecorded. The diagnostic pinned Torch intra-op, inter-op and Rayon to one thread.",
+    "unprofiled_slowdown": 1.2997681206316876,
+    "arms": {
+      "standard_transformer_cached_tq1_decode": {
+        "tok_per_sec": 1358.174848036944,
+        "latency_ms": 0.7362822256982327,
+        "profiled_cpu_ms": 322.42085799999995,
+        "profiled_final_logits_sha256": "ab4af3446d758608fe7a553454fd2b4ea78dea018b55d24176a4cf9ffe9492fb"
+      },
+      "synaptic_transformer_cached_tq1_decode": {
+        "tok_per_sec": 1044.9362670757541,
+        "latency_ms": 0.9569961647503078,
+        "profiled_cpu_ms": 531.6830270000002,
+        "profiled_final_logits_sha256": "d62caaef00a7e168d368966fe50ae76b6cd037a1d93ba6fc86615cf47c9732bf"
+      }
+    },
+    "profile": "One direct unprofiled gate pair, followed by cProfile using thread CPU time on the 200 cached token forwards only; the named cumulative rows overlap."
+  },
+  "profile_rows": [
+    {
+      "loc": "bio_inspired_nanochat/synaptic.py:4129:forward",
+      "calls": 400,
+      "own_ms": 79.03745300000001,
+      "cum_ms": 317.612903
+    },
+    {
+      "loc": "bio_inspired_nanochat/synaptic.py:2558:_release_canonical_rust_cpu",
+      "calls": 400,
+      "own_ms": 18.263589,
+      "cum_ms": 55.128533
+    },
+    {
+      "loc": "bio_inspired_nanochat/synaptic.py:3811:forward",
+      "calls": 800,
+      "own_ms": 23.020678000000004,
+      "cum_ms": 52.909746
+    },
+    {
+      "loc": "bio_inspired_nanochat/synaptic.py:470:_resolve_synaptic_granularity",
+      "calls": 1200,
+      "own_ms": 8.673085,
+      "cum_ms": 21.456561000000004
+    },
+    {
+      "loc": "bio_inspired_nanochat/synaptic.py:2508:_can_use_native_presyn_cpu_decode",
+      "calls": 400,
+      "own_ms": 5.988276000000001,
+      "cum_ms": 17.238287
+    },
+    {
+      "loc": "bio_inspired_nanochat/engine.py:323:insert_kv",
+      "calls": 400,
+      "own_ms": 9.517550000000002,
+      "cum_ms": 11.721948000000001
+    },
+    {
+      "loc": "<method 'numpy' of 'torch._C.TensorBase' objects>",
+      "calls": 5600,
+      "own_ms": 13.626735,
+      "cum_ms": 13.626735
+    },
+    {
+      "loc": "<built-in method torch.as_strided>",
+      "calls": 4400,
+      "own_ms": 9.831375,
+      "cum_ms": 9.831375
+    },
+    {
+      "loc": "<built-in method rustbpe.rustbpe.presyn_release_canonical_cpu>",
+      "calls": 400,
+      "own_ms": 14.378222000000001,
+      "cum_ms": 14.378222000000001
+    }
+  ],
+  "vanilla_cache_insert": {
+    "loc": "bio_inspired_nanochat/engine.py:323:insert_kv",
+    "calls": 400,
+    "own_ms": 10.555863,
+    "cum_ms": 12.701669
+  },
+  "interpretation": "The diagnostic ratio crossed below 1.5. Vanilla throughput fell 20.0% and synaptic throughput rose 2.8%. One shared-host pair cannot establish the cause of that variation or clear the nightly. The largest profiled self cost is in SynapticCausalSelfAttention.forward. The native release call accounts for 14.38 ms of 531.68 ms profiled synaptic CPU time. The generic KV insert has similar cost in both models.",
+  "candidate": "The granularity validator unwraps an already-valid enum member and reconstructs the same member three times per layer and token. All 1,200 validation calls together account for 21.46 ms inclusive in the instrumented run. This branch lives in the formal-mapped synaptic.py. Its speedup is unmeasured. No production change was made."
+}

@@ -1,136 +1,88 @@
-"""Tests for the Factorial Mechanism Redundancy & Saturation Evaluation (bead `74f.5`).
-
-Verifies:
-1. Multi-seed factorial evaluation across individual and paired biological mechanisms.
-2. Interaction / Synergy index calculation.
-3. Zero posthoc penalty or fabricated offsets across arms.
-4. CLI entrypoint and JSON artifact serialization.
-"""
-
-from __future__ import annotations
-
+"""Counterexamples and real training/score checks for the conditional mechanism interaction."""
 import json
-from pathlib import Path
+import math
 
 import pytest
 import torch
+import torch.nn.functional as F
 
-from scripts.e2e import mechanism_redundancy_eval as redundancy_module
+from bio_inspired_nanochat.synaptic import SynapticMoE
 from scripts.e2e.mechanism_redundancy_eval import (
-    RedundancyConfig,
-    _run_single_seed_arm,
-    main as redundancy_main,
-    run_mechanism_redundancy_evaluation,
+    ARMS, BOTH, GLIA, MET, OFF, RedundancyConfig, _batch, _build, _reset_witness, arm_configs, interaction, main,
 )
 
 
-@pytest.mark.unit
-def test_mechanism_redundancy_eval_pipeline(tmp_path: Path):
-    """The factorial harness evaluates baseline, single, pairwise, and combined arms."""
-    cfg = RedundancyConfig(
-        seeds=(201, 203),
-        train_steps=1,
-        eval_batches=1,
-        batch_size=2,
-        sequence_len=16,
-        vocab_size=32,
-        n_embd=16,
-        n_layer=1,
-        n_head=2,
-        n_kv_head=2,
-        bootstrap_samples=100,
-    )
-    report = run_mechanism_redundancy_evaluation(cfg, run_dir=tmp_path, verbose=False)
-
-    assert "vanilla_baseline" in report.arms
-    assert "all_bio_active" in report.arms
-    assert "presyn_only" in report.arms
-    assert "hebbian_only" in report.arms
-    assert "presyn_hebbian" in report.arms
-
-    for name, arm in report.arms.items():
-        assert set(arm.losses.keys()) == {201, 203}
-        assert arm.loss_stats.mean > 0.0
-
-    assert len(report.synergies) == 6
-    for s in report.synergies:
-        assert isinstance(s.synergy_index, float)
-        assert s.interpretation in {
-            "Independent (Additive)",
-            "Diminishing Returns (Redundant / Sub-additive)",
-            "Synergistic (Super-additive)",
-        }
+def test_interaction_uses_matched_differences_and_rejects_missing_conditions():
+    offsets = {OFF: 0, MET: -0.2, GLIA: -0.3, BOTH: -0.5}
+    cells = {a: {s: s / 3 + o for s in range(6)} for a, o in offsets.items()}
+    result = interaction(cells, margin=0.01, signals_active=True, learned=True)
+    assert result['verdict'] == 'within_practical_margin_on_this_task'
+    assert result['mean'] == pytest.approx(0, abs=1e-12)
+    for s in cells[BOTH]:
+        cells[BOTH][s] += 0.15
+    result = interaction(cells, margin=0.01, signals_active=True, learned=True)
+    assert result['verdict'] == 'positive_interaction_on_this_task'
+    assert result['paired_bootstrap_95'] == pytest.approx([0.15, 0.15])
+    assert interaction(cells, margin=.01, signals_active=False, learned=True)['verdict'].startswith('inconclusive')
+    assert interaction(cells, margin=.01, signals_active=True, learned=False)['verdict'].startswith('inconclusive')
+    cells[OFF].pop(2)
+    with pytest.raises(ValueError, match='paired seeds'):
+        interaction(cells, margin=.01, signals_active=True, learned=True)
 
 
-@pytest.mark.unit
-def test_factorial_arms_have_no_posthoc_penalties(monkeypatch):
-    """Identical model weights produce identical validation losses across all arms."""
-    class IdenticalModel(torch.nn.Module):
-        def __init__(self, _config):
-            super().__init__()
-            self.bias = torch.nn.Parameter(torch.zeros(1))
-
-        def reset_sequence_state(self, **_kwargs):
-            return 0
-
-        def forward(self, tokens, **_kwargs):
-            logits = self.bias.expand(*tokens.shape, 8)
-            targets = _kwargs.get("targets")
-            loss = None
-            if targets is not None:
-                loss = torch.tensor(1.4567, requires_grad=True)
-            return logits, loss
-
-    monkeypatch.setattr(redundancy_module, "GPTSynaptic", IdenticalModel)
-    cfg = RedundancyConfig(
-        seeds=(201, 203),
-        train_steps=1,
-        eval_batches=1,
-        batch_size=2,
-        sequence_len=4,
-        vocab_size=8,
-        n_embd=4,
-        n_layer=1,
-    )
-
-    flags_vanilla = {"presyn": False, "postsyn": False, "glial": False, "septin": False}
-    flags_all = {"presyn": True, "postsyn": True, "glial": True, "septin": True}
-
-    res_vanilla = _run_single_seed_arm("vanilla", flags_vanilla, cfg, seed=201)
-    res_all = _run_single_seed_arm("all", flags_all, cfg, seed=201)
-
-    assert res_vanilla.val_loss == pytest.approx(res_all.val_loss)
+def test_historical_single_forward_reset_discards_pending_hebbian_writes():
+    witness = _reset_witness(34)
+    old = witness['historical_reset']
+    control = witness['successive_forwards']
+    assert old['pending_before_forward_or_reset'] == control['pending_before_forward_or_reset'] == [False, True, True]
+    assert old['bdnf_trace_l1'] == old['slow_consolidation_l1'] == 0
+    assert control['bdnf_trace_l1'] > 0 and control['slow_consolidation_l1'] > 0
 
 
-@pytest.mark.unit
+def test_dense_inert_glial_toggle_preserves_nonuniform_model_predictions():
+    config = RedundancyConfig()
+    arms = arm_configs()
+    x, y = _batch(torch.tensor([0, 4, 8, 12]), 8)
+    logits = []
+    for arm in (OFF, GLIA):
+        model = _build(config, arms[arm], 47, moe=False).eval()
+        assert not any(isinstance(m, SynapticMoE) for m in model.modules())
+        with torch.no_grad():
+            model.lm_head.weight.normal_(std=0.1)
+            logits.append(model(x, train_mode=False)[0])
+    assert float(logits[0].std()) > 0.05
+    assert torch.equal(logits[0], logits[1])
+    assert F.cross_entropy(logits[0].flatten(0, 1), y.flatten()) == F.cross_entropy(logits[1].flatten(0, 1), y.flatten())
+
+
+def test_real_training_cli_reports_observed_nll_without_arm_offsets(tmp_path):
+    output = tmp_path / 'interaction.json'
+    assert main(['--seeds', '41', '43', '--steps', '2', '--eval-batches', '1', '--output-json', str(output)]) == 0
+    result = json.loads(output.read_text())
+    assert len(result['rows']) == 8
+    assert result['interaction']['verdict'].startswith('inconclusive')
+    for seed in (41, 43):
+        quartet = [r for r in result['rows'] if r['seed'] == seed]
+        assert {r['arm'] for r in quartet} == set(ARMS)
+        assert len({r['initial_parameter_sha256'] for r in quartet}) == 1
+        for row in quartet:
+            logits = torch.tensor(row['heldout_logits'])
+            gold = torch.tensor(row['heldout_targets'])
+            assert row['nll'] == pytest.approx(float(F.cross_entropy(logits.flatten(0, 1), gold.flatten())), abs=1e-7)
+            assert row['accuracy'] == float((logits.argmax(-1) == gold).float().mean())
+            assert row['trained_parameter_sha256'] != row['initial_parameter_sha256']
+            assert not set(row['heldout_unique_starts']).intersection(sum(row['training_starts'], []))
+            assert row['glial_observations'] == (2 if row['arm'] in (GLIA, BOTH) else 0)
+
+
 def test_redundancy_config_validation():
-    """Config validation rejects invalid seeds, odd sequence lengths, or non-divisible embeddings."""
-    with pytest.raises(ValueError, match="at least two"):
+    with pytest.raises(ValueError, match='unique'):
         RedundancyConfig(seeds=(1,))
-    with pytest.raises(ValueError, match="unique"):
-        RedundancyConfig(seeds=(1, 1))
-    with pytest.raises(ValueError, match="even"):
-        RedundancyConfig(sequence_len=15)
-    with pytest.raises(ValueError, match="divisible by 4"):
+    with pytest.raises(ValueError, match='unique'):
+        RedundancyConfig(seeds=(2, 2))
+    with pytest.raises(ValueError, match='positive'):
+        RedundancyConfig(train_steps=0)
+    with pytest.raises(ValueError, match='divisible'):
         RedundancyConfig(n_embd=6)
-
-
-@pytest.mark.unit
-def test_mechanism_redundancy_cli_entrypoint(tmp_path: Path):
-    """CLI entrypoint runs cleanly and writes structured JSON."""
-    json_path = tmp_path / "redundancy_report.json"
-    ret = redundancy_main([
-        "--run-dir", str(tmp_path),
-        "--output-json", str(json_path),
-        "--seeds", "201", "203",
-        "--steps", "1",
-        "--eval-batches", "1",
-        "--device", "cpu",
-    ])
-    assert ret == 0
-    assert json_path.exists()
-
-    data = json.loads(json_path.read_text(encoding="utf-8"))
-    assert "arms" in data
-    assert "synergies" in data
-    assert "correlation_matrix" in data
+    with pytest.raises(ValueError, match='finite'):
+        RedundancyConfig(lr=math.nan)

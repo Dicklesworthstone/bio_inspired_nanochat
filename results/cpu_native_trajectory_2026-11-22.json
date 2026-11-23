@@ -1,0 +1,502 @@
+{
+  "platform": "Linux x86_64 on trj, Python 3.14.2, Torch 2.9.1+cu128, CPU only; two intra-op threads and two Rayon threads.",
+  "date": "2026-11-22",
+  "model_config": {
+    "sequence_len": 64,
+    "vocab_size": 452,
+    "n_layer": 2,
+    "n_head": 1,
+    "n_kv_head": 1,
+    "n_embd": 128,
+    "tie_embeddings": false,
+    "dropout": 0.0,
+    "use_moe": false,
+    "num_experts": 8,
+    "moe_top_k": 2,
+    "moe_hidden_mult": 4,
+    "moe_balance_loss": 0.01,
+    "init_type": "baseline",
+    "init_seed": 42,
+    "final_norm": true
+  },
+  "train_cli": "source ../env && CUDA_VISIBLE_DEVICES='' PYTHONPATH=. uv run --no-sync python ../trace_cpu.py native",
+  "training_arguments": [
+    "--synapses=1",
+    "--depth=2",
+    "--max_seq_len=64",
+    "--device_batch_size=2",
+    "--total_batch_size=128",
+    "--num_iterations=2",
+    "--eval_every=2",
+    "--eval_tokens=128",
+    "--core_metric_every=-1",
+    "--sample_every=-1",
+    "--device_type=cpu",
+    "--model_tag=e2e_quick_start",
+    "--syn_cfg.tau_rrp=60.0",
+    "--syn_cfg.enable_hebbian=1",
+    "--syn_cfg.bistable_latch=1"
+  ],
+  "reference_override": "--syn_cfg.native_presyn=0",
+  "data_inputs_sha256": {
+    "base_data/shard_00000.parquet": "237c75d1796684623209b8d6582b73dab23f9de8e79f0972daa14d63e3b50456",
+    "base_data/shard_00001.parquet": "b17011e279a403c6ad0f66401b6b2f0c044c86db3a9f1e4d53dcc6942c1ac3f6",
+    "tokenizer/token_bytes.pt": "1c53e5d593b7e4848127dec9326465990e6ed9bc1ae88ab2de300d8e3c932eca",
+    "tokenizer/tokenizer.json": "d165843e8934b645a071fbf653680f5f3c1ca4dac7d825f6aaf868e78653f033"
+  },
+  "unmodified_wheel_sha256": "d043271764179c0f6fc5b46805efc0c34ce8b29942060d2be57f3f10cd7d9b14",
+  "unmodified_loaded_elf_sha256": "be4c6deb888e23e9e4934b9d3addd8445ed2266c8213523eb9ff2d59b3562854",
+  "prompt": "The synapse",
+  "token_ids": [
+    429,
+    326
+  ],
+  "rtol": 1e-05,
+  "atol": 1e-06,
+  "baseline_trained_result": {
+    "trained_logit_max_abs": 0.0007157623767852783,
+    "outside_original_tolerance": 874,
+    "logits": 904,
+    "eval_first_edge": 1.4569963216781616,
+    "eval_different_releases": 372,
+    "train_first_edge": 1.4492371082305908,
+    "train_different_releases": 1229,
+    "val_bpb": 1.4349256529350143
+  },
+  "instrumented_vs_uninstrumented_same_backend": {
+    "native": {
+      "tensors": 195,
+      "different": []
+    },
+    "reference": {
+      "tensors": 195,
+      "different": []
+    }
+  },
+  "first_layer_eval": {
+    "training": false,
+    "dtype": "torch.float32",
+    "autocast": false,
+    "step": 0,
+    "i": 0,
+    "drive": {
+      "numel": 4096,
+      "different": 0
+    },
+    "idx": {
+      "numel": 4096,
+      "different": 0
+    },
+    "valid": {
+      "numel": 4096,
+      "different": 0
+    },
+    "ema_in": {
+      "numel": 1,
+      "different": 0
+    },
+    "C_in": {
+      "numel": 128,
+      "different": 0
+    },
+    "RRP_in": {
+      "numel": 128,
+      "different": 0
+    },
+    "release": {
+      "numel": 4096,
+      "different": 372,
+      "first": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "first_native": 1.4569963216781616,
+      "first_reference": 1.4569965600967407,
+      "max_abs": 4.76837158203125e-07
+    },
+    "C_out": {
+      "numel": 128,
+      "different": 4,
+      "first": [
+        0,
+        0,
+        23
+      ],
+      "first_native": 1.8660060167312622,
+      "first_reference": 1.8660061359405518,
+      "max_abs": 4.76837158203125e-07
+    },
+    "RRP_out": {
+      "numel": 128,
+      "different": 2,
+      "first": [
+        0,
+        0,
+        51
+      ],
+      "first_native": 0.25971776247024536,
+      "first_reference": 0.25971779227256775,
+      "max_abs": 5.960464477539063e-08
+    }
+  },
+  "first_layer_train": {
+    "training": true,
+    "dtype": "torch.float32",
+    "autocast": false,
+    "step": 0,
+    "i": 2,
+    "drive": {
+      "numel": 4096,
+      "different": 0
+    },
+    "idx": {
+      "numel": 4096,
+      "different": 0
+    },
+    "valid": {
+      "numel": 4096,
+      "different": 0
+    },
+    "ema_in": {
+      "numel": 1,
+      "different": 0
+    },
+    "C_in": {
+      "numel": 128,
+      "different": 0
+    },
+    "RRP_in": {
+      "numel": 128,
+      "different": 0
+    },
+    "release": {
+      "numel": 4096,
+      "different": 1229,
+      "first": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "first_native": 1.4492371082305908,
+      "first_reference": 1.44923734664917,
+      "max_abs": 9.5367431640625e-07
+    },
+    "C_out": {
+      "numel": 128,
+      "different": 4,
+      "first": [
+        0,
+        0,
+        58
+      ],
+      "first_native": 1.6985223293304443,
+      "first_reference": 1.6985225677490234,
+      "max_abs": 2.384185791015625e-07
+    },
+    "RRP_out": {
+      "numel": 128,
+      "different": 3,
+      "first": [
+        0,
+        0,
+        29
+      ],
+      "first_native": 0.23629912734031677,
+      "first_reference": 0.23629911243915558,
+      "max_abs": 8.940696716308594e-08
+    },
+    "drive_grad": {
+      "numel": 4096,
+      "different": 2692,
+      "first": [
+        0,
+        0,
+        1,
+        1
+      ],
+      "first_native": -9.770655015017837e-05,
+      "first_reference": -9.770655742613599e-05,
+      "max_abs": 7.275957614183426e-11
+    }
+  },
+  "first_edge_scalar_reconstruction": {
+    "values": {
+      "softplus": {
+        "torch": 0.3215874135494232,
+        "native_scalar_reconstruction": 0.3215874135494232
+      },
+      "drive_sigmoid": {
+        "torch": 0.27500274777412415,
+        "native_scalar_reconstruction": 0.27500271797180176
+      },
+      "calcium": {
+        "torch": 0.1768730878829956,
+        "native_scalar_reconstruction": 0.1768730878829956
+      },
+      "fast": {
+        "torch": 0.30660659074783325,
+        "native_scalar_reconstruction": 0.30660659074783325
+      },
+      "slow": {
+        "torch": 0.15029071271419525,
+        "native_scalar_reconstruction": 0.15029071271419525
+      },
+      "doc2_sigmoid": {
+        "torch": 0.5566290616989136,
+        "native_scalar_reconstruction": 0.5566290616989136
+      },
+      "sensor": {
+        "torch": 0.30424216389656067,
+        "native_scalar_reconstruction": 0.30424216389656067
+      },
+      "fusion_sigmoid": {
+        "torch": 0.7526370286941528,
+        "native_scalar_reconstruction": 0.7526370286941528
+      },
+      "probability": {
+        "torch": 0.2069772481918335,
+        "native_scalar_reconstruction": 0.2069772332906723
+      },
+      "quantal_amplitude": {
+        "torch": 1.1732351779937744,
+        "native_scalar_reconstruction": 1.1732351779937744
+      },
+      "raw_release": {
+        "torch": 1.4569979906082153,
+        "native_scalar_reconstruction": 1.4569977521896362
+      },
+      "normalized_divide": {
+        "torch": 1.4569965600967407,
+        "native_scalar_reconstruction": 1.4569963216781616
+      },
+      "normalized_reciprocal_multiply": {
+        "torch": 1.4569965600967407,
+        "native_scalar_reconstruction": 1.4569963216781616
+      }
+    },
+    "drive": -0.9693868160247803,
+    "native_recorded": 1.4569963216781616,
+    "reference_recorded": 1.4569965600967407
+  },
+  "first_optimizer_step": {
+    "source": "Actual global pre/post-step optimizer hooks. All native/reference weights are identical before each respective first optimizer update.",
+    "q_proj_layer_zero": {
+      "pre": {
+        "weight": {
+          "numel": 16384,
+          "different": 0
+        },
+        "gradient": {
+          "numel": 16384,
+          "different": 15091,
+          "first": [
+            0,
+            1
+          ],
+          "first_native": 0.00046704706619493663,
+          "first_reference": 0.00046704718261025846,
+          "max_abs": 9.89530235528946e-10
+        },
+        "bfloat16_gradient": {
+          "numel": 16384,
+          "different": 2,
+          "first": [
+            48,
+            58
+          ],
+          "first_native": 0.000823974609375,
+          "first_reference": 0.000820159912109375,
+          "max_abs": 3.814697265625e-06
+        }
+      },
+      "post": {
+        "weight": {
+          "numel": 16384,
+          "different": 13720,
+          "first": [
+            0,
+            0
+          ],
+          "first_native": 0.08116874098777771,
+          "first_reference": 0.08118827641010284,
+          "max_abs": 0.0003124997019767761
+        },
+        "gradient": {
+          "numel": 16384,
+          "different": 14917,
+          "first": [
+            0,
+            1
+          ],
+          "first_native": 0.00012960555613972247,
+          "first_reference": 0.00012960558524355292,
+          "max_abs": 2.9103830456733704e-10
+        },
+        "bfloat16_gradient": {
+          "numel": 16384,
+          "different": 14,
+          "first": [
+            3,
+            81
+          ],
+          "first_native": -2.956390380859375e-05,
+          "first_reference": -2.968311309814453e-05,
+          "max_abs": 2.384185791015625e-07
+        }
+      }
+    },
+    "muon_matrices": {
+      "pre": {
+        "matrices": 24,
+        "different_weights": 0,
+        "different_gradients": 24,
+        "different_after_bfloat16_gradient_cast": 24
+      },
+      "post": {
+        "matrices": 24,
+        "different_weights": 17,
+        "different_gradients": 24,
+        "different_after_bfloat16_gradient_cast": 23
+      }
+    }
+  },
+  "normalization_only_counterfactual": {
+    "trained_logit_max_abs": 0.0008563995361328125,
+    "outside_original_tolerance": 885,
+    "logits": 904,
+    "eval_first_edge": 1.4569963216781616,
+    "eval_different_releases": 372,
+    "train_first_edge": 1.4492371082305908,
+    "train_different_releases": 405,
+    "val_bpb": 1.434937975517019
+  },
+  "torch_precomputed_sigmoid_softplus_counterfactual": {
+    "trained_logit_max_abs": 0.0007576048374176025,
+    "outside_original_tolerance": 889,
+    "logits": 904,
+    "eval_first_edge": 1.4569965600967407,
+    "eval_different_releases": 202,
+    "train_first_edge": 1.44923734664917,
+    "train_different_releases": 1095,
+    "val_bpb": 1.4349313007851
+  },
+  "reference": {
+    "eval_first_edge": 1.4569965600967407,
+    "train_first_edge": 1.44923734664917,
+    "val_bpb": 1.434935665032893
+  },
+  "baseline_trace_sha256": "13b53b351c456e560b3f40ef179915cad2111b8a7b13415aece015d2a47e3e42",
+  "counterfactual_source_sha256": {
+    "source": {
+      "bio_inspired_nanochat/synaptic.py": "296e14e7ac8b2fbe44d76251a23e3bcd2b1a46d72f95a671d23b60094a71addc",
+      "rust_src/src/presyn.rs": "27d7e202539405a28e70727ac22ffc8c034babfb5d9e6070cbe6ff3ab6d5cf9f"
+    },
+    "normalized": {
+      "bio_inspired_nanochat/synaptic.py": "5389d8284bee13e18b7f6a196a1e00f77d7977d7b88d71e3c61f8f45ba6c32b9",
+      "rust_src/src/presyn.rs": "27d7e202539405a28e70727ac22ffc8c034babfb5d9e6070cbe6ff3ab6d5cf9f"
+    },
+    "precomputed": {
+      "bio_inspired_nanochat/synaptic.py": "658d17504d5d17ac315f224ba8a0257de8305c8c2721236cb64734c1f38cb0db",
+      "rust_src/src/presyn.rs": "410f21a1295b4498255a5d9280c4372a873913a21a94c61090327100e0d89588"
+    }
+  },
+  "dsr": {
+    "scan_and_first_step": {
+      "run_id": "6b04e825-8d8f-4b01-b103-981dffaac622",
+      "exit_code": 0,
+      "checks": [
+        {
+          "status": "passed",
+          "log_sha256": "545e9b5ef14927668b83a8c2d7370b3101f007d0064fd3356e0385bf871ead2e"
+        },
+        {
+          "status": "passed",
+          "log_sha256": "08b0331b4476913a2e54109f042d67eabbd46def8b095c8bfc9873fcbdb59893"
+        },
+        {
+          "status": "passed",
+          "log_sha256": "22a3cc0d0c8a16a176fa38dc64f14607e1e54b58adf57576d3b6a4d3a7ea2044"
+        }
+      ]
+    },
+    "same_backend_controls": {
+      "run_id": "1aeab110-d558-44e8-8c99-b3a756f3a385",
+      "exit_code": 0,
+      "checks": [
+        {
+          "status": "passed",
+          "log_sha256": "1bef2c89da7e0e904d19bda3d9decce14246602a6f1385d8675a02ccfcdfe153"
+        },
+        {
+          "status": "passed",
+          "log_sha256": "4464213adb6140f20ffa44522d2caea1cc3da17fefee95bcdbd0bbd641d9f513"
+        },
+        {
+          "status": "passed",
+          "log_sha256": "1c3606a42673e062b59cebb01e3af6e93caed00bb18e91457d4463bfc778de4a"
+        }
+      ]
+    },
+    "first_edge_arithmetic": {
+      "run_id": "b384cb55-7dde-4343-808b-09e62e9ea778",
+      "exit_code": 0,
+      "checks": [
+        {
+          "status": "passed",
+          "log_sha256": "16e724aacb8913b3a41d5889132fba1b821ef337b652072ee368a7bfdde96c26"
+        }
+      ]
+    },
+    "normalization_only": {
+      "run_id": "c5b6011e-386b-42a8-af83-319ea6ea67b4",
+      "exit_code": 1,
+      "checks": [
+        {
+          "status": "passed",
+          "log_sha256": "da0994806690ee1abbfbc28aeddbfe2eb9c433d6e1621d09351dda9f0fc6e4a9"
+        },
+        {
+          "status": "failed",
+          "log_sha256": "9027e73277548d862da9c059b5edcad9815669386acfc1eeb8b72907097f5c36"
+        }
+      ]
+    },
+    "precomputed_drive_nonlinearities": {
+      "run_id": "8590f1e0-ba17-4d4a-93c8-ca0fc40e74b6",
+      "exit_code": 1,
+      "checks": [
+        {
+          "status": "passed",
+          "log_sha256": "1679af8f3fb115e9347257ccae20df5b7c98ce6fd7b9d1459e5a7bf369555446"
+        },
+        {
+          "status": "passed",
+          "log_sha256": "f2ae191704702c715ace4fa5838fd8ea7cb9a3656cd8aaeea0745dfaa7b34464"
+        },
+        {
+          "status": "passed",
+          "log_sha256": "d8a844eb16f731d54bb9a06ce77d2188bc1a180d85c19006ee2cdec86b2bdb88"
+        },
+        {
+          "status": "failed",
+          "log_sha256": "b3fd25327693d042698ff4b04af1b76d0fea92699ca1bf730d6abd31e7ed6cd9"
+        },
+        {
+          "status": "passed",
+          "log_sha256": "03da21acf5e5d823fb08117065f97ee3f55cdd4cf845ec2291c8f86907b594e9"
+        }
+      ]
+    }
+  },
+  "experimental_wheel_sha256": "afe8e9f6a387cecf92b93df86113748ae901a265a067a383ae9e78fa6a54521f",
+  "experimental_elf_sha256": "50155ae39c3dcbc6855c55ad2b2ec25255218ed1248a2b4fe77c2759ef4fdc61",
+  "candidate_scan_and_decode_suite": {
+    "passed": 9,
+    "deselected_gpu_only": 1,
+    "source": "Candidate scratch tree's scan and decode files. The newer ABI-staleness preflight regression belongs to the original ten-test integrated run."
+  },
+  "decision": "The forward-division candidate and the shared Torch sigmoid/softplus candidate failed the original trained-logit criterion. Both experimental changes were rejected."
+}

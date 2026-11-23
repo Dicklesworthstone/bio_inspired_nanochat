@@ -570,6 +570,129 @@
           "sha256": "1f004635abba17c2985bfc70b6004e330004d30d7269e89b9d1b2d2d9dec397e"
         }
       ]
+    },
+    {
+      "probe": "bio-gpu-preparation",
+      "observation": "Installed the frozen CUDA Python environment and built the project Rust extension on the dual-4090 worker. Each downstream check has its own exit in this preparation receipt.",
+      "run_id": "153cfada-ca06-4f49-98d3-e7988f95c3c9",
+      "exit": 1,
+      "source": "8e8ad5c7b3eb0d874c29177fc7ef704e688cd0f8|525465b1f5b703deff25432f9832ef0cf22e5bac925f5cfd7c6062cf9a7ce36f|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "838d99f42973eec3a94586bfafbd6c1dfab553101ba318ca46870ac78e2851a3"
+        },
+        {
+          "exit": 0,
+          "sha256": "800491e88f6c855e8ba8e302a1364315a9da70719fbca907326c47b0bd0647ba"
+        },
+        {
+          "exit": 1,
+          "sha256": "c24ff5add512ea9d02df013dfc3f75ca945981faaa027bceb9a03cf5237f7034"
+        },
+        {
+          "exit": 0,
+          "sha256": "1ef98219afe70e573b2e56d8d6ef7bd505d7f883121d1ab05e3ede904d0991cb"
+        }
+      ]
+    },
+    {
+      "probe": "bio-train-clock",
+      "observation": "The shared bare pytest launcher selected an interpreter missing Torch. The timer source passed lint, type checks and scoped UBS; the runtime retry used the environment interpreter.",
+      "run_id": "077ba488-21ac-41f9-aa0e-594205979565",
+      "exit": 1,
+      "source": "15333ff4ddbbf8063740cbf2d083037d1a21b659|2ce3f2c661b91ec36df249a4b21e6da46f73c930217aa6647047cf912ef76a27|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 4,
+          "sha256": "2bf303ceae1d3d4b80ed0a4268fcfbf11778eb5ce2d073fad4bdfebad67176a6"
+        },
+        {
+          "exit": 0,
+          "sha256": "6765b658479a863689e287ef352c180fb4eb8ee757248fcfa114f29f096cffa1"
+        },
+        {
+          "exit": 0,
+          "sha256": "0cdc86007b60b5c7860de55dd8e1c1bbba5aab05d6ecb767978c9af9797d2689"
+        }
+      ]
+    },
+    {
+      "probe": "bio-train-clock-native",
+      "observation": "The optimizer-boundary timing regression passed using python -m pytest. Fourteen of 15 performance tests passed. The real relative CPU training gate failed at 2.44x vs 2.00x under this worker load.",
+      "run_id": "e15be265-83b5-4bdd-bd4f-d481002d74c5",
+      "exit": 1,
+      "source": "15333ff4ddbbf8063740cbf2d083037d1a21b659|2ce3f2c661b91ec36df249a4b21e6da46f73c930217aa6647047cf912ef76a27|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 1,
+          "sha256": "0d1f8a93fc0b611d6997f1170fa32d95c0dd346bacdb43f7eba72b5b66ed3f87"
+        }
+      ]
+    },
+    {
+      "probe": "bio-d1-fused-probe",
+      "observation": "Exploratory native_presyn=1 reached both D1 updates, validated at step 2 and committed both rank shards in 410.199 s / 0.22789 GPUh. Training exit 0. The outer DSR receipt was invalidated when the trainer appended the default tracked registry. Only that registry changed; source-stable replay would be needed to qualify this observation.",
+      "run_id": "d7d6de26-dbe1-4e53-bab7-c417289d5ec7",
+      "exit": 1,
+      "source": "8e8ad5c7b3eb0d874c29177fc7ef704e688cd0f8|cdbaf9e981accc88bc61f25dea4fa3886fbd6bb0b6053bf9f8abe733559fae0b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "1748977480489b7acce9517d547b656e367db82797c71a81e9c429270a768509"
+        }
+      ]
+    },
+    {
+      "probe": "bio-d1-fused-score",
+      "observation": "The standalone registered-preset scorer refused this exploratory checkpoint because native_presyn differs from bio_all. The mismatch guard remains intact. The saved-config base_loss entry point is the appropriate independent measurement.",
+      "run_id": "6e2ec622-7ee0-43b0-9a8c-53c37e1385a8",
+      "exit": 1,
+      "source": "8e8ad5c7b3eb0d874c29177fc7ef704e688cd0f8|80e2718dc4b044c6a756663d235e8f281a40158f58e61755d5ab5a69d2b3f6b2|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 1,
+          "sha256": "4260b5f3808f4758ff5a749a494d01994d4173ea5349dfd35c78709e914e970c"
+        }
+      ]
+    },
+    {
+      "probe": "interaction-first",
+      "observation": "Completed 16 trained MoE cells across four paired training seeds. A test-only type issue failed the initial DSR envelope; outcomes and raw traces were retained.",
+      "run_id": "066b5191-e2e2-467f-808d-982b2937f265",
+      "exit": 1,
+      "source": "15333ff4ddbbf8063740cbf2d083037d1a21b659|ca09a7145ab719627c178a2e4cfd4a2172d6c02455352dd290fff65a3981411e|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "c6460a42b9bd19430649363ae5fcdf72928bd74e93dc4a257572d9acb2f953ae"
+        },
+        {
+          "exit": 1,
+          "sha256": "1d83a1445d2a71a7ab16dafb464c56ed62ed94f36a2f25a7186c54fc1722692c"
+        },
+        {
+          "exit": 0,
+          "sha256": "2b2b44ea25b0f2c08b75ef589e3ae12bea4935166e5ac616c50c21acd99622b6"
+        }
+      ]
+    },
+    {
+      "probe": "interaction-final",
+      "observation": "The prerequisite-matched four-seed MoE experiment passed 5 tests, lint, typing and UBS. The 95% paired bootstrap interval lay within \u00b10.01 nats on the held-out synthetic task.",
+      "run_id": "f4557e5a-6ea9-413e-a012-14f728ef8a49",
+      "exit": 0,
+      "source": "15333ff4ddbbf8063740cbf2d083037d1a21b659|1f39d72e56cd652d21bcd31acb4e57c41fa33ad6f4900f1a46e37105a94b1bad|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "92b794e4e4ec20fe5220bcebd59e9f76c6f637831294a875d75885c31d9db827"
+        },
+        {
+          "exit": 0,
+          "sha256": "fc613aabca1988f92eaafb4df399c16b9a15d09a7b4f0839ee5c0a1056804ba3"
+        }
+      ]
     }
   ],
   "reference_feasibility": {
