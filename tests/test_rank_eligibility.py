@@ -92,3 +92,29 @@ def test_traces_update_during_training_and_stay_finite():
     lin(torch.randn(B, IN, requires_grad=True), torch.ones(B), torch.ones(B))  # grad enabled
     assert not torch.equal(lin.u_buf, u0), "eligibility traces must update during training"
     assert torch.isfinite(lin.u_buf).all() and torch.isfinite(lin.v_buf).all()
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("batch_shape", [(7,), (2, 4)])
+def test_bfloat16_coactivity_accumulates_in_float32_trace_buffers(batch_shape):
+    """Exercise both routed MoE rows and dense sequences under training autocast."""
+    set_seed(12)
+    cfg = SynapticConfig(enable_hebbian=True, enable_stdp=False, rank_eligibility=4)
+    lin = SynapticLinear(IN, OUT, cfg)
+    x = torch.randn(*batch_shape, IN).bfloat16()
+    y = torch.randn(*batch_shape, OUT).bfloat16()
+    assert lin.u_buf is not None and lin.v_buf is not None
+    assert lin.proj_in is not None and lin.proj_out is not None
+    lin.u_buf.normal_()
+    lin.v_buf.normal_()
+    u0, v0 = lin.u_buf.clone(), lin.v_buf.clone()
+    with torch.no_grad(), torch.autocast("cpu", dtype=torch.bfloat16):
+        lin._update_hebb_traces(x, y, genes=None)
+    x_rows, y_rows = x.reshape(-1, IN), y.reshape(-1, OUT)
+    projected_x = x_rows @ lin.proj_in.bfloat16()
+    projected_y = y_rows @ lin.proj_out.bfloat16()
+    scale = 0.05 / x_rows.size(0)
+    expected_u = cfg.post_trace_decay * u0 + scale * x_rows.float().T @ projected_y.float()
+    expected_v = cfg.post_trace_decay * v0 + scale * projected_x.float().T @ y_rows.float()
+    torch.testing.assert_close(lin.u_buf, expected_u, rtol=1e-6, atol=1e-7)
+    torch.testing.assert_close(lin.v_buf, expected_v, rtol=1e-6, atol=1e-7)

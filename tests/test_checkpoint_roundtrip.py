@@ -18,12 +18,69 @@ import torch
 import pytest
 
 from bio_inspired_nanochat.checkpoint_manager import (
+    build_model,
+    checkpoint_model_config,
     config_hash,
     config_provenance,
+    save_checkpoint,
     synaptic_config_from_meta,
     synaptic_config_to_meta,
 )
 from bio_inspired_nanochat.synaptic import SynapticConfig
+
+
+@pytest.mark.parametrize(
+    "saved_norm,softcap,tied",
+    [(None, 15.0, False), (False, 0.75, False), (True, 0.0, False), (True, 0.75, True)],
+    ids=["legacy-head", "unnormalized-softcap", "normalized-uncapped", "normalized-softcap-tied"],
+)
+def test_serving_and_scoring_reproduce_original_checkpoint_logits(tmp_path, monkeypatch, saved_norm, softcap, tied):
+    import tiktoken
+    from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
+    from bio_inspired_nanochat.tokenizer import RustBPETokenizer
+    from scripts.eval_matrix import _get_logits, _load_base_train_checkpoint
+
+    monkeypatch.setenv("NANOCHAT_BASE_DIR", str(tmp_path))
+    enc = tiktoken.Encoding(
+        name="byte-roundtrip", pat_str="(?s).", mergeable_ranks={bytes([i]): i for i in range(256)},
+        special_tokens={"<|bos|>": 256},
+    )
+    tokenizer = RustBPETokenizer(enc, "<|bos|>")
+    tokenizer.save(str(tmp_path / "tokenizer"))
+    syn_cfg = SynapticConfig()
+    cfg = GPTSynapticConfig(sequence_len=8, vocab_size=257, n_layer=1, n_head=1, n_kv_head=1, n_embd=16,
+                            init_seed=17, syn_cfg=syn_cfg, final_norm=bool(saved_norm),
+                            logit_softcap=softcap, tie_embeddings=tied, rope_base=800.0)
+    ids = torch.tensor([tokenizer.encode("abcd")])
+    with torch.random.fork_rng(devices=[]), torch.no_grad():
+        torch.manual_seed(17)
+        original = GPTSynaptic(cfg).eval()
+        original.init_weights()
+        original.wte.weight.mul_(3)
+        if not tied:
+            original.lm_head.weight.uniform_(-1, 1)
+        expected = original(ids, train_mode=False)[0]
+        # A zero head or unit-scale residual could otherwise make this test insensitive.
+        cfg.final_norm = not cfg.final_norm
+        assert not torch.allclose(expected, original(ids, train_mode=False)[0])
+        cfg.final_norm = bool(saved_norm)
+        architecture = checkpoint_model_config(original, {})
+        assert architecture["logit_softcap"] == softcap
+        if saved_norm is None:
+            architecture.pop("final_norm")  # historical checkpoints predate the switch
+            architecture.pop("logit_softcap")
+        directory = tmp_path / "checkpoint"
+        save_checkpoint(str(directory), 2, original.state_dict(), None, {
+            "model_config": architecture, "synapses": True, "synaptic_config": synaptic_config_to_meta(syn_cfg),
+        })
+        served, serving_tokenizer, _ = build_model(str(directory), 2, torch.device("cpu"), "eval")
+        scored, _, _ = _load_base_train_checkpoint(directory, step=2, preset="bio_all", seed=17, device=torch.device("cpu"))
+        assert serving_tokenizer.encode("abcd") == ids[0].tolist()
+        for loaded in (served, scored):
+            assert (loaded.wte.weight is loaded.lm_head.weight) == tied
+            assert loaded.config.logit_softcap == softcap and loaded.config.rope_base == 800.0
+        torch.testing.assert_close(served(ids)[0], expected, rtol=0, atol=0)
+        torch.testing.assert_close(_get_logits(scored, ids), expected, rtol=0, atol=0)
 
 
 @pytest.mark.unit

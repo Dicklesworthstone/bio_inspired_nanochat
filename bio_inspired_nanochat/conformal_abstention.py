@@ -1,135 +1,135 @@
-"""Conformal Certified Abstention & Selective Prediction (bead re4e.10).
+"""Top-1 selective classification with a finite-sample calibration risk bound.
 
-Delivers finite-sample, distribution-free error rate guarantees:
-answers only when confidence exceeds the calibrated conformal threshold,
-guaranteeing error rate on answered queries <= alpha.
+The classifier and threshold grid must be fixed before an independent, iid labelled
+calibration sample. At confidence 1-delta over that sample, every admitted policy's
+population error conditional on answering is at most alpha under the same distribution.
+This statement concerns a population rate. Individual answers can be wrong.
 """
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
-from typing import Optional, Tuple
 
-import numpy as np
 import torch
 from torch import Tensor
 
 
-@dataclass
+@dataclass(frozen=True)
 class ConformalDecision:
-    prediction: Optional[int]
+    prediction: int | None
     abstained: bool
     non_conformity_score: float
     calibrated_threshold: float
     target_alpha: float
-    coverage_guaranteed: bool
+    calibration_confidence: float
+    answered_risk_upper_bound: float | None
+
+
+# Fixed before seeing labels or predictions. Testing every distinct observed score would
+# instead create a data-dependent family with a different simultaneous-coverage obligation.
+_THRESHOLDS = tuple(i / 100 for i in range(101))
+
+
+def _upper_risk(errors: int, answered: int, log_inverse_tail: float) -> float:
+    """Invert the binomial Chernoff lower-tail bound; return the conservative endpoint."""
+    if errors == answered:
+        return 1.0
+    if errors == 0:
+        return -math.expm1(-log_inverse_tail / answered)
+    p = errors / answered
+    low, high = p, 1.0
+    for _ in range(50):
+        mid = (low + high) / 2
+        if mid == high or mid == low:
+            break
+        divergence = p * math.log(p / mid) + (1 - p) * (math.log1p(-p) - math.log1p(-mid))
+        if answered * divergence >= log_inverse_tail:
+            high = mid
+        else:
+            low = mid
+    return high
+
+
+def _predictions(probs: Tensor) -> tuple[Tensor, Tensor]:
+    if probs.ndim != 2 or probs.shape[0] < 1 or probs.shape[1] < 2 or not probs.is_floating_point():
+        raise ValueError("expected a nonempty floating probability matrix with at least two classes")
+    values = probs.detach().to(device="cpu", dtype=torch.float64)
+    if (not values.isfinite().all() or (values < 0).any() or (values > 1).any()
+        or not torch.allclose(values.sum(1), torch.ones_like(values[:, 0]), atol=1e-5, rtol=0)):
+        raise ValueError("probability rows must be finite, nonnegative and sum to one")
+    confidence, predicted = values.max(dim=1)
+    return 1.0 - confidence, predicted
+
+
+def _label_errors(probs: Tensor, labels: Tensor, predicted: Tensor) -> Tensor:
+    if labels.shape != predicted.shape or labels.dtype not in (torch.int64, torch.int32, torch.int16, torch.int8, torch.uint8):
+        raise ValueError("one integer class label is required per prediction")
+    labels = labels.detach().cpu()
+    if (labels < 0).any() or (labels >= probs.shape[1]).any():
+        raise ValueError("label outside the class range")
+    return predicted != labels
 
 
 class ConformalAbstentionEngine:
-    """Split conformal predictor for certified error-bounded abstention."""
+    """Calibrate an acceptance policy on held-out labels using simultaneous binomial bounds."""
 
-    def __init__(self, target_alpha: float = 0.05) -> None:
-        if not 0.0 < target_alpha < 1.0:
-            raise ValueError(f"target_alpha must be in (0, 1), got {target_alpha}")
-        self.target_alpha = float(target_alpha)
-        self.calibrated_threshold: Optional[float] = None
-        self.calibration_size: int = 0
+    def __init__(self, target_alpha: float = 0.05, *, delta: float = 0.05) -> None:
+        if not (0 < target_alpha < 1 and 0 < delta < 1):
+            raise ValueError("target_alpha and delta must be in (0, 1)")
+        self.target_alpha = target_alpha
+        self.delta = delta
+        self.calibrated_threshold: float | None = None
+        self.answered_risk_upper_bound: float | None = None
+        self.calibration_size = 0
+        self._classes = 0
 
-    def calibrate(
-        self,
-        predicted_probs: Tensor,
-        ground_truth_labels: Tensor,
-    ) -> float:
-        """Calibrate non-conformity threshold to guarantee answered error <= target_alpha."""
-        probs = predicted_probs.detach().cpu().numpy()
-        labels = ground_truth_labels.detach().cpu().numpy()
+    def calibrate(self, predicted_probs: Tensor, ground_truth_labels: Tensor) -> float:
+        scores, predicted = _predictions(predicted_probs)
+        errors = _label_errors(predicted_probs, ground_truth_labels, predicted)
+        order = scores.argsort()
+        ordered = scores[order]
+        cum_errors = errors[order].long().cumsum(dim=0)
+        counts = torch.searchsorted(ordered, ordered.new_tensor(_THRESHOLDS), right=True)
+        # Conditional on each fixed policy's acceptance count, accepted errors are binomial.
+        # A union bound over the grid makes selection of the widest passing policy valid.
+        tail = math.log(len(_THRESHOLDS)) - math.log(self.delta)
+        threshold, bound = -1.0, None
+        for candidate, count in reversed(list(zip(_THRESHOLDS, counts.tolist(), strict=True))):
+            if count:
+                upper = _upper_risk(int(cum_errors[count - 1]), count, tail)
+                if upper <= self.target_alpha:
+                    threshold, bound = candidate, upper
+                    break
+        self.calibrated_threshold = threshold
+        self.answered_risk_upper_bound = bound
+        self.calibration_size, self._classes = predicted_probs.shape
+        return threshold
 
-        n = len(labels)
-        if n == 0:
-            raise ValueError("Calibration dataset must not be empty")
-
-        pred_classes = np.argmax(probs, axis=-1)
-        max_probs = np.max(probs, axis=-1)
-        scores = 1.0 - max_probs
-        is_incorrect = (pred_classes != labels).astype(float)
-
-        # Sort by non-conformity score (ascending confidence)
-        order = np.argsort(scores)
-        sorted_scores = scores[order]
-        sorted_errors = is_incorrect[order]
-
-        # Cumulative error rate for answered set at each score cutoff
-        cum_errors = np.cumsum(sorted_errors)
-        cum_counts = np.arange(1, n + 1)
-        cum_error_rates = cum_errors / cum_counts
-
-        # Find largest threshold where cumulative error rate <= target_alpha
-        valid_cutoffs = np.where(cum_error_rates <= self.target_alpha)[0]
-        if len(valid_cutoffs) > 0:
-            best_idx = valid_cutoffs[-1]
-            self.calibrated_threshold = float(sorted_scores[best_idx])
-        else:
-            # Most conservative: lowest observed score
-            self.calibrated_threshold = float(sorted_scores[0])
-
-        self.calibration_size = n
+    def _threshold_for(self, probs: Tensor) -> float:
+        if self.calibrated_threshold is None:
+            raise RuntimeError("calibrate before predicting")
+        if probs.shape[-1:] != (self._classes,):
+            raise ValueError("prediction class count differs from calibration")
         return self.calibrated_threshold
 
-    def predict(
-        self,
-        prob_distribution: Tensor,
-    ) -> ConformalDecision:
-        """Predict top-1 class or abstain if non-conformity exceeds calibrated threshold."""
-        if self.calibrated_threshold is None:
-            raise RuntimeError("Engine must be calibrated before predicting")
+    def predict(self, prob_distribution: Tensor) -> ConformalDecision:
+        probs = prob_distribution.reshape(1, -1) if prob_distribution.ndim == 1 else prob_distribution
+        threshold = self._threshold_for(probs)
+        scores, predicted = _predictions(probs)
+        if len(scores) != 1:
+            raise ValueError("predict expects one distribution")
+        score = float(scores[0])
+        abstained = score > threshold
+        return ConformalDecision(None if abstained else int(predicted[0]), abstained, score, threshold,
+                                 self.target_alpha, 1 - self.delta, self.answered_risk_upper_bound)
 
-        probs = prob_distribution.detach().cpu().numpy()
-        if probs.ndim > 1:
-            probs = probs.squeeze(0)
-
-        pred_class = int(np.argmax(probs))
-        max_prob = float(probs[pred_class])
-        score = 1.0 - max_prob
-
-        should_abstain = score > self.calibrated_threshold
-
-        return ConformalDecision(
-            prediction=None if should_abstain else pred_class,
-            abstained=should_abstain,
-            non_conformity_score=score,
-            calibrated_threshold=self.calibrated_threshold,
-            target_alpha=self.target_alpha,
-            coverage_guaranteed=True,
-        )
-
-    def evaluate_answered_error(
-        self,
-        test_probs: Tensor,
-        test_labels: Tensor,
-    ) -> Tuple[float, float]:
-        """Evaluate empirical error rate on answered subset and abstention rate.
-
-        Returns (answered_error_rate, abstention_rate).
-        """
-        probs = test_probs.detach().cpu().numpy()
-        labels = test_labels.detach().cpu().numpy()
-
-        n = len(labels)
-        answered_correct = 0
-        answered_total = 0
-        abstained_count = 0
-
-        for i in range(n):
-            dec = self.predict(torch.from_numpy(probs[i]))
-            if dec.abstained:
-                abstained_count += 1
-            else:
-                answered_total += 1
-                if dec.prediction == labels[i]:
-                    answered_correct += 1
-
-        answered_error = (
-            (1.0 - (answered_correct / answered_total)) if answered_total > 0 else 0.0
-        )
-        abstention_rate = abstained_count / max(1, n)
-        return answered_error, abstention_rate
+    def evaluate_answered_error(self, test_probs: Tensor, test_labels: Tensor) -> tuple[float, float]:
+        """Return empirical conditional error (NaN for zero answers) and abstention fraction."""
+        threshold = self._threshold_for(test_probs)
+        scores, predicted = _predictions(test_probs)
+        errors = _label_errors(test_probs, test_labels, predicted)
+        kept = scores <= threshold
+        answered = int(kept.sum())
+        rate = int(errors[kept].sum()) / answered if answered else math.nan
+        return rate, 1 - answered / len(scores)

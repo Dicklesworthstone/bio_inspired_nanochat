@@ -3,6 +3,7 @@ Utilities for saving and loading model/optim/state checkpoints.
 """
 import glob
 import hashlib
+import hmac
 import json
 import logging
 import os
@@ -80,6 +81,12 @@ def checkpoint_model_config(model, base_config: dict[str, Any]) -> dict[str, Any
     out = dict(base_config)
     config = getattr(model, "config", None)
     for name in (
+        "sequence_len",
+        "vocab_size",
+        "n_layer",
+        "n_head",
+        "n_kv_head",
+        "n_embd",
         "dropout",
         "use_moe",
         "num_experts",
@@ -90,6 +97,8 @@ def checkpoint_model_config(model, base_config: dict[str, Any]) -> dict[str, Any
         "init_seed",
         "tie_embeddings",
         "final_norm",
+        "logit_softcap",
+        "rope_base",
         # Attention-architecture surface: without these, a checkpoint saved
         # through this metadata path rebuilt as attention_type="standard" and
         # the strict load failed on the unexpected ultrametric projection keys.
@@ -542,6 +551,9 @@ def save_checkpoint(checkpoint_dir, step, model_data, optimizer_data, meta_data,
         logger.info(f"Saved model parameters to: {model_path}")
         # Work on a copy: adding inferred metadata must not mutate caller-owned state.
         meta_to_save = dict(meta_data) if meta_data is not None else {}
+        if (meta_to_save.get("user_config") or {}).get("matrix_run_id"):
+            with open(model_path, "rb") as model_file:
+                meta_to_save["model_file_sha256"] = hashlib.file_digest(model_file, "sha256").hexdigest()
         # Check if model_data contains synaptic-specific keys (heuristic detection)
         # This is a fallback; ideally the caller should set synapses=True in meta_data
         if "synapses" not in meta_to_save:
@@ -601,14 +613,22 @@ def load_checkpoint(checkpoint_dir, step, device, load_optimizer=False, rank=0, 
     # checkpoints are tensor-only state dicts (and RNG is tensor-encoded), so no
     # arbitrary-pickle deserialization is ever required to resume.
     model_path = os.path.join(checkpoint_dir, f"model_{step:06d}.pt")
-    model_data = torch.load(model_path, map_location=device, weights_only=True)
+    meta_data = load_checkpoint_metadata(checkpoint_dir, step)
+    with open(model_path, "rb") as model_file:
+        if (meta_data.get("user_config") or {}).get("matrix_run_id"):
+            # Hash and deserialize the same open file. Fixed and lifecycle controls can
+            # have identical state-dict keys even when the two learned tensors differ.
+            expected = meta_data.get("model_file_sha256")
+            actual = hashlib.file_digest(model_file, "sha256").hexdigest()
+            if not isinstance(expected, str) or not hmac.compare_digest(actual, expected):
+                raise ValueError(f"model weights do not match checkpoint metadata: {model_path}")
+            model_file.seek(0)
+        model_data = torch.load(model_file, map_location=device, weights_only=True)
     # Load the optimizer state if requested
     optimizer_data = None
     if load_optimizer:
         optimizer_path = os.path.join(checkpoint_dir, f"optim_{step:06d}_rank{rank:d}.pt")
         optimizer_data = torch.load(optimizer_path, map_location=device, weights_only=True)
-    # Load the metadata
-    meta_data = load_checkpoint_metadata(checkpoint_dir, step)
     if load_train_state:
         train_path = os.path.join(checkpoint_dir, f"train_{step:06d}_rank{rank:d}.pt")
         # ALWAYS load RNG state onto CPU, regardless of the compute device: torch's RNG
@@ -840,14 +860,8 @@ def prune_checkpoints(checkpoint_dir: str, keep_last: int, *, best_step: int | N
     return pruned
 
 
-def build_model(checkpoint_dir, step, device, phase):
-    """
-    A bunch of repetitive code to build a model from a given checkpoint.
-    Returns:
-    - base model - uncompiled, not wrapped in DDP
-    - tokenizer
-    - meta data saved during base model training
-    """
+def load_checkpoint_model(checkpoint_dir, step, device, phase):
+    """Reconstruct the original model and its metadata for serving or scoring."""
     if phase not in {"train", "eval"}:
         raise ValueError(f"phase must be 'train' or 'eval', got {phase!r}")
     model_data, _optimizer_data, meta_data = load_checkpoint(checkpoint_dir, step, device, load_optimizer=False)
@@ -882,6 +896,8 @@ def build_model(checkpoint_dir, step, device, phase):
             n_head=model_config_kwargs["n_head"],
             n_kv_head=model_config_kwargs.get("n_kv_head", model_config_kwargs["n_head"]),
             n_embd=model_config_kwargs["n_embd"],
+            rope_base=model_config_kwargs.get("rope_base", 10000.0),
+            logit_softcap=model_config_kwargs.get("logit_softcap", 15.0),
             synapses=True,
             syn_cfg=syn_cfg,
             dropout=model_config_kwargs.get("dropout", 0.0),
@@ -920,11 +936,16 @@ def build_model(checkpoint_dir, step, device, phase):
         model.eval()
     else:
         model.train()
-    # Load the Tokenizer
+    return model, meta_data
+
+
+def build_model(checkpoint_dir, step, device, phase):
+    """Return the checkpoint model, compatible serving tokenizer, and training metadata."""
+    model, meta_data = load_checkpoint_model(checkpoint_dir, step, device, phase)
     tokenizer = get_tokenizer()
     # Sanity check: compatibility between model and tokenizer
     tokenizer_vocab_size = tokenizer.get_vocab_size()
-    model_vocab_size = model_config_kwargs["vocab_size"]
+    model_vocab_size = model.config.vocab_size
     if tokenizer_vocab_size != model_vocab_size:
         raise ValueError(
             "checkpoint tokenizer vocabulary mismatch: "

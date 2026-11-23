@@ -25,6 +25,7 @@ import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
+from types import ModuleType
 from typing import Any, Literal, cast
 
 import numpy as np
@@ -432,27 +433,38 @@ class SynapticConfig:
 
 
 @functools.lru_cache(maxsize=1)
-def _rust_presyn_kernel() -> Any:
-    """The compiled ``rustbpe.presyn_release_canonical_cpu`` entry point, or ``None``.
-
-    ``rustbpe`` is the optional maturin extension (``uv sync --extra cpu --dev`` builds it).
-    Cached so the CPU decode predicate does not pay an import lookup per token.
-    """
+def rust_presyn_cpu_backend() -> ModuleType | None:
+    """Resolve the optional CPU kernels before handing them mutable synaptic state."""
     try:
         module = importlib.import_module("rustbpe")
-    except ModuleNotFoundError:
-        return None
-    return getattr(module, "presyn_release_canonical_cpu", None)
+    except ModuleNotFoundError as exc:
+        if exc.name == "rustbpe":
+            return None
+        raise
+    kernels = ("presyn_detached_scan_cpu", "presyn_release_canonical_cpu")
+    abi = getattr(module, "PRESYN_CPU_ABI", None)
+    if abi is None and not any(hasattr(module, name) for name in kernels):
+        return None  # Tokenizer-only installations use the reference implementation.
+    if type(abi) is not int or abi != 1 or not all(callable(getattr(module, name, None)) for name in kernels):
+        raise RuntimeError(
+            f"Incompatible rustbpe CPU presyn backend at {module.__file__}: "
+            f"expected PRESYN_CPU_ABI=1 with scan and decode kernels, found {abi!r}. "
+            "Rebuild from this checkout with uv run --no-sync maturin develop --release --uv "
+            "or select the reference backend with --syn_cfg.native_presyn=0."
+        )
+    return module
+
+
+@functools.lru_cache(maxsize=1)
+def _rust_presyn_kernel() -> Any:
+    """The verified single-query CPU decoder, or None when unavailable."""
+    return getattr(rust_presyn_cpu_backend(), "presyn_release_canonical_cpu", None)
 
 
 @functools.lru_cache(maxsize=1)
 def _rust_detached_scan_kernel() -> Any:
     """The compiled ``rustbpe.presyn_detached_scan_cpu`` multi-query scan, or ``None``."""
-    try:
-        module = importlib.import_module("rustbpe")
-    except ModuleNotFoundError:
-        return None
-    return getattr(module, "presyn_detached_scan_cpu", None)
+    return getattr(rust_presyn_cpu_backend(), "presyn_detached_scan_cpu", None)
 
 
 def _resolve_synaptic_granularity(cfg: SynapticConfig) -> SynapticGranularity:
@@ -3669,14 +3681,14 @@ class SynapticLinear(nn.Module):
                     y_proj_2d = y_proj.reshape(-1, y_proj.size(-1))
                     x_proj_2d = x_proj.reshape(-1, x_proj.size(-1))
                     self.u_buf.addmm_(
-                        x_2d.t(),
-                        y_proj_2d,
+                        x_2d.t().to(self.u_buf.dtype),
+                        y_proj_2d.to(self.u_buf.dtype),
                         beta=self.cfg.post_trace_decay,
                         alpha=0.05 / norm_factor,
                     )
                     self.v_buf.addmm_(
-                        x_proj_2d.t(),
-                        y_2d,
+                        x_proj_2d.t().to(self.v_buf.dtype),
+                        y_2d.to(self.v_buf.dtype),
                         beta=self.cfg.post_trace_decay,
                         alpha=0.05 / norm_factor,
                     )
@@ -3692,15 +3704,17 @@ class SynapticLinear(nn.Module):
                 # fictitious spike pair — LTP/LTD computed over unrelated tokens,
                 # scaling with batch size. Only the dense (B, T, C) path above has
                 # a true temporal axis. Accumulate the plain co-activity trace.
+                # In-place addmm bypasses autocast. Accumulate in the long-lived
+                # trace buffer's dtype even when routed activations are bfloat16.
                 self.u_buf.addmm_(
-                    x.transpose(0, 1),
-                    y_proj,
+                    x.transpose(0, 1).to(self.u_buf.dtype),
+                    y_proj.to(self.u_buf.dtype),
                     beta=self.cfg.post_trace_decay,
                     alpha=0.05 / batch,
                 )
                 self.v_buf.addmm_(
-                    x_proj.transpose(0, 1),
-                    y,
+                    x_proj.transpose(0, 1).to(self.v_buf.dtype),
+                    y.to(self.v_buf.dtype),
                     beta=self.cfg.post_trace_decay,
                     alpha=0.05 / batch,
                 )

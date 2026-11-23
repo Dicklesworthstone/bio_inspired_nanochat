@@ -6,16 +6,74 @@
 
 Run project checks through DSR. The command examples below describe the payloads for its
 workers. The repository policy covers CPU, GPU, scheduled checks and release automation.
-The November 22 audit found no standing project profile in the installed DSR configuration.
-Beads `u0fl.1` and `u0fl.2` track the CPU/nightly and hardware receipts. The lane definitions
-below describe the required coverage.
+The standing DSR profiles are `bio_inspired_nanochat` for main and `bio_inspired_nanochat-nightly`
+for the two nightly suites. Both run the repository's gate definitions with local `act` and retain
+artifacts under `runs/dsr/$DSR_RUN_ID/`. Use a private, pinned checkout on the Linux worker.
+The project registry can also be used on a fresh dispatcher:
+
+```bash
+DSR_REPOS_FILE="$PWD/dsr/quality.yaml" dsr --json quality --tool bio_inspired_nanochat --work-dir "$PWD" --check-timeout 14400
+DSR_REPOS_FILE="$PWD/dsr/quality.yaml" dsr --json quality --tool bio_inspired_nanochat-nightly --work-dir "$PWD" --check-timeout 14400
+```
+
+Beads `u0fl.1` and `u0fl.2` track terminal main, nightly and hardware qualification.
 
 The audit exercised two-rank vanilla checkpointing, greedy and selective web generation,
 the default bio Quick Start and the printed matrix scoring command. The research host's
 installed native CPU extension exposed the scan symbol with an older return signature.
 The default bio trainer failed during evaluation. Explicitly selecting the reference backend
-completed two training steps with the same inputs. Bead `u0fl.4` tracks the source-matched
-wheel, a diagnostic for stale installations and the default-path rerun. [Probe results](results/project_reality_check_2026-11-22.json)
+completed two training steps with the same inputs. That wheel's installed Linux CPython 3.14
+shared library had SHA-256 `1ff8e09978dc7abded9932afc33af753d68bc20f1677711e948f6a8d25061c27`.
+CPU training now checks the advertised presynaptic ABI before allocating a model. ABI 1
+returns the release tensor and gradient factor from the detached scan. An unversioned or
+incompatible native kernel raises an error that identifies the loaded package and explains
+how to rebuild it. A missing extension or tokenizer-only install uses the reference recurrence.
+In a Python 3.14 environment without `rustbpe`, both settings of `native_presyn` produced
+bit-identical releases, drive gradients and synaptic state for the same seeded stochastic scan.
+[Original probe results](results/project_reality_check_2026-11-22.json)
+
+### Reproducing the CPU presynaptic checks
+
+Use a fresh Python 3.14 environment on a Linux DSR worker. Run the build and tests
+in the same checkout. The following are DSR check payloads.
+
+```bash
+uv sync --frozen --extra cpu --dev
+uv run --no-sync maturin build --release --locked
+uv run --no-sync maturin develop --release --locked --uv
+uv run --no-sync python -m pytest tests/test_e2e_quick_start.py -v
+uv run --no-sync python -m pytest tests/test_presyn_scan_kernel.py tests/test_presyn_rust_dispatch.py -v -m 'not gpu'
+```
+
+The Quick Start tests train a tokenizer, train a CPU bio model, reload its checkpoint
+and exercise chat on a small local corpus. The recurrence tests compare native and
+reference outputs, gradients and mutable state on identical inputs.
+
+On November 22 DSR built `bio_inspired_nanochat-0.1.0-cp314-cp314-manylinux_2_34_x86_64.whl`
+from the ABI change on top of `320ffdc8`. Its SHA-256 was
+`d043271764179c0f6fc5b46805efc0c34ce8b29942060d2be57f3f10cd7d9b14`.
+The worker used Python 3.14.2, installed the wheel into an isolated uv environment and
+reused existing Torch dependencies. The packaged and loaded shared libraries both hashed
+to `be4c6deb888e23e9e4934b9d3addd8445ed2266c8213523eb9ff2d59b3562854`.
+The original wheel failed before model allocation with the new ABI diagnostic.
+
+Both the default native trainer and `--syn_cfg.native_presyn=0` wrote complete two-step
+checkpoints on identical local parquet shards. Validation BPB was 1.4349256529350143
+and 1.434935665032893, respectively. Reloading the checkpoints and scoring “The synapse”
+gave a maximum absolute logit difference of 0.0007157624. Of 904 logits, 874 exceeded
+the predeclared `rtol=1e-5, atol=1e-6` comparison. Both training paths run, and this
+strict end-to-end parity check failed.
+Repeating each backend on its own reproduced all 195 model-state tensors and the prompt
+logits bit for bit. Across backends, 109 of 195 tensors already differed after step one.
+The maximum logit differences on that prompt were 0.0003334433 at step one and
+0.0007157624 at step two. All 10 selected CPU scan and decode tests passed. The hardware
+GPU case was deselected for that check.
+
+To identify the backend in an affected environment, start a fresh process.
+
+```bash
+uv run --no-sync python -c 'from bio_inspired_nanochat.synaptic import rust_presyn_cpu_backend; m = rust_presyn_cpu_backend(); print((m.__file__, m.PRESYN_CPU_ABI) if m else "reference backend")'
+```
 
 ---
 

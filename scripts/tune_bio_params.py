@@ -43,8 +43,10 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import hashlib
 import io
 import json
+import logging
 import math
 import os
 import time
@@ -97,6 +99,8 @@ class _DistributedApi(Protocol):
     def all_gather(
         self, tensor_list: list[torch.Tensor], tensor: torch.Tensor
     ) -> None: ...
+
+    def all_gather_object(self, object_list: list, obj: object) -> None: ...
 
     def destroy_process_group(self) -> None: ...
 
@@ -240,6 +244,8 @@ def decode_params(vector: np.ndarray, specs: Sequence[ParamSpec]) -> Dict[str, f
     out: dict[str, float] = {}
     for i, spec in enumerate(specs):
         val = float(vector[i])
+        if not math.isfinite(val):
+            raise ValueError(f"non-finite candidate parameter {spec.name}")
         if spec.log_scale:
             val = math.exp(val)
         val = max(spec.lower, min(spec.upper, val))
@@ -1013,6 +1019,9 @@ class CandidateEvalResult:
     lce_pred_loss: float | None = None
     losses: list[float] | None = None
     held_out_loss: float | None = None  # loss on a FIXED held-out set (74f.1)
+    error: str | None = None
+    final_weights_sha256: str | None = None
+    optimizer_names: tuple[str, ...] = ()
 
     @property
     def objective(self) -> float:
@@ -1091,6 +1100,7 @@ def evaluate_candidate_detailed(
     held_out_batches: int = 8,
     held_out_seed: int = 12345,
     lm_task: LMTask | None = None,
+    record_weight_digest: bool = False,
 ) -> CandidateEvalResult:
     """
     Instantiates a model with specific bio-parameters and runs a short training loop.
@@ -1114,6 +1124,7 @@ def evaluate_candidate_detailed(
     attempts = max(0, int(max_retries)) + 1
     last_exc: Exception | None = None
     for attempt in range(attempts):
+        completed_steps = 0
         try:
             # 1) Decode parameters
             param_dict = decode_params(solution_vector, specs)
@@ -1137,7 +1148,7 @@ def evaluate_candidate_detailed(
             # 4) Optimizer
             if lm_task is not None:
                 with contextlib.redirect_stdout(io.StringIO()):  # its per-call LR-scale banner
-                    optimizers = list(model.setup_optimizers())
+                    optimizers = list(model.setup_optimizers(independent_model=True))
             else:
                 optimizers = [
                     torch.optim.AdamW(
@@ -1191,6 +1202,7 @@ def evaluate_candidate_detailed(
                 torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
                 for optim in optimizers:
                     optim.step()
+                completed_steps += 1
 
                 loss_val = float(loss.item())
                 mean_window.append(loss_val)
@@ -1206,6 +1218,16 @@ def evaluate_candidate_detailed(
                 raise FloatingPointError(
                     "Non-finite mean_last_loss encountered during evaluation"
                 )
+            weight_digest = None
+            if record_weight_digest:
+                # Capture the optimizer's final state before held-out evaluation resets
+                # sequence memory (including any online fast weights).
+                hasher = hashlib.sha256()
+                for name, param in model.named_parameters():
+                    descriptor = json.dumps([name, str(param.dtype), list(param.shape)])
+                    hasher.update(descriptor.encode() + b"\x00")
+                    hasher.update(param.detach().reshape(-1).contiguous().view(torch.uint8).cpu().numpy().tobytes())
+                weight_digest = hasher.hexdigest()
 
             # Held-out evaluation (74f.1): score generalization on a FIXED held-out set
             # (identical across all candidates), which is far less noisy than the last-k
@@ -1216,7 +1238,9 @@ def evaluate_candidate_detailed(
                 if can_reset:
                     model.reset_sequence_state(reset_fast_weights=True)
                 bpb = lm_held_out_bpb(model, lm_task, batch_size, device)
-                held_out_loss = bpb if math.isfinite(bpb) else PENALTY_LOSS
+                if not math.isfinite(bpb):
+                    raise FloatingPointError("non-finite held-out BPB")
+                held_out_loss = bpb
             elif held_out_batches > 0:
                 model.eval()
                 ho_losses: list[float] = []
@@ -1234,7 +1258,9 @@ def evaluate_candidate_detailed(
                         _, lho = model(xho, yho)
                         ho_losses.append(float(lho.item()))
                 ho_mean = float(np.mean(ho_losses)) if ho_losses else PENALTY_LOSS
-                held_out_loss = ho_mean if math.isfinite(ho_mean) else PENALTY_LOSS
+                if not math.isfinite(ho_mean):
+                    raise FloatingPointError("non-finite held-out loss")
+                held_out_loss = ho_mean
 
             lce_pred = None
             if use_lce and lce_target is not None and lce_points is not None:
@@ -1252,6 +1278,8 @@ def evaluate_candidate_detailed(
                 lce_pred_loss=lce_pred,
                 losses=all_losses,
                 held_out_loss=held_out_loss,
+                final_weights_sha256=weight_digest,
+                optimizer_names=tuple(type(o).__name__ for o in optimizers),
             )
 
         except Exception as exc:
@@ -1260,7 +1288,8 @@ def evaluate_candidate_detailed(
             last_exc = exc
             if attempt + 1 >= attempts:
                 return CandidateEvalResult(
-                    mean_last_loss=PENALTY_LOSS, steps_run=steps_i
+                    mean_last_loss=PENALTY_LOSS, steps_run=completed_steps,
+                    error=f"{type(exc).__name__}: {exc}",
                 )
             if device.startswith("cuda") and torch.cuda.is_available():
                 torch.cuda.empty_cache()
@@ -1437,18 +1466,60 @@ def evaluate_candidate(
     return float(res.objective)
 
 
-def _merge_allgathered_fitness(gathered: list[torch.Tensor]) -> list[float]:
-    pop = int(gathered[0].numel()) if gathered else 0
+def _merge_allgathered_fitness(gathered: Sequence[torch.Tensor | list[float]]) -> list[float]:
+    pop = len(gathered[0]) if gathered else 0
     out: list[float] = []
     for i in range(pop):
         v = float("nan")
         for t in gathered:
-            val = float(t[i].item())
+            val = float(t[i])
             if math.isfinite(val):
                 v = val
                 break
         out.append(v if math.isfinite(v) else PENALTY_LOSS)
     return out
+
+
+def _evaluate_population(
+    solutions: torch.Tensor, *, args: argparse.Namespace, specs: Sequence[ParamSpec],
+    dist_info: DistInfo, steps: int, lce_target: int | None, lm_task: LMTask | None,
+    model_config: GPTSynapticConfig = MODEL_CONFIG,
+) -> tuple[list[float], list[dict[str, Any]]]:
+    """Each rank owns disjoint candidates. The group exchanges only terminal outcomes."""
+    local = [float("nan")] * len(solutions)
+    records = []
+    for idx in range(dist_info.rank, len(solutions), dist_info.world_size):
+        vector = solutions[idx].detach().cpu().numpy().astype("<f8", copy=False)
+        result = evaluate_candidate_detailed(
+            vector, specs=specs, seed=args.seed, steps=steps, batch_size=args.batch_size,
+            device=dist_info.device, lr=args.lr, weight_decay=args.weight_decay,
+            timeout_seconds=args.timeout_seconds, max_retries=args.retries, raise_on_error=False,
+            lce_target_steps=lce_target, lce_exponent=args.lce_exponent,
+            lce_tail_points=args.lce_tail_points, lce_stride=args.lce_stride,
+            lm_task=lm_task, model_config=model_config, record_weight_digest=args.record_weight_digests,
+        )
+        value = result.lce_pred_loss if lce_target and result.lce_pred_loss is not None else result.objective
+        if result.error is None:
+            local[idx] = value
+        records.append({
+            "index": idx, "candidate_sha256": hashlib.sha256(vector.tobytes()).hexdigest(),
+            "encoded_solution": [float(v) if math.isfinite(v) else str(v) for v in vector],
+            "rank": dist_info.rank, "device": dist_info.device,
+            "group_backend": dist_info.backend or "serial", "group_size": dist_info.world_size,
+            "optimizer_scope": "candidate", "optimizer_names": list(result.optimizer_names),
+            "steps_run": result.steps_run, "score": value if result.error is None else None,
+            "error": result.error, "final_weights_sha256": result.final_weights_sha256,
+        })
+    if dist_info.enabled:
+        shards: list[tuple[list[float], list[dict[str, Any]]]] = [([], []) for _ in range(dist_info.world_size)]
+        dist.all_gather_object(shards, (local, records))
+        gathered = [scores for scores, _ in shards]
+        records = sorted((r for _, rows in shards for r in rows), key=lambda r: r["index"])
+    else:
+        gathered = [local]
+    if [r["index"] for r in records] != list(range(len(solutions))):
+        raise RuntimeError("population scheduler returned missing or duplicate candidate indices")
+    return _merge_allgathered_fitness(gathered), records
 
 
 def _distributed_worker_loop(
@@ -1485,41 +1556,9 @@ def _distributed_worker_loop(
         sols = torch.empty((pop, dim), dtype=torch.float64, device=comm_device)
         dist.broadcast(sols, src=0)
 
-        fitness = torch.full(
-            (pop,), float("nan"), dtype=torch.float64, device=comm_device
-        )
         use_lce = mode == mode_lce and target_steps > steps_to_run
-        for sol_idx in range(dist_info.rank, pop, dist_info.world_size):
-            res = evaluate_candidate_detailed(
-                sols[sol_idx].detach().cpu().numpy(),
-                specs=specs,
-                seed=int(args.seed),
-                steps=int(steps_to_run),
-                batch_size=int(args.batch_size),
-                device=dist_info.device,
-                lr=float(args.lr),
-                weight_decay=float(args.weight_decay),
-                timeout_seconds=args.timeout_seconds,
-                max_retries=int(args.retries),
-                raise_on_error=False,
-                mean_last=10,
-                lce_target_steps=int(target_steps) if use_lce else None,
-                lce_exponent=float(args.lce_exponent),
-                lce_tail_points=int(args.lce_tail_points),
-                lce_stride=int(args.lce_stride),
-                record_losses=False,
-                lm_task=lm_task,
-            )
-            if use_lce and res.lce_pred_loss is not None:
-                fitness[sol_idx] = float(res.lce_pred_loss)
-            else:
-                # 74f.1: prefer the held-out objective (far less noisy than
-                # train-side mean-last-k); falls back automatically when the
-                # caller disables held-out batches.
-                fitness[sol_idx] = float(res.objective)
-
-        gathered = [torch.empty_like(fitness) for _ in range(dist_info.world_size)]
-        dist.all_gather(gathered, fitness)
+        _evaluate_population(sols, args=args, specs=specs, dist_info=dist_info, steps=steps_to_run,
+                             lce_target=target_steps if use_lce else None, lm_task=lm_task)
 
 
 # -----------------------------------------------------------------------------
@@ -1969,6 +2008,7 @@ def _cmd_optimize(
 
                 solutions = es.ask()
                 pop = int(len(solutions))
+                sols_t = torch.as_tensor(np.asarray(solutions, dtype=np.float64), device=comm_device)
 
                 if args.distributed:
                     ctrl = torch.tensor(
@@ -1984,82 +2024,26 @@ def _cmd_optimize(
                         device=comm_device,
                     )
                     dist.broadcast(ctrl, src=0)
-                    sols_np = np.asarray(solutions, dtype=np.float64)
-                    sols_t = torch.as_tensor(
-                        sols_np, dtype=torch.float64, device=comm_device
-                    )
                     dist.broadcast(sols_t, src=0)
-
-                    fitness = torch.full(
-                        (pop,), float("nan"), dtype=torch.float64, device=comm_device
-                    )
-                    for sol_idx in range(dist_info.rank, pop, dist_info.world_size):
-                        res = evaluate_candidate_detailed(
-                            sols_t[sol_idx].detach().cpu().numpy(),
-                            specs=specs,
-                            seed=int(args.seed),
-                            steps=int(eval_steps),
-                            batch_size=int(args.batch_size),
-                            device=dist_info.device,
-                            lr=float(args.lr),
-                            weight_decay=float(args.weight_decay),
-                            timeout_seconds=args.timeout_seconds,
-                            max_retries=int(args.retries),
-                            raise_on_error=False,
-                            mean_last=10,
-                            lce_target_steps=int(lce_target_steps) if use_lce else None,
-                            lce_exponent=float(args.lce_exponent),
-                            lce_tail_points=int(args.lce_tail_points),
-                            lce_stride=int(args.lce_stride),
-                            record_losses=False,
-                            lm_task=lm_task,
-                        )
-                        if use_lce and res.lce_pred_loss is not None:
-                            fitness[sol_idx] = float(res.lce_pred_loss)
-                        else:
-                            # 74f.1: prefer the held-out objective (see
-                            # _distributed_worker_loop note).
-                            fitness[sol_idx] = float(res.objective)
-
-                    gathered = [
-                        torch.empty_like(fitness) for _ in range(dist_info.world_size)
-                    ]
-                    dist.all_gather(gathered, fitness)
-                    fitnesses = _merge_allgathered_fitness(gathered)
-                else:
-                    fitnesses = []
-                    for sol in solutions:
-                        res = evaluate_candidate_detailed(
-                            np.asarray(sol, dtype=np.float64),
-                            specs=specs,
-                            seed=int(args.seed),
-                            steps=int(eval_steps),
-                            batch_size=int(args.batch_size),
-                            device=args.device,
-                            lr=float(args.lr),
-                            weight_decay=float(args.weight_decay),
-                            timeout_seconds=args.timeout_seconds,
-                            max_retries=int(args.retries),
-                            raise_on_error=False,
-                            mean_last=10,
-                            lce_target_steps=int(lce_target_steps) if use_lce else None,
-                            lce_exponent=float(args.lce_exponent),
-                            lce_tail_points=int(args.lce_tail_points),
-                            lce_stride=int(args.lce_stride),
-                            record_losses=False,
-                            lm_task=lm_task,
-                        )
-                        if use_lce and res.lce_pred_loss is not None:
-                            fitnesses.append(float(res.lce_pred_loss))
-                        else:
-                            # 74f.1: prefer the held-out objective (see
-                            # _distributed_worker_loop note).
-                            fitnesses.append(float(res.objective))
+                fitnesses, candidates = _evaluate_population(
+                    sols_t, args=args, specs=specs, dist_info=dist_info, steps=eval_steps,
+                    lce_target=lce_target_steps if use_lce else None, lm_task=lm_task,
+                )
+                failed = [row for row in candidates if row["error"] is not None]
+                if failed:
+                    logging.getLogger(__name__).warning("generation=%s failed candidates: %s", next_gen, failed)
+                if len(failed) == pop:
+                    if artifacts is not None:
+                        _append_progress(artifacts.progress_jsonl, {
+                            "generation": next_gen, "status": "all_candidates_failed", "candidates": candidates,
+                        })
+                    raise RuntimeError(f"generation {next_gen}: every candidate failed")
 
                 es.tell(solutions, fitnesses)
 
                 gen = int(getattr(es, "countiter", 0))
-                gen_min = float(min(fitnesses))
+                best_idx = min((r["index"] for r in candidates if r["error"] is None), key=fitnesses.__getitem__)
+                gen_min = fitnesses[best_idx]
                 gen_mean = float(np.mean(fitnesses))
                 elapsed_s = float(time.monotonic() - gen_start)
                 gpu_hours = (elapsed_s / 3600.0) * float(gpu_count)
@@ -2070,7 +2054,6 @@ def _cmd_optimize(
                 improved = gen_min < best_loss
                 if improved:
                     best_loss = gen_min
-                    best_idx = int(np.argmin(fitnesses))
                     best_params = decode_params(
                         np.array(solutions[best_idx], dtype=np.float64), specs
                     )
@@ -2124,6 +2107,7 @@ def _cmd_optimize(
                             "run_id": run_id,
                             "generation": gen,
                             "min_loss": gen_min,
+                            "candidates": candidates,
                             "mean_loss": gen_mean,
                             "best_loss": best_loss,
                             "popsize": pop,
@@ -2435,6 +2419,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     opt_p.add_argument("--generations", type=int, default=MAX_GENERATIONS)
     opt_p.add_argument("--popsize", type=int, default=POPULATION_SIZE)
+    opt_p.add_argument("--record-weight-digests", action="store_true",
+                       help="Record SHA-256 of each candidate's final weights in generation progress")
     opt_p.add_argument("--sigma0", type=float, default=0.2)
     opt_p.add_argument("--steps", type=int, default=STEPS_PER_EVAL)
     opt_p.add_argument(

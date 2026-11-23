@@ -154,6 +154,25 @@ def _recurrence_case(native: bool, *, train: bool, frac: float, grad: bool):
 
 
 @pytest.mark.unit
+def test_unversioned_native_scan_is_rejected_before_mutating_state(monkeypatch):
+    """A stale wheel has the same scan symbol and an incompatible tuple contract."""
+    from bio_inspired_nanochat.synaptic import rust_presyn_cpu_backend
+
+    extension = pytest.importorskip("rustbpe")
+    if not hasattr(extension, "presyn_detached_scan_cpu"):
+        pytest.skip("requires installed presyn scan")
+    rust_presyn_cpu_backend.cache_clear()
+    # Remove only the advertised ABI from the actual extension. An unversioned
+    # wheel is also exercised as a separate clean-process installation check.
+    monkeypatch.delattr(extension, "PRESYN_CPU_ABI", raising=False)
+    with pytest.raises(RuntimeError, match="Incompatible rustbpe CPU presyn backend") as err:
+        rust_presyn_cpu_backend()
+    assert "expected PRESYN_CPU_ABI=1" in str(err.value)
+    assert "maturin develop --release" in str(err.value)
+    assert "--syn_cfg.native_presyn=0" in str(err.value)
+
+
+@pytest.mark.unit
 @pytest.mark.parametrize(
     ("train", "frac", "grad"), [(True, 0.3, True), (True, 0.0, True), (False, 0.0, False)]
 )

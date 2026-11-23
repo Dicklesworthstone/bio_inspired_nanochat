@@ -1,0 +1,23 @@
+schema_version: 1.0.0
+tools:
+  bio_inspired_nanochat:
+    repo: Dicklesworthstone/bio_inspired_nanochat
+    required_checks:
+      - >-
+        git rev-parse HEAD &&
+        act push --workflows .github/workflows/ci.yml
+        --artifact-server-path "$PWD/runs/dsr/${DSR_RUN_ID:?}/main"
+        --pull=false
+  bio_inspired_nanochat-nightly:
+    repo: Dicklesworthstone/bio_inspired_nanochat
+    required_checks:
+      - >-
+        git rev-parse HEAD &&
+        act schedule --workflows .github/workflows/nightly-validation.yml
+        --artifact-server-path "$PWD/runs/dsr/${DSR_RUN_ID:?}/validation"
+        --pull=false
+      - >-
+        git rev-parse HEAD &&
+        act schedule --workflows .github/workflows/nightly-uncertainty.yml
+        --artifact-server-path "$PWD/runs/dsr/${DSR_RUN_ID:?}/uncertainty"
+        --pull=false

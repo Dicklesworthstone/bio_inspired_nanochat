@@ -1,30 +1,139 @@
-# Bio-vs-Vanilla Ablation Matrix — Pre-Registered Experiment Spec (bead `hwxb.5.1`)
+# D1 bio-vs-vanilla ablation protocol
 
-This document and its machine-readable twin, `bio_inspired_nanochat/ablation_matrix.py`, define the
-**headline experiment** of the scale-up epic: *does the biology help, and which mechanism?* It is
-**pre-registered** — the configs, seeds, equal-compute budget, metrics, and the decision rule are
-fixed here **before** any 4090 time is spent, so the result cannot be rationalized after the fact.
+**Prospective version `d1-paired-bpb-2026-11-22`** fixes the comparisons and selection rule before any
+D1 outcome. The primary question is whether the default dense synaptic model lowers held-out FineWeb
+validation bits per byte (BPB) relative to vanilla at the same training token budget. A second
+comparison measures the synaptic architecture alone. Each mechanism has its own paired comparison.
+The executable definitions are in [eval_stats.py](../bio_inspired_nanochat/eval_stats.py) and the
+training columns are in [ablation_matrix.py](../bio_inspired_nanochat/ablation_matrix.py).
 
-It builds on, and does not duplicate, the general
-[`docs/eval_benchmark_matrix.md`](eval_benchmark_matrix.md) (metric definitions, preset dimensions,
-the `eval_matrix` harness contract). What this spec adds is the **experimental design** the headline
-verdict needs: the architecture-vs-mechanism anchor, both ablation directions, param-matching,
-staged compute with a GPU-hour gate, and the pinned statistical decision rule.
+## Registered comparisons
 
-> The mechanism set, the leave-one-out columns, and the add-one-in columns are **derived from
-> `ablation_registry.MECHANISMS`** in code, so this spec cannot silently drift from what the model
-> actually treats as ablatable. The narrative below mirrors that code; the code is authoritative.
+Every difference below is treatment BPB minus control BPB on the same initialization seed. A
+negative value favors treatment. The screen records both anchors. Only the thirteen mechanism or
+stack comparisons can nominate a candidate. The MoE lifecycle belongs to a separate exploratory
+family.
 
-**November 22 audit of the original registration.** Preserve the original design below for
-comparison with the next protocol. A two-seed screen needs an explicit descriptive advancement
-rule. The minimum exact two-sided Wilcoxon p-value with three nonzero pairs is 0.25. The launcher
-and the cost gate use different default seed counts, and the scorer corrects all comparisons to
-one baseline. The original example also requests 498,073,600 tokens per cell. It cannot serve
-as a 10M-token screening recipe. Record the corrected contrasts, independent confirmation
-seeds, capacity matching, GPU-hour accounting and executable recipe before running D1.
-The open acceptance tests are `hwxb.5.6` through `hwxb.5.9`. [Current bridge plan](bridge_plan.md)
+| Question | Treatment | Control |
+|---|---|---|
+| Total effect of the default configuration (primary) | `bio_all` | `vanilla` |
+| Synaptic scaffold (architecture) | `synaptic_off` | `vanilla` |
+| Presynaptic stack, including its dependent mechanisms | `bio_all` | `bio_no_presyn` |
+| Marginal contribution of stochastic release, Doc2, or septin barrier | `bio_all` | Corresponding `bio_no_stochastic_release`, `bio_no_doc2`, or `bio_no_septin_barrier` |
+| Hebbian plasticity alone | `add_hebbian` | `synaptic_off` |
+| Incremental BDNF, bistable latch, or STDP effect | `add_bdnf`, `add_bistable_latch`, or `add_stdp` | `add_hebbian` |
+| Cusp latch conditional on the bistable latch | `add_cusp_latch` | `add_bistable_latch` |
+| Learnable kinetics or metriplectic integration conditional on presynaptic dynamics | `add_learnable_kinetics` or `add_metriplectic_integrator` | `control_presyn` |
+| Differentiable recurrence given learnable kinetics | `add_differentiable_recurrence` | `add_learnable_kinetics` |
+| Neuromodulation given presynaptic and Hebbian dynamics | `add_neuromod` | `control_presyn_hebbian` |
 
----
+The October screening roster contained 17 columns. The prospective screen removes the
+`add_native_presyn` acceleration comparison and adds two prerequisite-only controls, giving 18
+columns. Both controls disable BDNF activity. The registered backend uses the matrix reference
+settings `native_presyn=False` and `native_genetics=False` throughout. A comparison of fused
+dispatch against the reference requires its own paired measurements. The historical roster and
+CPU scores remain available under their original version.
+
+## Screening, admission and confirmation
+
+1. **Screen.** Run all 18 columns on seeds 1337 and 1338. A mechanism advances only when its
+   specified treatment has strictly lower held-out BPB on **both** seeds. A tie or reversal on
+   either seed rules out advancement. Screening uses no significance test. If no mechanism
+   advances, record `no_go` and stop at 36 training cells. A favorable total or scaffold
+   comparison alone cannot open confirmation. A missing, failed, duplicated, unexpected or
+   mismatched cell makes the screen inconclusive.
+2. **Size and cost the complete family.** If `k` mechanisms advance, test exactly `m = k + 2`
+   hypotheses, including both anchors. Train every distinct treatment and control on fresh
+   seeds starting at 2337. Use `n = ceil(log2(2m / 0.05))` paired seeds. With one survivor the
+   family has three hypotheses and seven seeds. The smallest exact two-sided signed-rank
+   p-value is then 1/64, and the smallest first Holm-adjusted value is 3/64. With 13 survivors
+   the family has 15 hypotheses and ten seeds. This calculation establishes that significance
+   is attainable with nonzero pairs. Actual power depends on effect size, seed variation and
+   ties. Budget refusal yields no confirmatory test. Cost each arm at its measured aggregate
+   training throughput, multiply wall hours by the training device count, and use the full set
+   of control cells and fresh seeds.
+3. **Confirm.** Pair by seed and compute the treatment-minus-control BPB vector for every
+   registered hypothesis. Apply Holm across the whole family to the two-sided paired-t
+   p-values, and separately to the exact two-sided Wilcoxon signed-rank p-values. At familywise
+   alpha 0.05 a supported gain requires both adjusted values at or below alpha and a paired
+   95% percentile-bootstrap interval wholly below zero (10,000 resamples, seed 0). The
+   symmetric rule gives a supported regression. The training seed is the sampling unit.
+   The signed-rank calculation drops zero differences. Means and intervals retain them.
+   If ties make the adjusted signed-rank threshold unattainable given the other family
+   results, report the contrast as inconclusive. Exact ties throughout yield a sample
+   difference of zero and a null verdict. A null leaves equivalence unresolved.
+
+The independent seeds address screening selection under the same fixed validation corpus.
+Results describe variation across training seeds on that corpus. The protocol makes no
+inference about variance across corpora, long-context memory, online adaptation, or performance
+on downstream tasks.
+
+## Training and evidence
+
+Train dense depth-10, width-640, five-head models with tied embeddings and sequence length 1024 on two CUDA devices.
+Each screening cell gets the largest complete training batch fitting 10 million tokens.
+Confirmation uses 100 million, with the same rounding rule. Reject batches that would discard
+over 5% of the stage budget. Score at least 1 million input tokens in complete held-out BPB
+batches with the same tokenizer, byte mapping, split and evaluation geometry. Record the
+actual number of scored input tokens and match the source revision, source content, ordered train/validation
+shards, optimizer recipe per arm and training/evaluation geometry across stages. The scorer
+checks the checkpoint against the training manifest before emitting its provenance. The
+statistical reader compares the CSV with the scorer's sibling JSONL, rejects mixed stages or
+campaigns, and verifies the screening selection digest on confirmation. Archive both scorer
+files together. The shard fingerprints establish which local bytes the run used. Archive upstream
+FineWeb acquisition checksums to establish corpus origin. The scored-token count includes
+revisits if a small shard wraps. Keep the original scorer CSV, manifests and checkpoints with
+any published result.
+
+For a batch of 65,536 training tokens, 152 updates give 9,961,472 screening tokens per
+cell. Before any training, freeze the resolved manifest on the worker hosting the shards.
+Supply the slowest measured aggregate training rate and single-GPU scoring time from a
+representative pilot of the frozen backend. The training launcher and the emitted scoring
+command both enforce the remaining physical GPU-hour allocation. Confirmation charges the
+screen's completed and failed attempts and uses its per-arm timings.
+
+```bash
+uv run python -m scripts.matrix_launch --stage screening --nproc 2 --plan \
+  --recipe="--device_type=cuda --depth=10 --tie_embeddings=1 --max_seq_len=1024 --device_batch_size=8 --total_batch_size=65536 --num_iterations=152 --eval_tokens=1048576 --core_metric_every=-1 --sample_every=-1" \
+  --tok-per-sec "$measured_aggregate_tokens_per_second" --score-seconds-per-cell "$measured_cell_score_seconds"
+```
+
+Use the same arguments with `--execute` to train. Run the scoring command printed on the
+last line. Use `--execute --restart` to continue the same training manifest.
+
+**Capacity and interpretation.** Shared width/depth and equal input tokens establish the
+registered budget. Record the trainable parameter count, active parameter count, optimizer
+names and recipe digest for each arm, including installed fast-weight matrices. A contrast
+with different counts or optimization includes those differences in its estimated effect.
+Only describe equal parameter capacity if both observed counts agree. Independent
+throughput and GPU-hour measurements are required for a claim at equal compute.
+
+The following analysis commands consume the CSVs produced by the checkpoint scorer. The
+confirmation command derives its survivor list, family size and control columns from the exact
+screening CSV admitted by the launcher.
+
+```bash
+uv run python -m bio_inspired_nanochat.eval_stats screen/summary.csv \
+  --d1-stage screening --json-out screen/decision.json
+uv run python -m bio_inspired_nanochat.eval_stats confirm/summary.csv \
+  --d1-stage confirmation --d1-screen-csv screen/summary.csv --json-out confirm/decision.json
+```
+
+For exploratory structural MoE results, `structural_descriptive(data)` reports matched
+per-seed BPB differences for lifecycle minus fixed, fixed minus metabolism-off, fixed minus
+genome-off, and glial-on minus fixed. Report observed split/merge events alongside the
+lifecycle contrast so that a dormant controller is visible. These comparisons never enter
+the dense confirmation family.
+
+## Historical registration and CPU experiments
+
+The following archived text records the earlier design and its command examples. Its 17-column
+roster, overlapping seeds, three-seed threshold and 498,073,600-token launch example were
+superseded by the protocol above. Historical CPU evidence and the D1 acceptance gates are
+summarized in the [bridge plan](bridge_plan.md).
+
+<details>
+<summary>Original registration, dated amendments and toy-scale measurements</summary>
 
 ## 1) The confound, and the three anchors
 
@@ -163,7 +272,7 @@ direction-aware (improvement = bpb down).
 
 ---
 
-## 6) How to run it
+## 6) Historical launcher and CPU experiments
 
 Every column maps to an `eval_matrix` run and is accepted by `--preset` / `--presets`: the named
 registry presets (`vanilla`, `bio_all`, `bio_no_*`) go through `ablation_registry.apply_preset`, and
@@ -192,10 +301,9 @@ uv run --no-sync python -m scripts.matrix_launch --stage screening \
 `ablation_matrix.base_train_argv(column, seed=…)` contributes `--synapses`, one
 `--syn_cfg.<field>=<value>` per field the column sets, the seed as `--init_seed` (what
 `eval_matrix` checks the checkpoint against) and `--model_tag=matrix_<column>_s<seed>`; the
-launcher currently prints `eval_matrix batch`, which argparse rejects. The pipeline test
-constructs its own `eval_matrix matrix --checkpoint-dir … --eval-bpb` command, then scores
-two checkpoints per column and pairs the results. `hwxb.5.8` requires the test to use the
-actual printed command.
+launcher at revision `320ffdc` printed `eval_matrix batch`, which argparse rejected. Its pipeline
+test constructed a separate scoring command. The current launcher binds training and scoring
+to one manifest. The end-to-end test executes the emitted scoring command verbatim.
 
 **Toy-scale dry runs on real text (2026-10-07 and 2026-10-13).** The three anchors first ran through
 this exact chain at 2L/128d, 600k WikiText-2 tokens, seeds 1337–1339
@@ -247,3 +355,5 @@ toy scale it costs loss, mostly through frequent merges driven by noisy first-or
   ablated and get no column.
 - The **feasible mechanism set** and the **final token budget** are pinned by `hwxb.4.5`; this spec is
   parametric in both.
+
+</details>

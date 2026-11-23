@@ -505,6 +505,9 @@ fn dummy_function() -> PyResult<String> {
 #[pymodule]
 fn rustbpe(m: &Bound<'_, PyModule>) -> PyResult<()> {
     pyo3_log::init(); // forwards Rust `log` to Python's `logging`
+    // ABI 1 returns (release, drive_gradient_factor) from the detached scan.
+    // Bump this and the Python dispatcher together for incompatible contract changes.
+    m.add("PRESYN_CPU_ABI", 1_u32)?;
     m.add_class::<Tokenizer>()?;
     m.add_function(wrap_pyfunction!(presyn::presyn_release_canonical_cpu, m)?)?;
     m.add_function(wrap_pyfunction!(presyn::presyn_detached_scan_cpu, m)?)?;
@@ -514,6 +517,7 @@ fn rustbpe(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     let __all__ = vec![
         "Tokenizer".to_string(),
+        "PRESYN_CPU_ABI".to_string(),
         "presyn_release_canonical_cpu".to_string(),
         "presyn_detached_scan_cpu".to_string(),
         "accumulate_router_stats_cpu".to_string(),

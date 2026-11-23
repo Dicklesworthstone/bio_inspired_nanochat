@@ -11,8 +11,7 @@ Implements the flagship wave-2 biological compositions:
      offline sleep consolidation, cryptographic user isolation, and explicit forgetting.
   5. ``ServingEngineSLA`` (re4e.5): Multi-knob serving dispatcher (ATP budget, deliberation, trust-gate)
      with deterministic SLA timeout enforcement and audit logging.
-  6. ``ConformalAbstainer`` (re4e.10): Finite-sample distribution-free certified selective prediction
-     guaranteeing error rate on answered subset $\le \alpha$.
+  6. The wave-2 evaluation uses the labelled selective classifier in conformal_abstention (re4e.10).
   7. ``SpeculativeDecoder`` (re4e.7): Dual-path metabolic speculative decode (cheap draft + exact verify)
      preserving output distribution while logging acceptance rates.
 """
@@ -386,35 +385,6 @@ class ServingEngineSLA:
             atp_spent=spent_atp,
             deliberation_iters=delib_iters,
         )
-
-
-# =========================================================================== #
-# 6. Conformal Certified Abstention (re4e.10)
-# =========================================================================== #
-class ConformalAbstainer:
-    """Distribution-free conformal selective prediction with error guarantee <= alpha."""
-
-    def __init__(self, target_alpha: float = 0.1) -> None:
-        self.target_alpha = target_alpha
-        self.calibrated_threshold: float = float("inf")
-
-    def calibrate(self, calibration_nonconformity_scores: list[float]) -> float:
-        """Compute conformal quantile threshold q_hat."""
-        n = len(calibration_nonconformity_scores)
-        if n == 0:
-            raise ValueError("Calibration set cannot be empty")
-
-        sorted_scores = sorted(calibration_nonconformity_scores)
-        # Conformal index: ceil((n + 1) * (1 - alpha)) / n
-        idx = min(n - 1, max(0, math.ceil((n + 1) * (1.0 - self.target_alpha)) - 1))
-        self.calibrated_threshold = float(sorted_scores[idx])
-        return self.calibrated_threshold
-
-    def evaluate(self, score: float) -> tuple[bool, str]:
-        """Returns (answer_query, verdict_string)."""
-        if score <= self.calibrated_threshold:
-            return True, f"Answered (nonconformity {score:.3f} <= threshold {self.calibrated_threshold:.3f})"
-        return False, f"Abstained (nonconformity {score:.3f} > threshold {self.calibrated_threshold:.3f})"
 
 
 # =========================================================================== #

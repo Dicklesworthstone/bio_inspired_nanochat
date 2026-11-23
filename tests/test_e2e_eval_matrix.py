@@ -44,6 +44,7 @@ from scripts.eval_matrix import (
     SUMMARY_FIELDS,
     _batch_output_dir,
     _binary_auroc,
+    _checkpoint_recipe_stats,
     _deterministic_ood_tokens,
     _forgetting_rate_from_accuracy_matrix,
     _get_logits,
@@ -283,7 +284,9 @@ def test_eval_matrix_evaluates_real_base_train_checkpoint(tmp_path):
     assert row["sequence_len"] == 16 and row["vocab_size"] == 32
     assert row["train_tokens_requested"] == 48
     assert row["train_tokens_processed"] == 48
-    assert row["tok_per_sec"] == pytest.approx(32.0)
+    # Steps 0..2 were all excluded from this historical trainer's timed window.
+    assert row["tok_per_sec"] is None and row["walltime_sec"] is None
+    assert row["trainable_params"] == row["active_params"] == sum(p.numel() for p in model.parameters())
     registry_record = read_records(str(tmp_path / "registry.jsonl"))[0]
     assert registry_record.run_id == row["run_id"]
     assert registry_record.config_hash
@@ -382,6 +385,10 @@ def test_eval_matrix_emits_live_moe_routing_metrics_from_checkpoint(tmp_path):
 
     row = json.loads((out_dir / "summary.jsonl").read_text(encoding="utf-8"))
     assert row["use_moe"] and row["num_experts"] == 4 and row["moe_top_k"] == 2
+    all_parameters = sum(p.numel() for p in model.parameters())
+    expert_size = sum(p.numel() for p in model.h[0].mlp.experts[0].parameters())
+    assert row["trainable_params"] == sum(p.numel() for p in model.parameters() if p.requires_grad)
+    assert row["active_params"] == all_parameters - 2 * expert_size
     assert row["capability_metric_status"]["routing"] == "ok"
     assert 0.0 <= row["moe_gini"] <= 1.0
     assert 0.0 <= row["dead_expert_frac"] <= 1.0
@@ -395,6 +402,132 @@ def test_eval_matrix_emits_live_moe_routing_metrics_from_checkpoint(tmp_path):
     assert len(routing) == 1 and routing[0]["layers"]
     registry = read_records(str(tmp_path / "moe_registry.jsonl"))[0]
     assert {"moe_gini", "dead_expert_frac"} <= set(registry.metrics)
+
+
+def test_checkpoint_training_throughput_only_uses_tokens_on_its_clock():
+    meta = {"user_config": {"total_batch_size": 16}, "loop_state": {"total_training_time": 1.5}}
+    assert _checkpoint_recipe_stats(meta, 11)[:4] == (176, 176, None, None)
+    assert _checkpoint_recipe_stats(meta, 14)[:4] == (224, 224, 1.5, 32.0)
+    manifested = {"user_config": {"total_batch_size": 16, "matrix_run_id": "campaign"},
+                  "matrix_training_wall_seconds": 7.0}
+    assert _checkpoint_recipe_stats(manifested, 14)[:4] == (224, 224, 7.0, 32.0)
+
+
+def test_matrix_rejects_swapped_arms_and_wrong_tokens(tmp_path):
+    """Reopen real model weights under the wrong arm and then under a different budget."""
+    import shutil
+    import torch
+    from bio_inspired_nanochat import ablation_matrix as am
+    from bio_inspired_nanochat.matrix_manifest import seal_manifest
+    from scripts.matrix_launch import recipe_fields
+
+    columns = {c.config_id: c for c in am.structural_columns()}
+    seed = 19
+    preset = "moe_fixed"
+    cfg = columns[preset].build_syn_cfg()
+    assert cfg is not None
+    model = GPTSynaptic(GPTSynapticConfig(sequence_len=8, vocab_size=32, n_layer=1, n_head=1, n_kv_head=1, n_embd=64,
+                                          syn_cfg=cfg, use_moe=True, num_experts=2,
+                                          moe_top_k=1, init_seed=seed))
+    model.init_weights()
+    column_flags = {}
+    for name in (preset, "moe_splitmerge"):
+        flags = recipe_fields(am.base_train_argv(columns[name], seed=seed))
+        column_flags[name] = {k: v for k, v in flags.items() if k not in {"model_tag", "init_seed"}}
+    manifest = seal_manifest({
+        "schema": 1, "stage": "structural", "registered": False, "columns": list(column_flags),
+        "seeds": [seed], "world_size": 1, "num_iterations": 2, "total_batch_size": 8,
+        "tokens_per_cell": 16, "recipe": {}, "column_flags": column_flags,
+        "data": {"train_sha256": "train", "val_sha256": "val", "tokenizer_sha256": "tokens"},
+        "source_sha256": "source", "git_revision": "revision",
+    })
+    def directory(column):
+        return tmp_path / manifest["checkpoint_template"].format(preset=column, seed=seed)
+
+    training = {
+        "model_tag": directory(preset).name, "matrix_run_id": manifest["run_id"], "init_seed": seed,
+        "depth": 1, "max_seq_len": 8, "num_iterations": 2, "total_batch_size": 8, "use_moe": 1,
+        "num_experts": 2, "moe_top_k": 1, "moe_hidden_mult": 4, "synapses": 1, "splitmerge_every": 0,
+        "init_type": "baseline", "tie_embeddings": 0, "final_norm": 1,
+        "syn_cfg_overrides": {k[8:]: v for k, v in column_flags[preset].items() if k.startswith("syn_cfg.")},
+    }
+    meta = {"step": 2, "model_config": checkpoint_model_config(model, {}), "synapses": True,
+            "synaptic_config": synaptic_config_to_meta(cfg), "user_config": training,
+            "matrix_data": manifest["data"], "matrix_source_sha256": manifest["source_sha256"],
+            "matrix_git_revision": manifest["git_revision"], "matrix_train_world_size": 1,
+            "matrix_train_device_type": "cpu", "matrix_optimizer_names": ["AdamW", "Muon"]}
+    save_checkpoint(str(directory(preset)), 2, model.state_dict(), None, meta)
+    def score(column):
+        return _load_base_train_checkpoint(directory(column), manifest=manifest, step=2, preset=column,
+                                           seed=seed, device=torch.device("cpu"))
+
+    assert score(preset)[2] == 2
+    swapped = directory("moe_splitmerge")
+    shutil.copytree(directory(preset), swapped)
+    with pytest.raises(ValueError, match="model_tag"):
+        score("moe_splitmerge")
+    # Relabeling the directory AND its stored tag still cannot turn off the independent
+    # controller check: the arms have identical model weights/shape and biological flags.
+    meta_path = swapped / "meta_000002.json"
+    swapped_meta = json.loads(meta_path.read_text())
+    swapped_meta["user_config"]["model_tag"] = swapped.name
+    meta_path.write_text(json.dumps(swapped_meta))
+    with pytest.raises(ValueError, match="splitmerge_every"):
+        score("moe_splitmerge")
+    fixed_meta = directory(preset) / "meta_000002.json"
+    saved_meta = json.loads(fixed_meta.read_text())
+    saved_meta["user_config"]["total_batch_size"] = 16
+    fixed_meta.write_text(json.dumps(saved_meta))
+    with pytest.raises(ValueError, match="total batch size"):
+        score(preset)
+    saved_meta["user_config"]["total_batch_size"] = 8
+    saved_meta["synaptic_config"]["tau_c"] += 1
+    fixed_meta.write_text(json.dumps(saved_meta))
+    with pytest.raises(ValueError, match="tau_c"):
+        score(preset)
+    # A weights-only swap preserves both cell tags and ALL state-dict key names.
+    saved_meta["synaptic_config"]["tau_c"] -= 1
+    fixed_meta.write_text(json.dumps(saved_meta))
+    with torch.no_grad():
+        model.lm_head.weight.add_(1)
+    torch.save(model.state_dict(), directory(preset) / "model_000002.pt")
+    with pytest.raises(ValueError, match="weights do not match checkpoint metadata"):
+        score(preset)
+
+
+@pytest.mark.parametrize("changed", ["val", "token_bytes"])
+def test_matrix_cli_refuses_replaced_heldout_shard_or_tokenizer(tmp_path, monkeypatch, changed):
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    import tiktoken
+    import torch
+    from bio_inspired_nanochat import dataset
+    from bio_inspired_nanochat.matrix_manifest import dataset_identity, seal_manifest
+    from bio_inspired_nanochat.tokenizer import RustBPETokenizer
+    from scripts.eval_matrix import main
+
+    monkeypatch.setenv("NANOCHAT_BASE_DIR", str(tmp_path))
+    shards = tmp_path / "base_data"
+    shards.mkdir()
+    monkeypatch.setattr(dataset, "DATA_DIR", str(shards))
+    train, heldout = (shards / f"shard_{i:05d}.parquet" for i in range(2))
+    pq.write_table(pa.table({"text": ["training text"]}), train)
+    pq.write_table(pa.table({"text": ["evaluation text"]}), heldout)
+    enc = tiktoken.Encoding(name="bytes", pat_str="(?s).", mergeable_ranks={bytes([i]): i for i in range(256)},
+                            special_tokens={"<|bos|>": 256})
+    RustBPETokenizer(enc, "<|bos|>").save(str(tmp_path / "tokenizer"))
+    token_bytes = tmp_path / "tokenizer" / "token_bytes.pt"
+    torch.save(torch.tensor([1] * 256 + [0]), token_bytes)
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(json.dumps(seal_manifest({"schema": 1, "stage": "screening", "data": dataset_identity()})))
+    if changed == "val":
+        pq.write_table(pa.table({"text": ["different evaluation text"]}), heldout)
+    else:
+        torch.save(torch.tensor([1] * 255 + [2, 0]), token_bytes)
+    monkeypatch.setattr(sys, "argv", ["eval_matrix", "run", "--preset", "vanilla", "--eval-bpb",
+                                     "--matrix-manifest", str(manifest_path), "--checkpoint-dir", str(tmp_path / "ckpt")])
+    with pytest.raises(ValueError, match="evaluation data/split/tokenizer"):
+        main()
 
 
 def test_eval_matrix_requires_checkpoint_or_explicit_smoke_mode():

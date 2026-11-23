@@ -1,0 +1,108 @@
+{
+  "calibration_sample": {
+    "abstained": 512,
+    "answered": 0,
+    "answered_error_rate": null,
+    "coverage": 0.0,
+    "errors_among_answered": 0,
+    "queries": 512,
+    "unconditional_top1_errors": 512
+  },
+  "checkpoint": {
+    "loader": "load_model(base, cpu, eval)",
+    "model_class": "GPT",
+    "model_config": {
+      "attention_type": "standard",
+      "init_seed": 1337,
+      "init_type": "baseline",
+      "n_embd": 640,
+      "n_head": 5,
+      "n_kv_head": 5,
+      "n_layer": 10,
+      "sequence_len": 2048,
+      "tie_embeddings": true,
+      "ultrametric_alpha": 2.0,
+      "ultrametric_k": 8,
+      "ultrametric_lcp_beta": 32.0,
+      "ultrametric_p": 2,
+      "ultrametric_query_chunk_size": 64,
+      "vocab_size": 65536
+    },
+    "step": 150,
+    "tag": "smoke_2x4090_150steps",
+    "torch_version": "2.9.1+cu128",
+    "training_provenance": null
+  },
+  "file_sha256": {
+    "base_checkpoints/smoke_2x4090_150steps/meta_000150.json": "98c69435e00600f05d88884a551155919002b5f43aadf48bf7e73a5b9a0f99e9",
+    "base_checkpoints/smoke_2x4090_150steps/model_000150.pt": "e324c0bc301db4c27a0d2d9240df41176a340b9712b2c3d3b8d1a243be59d813",
+    "base_data/shard_00027.parquet": "4bbe362eb1ab719547b26608ca3f81d8b39262f31285dfb28c3d15a4c01db017",
+    "tokenizer/token_bytes.pt": "ae39c27aae519d14071efc95f9a558ba0b7ede47e7d83ad4f198422b44c5f70e",
+    "tokenizer/tokenizer.json": "45d958866dbe10af5f33f4cd360d7fe30cfabdd7dbe5cd3aaec27f25e579e46b"
+  },
+  "finite_population_census": {
+    "abstained": 256,
+    "answered": 0,
+    "answered_error_rate": null,
+    "coverage": 0.0,
+    "errors_among_answered": 0,
+    "queries": 256,
+    "unconditional_top1_errors": 256
+  },
+  "protocol": {
+    "alpha": 0.1,
+    "calibration": "512 uniform draws with replacement from that population",
+    "calibration_rng": "torch.randint with CPU torch.Generator, seed 1337",
+    "delta": 0.05,
+    "document_order": "native validation shard, parquet row order, one query per document",
+    "eligibility": "at least 17 tokens and a prefix not used in any earlier accepted document",
+    "population": "first 256 eligible distinct prefixes, equiprobable",
+    "query": "first 16 encoded text tokens, no inserted BOS, predict the 17th token",
+    "score": "one minus maximum predicted token probability",
+    "separate_description": "next 128 distinct eligible prefixes in shard order",
+    "threshold_grid": "0.00 through 1.00 inclusive in increments of 0.01"
+  },
+  "sample_identity": {
+    "calibration_distinct_queries": 229,
+    "calibration_draws_sha256": "9ea338c37ca4c0ca0583afe55f3157312c47179c5f80c6b752a24c3c609198a0",
+    "descriptive_first_last_doc_indices": [
+      256,
+      383
+    ],
+    "documents_examined": 384,
+    "ordered_document_prefix_target_sha256": "8661a23f84679a7633da5277566d97552c696305f5360c2f82908f6f019742a6",
+    "population_first_last_doc_indices": [
+      0,
+      255
+    ]
+  },
+  "scope": "Calibration risk bound applies to fresh uniform draws from the first 256 queries. The next 128 queries are descriptive. Conditional error is undefined for zero answers.",
+  "selected_policy": {
+    "admissible_candidates": 0,
+    "candidates_with_answers": 1,
+    "lowest_candidate_upper_bound": {
+      "answered": 512,
+      "cutoff": 1.0,
+      "errors": 512,
+      "upper_bound": 1.0
+    },
+    "population_risk_upper_bound": null,
+    "threshold": -1.0
+  },
+  "separate_descriptive_sample": {
+    "abstained": 128,
+    "answered": 0,
+    "answered_error_rate": null,
+    "coverage": 0.0,
+    "errors_among_answered": 0,
+    "queries": 128,
+    "unconditional_top1_errors": 128
+  },
+  "source_sha256": {
+    "bio_inspired_nanochat/checkpoint_manager.py": "ac75bb7fc20735c445033dff716616c8a6b36a0a36447faf0589076fe3efb14a",
+    "bio_inspired_nanochat/conformal_abstention.py": "383932965f141b0c7eba0067fabe7121b5ce4b2af5ccc1769b7f23c198fdfda5",
+    "bio_inspired_nanochat/gpt.py": "b551f6ccb39fe0a3678e1fe0204724a3b91c63cd927489d74844654178da2228",
+    "scripts/e2e/uncertainty_calibration.py": "9c1c056dcf4a4c26a258a4368b28cbd0aa681e8902cad68d8496099a773975f5"
+  },
+  "study": "fixed next-token abstention on a uniform finite population"
+}

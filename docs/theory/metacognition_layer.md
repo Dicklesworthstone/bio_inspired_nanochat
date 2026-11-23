@@ -50,4 +50,4 @@ where:
 
 The metacognitive report feeds directly into:
 - **`re4e.1` (Self-Correcting Loop)**: Spans labeled `GUESSING` or `UNKNOWN` trigger targeted deliberation and localized regeneration.
-- **`re4e.10` (Conformal Certified Abstention)**: Guarantees finite-sample error rate $\le \alpha$ by abstaining when $\mathcal{C} < \tau_{\alpha}$.
+- **Selective risk (`re4e.10`).** The standalone classifier uses labelled calibration data independent of a fixed model. For a fixed confidence cutoff, conditional on the number accepted, the error count is binomial under iid sampling. The implementation inverts a one-sided Chernoff bound at $\delta/101$ for each of 101 fixed cutoffs and selects the widest whose upper risk bound is at most $\alpha$. The union bound gives confidence $1-\delta$ over calibration for the population error among answers. If every cutoff fails, it abstains on all inputs and conditional empirical error is undefined. A token stream, changed model or shifted distribution requires separate validation. [Implementation](../../bio_inspired_nanochat/conformal_abstention.py) · [Learn then Test](https://arxiv.org/abs/2110.01052)

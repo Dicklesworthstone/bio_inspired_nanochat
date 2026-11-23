@@ -80,7 +80,9 @@ MATRIX_EXCLUDED_MECHANISMS: frozenset[str] = (
     INFRA_MECHANISMS | {"topological_nas"}
 )
 
-# Reproducible seeds. >=3 for paired variance estimation; note that the pre-registered
+# Historical CPU experiment seeds. Registered D1 confirmation obtains its fresh seeds
+# and complete contrast family from eval_stats.d1_confirmation_plan. For the older
+# dry-run calculator, note that the pre-registered
 # exact two-sided Wilcoxon leg in eval_stats.compare_matrix has floor p = 2^(1-n), which requires
 # n >= ceil(log2(2 * m / alpha)) seeds (>=6 for m=1 survivor at alpha=0.05; see min_confirmation_seeds).
 SCREENING_SEEDS: tuple[int, ...] = (1337, 1338)
@@ -161,7 +163,7 @@ class AblationConfig:
         """
         if self.base is Base.VANILLA:
             return None
-        cfg = SynapticConfig()
+        cfg = SynapticConfig(native_presyn=False, native_genetics=False)
         if self.base is Base.SYNAPTIC_OFF:
             for field, value in SYNAPTIC_OFF_OVERRIDES.items():
                 setattr(cfg, field, value)
@@ -277,6 +279,19 @@ def screening_columns() -> list[AblationConfig]:
     return anchors() + leave_one_out() + add_one_in()
 
 
+def d1_screening_columns() -> list[AblationConfig]:
+    """Prospective D1 roster with matched prerequisites for attribution."""
+    columns = [c for c in screening_columns() if c.config_id != "add_native_presyn"]
+    columns.extend([
+        AblationConfig("control_presyn", Base.SYNAPTIC_OFF, {"enable_presyn": True},
+                       "control", "Presynaptic prerequisite alone."),
+        AblationConfig("control_presyn_hebbian", Base.SYNAPTIC_OFF,
+                       {"enable_presyn": True, "enable_hebbian": True, "bdnf_scale": 0.0},
+                       "control", "Both prerequisites for neuromodulation, without BDNF."),
+    ])
+    return columns
+
+
 # --------------------------------------------------------------------------- #
 # MoE stage (sx1m / uta; `--stage structural`). Everything that acts only on SynapticMoE blocks is
 # contrasted here against `moe_fixed` (bio_all on MoE, fixed expert population), never on the dense
@@ -379,7 +394,9 @@ def base_train_argv(
         argv.append("--synapses=0")
     else:
         argv.append("--synapses=1")
-        merged: dict[str, Any] = {}
+        # base_train enables both native paths by default. The frozen column selects its own
+        # backend, including when the trainer would enable genetics without metabolism.
+        merged: dict[str, Any] = {"native_presyn": False, "native_genetics": False}
         if column.base is Base.SYNAPTIC_OFF:
             merged.update(SYNAPTIC_OFF_OVERRIDES)
         merged.update(column.overrides)
@@ -406,16 +423,18 @@ def confirmation_columns(survivors: list[str]) -> list[AblationConfig]:
 
 
 def estimate_gpu_hours(columns: list[AblationConfig], seeds: tuple[int, ...], train_tokens: int,
-                       tok_per_sec: float) -> float:
+                       tok_per_sec: float, *, world_size: int = 1) -> float:
     """GPU-hours for ``len(columns) x len(seeds)`` runs of ``train_tokens`` at ``tok_per_sec``.
 
     ``tok_per_sec`` is the measured aggregate training throughput (hwxb.2.2) — or a planning estimate
     from docs/eval_benchmark_matrix.md §5 when no measurement exists yet.
     """
-    if tok_per_sec <= 0:
+    if not math.isfinite(tok_per_sec) or tok_per_sec <= 0:
         raise ValueError(f"tok_per_sec must be positive, got {tok_per_sec}")
+    if world_size < 1 or train_tokens <= 0:
+        raise ValueError("world_size and train_tokens must be positive")
     runs = len(columns) * len(seeds)
-    return runs * (train_tokens / tok_per_sec) / 3600.0
+    return world_size * runs * (train_tokens / tok_per_sec) / 3600.0
 
 
 @dataclass(frozen=True)

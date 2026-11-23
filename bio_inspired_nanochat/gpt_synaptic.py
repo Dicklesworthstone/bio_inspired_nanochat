@@ -656,6 +656,8 @@ class GPTSynaptic(nn.Module):
         lr=None,
         wd=None,
         scalar_lr=0.01,
+        *,
+        independent_model: bool = False,
     ):
         # Support both old GPT-style signature and new simple signature
         # If GPT-style args are provided (defaults), use GPT-style optimizer setup
@@ -689,7 +691,9 @@ class GPTSynaptic(nn.Module):
             from bio_inspired_nanochat.muon import DistMuon, Muon
 
             model_dim = self.config.n_embd
-            ddp, rank, _local_rank, _world_size = get_dist_info()
+            # Population workers each own a distinct candidate. Only replicas training
+            # the same model may reduce gradients or shard optimizer updates across ranks.
+            ddp, rank, _local_rank, _world_size = (False, 0, 0, 1) if independent_model else get_dist_info()
             
             # Separate matrix params (2D) for Muon from other params (1D/0D) for AdamW
             matrix_params = []

@@ -38,6 +38,15 @@ def test_wave2_compositions_full_battery(tmp_path: Path):
     for name in EXPECTED_WAVE2_INVARIANTS:
         assert name in inv_map, f"Missing invariant: {name}"
         assert inv_map[name].passed, f"Invariant {name} failed: {inv_map[name].detail}"
+    selective = inv_map["conformal_certified_abstention"].observed
+    assert selective["calibration_draws"] == 512 and selective["population_size"] == 8
+    assert len(selective["checkpoint_sha256"]) == 64
+    assert selective["abstention_rate"] == 1 - selective["answered_count"] / 8
+    if selective["answered_count"]:
+        assert selective["population_error_given_answer"] == selective["errors"] / selective["answered_count"]
+        assert selective["risk_upper_bound"] <= cfg.conformal_target_alpha
+    else:
+        assert selective["population_error_given_answer"] is None and selective["risk_upper_bound"] is None
 
     # Verify structured event stream was written and contains records
     events_path = tmp_path / "events.jsonl"

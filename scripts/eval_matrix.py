@@ -18,10 +18,12 @@ import inspect
 import json
 import math
 import time
+from ast import literal_eval
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -37,14 +39,17 @@ from rich.table import Table
 
 from bio_inspired_nanochat.ablation_matrix import (
     AblationConfig,
+    d1_screening_columns,
     screening_columns,
     structural_columns,
 )
 from bio_inspired_nanochat.ablation_registry import MECHANISMS, apply_preset
 from bio_inspired_nanochat.checkpoint_manager import (
+    config_hash,
     list_checkpoint_steps,
-    load_checkpoint,
+    load_checkpoint_model,
     synaptic_config_from_meta,
+    synaptic_config_to_meta,
 )
 from bio_inspired_nanochat.common import (
     autodetect_device_type,
@@ -55,6 +60,7 @@ from bio_inspired_nanochat.dataloader import tokenizing_distributed_data_loader
 from bio_inspired_nanochat.gpt import GPT, GPTConfig
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
 from bio_inspired_nanochat.loss_eval import evaluate_bpb
+from bio_inspired_nanochat.matrix_manifest import dataset_identity, digest, load_manifest, score_budget, seal_scores, source_identity
 from bio_inspired_nanochat.results_registry import (
     DEFAULT_REGISTRY,
     RunRecord,
@@ -91,11 +97,11 @@ DEFAULT_ABLATION_PRESETS: tuple[PresetId, ...] = (
 # The pre-registered matrix columns (docs/ablation_matrix.md) that are not named registry
 # presets: the synaptic_off anchor and the add-one-in columns. They are materialised through
 # ablation_matrix.AblationConfig.build_syn_cfg(), so this runner cannot drift from the spec.
-MATRIX_COLUMNS: dict[str, AblationConfig] = {
+ALL_MATRIX_COLUMNS: dict[str, AblationConfig] = {
     column.config_id: column
-    for column in screening_columns() + structural_columns()
-    if column.config_id not in set(PresetId.__args__)
+    for column in screening_columns() + d1_screening_columns() + structural_columns()
 }
+MATRIX_COLUMNS = {k: v for k, v in ALL_MATRIX_COLUMNS.items() if k not in set(PresetId.__args__)}
 
 SUMMARY_FIELDS: tuple[str, ...] = (
     "status",
@@ -152,6 +158,25 @@ SUMMARY_FIELDS: tuple[str, ...] = (
     "recall_by_length",
     "forgetting_by_task",
     "capability_metric_status",
+    "matrix_stage",
+    "protocol_id",
+    "matrix_manifest_digest",
+    "matrix_source_sha256",
+    "model_file_sha256",
+    "trained_cell_id",
+    "train_data_digest",
+    "eval_data_digest",
+    "tokenizer_digest",
+    "screen_summary_sha256",
+    "eval_device_batch_size",
+    "eval_tokens_processed",
+    "train_device_type",
+    "train_world_size",
+    "optimizer_recipe_digest",
+    "optimizer_names",
+    "trainable_params",
+    "active_params",
+    "parameter_match_rule",
 )
 
 
@@ -162,8 +187,8 @@ class HarnessRunSummary:
     seed: int
     train_tokens_requested: int
     train_tokens_processed: int
-    walltime_sec: float
-    tok_per_sec: float
+    walltime_sec: float | None
+    tok_per_sec: float | None
     train_loss_final: float | None
     val_loss: float
     val_ppl: float
@@ -653,6 +678,7 @@ def _load_base_train_checkpoint(
     preset: PresetId,
     seed: int,
     device: torch.device,
+    manifest: dict[str, Any] | None = None,
 ) -> tuple[Any, dict[str, Any], int]:
     """Rebuild and load one real ``base_train`` checkpoint without tokenizer side effects.
 
@@ -671,13 +697,18 @@ def _load_base_train_checkpoint(
             f"available={available_steps}"
         )
 
-    model_data, _, meta_data = load_checkpoint(
-        str(checkpoint_dir), resolved_step, device, load_optimizer=False
-    )
+    model, meta_data = load_checkpoint_model(str(checkpoint_dir), resolved_step, device, "eval")
     model_config = meta_data.get("model_config")
     if not isinstance(model_config, dict):
         raise ValueError("base_train checkpoint metadata must contain a model_config object")
 
+    training = meta_data.get("user_config") or {}
+    if checkpoint_dir.name.startswith("matrix_") and training.get("model_tag") != checkpoint_dir.name:
+        raise ValueError("matrix checkpoint directory does not match training model_tag")
+    if training.get("matrix_run_id") and manifest is None:
+        raise ValueError("this training checkpoint requires its --matrix-manifest")
+    if manifest is not None:
+        _verify_matrix_cell(manifest, meta_data, checkpoint_dir, preset, seed, resolved_step)
     is_synaptic = bool(meta_data.get("synapses", False))
     expects_synaptic = preset not in {"vanilla"}
     if is_synaptic != expects_synaptic:
@@ -694,64 +725,128 @@ def _load_base_train_checkpoint(
 
     if is_synaptic:
         syn_cfg = synaptic_config_from_meta(meta_data)
-        expected_syn_cfg = _syn_cfg_for_preset(preset)
-        mismatches = [
-            mechanism.field
-            for mechanism in MECHANISMS
-            if getattr(syn_cfg, mechanism.field) != getattr(expected_syn_cfg, mechanism.field)
-        ]
+        expected_syn_cfg = ALL_MATRIX_COLUMNS[preset].build_syn_cfg() if manifest else _syn_cfg_for_preset(preset)
+        if expected_syn_cfg is None:
+            raise ValueError(f"synaptic checkpoint cannot represent vanilla column {preset}")
+        if manifest:
+            # Training starts with these shared switches, then applies the frozen
+            # column's explicit overrides. Check every kinetic constant as well as flags.
+            from bio_inspired_nanochat.cmaes_params import coerce_syn_cfg_override
+
+            expected_syn_cfg.use_flex_attention = bool(training.get("use_flex_attention", False))
+            flags = {**manifest["recipe"], **manifest["column_flags"][preset]}
+            for key, raw in flags.items():
+                if key.startswith("syn_cfg."):
+                    field = key.removeprefix("syn_cfg.")
+                    setattr(expected_syn_cfg, field, coerce_syn_cfg_override(field, raw))
+            expected = synaptic_config_to_meta(expected_syn_cfg)
+            saved = meta_data.get("synaptic_config") or {}
+            mismatches = [k for k in set(expected) | set(saved) if expected.get(k) != saved.get(k) or k not in expected or k not in saved]
+        else:
+            mismatches = [
+                mechanism.field for mechanism in MECHANISMS
+                if getattr(syn_cfg, mechanism.field) != getattr(expected_syn_cfg, mechanism.field)
+            ]
         if mismatches:
             raise ValueError(
                 f"checkpoint bio flags do not match preset {preset!r}: {sorted(mismatches)}"
             )
-        cfg = GPTSynapticConfig(
-            sequence_len=int(model_config["sequence_len"]),
-            vocab_size=int(model_config["vocab_size"]),
-            n_layer=int(model_config["n_layer"]),
-            n_head=int(model_config["n_head"]),
-            n_kv_head=int(model_config.get("n_kv_head", model_config["n_head"])),
-            n_embd=int(model_config["n_embd"]),
-            synapses=True,
-            syn_cfg=syn_cfg,
-            dropout=float(model_config.get("dropout", 0.0)),
-            use_moe=bool(model_config.get("use_moe", False)),
-            num_experts=int(model_config.get("num_experts", 8)),
-            moe_experts_per_layer=(
-                tuple(int(value) for value in model_config["moe_experts_per_layer"])
-                if model_config.get("moe_experts_per_layer") is not None
-                else None
-            ),
-            moe_top_k=int(model_config.get("moe_top_k", 2)),
-            moe_hidden_mult=int(model_config.get("moe_hidden_mult", 4)),
-            moe_balance_loss=float(model_config.get("moe_balance_loss", 0.01)),
-            init_type=str(model_config.get("init_type", "baseline")),
-            init_seed=int(model_config.get("init_seed", seed)),
-            tie_embeddings=bool(model_config.get("tie_embeddings", False)),
-        )
-        with torch.device("meta"):
-            model = GPTSynaptic(cfg)
-    else:
-        cfg = GPTConfig(**model_config)
-        with torch.device("meta"):
-            model = GPT(cfg)
-
-    if device.type in {"cpu", "mps"}:
-        model_data = {
-            name: value.float() if value.dtype == torch.bfloat16 else value
-            for name, value in model_data.items()
-        }
-    model_data = {name.removeprefix("_orig_mod."): value for name, value in model_data.items()}
-    model.to_empty(device=device)
-    model.init_weights()
-    model.load_state_dict(model_data, strict=True, assign=True)
-    model.tie_weights()
-    model.train(False)
     return model, meta_data, resolved_step
+
+
+def _verify_matrix_cell(
+    manifest: dict[str, Any], meta: dict[str, Any], directory: Path, preset: str, seed: int,
+    step: int,
+) -> None:
+    """Bind the scored weights to the training run, selected arm, topology and budget."""
+    if preset not in manifest["columns"] or seed not in manifest["seeds"]:
+        raise ValueError(f"cell ({preset}, {seed}) is outside the matrix manifest")
+    tag = manifest["checkpoint_template"].format(preset=preset, seed=seed)
+    training = meta["user_config"]
+    arch = meta["model_config"]
+
+    def require(field: str, observed: Any, expected: Any) -> None:
+        if observed != expected:
+            raise ValueError(f"matrix checkpoint {field} mismatch: observed={observed!r}, expected={expected!r}")
+
+    require("directory", directory.name, tag)
+    require("model_tag", training.get("model_tag"), tag)
+    require("matrix_run_id", training.get("matrix_run_id"), manifest["run_id"])
+    require("training data/split/tokenizer", meta.get("matrix_data"), manifest["data"])
+    require("training source", meta.get("matrix_source_sha256"), manifest["source_sha256"])
+    require("git revision", meta.get("matrix_git_revision"), manifest["git_revision"])
+    require("training world size", meta.get("matrix_train_world_size"), manifest["world_size"])
+    if not meta.get("matrix_train_device_type") or not meta.get("matrix_optimizer_names"):
+        raise ValueError("matrix checkpoint lacks its training device or optimizers")
+    require("initialization seed", arch.get("init_seed"), seed)
+    require("training seed", training.get("init_seed"), seed)
+    require("checkpoint step", meta.get("step"), step)
+    require("final step", step, manifest["num_iterations"])
+    require("configured steps", training.get("num_iterations"), step)
+    require("total batch size", training.get("total_batch_size"), manifest["total_batch_size"])
+    require("training tokens", step * training["total_batch_size"], manifest["tokens_per_cell"])
+    column = ALL_MATRIX_COLUMNS[preset]
+    overrides = column.train_overrides
+    # Fixed and lifecycle arms have identical SynapticConfig mechanism flags.
+    # The default for a fixed population must be checked even when no CLI flag was emitted.
+    controls = {"use_moe": 0, "splitmerge_every": 0, **overrides}
+    for name, expected in controls.items():
+        require(name, training.get(name), expected)
+    require("use_moe topology", bool(arch.get("use_moe")), bool(controls["use_moe"]))
+    require("saved lifecycle", (meta.get("splitmerge") or {}).get("every", 0), controls["splitmerge_every"])
+    if controls["use_moe"]:
+        for name in ("num_experts", "moe_top_k", "moe_hidden_mult"):
+            require(name, arch[name], training[name])
+        if not training.get("uta4_variable_experts"):
+            require("per-layer expert counts", arch.get("moe_experts_per_layer"), [arch["num_experts"]] * arch["n_layer"])
+    require("training depth", arch["n_layer"], training["depth"])
+    require("training context length", arch["sequence_len"], training["max_seq_len"])
+    require("model dimension", arch["n_embd"], training["depth"] * 64)
+    expected_heads = max(1, (arch["n_embd"] + 127) // 128)
+    require("attention head count", arch["n_head"], expected_heads)
+    require("KV head count", arch["n_kv_head"], expected_heads)
+    require("initialization", arch["init_type"], training["init_type"])
+    require("tied embeddings", arch["tie_embeddings"], bool(training["tie_embeddings"]))
+    if meta["synapses"]:
+        require("output normalization", arch["final_norm"], bool(training["final_norm"]))
+    flags = {**manifest["recipe"], **manifest["column_flags"][preset]}
+    for key, raw in flags.items():
+        if key.startswith("syn_cfg."):
+            from bio_inspired_nanochat.cmaes_params import coerce_syn_cfg_override
+
+            name = key.removeprefix("syn_cfg.")
+            require(key, training["syn_cfg_overrides"].get(name), raw)
+            require(key, (meta.get("synaptic_config") or {}).get(name), coerce_syn_cfg_override(name, raw))
+        else:
+            try:
+                expected = literal_eval(raw)
+            except (ValueError, SyntaxError):
+                expected = raw
+            require(key, training.get(key), expected)
+
+
+def _parameter_counts(model: Any) -> tuple[int, int]:
+    """Count unique trainable weights and nominal per-token top-k active capacity.
+
+    Shared weights, including tied embeddings, count once. Active capacity includes
+    frozen parameters (e.g. the MoE router embeddings) and excludes registered buffers.
+    On MoE layers it includes the router and top-k experts on a full-depth token route.
+    """
+    total = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    active = sum(p.numel() for p in model.parameters())
+    for module in model.modules():
+        if isinstance(module, SynapticMoE):
+            sizes = {sum(p.numel() for p in expert.parameters()) for expert in module.experts}
+            if len(sizes) != 1:
+                raise ValueError("active parameter count depends on route for unequal-sized experts")
+            inactive_experts = max(len(module.experts) - module.top_k, 0)
+            active -= inactive_experts * sizes.pop()
+    return total, active
 
 
 def _checkpoint_recipe_stats(
     meta_data: dict[str, Any], checkpoint_step: int
-) -> tuple[int, int, float, float, float | None]:
+) -> tuple[int, int, float | None, float | None, float | None]:
     """Extract truthful training facts from ``base_train`` JSON metadata."""
     user_config = meta_data.get("user_config") or {}
     loop_state = meta_data.get("loop_state") or {}
@@ -761,8 +856,17 @@ def _checkpoint_recipe_stats(
         configured_steps = checkpoint_step
     requested = max(0, configured_steps) * total_batch
     processed = max(0, checkpoint_step) * total_batch
-    walltime = float(loop_state.get("total_training_time", 0.0))
-    throughput = processed / walltime if processed > 0 and walltime > 0 else 0.0
+    if user_config.get("matrix_run_id"):
+        # Cumulative process time through the start of checkpoint publication, including
+        # warmup and evaluation. The launcher measures final write and process-exit time.
+        seconds = float(meta_data["matrix_training_wall_seconds"])
+        timed_tokens = processed
+    else:
+        # Historical base_train only accumulates dt on zero-indexed steps >10.
+        seconds = float(loop_state.get("total_training_time", 0.0))
+        timed_tokens = max(0, checkpoint_step - 11) * total_batch
+    walltime = seconds if timed_tokens > 0 and seconds > 0 and math.isfinite(seconds) else None
+    throughput = timed_tokens / walltime if walltime is not None else None
     smooth_loss = loop_state.get("smooth_train_loss")
     train_loss = float(smooth_loss) if smooth_loss is not None else None
     return requested, processed, walltime, throughput, train_loss
@@ -788,6 +892,10 @@ def _write_jsonl(path: Path, record: dict[str, Any]) -> None:
 def _append_csv(path: Path, *, fieldnames: tuple[str, ...], row: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     exists = path.exists()
+    if exists:
+        with path.open(encoding="utf-8", newline="") as f:
+            if next(csv.reader(f), None) != list(fieldnames):
+                raise ValueError(f"existing summary schema differs at {path}; choose a fresh batch directory")
     with path.open("a", encoding="utf-8", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(fieldnames), extrasaction="ignore")
         if not exists:
@@ -1080,6 +1188,7 @@ def _run_one(
     moe_top_k: int,
     checkpoint_dir: str,
     checkpoint_step: int,
+    manifest: dict[str, Any] | None = None,
     registry_path: str,
     runtime: ComputeRuntime,
 ) -> HarnessRunSummary:
@@ -1101,6 +1210,7 @@ def _run_one(
             preset=preset,
             seed=seed,
             device=device,
+            manifest=manifest,
         )
         recipe_source = "base_train_checkpoint"
         config = model.config
@@ -1237,7 +1347,39 @@ def _run_one(
         else total_batch_size_tokens
     )
 
+    trainable, active = _parameter_counts(model)
+    identity: dict[str, Any] = {"trainable_params": trainable, "active_params": active}
+    if manifest is not None:
+        from bio_inspired_nanochat.eval_stats import D1_PARAMETER_MATCH_RULE
+
+        optimizer_keys = (
+            "embedding_lr", "unembedding_lr", "matrix_lr", "scalar_lr", "weight_decay",
+            "grad_clip", "warmup_ratio", "warmdown_ratio", "final_lr_frac",
+        )
+        identity.update({
+            "matrix_stage": manifest["stage"],
+            "protocol_id": manifest["protocol_id"],
+            "matrix_manifest_digest": manifest["run_id"],
+            "matrix_source_sha256": checkpoint_meta["matrix_source_sha256"],
+            "model_file_sha256": checkpoint_meta["model_file_sha256"],
+            "checkpoint_git_sha": checkpoint_meta["matrix_git_revision"],
+            "checkpoint_config_hash": config_hash({
+                "model": {k: v for k, v in checkpoint_meta["model_config"].items() if k != "init_seed"},
+                "synaptic": checkpoint_meta.get("synaptic_config"),
+            }),
+            "trained_cell_id": checkpoint_user_config["model_tag"],
+            "train_data_digest": manifest["data"]["train_sha256"],
+            "eval_data_digest": manifest["data"]["val_sha256"],
+            "tokenizer_digest": manifest["data"]["tokenizer_sha256"],
+            "screen_summary_sha256": manifest.get("screen_summary_sha256"),
+            "train_device_type": checkpoint_meta["matrix_train_device_type"],
+            "train_world_size": checkpoint_meta["matrix_train_world_size"],
+            "optimizer_recipe_digest": digest({key: checkpoint_user_config[key] for key in optimizer_keys}),
+            "optimizer_names": checkpoint_meta["matrix_optimizer_names"],
+            "parameter_match_rule": D1_PARAMETER_MATCH_RULE,
+        })
     run_config = {
+        **identity,
         "preset": preset,
         "seed": seed,
         "recipe_source": recipe_source,
@@ -1395,7 +1537,7 @@ def _run_one(
         model.train(False)
 
     # Evaluation
-    eval_steps = max(1, int(eval_tokens // world_tokens_per_micro))
+    eval_steps = max(1, math.ceil(eval_tokens / world_tokens_per_micro) if manifest else eval_tokens // world_tokens_per_micro)
     val_loss, val_ppl, id_ece, ood_auroc, routing = _val_loss_ppl_ece(
         model,
         val_iter,
@@ -1600,9 +1742,14 @@ def _run_one(
         "recall_by_length": summary.recall_by_length,
         "forgetting_by_task": summary.forgetting_by_task,
         "capability_metric_status": capability_metric_status,
+        "eval_device_batch_size": device_batch_size,
+        "eval_tokens_processed": eval_steps * world_tokens_per_micro,
+        **identity,
     }
     if ddp_rank == 0:
-        registry_metrics = {"tok_per_sec": float(summary.tok_per_sec)}
+        registry_metrics: dict[str, float] = {}
+        if summary.tok_per_sec is not None:
+            registry_metrics["tok_per_sec"] = summary.tok_per_sec
         if summary.train_loss_final is not None and math.isfinite(summary.train_loss_final):
             registry_metrics["train_loss"] = float(summary.train_loss_final)
         if summary.val_bpb is not None and math.isfinite(summary.val_bpb):
@@ -1730,6 +1877,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
             moe_top_k=args.moe_top_k,
             checkpoint_dir=args.checkpoint_dir,
             checkpoint_step=args.checkpoint_step,
+            manifest=args.matrix_manifest,
             registry_path=args.registry_path,
             runtime=runtime,
         )
@@ -1752,6 +1900,11 @@ def _run_batch(
     )
     runtime = compute_init(args.device_type)
     ddp, ddp_rank, _, _, device = runtime
+    registered = args.matrix_manifest and args.matrix_manifest["registered"]
+    if registered and (ddp or device.type != "cuda"):
+        raise ValueError("registered matrix scoring requires the single CUDA process in the launch plan")
+    if registered and (presets != args.matrix_manifest["columns"] or seeds != args.matrix_manifest["seeds"]):
+        raise ValueError("registered scoring requires the full ordered matrix roster")
     stamp_payload = [_utc_stamp() if ddp_rank == 0 else ""]
     if ddp and torch.distributed.is_initialized():
         torch.distributed.broadcast_object_list(stamp_payload, src=0, device=device)
@@ -1762,7 +1915,7 @@ def _run_batch(
         else _batch_output_dir(Path(args.out_dir), batch_id)
     )
     if ddp_rank == 0:
-        batch_out_dir.mkdir(parents=True, exist_ok=True)
+        batch_out_dir.mkdir(parents=True, exist_ok=not registered)
     if ddp and torch.distributed.is_initialized():
         torch.distributed.barrier()
 
@@ -1780,7 +1933,7 @@ def _run_batch(
         for preset in presets:
             for seed in seeds:
                 try:
-                    _run_one(
+                    score_cell = partial(_run_one,
                         preset=preset,
                         train_tokens=args.train_tokens,
                         seed=seed,
@@ -1814,9 +1967,12 @@ def _run_batch(
                         moe_top_k=args.moe_top_k,
                         checkpoint_dir=args.checkpoint_dir,
                         checkpoint_step=args.checkpoint_step,
+                        manifest=args.matrix_manifest,
                         registry_path=args.registry_path,
                         runtime=runtime,
                     )
+                    with score_budget(args.matrix_manifest, preset, seed) if registered else nullcontext():
+                        score_cell()
                 except Exception as e:
                     had_failure = True
                     err_id = f"ERR-{preset}-t{args.train_tokens}-s{seed}-{_utc_stamp()}"
@@ -1880,6 +2036,8 @@ def _run_batch(
 
     if ddp_rank == 0:
         console.print(f"Batch outputs: {batch_out_dir}")
+    if registered and not had_failure:
+        seal_scores(args.matrix_manifest, batch_out_dir / "summary.csv")
     return int(had_failure)
 
 
@@ -1932,6 +2090,7 @@ def main() -> int:
             default=-1,
             help="base_train checkpoint step (-1 selects the latest complete model checkpoint)",
         )
+        p.add_argument("--matrix-manifest", help="Verify this frozen launcher manifest, checkpoint and live evaluation data")
         p.add_argument(
             "--inline-smoke-training",
             action="store_true",
@@ -2035,6 +2194,21 @@ def main() -> int:
             "scientific evaluation requires --checkpoint-dir from base_train; "
             "use --inline-smoke-training only for CI plumbing smoke tests"
         )
+    if args.matrix_manifest:
+        if not args.checkpoint_dir or args.data != "fineweb" or not args.eval_bpb:
+            parser.error("--matrix-manifest requires --checkpoint-dir, --data fineweb, and --eval-bpb")
+        args.matrix_manifest = load_manifest(args.matrix_manifest)
+        if dataset_identity() != args.matrix_manifest["data"]:
+            raise ValueError("evaluation data/split/tokenizer do not match matrix manifest")
+        if args.matrix_manifest["registered"]:
+            from bio_inspired_nanochat.eval_stats import D1_PROTOCOL_VERSION
+
+            if args.cmd != "matrix":
+                parser.error("registered scoring requires the matrix command emitted by the launcher")
+            if args.matrix_manifest["protocol_id"] != D1_PROTOCOL_VERSION:
+                raise ValueError("evaluation protocol differs from the registered manifest")
+            if source_identity() != (args.matrix_manifest["git_revision"], args.matrix_manifest["source_sha256"]):
+                raise ValueError("evaluation source differs from the registered training manifest")
     return int(args.func(args))
 
 

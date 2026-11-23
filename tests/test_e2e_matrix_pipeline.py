@@ -18,6 +18,7 @@ import csv
 import json
 import math
 import os
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -42,6 +43,19 @@ def _run(module_args: list[str], env: dict[str, str], timeout: int) -> subproces
     return subprocess.run([sys.executable, "-m", *module_args], cwd=REPO, env=env, capture_output=True, text=True, timeout=timeout)
 
 
+def _score(launch, env):
+    argv = shlex.split(launch.stdout.splitlines()[-1])
+    assert argv[:4] == [sys.executable, "-m", "scripts.eval_matrix", "matrix"]
+    assert "--eval-bpb" in argv
+    scored = subprocess.run([sys.executable, *argv[1:]], cwd=REPO, env=env,
+                            capture_output=True, text=True, timeout=2400)
+    assert scored.returncode == 0, (scored.stdout[-3000:], scored.stderr[-4000:])
+    manifest_path = Path(argv[argv.index("--matrix-manifest") + 1])
+    manifest = json.loads(manifest_path.read_text())
+    summary = next(Path(argv[argv.index("--out-dir") + 1]).rglob("summary.csv"))
+    return summary, manifest
+
+
 @pytest.fixture(scope="module")
 def pipeline(tmp_path_factory):
     base_dir = tmp_path_factory.mktemp("matrix_base")
@@ -50,36 +64,28 @@ def pipeline(tmp_path_factory):
     tok = _run(["scripts.tok_train", "--max_chars=200000", "--vocab_size=1024"], env, timeout=600)
     assert tok.returncode == 0, tok.stderr[-3000:]
 
-    launch = _run(
-        ["scripts.matrix_launch", "--columns", ",".join(COLUMNS), "--seeds", ",".join(map(str, SEEDS)), f"--recipe={RECIPE}", "--execute"],
-        env, timeout=2400,
-    )
+    argv = ["scripts.matrix_launch", "--exploratory", "--columns", ",".join(COLUMNS),
+            "--seeds", ",".join(map(str, SEEDS)), f"--recipe={RECIPE}"]
+    plan = _run([*argv, "--plan"], env, timeout=300)
+    assert plan.returncode == 0, plan.stderr
+    score_argv = shlex.split(plan.stdout.splitlines()[-1])
+    path = Path(score_argv[score_argv.index("--matrix-manifest") + 1])
+    assert path.is_file() and not (path.parent / "attempts.jsonl").exists()
+    launch = _run([*argv, "--execute"], env, timeout=2400)
     assert launch.returncode == 0, (launch.stdout[-2000:], launch.stderr[-4000:])
+    assert launch.stdout.splitlines()[-1] == plan.stdout.splitlines()[-1]
 
-    out_dir = base_dir / "matrix_out"
-    template = str(base_dir / "base_checkpoints" / "matrix_{preset}_s{seed}")
-    scored = _run(
-        [
-            "scripts.eval_matrix", "matrix",
-            "--presets", ",".join(COLUMNS), "--seeds", ",".join(map(str, SEEDS)),
-            "--checkpoint-dir", template, "--data", "fineweb", "--device-type", "cpu",
-            "--eval-bpb", "--eval-tokens", "128", "--device-batch-size", "2",
-            "--niah-lengths", "8", "--continual-exposures", "2", "--ece-bins", "5",
-            "--out-dir", str(out_dir), "--batch-id", "pipeline", "--registry-path", str(base_dir / "eval_registry.jsonl"),
-        ],
-        env, timeout=2400,
-    )
-    assert scored.returncode == 0, (scored.stdout[-2000:], scored.stderr[-4000:])
-    summary = next(out_dir.rglob("summary.csv"))
+    summary, manifest = _score(launch, env)
     stats = _run(["bio_inspired_nanochat.eval_stats", str(summary), "--min-pairs", "2", "--json-out", str(base_dir / "verdict.json")], env, timeout=600)
     assert stats.returncode == 0, stats.stderr[-3000:]
-    return {"base_dir": base_dir, "launch": launch, "summary": summary, "verdict": base_dir / "verdict.json"}
+    return {"base_dir": base_dir, "launch": launch, "manifest": manifest, "summary": summary, "verdict": base_dir / "verdict.json", "env": env}
 
 
 def test_launcher_trained_every_cell_under_the_tag_eval_matrix_resolves(pipeline):
     for column in COLUMNS:
         for seed in SEEDS:
-            ckpt = pipeline["base_dir"] / "base_checkpoints" / f"matrix_{column}_s{seed}"
+            tag = pipeline["manifest"]["checkpoint_template"].format(preset=column, seed=seed)
+            ckpt = pipeline["base_dir"] / "base_checkpoints" / tag
             assert (ckpt / "model_000002.pt").exists(), sorted(p.name for p in ckpt.iterdir()) if ckpt.exists() else f"missing {ckpt}"
             meta = json.loads((ckpt / "meta_000002.json").read_text(encoding="utf-8"))
             assert int(meta["model_config"]["init_seed"]) == seed
@@ -93,6 +99,24 @@ def test_eval_matrix_scored_every_checkpoint_from_its_own_metadata(pipeline):
     for r in rows:
         assert math.isfinite(float(r["val_bpb"])), r
         assert r["recipe_source"] == "base_train_checkpoint", r["recipe_source"]
+        assert r["matrix_manifest_digest"] == pipeline["manifest"]["run_id"]
+        assert int(r["trainable_params"]) > 0 and int(r["active_params"]) > 0
+
+
+def test_restart_requires_matching_run_and_preserves_complete_checkpoints(pipeline):
+    manifest = pipeline["manifest"]
+    timing = pipeline["base_dir"] / "matrix_runs" / manifest["run_id"] / "attempts.jsonl"
+    before = timing.read_bytes()
+    argv = ["scripts.matrix_launch", "--exploratory", "--columns", ",".join(COLUMNS),
+            "--seeds", ",".join(map(str, SEEDS)), f"--recipe={RECIPE}", "--execute"]
+    refused = _run(argv, pipeline["env"], timeout=300)
+    assert refused.returncode != 0 and "run already exists" in refused.stderr
+    resumed = _run([*argv, "--restart"], pipeline["env"], timeout=300)
+    assert resumed.returncode == 0, resumed.stderr
+    changed = [a.replace("--num_iterations=2", "--num_iterations=3") for a in argv]
+    rejected = _run([*changed, "--restart"], pipeline["env"], timeout=300)
+    assert rejected.returncode != 0 and "existing matching matrix manifest" in rejected.stderr
+    assert timing.read_bytes() == before
 
 
 def test_eval_stats_pairs_the_synaptic_off_anchor_against_vanilla(pipeline):
@@ -118,6 +142,7 @@ def test_structural_stage_pipeline_trains_and_scores_moe_columns(pipeline):
             "scripts.matrix_launch",
             "--stage",
             "structural",
+            "--exploratory",
             "--columns",
             ",".join(struct_cols),
             "--seeds",
@@ -130,51 +155,16 @@ def test_structural_stage_pipeline_trains_and_scores_moe_columns(pipeline):
     )
     assert launch.returncode == 0, (launch.stdout[-2000:], launch.stderr[-4000:])
 
-    out_dir = base_dir / "structural_out"
-    template = str(base_dir / "base_checkpoints" / "matrix_{preset}_s{seed}")
-    scored = _run(
-        [
-            "scripts.eval_matrix",
-            "matrix",
-            "--presets",
-            ",".join(struct_cols),
-            "--seeds",
-            ",".join(map(str, SEEDS)),
-            "--checkpoint-dir",
-            template,
-            "--data",
-            "fineweb",
-            "--device-type",
-            "cpu",
-            "--eval-bpb",
-            "--eval-tokens",
-            "128",
-            "--device-batch-size",
-            "2",
-            "--niah-lengths",
-            "8",
-            "--continual-exposures",
-            "2",
-            "--ece-bins",
-            "5",
-            "--out-dir",
-            str(out_dir),
-            "--batch-id",
-            "structural_pipeline",
-            "--registry-path",
-            str(base_dir / "structural_eval_registry.jsonl"),
-        ],
-        env,
-        timeout=2400,
-    )
-    assert scored.returncode == 0, (scored.stdout[-2000:], scored.stderr[-4000:])
-    summary = next(out_dir.rglob("summary.csv"))
+    summary, manifest = _score(launch, env)
+    assert manifest["run_id"] != pipeline["manifest"]["run_id"]
     rows = list(csv.DictReader(summary.open(encoding="utf-8")))
     assert {(r["preset"], int(r["seed"])) for r in rows} == {
         (c, s) for c in struct_cols for s in SEEDS
     }
     for r in rows:
         assert math.isfinite(float(r["val_bpb"])), r
+        assert r["matrix_manifest_digest"] == manifest["run_id"]
+        assert 0 < int(r["active_params"]) < int(r["trainable_params"])
         assert math.isfinite(float(r["moe_gini"])), r
         assert math.isfinite(float(r["dead_expert_frac"])), r
 

@@ -494,18 +494,17 @@ pub fn presyn_release_canonical_cpu<'py>(
         .map_err(|error| {
             pyo3::exceptions::PyValueError::new_err(format!("idx must be rank 4: {error}"))
         })?;
-    let valid_arr = match valid.as_ref() {
-        Some(v) => Some(
-            v.as_array()
-                .into_dimensionality::<ndarray::Ix4>()
-                .map_err(|error| {
+    let valid_arr =
+        match valid.as_ref() {
+            Some(v) => Some(v.as_array().into_dimensionality::<ndarray::Ix4>().map_err(
+                |error| {
                     pyo3::exceptions::PyValueError::new_err(format!(
                         "valid must be rank 4: {error}"
                     ))
-                })?,
-        ),
-        None => None,
-    };
+                },
+            )?),
+            None => None,
+        };
     let drive_shape = drive_arr.shape();
     if drive_shape[2] != 1 {
         return Err(pyo3::exceptions::PyValueError::new_err(format!(
@@ -794,10 +793,7 @@ pub fn presyn_release_canonical_cpu<'py>(
 }
 
 /// (edge release, pre-EMA drive gradient factor) of `presyn_detached_scan_cpu`.
-type ScanOutputs<'py> = (
-    Bound<'py, PyArrayDyn<f32>>,
-    Bound<'py, PyArrayDyn<f32>>,
-);
+type ScanOutputs<'py> = (Bound<'py, PyArrayDyn<f32>>, Bound<'py, PyArrayDyn<f32>>);
 
 /// Exact detached causal scan of a whole query block on CPU (l7c9 / jyb.9).
 ///
@@ -989,10 +985,10 @@ pub fn presyn_detached_scan_cpu<'py>(
                         out[[t, k]] = rel * qamp;
                         if record {
                             gf[[t, k]] = if ok && (0.0..=1.0).contains(&prob_raw) {
-                                let d_sensor_d_ca =
-                                    0.7 * cfg.syt_fast_kd / (fast_denom * fast_denom)
-                                        + 0.3 * cfg.syt_slow_kd / (slow_denom * slow_denom)
-                                        + 4.0 * cfg.doc2_gain * doc2_sig * (1.0 - doc2_sig);
+                                let d_sensor_d_ca = 0.7 * cfg.syt_fast_kd
+                                    / (fast_denom * fast_denom)
+                                    + 0.3 * cfg.syt_slow_kd / (slow_denom * slow_denom)
+                                    + 4.0 * cfg.doc2_gain * doc2_sig * (1.0 - doc2_sig);
                                 let d_fuse_d_ca =
                                     3.0 * fuse_base * (1.0 - fuse_base) * d_sensor_d_ca;
                                 let d_ca_d_drive = if calcium_raw >= 0.0 {

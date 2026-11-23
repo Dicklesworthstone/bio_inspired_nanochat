@@ -385,6 +385,133 @@ def _render_report(report: UncertaintyE2EReport) -> None:
     )
 
 
+def run_checkpoint_abstention(tag: str, step: int) -> dict:
+    """Evaluate a fixed threshold policy on a fully enumerated finite distribution."""
+    import pyarrow.parquet as pq
+    import torch
+
+    from bio_inspired_nanochat.checkpoint_manager import load_model
+    from bio_inspired_nanochat.common import get_base_dir
+    from bio_inspired_nanochat.conformal_abstention import (
+        _THRESHOLDS,
+        _upper_risk,
+        ConformalAbstentionEngine,
+    )
+    from bio_inspired_nanochat.dataset import parquet_paths_for_split
+    from bio_inspired_nanochat.matrix_manifest import digest, file_digest
+
+    base = Path(get_base_dir())
+    model, tokenizer, meta = load_model("base", torch.device("cpu"), "eval", model_tag=tag, step=step)
+    if model.training or meta["step"] != step or meta.get("synapses"):
+        raise ValueError("expected an eval-mode vanilla checkpoint at the requested step")
+    validation = parquet_paths_for_split("val", data_dir=str(base / "base_data"))
+    training = parquet_paths_for_split("train", data_dir=str(base / "base_data"))
+    if len(validation) != 1 or set(validation).intersection(training):
+        raise ValueError("expected a separate native validation shard")
+    val_path = Path(validation[0])
+    inputs: list[list[int]] = []
+    targets: list[int] = []
+    document_indices: list[int] = []
+    seen: set[tuple[int, ...]] = set()
+    examined = 0
+    for batch in pq.ParquetFile(val_path).iter_batches(batch_size=64, columns=["text"]):
+        for text in batch.column(0).to_pylist():
+            examined += 1
+            ids = tokenizer.encode(text)
+            prefix = tuple(ids[:16])
+            if len(ids) < 17 or prefix in seen:
+                continue
+            seen.add(prefix)
+            inputs.append(list(prefix))
+            targets.append(ids[16])
+            document_indices.append(examined - 1)
+            if len(inputs) == 384:
+                break
+        if len(inputs) == 384:
+            break
+    if len(inputs) != 384:
+        raise ValueError(f"validation shard supplied {len(inputs)} distinct eligible documents, need 384")
+    probs_parts = []
+    with torch.inference_mode():
+        for batch in torch.tensor(inputs, dtype=torch.long).split(8):
+            logits = model(batch)[:, -1, :]
+            probs_parts.append(logits.float().softmax(dim=-1))
+    probs = torch.cat(probs_parts)
+    labels = torch.tensor(targets, dtype=torch.long)
+    draws = torch.randint(256, (512,), generator=torch.Generator().manual_seed(1337))
+    engine = ConformalAbstentionEngine(target_alpha=0.10, delta=0.05)
+    threshold = engine.calibrate(probs[draws], labels[draws])
+    decisions = [engine.predict(row) for row in probs]
+    keep = torch.tensor([not d.abstained for d in decisions])
+    scores = torch.tensor([d.non_conformity_score for d in decisions], dtype=torch.float64)
+    predicted = probs.argmax(dim=1)
+    errors = predicted != labels
+
+    def counts(indices):
+        n = int(indices.numel())
+        answered = int(keep[indices].sum())
+        wrong = int((errors[indices] & keep[indices]).sum())
+        return {"queries": n, "answered": answered, "errors_among_answered": wrong,
+                "abstained": n - answered, "coverage": answered / n,
+                "answered_error_rate": wrong / answered if answered else None,
+                "unconditional_top1_errors": int(errors[indices].sum())}
+
+    # Expose the nearest attempted risk bound even when the chosen policy abstains on all inputs.
+    tail = math.log(len(_THRESHOLDS) / engine.delta)
+    candidates = []
+    for cutoff in _THRESHOLDS:
+        accepted = scores[draws] <= cutoff
+        n = int(accepted.sum())
+        if n:
+            wrong = int(errors[draws][accepted].sum())
+            candidates.append({"cutoff": cutoff, "answered": n, "errors": wrong,
+                               "upper_bound": _upper_risk(wrong, n, tail)})
+    eligible = [c for c in candidates if c["upper_bound"] <= engine.target_alpha]
+    if threshold != max((c["cutoff"] for c in eligible), default=-1.0):
+        raise AssertionError("enumerated calibration grid disagrees with deployed threshold")
+    checkpoint = base / "base_checkpoints" / tag
+    encoding = base / "tokenizer" / "tokenizer.json"
+    if not encoding.is_file():
+        encoding = base / "tokenizer" / "tokenizer.pkl"
+    files = [checkpoint / f"model_{step:06d}.pt", checkpoint / f"meta_{step:06d}.json",
+             encoding, base / "tokenizer" / "token_bytes.pt", val_path]
+    return {
+        "study": "fixed next-token abstention on a uniform finite population",
+        "protocol": {
+            "document_order": "native validation shard, parquet row order, one query per document",
+            "query": "first 16 encoded text tokens, no inserted BOS, predict the 17th token",
+            "eligibility": "at least 17 tokens and a prefix not used in any earlier accepted document",
+            "population": "first 256 eligible distinct prefixes, equiprobable",
+            "calibration": "512 uniform draws with replacement from that population",
+            "calibration_rng": "torch.randint with CPU torch.Generator, seed 1337",
+            "separate_description": "next 128 distinct eligible prefixes in shard order",
+            "alpha": engine.target_alpha, "delta": engine.delta,
+            "score": "one minus maximum predicted token probability",
+            "threshold_grid": "0.00 through 1.00 inclusive in increments of 0.01",
+        },
+        "checkpoint": {"tag": tag, "step": step, "loader": "load_model(base, cpu, eval)",
+                       "model_class": type(model).__name__, "model_config": meta["model_config"],
+                       "training_provenance": meta.get("provenance"), "torch_version": str(torch.__version__)},
+        "file_sha256": {str(p.relative_to(base)): file_digest(p) for p in files},
+        "source_sha256": {name: file_digest(Path(__file__).resolve().parents[2] / name) for name in (
+            "bio_inspired_nanochat/conformal_abstention.py", "bio_inspired_nanochat/checkpoint_manager.py",
+            "bio_inspired_nanochat/gpt.py", "scripts/e2e/uncertainty_calibration.py")},
+        "sample_identity": {
+            "documents_examined": examined, "population_first_last_doc_indices": document_indices[:256:255],
+            "descriptive_first_last_doc_indices": [document_indices[256], document_indices[-1]],
+            "ordered_document_prefix_target_sha256": digest(list(zip(document_indices, inputs, targets, strict=True))),
+            "calibration_draws_sha256": digest(draws.tolist()), "calibration_distinct_queries": int(draws.unique().numel()),
+        },
+        "selected_policy": {"threshold": threshold, "population_risk_upper_bound": engine.answered_risk_upper_bound,
+                            "candidates_with_answers": len(candidates), "admissible_candidates": len(eligible),
+                            "lowest_candidate_upper_bound": min(candidates, key=lambda c: c["upper_bound"])},
+        "calibration_sample": counts(draws), "finite_population_census": counts(torch.arange(256)),
+        "separate_descriptive_sample": counts(torch.arange(256, 384)),
+        "scope": "Calibration risk bound applies to fresh uniform draws from the first 256 queries. "
+                 "The next 128 queries are descriptive. Conditional error is undefined for zero answers.",
+    }
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Uncertainty/calibration E2E + JSONL evidence")
     parser.add_argument("--run-dir", default=None)
@@ -392,11 +519,22 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--train-steps", type=int, default=ExperimentConfig.train_steps)
     parser.add_argument("--mc-samples", type=int, default=ExperimentConfig.mc_samples)
     parser.add_argument("--target-coverage", type=float, default=0.8)
+    parser.add_argument("--abstention-checkpoint-tag", help="Run the fixed trained-checkpoint abstention study")
+    parser.add_argument("--checkpoint-step", type=int)
     return parser.parse_args()
 
 
 def main() -> None:
     args = _parse_args()
+    if args.abstention_checkpoint_tag or args.checkpoint_step is not None:
+        if not args.abstention_checkpoint_tag or args.checkpoint_step is None or not args.run_dir:
+            raise SystemExit("checkpoint study requires --abstention-checkpoint-tag, --checkpoint-step and --run-dir")
+        result = run_checkpoint_abstention(args.abstention_checkpoint_tag, args.checkpoint_step)
+        out = Path(args.run_dir) / "checkpoint_abstention.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(result, indent=2, sort_keys=True, allow_nan=False) + "\n", encoding="utf-8")
+        Console().print(f"Wrote checkpoint abstention result to {out}", markup=False)
+        return
     experiment = ExperimentConfig(
         seed=args.seed,
         train_steps=args.train_steps,

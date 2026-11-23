@@ -13,10 +13,12 @@ python -m scripts.base_train --depth=4 --max_seq_len=512 --device_batch_size=1 -
 
 import math
 import os
+import runpy
 
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 import sys
 import time
+from ast import literal_eval
 from contextlib import nullcontext
 from dataclasses import asdict
 from typing import Any, cast
@@ -95,6 +97,7 @@ num_experts = 8
 moe_top_k = 2
 moe_hidden_mult = 4
 splitmerge_every = 0  # apply split/merge every N steps (0=off)
+sm_warmup_steps = 20_000  # first optimization step eligible for split/merge
 merge_cosine = 0.85  # merge cosine similarity threshold
 merge_health_max = 0.25  # merge health threshold
 splits_per_call = 1  # splits per step
@@ -146,6 +149,8 @@ core_metric_max_per_task = 500  # examples per task in estimating the core metri
 sample_every = 2000  # every how many steps to sample from the model (-1 = only at the end)
 save_every = -1  # every how many steps to save model checkpoints (-1 = disable, and save only at the end of the run)
 # Output
+matrix_run_id = ""
+matrix_manifest = ""
 model_tag = (
     ""  # optionally override the model tag for the output checkpoint directory name
 )
@@ -161,17 +166,15 @@ neuroviz_interactive_every = 25000
 # Values are typed and validated against the dataclass when the config is built below.
 sys.argv, syn_cfg_overrides = extract_syn_cfg_cli_overrides(sys.argv)
 
-# now allow CLI to override the settings via the configurator lol
+# Apply the packaged configurator to the declared scalar training settings.
 config_keys = [
     k
     for k, v in globals().items()
     if not k.startswith("_") and isinstance(v, (int, float, bool, str))
 ]
-with open(
-    os.path.join("bio_inspired_nanochat", "configurator.py"),
-    encoding="utf-8",
-) as f:
-    exec(f.read())  # noqa: S102  # nosec B102 # overrides from command line or config file
+_configured = runpy.run_module("bio_inspired_nanochat.configurator", init_globals=globals())
+for _config_key in config_keys:
+    globals()[_config_key] = _configured[_config_key]
 user_config = {k: globals()[k] for k in config_keys}  # will be useful for logging
 user_config["syn_cfg_overrides"] = dict(syn_cfg_overrides)
 if syn_cfg_overrides and not synapses:
@@ -202,6 +205,7 @@ wandb_run = (
     else wandb.init(project="nanochat", name=run, config=user_config)
 )
 
+matrix_started = time.monotonic()
 # Tokenizer will be useful for evaluation, also we need the vocab size
 tokenizer = get_tokenizer()
 token_bytes = get_token_bytes(device=device)
@@ -220,6 +224,41 @@ if resuming:
 resume_meta = (
     load_checkpoint_metadata(checkpoint_dir, resume_from_step) if resuming else None
 )
+matrix_provenance: dict[str, Any] = {}
+if matrix_run_id or matrix_manifest:
+    from bio_inspired_nanochat.matrix_manifest import dataset_identity, load_manifest, source_identity
+
+    manifest = load_manifest(matrix_manifest)
+    revision, source_sha = source_identity()
+    data = dataset_identity()
+    if (manifest["run_id"] != matrix_run_id or manifest["source_sha256"] != source_sha
+        or manifest["git_revision"] != revision or manifest["data"] != data
+        or ddp_world_size != manifest["world_size"] or init_seed not in manifest["seeds"]):
+        raise ValueError("matrix training inputs differ from the frozen manifest")
+    column_id = next((c for c in manifest["columns"] if
+                      manifest["checkpoint_template"].format(preset=c, seed=init_seed) == model_tag), None)
+    if column_id is None:
+        raise ValueError("matrix training tag does not identify a registered cell")
+    expected = {**manifest["recipe"], **manifest["column_flags"][column_id]}
+    for key, value in expected.items():
+        if key.startswith("syn_cfg."):
+            actual = (resume_meta or {}).get("user_config", user_config)["syn_cfg_overrides"].get(key[8:])
+            expected_value = value
+        else:
+            actual = user_config.get(key)
+            try:
+                expected_value = literal_eval(value)
+            except (ValueError, SyntaxError):
+                expected_value = value
+        if actual != expected_value:
+            raise ValueError(f"matrix training flag {key} differs from the frozen value {value}")
+    if resume_meta and resume_meta.get("user_config", {}).get("matrix_run_id") != matrix_run_id:
+        raise ValueError("resume checkpoint belongs to another matrix run")
+    if resume_meta:
+        user_config["syn_cfg_overrides"] = dict(resume_meta["user_config"]["syn_cfg_overrides"])
+    matrix_provenance = {"matrix_data": data, "matrix_source_sha256": source_sha,
+                         "matrix_git_revision": revision, "matrix_train_device_type": device_type,
+                         "matrix_train_world_size": ddp_world_size}
 if resuming:
     validate_exact_resume_payload_step(
         resume_meta,
@@ -453,7 +492,7 @@ if use_syn:
     try:
         from bio_inspired_nanochat.ablation_registry import moe_only_mechanisms_on
         from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
-        from bio_inspired_nanochat.synaptic import SynapticConfig
+        from bio_inspired_nanochat.synaptic import SynapticConfig, rust_presyn_cpu_backend
     except Exception as e:
         raise RuntimeError(
             "synapses=1 but synaptic model modules failed to import."
@@ -518,6 +557,8 @@ if use_syn:
             resume_model_config.get("moe_hidden_mult", moe_hidden_mult)
         ),
         dropout=float(resume_model_config.get("dropout", 0.0)),
+        rope_base=float(resume_model_config.get("rope_base", 10000.0)),
+        logit_softcap=float(resume_model_config.get("logit_softcap", 15.0)),
         moe_balance_loss=float(resume_model_config.get("moe_balance_loss", 0.01)),
         init_type=str(resume_model_config.get("init_type", init_type)),
         init_seed=int(resume_model_config.get("init_seed", init_seed)),
@@ -530,6 +571,8 @@ if use_syn:
             resume_model_config.get("final_norm", bool(final_norm) if not resuming else False)
         ),
     )
+    if device_type == "cpu" and syn_cfg.enable_presyn and syn_cfg.native_presyn:
+        rust_presyn_cpu_backend()
     if syn_cfg.topological_nas and splitmerge_every <= 0:
         raise ValueError("topological_nas=1 requires splitmerge_every > 0")
     if not model_config.use_moe and (inert := moe_only_mechanisms_on(syn_cfg)):
@@ -693,8 +736,11 @@ if splitmerge_every > 0:
                 "checkpoint splitmerge schedule disagrees with its controller config"
             )
     else:
+        if sm_warmup_steps < 0:
+            raise ValueError("sm_warmup_steps must be nonnegative")
         sm_cfg = SplitMergeConfig(
             enabled=True,
+            warmup_steps=sm_warmup_steps,
             merge_cosine_threshold=merge_cosine,
             merge_health_max=merge_health_max,
             merges_per_call=merges_per_call,
@@ -1024,6 +1070,11 @@ while True:
                 ),
                 "provenance": config_provenance(syn_cfg) if use_syn else None,
                 "user_config": user_config,  # inputs to the training script
+                **matrix_provenance,
+                **({"matrix_training_wall_seconds": time.monotonic() - matrix_started +
+                    float((resume_meta or {}).get("matrix_training_wall_seconds", 0))}
+                   if matrix_run_id else {}),
+                "matrix_optimizer_names": [type(opt).__name__ for opt in optimizers],
                 "device_batch_size": device_batch_size,
                 "total_batch_size": total_batch_size,
                 "max_seq_len": max_seq_len,

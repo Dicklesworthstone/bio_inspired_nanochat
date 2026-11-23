@@ -36,10 +36,10 @@ import torch
 from rich.console import Console
 from rich.table import Table
 
+from bio_inspired_nanochat.conformal_abstention import ConformalAbstentionEngine
 from bio_inspired_nanochat.e2e_harness import InvariantResult
 from bio_inspired_nanochat.run_logging import RunLogger
 from bio_inspired_nanochat.wave2_compositions import (
-    ConformalAbstainer,
     EnergyGuidedSearch,
     MetacognitionController,
     PersistentLifelongMemory,
@@ -75,6 +75,46 @@ class Wave2CompositionsReport:
         if failed:
             msg = "\n".join(f"  FAILED: {inv.name} -> {inv.detail}" for inv in failed)
             raise AssertionError(f"Wave-2 Compositions battery failed with {len(failed)} failure(s):\n{msg}")
+
+
+def _selective_risk_on_cyclic_language(cfg: Wave2CompositionsConfig) -> InvariantResult:
+    """Calibrate on independent sequence starts, then enumerate the held-out query population."""
+    from scripts.e2e.stochastic_thermo_uq import (
+        ExperimentConfig, _make_model, _make_pool, _model_checkpoint_id, _softmax_prediction, _train_model,
+    )
+
+    experiment = ExperimentConfig(seed=cfg.seed)
+    torch.manual_seed(cfg.seed)
+    model = _make_model(experiment)
+    # Fix a uniform distribution over the odd starts of a 16-symbol cyclic language.
+    # Training sees even starts. Each query has one scored next token, at its final position.
+    train = _make_pool(experiment, low=0, high=16, starts=torch.arange(0, 16, 2))
+    held_out = _make_pool(experiment, low=0, high=16, starts=torch.arange(1, 16, 2))
+    _train_model(model, train, experiment)
+    with torch.inference_mode():
+        probs = _softmax_prediction(model, torch.cat([x for x, _ in held_out])).probabilities[:, -1]
+    labels = torch.cat([y for _, y in held_out])[:, -1]
+    rng = torch.Generator().manual_seed(cfg.seed + 1001)
+    indices = torch.randint(len(labels), (512,), generator=rng)
+    policy = ConformalAbstentionEngine(cfg.conformal_target_alpha)
+    threshold = policy.calibrate(probs[indices], labels[indices])
+    decisions = [policy.predict(row) for row in probs]
+    answered = [(decision.prediction, int(label)) for decision, label in zip(decisions, labels, strict=True)
+                if not decision.abstained]
+    errors = sum(pred != label for pred, label in answered)
+    risk = errors / len(answered) if answered else None
+    bound = policy.answered_risk_upper_bound
+    valid = (risk is None and bound is None) or (risk is not None and bound is not None
+                                                 and risk <= bound <= policy.target_alpha)
+    return InvariantResult(
+        name="conformal_certified_abstention", passed=valid,
+        observed={"target_alpha": policy.target_alpha, "delta": policy.delta, "threshold": threshold,
+                  "risk_upper_bound": bound, "population_error_given_answer": risk,
+                  "calibration_draws": len(indices), "population_size": len(labels), "answered_count": len(answered),
+                  "errors": errors, "abstention_rate": 1 - len(answered) / len(labels),
+                  "checkpoint_sha256": _model_checkpoint_id(model)},
+        detail=f"Answered {len(answered)}/{len(labels)} held-out cyclic starts with {errors} errors.",
+    )
 
 
 def run_wave2_compositions_e2e(
@@ -350,41 +390,8 @@ def run_wave2_compositions_e2e(
         # ===================================================================
         # 6. Conformal Certified Abstention (re4e.10)
         # ===================================================================
-        abstainer = ConformalAbstainer(target_alpha=cfg.conformal_target_alpha)
-        # Calibration nonconformity scores (e.g. error residuals)
-        calib_scores = [0.05, 0.08, 0.12, 0.14, 0.18, 0.22, 0.25, 0.30, 0.35, 0.40]
-        q_hat = abstainer.calibrate(calib_scores)
-
-        # Test on fresh evaluation queries
-        eval_scores = [0.07, 0.10, 0.15, 0.20, 0.45, 0.50]
-        eval_ground_truth_errors = [0, 0, 0, 0, 1, 1]  # 1 indicates error
-
-        answered_errors = []
-        for s, err in zip(eval_scores, eval_ground_truth_errors):
-            answered, _ = abstainer.evaluate(s)
-            if answered:
-                answered_errors.append(err)
-
-        emp_error_rate = (sum(answered_errors) / max(1, len(answered_errors))) if answered_errors else 0.0
-        conformal_ok = (emp_error_rate <= cfg.conformal_target_alpha) and (q_hat > 0.0)
-
-        invariants.append(
-            InvariantResult(
-                name="conformal_certified_abstention",
-                passed=conformal_ok,
-                observed={
-                    "target_alpha": cfg.conformal_target_alpha,
-                    "calibrated_q_hat": q_hat,
-                    "answered_count": len(answered_errors),
-                    "empirical_error_rate": emp_error_rate,
-                },
-                detail=(
-                    f"Conformal quantile threshold q_hat={q_hat:.3f}; "
-                    f"Answered {len(answered_errors)}/{len(eval_scores)} queries with "
-                    f"empirical error={emp_error_rate:.2%} <= alpha={cfg.conformal_target_alpha:.2%}"
-                ),
-            )
-        )
+        selective = _selective_risk_on_cyclic_language(cfg)
+        invariants.append(selective)
 
         # ===================================================================
         # 7. Speculative Decoder Cheap Path (re4e.7)
@@ -442,7 +449,7 @@ def run_wave2_compositions_e2e(
                 "energy_search_reduction": search_res.energy_reduction,
                 "lifelong_recalled_sim": sim_alice,
                 "serving_valid_status": resp_valid.status,
-                "conformal_q_hat": q_hat,
+                "conformal_q_hat": selective.observed["threshold"],
                 "speculative_accept_rate": spec_res.accept_rate,
             },
         )

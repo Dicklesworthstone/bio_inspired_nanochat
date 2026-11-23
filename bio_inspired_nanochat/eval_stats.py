@@ -21,6 +21,7 @@ import argparse
 import csv
 import json
 import math
+import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Optional
@@ -187,7 +188,8 @@ def paired_t_test(deltas: np.ndarray) -> tuple[float, float]:
     sd = deltas.std(ddof=1)
     if sd == 0.0:
         # No variance: either an exact tie (t=0, p=1) or a constant non-zero shift.
-        return (0.0, 1.0) if deltas.mean() == 0.0 else (float("inf"), 0.0)
+        mean = float(deltas.mean())
+        return (0.0, 1.0) if mean == 0.0 else (math.copysign(math.inf, mean), 0.0)
     t = float(deltas.mean() / (sd / math.sqrt(n)))
     return t, float(t_sf_two_sided(t, n - 1))
 
@@ -499,8 +501,374 @@ def compare_matrix(
 
 
 # --------------------------------------------------------------------------- #
-# CLI: read an eval_matrix summary.csv and print the comparison
+# Prospective D1 comparisons and decisions
 # --------------------------------------------------------------------------- #
+D1_PROTOCOL_VERSION = "d1-paired-bpb-2026-11-22"
+D1_SCREEN_SEEDS = (1337, 1338)
+D1_ALPHA = 0.05
+D1_PARAMETER_MATCH_RULE = "report_exact_trainable_and_active_counts"
+
+
+@dataclass(frozen=True)
+class D1Contrast:
+    """Treatment minus control, so negative BPB always favors the intervention."""
+
+    name: str
+    treatment: str
+    control: str
+    role: str
+
+
+D1_ANCHORS = (
+    D1Contrast("total_bio", "bio_all", "vanilla", "primary"),
+    D1Contrast("scaffold", "synaptic_off", "vanilla", "architecture"),
+)
+# Fixed before D1. The name of a leave-one-out hypothesis is its ablated column
+# for compatibility with matrix_launch; *full* is the treated model.
+D1_MECHANISMS = (
+    D1Contrast("bio_no_presyn", "bio_all", "bio_no_presyn", "presynaptic_stack"),
+    D1Contrast("bio_no_stochastic_release", "bio_all", "bio_no_stochastic_release", "mechanism"),
+    D1Contrast("bio_no_doc2", "bio_all", "bio_no_doc2", "mechanism"),
+    D1Contrast("bio_no_septin_barrier", "bio_all", "bio_no_septin_barrier", "mechanism"),
+    D1Contrast("add_hebbian", "add_hebbian", "synaptic_off", "mechanism"),
+    D1Contrast("add_bdnf", "add_bdnf", "add_hebbian", "mechanism"),
+    D1Contrast("add_bistable_latch", "add_bistable_latch", "add_hebbian", "mechanism"),
+    D1Contrast("add_stdp", "add_stdp", "add_hebbian", "mechanism"),
+    D1Contrast("add_cusp_latch", "add_cusp_latch", "add_bistable_latch", "mechanism"),
+    D1Contrast("add_learnable_kinetics", "add_learnable_kinetics", "control_presyn", "mechanism"),
+    D1Contrast("add_differentiable_recurrence", "add_differentiable_recurrence", "add_learnable_kinetics", "mechanism"),
+    D1Contrast("add_metriplectic_integrator", "add_metriplectic_integrator", "control_presyn", "mechanism"),
+    D1Contrast("add_neuromod", "add_neuromod", "control_presyn_hebbian", "mechanism"),
+)
+D1_STRUCTURAL = (
+    D1Contrast("lifecycle", "moe_splitmerge", "moe_fixed", "exploratory"),
+    D1Contrast("metabolism", "moe_fixed", "moe_no_metabolism", "exploratory"),
+    D1Contrast("genome", "moe_fixed", "moe_no_genome", "exploratory"),
+    D1Contrast("glial_homeostasis", "moe_add_glial_homeostasis", "moe_fixed", "exploratory"),
+)
+
+
+def _contrast_columns(contrasts: tuple[D1Contrast, ...]) -> list[str]:
+    return list(dict.fromkeys(arm for contrast in contrasts for arm in (contrast.control, contrast.treatment)))
+
+
+def _d1_cell_errors(
+    data: dict[str, dict[int, float]], columns: list[str], seeds: tuple[int, ...]
+) -> list[str]:
+    errors = []
+    if set(data) != set(columns):
+        errors.append(f"missing columns {sorted(set(columns) - set(data))}, extra columns {sorted(set(data) - set(columns))}")
+    for column in columns:
+        cells = data.get(column, {})
+        if set(cells) != set(seeds):
+            errors.append(f"{column} expected seeds {list(seeds)}, received {sorted(cells)}")
+        if any(not math.isfinite(value) or value < 0 for value in cells.values()):
+            errors.append(f"{column} has invalid validation BPB")
+    return errors
+
+
+def d1_screen(data: dict[str, dict[int, float]]) -> dict:
+    """Select candidates descriptively: strictly lower BPB on both registered seeds."""
+    contrasts = D1_ANCHORS + D1_MECHANISMS
+    errors = _d1_cell_errors(data, _contrast_columns(contrasts), D1_SCREEN_SEEDS)
+    report: dict = {
+        "protocol_version": D1_PROTOCOL_VERSION, "stage": "screening", "status": "inconclusive",
+        "metric": "val_bpb", "lower_is_better": True,
+        "seeds": list(D1_SCREEN_SEEDS), "survivors": [], "contrasts": {}, "errors": errors,
+    }
+    if errors:
+        return report
+    for contrast in contrasts:
+        deltas = [data[contrast.treatment][s] - data[contrast.control][s] for s in D1_SCREEN_SEEDS]
+        advances = contrast in D1_MECHANISMS and all(delta < 0 for delta in deltas)
+        if advances:
+            report["survivors"].append(contrast.name)
+        report["contrasts"][contrast.name] = {**asdict(contrast), "paired_deltas": deltas, "advances": advances}
+    report["status"] = "go" if report["survivors"] else "no_go"
+    return report
+
+
+def structural_descriptive(data: dict[str, dict[int, float]]) -> dict:
+    """Exploratory MoE contrasts. No dense nominations or confirmatory tests."""
+    seeds = tuple(sorted(data.get("moe_fixed", {})))
+    errors = _d1_cell_errors(data, _contrast_columns(D1_STRUCTURAL), seeds)
+    if not seeds:
+        errors.append("no fixed-MoE seed observations")
+    report: dict = {"stage": "structural", "seeds": list(seeds), "status": "inconclusive",
+                    "errors": errors, "contrasts": {}}
+    if errors:
+        return report
+    for c in D1_STRUCTURAL:
+        deltas = [data[c.treatment][s] - data[c.control][s] for s in seeds]
+        report["contrasts"][c.name] = {**asdict(c), "paired_deltas": deltas}
+    report["status"] = "exploratory"
+    return report
+
+
+def _d1_confirmation_contrasts(survivors: list[str] | tuple[str, ...]) -> tuple[D1Contrast, ...]:
+    selected = set(survivors)
+    if not selected or len(selected) != len(survivors):
+        raise ValueError("D1 confirmation requires one or more distinct selected mechanisms")
+    unknown = selected - {c.name for c in D1_MECHANISMS}
+    if unknown:
+        raise ValueError(f"unregistered D1 mechanism(s): {sorted(unknown)}")
+    return D1_ANCHORS + tuple(c for c in D1_MECHANISMS if c.name in selected)
+
+
+def d1_confirmation_plan(survivors: list[str] | tuple[str, ...]) -> dict:
+    """Keep every selected contrast's control and size one prespecified Holm family."""
+    contrasts = _d1_confirmation_contrasts(survivors)
+    family_size = len(contrasts)
+    min_n = math.ceil(math.log2(2 * family_size / D1_ALPHA))
+    return {
+        "protocol_version": D1_PROTOCOL_VERSION, "stage": "confirmation",
+        "columns": _contrast_columns(contrasts), "seeds": list(range(2337, 2337 + min_n)),
+        "family_size": family_size, "alpha": D1_ALPHA,
+        "minimum_raw_wilcoxon_p": 2 ** (1 - min_n),
+        "minimum_first_holm_p": min(1.0, family_size * 2 ** (1 - min_n)),
+        "contrasts": [asdict(c) for c in contrasts],
+    }
+
+
+def d1_confirm(data: dict[str, dict[int, float]], survivors: list[str] | tuple[str, ...]) -> dict:
+    """Evaluate only the registered family on complete, independent confirmation pairs."""
+    plan = d1_confirmation_plan(survivors)
+    seeds = tuple(plan["seeds"])
+    errors = _d1_cell_errors(data, plan["columns"], seeds)
+    report: dict = {**plan, "status": "inconclusive", "errors": errors, "results": {},
+                    "metric": "val_bpb", "lower_is_better": True}
+    if errors:
+        return report
+    contrasts = _d1_confirmation_contrasts(survivors)
+    results = {}
+    for c in contrasts:
+        result = paired_comparison(data[c.treatment], data[c.control], lower_is_better=True)
+        if result is None:
+            raise RuntimeError("complete registered grid yielded fewer than two paired observations")
+        results[c.name] = result
+    adjusted_t = holm_adjust({name: r.t_p_value for name, r in results.items()})
+    raw_w = {name: r.wilcoxon_p_value for name, r in results.items()}
+    adjusted_w = holm_adjust(raw_w)
+    for c in contrasts:
+        r = results[c.name]
+        deltas = [data[c.treatment][s] - data[c.control][s] for s in seeds]
+        nonzero = sum(d != 0.0 for d in deltas)
+        floor = min(1.0, 2.0 ** (1 - nonzero))
+        family_floor = holm_adjust({**raw_w, c.name: floor})[c.name]
+        passes = max(adjusted_t[c.name], adjusted_w[c.name]) <= D1_ALPHA
+        if passes and r.mean_delta < 0 and r.delta_ci_high < 0:
+            verdict = "supported_gain"
+        elif passes and r.mean_delta > 0 and r.delta_ci_low > 0:
+            verdict = "supported_regression"
+        elif nonzero > 0 and family_floor > D1_ALPHA:
+            verdict = "inconclusive"
+        else:
+            verdict = "null"
+        report["results"][c.name] = {
+            **asdict(r), "paired_deltas": deltas, "n_nonzero": nonzero,
+            "minimum_raw_wilcoxon_p": floor, "minimum_holm_p_given_other_results": family_floor,
+            "paired_t_p_adjusted": adjusted_t[c.name],
+            "wilcoxon_p_adjusted": adjusted_w[c.name], "verdict": verdict,
+        }
+    report["status"] = "evaluated"
+    return report
+
+
+@dataclass
+class _D1Evidence:
+    data: dict[str, dict[int, float]]
+    common: dict[str, str]
+    arms: dict[str, dict[str, str]]
+    manifest: str
+    screen_summary_sha256: str
+
+
+def _verify_score_mirror(csv_path: Path, rows: dict[tuple[str, int], dict[str, str]]) -> None:
+    """Detect a partial publish or edited CSV against the scorer's existing JSONL records."""
+    mirror = csv_path.with_suffix(".jsonl")
+    if not mirror.is_file():
+        raise ValueError(f"registered D1 analysis requires the scorer's paired summary {mirror}")
+    seen = set()
+    with mirror.open(encoding="utf-8") as stream:
+        for number, line in enumerate(stream, 1):
+            record = json.loads(line)
+            if not isinstance(record, dict):
+                raise ValueError(f"{mirror} line {number}: expected one score record")
+            key = (record.get("preset"), record.get("seed"))
+            if key not in rows or key in seen:
+                raise ValueError(f"{mirror} line {number}: extra or duplicate score record {key}")
+            for field, value in rows[key].items():
+                actual = record.get(field)
+                if isinstance(actual, (list, dict)):
+                    actual = json.dumps(actual, sort_keys=True, separators=(",", ":"))
+                if str(actual) != value:
+                    raise ValueError(f"{mirror} line {number}: CSV disagrees on {field} for {key}")
+            seen.add(key)
+    if seen != set(rows):
+        raise ValueError(f"{mirror}: missing recorded scorer cells")
+
+
+def _read_d1_evidence(path: Path, stage: str, survivors: list[str] | tuple[str, ...]) -> _D1Evidence:
+    """Validate scored rows as one complete campaign before computing any contrasts."""
+    from bio_inspired_nanochat.matrix_manifest import registered_tokens
+
+    if stage == "screening":
+        columns = _contrast_columns(D1_ANCHORS + D1_MECHANISMS)
+        seeds = D1_SCREEN_SEEDS
+    elif stage == "confirmation":
+        plan = d1_confirmation_plan(survivors)
+        columns, seeds = plan["columns"], tuple(plan["seeds"])
+    else:
+        raise ValueError(f"unregistered D1 stage {stage!r}")
+
+    fixed = {
+        "status": "ok", "matrix_stage": stage, "protocol_id": D1_PROTOCOL_VERSION,
+        "recipe_source": "base_train_checkpoint", "data": "fineweb",
+        "train_device_type": "cuda", "train_world_size": "2", "device_type": "cuda",
+        "sequence_len": "1024", "n_layer": "10", "n_head": "5", "n_embd": "640",
+        "parameter_match_rule": D1_PARAMETER_MATCH_RULE,
+    }
+    digest_fields = ("matrix_manifest_digest", "matrix_source_sha256", "model_file_sha256", "train_data_digest",
+                     "eval_data_digest", "tokenizer_digest", "optimizer_recipe_digest")
+    common_fields = ("matrix_source_sha256", "checkpoint_git_sha", "train_data_digest",
+                     "eval_data_digest", "tokenizer_digest", "train_device_type", "train_world_size",
+                     "device_type", "world_size", "eval_device_batch_size", "eval_tokens_processed", "total_batch_size_tokens",
+                     "device_batch_size", "sequence_len", "n_layer", "n_head", "n_embd", "vocab_size")
+    arm_fields = ("checkpoint_config_hash", "optimizer_recipe_digest", "optimizer_names",
+                  "trainable_params", "active_params")
+    required = (set(fixed) | set(digest_fields) | set(common_fields) | set(arm_fields)
+                | {"trained_cell_id", "preset", "seed", "val_bpb", "eval_bpb", "use_moe",
+                   "train_tokens_processed", "train_tokens_requested", "steps", "checkpoint_step", "eval_steps"})
+    if stage == "confirmation":
+        required.add("screen_summary_sha256")
+    evidence = _D1Evidence({}, {}, {}, "", "")
+    rows: dict[tuple[str, int], dict[str, str]] = {}
+    with path.open(newline="", encoding="utf-8") as stream:
+        reader = csv.DictReader(stream)
+        header = reader.fieldnames or []
+        missing = required.difference(header)
+        if missing or len(header) != len(set(header)):
+            raise ValueError(f"D1 CSV has missing or duplicate headers: missing {sorted(missing)}")
+        for row in reader:
+            try:
+                if None in row or any(not row[k] for k in required):
+                    raise ValueError("missing or unlabelled cell field")
+                for key, expected in fixed.items():
+                    if row[key] != expected:
+                        raise ValueError(f"{key} must equal {expected!r}")
+                lengths = {k: 64 for k in digest_fields}
+                lengths.update(checkpoint_config_hash=16, checkpoint_git_sha=40)
+                if stage == "confirmation":
+                    lengths["screen_summary_sha256"] = 64
+                for key, length in lengths.items():
+                    if not re.fullmatch(rf"[0-9a-f]{{{length}}}", row[key]):
+                        raise ValueError(f"invalid {key}")
+                for key in ("world_size", "n_head", "vocab_size", "device_batch_size",
+                            "trainable_params", "active_params"):
+                    if int(row[key]) <= 0:
+                        raise ValueError(f"{key} must be positive")
+                if row["eval_bpb"].lower() not in ("1", "true") or row["use_moe"].lower() not in ("0", "false"):
+                    raise ValueError("D1 requires held-out BPB on dense models")
+                if row["train_data_digest"] == row["eval_data_digest"]:
+                    raise ValueError("identical train and validation shard digests")
+                if int(row["eval_tokens_processed"]) < 1_000_000:
+                    raise ValueError("D1 requires at least 1,000,000 held-out evaluation tokens")
+                eval_micro = int(row["world_size"]) * int(row["sequence_len"]) * int(row["eval_device_batch_size"])
+                if eval_micro <= 0 or int(row["eval_steps"]) * eval_micro != int(row["eval_tokens_processed"]):
+                    raise ValueError("held-out evaluation token count disagrees with batch geometry")
+                batch = int(row["total_batch_size_tokens"])
+                if batch % (int(row["device_batch_size"]) * 1024 * 2):
+                    raise ValueError("global training batch disagrees with per-rank batch geometry")
+                tokens = registered_tokens(stage, batch)
+                for key, expected_count in (("train_tokens_processed", tokens), ("train_tokens_requested", tokens),
+                                            ("steps", tokens // batch), ("checkpoint_step", tokens // batch)):
+                    if int(row[key]) != expected_count:
+                        raise ValueError(f"{key} must equal {expected_count}")
+                preset, seed = row["preset"], int(row["seed"])
+                manifest = row["matrix_manifest_digest"]
+                if row["trained_cell_id"] != f"matrix_{stage}_{manifest[:20]}_{preset}_s{seed}":
+                    raise ValueError("trained_cell_id disagrees with manifest, preset or seed")
+                common = {k: row[k] for k in common_fields}
+                arm = {k: row[k] for k in arm_fields}
+                if evidence.common and common != evidence.common:
+                    raise ValueError("inconsistent source, shard, tokenizer, batch, evaluation or model dimensions")
+                if evidence.manifest and manifest != evidence.manifest:
+                    raise ValueError("mixed stage manifests")
+                source_screen = row.get("screen_summary_sha256", "") or ""
+                if evidence.screen_summary_sha256 and source_screen != evidence.screen_summary_sha256:
+                    raise ValueError("mixed screening selections")
+                if preset in evidence.arms and arm != evidence.arms[preset]:
+                    raise ValueError(f"configuration, optimizer or capacity differs between seeds of {preset}")
+                cells = evidence.data.setdefault(preset, {})
+                if seed in cells:
+                    raise ValueError(f"duplicate cell {preset} seed {seed}")
+                cells[seed] = float(row["val_bpb"])
+                rows[preset, seed] = {field: row[field] for field in required}
+                evidence.common, evidence.manifest = common, manifest
+                evidence.arms[preset], evidence.screen_summary_sha256 = arm, source_screen
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"{path} line {reader.line_num}: {exc}") from exc
+    errors = _d1_cell_errors(evidence.data, columns, seeds)
+    if errors:
+        raise ValueError("; ".join(errors))
+    if len({arm["checkpoint_config_hash"] for arm in evidence.arms.values()}) != len(evidence.arms):
+        raise ValueError("distinct D1 columns report identical checkpoint configurations")
+    _verify_score_mirror(path, rows)
+    return evidence
+
+
+def load_d1_csv(
+    path: Path, *, stage: str, survivors: list[str] | tuple[str, ...] = ()
+) -> dict[str, dict[int, float]]:
+    """Load a complete registered grid for the launcher admission or statistical analysis."""
+    return _read_d1_evidence(path, stage, survivors).data
+
+
+def _check_d1_continuity(screen: _D1Evidence, confirmation: _D1Evidence, screen_digest: str) -> None:
+    if confirmation.screen_summary_sha256 != screen_digest:
+        raise ValueError("supplied screening CSV differs from the selection admitted to confirmation")
+    if confirmation.common != screen.common or any(
+        arm != screen.arms[preset] for preset, arm in confirmation.arms.items()
+    ):
+        raise ValueError("source, data, evaluation or per-arm recipe changed after screening")
+
+
+def d1_csv_report(path: Path, *, stage: str, screen_csv: Path | None = None) -> dict:
+    """Make a D1 decision from the scorer's completed checkpoint rows."""
+    from bio_inspired_nanochat.matrix_manifest import file_digest, registered_tokens
+
+    if stage == "screening" and screen_csv is None:
+        evidence = _read_d1_evidence(path, stage, ())
+        report = d1_screen(evidence.data)
+        contrasts = D1_ANCHORS + D1_MECHANISMS
+    elif stage == "confirmation" and screen_csv is not None:
+        screen = _read_d1_evidence(screen_csv, "screening", ())
+        selection = d1_screen(screen.data)
+        if selection["status"] != "go":
+            raise ValueError("screen nominated no survivor for confirmation")
+        survivors = selection["survivors"]
+        evidence = _read_d1_evidence(path, stage, survivors)
+        _check_d1_continuity(screen, evidence, file_digest(screen_csv))
+        report = d1_confirm(evidence.data, survivors)
+        report["screen_summary_sha256"] = evidence.screen_summary_sha256
+        contrasts = _d1_confirmation_contrasts(survivors)
+    else:
+        raise ValueError("confirmation requires --d1-screen-csv; screening takes only its own CSV")
+    report.update(
+        manifest_digest=evidence.manifest, common=evidence.common, arms=evidence.arms,
+        val_bpb_by_seed=evidence.data,
+        train_tokens_per_cell=registered_tokens(stage, int(evidence.common["total_batch_size_tokens"])),
+    )
+    report["matching"] = {}
+    for c in contrasts:
+        treatment, control = evidence.arms[c.treatment], evidence.arms[c.control]
+        report["matching"][c.name] = {
+            "equal_parameter_counts": all(treatment[k] == control[k] for k in ("active_params", "trainable_params")),
+            "same_optimizer_recipe": all(treatment[k] == control[k] for k in ("optimizer_names", "optimizer_recipe_digest")),
+        }
+    return report
+
+
 def load_matrix_csv(path: Path, metric: str) -> dict[str, dict[int, float]]:
     """Read preset/seed/<metric> rows from an eval_matrix summary.csv.
 
@@ -566,8 +934,12 @@ def _load_matrix_provenance(path: Path, metric: str) -> dict[str, Any]:
             recipe_sources.add(row.get("recipe_source") or "unknown")
             data_sources.add(row.get("data") or "unknown")
     canonical = recipe_sources == {"base_train_checkpoint"} and data_sources == {"fineweb"}
-    warning = None
-    if not canonical:
+    if canonical:
+        warning = (
+            "CHECKPOINT SUMMARY: rows identify the base_train checkpoint scorer and FineWeb loader. "
+            "Use the D1 analysis mode to verify the registered grid, budgets and matched controls."
+        )
+    else:
         warning = (
             "NONCANONICAL OR UNKNOWN EVIDENCE: inferential calculations are shown for pipeline "
             "inspection only; do not promote them to a recipe-faithful FineWeb bio-vs-vanilla claim"
@@ -576,6 +948,7 @@ def _load_matrix_provenance(path: Path, metric: str) -> dict[str, Any]:
         "recipe_sources": sorted(recipe_sources),
         "data_sources": sorted(data_sources),
         "canonical_recipe_evidence": canonical,
+        "registered_d1_evidence": False,
         "scope_warning": warning,
     }
 
@@ -677,6 +1050,43 @@ def _format_markdown_report(report: dict) -> str:
     return "\n".join(lines)
 
 
+def _format_d1_report(report: dict) -> str:
+    lines = [
+        f"# {report['protocol_version']} · {report['stage']} · {report['status']}",
+        "", f"Manifest `{report['manifest_digest']}`. Paired training seeds {report['seeds']}.",
+        "", "Lower validation BPB favors the treatment. Parameter and optimizer details appear in the JSON.",
+        "", "| Contrast | Treatment − control | Paired BPB differences | Parameter counts equal | Optimizer matches | Outcome |",
+        "|---|---|---|---|---|---|",
+    ]
+    screen = report["stage"] == "screening"
+    contrasts = report["contrasts"].values() if screen else report["contrasts"]
+    for c in contrasts:
+        name = c["name"]
+        r = c if screen else report["results"][name]
+        if screen:
+            outcome = "nominated" if c["advances"] else "descriptive"
+        else:
+            outcome = (
+                f"{r['verdict']} (n nonzero {r['n_nonzero']}, "
+                f"adjusted t p={r['paired_t_p_adjusted']:.4g}, "
+                f"adjusted W p={r['wilcoxon_p_adjusted']:.4g}, "
+                f"95% interval [{r['delta_ci_low']:+.6g}, {r['delta_ci_high']:+.6g}])"
+            )
+        matching = report["matching"][name]
+        deltas = ", ".join(f"{v:+.6g}" for v in r["paired_deltas"])
+        lines.append(
+            f"| {name} | `{c['treatment']}` − `{c['control']}` | {deltas} | "
+            f"{matching['equal_parameter_counts']} | {matching['same_optimizer_recipe']} | {outcome} |"
+        )
+    if screen:
+        lines.extend(["", "Screening nominates candidates only. A no-go yields no confirmatory test."])
+    else:
+        lines.extend(["", f"Holm family size {report['family_size']}. "
+                      "A null leaves the effect unresolved. Unequal capacity or optimizer changes "
+                      "limit attribution to the tested configuration."])
+    return "\n".join(lines) + "\n"
+
+
 def main() -> int:
     console = Console()
     ap = argparse.ArgumentParser(description="Bio-vs-vanilla statistical comparison.")
@@ -687,31 +1097,36 @@ def main() -> int:
     ap.add_argument("--min-pairs", type=int, default=3)
     ap.add_argument("--json-out", type=Path)
     ap.add_argument("--markdown-out", type=Path)
+    ap.add_argument("--d1-stage", choices=("screening", "confirmation"))
+    ap.add_argument("--d1-screen-csv", type=Path, help="screening summary admitted to confirmation")
     ap.add_argument(
         "--higher-better", action="store_true", help="force higher-is-better direction"
     )
     args = ap.parse_args()
 
-    data = load_matrix_csv(args.csv, args.metric)
-    if args.baseline not in data:
-        console.print(
-            f"[red]Baseline {args.baseline!r} has no usable rows in {args.csv}.[/red]"
-        )
-        return 2
     try:
-        report = compare_matrix(
-            data,
-            baseline=args.baseline,
-            metric=args.metric,
-            lower_is_better=(False if args.higher_better else None),
-            alpha=args.alpha,
-            min_pairs=args.min_pairs,
-        )
-        report.update(_load_matrix_provenance(args.csv, args.metric))
-    except ValueError as exc:
-        console.print(f"[red]{exc}[/red]")
+        if args.d1_stage:
+            if (args.metric, args.baseline, args.alpha, args.min_pairs, args.higher_better) != (
+                "val_bpb", "vanilla", D1_ALPHA, 3, False
+            ):
+                raise ValueError("metric, direction, contrasts, alpha and sample size are frozen for D1")
+            report = d1_csv_report(args.csv, stage=args.d1_stage, screen_csv=args.d1_screen_csv)
+            formatted = _format_d1_report(report)
+        else:
+            if args.d1_screen_csv is not None:
+                raise ValueError("--d1-screen-csv requires --d1-stage confirmation")
+            data = load_matrix_csv(args.csv, args.metric)
+            report = compare_matrix(
+                data, baseline=args.baseline, metric=args.metric,
+                lower_is_better=(False if args.higher_better else None),
+                alpha=args.alpha, min_pairs=args.min_pairs,
+            )
+            report.update(_load_matrix_provenance(args.csv, args.metric))
+            formatted = _format_report(report)
+    except (OSError, ValueError) as exc:
+        console.print(f"Inconclusive: {exc}", markup=False, style="red")
         return 2
-    console.print(_format_report(report), markup=False)
+    console.print(formatted, markup=False)
     if args.json_out is not None:
         args.json_out.parent.mkdir(parents=True, exist_ok=True)
         args.json_out.write_text(
@@ -724,7 +1139,8 @@ def main() -> int:
         console.print(f"[green]Wrote strict JSON report:[/green] {args.json_out}")
     if args.markdown_out is not None:
         args.markdown_out.parent.mkdir(parents=True, exist_ok=True)
-        args.markdown_out.write_text(_format_markdown_report(report), encoding="utf-8")
+        markdown = formatted if args.d1_stage else _format_markdown_report(report)
+        args.markdown_out.write_text(markdown, encoding="utf-8")
         console.print(f"[green]Wrote Markdown report:[/green] {args.markdown_out}")
     return 0
 
