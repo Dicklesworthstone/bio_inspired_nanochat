@@ -568,3 +568,47 @@ file in a fresh directory. Run the Python drivers through DSR with
 path. Split the gzip archive's `frozen` and `training` entries
 into separate files before passing them, in that order, to
 `verify_prediction_credit.py` with a fresh result path.
+
+## Qualifying a GSM8K starting policy
+
+The archive screen found no mixed rewards. This pilot trains two
+supervised starting policies on the official GSM8K training split
+and tests whether the correct answers depend on the question.
+[Cobbe et al., 2021](https://arxiv.org/abs/2110.14168)
+
+- [ ] Load the same archived two-layer, width-192 FineWeb checkpoint
+  for both arms and verify its weights and tokenizer. One arm learns
+  worked solutions with the production token masks for calculator
+  outputs. The other learns just the official final answer in
+  `#### number` format. Keep the question text and start state matched.
+- [ ] Use official revision `740312add88f781978c0658806c59bc2815b9866`.
+  Take selection questions from shuffled training indices [128, 192)
+  and confirmation questions from [192, 256). Train on indices
+  [256, 7473), excluding question text duplicates of either panel
+  and worked solutions longer than 512 rendered tokens. Apply the
+  same exclusions to both arms. Retain the official test split
+  for later evaluation.
+- [ ] Train for 384 updates with 32 questions per update, microbatches
+  of eight and fixed shuffled epochs. Use AdamW with peak learning
+  rate 0.001, 16 warmup steps, cosine decay to 0.0001, weight decay
+  0.0001, gradient norm cap 1 and BF16 autocast. Supervise assistant
+  and sampled calculator tokens and exclude prompt and forced
+  calculator output tokens. Disable ordinary synaptic writes in
+  both arms. Save final checkpoints with the production writer
+  and reload using the production reader.
+- [ ] Sample four unforced completions per question with the production
+  engine, temperature 1, top-k 50 and a 160-token cap. On each panel,
+  require at least 24 correct completions out of 256, at least 16 mixed
+  reward groups out of 64, and correct answers of at least four distinct
+  values. Require more correct completions than the most frequent
+  training answer and at least eight more than scoring the very same
+  outputs against gold labels rotated by 17 questions. Test the paired
+  differences across questions with a one-sided exact sign-flip
+  `p ≤ 0.025`. A checkpoint qualifies only if it passes both panels.
+  If both qualify, prioritize the higher selection score.
+- [ ] Independently reconstruct every reward and qualification
+  decision. If any arm supplies mixed reward groups, replay an actual
+  group through the exact final-matrix score and compare with full
+  masked autograd. Keep task qualification and gradient parity as
+  separate results. Publish the complete denominators and checkpoint
+  identities.
