@@ -124,6 +124,10 @@ revision. [Current protocol](ablation_matrix.md) · [Follow-up DSR receipts](../
       allocation at both measured vanilla prompt lengths. At 1,024 tokens the
       fix saved 384 MiB over the first widened implementation. All 67,108,864
       output logits had the same byte digest.
+    - [x] Verify free-running generation through the public engine on two further
+      prompts per checkpoint. Each lower-precision format went from 0/64 to 64/64
+      aligned FP32 tokens. All four reference continuations repeated one token
+      throughout. [Prompts and completions](../results/profiles/greedy_generation_precision_2026-11-23.json)
   - [x] Repair the 15 floating type diagnostics and validate the affected callers
     with 340 tests. The full-tree scanner is a separate standing-main gate.
   - [x] Re-run the Linux CPU suite after repairing matrix coverage, the working-memory
@@ -133,7 +137,11 @@ revision. [Current protocol](ablation_matrix.md) · [Follow-up DSR receipts](../
     against a 2.00× limit. The 40 targeted regressions passed with their original
     deadlines on the second worker. After the CUDA atlas correction, 2,065 of 2,077
     passed and 11 skipped. The same training budget failed at 4,643 versus
-    9,669 tokens/s (2.08×). [DSR run and source fingerprints](../results/reality_check_followup_2026-11-22.json)
+    9,669 tokens/s (2.08×). With the final serving change and four added ordering
+    cases, 2,069 of 2,081 passed and 11 skipped. The sole failure measured
+    5,018 versus 11,176 training tokens/s (2.23×). The native macOS head and
+    Quick Start suites passed all 24 cases.
+    [DSR run and source fingerprints](../results/reality_check_followup_2026-11-22.json)
   - [x] Close the shared-cache tokenizer deserialization gap. All 18 cases passed,
     including three archived formats. An independently trained checkpoint also
     passed held-out-only scoring through the public CLI.

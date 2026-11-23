@@ -1932,6 +1932,36 @@
           "sha256": "61c5cebc41c6483675fa9d239a153d0bb22f6bd586be987327fb8eb926f83519"
         }
       ]
+    },
+    {
+      "probe": "bio-nov23-serving-final-cpu",
+      "observation": "Final serving implementation with buffer reuse: full Linux CPU suite 2069 passed, 11 skipped and one failed in 700.37s across 2081 cases. The unchanged live training budget measured 5017.7 synaptic versus 11176.1 vanilla tokens/s, a 2.23x slowdown against 2.00x.",
+      "run_id": "68568be0-abee-4129-9c87-4ed04f90bc95",
+      "exit": 1,
+      "source": "4d22be6733b8d7d7c8125163d9a9fd7e1f871c94|51d592f0a43a20479636ebd9bf767a53649d2bd17df822f335cbbb06b2e7fa83|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 1,
+          "sha256": "5923d1cc8d222775d069a6833ad8047f4b0cd8bc05bf72742959f65b569dffa6"
+        }
+      ]
+    },
+    {
+      "probe": "bio-nov23-greedy-completions",
+      "observation": "The unmodified public Engine.generate ran 16 autoregressive tokens on two further real validation prompts per checkpoint. Original BF16 and FP16 each agreed with FP32 at 0/64 aligned positions, whereas repaired BF16 and FP16 each agreed at 64/64 and matched all four complete sequences. All four reference sequences repeated one token, so this is precision fidelity, not chat quality.",
+      "run_id": "08f11e37-a781-4851-9fe0-5f711def8b1a",
+      "exit": 0,
+      "source": "4d22be6733b8d7d7c8125163d9a9fd7e1f871c94|51d592f0a43a20479636ebd9bf767a53649d2bd17df822f335cbbb06b2e7fa83|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "d9cc992dcaea8b5b7d3dca0cd49a1dcbba9517d377ba61fffcfe87faaad107f1"
+        },
+        {
+          "exit": 0,
+          "sha256": "20b3f2c76092e42027447c4a7adde60297e05bb09f1e15dfa8413a727facdc95"
+        }
+      ]
     }
   ],
   "reference_feasibility": {

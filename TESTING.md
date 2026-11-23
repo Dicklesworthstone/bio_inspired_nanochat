@@ -82,6 +82,13 @@ implementation used 934,437,888 bytes. All 67,108,864 returned FP32 scores
 had the same byte digest across the two FP32 implementations. At 32 tokens
 all 2,097,152 scores also matched. [Paired allocator readings and tensor hashes](results/profiles/prefill_projection_2026-11-23.json)
 
+The public `Engine.generate` also ran freely for 16 tokens on two later prompts
+per checkpoint. The old BF16 and FP16 paths each matched 0/64 aligned FP32
+tokens. The corrected paths each matched 64/64, including all four complete
+continuations. Every FP32 continuation repeated one token throughout. This
+comparison establishes reproducibility of greedy generation on these pilots.
+[Prompt IDs and complete generated sequences](results/profiles/greedy_generation_precision_2026-11-23.json)
+
 > The test discipline for `bio_inspired_nanochat`. Established by bead **eqyk.1**
 > (*Unit-test framework, conventions, fixtures & coverage gate*) — the foundation
 > every later "unit tests + e2e + detailed logging" bead builds on.
