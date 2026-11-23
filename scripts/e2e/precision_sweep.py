@@ -111,7 +111,11 @@ def main() -> int:
     parser.add_argument("--checkpoint-dir", type=Path, required=True)
     parser.add_argument("--step", type=int, required=True)
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--skip-blocks", type=int, default=0,
+                        help="Skip this many batches in both streams before warmup and measurement")
     args = parser.parse_args()
+    if args.skip_blocks < 0:
+        parser.error("--skip-blocks must be nonnegative")
     device = torch.device("cuda", 0)
     stock, _ = load_checkpoint_model(str(args.checkpoint_dir), args.step, device, "eval")
     # Promote stored matrix weights once for all arms. Rotary lookup tables and
@@ -124,6 +128,9 @@ def main() -> int:
         raise ValueError("checkpoint has unexpected non-FP32 parameters outside matrix layers")
     train_stream = tokenizing_distributed_data_loader(1, PROMPT, "train", device="cuda")
     val_stream = tokenizing_distributed_data_loader(1, PROMPT + CACHED, "val", device="cuda")
+    for _ in range(args.skip_blocks):
+        next(train_stream)
+        next(val_stream)
     observations = []
     failed = False
     for block in range(-1, 4):
@@ -144,6 +151,11 @@ def main() -> int:
                  "cached inference and one unscaled AdamW update per block. No training-quality estimate.",
         "checkpoint": args.checkpoint_dir.name, "step": args.step, "source_sha256": file_digest(Path(__file__)),
         "checkpoint_sha256": file_digest(args.checkpoint_dir / f"model_{args.step:06d}.pt"),
+        "model_source_sha256": {
+            name: file_digest(Path(__file__).resolve().parents[2] / "bio_inspired_nanochat" / name)
+            for name in ("common.py", "gpt.py", "gpt_synaptic.py")
+        },
+        "skip_blocks": args.skip_blocks,
         "torch": str(torch.__version__), "device": torch.cuda.get_device_name(device),
         "prompt": PROMPT, "cached_steps": CACHED, "warmup": warmup, "blocks": rows,
         "comparisons_with_fp32": {m: _summarize(rows, warmup, m) for m in FORMATS[1:]},
