@@ -1230,6 +1230,20 @@
       "lean_toolchain": "leanprover/lean4:v4.27.0",
       "mathlib_revision": "a3a10db0e9d66acbebf76c5e6a135066525ac900",
       "regression_command": "python -m scripts.formal_feedback --run-tests --run-lean-audit with the pinned Lake environment; verify the axiom allowlist for every resolved declaration."
+    },
+    {
+      "cycle_id": "attention-recommendation-contract-2026-11-23",
+      "frog_id": "bio_inspired_nanochat-zsi",
+      "hash_scope": "formal/lean/BioInspiredNanochat.lean",
+      "artifact_hash": "sha256:831498bc2853d86701250ea89024ab5f5f6190d2e3a5a9ae66f93a7d5d42d963",
+      "theorem_ids": ["BioInspiredNanochat.Metriplectic.energyRate_zero"],
+      "axioms": ["propext", "Classical.choice", "Quot.sound"],
+      "sorry_or_admit_present": false,
+      "runtime_mapping": [{
+        "path": "tests/test_flex_canonical.py",
+        "sha256": "b775688487e4a263cf3c647e86e3db806bba92c05a808edab91a07bb43354408"
+      }],
+      "change_scope": "Only the benchmark recommendation test changed. It now requires a measured baseline and excludes approximate Flex from the dense synaptic comparison. The forward and parity checks in the same module are unchanged. DSR fa70f3bb-0971-4a08-994a-23cfd263d85f rejected the old digest. This binding makes no theorem claim about recommendation policy or hardware speed."
     }
   ]
 }

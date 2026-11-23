@@ -86,7 +86,6 @@ def _tiny_model(seed: int) -> GPTSynaptic:
             n_head=2,
             n_kv_head=2,
             n_embd=16,
-            logit_softcap=0.0,
             synapses=True,
             syn_cfg=SynapticConfig(enable_hebbian=True),  # the fast weights are the working memory
             use_moe=False,
@@ -126,26 +125,31 @@ def run_demo(run_dir: str | Path, *, seed: int = 19) -> WorkingMemoryDemoResult:
 
         prompt = torch.tensor([[1, 7, 3, 11, 5, 2]], dtype=torch.long)
         captured: list[torch.Tensor] = []
+        residuals: list[torch.Tensor] = []
 
         def capture_input(_module: torch.nn.Module, args: tuple[object, ...]) -> None:
             value = args[0]
             if torch.is_tensor(value):
                 captured.append(value.detach().clone())
 
+        def capture_residual(_module, _args, output) -> None:
+            residuals.append(output[0][0, -1].detach().clone())
+
         handle = projection.register_forward_pre_hook(capture_input)
+        residual_handle = model.h[-1].register_forward_hook(capture_residual)
         try:
             with torch.no_grad():
                 baseline_logits, _ = model(prompt, train_mode=False)
         finally:
             handle.remove()
-        if not captured:
-            raise RuntimeError("final projection input was not captured")
+            residual_handle.remove()
+        if not captured or not residuals:
+            raise RuntimeError("final projection input or residual was not captured")
 
         baseline = baseline_logits[0, -1].detach().float()
         ranking = torch.argsort(baseline, descending=True)
         baseline_token = int(ranking[0].item())
         target_token = int(ranking[1].item())
-        baseline_margin = float((baseline[baseline_token] - baseline[target_token]).item())
 
         projection_input = captured[-1].reshape(-1, captured[-1].shape[-1])[-1].to(projection.w_fast)
         input_norm = projection_input.norm()
@@ -159,6 +163,11 @@ def run_demo(run_dir: str | Path, *, seed: int = 19) -> WorkingMemoryDemoResult:
         head_delta = (
             model.lm_head.weight[target_token] - model.lm_head.weight[baseline_token]
         ).to(transform)
+        # The positive RMS scale and monotone softcap preserve token ordering.
+        # Solve the rank change in the raw residual, then pass its predicted
+        # displacement through the actual nonlinear readout to predict the margin.
+        residual = residuals[0].to(transform)
+        baseline_margin = -float(torch.dot(residual, head_delta).item())
         value_gradient = transform @ head_delta
         gradient_norm = value_gradient.norm()
         gradient_norm_value = float(gradient_norm.detach().item())
@@ -179,17 +188,16 @@ def run_demo(run_dir: str | Path, *, seed: int = 19) -> WorkingMemoryDemoResult:
             expected_module=module_name,
         )
         with torch.no_grad():
+            displacement = fast_gate * input_norm_value * float(receipt["effective_scale"]) * (value @ transform)
+            predicted_hidden = residual + displacement
+            if model.config.final_norm:
+                predicted_hidden = torch.nn.functional.rms_norm(predicted_hidden, predicted_hidden.shape)
+            predicted_logits = model.hidden_to_logits(predicted_hidden)
+            predicted_margin = float((predicted_logits[target_token] - predicted_logits[baseline_token]).item())
             injected_logits, _ = model(prompt, train_mode=False)
         injected = injected_logits[0, -1].detach().float()
         injected_token = int(injected.argmax().item())
 
-        predicted_gain = (
-            fast_gate
-            * input_norm_value
-            * float(torch.dot(value, value_gradient).item())
-            * float(receipt["effective_scale"])
-        )
-        predicted_margin = float(baseline[target_token] - baseline[baseline_token]) + predicted_gain
         observed_margin = float((injected[target_token] - injected[baseline_token]).item())
         margin_error = abs(predicted_margin - observed_margin)
 

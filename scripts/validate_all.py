@@ -206,12 +206,16 @@ def run_single_check(
     """
     if not math.isfinite(timeout_scale) or timeout_scale <= 0:
         raise ValueError(f"timeout_scale must be a positive finite number, got {timeout_scale!r}")
-    cmd = ["uv", "run", "--no-sync"] + check.command
+    # Invoke pytest in the project interpreter even when a global console script
+    # happens to be first on PATH (e.g. a wheel-only DSR environment).
+    command = ["python", "-m", *check.command] if check.command[:1] == ["pytest"] else check.command
+    cmd = ["uv", "run", "--no-sync", *command]
     budget_sec = check.timeout_sec * timeout_scale
     t0 = time.perf_counter()
     try:
         proc = subprocess.run(
             cmd,
+            cwd=Path(__file__).resolve().parents[1],
             capture_output=True,
             text=True,
             timeout=budget_sec,

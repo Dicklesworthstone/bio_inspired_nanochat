@@ -24,7 +24,7 @@ dependencies = [
     "tiktoken>=0.11.0",
     "tokenizers>=0.22.0",
     "torch==2.9.1",
-    "triton>=3.0.0",
+    "triton>=3.0.0; sys_platform == 'linux'",
     "transformers>=4.40.0",
     "uvicorn>=0.36.0",
     "wandb>=0.21.3",

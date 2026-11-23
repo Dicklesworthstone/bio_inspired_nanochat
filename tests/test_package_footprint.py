@@ -46,7 +46,6 @@ STANDALONE_RESEARCH_CLUSTERS: dict[str, frozenset[str]] = {
             "bio_inspired_nanochat.neural_society",
             "bio_inspired_nanochat.result_interpreter",
             "bio_inspired_nanochat.theory_discovery",
-            "bio_inspired_nanochat.xpoll",
         }
     ),
     "geometry_theory": frozenset(
@@ -54,7 +53,6 @@ STANDALONE_RESEARCH_CLUSTERS: dict[str, frozenset[str]] = {
             "bio_inspired_nanochat.certificate_bundle",
             "bio_inspired_nanochat.composition",
             "bio_inspired_nanochat.fmri_attractor_viz",
-            "bio_inspired_nanochat.gauge_consolidation",
             "bio_inspired_nanochat.homeostatic_safety",
             "bio_inspired_nanochat.master_sde",
             "bio_inspired_nanochat.neuromorphic_sparse",
@@ -65,7 +63,6 @@ STANDALONE_RESEARCH_CLUSTERS: dict[str, frozenset[str]] = {
     ),
     "decoding_serving": frozenset(
         {
-            "bio_inspired_nanochat.conformal_abstention",
             "bio_inspired_nanochat.constrained_energy_decoder",
             "bio_inspired_nanochat.energy_guided_search",
             "bio_inspired_nanochat.execution",
@@ -78,7 +75,6 @@ STANDALONE_RESEARCH_CLUSTERS: dict[str, frozenset[str]] = {
     "optimization_telemetry": frozenset(
         {
             "bio_inspired_nanochat.async_population",
-            "bio_inspired_nanochat.configurator",
             "bio_inspired_nanochat.determinism",
             "bio_inspired_nanochat.hybrid_optimizer",
             "bio_inspired_nanochat.metrics_fused",
@@ -142,11 +138,20 @@ def test_package_footprint_boundary_and_quarantine():
     for script_name in CORE_CLI_SCRIPTS:
         core_seeds |= extract_package_imports(SCRIPTS_ROOT / script_name, valid_names)
     reached_core = transitive_closure(core_seeds, graph)
+    assert "bio_inspired_nanochat.configurator" in extract_package_imports(SCRIPTS_ROOT / "base_train.py", valid_names)
 
     all_script_seeds: set[str] = set()
     for script_path in sorted(SCRIPTS_ROOT.rglob("*.py")):
         all_script_seeds |= extract_package_imports(script_path, valid_names)
     reached_all_scripts = transitive_closure(all_script_seeds, graph)
+    research_callers = {
+        "e2e/uncertainty_calibration.py": "bio_inspired_nanochat.conformal_abstention",
+        "e2e/continual_learning_eval.py": "bio_inspired_nanochat.gauge_consolidation",
+        "xpoll_benchmark.py": "bio_inspired_nanochat.xpoll",
+    }
+    for script, module in research_callers.items():
+        assert module in extract_package_imports(SCRIPTS_ROOT / script, valid_names)
+        assert module not in reached_core
 
     standalone_expected = frozenset().union(*STANDALONE_RESEARCH_CLUSTERS.values())
     standalone_actual = valid_names - reached_all_scripts
