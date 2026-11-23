@@ -21,9 +21,7 @@ from __future__ import annotations
 
 import csv
 import json
-import os
 import platform
-import runpy
 import time
 from contextlib import nullcontext
 from dataclasses import dataclass
@@ -44,6 +42,7 @@ from rich.progress import (
 from rich.table import Table
 from torch.nn.attention import SDPBackend, sdpa_kernel
 
+from bio_inspired_nanochat.configurator import configured_copy
 from bio_inspired_nanochat.common import (
     autodetect_device_type,
     compute_cleanup,
@@ -104,11 +103,7 @@ dtype = "float32"  # float32|bfloat16|float16 (used for ca_init mode)
 config_keys = [
     k for k, v in globals().items() if not k.startswith("_") and isinstance(v, (int, float, bool, str))
 ]
-_configured = runpy.run_path(
-    os.path.join("bio_inspired_nanochat", "configurator.py"),
-    init_globals=globals(),
-    run_name="_benchmark_configurator",
-)
+_configured = configured_copy(globals(), script_name="_benchmark_configurator")
 for _config_key in config_keys:
     globals()[_config_key] = _configured[_config_key]
 

@@ -6,10 +6,10 @@ Loads a checkpoint, and:
 Example run as:
 torchrun --standalone --nproc_per_node=8 -m scripts.base_loss
 """
-import runpy
 from contextlib import nullcontext
 from bio_inspired_nanochat.torch_imports import torch, F
 from bio_inspired_nanochat.checkpoint_manager import load_model
+from bio_inspired_nanochat.configurator import configured_copy
 from bio_inspired_nanochat.common import compute_init, print0, compute_cleanup, autodetect_device_type
 from bio_inspired_nanochat.dataloader import tokenizing_distributed_data_loader
 from bio_inspired_nanochat.tokenizer import get_token_bytes
@@ -24,7 +24,7 @@ validation_only = False  # score the held-out split without training-split evalu
 model_tag = None # optional model tag for the output directory name
 model_step = None # optional model step for the output directory name
 device_type = "" # cuda|cpu|mps (empty => autodetect)
-configured = runpy.run_module("bio_inspired_nanochat.configurator", init_globals=globals())
+configured = configured_copy(globals())
 device_batch_size = configured["device_batch_size"]
 split_tokens = configured["split_tokens"]
 validation_only = configured["validation_only"]

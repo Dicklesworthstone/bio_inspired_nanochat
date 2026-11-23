@@ -93,7 +93,8 @@ def test_launcher_trained_every_cell_under_the_tag_eval_matrix_resolves(pipeline
 
 
 def test_eval_matrix_scored_every_checkpoint_from_its_own_metadata(pipeline):
-    rows = list(csv.DictReader(pipeline["summary"].open(encoding="utf-8")))
+    with pipeline["summary"].open(encoding="utf-8", newline="") as stream:
+        rows = list(csv.DictReader(stream))
     cells = {(r["preset"], int(r["seed"])) for r in rows}
     assert cells == {(c, s) for c in COLUMNS for s in SEEDS}, cells
     for r in rows:
@@ -157,7 +158,8 @@ def test_structural_stage_pipeline_trains_and_scores_moe_columns(pipeline):
 
     summary, manifest = _score(launch, env)
     assert manifest["run_id"] != pipeline["manifest"]["run_id"]
-    rows = list(csv.DictReader(summary.open(encoding="utf-8")))
+    with summary.open(encoding="utf-8", newline="") as stream:
+        rows = list(csv.DictReader(stream))
     assert {(r["preset"], int(r["seed"])) for r in rows} == {
         (c, s) for c in struct_cols for s in SEEDS
     }

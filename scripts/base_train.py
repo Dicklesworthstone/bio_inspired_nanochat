@@ -13,7 +13,6 @@ python -m scripts.base_train --depth=4 --max_seq_len=512 --device_batch_size=1 -
 
 import math
 import os
-import runpy
 
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 import sys
@@ -55,6 +54,7 @@ from bio_inspired_nanochat.common import (
     print_banner,
 )
 from bio_inspired_nanochat.cmaes_params import extract_syn_cfg_cli_overrides
+from bio_inspired_nanochat.configurator import configured_copy
 from bio_inspired_nanochat.dataloader import (
     collate_dataloader_state_dicts,
     tokenizing_distributed_data_loader,
@@ -174,7 +174,7 @@ config_keys = [
     for k, v in globals().items()
     if not k.startswith("_") and isinstance(v, (int, float, bool, str))
 ]
-_configured = runpy.run_module("bio_inspired_nanochat.configurator", init_globals=globals())
+_configured = configured_copy(globals())
 user_config = {k: _configured[k] for k in config_keys}
 globals().update(user_config)
 user_config["syn_cfg_overrides"] = dict(syn_cfg_overrides)

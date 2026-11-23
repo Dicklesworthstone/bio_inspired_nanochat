@@ -42,6 +42,7 @@ from bio_inspired_nanochat.dataloader import (
     extract_rank_dataloader_state,
     tokenizing_task_data_loader_with_state,
 )
+from bio_inspired_nanochat.configurator import apply_config
 from bio_inspired_nanochat.common import (
     DummyWandb,
     autodetect_device_type,
@@ -100,8 +101,7 @@ total_batch_size = 524288
 dry_run = 0 # dry_run=1 is for experiments: we will log to wandb but we won't write checkpoints or report
 save_every = -1 # periodic optimizer-step checkpoint interval (-1 => final only)
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
-with open(os.path.join("bio_inspired_nanochat", "configurator.py"), encoding="utf-8") as f:
-    exec(f.read())  # nosec B102 # noqa: S102 # overrides from command line or config file
+apply_config(globals())
 user_config = {k: globals()[k] for k in config_keys} # possibly useful for logging
 # -----------------------------------------------------------------------------
 

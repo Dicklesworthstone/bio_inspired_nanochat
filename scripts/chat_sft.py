@@ -28,6 +28,7 @@ from bio_inspired_nanochat.checkpoint_manager import (
     synaptic_config_to_meta,
 )
 from bio_inspired_nanochat.engine import Engine
+from bio_inspired_nanochat.configurator import apply_config
 from bio_inspired_nanochat.report import get_report
 from scripts.chat_eval import run_chat_eval
 
@@ -80,8 +81,7 @@ eval_metrics_every = 200
 eval_metrics_max_problems = 1024
 # now allow CLI to override the settings via the configurator lol
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
-with open(os.path.join('bio_inspired_nanochat', 'configurator.py')) as f:
-    exec(f.read()) # nosec B102 # overrides from command line or config file
+apply_config(globals())
 user_config = {k: globals()[k] for k in config_keys} # possibly useful for logging
 # -----------------------------------------------------------------------------
 

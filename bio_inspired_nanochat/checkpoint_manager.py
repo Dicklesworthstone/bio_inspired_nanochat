@@ -719,8 +719,12 @@ def load_rank_training_checkpoint(
     marker_path = os.path.join(checkpoint_dir, f"commit_{step:06d}.json")
     if not os.path.exists(marker_path):
         raise ValueError("exact training resume requires a checkpoint completion marker")
-    with open(marker_path, "r", encoding="utf-8") as file:
-        marker = json.load(file)
+    try:
+        with open(marker_path, "r", encoding="utf-8") as file:
+            marker = json.load(file)
+    except json.JSONDecodeError as exc:
+        exc.add_note(f"while reading checkpoint completion marker {marker_path}")
+        raise
     saved_world_size = marker.get("world_size") if isinstance(marker, dict) else None
     if (
         isinstance(saved_world_size, bool)

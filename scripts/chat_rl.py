@@ -41,6 +41,7 @@ from bio_inspired_nanochat.checkpoint_manager import (
     synaptic_config_to_meta,
 )
 from bio_inspired_nanochat.engine import Engine, batch_slices
+from bio_inspired_nanochat.configurator import apply_config
 from bio_inspired_nanochat.report import get_report
 from tasks.gsm8k import GSM8K
 
@@ -79,8 +80,7 @@ eval_every = 60 # every how many steps to evaluate the model for val pass@k
 eval_examples = 400 # number of examples used for evaluating pass@k
 # now allow CLI to override the settings via the configurator lol
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
-with open(os.path.join('bio_inspired_nanochat', 'configurator.py')) as f:
-    exec(f.read()) # nosec B102 # overrides from command line or config file
+apply_config(globals())
 user_config = {k: globals()[k] for k in config_keys} # will be useful for logging
 # -----------------------------------------------------------------------------
 

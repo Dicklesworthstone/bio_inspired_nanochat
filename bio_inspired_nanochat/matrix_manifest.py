@@ -77,8 +77,12 @@ def seal_manifest(fields: dict) -> dict:
 
 
 def load_manifest(path: str | Path) -> dict:
-    with Path(path).open(encoding="utf-8") as stream:
-        data = json.load(stream)
+    try:
+        with Path(path).open(encoding="utf-8") as stream:
+            data = json.load(stream)
+    except json.JSONDecodeError as exc:
+        exc.add_note(f"while reading matrix manifest {path}")
+        raise
     if not isinstance(data, dict) or data.get("schema") != 1:
         raise ValueError("unsupported matrix manifest schema")
     fields = {k: v for k, v in data.items() if k not in {"run_id", "checkpoint_template"}}

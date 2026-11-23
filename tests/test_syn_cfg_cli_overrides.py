@@ -34,8 +34,51 @@ from bio_inspired_nanochat.cmaes_params import (
     extract_syn_cfg_cli_overrides,
 )
 from bio_inspired_nanochat.synaptic import SynapticConfig
+from bio_inspired_nanochat.configurator import apply_config, configured_copy
 
 pytestmark = pytest.mark.unit
+
+
+def test_trusted_config_file_and_following_flags_share_the_requested_namespace(tmp_path):
+    config_file = tmp_path / "recipe.py"
+    config_file.write_text(
+        "depth *= 2\n"
+        "def effective_width():\n"
+        "    return depth * width\n"
+        "width = depth + 1\n",
+        encoding="utf-8",
+    )
+    params = {"depth": 2, "width": 3, "label": None}
+    configured = apply_config(
+        params, ["--depth=3", str(config_file), "--depth=4", "--label=trial=a"]
+    )
+    assert configured["depth"] == 4 and configured["width"] == 7
+    assert configured["label"] == "trial=a"
+    assert configured["effective_width"]() == 28
+    with pytest.raises(AssertionError, match="Type mismatch"):
+        apply_config(params, ["--depth=True"])
+
+
+def test_isolated_config_preserves_module_and_script_recipe_contexts(tmp_path, monkeypatch):
+    recipe = tmp_path / "recipe.py"
+    recipe.write_text(
+        "seen = (__name__, __file__, __package__, __spec__, __loader__, __cached__)\n"
+        "depth = literal_eval('7') if os.path.isfile(__file__) else -1\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("sys.argv", ["train.py", str(recipe)])
+    caller = {"depth": 2, "__name__": "__main__"}
+    module = configured_copy(caller)
+    script = configured_copy(caller, script_name="_benchmark_configurator")
+    assert caller == {"depth": 2, "__name__": "__main__"}
+    assert module["depth"] == script["depth"] == 7
+    name, path, package, spec, loader, cached = module["seen"]
+    assert name == spec.name == "bio_inspired_nanochat.configurator"
+    assert Path(path) == Path(spec.origin) and package == "bio_inspired_nanochat"
+    assert loader is spec.loader and cached == spec.cached
+    assert script["seen"] == (
+        "_benchmark_configurator", "bio_inspired_nanochat/configurator.py", "", None, None, None
+    )
 
 
 # --------------------------------------------------------------------------- #

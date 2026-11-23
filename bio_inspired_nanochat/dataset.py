@@ -99,8 +99,12 @@ def _load_sha256_map(path: str | None) -> dict[str, str]:
 
     p = os.path.expanduser(path)
     if p.endswith(".json"):
-        with open(p, encoding="utf-8") as f:
-            data = json.load(f)
+        try:
+            with open(p, encoding="utf-8") as f:
+                data = json.load(f)
+        except json.JSONDecodeError as exc:
+            exc.add_note(f"while reading dataset checksums from {p}")
+            raise
         if not isinstance(data, dict):
             raise TypeError("checksum JSON must be an object mapping filename -> sha256")
         out: dict[str, str] = {}
