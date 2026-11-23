@@ -187,3 +187,60 @@ the compiled axiom checks for all 19 mapped Lean theorems passed.
 Ruff and ty passed on the locked Linux environment. The receipts retain
 the stale-hash rejection, the isolated RAM scratch quota failure, and
 the separate throughput reruns. [Executable evidence](../../results/delayed_reward_2026-11-23.json)
+
+## Attribution within a group of rollouts
+
+The chat trainer uses centered rewards and a token-normalized on-policy
+objective. Each group consists of completions for one question. The
+original GRPO formulation includes additional normalization and a
+reference policy. [DeepSeekMath](https://arxiv.org/abs/2402.03300)
+
+For rollout `i`, form the two ordinary co-activity trace factors from
+tokens at positions whose next-token targets were actually sampled by the
+policy. Compute the unit Frobenius direction `Dᵢ` of their product before
+any results are combined. For each slow matrix, add
+`α Σᵢ (rᵢ − mean_group(r)) Dᵢ / N` after the optimizer step, with `N`
+the number of rollouts processed across all groups and ranks at that
+step. Trace directions are computed on the same forward that produced
+the policy gradient. The normalized product of pooled factors contains
+cross-rollout terms. Computing each direction before the reduction removes
+those terms and allows a zero-advantage group to produce exactly zero
+reward-driven update.
+
+### Registered work
+
+- [ ] Stage an opt-in chat trainer path with signed group-centered credit.
+  Match the gradient path in the `off`, `aligned` and `shuffled` modes
+  by disabling ordinary online updates in these three modes. Keep the
+  existing default. Shuffle advantages within each full question group
+  before slicing microbatches. Apply one finite, globally normalized update
+  after the optimizer. Preserve the action mask for padding, prompts and
+  forced tool tokens.
+- [ ] Check individually computed trace products, cancellation, zero
+  advantages, permutation and microbatch remainder, post-backward mutation,
+  and two-rank reduction. Verify that large CUDA batches retain all
+  policy log probabilities. Use the actual GSM8K runner with archived
+  official rows. Explicitly record if the starting checkpoint produces
+  only one reward value in each group.
+- [ ] On the synthetic copy-first task, initialize eight fresh models
+  (seeds 70521–77521, spaced by 1000) with 128 supervised updates,
+  batch size 16, on task seeds `2000000 + model_seed + update`. Use
+  the existing depth-2, width-64 model and AdamW at `0.002`, clip 1,
+  weight decay `0.0001`. Clone each trained state across all three
+  policy arms. Train for 96 policy updates with four questions and four
+  sampled one-token rollouts each. Use the fresh question stream
+  `3000000 + model_seed + update`, a common seeded sampler, and
+  `α=0.03` for the aligned and shuffled arms.
+- [ ] Evaluate expected reward on the same 512 fresh contexts from seed
+  102004 at updates 0, 32, 64 and 96. Require at least six starting
+  checkpoints above 0.10 and nonconstant reward groups in every seed.
+  Test aligned versus off and aligned versus shuffled on the mean of
+  the three post-baseline checkpoints. Require at least one percentage
+  point in the mean, positive changes in at least six of eight seeds,
+  and paired one-sided exact sign-flip `p ≤ 0.025` in both contrasts.
+  Archive missing, null and failed runs. The controlled bandit and
+  official GSM8K runner smoke have distinct scopes.
+- [ ] Independently verify the comparisons and publish the executed
+  source, test and DSR evidence. Keep full GSM8K effectiveness open
+  unless the staged starting policy earns diverse rewards in a
+  matched evaluation at the appropriate scale.
