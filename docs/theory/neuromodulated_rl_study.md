@@ -449,3 +449,26 @@ reward arrives.
   before using this screen to justify a larger matched GSM8K run.
   Archive both checkpoint and dataset identities and leave the
   official test split out of selection.
+
+### Registered multi-token check
+
+Partition scored actions by their exact prediction prefix. At a
+prefix `q`, sum the coefficient of each action edge to obtain
+`w(q,a)` and sum all active coefficients to obtain the prefix mass
+`m(q)`. The score contribution before the local Jacobians is
+`Σₐ w(q,a) uₐ − m(q) Σᵥ π(v|q) uᵥ`. Centering across completions
+can make the root mass zero while leaving nonzero masses farther
+down the tree. Forced tokens define the next prefix and carry no
+score coefficient.
+
+- [ ] Use the production KV cache and a frozen dense synaptic model
+  with presynaptic recurrence disabled. Capture prediction traces
+  before revealing fixed rewards. Include a shared prompt, a
+  branch shared after a forced token, repeated actions, divergent
+  branches, and unequal endings.
+- [ ] Reconstruct the aggregate and compare it with full masked
+  autograd. Run the comparison with and without output capping.
+  Check that omitting every prefix normalizer fails, and that
+  reducing the corrected matrix to the fixed rank-16 basis agrees
+  with projecting the full gradient. Use the same valid-token
+  denominator for both implementations.
