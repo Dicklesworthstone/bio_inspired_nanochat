@@ -59,6 +59,10 @@ revision. [Current protocol](ablation_matrix.md) · [Follow-up DSR receipts](../
     pilot 3.19468 bits per byte. At this early checkpoint the bigram used 0.96053
     fewer bits per byte. The 498M-token neural comparison remains open.
     [Matched scores and identities](../results/vanilla_matched_counts_2026-11-23.json)
+  - [x] Test which observations merit a memory write, then isolate the effect
+    of reading a true cue–successor pair on a frozen pretrained model. The
+    proposed write selector passed 11/32 registered comparisons. Exact
+    binding passed 0/10 on fresh FineWeb and WikiText prefixes. [Protocols, scores and replay](episodic_write_policy.md#results)
 - [x] Test repetition on the same step-50 checkpoint with presynaptic release enabled
   and disabled. Greedy repeated trigrams fell from 256/352 to 242/352 slots across 16
   documents. Seeded sampling produced zero in both arms. Next-token loss differed by

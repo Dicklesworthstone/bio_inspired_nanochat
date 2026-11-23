@@ -1,0 +1,979 @@
+{
+  "protocol_commits": {
+    "write_selection": "e633c47",
+    "paired_neural_transfer": "8426935"
+  },
+  "source_and_observations_commit": "9a21dba",
+  "artifacts": {
+    "episodic_write_policy_2026-11-23": {
+      "summary_sha256": "aaf3eba9029f09360bafcff05b492a222c11eb8e2c1fac120e809633430641f7",
+      "documents_sha256": "7239144ae469366ca2b9f5b46798d958372ca1f3f63c0a4f771f9986d2f28578",
+      "study_source_sha256": "5991d827ca169525b8b758ba571bc2f70b2a10a3ceda8dc292af6a2be2f9af5f"
+    },
+    "associative_credit_2026-11-23": {
+      "summary_sha256": "71781a787be63d2931b92b2015c6209486f353343df7fdf2e341a5197a367314",
+      "documents_sha256": "ff6202e3a0633e6972f69ab8aa200adeaf90eabeb19b201a4d90e3b4cef07a12",
+      "study_source_sha256": "410534a17e523c7fa69c5436e875b600d4002e496fb83a6efaf6c3a7196b37a2"
+    }
+  },
+  "two_gpu_archive_byte_identical": true,
+  "dsr": {
+    "wg72-real": {
+      "purpose": "Original write-selection run",
+      "id": "CCCB084B-9CDE-4425-B761-7B502C370140",
+      "status": "success",
+      "exit_code": 0,
+      "duration_ms": 13527,
+      "config_sha256": "230817e29224cacb08614ea28a67d94d179aef5be55e92e325effcc2526216c4",
+      "source_before": "e633c47b0f694351f846e8fb81e644a5ff61e87b|f4230c97d8cd3b9f7303eddb7385f9b4b9a619f72c0f5986ced898e71a0df239|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "e633c47b0f694351f846e8fb81e644a5ff61e87b|f4230c97d8cd3b9f7303eddb7385f9b4b9a619f72c0f5986ced898e71a0df239|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "checks": [
+        {
+          "command": "export UV_PROJECT_ENVIRONMENT=/Volumes/SANDISK_SSD/scratch/bio-d1-execution.mBId4ZF4/nov23-mac-wheel-env UV_OFFLINE=true OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 && uv run --no-sync --python /opt/homebrew/bin/python3.14 python -m scripts.e2e.episodic_write_policy --inputs /tmp/nanochat-write-gain.csg2x2ZX --out /tmp/nanochat-write-gain.csg2x2ZX/science",
+          "exit_code": 0,
+          "log_sha256": "240c7295bca6da2db5d09232e10e2801c2c8c37fd84f787dcdb50c8693db4206",
+          "duration_ms": 13405
+        }
+      ]
+    },
+    "wg72-checks": {
+      "purpose": "Initial macOS checks. Type diagnostics led to a typed count-update fix. Remaining environment diagnostics verified in locked Linux.",
+      "id": "CDE06AA0-1BEA-4E9D-9F4B-A134D97AD2DD",
+      "status": "failure",
+      "exit_code": 1,
+      "duration_ms": 13528,
+      "config_sha256": "94aa0a1986a96fc0a266a097f458498e6a98034e69204b64f0853958871c8eb3",
+      "source_before": "e633c47b0f694351f846e8fb81e644a5ff61e87b|f4230c97d8cd3b9f7303eddb7385f9b4b9a619f72c0f5986ced898e71a0df239|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "e633c47b0f694351f846e8fb81e644a5ff61e87b|f4230c97d8cd3b9f7303eddb7385f9b4b9a619f72c0f5986ced898e71a0df239|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "checks": [
+        {
+          "command": "export UV_PROJECT_ENVIRONMENT=/Volumes/SANDISK_SSD/scratch/bio-d1-execution.mBId4ZF4/nov23-mac-wheel-env UV_OFFLINE=true OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 && uv run --no-sync --python /opt/homebrew/bin/python3.14 ruff check --fix",
+          "exit_code": 0,
+          "log_sha256": "a5f3bc7f03a7f56dfd362d515ffed1ffa4806c3888e40fee98a2359b1131160f",
+          "duration_ms": 372
+        },
+        {
+          "command": "export UV_PROJECT_ENVIRONMENT=/Volumes/SANDISK_SSD/scratch/bio-d1-execution.mBId4ZF4/nov23-mac-wheel-env UV_OFFLINE=true OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 && uv run --no-sync --python /opt/homebrew/bin/python3.14 ty check",
+          "exit_code": 1,
+          "log_sha256": "48e03dcc7e8e50db235ddc9d7d52c4fe879d4b0b07dc1ee84dc2983cfa49459f",
+          "duration_ms": 2037
+        },
+        {
+          "command": "export UV_PROJECT_ENVIRONMENT=/Volumes/SANDISK_SSD/scratch/bio-d1-execution.mBId4ZF4/nov23-mac-wheel-env UV_OFFLINE=true OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 && uv run --no-sync --python /opt/homebrew/bin/python3.14 python -m pytest -q tests/test_episodic_write_policy.py --tb=short",
+          "exit_code": 0,
+          "log_sha256": "b058895039a2a5af23094cd7703a059d8cb18506da758b6aef336cec075939ed",
+          "duration_ms": 3070
+        },
+        {
+          "command": "ubs scripts/e2e/episodic_write_policy.py tests/test_episodic_write_policy.py",
+          "exit_code": 0,
+          "log_sha256": "4981894cb84ae3690295a0431405786260429a50074661fe3eadb4bdd3a19cd1",
+          "duration_ms": 7683
+        }
+      ]
+    },
+    "wg72-replay": {
+      "purpose": "Final write-selection program and focused macOS tests",
+      "id": "134E155A-8281-4C91-8280-EE7AE6104D1B",
+      "status": "success",
+      "exit_code": 0,
+      "duration_ms": 17885,
+      "config_sha256": "1cd5522f422358de2cb965f7a2ed4148ed7e030cb0f89aa1d9885126829bbeed",
+      "source_before": "e633c47b0f694351f846e8fb81e644a5ff61e87b|a79cda77c73b82ad2bf7bead1ed54736d7cabc5636e5bbac9cb60feb7ff96358|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "e633c47b0f694351f846e8fb81e644a5ff61e87b|a79cda77c73b82ad2bf7bead1ed54736d7cabc5636e5bbac9cb60feb7ff96358|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "checks": [
+        {
+          "command": "export UV_PROJECT_ENVIRONMENT=/Volumes/SANDISK_SSD/scratch/bio-d1-execution.mBId4ZF4/nov23-mac-wheel-env UV_OFFLINE=true OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 && uv run --no-sync --python /opt/homebrew/bin/python3.14 python -m scripts.e2e.episodic_write_policy --inputs /tmp/nanochat-write-gain.csg2x2ZX --out /tmp/nanochat-write-gain.csg2x2ZX/science-replay",
+          "exit_code": 0,
+          "log_sha256": "941ec6dd1726c8f38379f20b0b38c1b853ac02e0909dbd252be267772f7ff48b",
+          "duration_ms": 14159
+        },
+        {
+          "command": "export UV_PROJECT_ENVIRONMENT=/Volumes/SANDISK_SSD/scratch/bio-d1-execution.mBId4ZF4/nov23-mac-wheel-env UV_OFFLINE=true OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 && uv run --no-sync --python /opt/homebrew/bin/python3.14 python -m pytest -q tests/test_episodic_write_policy.py",
+          "exit_code": 0,
+          "log_sha256": "f49a6c07c9e0a81abdbc679dd67081889ed18e8c851d0bbb10c0d695d4c86cca",
+          "duration_ms": 3494
+        }
+      ]
+    },
+    "wg72-linux-qual": {
+      "purpose": "Linux Ruff, ty, focused tests and UBS for write selection",
+      "id": "10ca0598-2edc-4af5-b292-e8f25956b98e",
+      "status": "success",
+      "exit_code": 0,
+      "duration_ms": 169010,
+      "config_sha256": "dfcdb26b32e56a0aaee0b2cb7bb982861cb7e0fcfb2282eedc17b0afcd7836c4",
+      "source_before": "e633c47b0f694351f846e8fb81e644a5ff61e87b|a79cda77c73b82ad2bf7bead1ed54736d7cabc5636e5bbac9cb60feb7ff96358|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "e633c47b0f694351f846e8fb81e644a5ff61e87b|a79cda77c73b82ad2bf7bead1ed54736d7cabc5636e5bbac9cb60feb7ff96358|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "checks": [
+        {
+          "command": "source /data/projects/bio-native-u0fl4-V6tSMxvb/env && export CUDA_VISIBLE_DEVICES=0 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 UV_OFFLINE=true NANOCHAT_BASE_DIR=/data/projects/bio-vanilla-kkUkqcbo/cache OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 RAYON_NUM_THREADS=1 && uv run --no-sync ruff check --fix && uv run --no-sync ty check",
+          "exit_code": 0,
+          "log_sha256": "bb652193ff51b26823def0b699bc51ca134aec4754b5927cec4466046831a405",
+          "duration_ms": 85682
+        },
+        {
+          "command": "source /data/projects/bio-native-u0fl4-V6tSMxvb/env && export CUDA_VISIBLE_DEVICES=0 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 UV_OFFLINE=true NANOCHAT_BASE_DIR=/data/projects/bio-vanilla-kkUkqcbo/cache OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 RAYON_NUM_THREADS=1 && uv run --no-sync python -m pytest -q tests/test_episodic_write_policy.py --tb=short",
+          "exit_code": 0,
+          "log_sha256": "e8243a8d60cfd43b7c0d60c98e86e643b0cc06dc4e006c635d31e70d087f3f6d",
+          "duration_ms": 33601
+        },
+        {
+          "command": "source /data/projects/bio-native-u0fl4-V6tSMxvb/env && export CUDA_VISIBLE_DEVICES=0 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 UV_OFFLINE=true NANOCHAT_BASE_DIR=/data/projects/bio-vanilla-kkUkqcbo/cache OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 RAYON_NUM_THREADS=1 && ubs scripts/e2e/episodic_write_policy.py tests/test_episodic_write_policy.py",
+          "exit_code": 0,
+          "log_sha256": "cd80dd6a64e52668337f59d814e41a1d773e3ec755ba2affada7b281b831f7c8",
+          "duration_ms": 45696
+        }
+      ]
+    },
+    "wg72-independent": {
+      "purpose": "Independent literal-FIFO scoring on sampled real documents and all 40 aggregate BPBs",
+      "id": "4A039F6D-FD26-494F-A829-F1A885E96AB2",
+      "status": "success",
+      "exit_code": 0,
+      "duration_ms": 3722,
+      "config_sha256": "3bc220209af2a5b65f5d9fd9d197c33bee53bf916333357512ad8a2f9e2fa87d",
+      "source_before": "e633c47b0f694351f846e8fb81e644a5ff61e87b|a79cda77c73b82ad2bf7bead1ed54736d7cabc5636e5bbac9cb60feb7ff96358|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "e633c47b0f694351f846e8fb81e644a5ff61e87b|a79cda77c73b82ad2bf7bead1ed54736d7cabc5636e5bbac9cb60feb7ff96358|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "checks": [
+        {
+          "command": "export UV_PROJECT_ENVIRONMENT=/Volumes/SANDISK_SSD/scratch/bio-d1-execution.mBId4ZF4/nov23-mac-wheel-env UV_OFFLINE=true OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 && uv run --no-sync --python /opt/homebrew/bin/python3.14 python /tmp/nanochat-write-gain.csg2x2ZX/verify_write.py /tmp/nanochat-write-gain.csg2x2ZX /tmp/nanochat-write-gain.csg2x2ZX/science-replay /tmp/nanochat-write-gain.csg2x2ZX/audit.json",
+          "exit_code": 0,
+          "log_sha256": "84f3702170287610b63b203643bd5636f317aaa37eb81a17983fa1a560db5dce",
+          "duration_ms": 3551
+        }
+      ]
+    },
+    "zml5-transfer": {
+      "purpose": "First Pythia-160M run on RTX 4090, PCI bus 41",
+      "id": "3a196479-3a67-43cc-8af2-c8466672c145",
+      "status": "success",
+      "exit_code": 0,
+      "duration_ms": 108765,
+      "config_sha256": "cfbaa3017dfd45749e3ddca55d7960c89fb24f547c748423c243061cfe37da40",
+      "source_before": "8426935c6c72f84e90b9c3cf45b47b6d18719e7b|cb40e19ad34b68fc2661e2420ad54a233bb7780994748f4d7c4aa22d340f8473|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "8426935c6c72f84e90b9c3cf45b47b6d18719e7b|cb40e19ad34b68fc2661e2420ad54a233bb7780994748f4d7c4aa22d340f8473|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "checks": [
+        {
+          "command": "source /data/projects/bio-native-u0fl4-V6tSMxvb/env && export CUDA_VISIBLE_DEVICES=0 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 UV_OFFLINE=true NANOCHAT_BASE_DIR=/data/projects/bio-vanilla-kkUkqcbo/cache OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 RAYON_NUM_THREADS=1 && uv run --no-sync python -m scripts.e2e.associative_credit --model /data/projects/bio-wg72.wortLhYk/pythia --wiki /data/projects/bio-wg72.wortLhYk/wiki.parquet --fineweb /data/cache/bio_inspired_nanochat/base_data/shard_00027.parquet --previous results/episodic_write_policy_2026-11-23.jsonl.gz --out /data/projects/bio-wg72.wortLhYk/binding",
+          "exit_code": 0,
+          "log_sha256": "c752d95cdbce28b885729b7a46ecff31745de782891229089220998e1e204fc6",
+          "duration_ms": 107130
+        }
+      ]
+    },
+    "zml5-quality": {
+      "purpose": "Initial Linux type error on pretrained model device conversion; corrected before replication",
+      "id": "a0b04e73-3425-44f2-b979-40ba390ab1dd",
+      "status": "failure",
+      "exit_code": 1,
+      "duration_ms": 184655,
+      "config_sha256": "72a15ca0bd139b6543db5f7fc17ea4867d96456a526c47c88b34d917e8983f92",
+      "source_before": "8426935c6c72f84e90b9c3cf45b47b6d18719e7b|cb40e19ad34b68fc2661e2420ad54a233bb7780994748f4d7c4aa22d340f8473|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "8426935c6c72f84e90b9c3cf45b47b6d18719e7b|cb40e19ad34b68fc2661e2420ad54a233bb7780994748f4d7c4aa22d340f8473|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "checks": [
+        {
+          "command": "source /data/projects/bio-native-u0fl4-V6tSMxvb/env && export CUDA_VISIBLE_DEVICES=0 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 UV_OFFLINE=true NANOCHAT_BASE_DIR=/data/projects/bio-vanilla-kkUkqcbo/cache OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 RAYON_NUM_THREADS=1 && uv run --no-sync ruff check && uv run --no-sync ty check",
+          "exit_code": 1,
+          "log_sha256": "f3e5212b1eb51ee288f9666732e2d32a3bc79327157e2c499c3cf8553846deca",
+          "duration_ms": 84142
+        },
+        {
+          "command": "source /data/projects/bio-native-u0fl4-V6tSMxvb/env && export CUDA_VISIBLE_DEVICES=0 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 UV_OFFLINE=true NANOCHAT_BASE_DIR=/data/projects/bio-vanilla-kkUkqcbo/cache OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 RAYON_NUM_THREADS=1 && uv run --no-sync python -m pytest -q tests/test_associative_credit.py tests/test_episodic_write_policy.py --tb=short",
+          "exit_code": 0,
+          "log_sha256": "48096592e0913def5acfbccf26d997cc5384826da7f20771a06d8feeef1b161d",
+          "duration_ms": 50469
+        },
+        {
+          "command": "source /data/projects/bio-native-u0fl4-V6tSMxvb/env && export CUDA_VISIBLE_DEVICES=0 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 UV_OFFLINE=true NANOCHAT_BASE_DIR=/data/projects/bio-vanilla-kkUkqcbo/cache OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 RAYON_NUM_THREADS=1 && ubs scripts/e2e/associative_credit.py scripts/e2e/episodic_write_policy.py tests/test_associative_credit.py tests/test_episodic_write_policy.py",
+          "exit_code": 0,
+          "log_sha256": "2fbd347a2a7f62d294cdd556b3e8cceb47ab9cc1ab0cce08bd4d8f5d6fb292fd",
+          "duration_ms": 47091
+        }
+      ]
+    },
+    "zml5-locked-transfer": {
+      "purpose": "Second Pythia-160M run on RTX 4090, PCI bus 42, with explicit calibration-before-test phases",
+      "id": "72b5bd8b-91af-4f27-b928-a7ba1c44e4d4",
+      "status": "success",
+      "exit_code": 0,
+      "duration_ms": 116459,
+      "config_sha256": "c358cac945bb84c9128fdea08c3ddc9c7109245289a005692a624c7d785b0764",
+      "source_before": "8426935c6c72f84e90b9c3cf45b47b6d18719e7b|ce6df2e70c46fb735b4df42a91ec46f2c1afa29e6bafe6ae69ff5936afbb2587|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "8426935c6c72f84e90b9c3cf45b47b6d18719e7b|ce6df2e70c46fb735b4df42a91ec46f2c1afa29e6bafe6ae69ff5936afbb2587|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "checks": [
+        {
+          "command": "source /data/projects/bio-native-u0fl4-V6tSMxvb/env && export CUDA_VISIBLE_DEVICES=1 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 UV_OFFLINE=true NANOCHAT_BASE_DIR=/data/projects/bio-vanilla-kkUkqcbo/cache OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 RAYON_NUM_THREADS=1 && uv run --no-sync python -m scripts.e2e.associative_credit --model /data/projects/bio-wg72.wortLhYk/pythia --wiki /data/projects/bio-wg72.wortLhYk/wiki.parquet --fineweb /data/cache/bio_inspired_nanochat/base_data/shard_00027.parquet --previous results/episodic_write_policy_2026-11-23.jsonl.gz --out /data/projects/bio-wg72.wortLhYk/locked-binding",
+          "exit_code": 0,
+          "log_sha256": "9786af1fc7ba612126b31201829dd867f1be6676356bd167e7adaad31cc0ba8d",
+          "duration_ms": 115052
+        }
+      ]
+    },
+    "zml5-final-quality": {
+      "purpose": "Final Linux Ruff, ty, eight focused tests and four-file UBS. Its three warnings flag json.loads without a catch on research inputs. Malformed files intentionally abort scoring.",
+      "id": "eaa15f67-15d7-4d85-8f20-f7a7082d8076",
+      "status": "success",
+      "exit_code": 0,
+      "duration_ms": 193573,
+      "config_sha256": "e1202eb8f0cbfa78d18f9500cea4133101963d984364f9c2f19e49e72381ab40",
+      "source_before": "8426935c6c72f84e90b9c3cf45b47b6d18719e7b|ce6df2e70c46fb735b4df42a91ec46f2c1afa29e6bafe6ae69ff5936afbb2587|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "8426935c6c72f84e90b9c3cf45b47b6d18719e7b|ce6df2e70c46fb735b4df42a91ec46f2c1afa29e6bafe6ae69ff5936afbb2587|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "checks": [
+        {
+          "command": "source /data/projects/bio-native-u0fl4-V6tSMxvb/env && export CUDA_VISIBLE_DEVICES=1 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 UV_OFFLINE=true NANOCHAT_BASE_DIR=/data/projects/bio-vanilla-kkUkqcbo/cache OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 RAYON_NUM_THREADS=1 && uv run --no-sync ruff check --fix && uv run --no-sync ty check",
+          "exit_code": 0,
+          "log_sha256": "8da9e2136239f5698d42a975474fed5db057fc3a5d6d93ac8500cb8f7e5e28bb",
+          "duration_ms": 86761
+        },
+        {
+          "command": "source /data/projects/bio-native-u0fl4-V6tSMxvb/env && export CUDA_VISIBLE_DEVICES=1 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 UV_OFFLINE=true NANOCHAT_BASE_DIR=/data/projects/bio-vanilla-kkUkqcbo/cache OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 RAYON_NUM_THREADS=1 && uv run --no-sync python -m pytest -q tests/test_associative_credit.py tests/test_episodic_write_policy.py --tb=short",
+          "exit_code": 0,
+          "log_sha256": "cf3f7a3364f13e54f087cd3bdde6350079d6f5e98a3b542f4ae77ebca4509f70",
+          "duration_ms": 65537
+        },
+        {
+          "command": "source /data/projects/bio-native-u0fl4-V6tSMxvb/env && export CUDA_VISIBLE_DEVICES=1 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 UV_OFFLINE=true NANOCHAT_BASE_DIR=/data/projects/bio-vanilla-kkUkqcbo/cache OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 RAYON_NUM_THREADS=1 && ubs scripts/e2e/associative_credit.py scripts/e2e/episodic_write_policy.py tests/test_associative_credit.py tests/test_episodic_write_policy.py",
+          "exit_code": 0,
+          "log_sha256": "5bc4b7abf0dac5c1357749cb9fbcba54f2649dd5266edecfe91553b3ffb92787",
+          "duration_ms": 38513
+        }
+      ]
+    },
+    "write-decisions-independent": {
+      "purpose": "Independent reconstruction of mixture selections, pooled BPB, bounds and all 42 promotion decisions",
+      "id": "44D74D4F-26ED-45E2-945B-CCEA25028F9E",
+      "status": "success",
+      "exit_code": 0,
+      "duration_ms": 1117,
+      "config_sha256": "93f4a82a7ecbef83e3c9e6090271ed54dc573df63f29af59ad692b156e3a0373",
+      "source_before": "e633c47b0f694351f846e8fb81e644a5ff61e87b|a79cda77c73b82ad2bf7bead1ed54736d7cabc5636e5bbac9cb60feb7ff96358|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "e633c47b0f694351f846e8fb81e644a5ff61e87b|a79cda77c73b82ad2bf7bead1ed54736d7cabc5636e5bbac9cb60feb7ff96358|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "checks": [
+        {
+          "command": "export UV_PROJECT_ENVIRONMENT=/Volumes/SANDISK_SSD/scratch/bio-d1-execution.mBId4ZF4/nov23-mac-wheel-env UV_OFFLINE=true OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 && uv run --no-sync --python /opt/homebrew/bin/python3.14 python /tmp/nanochat-write-gain.csg2x2ZX/verify_decisions.py /Users/jemanuel/projects/bio_inspired_nanochat/results /tmp/nanochat-write-gain.csg2x2ZX/decisions-checked.json",
+          "exit_code": 0,
+          "log_sha256": "38109849f7a4e7bbcce73272ce4216fd5439ae46ff30215de5571ad963196c77",
+          "duration_ms": 996
+        }
+      ]
+    },
+    "binding-opportunities": {
+      "purpose": "Post hoc replay of every held-out target, exact-pair versus permutation loss partition and empirical oracle ceilings",
+      "id": "4b8740c0-36fb-4300-a751-a50275cdc61c",
+      "status": "success",
+      "exit_code": 0,
+      "duration_ms": 86280,
+      "config_sha256": "d34b87b6d3eaff55072025f1a705b88952453ceec5253b8dd8f7ae9f51ddbde4",
+      "source_before": "8426935c6c72f84e90b9c3cf45b47b6d18719e7b|ce6df2e70c46fb735b4df42a91ec46f2c1afa29e6bafe6ae69ff5936afbb2587|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "8426935c6c72f84e90b9c3cf45b47b6d18719e7b|ce6df2e70c46fb735b4df42a91ec46f2c1afa29e6bafe6ae69ff5936afbb2587|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "checks": [
+        {
+          "command": "source /data/projects/bio-native-u0fl4-V6tSMxvb/env && export CUDA_VISIBLE_DEVICES=0 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 UV_OFFLINE=true NANOCHAT_BASE_DIR=/data/projects/bio-vanilla-kkUkqcbo/cache OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 RAYON_NUM_THREADS=1 && PYTHONPATH=. uv run --no-sync python /data/projects/bio-wg72.wortLhYk/attribute_pairing.py --model /data/projects/bio-wg72.wortLhYk/pythia --wiki /data/projects/bio-wg72.wortLhYk/wiki.parquet --fineweb /data/cache/bio_inspired_nanochat/base_data/shard_00027.parquet --previous results/episodic_write_policy_2026-11-23.jsonl.gz --summary /data/projects/bio-wg72.wortLhYk/locked-binding/summary.json --documents /data/projects/bio-wg72.wortLhYk/locked-binding/documents.jsonl.gz --out /data/projects/bio-wg72.wortLhYk/opportunities.json",
+          "exit_code": 0,
+          "log_sha256": "25a61d7c599df4593f7be9e71cb9e2f3c11e68d10868d9ebc195c3937b07d845",
+          "duration_ms": 85188
+        }
+      ]
+    },
+    "write-science-cpu": {
+      "purpose": "Initial full suite on CSD. Local filesystems ran out of space during the job.",
+      "id": "70cb0ea0-0988-400e-8d0a-38b407ed56e1",
+      "status": "failure",
+      "exit_code": 1,
+      "duration_ms": 354680,
+      "config_sha256": "f783f7f267f2bed83a9be01a786d3d059f67a1850f9b3b5a4948879c5b5a3112",
+      "source_before": "8426935c6c72f84e90b9c3cf45b47b6d18719e7b|841e22e61eaf1735685f16bef195640a958641f7707e4d45b7730180b85a8008|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "8426935c6c72f84e90b9c3cf45b47b6d18719e7b|841e22e61eaf1735685f16bef195640a958641f7707e4d45b7730180b85a8008|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "checks": [
+        {
+          "command": "export UV_PROJECT_ENVIRONMENT=/data/projects/bio-nov23-cpu.xflG5TXe/venv PATH=/data/projects/bio-nov23-cpu.xflG5TXe/venv/bin:$PATH CUDA_VISIBLE_DEVICES= HF_HUB_OFFLINE=1 UV_OFFLINE=true OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 RAYON_NUM_THREADS=1 && uv run --no-sync python -m pytest -q tests/ --tb=short --junitxml=/data/projects/bio-write-science.A0bK5ynp/full.xml",
+          "exit_code": 1,
+          "log_sha256": "80a24dd714a2a96445de32bb2ccdc5317d21623ee60706f9c478128a6959b75e",
+          "duration_ms": 354538
+        }
+      ]
+    },
+    "write-final-cpu": {
+      "purpose": "Exact-source CSD retry stopped after the confirmed storage failure. Exit 143.",
+      "id": "0f59afa0-9742-4281-b8cc-c590a1035733",
+      "status": "failure",
+      "exit_code": 1,
+      "duration_ms": 349147,
+      "config_sha256": "60032596237cd3268145f7a04577289a7de3a5ff6ae7b00e340dda9fb4c71eb6",
+      "source_before": "8426935c6c72f84e90b9c3cf45b47b6d18719e7b|c24a715fb08feefa00a1d86444a0bfa86bd8a028289752d901f71f036508116c|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "8426935c6c72f84e90b9c3cf45b47b6d18719e7b|c24a715fb08feefa00a1d86444a0bfa86bd8a028289752d901f71f036508116c|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "checks": [
+        {
+          "command": "export UV_PROJECT_ENVIRONMENT=/data/projects/bio-nov23-cpu.xflG5TXe/venv PATH=/data/projects/bio-nov23-cpu.xflG5TXe/venv/bin:$PATH CUDA_VISIBLE_DEVICES= HF_HUB_OFFLINE=1 UV_OFFLINE=true OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 RAYON_NUM_THREADS=1 && uv run --no-sync python -m pytest -q tests/ --tb=short --junitxml=/data/projects/bio-write-science.A0bK5ynp/final.xml",
+          "exit_code": 143,
+          "log_sha256": "5289b7d4955d4efe859bc587a36b200b40bbd7a2fcdb6c7b3b444be6e63592ea",
+          "duration_ms": 349010
+        }
+      ]
+    },
+    "write-full-suite-recovery": {
+      "purpose": "Exact-source Linux suite rerun with CUDA hidden on a worker with free scratch space.",
+      "status": "running"
+    },
+    "write-linux-cpu-recovered": {
+      "purpose": "Exact-source locked CPU-only suite on original host after free space returned, with an explicit private temporary directory.",
+      "status": "running"
+    }
+  },
+  "write_score_verifier": {
+    "pooled_bpb_recomputations": 40,
+    "independent_document_arm_replays": 80,
+    "replayed": [
+      [
+        "pilot",
+        0,
+        "000d33a071553d8e186470210b60f2e50c20898c8d73e3b8d12728f2885e1900",
+        "gain"
+      ],
+      [
+        "pilot",
+        0,
+        "000d33a071553d8e186470210b60f2e50c20898c8d73e3b8d12728f2885e1900",
+        "frozen"
+      ],
+      [
+        "pilot",
+        0,
+        "000d33a071553d8e186470210b60f2e50c20898c8d73e3b8d12728f2885e1900",
+        "uniform"
+      ],
+      [
+        "pilot",
+        0,
+        "000d33a071553d8e186470210b60f2e50c20898c8d73e3b8d12728f2885e1900",
+        "recency"
+      ],
+      [
+        "pilot",
+        0,
+        "000d33a071553d8e186470210b60f2e50c20898c8d73e3b8d12728f2885e1900",
+        "rarity"
+      ],
+      [
+        "pilot",
+        0,
+        "000d33a071553d8e186470210b60f2e50c20898c8d73e3b8d12728f2885e1900",
+        "surprise"
+      ],
+      [
+        "pilot",
+        0,
+        "000d33a071553d8e186470210b60f2e50c20898c8d73e3b8d12728f2885e1900",
+        "frequency_surprise"
+      ],
+      [
+        "pilot",
+        0,
+        "000d33a071553d8e186470210b60f2e50c20898c8d73e3b8d12728f2885e1900",
+        "uniform_order2"
+      ],
+      [
+        "pilot",
+        0,
+        "000d33a071553d8e186470210b60f2e50c20898c8d73e3b8d12728f2885e1900",
+        "frequency_surprise_order2"
+      ],
+      [
+        "pilot",
+        0,
+        "000d33a071553d8e186470210b60f2e50c20898c8d73e3b8d12728f2885e1900",
+        "dense"
+      ],
+      [
+        "pilot",
+        0,
+        "0022844aff06a63f90f1363d29f3f8e82272868f1574fd58bd3cd5f7efa8e507",
+        "gain"
+      ],
+      [
+        "pilot",
+        0,
+        "0022844aff06a63f90f1363d29f3f8e82272868f1574fd58bd3cd5f7efa8e507",
+        "frozen"
+      ],
+      [
+        "pilot",
+        0,
+        "0022844aff06a63f90f1363d29f3f8e82272868f1574fd58bd3cd5f7efa8e507",
+        "uniform"
+      ],
+      [
+        "pilot",
+        0,
+        "0022844aff06a63f90f1363d29f3f8e82272868f1574fd58bd3cd5f7efa8e507",
+        "recency"
+      ],
+      [
+        "pilot",
+        0,
+        "0022844aff06a63f90f1363d29f3f8e82272868f1574fd58bd3cd5f7efa8e507",
+        "rarity"
+      ],
+      [
+        "pilot",
+        0,
+        "0022844aff06a63f90f1363d29f3f8e82272868f1574fd58bd3cd5f7efa8e507",
+        "surprise"
+      ],
+      [
+        "pilot",
+        0,
+        "0022844aff06a63f90f1363d29f3f8e82272868f1574fd58bd3cd5f7efa8e507",
+        "frequency_surprise"
+      ],
+      [
+        "pilot",
+        0,
+        "0022844aff06a63f90f1363d29f3f8e82272868f1574fd58bd3cd5f7efa8e507",
+        "uniform_order2"
+      ],
+      [
+        "pilot",
+        0,
+        "0022844aff06a63f90f1363d29f3f8e82272868f1574fd58bd3cd5f7efa8e507",
+        "frequency_surprise_order2"
+      ],
+      [
+        "pilot",
+        0,
+        "0022844aff06a63f90f1363d29f3f8e82272868f1574fd58bd3cd5f7efa8e507",
+        "dense"
+      ],
+      [
+        "pilot",
+        1,
+        "01a789d69378d87758c7ddb8a9310ad2efb311aff13f7e159aec55dc8d4f3afb",
+        "gain"
+      ],
+      [
+        "pilot",
+        1,
+        "01a789d69378d87758c7ddb8a9310ad2efb311aff13f7e159aec55dc8d4f3afb",
+        "frozen"
+      ],
+      [
+        "pilot",
+        1,
+        "01a789d69378d87758c7ddb8a9310ad2efb311aff13f7e159aec55dc8d4f3afb",
+        "uniform"
+      ],
+      [
+        "pilot",
+        1,
+        "01a789d69378d87758c7ddb8a9310ad2efb311aff13f7e159aec55dc8d4f3afb",
+        "recency"
+      ],
+      [
+        "pilot",
+        1,
+        "01a789d69378d87758c7ddb8a9310ad2efb311aff13f7e159aec55dc8d4f3afb",
+        "rarity"
+      ],
+      [
+        "pilot",
+        1,
+        "01a789d69378d87758c7ddb8a9310ad2efb311aff13f7e159aec55dc8d4f3afb",
+        "surprise"
+      ],
+      [
+        "pilot",
+        1,
+        "01a789d69378d87758c7ddb8a9310ad2efb311aff13f7e159aec55dc8d4f3afb",
+        "frequency_surprise"
+      ],
+      [
+        "pilot",
+        1,
+        "01a789d69378d87758c7ddb8a9310ad2efb311aff13f7e159aec55dc8d4f3afb",
+        "uniform_order2"
+      ],
+      [
+        "pilot",
+        1,
+        "01a789d69378d87758c7ddb8a9310ad2efb311aff13f7e159aec55dc8d4f3afb",
+        "frequency_surprise_order2"
+      ],
+      [
+        "pilot",
+        1,
+        "01a789d69378d87758c7ddb8a9310ad2efb311aff13f7e159aec55dc8d4f3afb",
+        "dense"
+      ],
+      [
+        "pilot",
+        1,
+        "01c45abeff8371a3db719d200ebbd84cfea87ea4f4e6620e928cbb535ec2fc8d",
+        "gain"
+      ],
+      [
+        "pilot",
+        1,
+        "01c45abeff8371a3db719d200ebbd84cfea87ea4f4e6620e928cbb535ec2fc8d",
+        "frozen"
+      ],
+      [
+        "pilot",
+        1,
+        "01c45abeff8371a3db719d200ebbd84cfea87ea4f4e6620e928cbb535ec2fc8d",
+        "uniform"
+      ],
+      [
+        "pilot",
+        1,
+        "01c45abeff8371a3db719d200ebbd84cfea87ea4f4e6620e928cbb535ec2fc8d",
+        "recency"
+      ],
+      [
+        "pilot",
+        1,
+        "01c45abeff8371a3db719d200ebbd84cfea87ea4f4e6620e928cbb535ec2fc8d",
+        "rarity"
+      ],
+      [
+        "pilot",
+        1,
+        "01c45abeff8371a3db719d200ebbd84cfea87ea4f4e6620e928cbb535ec2fc8d",
+        "surprise"
+      ],
+      [
+        "pilot",
+        1,
+        "01c45abeff8371a3db719d200ebbd84cfea87ea4f4e6620e928cbb535ec2fc8d",
+        "frequency_surprise"
+      ],
+      [
+        "pilot",
+        1,
+        "01c45abeff8371a3db719d200ebbd84cfea87ea4f4e6620e928cbb535ec2fc8d",
+        "uniform_order2"
+      ],
+      [
+        "pilot",
+        1,
+        "01c45abeff8371a3db719d200ebbd84cfea87ea4f4e6620e928cbb535ec2fc8d",
+        "frequency_surprise_order2"
+      ],
+      [
+        "pilot",
+        1,
+        "01c45abeff8371a3db719d200ebbd84cfea87ea4f4e6620e928cbb535ec2fc8d",
+        "dense"
+      ],
+      [
+        "full",
+        0,
+        "000d33a071553d8e186470210b60f2e50c20898c8d73e3b8d12728f2885e1900",
+        "gain"
+      ],
+      [
+        "full",
+        0,
+        "000d33a071553d8e186470210b60f2e50c20898c8d73e3b8d12728f2885e1900",
+        "frozen"
+      ],
+      [
+        "full",
+        0,
+        "000d33a071553d8e186470210b60f2e50c20898c8d73e3b8d12728f2885e1900",
+        "uniform"
+      ],
+      [
+        "full",
+        0,
+        "000d33a071553d8e186470210b60f2e50c20898c8d73e3b8d12728f2885e1900",
+        "recency"
+      ],
+      [
+        "full",
+        0,
+        "000d33a071553d8e186470210b60f2e50c20898c8d73e3b8d12728f2885e1900",
+        "rarity"
+      ],
+      [
+        "full",
+        0,
+        "000d33a071553d8e186470210b60f2e50c20898c8d73e3b8d12728f2885e1900",
+        "surprise"
+      ],
+      [
+        "full",
+        0,
+        "000d33a071553d8e186470210b60f2e50c20898c8d73e3b8d12728f2885e1900",
+        "frequency_surprise"
+      ],
+      [
+        "full",
+        0,
+        "000d33a071553d8e186470210b60f2e50c20898c8d73e3b8d12728f2885e1900",
+        "uniform_order2"
+      ],
+      [
+        "full",
+        0,
+        "000d33a071553d8e186470210b60f2e50c20898c8d73e3b8d12728f2885e1900",
+        "frequency_surprise_order2"
+      ],
+      [
+        "full",
+        0,
+        "000d33a071553d8e186470210b60f2e50c20898c8d73e3b8d12728f2885e1900",
+        "dense"
+      ],
+      [
+        "full",
+        0,
+        "0022844aff06a63f90f1363d29f3f8e82272868f1574fd58bd3cd5f7efa8e507",
+        "gain"
+      ],
+      [
+        "full",
+        0,
+        "0022844aff06a63f90f1363d29f3f8e82272868f1574fd58bd3cd5f7efa8e507",
+        "frozen"
+      ],
+      [
+        "full",
+        0,
+        "0022844aff06a63f90f1363d29f3f8e82272868f1574fd58bd3cd5f7efa8e507",
+        "uniform"
+      ],
+      [
+        "full",
+        0,
+        "0022844aff06a63f90f1363d29f3f8e82272868f1574fd58bd3cd5f7efa8e507",
+        "recency"
+      ],
+      [
+        "full",
+        0,
+        "0022844aff06a63f90f1363d29f3f8e82272868f1574fd58bd3cd5f7efa8e507",
+        "rarity"
+      ],
+      [
+        "full",
+        0,
+        "0022844aff06a63f90f1363d29f3f8e82272868f1574fd58bd3cd5f7efa8e507",
+        "surprise"
+      ],
+      [
+        "full",
+        0,
+        "0022844aff06a63f90f1363d29f3f8e82272868f1574fd58bd3cd5f7efa8e507",
+        "frequency_surprise"
+      ],
+      [
+        "full",
+        0,
+        "0022844aff06a63f90f1363d29f3f8e82272868f1574fd58bd3cd5f7efa8e507",
+        "uniform_order2"
+      ],
+      [
+        "full",
+        0,
+        "0022844aff06a63f90f1363d29f3f8e82272868f1574fd58bd3cd5f7efa8e507",
+        "frequency_surprise_order2"
+      ],
+      [
+        "full",
+        0,
+        "0022844aff06a63f90f1363d29f3f8e82272868f1574fd58bd3cd5f7efa8e507",
+        "dense"
+      ],
+      [
+        "full",
+        1,
+        "01a789d69378d87758c7ddb8a9310ad2efb311aff13f7e159aec55dc8d4f3afb",
+        "gain"
+      ],
+      [
+        "full",
+        1,
+        "01a789d69378d87758c7ddb8a9310ad2efb311aff13f7e159aec55dc8d4f3afb",
+        "frozen"
+      ],
+      [
+        "full",
+        1,
+        "01a789d69378d87758c7ddb8a9310ad2efb311aff13f7e159aec55dc8d4f3afb",
+        "uniform"
+      ],
+      [
+        "full",
+        1,
+        "01a789d69378d87758c7ddb8a9310ad2efb311aff13f7e159aec55dc8d4f3afb",
+        "recency"
+      ],
+      [
+        "full",
+        1,
+        "01a789d69378d87758c7ddb8a9310ad2efb311aff13f7e159aec55dc8d4f3afb",
+        "rarity"
+      ],
+      [
+        "full",
+        1,
+        "01a789d69378d87758c7ddb8a9310ad2efb311aff13f7e159aec55dc8d4f3afb",
+        "surprise"
+      ],
+      [
+        "full",
+        1,
+        "01a789d69378d87758c7ddb8a9310ad2efb311aff13f7e159aec55dc8d4f3afb",
+        "frequency_surprise"
+      ],
+      [
+        "full",
+        1,
+        "01a789d69378d87758c7ddb8a9310ad2efb311aff13f7e159aec55dc8d4f3afb",
+        "uniform_order2"
+      ],
+      [
+        "full",
+        1,
+        "01a789d69378d87758c7ddb8a9310ad2efb311aff13f7e159aec55dc8d4f3afb",
+        "frequency_surprise_order2"
+      ],
+      [
+        "full",
+        1,
+        "01a789d69378d87758c7ddb8a9310ad2efb311aff13f7e159aec55dc8d4f3afb",
+        "dense"
+      ],
+      [
+        "full",
+        1,
+        "01c45abeff8371a3db719d200ebbd84cfea87ea4f4e6620e928cbb535ec2fc8d",
+        "gain"
+      ],
+      [
+        "full",
+        1,
+        "01c45abeff8371a3db719d200ebbd84cfea87ea4f4e6620e928cbb535ec2fc8d",
+        "frozen"
+      ],
+      [
+        "full",
+        1,
+        "01c45abeff8371a3db719d200ebbd84cfea87ea4f4e6620e928cbb535ec2fc8d",
+        "uniform"
+      ],
+      [
+        "full",
+        1,
+        "01c45abeff8371a3db719d200ebbd84cfea87ea4f4e6620e928cbb535ec2fc8d",
+        "recency"
+      ],
+      [
+        "full",
+        1,
+        "01c45abeff8371a3db719d200ebbd84cfea87ea4f4e6620e928cbb535ec2fc8d",
+        "rarity"
+      ],
+      [
+        "full",
+        1,
+        "01c45abeff8371a3db719d200ebbd84cfea87ea4f4e6620e928cbb535ec2fc8d",
+        "surprise"
+      ],
+      [
+        "full",
+        1,
+        "01c45abeff8371a3db719d200ebbd84cfea87ea4f4e6620e928cbb535ec2fc8d",
+        "frequency_surprise"
+      ],
+      [
+        "full",
+        1,
+        "01c45abeff8371a3db719d200ebbd84cfea87ea4f4e6620e928cbb535ec2fc8d",
+        "uniform_order2"
+      ],
+      [
+        "full",
+        1,
+        "01c45abeff8371a3db719d200ebbd84cfea87ea4f4e6620e928cbb535ec2fc8d",
+        "frequency_surprise_order2"
+      ],
+      [
+        "full",
+        1,
+        "01c45abeff8371a3db719d200ebbd84cfea87ea4f4e6620e928cbb535ec2fc8d",
+        "dense"
+      ]
+    ],
+    "source": "\"\"\"Independent list-based replay on real documents and pooled published scores.\"\"\"\nimport gzip, hashlib, json, math, random, sys\nfrom pathlib import Path\nimport numpy as np\nimport torch\n\nbase, run, dest = map(Path, sys.argv[1:])\ns=json.loads((run/\"summary.json\").read_text())\nrows=[json.loads(x) for x in gzip.open(run/\"documents.jsonl.gz\",\"rt\")]\nassert hashlib.sha256((run/\"documents.jsonl.gz\").read_bytes()).hexdigest()==s[\"documents_sha256\"]\nsizes=torch.load(base/\"token_bytes.pt\",weights_only=True).numpy()\nraw=np.load(base/\"eval-pairs.npy\",allow_pickle=False)\nv=len(sizes); keys=np.unique(raw[sizes[raw%v]>0])\nchecks=0; trace=[]\nfor prior,prefix,counts_key in [(\"pilot\",\"prefix-\",\"nxy\"),(\"full\",\"\",\"counts\")]:\n    with np.load(base/f\"{prefix}counts-rank0.npz\") as a,np.load(base/f\"{prefix}counts-rank1.npz\") as b:\n        nx,ny,hits=[a[k]+b[k] for k in (\"ux\",\"uy\",counts_key)]\n    for panel in range(2):\n        docs=[r for r in rows if r[\"prior\"]==prior and r[\"panel\"]==panel]\n        for arm,val in s[\"priors\"][prior][\"panels\"][panel][\"bpb\"].items():\n            calc=math.fsum(r[\"bits\"][arm] for r in docs)/sum(r[\"bytes\"] for r in docs)\n            assert math.isclose(val,calc,abs_tol=1e-12)\n            checks+=1\n        for row in sorted((r for r in docs if r[\"end\"]-r[\"start\"]>=192),key=lambda r:r[\"document_sha256\"])[:2]:\n            xy=raw[row[\"start\"]:row[\"end\"]]\n            inp=(xy//v).tolist(); out=(xy%v).tolist()\n            assert out[:-1]==inp[1:] and int(sizes[out].sum())==row[\"bytes\"]\n            assert hashlib.sha256(np.array(out,dtype=\"<u8\").tobytes()).hexdigest()==row[\"document_sha256\"]\n            u=(ny[out]+.5)/(ny.sum()+.5*v)\n            p=((hits[np.searchsorted(keys,xy)]+u)/(nx[inp]+1)).tolist()\n            for arm in row[\"bits\"]:\n                state=[]; values=[]; rng=random.Random(int(row[\"document_sha256\"],16))\n                for i in range(0,len(out),32):\n                    events=list(zip(([-1]+inp[:-1])[i:i+32],inp[i:i+32],out[i:i+32]))\n                    scores=[]\n                    for j,(z,x,y) in enumerate(events):\n                        context=[t for _,k,t in state if k==x]\n                        current=p[i+j]\n                        if arm!=\"frozen\":\n                            current=(context.count(y)+4*current)/(len(context)+4)\n                        if arm.endswith(\"_order2\"):\n                            longer=[t for k0,k1,t in state if k0==z and k1==x]\n                            current=(longer.count(y)+4*current)/(len(longer)+4)\n                        values.append(-math.log2(current))\n                        local=[t for _,k,t in events if k==x]\n                        touch=local.count(y); seen=context.count(y); denominator=len(context)+4\n                        old=(seen+4*p[i+j])/denominator\n                        updated=(seen+1+4*p[i+j])/(denominator+1)\n                        q=(touch+4*p[i+j])/(len(local)+4)\n                        gain=len(local)*(q*math.log2(updated/old)+(1-q)*math.log2(denominator/(denominator+1)))\n                        score={\"gain\":gain,\"rarity\":-u[i+j],\"surprise\":-math.log2(p[i+j]),\"recency\":j}.get(arm,-touch*math.log2(p[i+j]))\n                        scores.append(score)\n                    if len(events)==32 and arm!=\"frozen\":\n                        if arm==\"dense\": ids=list(range(32))\n                        elif arm.startswith(\"uniform\"): ids=sorted(rng.sample(range(32),4))\n                        else: ids=sorted(sorted(range(32),key=scores.__getitem__,reverse=True)[:4])\n                        state=(state+[events[j] for j in ids])[-64:]\n                assert math.isclose(math.fsum(values),row[\"bits\"][arm],abs_tol=1e-7,rel_tol=0), (prior,panel,arm)\n                trace.append([prior,panel,row[\"document_sha256\"],arm])\nreport={\"pooled_bpb_recomputations\":checks,\"independent_document_arm_replays\":len(trace),\n        \"replayed\":trace,\"source\":Path(__file__).read_text(),\"document_stream_sha256\":s[\"documents_sha256\"]}\nwith dest.open(\"x\") as f:\n    json.dump(report,f,indent=2); f.write(\"\\n\")\nprint(checks,len(trace))\n",
+    "document_stream_sha256": "7239144ae469366ca2b9f5b46798d958372ca1f3f63c0a4f771f9986d2f28578"
+  },
+  "statistics_verifier": {
+    "source": "\"\"\"Reconstruct both paired studies from their published document losses.\"\"\"\nimport gzip\nimport hashlib\nimport json\nimport math\nimport sys\nfrom pathlib import Path\n\nimport numpy as np\n\n\nroot, destination = map(Path, sys.argv[1:])\nreport = {\"panels\": {}, \"bootstrap_draws_per_panel\": 32768}\n\n\ndef inputs(stem):\n    aggregate = json.loads((root / (stem + \".json\")).read_text())\n    raw = root / (stem + \".jsonl.gz\")\n    assert hashlib.sha256(raw.read_bytes()).hexdigest() == aggregate[\"documents_sha256\"]\n    with gzip.open(raw, \"rt\") as stream:\n        return aggregate, [json.loads(line) for line in stream]\n\n\ndef verify(name, summary, docs, bits, candidate, seed, alpha):\n    controls = list(summary[\"contrasts\"])\n    byte_counts = np.array([row[\"bytes\"] for row in docs])\n    total_bytes = sum(int(x) for x in byte_counts)\n    bpbs = {arm: math.fsum(values) / total_bytes for arm, values in bits.items()}\n    for arm, value in bpbs.items():\n        assert abs(value - summary[\"bpb\"][arm]) < 2e-12\n    delta = np.column_stack([np.subtract(bits[arm], bits[candidate]) for arm in controls])\n    generator = np.random.default_rng(seed)\n    bounds = []\n    for _ in range(512):\n        indices = generator.integers(len(docs), size=(64, len(docs)))\n        # Multiplicities give weighted block sums without using the study's gather-and-sum path.\n        frequency = np.stack([np.bincount(draw, minlength=len(docs)) for draw in indices])\n        bounds.extend((frequency @ delta) / (frequency @ byte_counts)[:, None])\n    lower = np.quantile(bounds, alpha, axis=0)\n    passed = []\n    for i, arm in enumerate(controls):\n        published = summary[\"contrasts\"][arm]\n        saving = bpbs[arm] - bpbs[candidate]\n        assert abs(saving - published[\"saving_bpb\"]) < 2e-12\n        assert abs(lower[i] - published[\"lower_bpb\"]) < 2e-12\n        assert bool(saving >= .005 and lower[i] > 0) == published[\"pass\"]\n        if published[\"pass\"]:\n            passed.append(arm)\n    report[\"panels\"][name] = {\"documents\": len(docs), \"bytes\": total_bytes,\n                               \"bpb_checked\": len(bits), \"contrasts_checked\": len(controls), \"passed\": passed}\n\n\nwrite, records = inputs(\"episodic_write_policy_2026-11-23\")\nfor prior, result in write[\"priors\"].items():\n    for panel, summary in enumerate(result[\"panels\"]):\n        docs = [row for row in records if (row[\"prior\"], row[\"panel\"]) == (prior, panel)]\n        for row in docs:\n            expected = (row[\"end\"] - row[\"start\"]) // 32\n            for arm, count in row[\"writes\"].items():\n                assert count == expected * (32 if arm == \"dense\" else 4)\n        bits = {arm: [row[\"bits\"][arm] for row in docs] for arm in summary[\"bpb\"]}\n        verify(f\"{prior}/{panel}\", summary, docs, bits, \"gain\", 7291 + panel, .05 / 32)\n\n\ntransfer, records = inputs(\"associative_credit_2026-11-23\")\nassert len({row[\"sha256\"] for row in records}) == len(records)\nmixtures = [0, .01, .03, .1, .3, .6, 1]\nfor corpus, seed in ((\"fineweb\", 8911), (\"wikitext\", 8912)):\n    summary = transfer[\"corpora\"][corpus]\n    all_rows = sorted((row for row in records if row[\"corpus\"] == corpus), key=lambda row: row[\"sha256\"])\n    cal, test = all_rows[::4], [row for i, row in enumerate(all_rows) if i % 4]\n    assert all(row[\"split\"] == \"calibration\" for row in cal)\n    assert all(row[\"split\"] == \"test\" for row in test)\n    assert (len(cal), len(test)) == (summary[\"calibration_docs\"], summary[\"test_docs\"])\n    assert sum(row[\"tokens\"] for row in test) == summary[\"test_tokens\"]\n    assert sum(row[\"bytes\"] for row in test) == summary[\"test_bytes\"]\n    selections = {}\n    for kind in (\"binding\", \"exchangeable\", \"lexical\", \"continuous\"):\n        arms = [kind] if kind != \"continuous\" else [f\"cosine_{t}\" for t in (1, 5, 15, 50)]\n        choices = []\n        for arm in arms:\n            for j, mixture in enumerate(mixtures):\n                entries = [row[\"bits\"][arm][j] for row in cal]\n                if None not in entries:\n                    choices.append((math.fsum(entries), mixture, arms.index(arm), arm, j))\n        _, _, _, arm, j = min(choices)\n        selections[kind] = (arm, j)\n    selections[\"frozen\"] = (\"binding\", 0)\n    selections[\"exchangeable_same\"] = (\"exchangeable\", selections[\"binding\"][1])\n    for name, (arm, j) in selections.items():\n        selected = summary[\"settings\"][name]\n        assert (arm, j, mixtures[j]) == (selected[\"arm\"], selected[\"index\"], selected[\"mixture\"])\n    bits = {key: [row[\"bits\"][arm][j] for row in test] for key, (arm, j) in selections.items()}\n    verify(corpus, summary, test, bits, \"binding\", seed, .005)\n\nwith destination.open(\"x\") as stream:\n    json.dump(report, stream, indent=2)\n    stream.write(\"\\n\")\n",
+    "arguments": [
+      "published_results_directory",
+      "new_report_filename"
+    ],
+    "report": {
+      "panels": {
+        "pilot/0": {
+          "documents": 489,
+          "bytes": 2052047,
+          "bpb_checked": 10,
+          "contrasts_checked": 8,
+          "passed": [
+            "frozen",
+            "uniform",
+            "recency",
+            "rarity",
+            "uniform_order2"
+          ]
+        },
+        "pilot/1": {
+          "documents": 514,
+          "bytes": 2108574,
+          "bpb_checked": 10,
+          "contrasts_checked": 8,
+          "passed": [
+            "frozen",
+            "uniform",
+            "recency",
+            "rarity",
+            "uniform_order2"
+          ]
+        },
+        "full/0": {
+          "documents": 489,
+          "bytes": 2052047,
+          "bpb_checked": 10,
+          "contrasts_checked": 8,
+          "passed": [
+            "frozen"
+          ]
+        },
+        "full/1": {
+          "documents": 514,
+          "bytes": 2108574,
+          "bpb_checked": 10,
+          "contrasts_checked": 8,
+          "passed": []
+        },
+        "fineweb": {
+          "documents": 96,
+          "bytes": 178513,
+          "bpb_checked": 6,
+          "contrasts_checked": 5,
+          "passed": []
+        },
+        "wikitext": {
+          "documents": 45,
+          "bytes": 91660,
+          "bpb_checked": 6,
+          "contrasts_checked": 5,
+          "passed": []
+        }
+      },
+      "bootstrap_draws_per_panel": 32768
+    }
+  },
+  "pairing_attribution": {
+    "source": "\"\"\"Attribute the fixed, observed pairing effect to held-out prediction opportunities.\"\"\"\nimport argparse\nimport gzip\nimport json\nimport math\nfrom collections import Counter\nfrom pathlib import Path\n\nimport torch\nfrom rich.console import Console\nfrom tokenizers import Tokenizer\nfrom transformers import AutoModelForCausalLM\n\nfrom bio_inspired_nanochat.tokenizer import get_tokenizer\nfrom scripts.e2e.associative_credit import fineweb_articles, neural_inputs, panel, wiki_articles\n\n\ndef score(ids, p0, mix):\n    cues = [0, *ids[:-1]]\n    bins = {}\n    for start in range(0, len(ids), 32):\n        history = []\n        for block in range(max(0, start - 64), start, 32):\n            x, y = cues[block:block + 32], ids[block:block + 32]\n            history.append((Counter(x), Counter(y), Counter(zip(x, y))))\n        for i in range(start, min(start + 32, len(ids))):\n            x, y = cues[i], ids[i]\n            nx = sum(c[x] for c, _, _ in history)\n            paired = sum(xy[x, y] for _, _, xy in history)\n            exchangeable = sum(c[x] * t[y] / 32 for c, t, _ in history)\n            if paired == exchangeable:\n                group = \"identical\"\n            elif paired > exchangeable:\n                group = \"pairing_increases_target_probability\"\n            elif paired:\n                group = \"observed_pair_below_permutation_expectation\"\n            else:\n                group = \"pair_absent_but_marginals_overlap\"\n            base = float(p0[i])\n            observed = (1 - mix) * base + mix * (paired + 4 * base) / (nx + 4)\n            permuted = (1 - mix) * base + mix * (exchangeable + 4 * base) / (nx + 4)\n            bins.setdefault(group, []).append(math.log2(observed / permuted))\n    return bins\n\n\nparser = argparse.ArgumentParser(description=__doc__)\nfor name in (\"model\", \"wiki\", \"fineweb\", \"previous\", \"summary\", \"documents\", \"out\"):\n    parser.add_argument(\"--\" + name, type=Path, required=True)\nargs = parser.parse_args()\naggregate = json.loads(args.summary.read_text())\nwith gzip.open(args.documents, \"rt\") as stream:\n    published = {row[\"sha256\"]: row for row in map(json.loads, stream)}\nwith gzip.open(args.previous, \"rt\") as stream:\n    excluded = {json.loads(line)[\"document_sha256\"] for line in stream}\ntorch.set_float32_matmul_precision(\"highest\")\nmodel = AutoModelForCausalLM.from_pretrained(str(args.model), local_files_only=True,\n                                            dtype=torch.float32, attn_implementation=\"eager\").cuda().eval()\ntok = Tokenizer.from_file(str(args.model / \"tokenizer.json\"))\nsets = {\"fineweb\": panel(fineweb_articles(args.fineweb), tok, excluded, get_tokenizer(), 128),\n        \"wikitext\": panel(wiki_articles(args.wiki), tok, set())}\nreport = {}\nfor name, (samples, _) in sets.items():\n    arm = aggregate[\"corpora\"][name]\n    j = arm[\"settings\"][\"binding\"][\"index\"]\n    mixture = arm[\"settings\"][\"binding\"][\"mixture\"]\n    pieces = {}\n    errors = []\n    for i, (digest, _, ids) in enumerate(samples):\n        if i % 4 == 0:\n            continue\n        row = published[digest]\n        assert row[\"split\"] == \"test\" and row[\"corpus\"] == name and len(ids) == row[\"tokens\"]\n        _, _, base, _, _ = neural_inputs(model, ids, \"cuda\")\n        groups = score(ids, base, mixture)\n        expected = row[\"bits\"][\"exchangeable\"][j] - row[\"bits\"][\"binding\"][j]\n        error = abs(math.fsum(math.fsum(v) for v in groups.values()) - expected)\n        assert error < 1e-7, (digest, error)\n        errors.append(error)\n        for group, values in groups.items():\n            pieces.setdefault(group, []).extend(values)\n    assert sum(map(len, pieces.values())) == arm[\"test_tokens\"]\n    report[name] = {\"documents_verified\": len(errors), \"max_absolute_document_error_bits\": max(errors),\n                    \"test_bytes\": arm[\"test_bytes\"], \"mixture\": mixture,\n                    \"groups\": {k: {\"tokens\": len(v), \"bits_saved\": math.fsum(v),\n                                    \"bpb_contribution\": math.fsum(v) / arm[\"test_bytes\"]}\n                               for k, v in pieces.items()}}\nwith args.out.open(\"x\") as output:\n    json.dump(report, output, indent=2)\n    output.write(\"\\n\")\nConsole().print({name: value[\"documents_verified\"] for name, value in report.items()})\n",
+    "report": {
+      "fineweb": {
+        "documents_verified": 96,
+        "max_absolute_document_error_bits": 5.405675906899887e-13,
+        "test_bytes": 178513,
+        "mixture": 0.03,
+        "groups": {
+          "identical": {
+            "tokens": 34409,
+            "bits_saved": 0.0,
+            "bpb_contribution": 0.0
+          },
+          "pair_absent_but_marginals_overlap": {
+            "tokens": 1636,
+            "bits_saved": -101.38588514994109,
+            "bpb_contribution": -0.0005679467890290404
+          },
+          "pairing_increases_target_probability": {
+            "tokens": 2678,
+            "bits_saved": 187.50235782408245,
+            "bpb_contribution": 0.0010503568805861896
+          }
+        }
+      },
+      "wikitext": {
+        "documents_verified": 45,
+        "max_absolute_document_error_bits": 5.613287612504791e-13,
+        "test_bytes": 91660,
+        "mixture": 0.03,
+        "groups": {
+          "identical": {
+            "tokens": 17836,
+            "bits_saved": 0.0,
+            "bpb_contribution": 0.0
+          },
+          "pairing_increases_target_probability": {
+            "tokens": 1416,
+            "bits_saved": 81.45806399993667,
+            "bpb_contribution": 0.0008886980580398938
+          },
+          "pair_absent_but_marginals_overlap": {
+            "tokens": 858,
+            "bits_saved": -79.8658470411915,
+            "bpb_contribution": -0.0008713271551515547
+          }
+        }
+      }
+    }
+  },
+  "suite": {
+    "csd": {
+      "tests": 2089,
+      "failures": 11,
+      "errors": 132,
+      "skipped": 11,
+      "passed": 1935,
+      "xml_sha256": "525efe3872da2de75638b4ae3acb14f746067a6829de8274e958736070f664b4",
+      "temporary_storage_failures_or_errors": 142,
+      "other_failures": [
+        {
+          "test": "tests.test_perf_regression.test_live_throughput_budget_gate_passes",
+          "message": "AssertionError: synaptic_transformer_train (5318.1 tok/s) vs standard_transformer_train (11747.8 tok/s): slowdown=2.21x (budget <= 2.00x)\nassert False\n +  where False = BudgetComparison(mode='train', standard_name='standard_transformer_train', synaptic_name='synaptic_transformer_train',...ptic_transformer_train (5318.1 tok/s) vs standard_transformer_train (11747.8 tok/s): slowdown=2.21x (budget <= 2.00x)').passed"
+        }
+      ]
+    },
+    "linux_cuda_wheel_on_cpu": {
+      "dsr_status": "running"
+    },
+    "linux_cpu_wheel": {
+      "dsr_status": "running"
+    }
+  },
+  "count_input_producers": {
+    "instructions": "Use a new directory. Extract both original producers there. With NANOCHAT_BASE_DIR set to the staged project tokenizer and 28 shards, run counts.py validation_bpb single-rank; then counts.py fit with two torch.distributed.run ranks. Supply original-rank{0,1}.json from the prefix references below, and run fit.py with two ranks. Copy token_bytes.pt and tokenizer.json from the staged project tokenizer. All three invocations are DSR checks.",
+    "full": {
+      "filename": "counts.py",
+      "source": "\"\"\"Fit and score fixed count models on the same two training streams and single-device evaluation windows.\"\"\"\nimport hashlib\nimport json\nimport math\nimport sys\nfrom pathlib import Path\n\nimport numpy as np\n\nsys.path.insert(0, str(Path.cwd()))\nfrom bio_inspired_nanochat.common import get_dist_info\nfrom bio_inspired_nanochat.dataloader import tokenizing_distributed_data_loader\nfrom bio_inspired_nanochat.matrix_manifest import dataset_identity, source_identity\nfrom bio_inspired_nanochat.tokenizer import get_token_bytes, get_tokenizer\n\nroot = Path(__file__).parent\nbatch, context, seed, updates, accumulation = 16, 1024, 1337, 1900, 8\neval_tokens = 1048576\nvocab = get_tokenizer().get_vocab_size()\nbyte_lengths = get_token_bytes(\"cpu\").numpy()\nassert len(byte_lengths) == vocab\nmode = sys.argv[1]\n\ndef freeze(name, obj):\n    with (root / name).open(\"x\") as stream:\n        json.dump(obj, stream, sort_keys=True, indent=2, allow_nan=False)\n\nif mode in {\"validation\", \"validation_bpb\"}:\n    assert get_dist_info()[3] == 1\n    arrays = []\n    data = dataset_identity()\n    sha, source = source_identity()\n    validation = tokenizing_distributed_data_loader(batch, context, \"val\", device=\"cpu\")\n    skipped_windows = eval_tokens // (batch * context) if mode == \"validation_bpb\" else 0\n    for _ in range(skipped_windows):\n        next(validation)\n    for _ in range(eval_tokens // (batch * context)):\n        x, y = next(validation)\n        arrays.append(x.numpy().reshape(-1) * vocab + y.numpy().reshape(-1))\n    pairs = np.concatenate(arrays)\n    np.save(root / \"eval-pairs.npy\", pairs, allow_pickle=False)\n    denominator = int(byte_lengths[pairs % vocab].sum())\n    assert denominator > 0 and len(pairs) == eval_tokens\n    info = {\"model\":\"vanilla GPT\", \"stage\":\"500M headline reference\", \"seed\":seed, \"updates\":updates,\n            \"architecture\":{\"depth\":10,\"width\":640,\"head_count\":5,\"context\":context,\"tied_embeddings\":True},\n            \"training_world_size\":2, \"microbatch_per_rank\":batch, \"gradient_accumulation\":accumulation,\n            \"training_input_tokens\":updates*2*batch*context*accumulation,\"eval_device_count\":1,\n            \"validation_input_tokens\":len(pairs),\"validation_target_bytes\":denominator,\n            \"validation_nonzero_byte_targets\":int((byte_lengths[pairs%vocab]>0).sum()),\"vocab_size\":vocab,\n            \"validation_ordered_pairs_sha256\":hashlib.sha256(pairs.astype(\"<u8\").tobytes()).hexdigest(),\n            \"input_identity\":data,\"git_revision\":sha,\"source_sha256\":source,\n            \"comparator\":\"Fit on all optimizer input/target pairs from the actual two rank-local train loaders, including train BOS outcomes. Unigram probabilities are (N_y+0.5)/(N+0.5*V). Bigram probabilities are (N_xy+p_unigram(y))/(N_x+1). Evaluate only positive-byte targets and divide total bits by the original token byte lengths. Validation pairs select sparse sufficient-statistic storage only; all training windows and denominators are counted.\"}\n    info[\"validation_preceding_input_tokens\"] = skipped_windows * batch * context\n    info[\"validation_window\"] = \"Standalone scorer consumes the first 64 validation windows for loss/PPL/ECE, then the next 64 for BPB.\"\n    freeze(\"contract.json\",info)\n    print(json.dumps({k:v for k,v in info.items() if k!=\"input_identity\"}, sort_keys=True),flush=True)\nelif mode == \"fit\":\n    import time\n    print(\"Awaiting uncontended CPU fit allocation\", flush=True)\n    while not (root / \"cpu-fit-admitted\").is_file():\n        time.sleep(15)\n    _, rank, _, world = get_dist_info()\n    assert world == 2 and 0 <= rank < 2\n    contract = json.loads((root/\"contract.json\").read_text())\n    assert source_identity() == (contract[\"git_revision\"],contract[\"source_sha256\"])\n    assert dataset_identity() == contract[\"input_identity\"]\n    ordered = np.load(root/\"eval-pairs.npy\",allow_pickle=False)\n    keys = np.unique(ordered[byte_lengths[ordered % vocab] > 0])\n    ux = np.zeros(vocab,dtype=np.int64)\n    uy = np.zeros(vocab,dtype=np.int64)\n    counts = np.zeros(len(keys),dtype=np.int64)\n    stream = tokenizing_distributed_data_loader(batch,context,\"train\",device=\"cpu\")\n    history=hashlib.sha256()\n    for i in range(updates*accumulation):\n        a,b=next(stream)\n        x,y=a.numpy().reshape(-1),b.numpy().reshape(-1)\n        xy=x*vocab+y\n        history.update(xy.astype(\"<u8\",copy=False).tobytes())\n        ux += np.bincount(x,minlength=vocab)\n        uy += np.bincount(y,minlength=vocab)\n        idx=np.searchsorted(keys,xy).clip(max=len(keys)-1)\n        np.add.at(counts,idx[keys[idx]==xy],1)\n        if (i+1)%800==0:\n            print(json.dumps({\"rank\":rank,\"updates\":(i+1)//accumulation,\"fitted_targets\":int(uy.sum())}),flush=True)\n    assert ux.sum()==uy.sum()==updates*accumulation*batch*context\n    np.savez(root/f\"counts-rank{rank}.npz\",ux=ux,uy=uy,counts=counts,stream_digest=history.hexdigest())\nelif mode==\"finish\":\n    c=json.loads((root/\"contract.json\").read_text())\n    ordered=np.load(root/\"eval-pairs.npy\",allow_pickle=False)\n    targets=ordered%vocab\n    valid=byte_lengths[targets]>0\n    keys,weights=np.unique(ordered[valid],return_counts=True)\n    with np.load(root/\"counts-rank0.npz\") as a, np.load(root/\"counts-rank1.npz\") as b:\n        ux,uy,nxy=(a[k]+b[k] for k in (\"ux\",\"uy\",\"counts\"))\n        streams=[str(a[\"stream_digest\"]),str(b[\"stream_digest\"])]\n    assert int(uy.sum())==c[\"training_input_tokens\"] and streams[0]!=streams[1]\n    y=keys%vocab\n    pu=(uy[y]+0.5)/(uy.sum()+vocab*0.5)\n    pb=(nxy+pu)/(ux[keys//vocab]+1)\n    assert np.all((pb>0)&(pb<=1)) and int(weights.sum())==c[\"validation_nonzero_byte_targets\"]\n    bp=lambda p:float(-np.dot(weights.astype(\"float64\"),np.log2(p))/c[\"validation_target_bytes\"])\n    result={\"training_input_tokens\":int(uy.sum()),\"per_rank_pair_stream_sha256\":streams,\n            \"unigram_bpb\":bp(pu),\"bigram_bpb\":bp(pb),\"train_sha256\":c[\"input_identity\"][\"train_sha256\"],\n            \"val_sha256\":c[\"input_identity\"][\"val_sha256\"],\"tokenizer_sha256\":c[\"input_identity\"][\"tokenizer_sha256\"],\n            \"eval_ordered_pair_sha256\":c[\"validation_ordered_pairs_sha256\"],\n            \"validation_input_tokens\":len(ordered),\"validation_target_bytes\":c[\"validation_target_bytes\"]}\n    freeze(\"ngram-result.json\",result)\n    print(json.dumps(result,sort_keys=True),flush=True)\nelse:\n    raise ValueError(mode)\n",
+      "sha256": "fa3a7de7480c1cf96d12816b37d07aebe33733b880675a95dcec1ae4abe323bb"
+    },
+    "prefix": {
+      "filename": "fit.py",
+      "source": "\"\"\"Bounded throughput probe using the same two rank-local dataloaders and sufficient statistics.\"\"\"\nimport json\nimport resource\nimport sys\nimport time\nfrom pathlib import Path\nimport numpy as np\nsys.path.insert(0,str(Path.cwd()))\nfrom bio_inspired_nanochat.common import get_dist_info\nfrom bio_inspired_nanochat.dataloader import tokenizing_distributed_data_loader\nfrom bio_inspired_nanochat.tokenizer import get_token_bytes\nroot=Path(__file__).parent\n_,rank,_,world=get_dist_info()\nassert world==2\nc=json.loads((root/\"contract.json\").read_text())\nv=c[\"vocab_size\"]\npairs=np.load(root/\"eval-pairs.npy\",allow_pickle=False)\nsizes=get_token_bytes(\"cpu\").numpy()\nkeys=np.unique(pairs[sizes[pairs%v]>0])\nux=np.zeros(v,dtype=np.int64)\nuy=np.zeros(v,dtype=np.int64)\ncounts=np.zeros(len(keys),dtype=np.int64)\nt0=time.monotonic()\nloader=tokenizing_distributed_data_loader(16,1024,\"train\",device=\"cpu\")\nintervals=[]\nimport hashlib\nhistory=hashlib.sha256()\nfor i in range(24*8):\n    a,b=next(loader)\n    x,y=a.numpy().reshape(-1),b.numpy().reshape(-1)\n    xy=x*v+y\n    history.update(xy.astype(\"<u8\",copy=False).tobytes())\n    ux+=np.bincount(x,minlength=v)\n    uy+=np.bincount(y,minlength=v)\n    idx=np.searchsorted(keys,xy).clip(max=len(keys)-1)\n    np.add.at(counts,idx[keys[idx]==xy],1)\n    if (i+1)%64==0:\n        intervals.append({\"train_targets\":int(uy.sum()),\"seconds\":time.monotonic()-t0})\nusage=resource.getrusage(resource.RUSAGE_SELF)\nresult={\"rank\":rank,\"intervals\":intervals,\"targets\":int(uy.sum()),\"elapsed\":time.monotonic()-t0,\n        \"user_seconds\":usage.ru_utime,\"system_seconds\":usage.ru_stime,\"maxrss_kib\":usage.ru_maxrss,\n        \"voluntary_cs\":usage.ru_nvcsw,\"involuntary_cs\":usage.ru_nivcsw,\"prefix_sha256\":history.hexdigest()}\nwith (root/f\"count-probe-rank{rank}.json\").open(\"x\") as stream:\n    json.dump(result,stream,sort_keys=True)\nprint(json.dumps(result),flush=True)\n\nprevious=json.loads((root/f\"original-rank{rank}.json\").read_text())\nassert result[\"prefix_sha256\"] == previous[\"prefix_sha256\"]\nassert int(ux.sum()) == int(uy.sum()) == previous[\"targets\"] == 3145728\nwith (root/f\"prefix-counts-rank{rank}.npz\").open(\"xb\") as stream:\n    np.savez_compressed(stream, ux=ux, uy=uy, nxy=counts, digest=history.hexdigest())\n",
+      "sha256": "39b220076a63c2be9c85b49c86b1a8338e8951a3016b4170a55210f603f4ca19"
+    },
+    "original_prefix_references": [
+      {
+        "rank": 0,
+        "targets": 3145728,
+        "prefix_sha256": "b124cf841a3bd0531c3e22a30d9593d14c1c40d0170594e10cf951f4cd68e9d8"
+      },
+      {
+        "rank": 1,
+        "targets": 3145728,
+        "prefix_sha256": "27e61ba719f5b0b3bdb9d0ca7685193ef42bf57b17000cfe09ce28e76fe1d20a"
+      }
+    ]
+  }
+}
