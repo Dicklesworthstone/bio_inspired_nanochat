@@ -1,0 +1,142 @@
+{
+  "device": "NVIDIA GeForce RTX 4090",
+  "precision": "BF16 autocast",
+  "prefill": {
+    "prefill-memory": {
+      "source": "\"\"\"Measure actual CUDA prefill allocator use and returned logits for a saved vanilla checkpoint.\"\"\"\nfrom pathlib import Path\nimport sys, json, hashlib\nimport torch\nfrom bio_inspired_nanochat.checkpoint_manager import load_checkpoint_model\nfrom bio_inspired_nanochat.engine import Engine, KVCache\nfrom bio_inspired_nanochat.dataloader import tokenizing_distributed_data_loader\nfrom bio_inspired_nanochat.matrix_manifest import file_digest\nckpt, dest = map(Path, sys.argv[1:])\nmodel, _ = load_checkpoint_model(str(ckpt), 24, torch.device(\"cuda\", 0), \"eval\")\nengine = Engine(model, None)\ncfg = model.config\nrows = []\nfor length in (32, 1024):\n    ids, _ = next(tokenizing_distributed_data_loader(1,length,\"val\",device=\"cuda\"))\n    cache = KVCache(1, cfg.n_kv_head, length+1, cfg.n_embd//cfg.n_head,cfg.n_layer)\n    torch.cuda.synchronize()\n    before = torch.cuda.memory_allocated()\n    torch.cuda.reset_peak_memory_stats()\n    with torch.inference_mode(), torch.autocast(\"cuda\", torch.bfloat16):\n        logits = engine._forward(ids,cache)\n    torch.cuda.synchronize()\n    peak = torch.cuda.max_memory_allocated()-before\n    rows.append(dict(length=length,peak_increase_bytes=peak,logits_bytes=logits.numel()*logits.element_size(),\n                     dtype=str(logits.dtype),tokens_sha256=hashlib.sha256(ids.cpu().numpy().tobytes()).hexdigest(),\n                     last_greedy_token=int(logits[:,-1].argmax()),cache_pos=cache.get_pos()))\n    del cache, logits\nwith dest.open(\"x\") as f:\n    json.dump(dict(checkpoint_sha256=file_digest(ckpt/\"model_000024.pt\"), \n                   model_source_sha256=file_digest(Path(\"bio_inspired_nanochat/gpt.py\")),\n                   scope=\"Public cached forward, B1 BF16 on the same real validation prefix. Peak increase is live CUDA allocator bytes above the model and input; includes KV allocation. T32 precedes T1024 in each process.\",source=Path(__file__).read_text(),rows=rows),f,indent=2)\n    f.write(\"\\n\")\nprint(rows)\n",
+      "arms": {
+        "before": {
+          "checkpoint_sha256": "0c790b90a62a7a0040ecdb4790f5b36af9604ba3ccc2faa39204e20ef2aa14b2",
+          "model_source_sha256": "b551f6ccb39fe0a3678e1fe0204724a3b91c63cd927489d74844654178da2228",
+          "scope": "Public cached forward, B1 BF16 on the same real validation prefix. Peak increase is live CUDA allocator bytes above the model and input; includes KV allocation. T32 precedes T1024 in each process.",
+          "rows": [
+            {
+              "length": 32,
+              "peak_increase_bytes": 120685568,
+              "logits_bytes": 4194304,
+              "dtype": "torch.bfloat16",
+              "tokens_sha256": "3f8eb871079752ec3fbad418d7442185cdb50a46c3e20441c09bce702ed43886",
+              "last_greedy_token": 10,
+              "cache_pos": 32
+            },
+            {
+              "length": 1024,
+              "peak_increase_bytes": 531784704,
+              "logits_bytes": 134217728,
+              "dtype": "torch.bfloat16",
+              "tokens_sha256": "10e78dc1e458f4214e9ebea230834b935d025f9b6598a8b0802f8eb0d4741832",
+              "last_greedy_token": 10,
+              "cache_pos": 1024
+            }
+          ]
+        },
+        "after": {
+          "checkpoint_sha256": "0c790b90a62a7a0040ecdb4790f5b36af9604ba3ccc2faa39204e20ef2aa14b2",
+          "model_source_sha256": "5230486ae3ea83f910bc57bb8cdf132b2643f47a7ff4688b032b57a84361d2c6",
+          "scope": "Public cached forward, B1 BF16 on the same real validation prefix. Peak increase is live CUDA allocator bytes above the model and input; includes KV allocation. T32 precedes T1024 in each process.",
+          "rows": [
+            {
+              "length": 32,
+              "peak_increase_bytes": 132875264,
+              "logits_bytes": 8388608,
+              "dtype": "torch.float32",
+              "tokens_sha256": "3f8eb871079752ec3fbad418d7442185cdb50a46c3e20441c09bce702ed43886",
+              "last_greedy_token": 261,
+              "cache_pos": 32
+            },
+            {
+              "length": 1024,
+              "peak_increase_bytes": 934437888,
+              "logits_bytes": 268435456,
+              "dtype": "torch.float32",
+              "tokens_sha256": "10e78dc1e458f4214e9ebea230834b935d025f9b6598a8b0802f8eb0d4741832",
+              "last_greedy_token": 261,
+              "cache_pos": 1024
+            }
+          ]
+        }
+      }
+    },
+    "last-projection": {
+      "source": "\"\"\"Compare actual full-head prefill with the last hidden-position projection in one invocation.\"\"\"\nimport copy, hashlib, json, sys\nfrom pathlib import Path\n\nimport torch\nfrom bio_inspired_nanochat.checkpoint_manager import load_checkpoint_model\nfrom bio_inspired_nanochat.engine import Engine, KVCache\nfrom bio_inspired_nanochat.dataloader import tokenizing_distributed_data_loader\nfrom bio_inspired_nanochat.matrix_manifest import file_digest\n\ndef state_equal(a, b):\n    if isinstance(a, torch.Tensor):\n        return isinstance(b, torch.Tensor) and torch.equal(a, b)\n    if isinstance(a, dict):\n        return isinstance(b,dict) and a.keys() == b.keys() and all(state_equal(a[k],b[k]) for k in a)\n    if isinstance(a,(tuple,list)):\n        return type(a) is type(b) and len(a)==len(b) and all(state_equal(x,y) for x,y in zip(a,b))\n    return a == b\n\nckpt, step, dest = Path(sys.argv[1]), int(sys.argv[2]), Path(sys.argv[3])\nstock,_=load_checkpoint_model(str(ckpt),step,torch.device(\"cuda\",0),\"eval\")\ncfg=stock.config\nrows=[]\nfor length in (32,1024):\n    ids,_=next(tokenizing_distributed_data_loader(1,length,\"val\",device=\"cuda\"))\n    values={}\n    caches={}\n    peaks={}\n    for mode in (\"full\",\"final_only\"):\n        model=copy.deepcopy(stock).eval()\n        cache=KVCache(1,cfg.n_kv_head,length,cfg.n_embd//cfg.n_head,cfg.n_layer)\n        torch.cuda.synchronize()\n        before=torch.cuda.memory_allocated()\n        torch.cuda.reset_peak_memory_stats()\n        with torch.inference_mode(), torch.autocast(\"cuda\",torch.bfloat16):\n            if mode==\"full\":\n                logits=Engine(model,None)._forward(ids,cache)\n                logits=logits[0] if isinstance(logits,tuple) else logits\n                final=logits[:,-1,:]\n            else:\n                hidden=model.get_hidden_states(ids,kv_cache=cache)\n                logits=model.hidden_to_logits(hidden[:,-1:,:])\n                final=logits[:,0,:]\n        torch.cuda.synchronize()\n        peaks[mode]=torch.cuda.max_memory_allocated()-before\n        values[mode]=final.float().cpu().clone()\n        caches[mode]=cache\n        assert cache.get_pos()==length\n        del logits,final,model\n    a,b=values.values(); closed=torch.isclose(a,b,rtol=1e-5,atol=1e-5)\n    kv=torch.equal(caches[\"full\"].kv_cache,caches[\"final_only\"].kv_cache)\n    state=state_equal(caches[\"full\"].presyn_state,caches[\"final_only\"].presyn_state)\n    rows.append(dict(length=length,token_sha256=hashlib.sha256(ids.cpu().numpy().tobytes()).hexdigest(),\n                     vocab=a.numel(),outside_original_tolerance=int((~closed).sum()),max_abs=float((a-b).abs().max()),\n                     full_top=int(a.argmax()),final_only_top=int(b.argmax()),kv_exact=kv,bio_state_exact=state,\n                     peak_increase_bytes=peaks,passes=bool(closed.all() and a.argmax()==b.argmax() and kv and state)))\nwith dest.open(\"x\") as f:\n    json.dump(dict(scope=\"Single BF16 forward from each saved checkpoint, two prompt lengths. Matched peak increments use live CUDA allocator bytes above inputs and weights. Per-case adoption requires the same greedy ID, all logits within atol=rtol=1e-5, and identical KV and biological cache state.\",checkpoint_sha256=file_digest(ckpt/f\"model_{step:06d}.pt\"), source=Path(__file__).read_text(),rows=rows),f,indent=2)\n    f.write(\"\\n\")\nprint(rows)\n",
+      "arms": {
+        "vanilla": {
+          "scope": "Single BF16 forward from each saved checkpoint, two prompt lengths. Matched peak increments use live CUDA allocator bytes above inputs and weights. Per-case adoption requires the same greedy ID, all logits within atol=rtol=1e-5, and identical KV and biological cache state.",
+          "checkpoint_sha256": "0c790b90a62a7a0040ecdb4790f5b36af9604ba3ccc2faa39204e20ef2aa14b2",
+          "rows": [
+            {
+              "length": 32,
+              "token_sha256": "3f8eb871079752ec3fbad418d7442185cdb50a46c3e20441c09bce702ed43886",
+              "vocab": 65536,
+              "outside_original_tolerance": 31,
+              "max_abs": 0.045366764068603516,
+              "full_top": 261,
+              "final_only_top": 261,
+              "kv_exact": true,
+              "bio_state_exact": true,
+              "peak_increase_bytes": {
+                "full": 132849664,
+                "final_only": 99950592
+              },
+              "passes": false
+            },
+            {
+              "length": 1024,
+              "token_sha256": "10e78dc1e458f4214e9ebea230834b935d025f9b6598a8b0802f8eb0d4741832",
+              "vocab": 65536,
+              "outside_original_tolerance": 33,
+              "max_abs": 0.03857421875,
+              "full_top": 261,
+              "final_only_top": 261,
+              "kv_exact": true,
+              "bio_state_exact": true,
+              "peak_increase_bytes": {
+                "full": 931135488,
+                "final_only": 156631040
+              },
+              "passes": false
+            }
+          ]
+        },
+        "bio": {
+          "scope": "Single BF16 forward from each saved checkpoint, two prompt lengths. Matched peak increments use live CUDA allocator bytes above inputs and weights. Per-case adoption requires the same greedy ID, all logits within atol=rtol=1e-5, and identical KV and biological cache state.",
+          "checkpoint_sha256": "ea5b94b4c27c91cb69d7bec2cc77776a6d322eb833175698051cdec5a68f3058",
+          "rows": [
+            {
+              "length": 32,
+              "token_sha256": "3f8eb871079752ec3fbad418d7442185cdb50a46c3e20441c09bce702ed43886",
+              "vocab": 65536,
+              "outside_original_tolerance": 18,
+              "max_abs": 0.03937244415283203,
+              "full_top": 261,
+              "final_only_top": 261,
+              "kv_exact": true,
+              "bio_state_exact": true,
+              "peak_increase_bytes": {
+                "full": 221134848,
+                "final_only": 184172544
+              },
+              "passes": false
+            },
+            {
+              "length": 1024,
+              "token_sha256": "10e78dc1e458f4214e9ebea230834b935d025f9b6598a8b0802f8eb0d4741832",
+              "vocab": 65536,
+              "outside_original_tolerance": 23,
+              "max_abs": 0.026000022888183594,
+              "full_top": 281,
+              "final_only_top": 281,
+              "kv_exact": true,
+              "bio_state_exact": true,
+              "peak_increase_bytes": {
+                "full": 1152889856,
+                "final_only": 214856704
+              },
+              "passes": false
+            }
+          ]
+        }
+      }
+    }
+  }
+}

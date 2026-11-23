@@ -63,6 +63,18 @@ lower-precision matrix product and evaluating just the final tanh in FP32
 restored the FP32 choice on all 32 positions in both modes. Even the FP32
 reference had a two-way tie twice. [Token-by-token replay with source](results/profiles/vanilla_softcap_replay_2026-11-23.json)
 
+The corrected inference head computes the softcap in FP32 when the matrix
+product returns BF16 or FP16. On the original blocks the two checkpoints
+matched all 64 FP32 greedy choices in each format. On another four blocks
+per checkpoint, selected with `--skip-blocks 5`, each format again matched
+64/64. On the original blocks all 40 training losses, including warmups, were
+identical to their pre-fix values. None of the follow-up cohorts cleared the
+registered speed rule. These are teacher-forced next-token decisions from two
+early checkpoints. [Vanilla replay](results/profiles/precision_repaired_vanilla_2026-11-23.json) ·
+[Synaptic replay](results/profiles/precision_repaired_bio_2026-11-23.json) ·
+[Later vanilla blocks](results/profiles/precision_repaired_holdout_vanilla_2026-11-23.json) ·
+[Later synaptic blocks](results/profiles/precision_repaired_holdout_bio_2026-11-23.json)
+
 > The test discipline for `bio_inspired_nanochat`. Established by bead **eqyk.1**
 > (*Unit-test framework, conventions, fixtures & coverage gate*) — the foundation
 > every later "unit tests + e2e + detailed logging" bead builds on.

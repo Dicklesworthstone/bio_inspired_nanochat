@@ -108,6 +108,17 @@ revision. [Current protocol](ablation_matrix.md) · [Follow-up DSR receipts](../
     TF32 preserved all 64 measured greedy choices. BF16 preserved zero and FP16
     preserved two. No alternative met the registered speed and accuracy criteria.
     [Settings, timings and raw records](../TESTING.md#check-checkpoint-arithmetic-on-an-rtx-4090)
+    - [x] Trace the lost choices to the bounded output head. On the vanilla pilot,
+      widening just the final softcap recovered every original reference decision
+      in both lower-precision formats. Apply the correction to both inference
+      heads. BF16 and FP16 each recovered 64/64 reference choices on the original
+      blocks and matched 64/64 on later blocks. All 40 replayed training losses
+      matched the original values. [Independent diagnosis](../results/profiles/vanilla_softcap_replay_2026-11-23.json)
+    - [x] Test whether generation can project just the last prompt position with the
+      existing model trunk. At lengths 32 and 1,024, both models kept their greedy
+      choice and exact cache state. The changed matrix shape nevertheless moved
+      18–33 of 65,536 logits beyond the existing tolerance in every case.
+      The full projection remains in use. [Per-case memory and parity](../results/profiles/prefill_projection_2026-11-23.json)
   - [x] Repair the 15 floating type diagnostics and validate the affected callers
     with 340 tests. The full-tree scanner is a separate standing-main gate.
   - [x] Re-run the Linux CPU suite after repairing matrix coverage, the working-memory

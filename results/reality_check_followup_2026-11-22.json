@@ -1771,6 +1771,112 @@
           "sha256": "514e3d6b788cf978d26518b1d9f4daeda61ee8a42df0963e14bc518088bf5737"
         }
       ]
+    },
+    {
+      "probe": "bio-nov23-softcap-counterexample",
+      "observation": "Both unmodified GPT heads failed the BF16 and FP16 near-saturation ordering witness, all four cases. The original rounded scores made the first two distinct matrix outputs exactly equal.",
+      "run_id": "d2e028f9-f418-4775-b4bf-bd2a52b12d08",
+      "exit": 1,
+      "source": "f1a73788aee3903122af9ccdbfa3d647780ef690|03a06c31d05f076d6327590872ffaa58838929da23b10300af1c1eac5c0550b7|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 1,
+          "sha256": "64b90d723ac01949cb1505690439fdebe74da962c4acabe41da7489b356e2065"
+        }
+      ]
+    },
+    {
+      "probe": "bio-nov23-softcap-static",
+      "observation": "Whole-project Ruff and ty passed; all 63 head, checkpoint and deliberation cases passed against the repaired inference formula; UBS on all five touched Python files completed with zero critical or warning findings.",
+      "run_id": "a4d06cc4-50ad-454f-b5c3-a33dbc25e31c",
+      "exit": 0,
+      "source": "4ec83d32deef7d2829a644ffe92d2c4cdc1afe6a|60be0380c6c74e1a914824fdb3555df55a761d3c575c55984d4a9a2d26de8017|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "12b19f99c2ffcbd85fb60b297f811df79ef101fe665aa00a881fee35ec1b4327"
+        },
+        {
+          "exit": 0,
+          "sha256": "9285af843193633350bdb829bac8683e42d3972c94e9edc3974315d93b864081"
+        },
+        {
+          "exit": 0,
+          "sha256": "4474b16d5840ac4a48eaf901a993a8a8249079a7b105a22f01c9c2175f3f49df"
+        }
+      ]
+    },
+    {
+      "probe": "bio-nov23-prefill-memory",
+      "observation": "On the real vanilla checkpoint at prompt length 1024, widening the head with ordinary tensor temporaries increased peak allocation above the inputs and weights from 531784704 bytes to 934437888. Both observed full-output dtypes and T32 results were retained, motivating a same-result buffer reuse probe.",
+      "run_id": "60b4b84b-6f54-4be5-b954-81719f1648af",
+      "exit": 0,
+      "source": "4ec83d32deef7d2829a644ffe92d2c4cdc1afe6a|60be0380c6c74e1a914824fdb3555df55a761d3c575c55984d4a9a2d26de8017|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "341f5d99dd5305a7faf348a5dba641a7ca28ca5254dadd306a7d9b4983f4f112"
+        },
+        {
+          "exit": 0,
+          "sha256": "1a0661957469e3466b84d157e8fd6e361a76feb602c163943d0a3bfcf99e0477"
+        }
+      ]
+    },
+    {
+      "probe": "bio-nov23-softcap-final-cpu",
+      "observation": "At the first corrected head implementation the full CPU run exercised 2081 cases in 700.27s: 2069 passed, 11 skipped and one failed the 2.00x live training limit at 5078.1 versus 10670.9 tokens/s (2.10x).",
+      "run_id": "e68b462f-8edb-4852-a2e2-9f90550cc501",
+      "exit": 1,
+      "source": "4ec83d32deef7d2829a644ffe92d2c4cdc1afe6a|42a9bb44f68eea8acb9e7e247f28a39b9fd21f38161ded65bddc54d89f56526c|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 1,
+          "sha256": "9053554c49767939efa916b501d5f33d0b4099ca21dfb79f3350fa70ef25e971"
+        }
+      ]
+    },
+    {
+      "probe": "bio-nov23-softcap-cuda",
+      "observation": "Four full sweeps on the widened inference heads, sampling the original and disjoint subsequent stream blocks on both real checkpoints. BF16, FP16 and TF32 each matched the FP32 decision on 128/128 measured positions. All original 40 scalar training losses were exactly reproduced. No timing cohort met the registered joint speed rule.",
+      "run_id": "3878e64d-607b-4492-a974-b3ef8831e7a3",
+      "exit": 0,
+      "source": "4ec83d32deef7d2829a644ffe92d2c4cdc1afe6a|60be0380c6c74e1a914824fdb3555df55a761d3c575c55984d4a9a2d26de8017|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "cccd30895d6f389dcf6bc747f89479fa6112d0071fbd8d95d8f85c2eb0f9b40f"
+        },
+        {
+          "exit": 0,
+          "sha256": "45f45d2334d2d374e5f2b39dcb4409dca4cffab67058652e9b7e7ad2119bf6b6"
+        },
+        {
+          "exit": 0,
+          "sha256": "a1f7d2e9acd8f0cb72d2b2c3a65d4ca6b8c4e5e728ef56ff6d562cbbc75703dc"
+        },
+        {
+          "exit": 0,
+          "sha256": "8c8c2a61dda1950a60336bae244acd32c5eaa713f6f798edfed92b6e0a57fc85"
+        }
+      ]
+    },
+    {
+      "probe": "bio-nov23-final-projection",
+      "observation": "Against the live full prefill, last-position vocabulary projection matched KV, biological cache state and the greedy choice for all four checkpoint/length cases. Nevertheless 31/33 vanilla and 18/23 synaptic final logits exceeded atol=rtol=1e-5 at T32/T1024 respectively out of 65536 logits per case. Lower memory did not qualify the candidate.",
+      "run_id": "f8c6f37d-579d-405d-97ed-e4b60b5d649f",
+      "exit": 0,
+      "source": "4ec83d32deef7d2829a644ffe92d2c4cdc1afe6a|60be0380c6c74e1a914824fdb3555df55a761d3c575c55984d4a9a2d26de8017|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "556d6996b15688583ee4e23725a72770c9e052785af9cd595da3798890e2f0c5"
+        },
+        {
+          "exit": 0,
+          "sha256": "2ca001dc34c208889a0d9d8efd3e46cb8bdf90ff01aeee635f108b21826d54e4"
+        }
+      ]
     }
   ],
   "reference_feasibility": {
