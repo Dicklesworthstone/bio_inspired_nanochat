@@ -29,9 +29,30 @@ from bio_inspired_nanochat.checkpoint_manager import (
 )
 from bio_inspired_nanochat.gpt_synaptic import GPTSynapticConfig
 
-from _bio_testkit import assert_finite, make_tiny_synaptic, random_tokens
+from _bio_testkit import assert_finite, make_tiny_synaptic, make_tiny_vanilla, random_tokens
 
 SOFTCAP = 15.0
+
+
+@pytest.mark.parametrize("build", [make_tiny_vanilla, make_tiny_synaptic])
+@pytest.mark.parametrize("dtype", [torch.bfloat16, torch.float16])
+def test_inference_softcap_resolves_a_low_precision_tie_and_preserves_loss(build, dtype):
+    model = build()
+    hidden = torch.zeros(1, 1, model.config.n_embd)
+    hidden[..., 0] = 1.0
+    with torch.no_grad():
+        model.lm_head.weight.zero_()
+        model.lm_head.weight[0, 0] = 60.0
+        model.lm_head.weight[1, 0] = 61.0
+    with torch.autocast("cpu", dtype=dtype):
+        raw = model.lm_head(hidden)
+        historical = SOFTCAP * torch.tanh(raw / SOFTCAP)
+        # Check the legacy tie before asserting each model's public head.
+        assert historical.argmax().item() == 0 and historical[..., 0].equal(historical[..., 1])
+        logits = model.hidden_to_logits(hidden)
+        assert logits.dtype == torch.float32 and logits.argmax().item() == 1
+        torch.testing.assert_close(logits, SOFTCAP * torch.tanh(raw.float() / SOFTCAP), rtol=0, atol=0)
+        torch.testing.assert_close(model.hidden_to_logits(hidden, for_loss=True), historical, rtol=0, atol=0)
 
 
 def _blow_up_head(model, factor: float = 1000.0):

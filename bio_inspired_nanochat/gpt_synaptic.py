@@ -6,7 +6,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from bio_inspired_nanochat.common import ca_init_weight_
+from bio_inspired_nanochat.common import ca_init_weight_, softcap_logits
 from bio_inspired_nanochat.torch_imports import F, Tensor, nn, torch
 
 from .synaptic import (
@@ -454,15 +454,12 @@ class GPTSynaptic(nn.Module):
         )
         return hidden
 
-    def hidden_to_logits(self, hidden: Tensor) -> Tensor:
+    def hidden_to_logits(self, hidden: Tensor, *, for_loss: bool = False) -> Tensor:
         """Project final hidden states through the configured bounded language head."""
         if not torch.is_autocast_enabled() and hidden.dtype != self.lm_head.weight.dtype:
             hidden = hidden.to(dtype=self.lm_head.weight.dtype)
         logits = self.lm_head(hidden)
-        sc = self.config.logit_softcap
-        if sc and sc > 0.0:
-            logits = sc * torch.tanh(logits / sc)
-        return logits
+        return softcap_logits(logits, self.config.logit_softcap, for_loss=for_loss)
 
     def _chunked_cross_entropy(self, x: Tensor, targets: Tensor) -> Tensor:
         from torch.utils.checkpoint import checkpoint
@@ -472,7 +469,7 @@ class GPTSynaptic(nn.Module):
         valid_count = (targets_flat != -1).sum().clamp_min(1)
 
         def _chunk_fn(x_chunk: Tensor, t_chunk: Tensor) -> Tensor:
-            logits_chunk = self.hidden_to_logits(x_chunk).float()
+            logits_chunk = self.hidden_to_logits(x_chunk, for_loss=True).float()
             return F.cross_entropy(
                 logits_chunk,
                 t_chunk,
@@ -511,10 +508,8 @@ class GPTSynaptic(nn.Module):
             update_mem=update_mem,
         )
 
-        # Logit softcap (parity with vanilla GPT) — bound logits on BOTH the inference
-        # return and the loss path. See vg9.1. We match GPT exactly: the inference
-        # path returns softcapped logits in the lm_head dtype (no float cast), and the
-        # loss path casts to fp32 before cross-entropy.
+        # Both GPT variants widen the inference softcap and retain the
+        # original arithmetic for losses computed against saved checkpoints.
         if targets is None:
             return self.hidden_to_logits(x), None
         aux = sum(
@@ -525,9 +520,9 @@ class GPTSynaptic(nn.Module):
             ce = self._chunked_cross_entropy(x, targets)
             loss = ce + aux
             with torch.no_grad():
-                logits_sample = self.hidden_to_logits(x[:, -1:])
+                logits_sample = self.hidden_to_logits(x[:, -1:], for_loss=True)
             return logits_sample, loss
-        logits = self.hidden_to_logits(x)
+        logits = self.hidden_to_logits(x, for_loss=True)
         ce = F.cross_entropy(
             logits.float().reshape(-1, logits.size(-1)),
             targets.reshape(-1),

@@ -20,7 +20,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from bio_inspired_nanochat.common import ca_init_weight_, get_dist_info
+from bio_inspired_nanochat.common import ca_init_weight_, get_dist_info, softcap_logits
 from bio_inspired_nanochat.muon import Muon, DistMuon
 from bio_inspired_nanochat.adamw import DistAdamW
 
@@ -544,11 +544,9 @@ class GPT(nn.Module):
         """
         return self._forward_hidden(idx, kv_cache=kv_cache, max_layers=max_layers)
 
-    def hidden_to_logits(self, hidden):
+    def hidden_to_logits(self, hidden, *, for_loss=False):
         """Project final hidden states through the same bounded head as ``forward``."""
-        softcap = 15.0
-        logits = self.lm_head(hidden)
-        return softcap * torch.tanh(logits / softcap)
+        return softcap_logits(self.lm_head(hidden), 15.0, for_loss=for_loss)
 
     def _chunked_cross_entropy(self, x, targets):
         from torch.utils.checkpoint import checkpoint
@@ -558,7 +556,7 @@ class GPT(nn.Module):
         valid_count = (targets_flat != -1).sum().clamp_min(1)
 
         def _chunk_fn(x_chunk, t_chunk):
-            logits_chunk = self.hidden_to_logits(x_chunk).float()
+            logits_chunk = self.hidden_to_logits(x_chunk, for_loss=True).float()
             return F.cross_entropy(
                 logits_chunk,
                 t_chunk,
@@ -599,7 +597,7 @@ class GPT(nn.Module):
                 and x.size(0) * x.size(1) > 2048
             ):
                 return self._chunked_cross_entropy(x, targets)
-            logits = self.hidden_to_logits(x)
+            logits = self.hidden_to_logits(x, for_loss=True)
             loss = F.cross_entropy(
                 logits.float().reshape(-1, logits.size(-1)),
                 targets.reshape(-1),

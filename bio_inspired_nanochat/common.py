@@ -250,6 +250,17 @@ class DummyWandb:
         pass
 
 
+def softcap_logits(logits: "torch.Tensor", cap: float, *, for_loss: bool) -> "torch.Tensor":
+    """Bound head scores while preserving the registered loss arithmetic."""
+    if cap <= 0:
+        return logits
+    # Near saturation, BF16 and FP16 tanh can round hundreds of distinct
+    # vocabulary scores to the same maximum before generation selects a token.
+    if not for_loss and logits.dtype in (torch.bfloat16, torch.float16):
+        logits = logits.float()
+    return cap * torch.tanh(logits / cap)
+
+
 def stable_seed_u64(seed: int, *, salt: str) -> int:
     """Return a deterministic 64-bit seed derived from (seed, salt).
 
