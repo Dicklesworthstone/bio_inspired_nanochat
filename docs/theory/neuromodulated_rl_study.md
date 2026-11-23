@@ -701,14 +701,14 @@ variants. Comparing true labels with labels exchanged within each
 pair checks whether the change in the question affects the answer
 distribution. The official GSM8K test split stays reserved.
 
-- [ ] Generate and hash four disjoint 32-question panels before
+- [x] Generate and hash four disjoint 32-question panels before
   model execution. Each panel has 16 pairs, with four pairs each
   of addition, subtraction, equal rows and fair shares. Keep the
   two different correct answers out of the displayed quantities.
   In each choice panel, each correct letter appears eight times.
   Reserve the panels for screening, confirmation, adaptation and
   transfer, respectively.
-- [ ] On the screen panel, run four free-form completions per
+- [x] On the screen panel, run four free-form completions per
   question with the native engine, temperature 1, top-k 50 and
   a 96-token limit. Prompt for the final integer after `####`.
   Require 12 of 128 correct, eight of 32 mixed groups and four
@@ -718,7 +718,7 @@ distribution. The official GSM8K test split stays reserved.
   pair-sign-flip p-value at most 0.025. If it passes, confirm
   on the separate panel under the same rule and test exact
   cached credit on its first genuine mixed group.
-- [ ] Score the screen and confirmation panels separately with
+- [x] Score the screen and confirmation panels separately with
   a policy restricted to ` A`, ` B`, ` C`, and ` D`, each verified
   as one token. Use the temperature-1 softmax over those four
   native logits and draw four samples per question. On both
@@ -727,7 +727,7 @@ distribution. The official GSM8K test split stays reserved.
   at least eight mixed groups, four distinct correct integers
   in the samples and a one-sided exact pair-sign-flip
   `p ≤ 0.025` for the probability gap.
-- [ ] Use a genuinely sampled mixed four-choice group to compare
+- [x] Use a genuinely sampled mixed four-choice group to compare
   the exact trace against masked autograd. If both choice
   panels qualify, use the adaptation panel for eight updates,
   four questions and four sampled choices each. Freeze the
@@ -774,3 +774,34 @@ parameter count. Record it separately from the native NanoChat run.
   comparison, with coefficients derived from the recorded on-policy
   rewards. Keep this numerical transfer check separate from a
   training trial.
+
+The external screen logged zero answers under the required
+`####` marker before its raw completions were inspected. The
+Qwen evaluation recipe asks for a LaTeX boxed answer. Preserve
+the original result and add a diagnostic on the same archived
+samples. Parse the last completed `\boxed{…}` whose entire
+content is an integer or an integer-valued decimal, and apply
+the same thresholds. If both panels clear those thresholds, use
+the first mixed confirmation group for the numerical transfer
+check above with boxed rewards. Keep the `####` and boxed
+results separate. [Qwen evaluation instructions](https://github.com/QwenLM/Qwen2.5-Math#evaluation)
+
+### D20 observations
+
+The native free-form model answered 18 of 128 correctly, compared
+with zero when labels were exchanged within pairs. It produced
+16 mixed groups across 32 questions and got ten distinct correct
+values. The paired exact test gave `p = 1/2048`. The best constant
+answer on this panel scored 24 of 128, so free-form confirmation
+did not advance.
+
+| Four-choice panel | Expected accuracy | True minus exchanged | Correct / 128 | Mixed / 32 |
+| --- | ---: | ---: | ---: | ---: |
+| Screen | 23.87% | +0.386 percentage points | 29 | 5 |
+| Confirmation | 25.29% | −0.331 percentage points | 30 | 6 |
+
+Neither four-choice panel qualified. The eight-step adaptation
+trial was gated off. With the model frozen, the first recorded
+mixed group from each panel gave a nonzero delayed score.
+The exact last-matrix trace agreed with autograd within
+4.48 × 10⁻⁸ maximum absolute error on both groups.
