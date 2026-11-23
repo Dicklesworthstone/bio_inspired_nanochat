@@ -145,8 +145,14 @@ def train_cell(command, timeout, lock):
         watchdog = shutil.which("timeout") or shutil.which("gtimeout")
         if not watchdog:
             raise ValueError("a GPU-hour cap requires the coreutils timeout watchdog")
-        # A separate watchdog survives abrupt termination of the matrix launcher.
-        command = [watchdog, "--kill-after=10s", f"{timeout:.6f}s", *command]
+        # The D1 dual-GPU pilot spent 12.1 s on termination and return after
+        # TERM. Reserve grace and process-reaping time inside the allocation.
+        # The actual elapsed time is always charged, including OS delays.
+        if timeout < 1:
+            raise ValueError("less than one second remains in the device-hour allocation")
+        grace = min(10.0, timeout / 4)
+        settle = min(5.0, timeout / 4)
+        command = [watchdog, f"--kill-after={grace:.6f}s", f"{timeout - grace - settle:.6f}s", *command]
     child = subprocess.Popen(command, start_new_session=True, pass_fds=(lock.fileno(),))
     try:
         return child.wait()
@@ -190,6 +196,9 @@ def run_cells(manifest, path, columns, seeds, recipe, nproc, restart, *, plan_on
         attempted = mm.attempt_seconds(timings, recover=True)
         scoring = mm.attempt_seconds(path.parent / "scoring_attempts.jsonl", recover=True)
         spent_seconds = sum(attempted.values()) + sum(scoring.values()) / nproc
+        cap = manifest["cap_gpu_hours"]
+        if cap is not None and spent_seconds > cap * 3600 / nproc:
+            raise ValueError("recorded training and scoring time already exceeded the device-hour cap")
         pending = []
         for column, seed, command in build_commands(columns, seeds, recipe, nproc):
             tag = manifest["checkpoint_template"].format(preset=column.config_id, seed=seed)
@@ -213,7 +222,6 @@ def run_cells(manifest, path, columns, seeds, recipe, nproc, restart, *, plan_on
                 command = [f for f in command if not f.startswith("--syn_cfg.")]
                 command.append(f"--resume_from_step={step}")
             pending.append(command)
-        cap = manifest["cap_gpu_hours"]
         for command in pending:
             console.print(shlex.join(command), markup=False, soft_wrap=True)
             remaining = (cap * 3600 / nproc - spent_seconds) if cap is not None else None
@@ -227,6 +235,8 @@ def run_cells(manifest, path, columns, seeds, recipe, nproc, restart, *, plan_on
                 code = train_cell(command, remaining, lock)
             finally:
                 seconds = time.monotonic() - started
+                if code == 0 and remaining is not None and seconds > remaining:
+                    code = 124
                 mm.append_event(timings, event="end", tag=tag, seconds=seconds, exit=code)
             spent_seconds += seconds
             if code:

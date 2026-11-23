@@ -33,6 +33,7 @@ the regime declaration; a crash during the first new save cannot misclassify its
 
 | State | Where | Why |
 |-------|-------|-----|
+| Pending Hebbian weight writes and their scalar gates, by module and rank | `train_*_rankR.pt`, field `deferred_plasticity` | A training forward updates eligibility traces immediately and defers its parameter update until the next training forward. Each affected module must resume with the same pending flag and gate. |
 | Model params + buffers (incl. **fast weights** `w_fast`, eligibility traces) | `model_*.pt` (rank 0) | the trained model; fast weights are `Parameter`s, not transient |
 | Both optimizers (AdamW + Muon), **per-rank** | `optim_*_rankR.pt` | ZeRO-style optimizer state is sharded across ranks; each rank saves its own |
 | Full model params + buffers, **per-rank for distributed runs** | `train_*_rankR.pt` | DDP synchronizes gradients, not rank-local forward mutations; biological buffers and online-updated weights can diverge between ranks and must resume from that rank's state |
@@ -87,6 +88,43 @@ the disk. It is **opt-in** (the caller passes an explicit `keep_last`), only eve
 matching the strict checkpoint name pattern in the given dir, and logs every deletion.
 
 ## Verification (tests)
+
+Run the following payload through DSR on a worker with two available CUDA devices.
+Supply a prepared local Nanochat base directory containing `base_data/` and `tokenizer/`,
+and a fresh output directory. The probe writes control, interrupted and incomplete checkpoint
+sets, subprocess logs, per-stage wall times and a component-by-component comparison.
+Each training arm writes its default NeuroViz images under its own output directory.
+
+```bash
+uv run --no-sync python -m scripts.e2e.scaleup_checkpoint_recovery \
+  --base-dir /path/to/prepared/base --output-dir /path/to/new/recovery-run
+```
+
+Both arms start from the control's step-one checkpoint. The probe interrupts the second
+arm after both ranks commit step two, restarts it to step three and tries a separate copy
+that omits rank one's training shard. Split/merge runs every step from warmup zero.
+The comparison checks the model, both optimizers, next batch, RNG, controllers and validation
+BPB at each retained step. Read the trainer log for the effective compile mode.
+
+An initial two-4090 run matched the copied step-one checkpoint but diverged on its
+next update. The trainer had saved Hebbian traces without the pending-write flag and
+gate needed to apply them. Restoring those fields made every model and optimizer
+tensor agree through step three. The remaining difference was rank zero's CPU RNG.
+On each restart the dashboard rendered two layers, drawing one synthetic query and
+one synthetic key per layer. Four extra draws at step two and eight at step three
+reproduced the saved generator differences byte for byte. The dashboard now reads
+the last forward's observed per-head state and records when an observation is missing.
+
+The November 22 replay with both repairs matched 1,359, 1,359 and 1,351 tensor
+comparisons bit for bit at checkpoints one, two and three. Both ranks rejected the
+copy missing rank one's training shard. The final control and restarted branch scored
+1.31133104668403 validation BPB. The four two-device subprocesses used 0.479195
+GPU-hours. Both layers retained two experts during these three updates.
+[Recovery measurements and earlier controls](../results/checkpoint_recovery_2026-11-22.json)
+
+Old checkpoints with active training plasticity lack the pending-write records. Exact
+training resume rejects them. Their model weights remain available for evaluation and
+serving. Checkpoints for models without active training plasticity need no such records.
 
 `tests/test_scaleup_checkpoint.py` (CPU, fast):
 

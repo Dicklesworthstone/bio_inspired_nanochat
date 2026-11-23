@@ -20,9 +20,12 @@ revision. [Current protocol](ablation_matrix.md) · [Follow-up DSR receipts](../
 - [x] Score the independent 150-step vanilla checkpoint on 384 real-text queries.
   Preserve the zero-coverage result and audit raw entropy, logits and greedy tokens.
   [Scoring result](../results/conformal_abstention_smoke_2026-11-22.json) · [Independent diagnosis](../results/conformal_abstention_smoke_2026-11-22_diagnosis.json)
-- [ ] Complete `hwxb.2.6` on two physical GPUs. Compare the uninterrupted control,
-  real process interruption, restarted job and missing-rank negative. Require the
-  same next data, weights, optimizers, controller, RNG and validation trace.
+- [x] Interrupt and restart a bio training job on two physical RTX 4090s. The
+  first two comparisons exposed a lost deferred Hebbian update and a dashboard
+  that advanced rank 0's RNG. After both fixes the uninterrupted and resumed
+  runs agreed on every compared tensor (1,359, 1,359 and 1,351 at steps 1–3),
+  the next data and all three validation BPBs. Both ranks rejected the
+  missing-shard checkpoint. [Recovery evidence](../results/checkpoint_recovery_2026-11-22.json)
 - [ ] Establish admissible D1 rates on staged FineWeb data. The two-card reference
   pilot reached the 91,165,440-parameter model and timed out with zero logged
   updates, checkpoints or scores. The two GPUs incurred 0.40673 GPU-hours
@@ -42,6 +45,16 @@ revision. [Current protocol](ablation_matrix.md) · [Follow-up DSR receipts](../
   generalization and cohomology test remains open (`0642.8.3.1`).
 - [ ] Qualify the standing main/nightly DSR gates, reconcile the full Python run,
   and check the final published revision and generated evidence (`u0fl`).
+  - [x] Exercise both standing Linux CPU lanes. The main lane caught an optimizer
+    argument type error. Nightly passed the validation battery and uncertainty
+    suite, then measured a 1.67× cached-decode slowdown against the 1.50× limit.
+  - [ ] Check the corrected optimizer call with the locked CPU environment.
+  - [ ] Time completed CUDA work in the four standard hardware scenarios,
+    establish the first device-specific baseline and replay independently.
+  - [ ] Exercise the full GPU-marked test lane, primitive and model timing
+    thresholds. Retain each failing gate and its measurements.
+- [ ] Test the glial-homeostasis × metabolic-routing interaction on a model
+  with active experts, paired initializations and held-out tokens (`74f.5`).
 
 ## November 22, 2026 — decision at `16ce9fe1979c`
 

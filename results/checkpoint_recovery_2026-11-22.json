@@ -1,0 +1,1129 @@
+{
+  "date": "2026-11-22",
+  "platform": "Linux x86_64, 2 NVIDIA GeForce RTX 4090, Python 3.14.2, Torch 2.9.1+cu128, NCCL_P2P_DISABLE=1",
+  "execution": "Direct DSR on trj; eager because this Torch rejects torch.compile on Python 3.14.",
+  "geometry": {
+    "world_size": 2,
+    "depth": 2,
+    "max_seq_len": 32,
+    "per_rank_batch": 1,
+    "tokens_per_optimizer_step": 64,
+    "optimizer_steps": 3,
+    "eval_every": 1,
+    "eval_tokens": 64,
+    "save_every": 1,
+    "experts": 2,
+    "top_k": 1,
+    "splitmerge_every": 1,
+    "splitmerge_warmup": 0,
+    "neuromod_enabled": true,
+    "hebbian_enabled": true
+  },
+  "arms": "The control trained without interruption. The branch copied the completed step-1 checkpoint, trained to the completed step-2 marker, received SIGTERM, and resumed to step 3. A separate step-2 copy omitted train_000002_rank1.pt.",
+  "floating_comparison": {
+    "rtol": 0.001,
+    "atol": 0.0001,
+    "exact_components": [
+      "rank-local RNG",
+      "prefetched batch",
+      "dataloader cursor",
+      "split/merge cadence",
+      "deferred Hebbian pending state and gate"
+    ],
+    "uninitialized_reward_ema": "Require bitwise-identical scalar NaN payloads in this one declared no-reward sentinel."
+  },
+  "inputs_sha256": {
+    "base_data/shard_00000.parquet": "237c75d1796684623209b8d6582b73dab23f9de8e79f0972daa14d63e3b50456",
+    "base_data/shard_00001.parquet": "b17011e279a403c6ad0f66401b6b2f0c044c86db3a9f1e4d53dcc6942c1ac3f6",
+    "tokenizer/token_bytes.pt": "1c53e5d593b7e4848127dec9326465990e6ed9bc1ae88ab2de300d8e3c932eca",
+    "tokenizer/tokenizer.json": "d165843e8934b645a071fbf653680f5f3c1ca4dac7d825f6aaf868e78653f033"
+  },
+  "source_base": "320ffdc8fe558da8e42fd031f39fd5555df7af72 with the listed local patches applied",
+  "source_sha256": {
+    "before_deferred_state": {
+      "scripts/base_train.py": "e110811c48c39d4cd658a2e1623484a9cf9a0d220e97535ab99ce335861913d2",
+      "bio_inspired_nanochat/checkpoint_manager.py": "333dd05a7883424a4024a80bcfa176d15724b4fcad88dc0e805e6ce28f080b98",
+      "bio_inspired_nanochat/synaptic.py": "fba5313bc36ddaad9097a86f86fed15622221757b7e06faf5a68870a4a0666d5"
+    },
+    "after_deferred_state": {
+      "scripts/base_train.py": "66d5dd7699837b2f0fb01592545140a5b4781c3f009c136a9dc2005019f24a8a",
+      "bio_inspired_nanochat/checkpoint_manager.py": "5f22b401417498e5bd8fc08c69a019d33cb0ebc183988ee24cc216e9d3b79fe1",
+      "bio_inspired_nanochat/synaptic.py": "fba5313bc36ddaad9097a86f86fed15622221757b7e06faf5a68870a4a0666d5"
+    }
+  },
+  "final_comparison_driver_sha256": "dd5a02b196a90736c29d9c96a6f5183ff3c2e13bc117853906c86e00cd99122d",
+  "first_unpatched_gpu_training_failure": {
+    "reason": "In-place Hebbian eligibility addmm mixed FP32 trace buffers and BF16 activations on both ranks during the first training forward.",
+    "timing": {
+      "exit_code": 1,
+      "wall_s": 199.03997640823945,
+      "gpu_hours": 0.11057776467124414
+    },
+    "receipt": {
+      "run_id": "07f0abfa-fdc7-4219-8102-87b0f4ae2765",
+      "exit_code": 1,
+      "check_log_sha256": [
+        "7ccfe5e1c1ce7e5111a211763b5a0df683f367e10f1c1bd53259b9c608c38bae"
+      ]
+    }
+  },
+  "before_deferred_state": {
+    "stage_times": {
+      "control": {
+        "exit_code": 0,
+        "wall_s": 415.5648554987274,
+        "gpu_hours": 0.23086936416595968
+      },
+      "interrupt": {
+        "exit_code": 1,
+        "wall_s": 210.99472587974742,
+        "gpu_hours": 0.11721929215541524
+      },
+      "resume": {
+        "exit_code": 0,
+        "wall_s": 273.53146032895893,
+        "gpu_hours": 0.1519619224049772
+      },
+      "incomplete": {
+        "exit_code": 1,
+        "wall_s": 122.77708368888125,
+        "gpu_hours": 0.06820949093826736
+      }
+    },
+    "total_gpu_hours": 0.5682600696646195,
+    "steps": [
+      {
+        "step": 1,
+        "control_and_resumed_val_bpb": [
+          1.49154640598645,
+          1.49154640598645
+        ],
+        "controller_last_step_per_rank": [
+          [
+            0,
+            0
+          ],
+          [
+            0,
+            0
+          ]
+        ],
+        "compared_tensors": 1343,
+        "non_bitwise_tensors": 0,
+        "max_abs_tensor_delta": 0.0,
+        "mismatched_components": {},
+        "unmatched_rng_fields": {},
+        "control_and_resumed_smoothed_train_loss": [
+          0.6165002346038817,
+          0.6165002346038817
+        ]
+      },
+      {
+        "step": 2,
+        "control_and_resumed_val_bpb": [
+          1.4294492727406398,
+          1.42392007594478
+        ],
+        "controller_last_step_per_rank": [
+          [
+            1,
+            1
+          ],
+          [
+            1,
+            1
+          ]
+        ],
+        "compared_tensors": 1343,
+        "non_bitwise_tensors": 826,
+        "max_abs_tensor_delta": 0.7601028084754944,
+        "mismatched_components": {
+          "val_bpb": 1,
+          "model": 191,
+          "rank0.optimizers": 1,
+          "rank0.rng": 1,
+          "rank0.rank_model_state": 191,
+          "rank0.neuromod": 2,
+          "rank1.optimizers": 3,
+          "rank1.rank_model_state": 191,
+          "rank1.neuromod": 2
+        },
+        "unmatched_rng_fields": {
+          "rank0.rng": [
+            "rank0.rng.torch"
+          ]
+        },
+        "control_and_resumed_smoothed_train_loss": [
+          1.160532393455505,
+          1.1599873685836788
+        ]
+      },
+      {
+        "step": 3,
+        "control_and_resumed_val_bpb": [
+          1.31133104668403,
+          1.301244819561912
+        ],
+        "controller_last_step_per_rank": [
+          [
+            2,
+            2
+          ],
+          [
+            2,
+            2
+          ]
+        ],
+        "compared_tensors": 1343,
+        "non_bitwise_tensors": 710,
+        "max_abs_tensor_delta": 1.3167479038238525,
+        "mismatched_components": {
+          "val_bpb": 1,
+          "smooth_train_loss": 1,
+          "model": 159,
+          "rank0.optimizers": 12,
+          "rank0.rng": 1,
+          "rank0.rank_model_state": 159,
+          "rank0.neuromod": 2,
+          "rank1.optimizers": 17,
+          "rank1.rank_model_state": 195,
+          "rank1.neuromod": 2
+        },
+        "unmatched_rng_fields": {
+          "rank0.rng": [
+            "rank0.rng.torch"
+          ]
+        },
+        "control_and_resumed_smoothed_train_loss": [
+          1.6073137984275814,
+          1.604401992321014
+        ]
+      }
+    ],
+    "training_log_sha256": {
+      "control": "b95c3a67363e5ae55453d46432039608c035880271c12e5c2bc8f610f28e7b44",
+      "interrupt": "41921b557668bc491e2697ded2046f82ddf896a21f15a57de53d7a850e033ec6",
+      "resume": "de621770c036b2423948797d28c71f6c69642d83cfcdc5285f22f355d00736b6",
+      "incomplete": "02a3a86515901a2adc156ec4e52bbebf0230ccff4756c6e1375bfbb5ebc0d5ed"
+    },
+    "full_component_comparison_sha256": "d76bfc1fa447bf401a5bf3c7182fc25ab8355a893a09f22cf0f5a6b192b1f60a",
+    "restart_evidence": {
+      "step_two_commit": {
+        "version": 1,
+        "step": 2,
+        "complete": true,
+        "world_size": 2,
+        "optimizer_shards": true,
+        "train_shards": true
+      },
+      "workers_sent_SIGTERM": 2,
+      "original_rank_one_train_shard_present": true,
+      "negative_copy_rank_one_train_shard_present": false,
+      "negative_copy_complete_marker_present": true,
+      "ranks_rejecting_incomplete_checkpoint": [
+        0,
+        1
+      ]
+    }
+  },
+  "after_deferred_state": {
+    "stage_times": {
+      "control": {
+        "exit_code": 0,
+        "wall_s": 326.9086020728573,
+        "gpu_hours": 0.1816158900404763
+      },
+      "interrupt": {
+        "exit_code": 1,
+        "wall_s": 262.4083441416733,
+        "gpu_hours": 0.1457824134120407
+      },
+      "resume": {
+        "exit_code": 0,
+        "wall_s": 359.5187555840239,
+        "gpu_hours": 0.1997326419911244
+      },
+      "incomplete": {
+        "exit_code": 1,
+        "wall_s": 138.45979193318635,
+        "gpu_hours": 0.07692210662954797
+      }
+    },
+    "total_gpu_hours": 0.6040530520731894,
+    "steps": [
+      {
+        "step": 1,
+        "control_and_resumed_val_bpb": [
+          1.49154640598645,
+          1.49154640598645
+        ],
+        "controller_last_step_per_rank": [
+          [
+            0,
+            0
+          ],
+          [
+            0,
+            0
+          ]
+        ],
+        "compared_tensors": 1359,
+        "non_bitwise_tensors": 0,
+        "max_abs_tensor_delta": 0.0,
+        "mismatched_components": {},
+        "unmatched_rng_fields": {},
+        "control_and_resumed_smoothed_train_loss": [
+          0.6165002346038817,
+          0.6165002346038817
+        ]
+      },
+      {
+        "step": 2,
+        "control_and_resumed_val_bpb": [
+          1.4294492727406398,
+          1.4294492727406398
+        ],
+        "controller_last_step_per_rank": [
+          [
+            1,
+            1
+          ],
+          [
+            1,
+            1
+          ]
+        ],
+        "compared_tensors": 1359,
+        "non_bitwise_tensors": 1,
+        "max_abs_tensor_delta": 0.0,
+        "mismatched_components": {
+          "rank0.rng": 1
+        },
+        "unmatched_rng_fields": {
+          "rank0.rng": [
+            "rank0.rng.torch"
+          ]
+        },
+        "control_and_resumed_smoothed_train_loss": [
+          1.160532393455505,
+          1.160532393455505
+        ]
+      },
+      {
+        "step": 3,
+        "control_and_resumed_val_bpb": [
+          1.31133104668403,
+          1.31133104668403
+        ],
+        "controller_last_step_per_rank": [
+          [
+            2,
+            2
+          ],
+          [
+            2,
+            2
+          ]
+        ],
+        "compared_tensors": 1351,
+        "non_bitwise_tensors": 1,
+        "max_abs_tensor_delta": 0.0,
+        "mismatched_components": {
+          "rank0.rng": 1
+        },
+        "unmatched_rng_fields": {
+          "rank0.rng": [
+            "rank0.rng.torch"
+          ]
+        },
+        "control_and_resumed_smoothed_train_loss": [
+          1.6073137984275814,
+          1.6073137984275814
+        ]
+      }
+    ],
+    "training_log_sha256": {
+      "control": "c5bae79f021dd2473e1a945d150b5ef4bf81dae4789be9d606caa62b20cab0d6",
+      "interrupt": "3db57a2a548eb8797d317af0cf496fbe91aaf3e2ccef021b88026058d55a1fb4",
+      "resume": "fab1f9918043a4992ac034b8b168a7c9657e42cba1fddf9887856d3ce67a836b",
+      "incomplete": "de717486878b39513c24a0d66e420bb0788c8f4c6035ce86992699998b085d23"
+    },
+    "full_component_comparison_sha256": "e08431df0dea99398f1dae55bb0b6d017bccca8e13fe7f7f96cbb3a9d9447a0b",
+    "restart_evidence": {
+      "step_two_commit": {
+        "version": 1,
+        "step": 2,
+        "complete": true,
+        "world_size": 2,
+        "optimizer_shards": true,
+        "train_shards": true
+      },
+      "workers_sent_SIGTERM": 2,
+      "original_rank_one_train_shard_present": true,
+      "negative_copy_rank_one_train_shard_present": false,
+      "negative_copy_complete_marker_present": true,
+      "ranks_rejecting_incomplete_checkpoint": [
+        0,
+        1
+      ]
+    }
+  },
+  "dsr_receipts": {
+    "before_control": {
+      "run_id": "3c81ef96-f5e6-4d23-b683-76620293da3e",
+      "exit_code": 0,
+      "check_log_sha256": [
+        "79ab80a780658c6155bbf09c08507ed60392fc9502fc74946d2e30f55e6473a3"
+      ]
+    },
+    "before_interrupt_resume_missing_and_first_comparison": {
+      "run_id": "51094618-89ba-46b2-87c1-d164f9c9e3cc",
+      "exit_code": 1,
+      "check_log_sha256": [
+        "fcd5163bd9629dd32d51ae8f0e8424b0265b8ed8d758306bbe47e0b70299c88d",
+        "93197f2d39977328a9f1a8558d8483bc1052aa03219debfa53435c0167219d91",
+        "510dd295b798864c573765f8a3a6a00269866cc475facff8b2c04e5b2bdb5dc7",
+        "1ec345b4d827704245b9aceb61ccaab3e2cbf06d796f112bd7a2fbc1744e41b2"
+      ]
+    },
+    "before_final_comparator": {
+      "run_id": "d920a3d9-f850-4a73-981c-741f5397520d",
+      "exit_code": 1,
+      "check_log_sha256": [
+        "dfab28aeaa83df0108459398b186cbbce67a09aebea99c274b2efefaa5977ac6"
+      ]
+    },
+    "after_training_and_first_comparison": {
+      "run_id": "bd5580bf-6481-44c4-9782-648bdf0037fc",
+      "exit_code": 1,
+      "check_log_sha256": [
+        "54393dbe9b20d58462ca24aef732e69f52d9959cb8b85267ffee671a72f394f2"
+      ]
+    },
+    "after_final_comparator": {
+      "run_id": "1f1aa788-822c-4420-988a-d2abffb12096",
+      "exit_code": 1,
+      "check_log_sha256": [
+        "7e803f2088286557f9902b3f3c0f7422e5d499e6ac8cad3495482c607f12fdd8"
+      ]
+    },
+    "frozen_regressions": {
+      "run_id": "fe0b2a38-59b2-4654-a7b2-6ef96a2efeef",
+      "exit_code": 0,
+      "check_log_sha256": [
+        "057ef6b43464e8945ffdaaa7f37cfb708af747e46e286086df481dc4832c1d21",
+        "47adc6dcf1a3dc2802f36bba218719aa32ebdee21a3d9824cdb96136aeae0b42",
+        "4bee66af1528adb51e0e5b9d30d29c14c7d00178eff89070260945320dd40ea1"
+      ]
+    },
+    "integrated_regressions_and_static": {
+      "run_id": "59fbc5e4-919f-49b6-8329-8affa12d9d88",
+      "exit_code": 0,
+      "check_log_sha256": [
+        "46f75da659c5cae83864f4f68a8e68193be86a83b468cb93a9020ce37f30cb98",
+        "22b231f8709ee4e33a3ec2417493f62d3eb64e65924ede06bd18e51444f91285",
+        "3efbfee88d4e6ac0b6cfdcfcc567a902ffdd1f9ffb790d2ad0a4377441d4cd19",
+        "4776774a30d40d89abc071498b1fb3a3fae48129d8679b93fc8fccf50e7dd28a"
+      ]
+    },
+    "dashboard_observation_tests_and_static": {
+      "run_id": "1ecc7428-82ee-4eec-8d2a-d2715df56058",
+      "exit_code": 1,
+      "check_log_sha256": [
+        "f979eef3c34000750b971362b496ce33f0afe2557bcb9fe65a439ae7f50ab9a1",
+        "d016ff576e40902c0b1339d82a116aeacc8668921d97c1b2888a32be90a8c577",
+        "59aee5861bbeab119d99794d88fb0c3dc3c84d47d072713b730f8a990a2250c5",
+        "8f55e5d4af0ac54b0ee3f1f68fa000398402a78753028b403e5420bda0214611"
+      ]
+    },
+    "dashboard_observation_tests_frozen_source": {
+      "run_id": "aa037c0b-67fb-4c7c-81c1-4d3bfc2bd3a5",
+      "exit_code": 0,
+      "check_log_sha256": [
+        "294c5cc5069d2a01e613521f0aaacb2db853e5a15df79938355cba977f4c32d9"
+      ]
+    },
+    "observed_renderer_recovery": {
+      "run_id": "f44fa7bb-a30e-4a50-ad72-25ce384137d2",
+      "exit_code": 0,
+      "check_log_sha256": [
+        "51913c2c0820069d30db75b10dc34a2d98abfed55115de44370defdbd60944c3"
+      ]
+    },
+    "final_source_static": {
+      "run_id": "6518315e-ca16-4c4a-9816-0727825013aa",
+      "exit_code": 0,
+      "check_log_sha256": [
+        "a4eddc316945a75804378f60c31ad3afefcb5c654ec972b2ea16d2425c3ee686",
+        "a22cf71dff0c98b9938ca24183d4a8855ad4b2cdc53a6efbe6957bf087f19646",
+        "09245ae20f69b45278c1018cdc8ee32242de272d21f44ee461c71a224bf556f3"
+      ]
+    }
+  },
+  "total_gpu_hours": 1.7620854359738425,
+  "gpu_hour_basis": "Each two-rank torchrun subprocess's monotonic elapsed wall seconds (including startup and teardown) times 2 GPUs divided by 3600. CPU-only artifact checks are excluded.",
+  "observed_global_cpu_rng_offset": {
+    "reconstruction": "Starting with uninterrupted rank zero's exact CPU generator bytes, replay the default NeuroViz synthetic query/key draws of shape (1,1,50,64).",
+    "after_each_restart": {
+      "step_two": 4,
+      "step_three": 8
+    },
+    "both_cycles": true,
+    "receipt": {
+      "run_id": "d80a9b30-7074-4c83-9f71-4a7b9dd9135e",
+      "exit_code": 0,
+      "check_log_sha256": [
+        "c10a403e8568d66430dc00f24d22cf4b5deaeb94eba926d646404beaab3c622b"
+      ]
+    }
+  },
+  "after_observed_renderer": {
+    "stage_times": {
+      "control": {
+        "exit_code": 0,
+        "wall_s": 253.87623789394274,
+        "gpu_hours": 0.14104235438552373
+      },
+      "interrupt": {
+        "exit_code": 1,
+        "wall_s": 243.54396884003654,
+        "gpu_hours": 0.1353022049111314
+      },
+      "resume": {
+        "exit_code": 0,
+        "wall_s": 268.4661843860522,
+        "gpu_hours": 0.14914788021447345
+      },
+      "incomplete": {
+        "exit_code": 1,
+        "wall_s": 96.66379809658974,
+        "gpu_hours": 0.05370211005366097
+      }
+    },
+    "total_gpu_hours": 0.4791945495647896,
+    "steps": [
+      {
+        "step": 1,
+        "control_and_resumed_val_bpb": [
+          1.49154640598645,
+          1.49154640598645
+        ],
+        "controller_last_step_per_rank": [
+          [
+            0,
+            0
+          ],
+          [
+            0,
+            0
+          ]
+        ],
+        "compared_tensors": 1359,
+        "non_bitwise_tensors": 0,
+        "max_abs_tensor_delta": 0.0,
+        "mismatched_components": {},
+        "unmatched_rng_fields": {},
+        "control_and_resumed_smoothed_train_loss": [
+          0.6165002346038817,
+          0.6165002346038817
+        ],
+        "components": {
+          "val_bpb": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 0,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "smooth_train_loss": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 0,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "model": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 343,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank0.optimizers": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 145,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank0.rng": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 4,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank0.prefetched_batch": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 2,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank0.dataloader_state_dict": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 0,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank0.splitmerge": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 0,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank0.rank_model_state": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 343,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank0.neuromod": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 6,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank0.divergence_guard": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 0,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank0.deferred_plasticity": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 8,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank1.optimizers": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 145,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank1.rng": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 4,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank1.prefetched_batch": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 2,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank1.dataloader_state_dict": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 0,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank1.splitmerge": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 0,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank1.rank_model_state": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 343,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank1.neuromod": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 6,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank1.divergence_guard": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 0,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank1.deferred_plasticity": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 8,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          }
+        }
+      },
+      {
+        "step": 2,
+        "control_and_resumed_val_bpb": [
+          1.4294492727406398,
+          1.4294492727406398
+        ],
+        "controller_last_step_per_rank": [
+          [
+            1,
+            1
+          ],
+          [
+            1,
+            1
+          ]
+        ],
+        "compared_tensors": 1359,
+        "non_bitwise_tensors": 0,
+        "max_abs_tensor_delta": 0.0,
+        "mismatched_components": {},
+        "unmatched_rng_fields": {},
+        "control_and_resumed_smoothed_train_loss": [
+          1.160532393455505,
+          1.160532393455505
+        ],
+        "components": {
+          "val_bpb": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 0,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "smooth_train_loss": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 0,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "model": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 343,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank0.optimizers": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 145,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank0.rng": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 4,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank0.prefetched_batch": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 2,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank0.dataloader_state_dict": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 0,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank0.splitmerge": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 0,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank0.rank_model_state": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 343,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank0.neuromod": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 6,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank0.divergence_guard": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 0,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank0.deferred_plasticity": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 8,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank1.optimizers": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 145,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank1.rng": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 4,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank1.prefetched_batch": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 2,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank1.dataloader_state_dict": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 0,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank1.splitmerge": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 0,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank1.rank_model_state": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 343,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank1.neuromod": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 6,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank1.divergence_guard": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 0,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank1.deferred_plasticity": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 8,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          }
+        }
+      },
+      {
+        "step": 3,
+        "control_and_resumed_val_bpb": [
+          1.31133104668403,
+          1.31133104668403
+        ],
+        "controller_last_step_per_rank": [
+          [
+            2,
+            2
+          ],
+          [
+            2,
+            2
+          ]
+        ],
+        "compared_tensors": 1351,
+        "non_bitwise_tensors": 0,
+        "max_abs_tensor_delta": 0.0,
+        "mismatched_components": {},
+        "unmatched_rng_fields": {},
+        "control_and_resumed_smoothed_train_loss": [
+          1.6073137984275814,
+          1.6073137984275814
+        ],
+        "components": {
+          "val_bpb": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 0,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "smooth_train_loss": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 0,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "model": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 343,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank0.optimizers": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 145,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank0.rng": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 4,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank0.prefetched_batch": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 2,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank0.dataloader_state_dict": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 0,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank0.splitmerge": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 0,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank0.rank_model_state": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 343,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank0.neuromod": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 6,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank0.divergence_guard": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 0,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank0.deferred_plasticity": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 0,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank1.optimizers": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 145,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank1.rng": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 4,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank1.prefetched_batch": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 2,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank1.dataloader_state_dict": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 0,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank1.splitmerge": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 0,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank1.rank_model_state": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 343,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank1.neuromod": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 6,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank1.divergence_guard": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 0,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          },
+          "rank1.deferred_plasticity": {
+            "leaves_outside_tolerance": 0,
+            "tensors": 8,
+            "non_bitwise_tensors": 0,
+            "max_abs_delta": 0.0
+          }
+        }
+      }
+    ],
+    "training_log_sha256": {
+      "control": "1e9ef18adc930f7b55a53781f5f09ae088cf54e3bca777ce10b4bb33a08c9429",
+      "interrupt": "8694373718258dee552878e49a8e7122188b0d793e76ff5277edac7a8b3fa147",
+      "resume": "9d2411899ee7b097c10f6a366be617f32024d71503f6d0322ff0d9cbc3ce68d4",
+      "incomplete": "d04dcfa960bf771f9ecf10e7f74ca0989d20ec0ab27150911b611844676e5249"
+    },
+    "full_component_comparison_sha256": "38c15e8d3a652cc59574b3d92eed5c0e300234211811de969896828d9f79aa37",
+    "restart_evidence": {
+      "step_two_commit": {
+        "version": 1,
+        "step": 2,
+        "complete": true,
+        "world_size": 2,
+        "optimizer_shards": true,
+        "train_shards": true
+      },
+      "workers_sent_SIGTERM": 2,
+      "original_rank_one_train_shard_present": true,
+      "negative_copy_rank_one_train_shard_present": false,
+      "negative_copy_complete_marker_present": true,
+      "ranks_rejecting_incomplete_checkpoint": [
+        0,
+        1
+      ]
+    },
+    "source_base": "8e8ad5c7b3eb0d874c29177fc7ef704e688cd0f8 plus the following exact files",
+    "source_sha256": {
+      "scripts/base_train.py": "8364c11f9ca105026e353cf4c6e78bdc24180ec0a49230aa0cf2c39444b00aed",
+      "bio_inspired_nanochat/checkpoint_manager.py": "2210b9e5e48437c66c21207516bcbe9007ab2dd022900b7a6a4e77e92d030816",
+      "bio_inspired_nanochat/synaptic.py": "fba5313bc36ddaad9097a86f86fed15622221757b7e06faf5a68870a4a0666d5",
+      "bio_inspired_nanochat/neuroviz.py": "9fa1c9e62148a315ddd55d6245e312b72709104ca3c973753a0330aa44ddf6ea",
+      "scripts/e2e/scaleup_checkpoint_recovery.py": "eb1178a1263530299c821286003f40c61e5ea76070c5bb83708ea5d97110eb85"
+    },
+    "default_render_observations": {
+      "control": [
+        {
+          "layer": "moe_L0",
+          "step": 0,
+          "observed_fields": [
+            "AMP",
+            "BUF",
+            "C",
+            "CL",
+            "E",
+            "PR",
+            "RES",
+            "RRP"
+          ],
+          "json_sha256": "7990201c2f9981877b3fd749e7d378a21b74199456bdcde4e5baa1dbb0fdaae7"
+        },
+        {
+          "layer": "moe_L1",
+          "step": 0,
+          "observed_fields": [
+            "AMP",
+            "BUF",
+            "C",
+            "CL",
+            "E",
+            "PR",
+            "RES",
+            "RRP"
+          ],
+          "json_sha256": "3690e20d831f8701e803408e894554926f29112ddfec22de989b0bda960198f4"
+        }
+      ],
+      "branch": [
+        {
+          "layer": "moe_L0",
+          "step": 1,
+          "observed_fields": [
+            "AMP",
+            "BUF",
+            "C",
+            "CL",
+            "E",
+            "PR",
+            "RES",
+            "RRP"
+          ],
+          "json_sha256": "47a34b77a70ff45b2d23d12b37c1a11fae886ca5d707660415426d363496a18a"
+        },
+        {
+          "layer": "moe_L0",
+          "step": 2,
+          "observed_fields": [
+            "AMP",
+            "BUF",
+            "C",
+            "CL",
+            "E",
+            "PR",
+            "RES",
+            "RRP"
+          ],
+          "json_sha256": "bd6c83e8ead82d6e9812c2e526a21b3b89e301865008b68372982c46fdc4ecc5"
+        },
+        {
+          "layer": "moe_L1",
+          "step": 1,
+          "observed_fields": [
+            "AMP",
+            "BUF",
+            "C",
+            "CL",
+            "E",
+            "PR",
+            "RES",
+            "RRP"
+          ],
+          "json_sha256": "14a98ac0b1ebb632abfea4daa65659157aee3c7e174724c1f9f2f4f6013bb937"
+        },
+        {
+          "layer": "moe_L1",
+          "step": 2,
+          "observed_fields": [
+            "AMP",
+            "BUF",
+            "C",
+            "CL",
+            "E",
+            "PR",
+            "RES",
+            "RRP"
+          ],
+          "json_sha256": "1354db5759b1167742ec77e2a97aa008bee316aef115ad6f0f41d960ac6a03b8"
+        }
+      ]
+    },
+    "retained_experts_per_layer": {
+      "control": [
+        [
+          2,
+          2
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          2,
+          2
+        ]
+      ],
+      "branch": [
+        [
+          2,
+          2
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          2,
+          2
+        ]
+      ]
+    }
+  },
+  "scope": "Three optimizer updates exercise the default eager training path at this geometry. Both layers kept two experts; split/merge controller cadence and state were exercised without a population-size change."
+}

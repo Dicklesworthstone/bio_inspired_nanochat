@@ -438,6 +438,138 @@
           "sha256": "67bef20f94e8c9b01ef27b9809a53edd754d9f28fc12339d502de3157a1d897f"
         }
       ]
+    },
+    {
+      "probe": "trained-repetition",
+      "observation": "Same step-50 synaptic checkpoint, 4 calibration and 16 independent validation documents: fewer greedy repeated trigrams, zero sampled repeats in both arms, NLL interval spans zero",
+      "run_id": "5f1738f5-130d-4bca-b6bb-ae1cd3fb7348",
+      "exit": 0,
+      "source": "8e8ad5c7b3eb0d874c29177fc7ef704e688cd0f8|0623ea4c51e046de83a586fb384c84fd936673c4dc557dabfa350d564e988055|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "71951da6002ae93c142c69ebd069ecc15d6cca55b5ab716b6cbc5316dad2208e"
+        },
+        {
+          "exit": 0,
+          "sha256": "649b3addf3c0e5eb84e49d9e0d5ea42046ad6ac699ca217cfc3f44c3183e3b92"
+        }
+      ]
+    },
+    {
+      "probe": "trained-binding-first",
+      "observation": "Eight independently trained binding models produced original calibration and test traces. The data-generating job passed; a subsequent type check failed",
+      "run_id": "57626fc8-4c90-4adc-8b58-a4274cbfe9af",
+      "exit": 1,
+      "source": "8e8ad5c7b3eb0d874c29177fc7ef704e688cd0f8|bf7c8a2ec013f2233c50176bc36b110cff72cdcd0722ac487b80b0f8967af52f|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "938fb23d4695ca2911f497bcd0f218debb8e8604c1d17038766fb1ea4f2bcef9"
+        },
+        {
+          "exit": 1,
+          "sha256": "ed647cdbc346635f1ac4f9c6a16635ec7b8ece1fe82d1cc9bec74cf40257f81c"
+        }
+      ]
+    },
+    {
+      "probe": "trained-binding-verified",
+      "observation": "Four direct tests, independent re-derivation over original 1,024 labelled rows, Ruff, ty and UBS passed. Registered advantages not observed",
+      "run_id": "09a3770e-bb80-465b-b118-4ebd3e021bd3",
+      "exit": 0,
+      "source": "8e8ad5c7b3eb0d874c29177fc7ef704e688cd0f8|d1d901477a4cfc202a4ad4d9c3b1afc50422ce673d79f8b15d98aa186316f966|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "8f628f60a188bbec8031c9ab3ccd77c609579d8d65844e2486c231b104034c36"
+        },
+        {
+          "exit": 0,
+          "sha256": "b3d24a182d810200be98fd1557cb2d52adcf0cf315a5fefd82332b8c11686084"
+        },
+        {
+          "exit": 0,
+          "sha256": "c9d07e286773bd97ee1a9390c3db7fe95769ff7294757fb73c6bf6741d256f23"
+        }
+      ]
+    },
+    {
+      "probe": "bio-publish-shell",
+      "observation": "Final DSR runner shell syntax and UBS passed on the Mac dispatcher",
+      "run_id": "E98001BB-AC20-4C20-A234-1DA8EA9EB3E0",
+      "exit": 0,
+      "source": "16a9cbc372130f98b4bd530c35c16eb9525f57c4|52973ccfb168754d7da0628ad7445ae4675a78f23145b69ccb97774ebf3e43c9|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "ec122688640c11e25b0b580c51a6eb6629d5c90fcaf9597c9f27019a6ad1b72f"
+        }
+      ]
+    },
+    {
+      "probe": "signed-main",
+      "observation": "Linux local DSR main rebuilt Rust and verified its signed scanner, then the locked CPU type checker rejected a dict-expanded scalar_lr in the optimizer factory. Superseded by an explicitly typed call.",
+      "run_id": "f3a8eb7b-c788-4dcc-a66b-1d9127805978",
+      "exit": 1,
+      "source": "8e8ad5c7b3eb0d874c29177fc7ef704e688cd0f8|fc93ecb4b4f40f39c4f1f637e026cd2bdc5854d0238ed2c96ffc80adcb5962d6|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 1,
+          "sha256": "6688183f6b606e044abc906d5a0a6f3143deef03acbf5ca99261a33f5a1f8448"
+        }
+      ]
+    },
+    {
+      "probe": "nightly-final",
+      "observation": "Standing DSR nightly on the locked CPU image. The validation battery passed, and uncertainty passed. The separate cost gate measured standard/synaptic 1.91x for training and 1.67x for cached decode against limits 2.00x and 1.50x; the nightly correctly failed.",
+      "run_id": "e6b547d0-2e99-46ef-bed1-c0bdedb525e7",
+      "exit": 1,
+      "source": "16a9cbc372130f98b4bd530c35c16eb9525f57c4|6cd2168ee1a2502733006d26d574723772128053b52f3b3374bdc28cdb2cbb7f|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 1,
+          "sha256": "6eb221458b761ef75ad58ee219fbe138c89a897b7adefd5c3a96baa289601c15"
+        },
+        {
+          "exit": 0,
+          "sha256": "87afc7598edcf071b9dd4f142c55bc062c1e7d095c9b389a6227dfae233ba157"
+        }
+      ]
+    },
+    {
+      "probe": "bio-watchdog-accounted",
+      "observation": "Corrected launcher and scoring watchdogs: 43 matrix cases pass, including termination inside the allocation, delayed score refusal and refusal to resume an overdrawn ledger. Whole-tree ruff/ty pass and scoped UBS has zero critical findings.",
+      "run_id": "15f71cbf-7ada-453b-8e67-eac58678e2d6",
+      "exit": 0,
+      "source": "8e8ad5c7b3eb0d874c29177fc7ef704e688cd0f8|f6fed4620f23295f60af388ca697249d78c98c53a747257bb996764e3e0aa1c6|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "7d20770b2e9af53ec7e2cde1f2fa274823eb87c4d6afeb1b8beedeb1423bff08"
+        },
+        {
+          "exit": 0,
+          "sha256": "c2d12b6836871db6e7413e869fb4b8ef611e643bde6f377cac8d67c579a3fa46"
+        },
+        {
+          "exit": 0,
+          "sha256": "6d99084d0019c196a14eb96805b21f0ea5a833a395e10a748226078d41681b0b"
+        }
+      ]
+    },
+    {
+      "probe": "formal-repaired",
+      "observation": "After source-specific requalification the mapped suite passed 288 with 3 environment skips across 291 tests. All 19 compiled Lean declarations passed the explicit axiom allowlist. This verifies the reduced-model mapping and regressions.",
+      "run_id": "d6ccb563-358b-451a-b084-241c279214cc",
+      "exit": 0,
+      "source": "8e8ad5c7b3eb0d874c29177fc7ef704e688cd0f8|93cdea193bc6dc12a09da4595ae66dce133f0bbc29f15ab71d2d2e2ebef31242|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "logs": [
+        {
+          "exit": 0,
+          "sha256": "1f004635abba17c2985bfc70b6004e330004d30d7269e89b9d1b2d2d9dec397e"
+        }
+      ]
     }
   ],
   "reference_feasibility": {

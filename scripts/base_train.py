@@ -27,6 +27,7 @@ import torch.distributed as torch_dist
 import wandb
 
 from bio_inspired_nanochat.checkpoint_manager import (
+    capture_deferred_plasticity,
     capture_prefetched_batch,
     capture_rng_state,
     checkpoint_model_config,
@@ -34,6 +35,7 @@ from bio_inspired_nanochat.checkpoint_manager import (
     load_checkpoint,
     load_checkpoint_metadata,
     require_complete_checkpoint,
+    restore_deferred_plasticity,
     restore_optimizer_states,
     restore_prefetched_batch,
     restore_rank_model_state,
@@ -642,6 +644,8 @@ if resuming:
         train_state,
         required=ddp_world_size > 1,
     )
+    if use_syn:
+        restore_deferred_plasticity(model, (train_state or {}).get("deferred_plasticity"))
     del model_data  # free up this memory after the copy
     # hwxb.2.9: load_state_dict(assign=True) replaces the param objects, breaking any
     # wte/lm_head tie — re-establish it so the shared weight trains as one on resume.
@@ -684,13 +688,11 @@ print0(f"Total training FLOPs estimate: {num_flops_per_token * total_tokens:e}")
 
 # -----------------------------------------------------------------------------
 # Initialize the Optimizer (Muon for Linear layers, AdamW for embedding and lm_head)
-optimizers = model.setup_optimizers(
-    unembedding_lr=unembedding_lr,
-    embedding_lr=embedding_lr,
-    matrix_lr=matrix_lr,
-    weight_decay=weight_decay,
-    **({"scalar_lr": scalar_lr} if use_syn else {}),
-)
+optimizer_args = (unembedding_lr, embedding_lr, matrix_lr, weight_decay)
+if isinstance(orig_model, GPT):
+    optimizers = orig_model.setup_optimizers(*optimizer_args)
+else:
+    optimizers = orig_model.setup_optimizers(*optimizer_args, scalar_lr=scalar_lr)
 if len(optimizers) == 2:
     adamw_optimizer, muon_optimizer = optimizers
 else:
@@ -1090,6 +1092,7 @@ while True:
             # forward is stochastic during training; without this a resume diverges).
             train_state={
                 "rng": capture_rng_state(),
+                "deferred_plasticity": capture_deferred_plasticity(orig_model) if use_syn else {},
                 "step": step,
                 # DDP synchronizes gradients, not rank-local forward mutations. Bio
                 # buffers and online-updated weights may therefore legitimately differ

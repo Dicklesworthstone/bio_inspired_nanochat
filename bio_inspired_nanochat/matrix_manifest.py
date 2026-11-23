@@ -164,6 +164,8 @@ def score_budget(manifest: dict, preset: str, seed: int):
         signal.setitimer(signal.ITIMER_REAL, seconds)
         try:
             yield
+            if time.monotonic() - started > seconds:
+                raise ValueError("measured scoring time exceeded the remaining device-hour allocation")
             code = 0
         finally:
             signal.setitimer(signal.ITIMER_REAL, 0)

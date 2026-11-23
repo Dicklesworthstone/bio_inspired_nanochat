@@ -20,6 +20,8 @@ from __future__ import annotations
 import subprocess
 import sys
 import shlex
+import shutil
+import time
 from pathlib import Path
 
 import pytest
@@ -33,6 +35,27 @@ from bio_inspired_nanochat.cmaes_params import (
 from bio_inspired_nanochat.synaptic import SynapticConfig
 
 pytestmark = pytest.mark.unit
+
+
+def test_watchdog_stops_term_resistant_training_within_allocation(tmp_path):
+    from scripts.matrix_launch import train_cell
+
+    if not (shutil.which("timeout") or shutil.which("gtimeout")):
+        pytest.skip("requires coreutils timeout on this host")
+    marker = tmp_path / "training-started"
+    program = (
+        "import signal, sys, time; from pathlib import Path; "
+        "signal.signal(signal.SIGTERM, signal.SIG_IGN); "
+        "Path(sys.argv[1]).touch(); time.sleep(60)"
+    )
+    limit = 10.0
+    with (tmp_path / "lock").open("a+") as lock:
+        started = time.monotonic()
+        code = train_cell([sys.executable, "-c", program, str(marker)], limit, lock)
+        elapsed = time.monotonic() - started
+    assert marker.is_file()
+    assert code in (-9, 137)
+    assert elapsed <= limit
 
 RECIPE = ("--depth=10", "--total_batch_size=524288")
 
@@ -247,6 +270,29 @@ def test_scoring_shares_physical_device_budget_with_training(tmp_path, monkeypat
     with mm.score_budget(manifest, "vanilla", 1):
         pass
     assert mm.attempt_seconds(directory / "scoring_attempts.jsonl")["vanilla-1"] > 2
+    # A delayed timer can return control after the deadline. The result must
+    # still fail before the scorer can seal the cell.
+    clock = mm.time.monotonic
+    with monkeypatch.context() as patch, pytest.raises(ValueError, match="measured scoring time"):
+        with mm.score_budget(manifest, "vanilla", 1):
+            patch.setattr(mm.time, "monotonic", lambda: clock() + 3601)
+    import json
+    last = json.loads((directory / "scoring_attempts.jsonl").read_text().splitlines()[-1])
+    assert last["exit"] == 1 and last["seconds"] >= 3601
+
+
+def test_restart_cannot_report_success_after_recorded_overrun(tmp_path):
+    from bio_inspired_nanochat import matrix_manifest as mm
+    from scripts import matrix_launch
+
+    plan = mm.seal_manifest({"schema": 1, "stage": "screening", "cap_gpu_hours": 20 / 3600})
+    path = tmp_path / "manifest.json"
+    matrix_launch.run_cells(plan, path, [], [], [], 2, False, plan_only=True)
+    attempts = tmp_path / "attempts.jsonl"
+    mm.append_event(attempts, event="start", tag="cutoff")
+    mm.append_event(attempts, event="end", tag="cutoff", seconds=10.01, exit=137)
+    with pytest.raises(ValueError, match="already exceeded"):
+        matrix_launch.run_cells(plan, path, [], [], [], 2, True)
 
 
 def test_confirmation_admits_complete_scored_screen_and_refuses_an_edited_pair(tmp_path, monkeypatch):

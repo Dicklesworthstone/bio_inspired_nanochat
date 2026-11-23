@@ -27,6 +27,7 @@ import pytest
 import torch
 
 from bio_inspired_nanochat.synaptic import SynapticConfig, SynapticLinear
+from bio_inspired_nanochat.checkpoint_manager import capture_deferred_plasticity, restore_deferred_plasticity
 
 from _bio_testkit import make_tiny_synaptic, random_tokens, set_seed
 
@@ -41,6 +42,53 @@ def _make_lin(**cfg_overrides) -> SynapticLinear:
 
 def _signals():
     return torch.ones(B), torch.ones(B)  # calcium, energy (per-row)
+
+
+@pytest.mark.unit
+def test_checkpoint_preserves_the_next_hebbian_training_update(tmp_path):
+    lin = _make_lin().train()
+    optimizer = torch.optim.SGD(lin.parameters(), lr=0.01, momentum=0.9)
+    ca, en = _signals()
+    first, second = torch.randn(B, IN), torch.randn(B, IN)
+
+    def train(module, opt, batch):
+        opt.zero_grad()
+        output = module(batch, ca, en)
+        output.square().mean().backward()
+        opt.step()
+        return output.detach().clone()
+
+    train(lin, optimizer, first)
+    assert lin._plasticity_pending
+    file = tmp_path / "step-one.pt"
+    torch.save({"model": lin.state_dict(), "optimizer": optimizer.state_dict(),
+                "pending": capture_deferred_plasticity(lin)}, file)
+    expected = train(lin, optimizer, second)
+    observed = []
+    for restore in (False, True):
+        saved = torch.load(file, weights_only=True)
+        copy = _make_lin().train()
+        copy.load_state_dict(saved["model"])
+        opt = torch.optim.SGD(copy.parameters(), lr=0.01, momentum=0.9)
+        opt.load_state_dict(saved["optimizer"])
+        if restore:
+            restore_deferred_plasticity(copy, saved["pending"])
+        observed.append(train(copy, opt, second))
+        if restore:
+            for name, weight in lin.state_dict().items():
+                torch.testing.assert_close(copy.state_dict()[name], weight, rtol=0, atol=0)
+    assert not torch.equal(observed[0], expected), "Omitting the deferred write must change the next real forward"
+    torch.testing.assert_close(observed[1], expected, rtol=0, atol=0)
+
+
+@pytest.mark.unit
+def test_legacy_resume_requires_active_deferred_writes_but_allows_inert_layers():
+    lin = _make_lin()
+    with pytest.raises(ValueError, match="every active Hebbian module"):
+        restore_deferred_plasticity(lin, None)
+    restore_deferred_plasticity(_make_lin(plasticity_during_training=False), None)
+    restore_deferred_plasticity(lin, capture_deferred_plasticity(lin))
+    assert not lin._plasticity_pending
 
 
 # --------------------------------------------------------------------------- #

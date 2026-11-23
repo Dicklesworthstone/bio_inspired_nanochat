@@ -1127,6 +1127,64 @@
       "mathlib_revision": "a3a10db0e9d66acbebf76c5e6a135066525ac900",
       "build_command": "rch exec -- lake build",
       "build_result": "not-rerun-proof-source-unchanged"
+    },
+    {
+      "cycle_id": "d1-runtime-bindings-2026-11-23",
+      "frog_id": "bio_inspired_nanochat-r00r.13",
+      "route": "runtime-first-proof-preserving",
+      "proof_friction_class": "runtime-mapping-drift",
+      "runtime_defect_found": false,
+      "hash_scope": "formal/lean/BioInspiredNanochat.lean",
+      "artifact_hash": "sha256:831498bc2853d86701250ea89024ab5f5f6190d2e3a5a9ae66f93a7d5d42d963",
+      "sorry_or_admit_present": false,
+      "axioms": ["propext", "Classical.choice", "Quot.sound"],
+      "theorem_ids": [
+        "BioInspiredNanochat.Metriplectic.poisson_entropy_degeneracy",
+        "BioInspiredNanochat.Metriplectic.friction_energy_degeneracy",
+        "BioInspiredNanochat.Metriplectic.energyRate_zero",
+        "BioInspiredNanochat.Metriplectic.entropyRate_nonnegative",
+        "BioInspiredNanochat.Metriplectic.freeEnergyRate_nonpositive",
+        "BioInspiredNanochat.Metriplectic.freeEnergy_nonincreasing",
+        "BioInspiredNanochat.Metriplectic.trajectory_energy_constant",
+        "BioInspiredNanochat.Metriplectic.trajectory_entropy_from_start",
+        "BioInspiredNanochat.Metriplectic.trajectory_freeEnergy_nonincreasing",
+        "BioInspiredNanochat.Metriplectic.trajectory_component_bounds",
+        "BioInspiredNanochat.StochasticThermodynamics.logMeanGap_nonnegative",
+        "BioInspiredNanochat.StochasticThermodynamics.log_rate_tur_core",
+        "BioInspiredNanochat.StochasticThermodynamics.tur_calibration_inequality",
+        "BioInspiredNanochat.StochasticThermodynamics.crooks_log_calibration"
+      ],
+      "runtime_mapping": [
+        {
+          "path": "bio_inspired_nanochat/synaptic.py",
+          "sha256": "fba5313bc36ddaad9097a86f86fed15622221757b7e06faf5a68870a4a0666d5",
+          "change": "CPU dispatch now verifies the Rust scan/decode ABI before handing it mutable state. Both fast paths already exclude the metriplectic integrator. SynapticLinear casts co-activity operands to the long-lived trace dtype for in-place addmm. These are U/V eligibility buffers. Calcium, buffer, heat, the guarded integrator, and the energy/entropy definitions retain their prior representation and transition."
+        },
+        {
+          "path": "bio_inspired_nanochat/ablation_matrix.py",
+          "sha256": "251dfb33491cc9c544121e1bf9cc8df31d7dd4ac8d62a3066010729a4bb75464",
+          "change": "The prospective D1 roster adds matched presynaptic/Hebbian prerequisite arms, selects the reference backend unless a column explicitly enables a native path, and charges aggregate throughput against participating GPUs. These choices select experiments. The reduced field, dissipation rates and temperature assumptions have the same definitions."
+        },
+        {
+          "path": "scripts/e2e/uncertainty_calibration.py",
+          "sha256": "9c1c056dcf4a4c26a258a4368b28cbd0aa681e8902cad68d8496099a773975f5",
+          "change": "An opt-in trained-checkpoint study fits and evaluates selective answering on a finite query population. The previous Monte Carlo release/thermodynamic experiment remains the default entry point. The conditional TUR and Crooks theorems apply to their original analytic rates and exact fluctuation ratio. Selective error and coverage require the separate calibration study."
+        }
+      ],
+      "conformance": {
+        "statement_parity": "Ten exact-real metriplectic statements and four conditional stochastic-thermodynamic statements retain their hypotheses. The five CuspRetention cubic statements and their runtime bindings had no source drift.",
+        "state_parity": "Lean models (calcium, buffer, heat) and analytic rates or mass ratios. BF16 Hebbian co-activity accumulates in FP32 eligibility buffers. Its numerical comparison uses a separate PyTorch oracle for both dense and routed inputs.",
+        "transition_parity": "DiscreteStep assumes exact energy conservation and entropy production. Runtime acceptance uses dtype-aware guards. The independent tests include guarded fallbacks, lossy-replay rejection, and scripted versus native release and gradient comparisons.",
+        "concurrency_parity": "The proof statements are pure scalar or trajectory properties. Cross-rank optimizer state and checkpoint restart equivalence are separate executable obligations. Independent CMA candidates were checked against serial weights and scores in DSR 8ca2cd31-0d21-4b68-bd91-d9cc5a76d953.",
+        "cancel_drain_parity": "No theorem defines a cancellation or drain transition.",
+        "drift_gate": "Of 31 effective runtime files, the three entries above changed. All effective pytest modules were enumerated independently before replacing their bindings. The previous live manifest check rejected the stale bytes."
+      },
+      "lean_toolchain": "leanprover/lean4:v4.27.0",
+      "mathlib_revision": "a3a10db0e9d66acbebf76c5e6a135066525ac900",
+      "build_command": "DSR bio-pinned-lean-build on trj with an isolated toolchain, lake exe cache get, an explicit Mathlib revision check, git diff --exit-code -- lake-manifest.json, and lake build --wfail",
+      "build_result": "DSR afe60310-4007-40c5-a835-a7a8f2b1fc95 exited 0 with stable source fingerprints. Lake completed 7886 jobs and emitted 19 distinct theorem axiom reports. Build log sha256 79a283c2b73ef341e3b9257038ee2febf502e661a0ca91fe427f90ac726d32a7.",
+      "regression_command": "DSR bio-formal-inventory on trj with the installed ABI 1 wheel, all 19 effective pytest modules, tests/test_rank_eligibility.py and tests/test_presyn_scan_kernel.py. CUDA devices were hidden.",
+      "regression_result": "Before rebinding, 300 passed, 4 skipped and 1 failed in 2151.97 seconds. The sole failure was test_live_formal_contract_matches_repository_head rejecting the stale synaptic.py hash. Two skips required CUDA, one required torch.compile on Python 3.14 and one required FlexAttention Dynamo support. DSR run-1795395976-560473, pytest log sha256 1fa4eacb3932100df57d41452f4ddc1caf10cc12aeaadb7074e7f804ef181903."
     }
   ]
 }

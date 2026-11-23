@@ -383,6 +383,49 @@ def restore_optimizer_states(
         optimizer.load_state_dict(state)
 
 
+def _plasticity_modules(model):
+    from bio_inspired_nanochat.synaptic import SynapticLinear
+
+    return {
+        name: module for name, module in model.named_modules()
+        if isinstance(module, SynapticLinear) and module.u_buf is not None
+        and module.cfg.plasticity_during_training
+    }
+
+
+def capture_deferred_plasticity(model) -> dict:
+    """Save rank-local Hebbian writes deferred until the next training forward."""
+    state = {}
+    for name, module in _plasticity_modules(model).items():
+        pending = module._plasticity_pending
+        gate = module._last_gate_scale if pending else None
+        state[name] = {"pending": pending, "gate": None if gate is None else gate.detach().clone()}
+    return state
+
+
+def restore_deferred_plasticity(model, state: object) -> None:
+    modules = _plasticity_modules(model)
+    if state is None and not modules:
+        return  # Older checkpoints without active training plasticity carry no writes.
+    if not isinstance(state, dict) or state.keys() != modules.keys():
+        raise ValueError("Exact resume requires rank-local deferred plasticity for every active Hebbian module")
+    restored = {}
+    for name, module in modules.items():
+        entry = state[name]
+        if not isinstance(entry, dict) or entry.keys() != {"pending", "gate"} or type(entry["pending"]) is not bool:
+            raise ValueError(f"Malformed deferred plasticity for {name!r}")
+        gate = entry["gate"]
+        if gate is not None:
+            if (not entry["pending"] or not isinstance(gate, torch.Tensor) or gate.ndim != 0
+                    or not gate.is_floating_point() or not torch.isfinite(gate).item()):
+                raise ValueError(f"Invalid deferred Hebbian gate for {name!r}")
+            gate = gate.to(device=module.u_buf.device)
+        restored[name] = (entry["pending"], gate)
+    for name, (pending, gate) in restored.items():
+        modules[name]._plasticity_pending = pending
+        modules[name]._last_gate_scale = gate
+
+
 def restore_rank_model_state(
     model: Any,
     train_state: Mapping[str, Any] | None,

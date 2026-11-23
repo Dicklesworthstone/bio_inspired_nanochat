@@ -574,8 +574,15 @@ class NeuroVizManager:
 
         # Static images
         if self.cfg.save_pngs and step - self._last_img >= self.cfg.image_every:
+            from .telemetry import layer_attention_telemetry, unwrap_mlp_module
+
+            snapshot = getattr(model, "_last_presyn_state", None)
+            attention = {
+                unwrap_mlp_module(block.mlp): layer_attention_telemetry(snapshot, i)
+                for i, block in enumerate(getattr(model, "h", ()))
+            }
             for name, moe in self.layers:
-                self._write_images(name, moe, step)
+                self._write_images(name, moe, step, attention.get(moe))
                 self.lineage.render_timeline_png(name, step)
             self._last_img = step
 
@@ -644,7 +651,7 @@ class NeuroVizManager:
 
     # ------------------------- image writers ------------------------
 
-    def _write_images(self, name: str, moe: SynapticMoE, step: int):
+    def _write_images(self, name: str, moe: SynapticMoE, step: int, attention: dict[str, list[list[float]]] | None):
         outdir = os.path.join(self.cfg.log_dir, "images", name)
         _ensure_dir(outdir)
         m = self._layer_metrics(moe)
@@ -680,7 +687,7 @@ class NeuroVizManager:
         self._contribution_plot(name, moe, step, outdir)
         
         # educational plots (Presyn, Hebbian, Raster)
-        self._plot_presynaptic_dynamics(name, moe, step, outdir)
+        self._plot_presynaptic_dynamics(name, attention, step, outdir)
         self._plot_hebbian_memory(name, moe, step, outdir)
         self._plot_expert_raster(name, moe, step, outdir)
         
@@ -741,101 +748,22 @@ class NeuroVizManager:
         os.replace(tmp, path)
 
 
-    def _plot_presynaptic_dynamics(self, name: str, moe: SynapticMoE, step: int, outdir: str):
-        # Simulate "Boredom": Attend to the same token repeatedly
-        # We need a SynapticPresyn instance. We can't easily grab one from MoE (it's in Attention).
-        # But we can instantiate a dummy one with the same config.
-        from .synaptic import SynapticPresyn, build_presyn_state
-        
-        cfg = moe.cfg
-        head_dim = 64 # Assumption, but doesn't matter for this simulation as we fake logits
-        pre = SynapticPresyn(head_dim, cfg).to("cpu")
-        
-        T = 50
-        # Scenario: Attend to token 0 for 20 steps, then token 1 for 20 steps
-        logits = torch.zeros(1, 1, T, T)
-        # Causal mask
-        mask = torch.tril(torch.ones(T, T)).bool()
-        
-        # Set high logits for target
-        # Steps 0-20: target 0
-        logits[:, :, :25, 0] = 20.0
-        # Steps 20-40: target 1
-        logits[:, :, 25:, 1] = 20.0
-        
-        # Dummy q, k (needed for docking, but we can set them to be compatible)
-        q = torch.randn(1, 1, T, head_dim)
-        k = torch.randn(1, 1, T, head_dim)
-        
-        state = build_presyn_state(1, T, 1, "cpu", torch.float32, cfg)
-        
-        # Run forward
-        # SynapticPresyn.forward returns (syn_logit, new_state)
-        # But it updates state in-place or returns new tensors? It returns new tensors.
-        # And it processes the whole sequence at once (parallel).
-        
-        with torch.no_grad():
-            syn_logit, final_state = pre(q, k, logits, state, mask, train_mode=False)
-            
-        # We want to see the time-evolution of RRP, C, Release for the *target* tokens.
-        # RRP is (B,H,T). It represents the pool available *at step t*.
-        # Actually RRP is per-key (T_k). 
-        # Wait, in SynapticPresyn:
-        # RRP is (B,H,T) -> This is the RRP of the *key* token?
-        # Yes: "RRP_refill = (rho_r * RRP + ...)"
-        # And "used_rrp = release_frac.sum(dim=2)" -> sum over queries? No, dim=2 is T_q?
-        # Let's check presyn code:
-        # raw_release: (B,H,T_q, T_k)
-        # used_rrp = release_frac.sum(dim=2) -> Sum over queries attending to this key.
-        # So RRP[t] is the vesicle pool of token t (acting as a Key).
-        
-        # So we want to plot RRP of Token 0 and Token 1.
-        rrp = final_state["RRP"][0, 0].numpy() # (T,)
-        c_val = final_state["C"][0, 0].numpy()
-        
-        # Release probability? 
-        # We can infer it from syn_logit or just re-calculate.
-        # syn_logit is (B,H,T,T).
-        # Let's look at syn_logit[:,:,t,0] (attention to token 0 at step t)
-        syn_adjust = syn_logit[0, 0, :, 0].numpy() # (T,)
-        
-        # Save data for interactive dashboard
-        data = {
-            "rrp": rrp,
-            "calcium": c_val,
-            "logit_delta": syn_adjust,
-            "steps": list(range(T))
-        }
-        self._save_json(data, os.path.join(outdir, f"{name}_presyn_{step:09d}.json"))
-        
-        fig, ax = plt.subplots(3, 1, figsize=(8, 8), sharex=True)
-        
-        # Plot RRP of Token 0
-        ax[0].plot(rrp, label="RRP (Vesicles)", color="green", lw=2)
-        ax[0].set_title("Presynaptic State (Token 0)")
-        ax[0].set_ylabel("Pool Size")
-        ax[0].legend()
-        ax[0].grid(True, alpha=0.3)
-        
-        # Plot Calcium of Token 0
-        ax[1].plot(c_val, label="Calcium (Excitement)", color="orange", lw=2)
-        ax[1].set_ylabel("Concentration")
-        ax[1].legend()
-        ax[1].grid(True, alpha=0.3)
-        
-        # Plot Synaptic Adjustment to Token 0
-        ax[2].plot(syn_adjust, label="Logit Adjustment", color="red", lw=2)
-        ax[2].set_ylabel("Logit Delta")
-        ax[2].set_xlabel("Time Step")
-        ax[2].legend()
-        ax[2].grid(True, alpha=0.3)
-        
-        ax[2].text(5, -2, "Attending to Token 0...", fontsize=9, color="gray")
-        ax[2].text(30, -2, "Switched to Token 1", fontsize=9, color="gray")
-        
-        fig.suptitle(f"The 'Boredom' Mechanism (Simulated) @ {step}")
+    def _plot_presynaptic_dynamics(
+        self, name: str, attention: dict[str, list[list[float]]] | None, step: int, outdir: str,
+    ):
+        """Render the last real forward's final key position, averaged across the batch per head."""
+        base = os.path.join(outdir, f"{name}_presyn_{step:09d}")
+        self._save_json({"source": "last_forward", "step": step, "attention": attention}, base + ".json")
+        if not attention:
+            return
+        fig, ax = plt.subplots(figsize=(8, 4))
+        for key, label in (("RRP", "Vesicle pool"), ("C", "Calcium"), ("E", "Energy")):
+            if key in attention:
+                ax.plot(np.mean(attention[key], axis=0), marker="o", label=label)
+        ax.set(xlabel="Attention head", ylabel="Batch mean", title=f"{name} · final key position at step {step}")
+        ax.legend()
         fig.tight_layout()
-        fig.savefig(os.path.join(outdir, f"{name}_presyn_{step:09d}.png"), dpi=120)
+        fig.savefig(base + ".png", dpi=120)
         plt.close(fig)
 
     def _plot_hebbian_memory(self, name: str, moe: SynapticMoE, step: int, outdir: str):

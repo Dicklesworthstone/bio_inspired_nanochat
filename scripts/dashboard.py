@@ -318,32 +318,32 @@ elif page == "Synaptic Dynamics":
 
     # --- Tab 2: Presynaptic ---
     with tab2:
-        st.markdown("### Presynaptic 'Boredom' Simulation")
-        st.caption("We simulate a neuron attending to the same token repeatedly (Steps 0-25) and then switching. Watch the RRP drain and the Logit Delta suppress attention.")
-        
+        st.markdown("### Presynaptic state")
         files = get_files(f"images/{selected_layer}/{selected_layer}_presyn_*.json")
         if files:
             idx = st.slider("History (Presyn)", 0, len(files)-1, 0, format="Step -%d", key="presyn_slider")
             data = load_json(files[idx])
-            
-            steps = data['steps']
-            
-            fig = make_subplots(rows=3, cols=1, shared_xaxes=True, 
-                                subplot_titles=("RRP (Vesicle Pool)", "Calcium (Excitement)", "Logit Adjustment"))
-            
-            fig.add_trace(go.Scatter(x=steps, y=data['rrp'], name="RRP", line=dict(color="#00CC96", width=3)), row=1, col=1)
-            fig.add_trace(go.Scatter(x=steps, y=data['calcium'], name="Calcium", line=dict(color="#FFA15A", width=3)), row=2, col=1)
-            fig.add_trace(go.Scatter(x=steps, y=data['logit_delta'], name="Delta", line=dict(color="#EF553B", width=3)), row=3, col=1)
-            
-            # Annotations
-            fig.add_vline(x=25, line_width=1, line_dash="dash", line_color="gray")
-            fig.add_annotation(x=12, y=-2, text="Attending Token A", showarrow=False, row=3, col=1, font=dict(color="gray"))
-            fig.add_annotation(x=37, y=-2, text="Switched to Token B", showarrow=False, row=3, col=1, font=dict(color="gray"))
-
-            fig.update_layout(template="plotly_dark", height=700, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-            st.plotly_chart(fig, use_container_width=True)
+            if data.get("source") == "last_forward":
+                attention = data.get("attention")
+                if attention:
+                    fig = go.Figure()
+                    for key, label in (("RRP", "Vesicle pool"), ("C", "Calcium"), ("E", "Energy")):
+                        if key in attention:
+                            fig.add_trace(go.Scatter(y=np.mean(attention[key], axis=0), name=label, mode="lines+markers"))
+                    fig.update_layout(xaxis_title="Attention head", yaxis_title="Batch mean", template="plotly_dark")
+                    st.caption(f"Final key position in the observed forward at training step {data['step']}.")
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.info("No presynaptic state was recorded for this layer and step.")
+            elif data.get("steps"):
+                st.caption("Archived synthetic attention-switch simulation.")
+                fig = go.Figure()
+                for key, label in (("rrp", "Vesicle pool"), ("calcium", "Calcium"), ("logit_delta", "Logit adjustment")):
+                    fig.add_trace(go.Scatter(x=data["steps"], y=data[key], name=label))
+                fig.update_layout(xaxis_title="Simulation step", template="plotly_dark")
+                st.plotly_chart(fig, use_container_width=True)
         else:
-            st.warning("No presynaptic data found yet.")
+            st.info("No presynaptic observations are available yet.")
 
     # --- Tab 3: Hebbian ---
     with tab3:

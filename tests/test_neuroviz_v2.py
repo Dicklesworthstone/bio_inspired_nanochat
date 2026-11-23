@@ -69,6 +69,31 @@ def test_dense_model_has_empty_moe_panel():
     assert p["moe"] == {}, "a dense model must not fabricate expert metrics"
 
 
+def test_default_image_writer_reports_last_forward_and_preserves_training_rng(tmp_path):
+    model = make_tiny_synaptic(use_moe=True, num_experts=2, moe_top_k=1)
+    batch = random_tokens(batch=2, seq=6)
+    manager = NeuroVizManager(NeuroVizConfig(log_dir=str(tmp_path), image_every=1))
+    path = tmp_path / "images" / "moe_L0"
+    try:
+        manager.step(model, step=0)
+        missing = json.loads((path / "moe_L0_presyn_000000000.json").read_text())
+        assert missing["attention"] is None
+        with torch.no_grad():
+            model(batch, train_mode=False)
+        snapshots = model._last_presyn_state
+        assert snapshots is not None and snapshots[0] is not None
+        expected = snapshots[0]["C"][..., -1].tolist()
+        baseline = torch.get_rng_state()
+        manager.step(model, step=1)
+        assert torch.equal(torch.get_rng_state(), baseline)
+        observed = json.loads((path / "moe_L0_presyn_000000001.json").read_text())
+        assert observed["attention"]["C"] == expected
+        assert observed["source"] == "last_forward" and observed["step"] == 1
+        assert (path / "moe_L0_presyn_000000001.png").stat().st_size > 0
+    finally:
+        manager.close()
+
+
 def test_presyn_probe_returns_curves_without_mutating_consolidation():
     model = _model().eval()
     posts = [m for m in model.modules() if type(m).__name__ == "PostsynapticHebb"]
