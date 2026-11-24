@@ -174,8 +174,9 @@ tokens after a 128-token prefix. Twenty-two of the 24 pairs met 1.50×.
 The holdout matched 7,424 logit vectors and the final caches against eager.
 
 The two-graph experiment delivered the first token to the host before
-replaying the remaining 31. At 36 and 128 prompt tokens, median first-token
-ratios against vanilla were 1.44× and 2.27×, respectively. Complete-request
+replaying the remaining 31. Its first graph ran one cached decode forward
+after prefill and before the host read. At 36 and 128 prompt tokens, median
+first-token ratios against vanilla were 1.44× and 2.27×. Complete-request
 ratios were 1.34× and 1.32×. All 2,736 checked logit vectors, emitted IDs and
 final caches matched eager.
 
@@ -187,6 +188,56 @@ time across eight requests. Tracing the first-token graph directly gave
 eight requests, versus 2.61 ms total for vanilla. The unprofiled replay
 supplies the latency comparisons above.
 [Single-prefill measurements and receipts](results/profiles/rtx4090_single_prefill_2026-11-24.json)
+
+A follow-up moved the first host read to immediately after the prefill
+argmax. The experimental scan assigns disjoint sets of keys to CUDA
+programs, so each program advances its own recurrent state. In 30 paired
+128-token trials, it reduced median paired first-token latency by 46%
+relative to the existing synaptic scan. The ratio against live vanilla was
+1.94×, with nine pairs within 1.50×. At 36 tokens it was 1.41× vanilla, with
+17 of 30 pairs within 1.50×. The one-warp and two-warp variants of the
+existing scan increased median paired first-token latency at both lengths.
+All compared tokens agreed, and the largest absolute logit difference was
+2.39e-7 across the two prompt lengths and both graph boundaries. The
+128-token two-graph full-request median ratio was 1.24× vanilla.
+
+The initial prototype exceeded logit tolerance on all 30 tested 512-token
+prompts. At that length, both warp-count controls matched the existing
+scan exactly. Replaying eight captured blocks against the TorchScript
+recurrence placed the first release divergence in the prototype at the
+193-key frontier, with identical drive values and selected keys. The
+incumbent passed the reference tolerance on all eight blocks.
+
+Keeping each key's recycling queue in registers restored parity on the
+eight captured blocks and six direct cases. Across 180 paired graph
+requests at 36, 128 and 512 tokens, all emitted IDs matched and logits,
+KV and recurrent states stayed within the existing tolerance. The
+register variant reduced median paired first-token latency by 27%, 47%
+and 74%, respectively, relative to the existing synaptic scan. The
+same-invocation ratios against vanilla were 1.47×, 1.85× and 3.71×.
+At 512 tokens the complete 32-token graph request reached 0.97× vanilla
+by paired median, with 29 of 30 within 1.50×.
+
+The width-640, 10-layer synthetic model exceeded logit tolerance on one
+of 24 independently replayed 128-token prompts. All 24 first-token IDs
+agreed. The first attention key-set change and the first out-of-tolerance
+logits both appeared at zero-based position 118. Eager and captured runs
+both reached an absolute logit error of 0.00267 on that prompt. The scan
+remains an experiment pending full-model parity.
+
+The live `Engine.generate` now copies the decode cache only when generation
+needs a second token. The previous and revised engines agreed on 2,688
+sampled token and mask positions, plus 210 positions with metrics enabled.
+With four samples and a 128-token prompt, the revised synaptic engine
+reached the first token 18% faster by median paired latency and won 18 of
+24 comparisons. The single-sample measurements ranged from 7.5% faster to
+6.6% slower, and the four-sample case was still 2.42× the live vanilla
+engine. The four production regression cases exercise one-token and
+continuing streams with both single and multiple samples.
+The focused Linux DSR run passed 70 tests with one CUDA skip. Ruff and ty
+passed. The full CPU suite reached its 15-minute deadline after reporting
+failures.
+[Streaming and scan experiments](results/profiles/rtx4090_first_token_2026-11-24.json)
 
 The 2,103-case CPU run recorded 2,088 passes, 14 skips and one stale formal
 runtime hash. Refreshing the binding passed all 17 formal-feedback tests and
