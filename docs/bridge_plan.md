@@ -266,6 +266,15 @@ effective matrix config through the real trainer (`hwxb.5.7`). [Training default
    finite BPB, reject the wrong checkpoint or spend, and recover from interruption with matching
    state. Retain the actual data/tokenizer hashes and denominators. The baseline must also
    score the absolute usefulness thresholds. [Existing integration test](../tests/test_e2e_matrix_pipeline.py)
+
+   The November 24 CPU rehearsal completed all six cells across vanilla, scaffold-only
+   and Hebbian configurations. Each cell trained one optimizer update and scored a
+   completed checkpoint on the same content-disjoint validation split. The launcher’s
+   exact scorer command produced six finite BPB scores, and a restart left the attempt
+   log identical. Both two-seed contrasts returned `null`. Separate launcher and
+   powered decision fixtures passed 117 tests, covering no-go, missing controls and
+   aggregate device-charge refusal. This qualifies the rehearsal step of the bridge
+   plan. [Six cells, exact commands and DSR receipts](../results/d1_tiny_matrix_2026-11-24.json)
 4. **Execute the registered study (`hwxb.5.2.1/.2`, `hwxb.5.3`).** Run 17 × 2 dense
    screening cells at ~10M tokens each. Keep the five-column structural study separate.
    Apply the frozen rule, record actual throughput, device-hours and feasibility, and run
