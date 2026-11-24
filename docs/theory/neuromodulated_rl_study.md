@@ -1644,7 +1644,7 @@ guide a KL-matched matrix update that transfers to new prompts.
 - [x] Verify the published compressed archive, then bind the
   frozen prefix manifest and discovery rewards to the archive.
   The discovery file SHA-256 is `0b5486d3d3a2bd7844a08b824b8eb745d2f079ba40fe06996d209a0f77e0da86`.
-- [ ] Run the two-prefix Qwen fixture. Check local gradient
+- [x] Run the two-prefix Qwen fixture. Check local gradient
   parity and zero-signal behavior, and reject a reversed gradient
   and a corrupted support hash.
 - [ ] On the pinned checkpoint, reproduce all 16 supports in the
@@ -1675,3 +1675,60 @@ guide a KL-matched matrix update that transfers to new prompts.
 The construction driver SHA-256 is `261a09edf905936eb5c015301c3fe800c1e8d5c660335e7f7084172909ffccd5`.
 Its exact input checksum list SHA-256 is
 `0b0c0e7cd40f33d49ec89b5fc0fd6b433bf145c7debeba92bbd8f0d1346fdc4c`.
+
+### Registered KL matching and fresh transfer
+
+- [x] Seal 28 new paired L1 packing problems using seed 811070.
+  Calibration, verification and adaptation each use four pairs.
+  Transfer uses sixteen pairs. Audit all 56 targets and exclude
+  operation or wording overlap with the ladder, KL calibration and
+  both previous sibling panels.
+- [ ] Apply the frozen direction as an FP32 matrix product to
+  the last down-projection input and cast its output to BF16
+  before addition. Use reward, higher-prior, reversed and
+  same-layer autograd directions. Share the transfer run for
+  reward and autograd only if the deployed matrices are identical.
+- [ ] Draw four zero-write calibration continuations per question
+  with the BF16 top-50 sampler and 512-token cap. Measure each
+  32nd content step and sampled EOS. Verify exact reconstruction
+  of the original retained logits before measuring any drift.
+  Use base seed 811041 and salt
+  `qwen.kl.digit-write-calibration.L1`.
+- [ ] For each unit direction measure fixed-support KL at norm
+  0.03125. Estimate the target norm by multiplying 0.03125 by the
+  square root of target KL 0.002 over the observed KL, floored at
+  `1 × 10⁻¹²`. Multiply that estimate by `[0.5, 0.64, 0.8,
+  1, 1.25, 1.5625, 2]`, clipping the estimate and candidate
+  norms to `[2⁻¹⁰, 0.25]`. Measure the candidates on the same
+  prefixes. Choose the closest in log KL to 0.002 within
+  `[0.0014, 0.0026]` and with mean dynamic JS at most 0.00125.
+  Break ties by smaller norm and require the maximum-to-minimum
+  KL ratio across the chosen arms at most 1.55.
+- [ ] Repeat the drift check at the chosen norms on the independent
+  verification panel with salt `qwen.kl.digit-write-verification.L1`.
+  Require each KL in `[0.0008, 0.0040]`, dynamic JS at most
+  0.00125 and max-to-min KL ratio at most 1.8. Freeze these choices.
+  Hold transfer if the audit fails or any of these gates fails.
+- [ ] Run the zero-write adaptation and transfer draws, four per
+  question. Use eight-question batches, base seeds 811071 and
+  811072 and salts `qwen.digit-write.<split>.L1.<batch offset>`.
+  Require at least 96 parseable of 128 transfer draws and at least
+  eight mixed groups of four. Freeze the baseline before transfer
+  writes. Use the same seeds and inputs across arms and run the
+  primary comparisons on one GPU. Check a duplicate zero's tokens
+  and rewards exactly before interpreting auxiliary arms run on
+  the other GPU.
+- [ ] Score all unconditional transfer completions by the last
+  boxed integer. Require the reward direction to gain at least
+  eight correct responses of 128 over both zero and the
+  higher-prior direction, with one-sided exact pair sign-flip
+  `p ≤ 0.025` on each contrast. Require at most four additional
+  caps and at most four fewer parseable responses versus zero.
+  Report each arm's drift, response lengths and adaptation results.
+  Keep the adaptation comparison descriptive.
+
+The panel hash is `ba9e77d5b4e6d0f214dea2bf8b606818f53a666c3b24355c8de34e9d1a5d3457`.
+The panel generation source hash is `1ab9358774243a62267c95ff6d43673cac50093f4d99ace8d42a41ee66a0878f`.
+The evaluation source hash is `e64ef1c55f8614d46268ee8b728125b6c808821e61a4a2bed06575c4e164faa0`.
+The evaluation input checksum list hash is `f37d250db9c84db2094ed0bd79113cc4cb3a59bbd60c274a72b15cdbafa6186c`.
+The paired audit source hash is `0b03c25b56ac22f1673a62f09788f06dfdb7b77a35adbbeb7e5b8122fbaf4ded`.
