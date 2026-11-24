@@ -1512,3 +1512,60 @@ probe pool and completes `hy8.3.8`.
 
 [Sibling comparisons, source and receipts](../../results/qwen_sibling_credit_2026-11-23.json) ·
 [All frozen probes and suffix draws](../../results/qwen_sibling_credit_2026-11-23.json.gz)
+
+### Registered digit-only replication
+
+The exploratory digit result motivates a replication on newly sealed
+L1 packing prompts. The estimand is the held-out difference in
+terminal correctness between the two forced digits at each eligible
+frozen prefix, oriented by an independent discovery block. Branch
+rollouts are established credit estimators in VinePPO and TreeRL. This
+experiment measures their reward signal at a single legal token
+decision, before applying the conditional two-action matrix update.
+[VinePPO](https://arxiv.org/abs/2410.01679) ·
+[TreeRL](https://arxiv.org/abs/2506.11902)
+
+- [x] Seal 80 new matched pairs with seed 811060. Verify all 160
+  answers independently. Exclude overlap in full question text or
+  operation tuple with the ladder, KL and mixed sibling panels.
+- [ ] Exercise the digit selector and one-token intervention on a
+  small Qwen model, and check the exact test on known examples.
+- [ ] Roll in only on side zero, in five consecutive batches of
+  16, using the same pinned Qwen checkpoint and BF16 top-50 sampler.
+  Use seed 811061 with salts `qwen.digit.guide.0` through
+  `qwen.digit.guide.4`. Consider token positions 16 through 95
+  where the guide sampled a decimal digit. Rank by the smaller of
+  the top two guide digit probabilities, breaking ties by earliest
+  position. Try at most four positions per stem. The two most
+  probable digits in canonical prefill must each have at least 0.01
+  policy mass in both prefill and guide support. Take the first
+  16 eligible stems in panel order. Stop with zero suffix draws
+  if fewer than 12 qualify. Freeze and independently audit the
+  manifest before starting either reward block.
+- [ ] Draw eight suffixes per action in each of two blocks using
+  seeds 811062 and 811063, each salted with
+  `qwen.digit.<question ID>`. Check the packed support against
+  the manifest before forcing the first action. Use the ordinary
+  sampler for the entire remainder. Keep the 512-token cap and
+  the independently verified last-boxed-integer reward.
+- [ ] Apply the mixed-study gate unchanged. Include forks whose
+  discovery gap is at least two correct draws in either direction.
+  Require at least six such forks, at least six positive oriented
+  confirmation gaps, mean gain of at least one correct response
+  per eight draws, and one-sided exact sign-flip `p ≤ 0.025`.
+  The reference distribution assumes exchangeability of the two
+  confirmation arm counts under a joint no-effect null, with the
+  selected forks and directions fixed by discovery.
+  [Exact permutation testing](https://arxiv.org/abs/1411.7565)
+- [ ] Report all draws, ties and caps. On discovery-qualified forks,
+  also report the confirmation difference between the discovery
+  winner and the higher-prior digit, choosing the smaller token ID
+  on exact prior ties. Report disagreement count, wins, losses,
+  ties and mean gain including zero where both choices agree.
+  Treat comparisons with the prior and the mixed panel as
+  descriptive. Require confirmation before any write experiment.
+
+The sealed panel SHA-256 is `741f0d46a69896f30c83b89897556cce46642f3d59c5af70452b9c481887b412`.
+The driver SHA-256 is `2172cbd13d3f9d9108e45181872203d3168f7de70b4400ee828c08bda79708db`.
+The audit SHA-256 is `23c49a03b7cdc6cfe21844acbc356b84722e68f5b8065c47e840b251da17134d`.
+The frozen input checksum list SHA-256 is `b04c784dfe542faa55a97f79a68d5ef67f01ce705138f6068cd15dcf857c1fc6`.
