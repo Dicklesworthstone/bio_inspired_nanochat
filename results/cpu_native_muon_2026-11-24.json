@@ -1,0 +1,765 @@
+{
+  "dsr": {
+    "first-step": {
+      "checks": [
+        {
+          "duration_ms": 76282,
+          "exit_code": 0,
+          "log_sha256": "3c9695173d5b34300e179f1af241fa756854147c04fe1c3107ff415beb3e8827",
+          "status": "passed"
+        }
+      ],
+      "exit_code": 0,
+      "receipt_sha256": "f0a2d0bb42be5615334a0698696d07cebd0ddcbda72e35357f5ad7bb724f8c1d",
+      "run_id": "329f9ddf-f1e9-4a4d-80b1-33a3baeccb9f",
+      "source": "4407fffae654744a0ed4a68619f87f90a71d41b3|7cc162fd3f43e3158bbfcebb5db67f00ae72bb74dcafdfbb4d5a72b407cc4b2d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "passed"
+    },
+    "fresh-pair": {
+      "checks": [
+        {
+          "duration_ms": 672990,
+          "exit_code": 0,
+          "log_sha256": "73ae957378a816746e9b141775fe5fc7e367b9c9837156a65f94efa81c9939a4",
+          "status": "passed"
+        }
+      ],
+      "exit_code": 0,
+      "receipt_sha256": "9f4222e67196e1b78fe0123252b1749f15fa2a31a7cec8cc4c88eda9c722402b",
+      "run_id": "1fbd8a2f-050b-4466-952c-008f75dca413",
+      "source": "d593363ddcec73be56e855dc2b08a85be8767606|f42e3c01f2ade601188838ba59314acd3a3e9441be548b501cb580c49cc87330|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "passed"
+    },
+    "fresh-quick-start": {
+      "checks": [
+        {
+          "duration_ms": 1185214,
+          "exit_code": 0,
+          "log_sha256": "f8ac710544a6c69b3027e86e77ec12db07832ff81e2209ce07377c11f2c69e06",
+          "status": "passed"
+        }
+      ],
+      "exit_code": 0,
+      "receipt_sha256": "a6ea97cbcc2261c70c4c40c2237a55b6126ebc70e5d7fc23b9c3871b53d7a609",
+      "run_id": "e01c51ec-4892-4260-a6fd-15f9acc8079f",
+      "source": "d593363ddcec73be56e855dc2b08a85be8767606|f42e3c01f2ade601188838ba59314acd3a3e9441be548b501cb580c49cc87330|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "passed"
+    },
+    "production-live": {
+      "checks": [
+        {
+          "duration_ms": 194365,
+          "exit_code": 0,
+          "log_sha256": "73af0855d8c216ca489d815da1493036d68de7db156de97754a43467a40e2f80",
+          "status": "passed"
+        }
+      ],
+      "exit_code": 0,
+      "receipt_sha256": "43ea275d1e44cac25205c2ade2f5a8605e46fb5d8f06a8e553f63bcc09eeb439",
+      "run_id": "498fc335-fd8c-4c95-8344-7b34c7e59cba",
+      "source": "d593363ddcec73be56e855dc2b08a85be8767606|f42e3c01f2ade601188838ba59314acd3a3e9441be548b501cb580c49cc87330|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "passed"
+    },
+    "production-static": {
+      "checks": [
+        {
+          "duration_ms": 3225,
+          "exit_code": 0,
+          "log_sha256": "ce9c1d1311be6cd353ebe7c8333d4a905fd8fbd5a127161cc3f617e1cca84b8a",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 63695,
+          "exit_code": 1,
+          "log_sha256": "7140cfd64132ece20eb99830a2d7e4cfc49363409a98039648c41ac7dcd1b142",
+          "status": "failed"
+        },
+        {
+          "duration_ms": 54540,
+          "exit_code": 0,
+          "log_sha256": "be350753cdd751c335aae0b30761ac552ba8961fb5e82e7392c8686305edbbf2",
+          "status": "passed"
+        }
+      ],
+      "exit_code": 1,
+      "receipt_sha256": "8e23a4f1c819c0820c9292a25667b54c0f6ddfcdc4ff17593ab0513006d9c790",
+      "run_id": "e9ef227c-5c57-45f1-ad6c-8d70040e23d0",
+      "source": "d593363ddcec73be56e855dc2b08a85be8767606|f42e3c01f2ade601188838ba59314acd3a3e9441be548b501cb580c49cc87330|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "failed"
+    },
+    "production-targeted": {
+      "checks": [
+        {
+          "duration_ms": 204846,
+          "exit_code": 0,
+          "log_sha256": "a4a1566ae44ac857dc98973d85846a5b1c90b36773c877fcc2a691bc4e58d032",
+          "status": "passed"
+        }
+      ],
+      "exit_code": 0,
+      "receipt_sha256": "dd61273ebcb0860ad495469d325d23ac637a0cf35e7e3ee1d815b88c8ab274d5",
+      "run_id": "3bd3d992-32f6-41e5-9f5e-3fe9ab2689d0",
+      "source": "d593363ddcec73be56e855dc2b08a85be8767606|f42e3c01f2ade601188838ba59314acd3a3e9441be548b501cb580c49cc87330|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "passed"
+    },
+    "production-typing": {
+      "checks": [
+        {
+          "duration_ms": 55908,
+          "exit_code": 0,
+          "log_sha256": "b090fa6aa64e883099540d4b0d5179d044edcbbe329c1bd79c04cb502a0ff7a3",
+          "status": "passed"
+        }
+      ],
+      "exit_code": 0,
+      "receipt_sha256": "694bac03d127900459283d352443fd182acecce233a4dd0778b5a4993132e1aa",
+      "run_id": "70e50710-040a-43b9-8740-b165d1305b6f",
+      "source": "d593363ddcec73be56e855dc2b08a85be8767606|f42e3c01f2ade601188838ba59314acd3a3e9441be548b501cb580c49cc87330|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "passed"
+    },
+    "production-wheel": {
+      "checks": [
+        {
+          "duration_ms": 469864,
+          "exit_code": 0,
+          "log_sha256": "c663bcf09161b01ec7bacc54668d86c91c8ead1abb3f23b8d946def05e391f18",
+          "status": "passed"
+        }
+      ],
+      "exit_code": 0,
+      "receipt_sha256": "bfd6f780400d54f77d8b2643e5a18620d3fa4664d2599a30aca74c1524b515a2",
+      "run_id": "20d41b38-448e-4dd8-b5dc-023364afcb6b",
+      "source": "d593363ddcec73be56e855dc2b08a85be8767606|f42e3c01f2ade601188838ba59314acd3a3e9441be548b501cb580c49cc87330|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "passed"
+    },
+    "train": {
+      "checks": [
+        {
+          "duration_ms": 392937,
+          "exit_code": 0,
+          "log_sha256": "a21027ff02328cbe5cc77edcbee4621e1dd328b10bca784f5835838ecac4cd8f",
+          "status": "passed"
+        }
+      ],
+      "exit_code": 0,
+      "receipt_sha256": "ae9c357edfcb5fab03788fa9d70a2c5606cd035419eb20d62d7fc4f95fd48c8b",
+      "run_id": "787f5562-ebb2-4095-8f98-33446eee0e73",
+      "source": "4407fffae654744a0ed4a68619f87f90a71d41b3|7cc162fd3f43e3158bbfcebb5db67f00ae72bb74dcafdfbb4d5a72b407cc4b2d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "passed"
+    }
+  },
+  "results": {
+    "archived_first_step": {
+      "archived_matrices_reproduced": 48,
+      "cross_backend": {
+        "bfloat16": {
+          "l2": 0.021104871730382023,
+          "matrices": 24,
+          "max_abs": 0.0007421895861625671,
+          "per_matrix": {
+            "h.0.attn.attn.k_proj.weight": {
+              "elements": 16384,
+              "max_abs": 0.00045898184180259705,
+              "squared_l2": 2.067932304800402e-05,
+              "unequal": 14104
+            },
+            "h.0.attn.attn.o_proj.weight": {
+              "elements": 16384,
+              "max_abs": 0.0002490207552909851,
+              "squared_l2": 7.738835817362383e-06,
+              "unequal": 12392
+            },
+            "h.0.attn.attn.q_proj.weight": {
+              "elements": 16384,
+              "max_abs": 0.0003124997019767761,
+              "squared_l2": 1.6086259178995385e-05,
+              "unequal": 13720
+            },
+            "h.0.attn.attn.v_proj.weight": {
+              "elements": 16384,
+              "max_abs": 0.0003906264901161194,
+              "squared_l2": 1.575590087085118e-05,
+              "unequal": 13605
+            },
+            "h.0.mlp.mlp.fc.post.U": {
+              "elements": 4096,
+              "max_abs": 0.0,
+              "squared_l2": 0.0,
+              "unequal": 0
+            },
+            "h.0.mlp.mlp.fc.post.V": {
+              "elements": 4096,
+              "max_abs": 0.0,
+              "squared_l2": 0.0,
+              "unequal": 0
+            },
+            "h.0.mlp.mlp.fc.w_fast": {
+              "elements": 65536,
+              "max_abs": 0.00021484354510903358,
+              "squared_l2": 1.1409777563364367e-05,
+              "unequal": 48956
+            },
+            "h.0.mlp.mlp.fc.w_slow": {
+              "elements": 65536,
+              "max_abs": 0.00019531231373548508,
+              "squared_l2": 2.2125961935276526e-05,
+              "unequal": 53979
+            },
+            "h.0.mlp.mlp.proj.post.U": {
+              "elements": 1024,
+              "max_abs": 0.0,
+              "squared_l2": 0.0,
+              "unequal": 0
+            },
+            "h.0.mlp.mlp.proj.post.V": {
+              "elements": 1024,
+              "max_abs": 0.0,
+              "squared_l2": 0.0,
+              "unequal": 0
+            },
+            "h.0.mlp.mlp.proj.w_fast": {
+              "elements": 65536,
+              "max_abs": 0.0005078129470348358,
+              "squared_l2": 5.3021032965383806e-05,
+              "unequal": 51094
+            },
+            "h.0.mlp.mlp.proj.w_slow": {
+              "elements": 65536,
+              "max_abs": 0.00040039047598838806,
+              "squared_l2": 4.004386223001117e-05,
+              "unequal": 49203
+            },
+            "h.1.attn.attn.k_proj.weight": {
+              "elements": 16384,
+              "max_abs": 0.0002734381705522537,
+              "squared_l2": 1.5680514452439994e-05,
+              "unequal": 13487
+            },
+            "h.1.attn.attn.o_proj.weight": {
+              "elements": 16384,
+              "max_abs": 0.0007421895861625671,
+              "squared_l2": 2.549843937848995e-05,
+              "unequal": 14083
+            },
+            "h.1.attn.attn.q_proj.weight": {
+              "elements": 16384,
+              "max_abs": 0.0003515593707561493,
+              "squared_l2": 1.2677116666422736e-05,
+              "unequal": 13190
+            },
+            "h.1.attn.attn.v_proj.weight": {
+              "elements": 16384,
+              "max_abs": 0.00042968615889549255,
+              "squared_l2": 3.197984256178424e-05,
+              "unequal": 14369
+            },
+            "h.1.mlp.mlp.fc.post.U": {
+              "elements": 4096,
+              "max_abs": 0.0,
+              "squared_l2": 0.0,
+              "unequal": 0
+            },
+            "h.1.mlp.mlp.fc.post.V": {
+              "elements": 4096,
+              "max_abs": 4.883855581283569e-06,
+              "squared_l2": 2.385204533883467e-11,
+              "unequal": 1
+            },
+            "h.1.mlp.mlp.fc.w_fast": {
+              "elements": 65536,
+              "max_abs": 0.0002343747764825821,
+              "squared_l2": 1.929062012464919e-05,
+              "unequal": 52710
+            },
+            "h.1.mlp.mlp.fc.w_slow": {
+              "elements": 65536,
+              "max_abs": 0.0002343747764825821,
+              "squared_l2": 2.162805843201438e-05,
+              "unequal": 53439
+            },
+            "h.1.mlp.mlp.proj.post.U": {
+              "elements": 1024,
+              "max_abs": 0.0,
+              "squared_l2": 0.0,
+              "unequal": 0
+            },
+            "h.1.mlp.mlp.proj.post.V": {
+              "elements": 1024,
+              "max_abs": 0.0,
+              "squared_l2": 0.0,
+              "unequal": 0
+            },
+            "h.1.mlp.mlp.proj.w_fast": {
+              "elements": 65536,
+              "max_abs": 0.0005859378725290298,
+              "squared_l2": 9.14292027681091e-05,
+              "unequal": 55042
+            },
+            "h.1.mlp.mlp.proj.w_slow": {
+              "elements": 65536,
+              "max_abs": 0.000405273400247097,
+              "squared_l2": 4.03708389106745e-05,
+              "unequal": 49931
+            }
+          },
+          "unequal_elements": 523305,
+          "unequal_matrices": 17
+        },
+        "float32": {
+          "l2": 6.8873803602461455e-06,
+          "matrices": 24,
+          "max_abs": 8.568167686462402e-08,
+          "per_matrix": {
+            "h.0.attn.attn.k_proj.weight": {
+              "elements": 16384,
+              "max_abs": 7.450580596923828e-08,
+              "squared_l2": 2.6449689876154737e-12,
+              "unequal": 14236
+            },
+            "h.0.attn.attn.o_proj.weight": {
+              "elements": 16384,
+              "max_abs": 8.195638656616211e-08,
+              "squared_l2": 2.0559930732067873e-12,
+              "unequal": 13952
+            },
+            "h.0.attn.attn.q_proj.weight": {
+              "elements": 16384,
+              "max_abs": 8.195638656616211e-08,
+              "squared_l2": 2.8034903226118815e-12,
+              "unequal": 14228
+            },
+            "h.0.attn.attn.v_proj.weight": {
+              "elements": 16384,
+              "max_abs": 8.009374141693115e-08,
+              "squared_l2": 2.291222643178583e-12,
+              "unequal": 13982
+            },
+            "h.0.mlp.mlp.fc.post.U": {
+              "elements": 4096,
+              "max_abs": 5.3085386753082275e-08,
+              "squared_l2": 2.2039115385549034e-13,
+              "unequal": 3657
+            },
+            "h.0.mlp.mlp.fc.post.V": {
+              "elements": 4096,
+              "max_abs": 7.450580596923828e-09,
+              "squared_l2": 4.380587775590855e-15,
+              "unequal": 2009
+            },
+            "h.0.mlp.mlp.fc.w_fast": {
+              "elements": 65536,
+              "max_abs": 4.0046870708465576e-08,
+              "squared_l2": 1.5791005218308719e-12,
+              "unequal": 56971
+            },
+            "h.0.mlp.mlp.fc.w_slow": {
+              "elements": 65536,
+              "max_abs": 4.284083843231201e-08,
+              "squared_l2": 1.532500478856892e-12,
+              "unequal": 57042
+            },
+            "h.0.mlp.mlp.proj.post.U": {
+              "elements": 1024,
+              "max_abs": 4.7497451305389404e-08,
+              "squared_l2": 1.1224182381368505e-13,
+              "unequal": 941
+            },
+            "h.0.mlp.mlp.proj.post.V": {
+              "elements": 1024,
+              "max_abs": 1.4901161193847656e-08,
+              "squared_l2": 7.574243867931361e-15,
+              "unequal": 771
+            },
+            "h.0.mlp.mlp.proj.w_fast": {
+              "elements": 65536,
+              "max_abs": 7.497146725654602e-08,
+              "squared_l2": 5.229904938782257e-12,
+              "unequal": 60439
+            },
+            "h.0.mlp.mlp.proj.w_slow": {
+              "elements": 65536,
+              "max_abs": 8.195638656616211e-08,
+              "squared_l2": 4.928054727167294e-12,
+              "unequal": 60375
+            },
+            "h.1.attn.attn.k_proj.weight": {
+              "elements": 16384,
+              "max_abs": 7.404014468193054e-08,
+              "squared_l2": 2.219316963792915e-12,
+              "unequal": 13947
+            },
+            "h.1.attn.attn.o_proj.weight": {
+              "elements": 16384,
+              "max_abs": 7.264316082000732e-08,
+              "squared_l2": 2.3375161711633167e-12,
+              "unequal": 14121
+            },
+            "h.1.attn.attn.q_proj.weight": {
+              "elements": 16384,
+              "max_abs": 5.960464477539063e-08,
+              "squared_l2": 2.267316097785735e-12,
+              "unequal": 14110
+            },
+            "h.1.attn.attn.v_proj.weight": {
+              "elements": 16384,
+              "max_abs": 7.450580596923828e-08,
+              "squared_l2": 2.462782474709519e-12,
+              "unequal": 14113
+            },
+            "h.1.mlp.mlp.fc.post.U": {
+              "elements": 4096,
+              "max_abs": 4.470348358154297e-08,
+              "squared_l2": 2.2264811477078404e-13,
+              "unequal": 3661
+            },
+            "h.1.mlp.mlp.fc.post.V": {
+              "elements": 4096,
+              "max_abs": 7.450580596923828e-09,
+              "squared_l2": 5.2582083755216605e-15,
+              "unequal": 2113
+            },
+            "h.1.mlp.mlp.fc.w_fast": {
+              "elements": 65536,
+              "max_abs": 3.166496753692627e-08,
+              "squared_l2": 1.1512823570994255e-12,
+              "unequal": 56130
+            },
+            "h.1.mlp.mlp.fc.w_slow": {
+              "elements": 65536,
+              "max_abs": 2.7939677238464355e-08,
+              "squared_l2": 1.151273177040008e-12,
+              "unequal": 56015
+            },
+            "h.1.mlp.mlp.proj.post.U": {
+              "elements": 1024,
+              "max_abs": 3.3352989703416824e-08,
+              "squared_l2": 6.767512005830103e-14,
+              "unequal": 927
+            },
+            "h.1.mlp.mlp.proj.post.V": {
+              "elements": 1024,
+              "max_abs": 1.0244548320770264e-08,
+              "squared_l2": 4.352927673988708e-15,
+              "unequal": 725
+            },
+            "h.1.mlp.mlp.proj.w_fast": {
+              "elements": 65536,
+              "max_abs": 7.543712854385376e-08,
+              "squared_l2": 6.1119953817770435e-12,
+              "unequal": 60714
+            },
+            "h.1.mlp.mlp.proj.w_slow": {
+              "elements": 65536,
+              "max_abs": 8.568167686462402e-08,
+              "squared_l2": 6.024767729895024e-12,
+              "unequal": 60692
+            }
+          },
+          "unequal_elements": 595871,
+          "unequal_matrices": 24
+        }
+      },
+      "input_sha256": {
+        "native": "eafa2a825e66719f004e2123ccf35a7a07fc336d968f5c2ffe84e02d734936c5",
+        "reference": "1aa6434552adc6371b5bbd09873ab8b45692f34b036bcc69554894b6478b2763"
+      },
+      "lr": 0.02,
+      "momentum": 0.85,
+      "post_step_l2_reduction": 3064.2814287125802,
+      "pre_gradients": {
+        "l2": 6.504985094859829e-08,
+        "matrices": 24,
+        "max_abs": 1.280568540096283e-09,
+        "per_matrix": {
+          "h.0.attn.attn.k_proj.weight": {
+            "elements": 16384,
+            "max_abs": 9.313225746154785e-10,
+            "squared_l2": 4.601449244137475e-16,
+            "unequal": 15183
+          },
+          "h.0.attn.attn.o_proj.weight": {
+            "elements": 16384,
+            "max_abs": 9.313225746154785e-10,
+            "squared_l2": 2.965193990752046e-16,
+            "unequal": 14257
+          },
+          "h.0.attn.attn.q_proj.weight": {
+            "elements": 16384,
+            "max_abs": 9.89530235528946e-10,
+            "squared_l2": 4.520656580699645e-16,
+            "unequal": 15091
+          },
+          "h.0.attn.attn.v_proj.weight": {
+            "elements": 16384,
+            "max_abs": 1.1059455573558807e-09,
+            "squared_l2": 4.998948956825968e-16,
+            "unequal": 14776
+          },
+          "h.0.mlp.mlp.fc.post.U": {
+            "elements": 4096,
+            "max_abs": 3.637978807091713e-11,
+            "squared_l2": 1.7388303919033794e-19,
+            "unequal": 3791
+          },
+          "h.0.mlp.mlp.fc.post.V": {
+            "elements": 4096,
+            "max_abs": 4.001776687800884e-11,
+            "squared_l2": 1.4664886183584847e-19,
+            "unequal": 3768
+          },
+          "h.0.mlp.mlp.fc.w_fast": {
+            "elements": 65536,
+            "max_abs": 1.1641532182693481e-10,
+            "squared_l2": 1.8581673722434543e-17,
+            "unequal": 57451
+          },
+          "h.0.mlp.mlp.fc.w_slow": {
+            "elements": 65536,
+            "max_abs": 3.4924596548080444e-10,
+            "squared_l2": 1.1451716513259717e-16,
+            "unequal": 58750
+          },
+          "h.0.mlp.mlp.proj.post.U": {
+            "elements": 1024,
+            "max_abs": 2.546585164964199e-11,
+            "squared_l2": 2.5974150305353806e-20,
+            "unequal": 917
+          },
+          "h.0.mlp.mlp.proj.post.V": {
+            "elements": 1024,
+            "max_abs": 2.546585164964199e-11,
+            "squared_l2": 2.3893688221943156e-20,
+            "unequal": 941
+          },
+          "h.0.mlp.mlp.proj.w_fast": {
+            "elements": 65536,
+            "max_abs": 1.1641532182693481e-10,
+            "squared_l2": 1.0677231988383293e-17,
+            "unequal": 54873
+          },
+          "h.0.mlp.mlp.proj.w_slow": {
+            "elements": 65536,
+            "max_abs": 2.9103830456733704e-10,
+            "squared_l2": 6.516639615730883e-17,
+            "unequal": 56477
+          },
+          "h.1.attn.attn.k_proj.weight": {
+            "elements": 16384,
+            "max_abs": 1.280568540096283e-09,
+            "squared_l2": 5.630499989043854e-16,
+            "unequal": 15373
+          },
+          "h.1.attn.attn.o_proj.weight": {
+            "elements": 16384,
+            "max_abs": 9.313225746154785e-10,
+            "squared_l2": 4.973790584188226e-16,
+            "unequal": 14790
+          },
+          "h.1.attn.attn.q_proj.weight": {
+            "elements": 16384,
+            "max_abs": 8.149072527885437e-10,
+            "squared_l2": 5.125483038800513e-16,
+            "unequal": 15344
+          },
+          "h.1.attn.attn.v_proj.weight": {
+            "elements": 16384,
+            "max_abs": 1.0477378964424133e-09,
+            "squared_l2": 5.339396872453555e-16,
+            "unequal": 14933
+          },
+          "h.1.mlp.mlp.fc.post.U": {
+            "elements": 4096,
+            "max_abs": 2.9103830456733704e-11,
+            "squared_l2": 1.4656462211129786e-19,
+            "unequal": 3751
+          },
+          "h.1.mlp.mlp.fc.post.V": {
+            "elements": 4096,
+            "max_abs": 3.637978807091713e-11,
+            "squared_l2": 1.838575029192593e-19,
+            "unequal": 3840
+          },
+          "h.1.mlp.mlp.fc.w_fast": {
+            "elements": 65536,
+            "max_abs": 1.2369127944111824e-10,
+            "squared_l2": 1.5693730012333383e-17,
+            "unequal": 57403
+          },
+          "h.1.mlp.mlp.fc.w_slow": {
+            "elements": 65536,
+            "max_abs": 2.9103830456733704e-10,
+            "squared_l2": 9.693660449832852e-17,
+            "unequal": 58751
+          },
+          "h.1.mlp.mlp.proj.post.U": {
+            "elements": 1024,
+            "max_abs": 2.1827872842550278e-11,
+            "squared_l2": 2.5879004330013057e-20,
+            "unequal": 932
+          },
+          "h.1.mlp.mlp.proj.post.V": {
+            "elements": 1024,
+            "max_abs": 3.2741809263825417e-11,
+            "squared_l2": 3.3852432956111e-20,
+            "unequal": 958
+          },
+          "h.1.mlp.mlp.proj.w_fast": {
+            "elements": 65536,
+            "max_abs": 1.4551915228366852e-10,
+            "squared_l2": 1.3106233533930325e-17,
+            "unequal": 56697
+          },
+          "h.1.mlp.mlp.proj.w_slow": {
+            "elements": 65536,
+            "max_abs": 4.0745362639427185e-10,
+            "squared_l2": 8.050159439753859e-17,
+            "unequal": 58021
+          }
+        },
+        "unequal_elements": 597068,
+        "unequal_matrices": 24
+      },
+      "steps": 5,
+      "torch": "2.9.1+cu128"
+    },
+    "fresh_wheel": {
+      "elf": "rustbpe.cpython-314-x86_64-linux-gnu.so",
+      "elf_sha256": "be4c6deb888e23e9e4934b9d3addd8445ed2266c8213523eb9ff2d59b3562854",
+      "wheel": "bio_inspired_nanochat-0.1.0-cp314-cp314-manylinux_2_34_x86_64.whl",
+      "wheel_sha256": "56baec1f242c4a3ff48728e6413c0c254326462ed9d0c240539ce4468f45025a"
+    },
+    "fresh_wheel_parity": {
+      "atol": 1e-06,
+      "rtol": 1e-05,
+      "steps": {
+        "1": {
+          "logits": 904,
+          "max_abs": 2.384185791015625e-07,
+          "native_val_bpb": 1.6378109327112564,
+          "outside_tolerance": 0,
+          "reference_val_bpb": 1.6378109327112564
+        },
+        "2": {
+          "logits": 904,
+          "max_abs": 4.76837158203125e-07,
+          "native_val_bpb": 1.4349527369433788,
+          "outside_tolerance": 0,
+          "reference_val_bpb": 1.4349527369433788
+        }
+      }
+    },
+    "matched_two_step_counterfactual": {
+      "arms": [
+        "bf16-native",
+        "bf16-reference",
+        "fp32-native",
+        "fp32-reference"
+      ],
+      "atol": 1e-06,
+      "prompt": "The synapse",
+      "rtol": 1e-05,
+      "scope": "same-command two-step training",
+      "stages": {
+        "1": {
+          "bf16": {
+            "logits": 904,
+            "maximum_absolute_difference": 0.000333443284034729,
+            "native_or_first_val_bpb": 1.6378109327112564,
+            "outside_tolerance": 882,
+            "reference_or_second_val_bpb": 1.6378109327112564
+          },
+          "fp32": {
+            "logits": 904,
+            "maximum_absolute_difference": 2.384185791015625e-07,
+            "native_or_first_val_bpb": 1.6378109327112564,
+            "outside_tolerance": 0,
+            "reference_or_second_val_bpb": 1.6378109327112564
+          },
+          "native_precision": {
+            "logits": 904,
+            "maximum_absolute_difference": 0.0017480403184890747,
+            "native_or_first_val_bpb": 1.6378109327112564,
+            "outside_tolerance": 900,
+            "reference_or_second_val_bpb": 1.6378109327112564
+          },
+          "reference_precision": {
+            "logits": 904,
+            "maximum_absolute_difference": 0.0017991364002227783,
+            "native_or_first_val_bpb": 1.6378109327112564,
+            "outside_tolerance": 897,
+            "reference_or_second_val_bpb": 1.6378109327112564
+          }
+        },
+        "2": {
+          "bf16": {
+            "logits": 904,
+            "maximum_absolute_difference": 0.0008907020092010498,
+            "native_or_first_val_bpb": 1.4349238558918054,
+            "outside_tolerance": 892,
+            "reference_or_second_val_bpb": 1.4349383605977066
+          },
+          "fp32": {
+            "logits": 904,
+            "maximum_absolute_difference": 4.76837158203125e-07,
+            "native_or_first_val_bpb": 1.4349527369433788,
+            "outside_tolerance": 0,
+            "reference_or_second_val_bpb": 1.4349527369433788
+          },
+          "native_precision": {
+            "logits": 904,
+            "maximum_absolute_difference": 0.003881096839904785,
+            "native_or_first_val_bpb": 1.4349527369433788,
+            "outside_tolerance": 900,
+            "reference_or_second_val_bpb": 1.4349238558918054
+          },
+          "reference_precision": {
+            "logits": 904,
+            "maximum_absolute_difference": 0.004041731357574463,
+            "native_or_first_val_bpb": 1.4349527369433788,
+            "outside_tolerance": 902,
+            "reference_or_second_val_bpb": 1.4349383605977066
+          }
+        }
+      }
+    },
+    "production_parity": {
+      "atol": 1e-06,
+      "rtol": 1e-05,
+      "steps": {
+        "1": {
+          "logits": 904,
+          "max_abs": 2.384185791015625e-07,
+          "native_val_bpb": 1.6378109327112564,
+          "outside_tolerance": 0,
+          "reference_val_bpb": 1.6378109327112564
+        },
+        "2": {
+          "logits": 904,
+          "max_abs": 4.76837158203125e-07,
+          "native_val_bpb": 1.4349527369433788,
+          "outside_tolerance": 0,
+          "reference_val_bpb": 1.4349527369433788
+        }
+      }
+    }
+  },
+  "sources": {
+    "muon_native_replay.py": {
+      "content": "\"\"\"Reproduce the archived first Muon step and isolate orthogonalizer precision.\"\"\"\n\nimport hashlib\nimport json\nimport math\nimport sys\nfrom pathlib import Path\n\nimport torch\nfrom bio_inspired_nanochat.muon import Muon\n\n\nTRACES = {\n    \"native\": \"eafa2a825e66719f004e2123ccf35a7a07fc336d968f5c2ffe84e02d734936c5\",\n    \"reference\": \"1aa6434552adc6371b5bbd09873ab8b45692f34b036bcc69554894b6478b2763\",\n}\nLR = 0.02\nMOMENTUM = 0.85\nSTEPS = 5\n\n\ndef archived(root, arm):\n    path = root / f\"trace-{arm}\" / \"trace.pt\"\n    data = path.read_bytes()\n    assert hashlib.sha256(data).hexdigest() == TRACES[arm]\n    trace = torch.load(path, weights_only=True, map_location=\"cpu\")\n    result = {row[\"stage\"]: row[\"params\"] for row in trace[\"optim\"] if row[\"optimizer\"] == \"Muon\"}\n    assert set(result) == {\"pre\", \"post\"} and len(result[\"pre\"]) == len(result[\"post\"]) == 24\n    assert result[\"pre\"].keys() == result[\"post\"].keys()\n    return result\n\n\ndef production(entries):\n    params = {name: torch.nn.Parameter(data[\"weight\"].clone()) for name, data in entries.items()}\n    for name, param in params.items():\n        param.grad = entries[name][\"grad\"].clone()\n    Muon(list(params.values()), lr=LR, momentum=MOMENTUM, ns_steps=STEPS).step()\n    return {name: parameter.detach() for name, parameter in params.items()}\n\n\ndef orthogonalize(tensor, dtype):\n    value = tensor.to(dtype)\n    transposed = value.size(-2) > value.size(-1)\n    if transposed:\n        value = value.mT\n    value = value / (value.norm(dim=(-2, -1), keepdim=True) + 1e-7)\n    for _ in range(STEPS):\n        gram = value @ value.mT\n        polynomial = -4.7750 * gram + 2.0315 * gram @ gram\n        value = 3.4445 * value + polynomial @ value\n    return value.mT if transposed else value\n\n\ndef counterfactual(entries, dtype):\n    output = {}\n    for name, entry in entries.items():\n        grad = entry[\"grad\"].clone()\n        momentum = torch.zeros_like(grad).lerp_(grad, 1 - MOMENTUM)\n        g = grad.lerp_(momentum, MOMENTUM)\n        weight = entry[\"weight\"].clone()\n        output[name] = weight.add_(orthogonalize(g, dtype), alpha=-LR * max(1, weight.size(-2) / weight.size(-1))**0.5)\n    return output\n\n\ndef difference(a, b):\n    assert a.keys() == b.keys()\n    rows = {}\n    for name in a:\n        delta = a[name].double() - b[name].double()\n        rows[name] = {\"unequal\": int(torch.count_nonzero(delta)), \"max_abs\": float(delta.abs().max()),\n                      \"squared_l2\": float(delta.square().sum()), \"elements\": delta.numel()}\n    return {\"matrices\": len(rows), \"unequal_matrices\": sum(row[\"unequal\"] > 0 for row in rows.values()),\n            \"unequal_elements\": sum(row[\"unequal\"] for row in rows.values()),\n            \"max_abs\": max(row[\"max_abs\"] for row in rows.values()),\n            \"l2\": math.sqrt(math.fsum(row[\"squared_l2\"] for row in rows.values())), \"per_matrix\": rows}\n\n\ndef main(root, output):\n    torch.set_num_threads(2)\n    traces = {arm: archived(root, arm) for arm in TRACES}\n    before = {arm: trace[\"pre\"] for arm, trace in traces.items()}\n    assert before[\"native\"].keys() == before[\"reference\"].keys()\n    assert all(torch.equal(before[\"native\"][name][\"weight\"], before[\"reference\"][name][\"weight\"])\n               for name in before[\"native\"])\n    exact, high = {}, {}\n    for arm, snapshot in traces.items():\n        actual = production(snapshot[\"pre\"])\n        replay = counterfactual(snapshot[\"pre\"], torch.bfloat16)\n        for name in actual:\n            assert torch.equal(actual[name], snapshot[\"post\"][name][\"weight\"]), (arm, name, \"archived\")\n            assert torch.equal(replay[name], actual[name]), (arm, name, \"reference\")\n        exact[arm] = actual\n        high[arm] = counterfactual(snapshot[\"pre\"], torch.float32)\n    grads = {arm: {name: row[\"grad\"] for name, row in entries.items()} for arm, entries in before.items()}\n    by_precision = {\"bfloat16\": difference(exact[\"native\"], exact[\"reference\"]),\n                    \"float32\": difference(high[\"native\"], high[\"reference\"])}\n    document = {\"input_sha256\": TRACES, \"torch\": torch.__version__, \"lr\": LR, \"momentum\": MOMENTUM, \"steps\": STEPS,\n                \"archived_matrices_reproduced\": 48, \"pre_gradients\": difference(grads[\"native\"], grads[\"reference\"]),\n                \"cross_backend\": by_precision,\n                \"post_step_l2_reduction\": by_precision[\"bfloat16\"][\"l2\"] / by_precision[\"float32\"][\"l2\"]}\n    with output.open(\"x\", encoding=\"utf-8\") as stream:\n        json.dump(document, stream, indent=2, sort_keys=True, allow_nan=False)\n        stream.write(\"\\n\")\n    print({key: {metric: row[metric] for metric in (\"unequal_matrices\", \"max_abs\", \"l2\")}\n           for key, row in by_precision.items()})\n\n\nif __name__ == \"__main__\":\n    if not __debug__:\n        raise RuntimeError(\"The optimizer replay requires assertions.\")\n    main(*map(Path, sys.argv[1:]))\n",
+      "sha256": "2e297af030b86985ab452dfd238886d3a454639485dc3fae480ea9ea5020d395"
+    },
+    "muon_native_train.py": {
+      "content": "\"\"\"Run the original CPU training probe with one optimizer precision intervention.\"\"\"\n\nimport json\nimport math\nimport runpy\nimport sys\nfrom pathlib import Path\n\nimport torch\n\nfrom bio_inspired_nanochat import muon\nfrom bio_inspired_nanochat.checkpoint_manager import build_model\nfrom muon_native_replay import STEPS, orthogonalize\n\n\nPROMPT = \"The synapse\"\nARMS = (\"bf16-native\", \"bf16-reference\", \"fp32-native\", \"fp32-reference\")\nRTOL, ATOL = 1e-5, 1e-6\n\n\ndef high_precision(matrix, steps):\n    assert steps == STEPS and matrix.device.type == \"cpu\"\n    return orthogonalize(matrix, torch.float32)\n\n\ndef train(arm):\n    assert arm in ARMS\n    if arm.startswith(\"fp32-\"):\n        muon.zeropower_via_newtonschulz5 = high_precision\n    sys.argv = [\"scripts.base_train\", \"--synapses=1\", \"--depth=2\", \"--max_seq_len=64\",\n                \"--device_batch_size=2\", \"--total_batch_size=128\", \"--num_iterations=2\",\n                \"--eval_every=2\", \"--eval_tokens=128\", \"--core_metric_every=-1\", \"--sample_every=-1\",\n                \"--device_type=cpu\", \"--model_tag=e2e_quick_start\", \"--syn_cfg.tau_rrp=60.0\",\n                \"--syn_cfg.enable_hebbian=1\", \"--syn_cfg.bistable_latch=1\", \"--save_every=1\"]\n    if arm.endswith(\"-reference\"):\n        sys.argv.append(\"--syn_cfg.native_presyn=0\")\n    runpy.run_module(\"scripts.base_train\", run_name=\"__main__\")\n\n\ndef measure(directory, arm, step):\n    checkpoint = directory / arm / \"base_checkpoints\" / \"e2e_quick_start\"\n    meta = json.loads((checkpoint / f\"meta_{step:06d}.json\").read_bytes())\n    commit = json.loads((checkpoint / f\"commit_{step:06d}.json\").read_bytes())\n    assert commit[\"complete\"] and meta[\"synaptic_config\"][\"native_presyn\"] == arm.endswith(\"-native\")\n    model, tokenizer, _ = build_model(str(checkpoint), step, torch.device(\"cpu\"), \"eval\")\n    tokens = tokenizer.encode(PROMPT)\n    assert tokens == [429, 326]\n    with torch.inference_mode():\n        logits, _ = model(torch.tensor([tokens]), train_mode=False)\n    assert logits.numel() == 904 and bool(logits.isfinite().all())\n    val = meta.get(\"val_bpb\")\n    assert val is None or math.isfinite(val)\n    return logits, val\n\n\ndef report(directory, output):\n    torch.set_num_threads(2)\n    stages = {}\n    for step in (1, 2):\n        cases = {arm: measure(directory, arm, step) for arm in ARMS}\n        panel = {}\n        for label, native, reference in ((\"bf16\", \"bf16-native\", \"bf16-reference\"),\n                                         (\"fp32\", \"fp32-native\", \"fp32-reference\"),\n                                         (\"reference_precision\", \"fp32-reference\", \"bf16-reference\"),\n                                         (\"native_precision\", \"fp32-native\", \"bf16-native\")):\n            lhs, lhs_bpb = cases[native]\n            rhs, rhs_bpb = cases[reference]\n            diff = lhs.double() - rhs.double()\n            close = torch.isclose(lhs, rhs, rtol=RTOL, atol=ATOL)\n            panel[label] = {\"logits\": diff.numel(), \"outside_tolerance\": int((~close).sum()),\n                            \"maximum_absolute_difference\": float(diff.abs().max()),\n                            \"native_or_first_val_bpb\": lhs_bpb, \"reference_or_second_val_bpb\": rhs_bpb}\n        stages[str(step)] = panel\n    assert stages[\"2\"][\"bf16\"][\"outside_tolerance\"] > 0\n    with output.open(\"x\", encoding=\"utf-8\") as stream:\n        json.dump({\"stages\": stages, \"scope\": \"same-command two-step training\", \"rtol\": RTOL, \"atol\": ATOL,\n                   \"prompt\": PROMPT, \"arms\": ARMS}, stream, sort_keys=True, indent=2, allow_nan=False)\n        stream.write(\"\\n\")\n    print(json.dumps(stages[\"2\"], sort_keys=True))\n\n\nif __name__ == \"__main__\":\n    if not __debug__:\n        raise RuntimeError(\"The training probe requires assertions.\")\n    phase, *args = sys.argv[1:]\n    if phase == \"train\":\n        assert len(args) == 1\n        train(args[0])\n    else:\n        assert phase == \"report\"\n        report(*map(Path, args))\n",
+      "sha256": "0962f89fcbce656b1dc18aae014f88764097cd7db41c619b6fc19f463eab80b9"
+    },
+    "production.patch": {
+      "content": "diff --git a/bio_inspired_nanochat/muon.py b/bio_inspired_nanochat/muon.py\nindex 5084071..7393de1 100644\n--- a/bio_inspired_nanochat/muon.py\n+++ b/bio_inspired_nanochat/muon.py\n@@ -23,7 +23,8 @@ def zeropower_via_newtonschulz5(G: Tensor, steps: int) -> Tensor:\n     if G.ndim < 2:\n         raise ValueError(\"Muon expects 2D parameters only\") # batched Muon implementation by @scottjmaddox, and put into practice in the record by @YouJiacheng\n     a, b, c = (3.4445, -4.7750,  2.0315)\n-    X = G.bfloat16()\n+    # Keep CPU gradients in FP32 so a rounding boundary does not amplify backend noise.\n+    X = G.float() if G.device.type == \"cpu\" else G.bfloat16()\n     if G.size(-2) > G.size(-1):\n         X = X.mT\n \n@@ -47,8 +48,7 @@ class Muon(torch.optim.Optimizer):\n \n     Muon internally runs standard SGD-momentum, and then performs an orthogonalization post-\n     processing step, in which each 2D parameter's update is replaced with the nearest orthogonal\n-    matrix. To efficiently orthogonalize each update, we use a Newton-Schulz iteration, which has\n-    the advantage that it can be stably run in bfloat16 on the GPU.\n+    matrix. The Newton-Schulz iteration uses FP32 on CPU and BF16 on the GPU.\n \n     Some warnings:\n     - This optimizer should not be used for the embedding layer, the final fully connected layer,\ndiff --git a/tests/test_synaptic_optimizer_stability.py b/tests/test_synaptic_optimizer_stability.py\nindex 1128081..a84a1a5 100644\n--- a/tests/test_synaptic_optimizer_stability.py\n+++ b/tests/test_synaptic_optimizer_stability.py\n@@ -19,6 +19,7 @@ import pytest\n import torch\n \n from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig\n+from bio_inspired_nanochat.muon import zeropower_via_newtonschulz5\n from bio_inspired_nanochat.synaptic import SynapticConfig\n \n pytestmark = pytest.mark.unit\n@@ -89,3 +90,16 @@ def test_default_recipe_never_rises_above_its_initial_loss():\n def test_planted_negative_legacy_scalar_lr_stalls_far_behind_the_default_recipe():\n     legacy, default = _losses(scalar_lr=LEGACY_SCALAR_LR), _losses()\n     assert legacy[-1] > default[-1] + 1.0, (legacy, default)\n+\n+\n+def test_cpu_muon_keeps_small_gradient_changes_across_a_bfloat16_boundary():\n+    midpoint = 1 + 2**-8\n+    lower = torch.tensor([[midpoint - 2**-22, 0.4], [0.3, 0.9]], dtype=torch.float32)\n+    upper = lower.clone()\n+    upper[0, 0] = midpoint + 2**-22\n+    assert lower.bfloat16()[0, 0] != upper.bfloat16()[0, 0]\n+\n+    low_update = zeropower_via_newtonschulz5(lower, steps=5)\n+    high_update = zeropower_via_newtonschulz5(upper, steps=5)\n+    assert low_update.dtype == high_update.dtype == torch.float32\n+    torch.testing.assert_close(low_update, high_update, rtol=0, atol=2e-6)\n",
+      "sha256": "53d129c3abab4ef30d43aed331694f15f9e7b93ade0e1d28071b4f1dd015341b"
+    },
+    "verify_native_muon.py": {
+      "content": "\"\"\"Verify the normal CPU training entry point and its reloaded checkpoints.\"\"\"\n\nimport json\nimport sys\nfrom pathlib import Path\n\nimport torch\n\nfrom muon_native_train import ATOL, RTOL, measure\n\n\ndef main(root, output):\n    torch.set_num_threads(2)\n    results = {}\n    for step in (1, 2):\n        native, native_bpb = measure(root, \"verified-native\", step)\n        reference, reference_bpb = measure(root, \"verified-reference\", step)\n        outside = int((~torch.isclose(native, reference, rtol=RTOL, atol=ATOL)).sum())\n        results[str(step)] = {\"logits\": native.numel(), \"outside_tolerance\": outside,\n                              \"max_abs\": float((native.double() - reference.double()).abs().max()),\n                              \"native_val_bpb\": native_bpb, \"reference_val_bpb\": reference_bpb}\n    with output.open(\"x\", encoding=\"utf-8\") as stream:\n        json.dump({\"steps\": results, \"rtol\": RTOL, \"atol\": ATOL}, stream, indent=2, sort_keys=True, allow_nan=False)\n        stream.write(\"\\n\")\n    print(results)\n    assert all(case[\"outside_tolerance\"] == 0 for case in results.values())\n\n\nif __name__ == \"__main__\":\n    if not __debug__:\n        raise RuntimeError(\"The native parity check requires assertions.\")\n    main(*map(Path, sys.argv[1:]))\n",
+      "sha256": "5b99ab85d6d5fcf6b1da25145a0e1fb52399c4fceebeb6b4800fd478b89bc75f"
+    }
+  },
+  "training_base": "d593363ddcec73be56e855dc2b08a85be8767606"
+}

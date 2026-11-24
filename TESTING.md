@@ -201,6 +201,27 @@ The resulting model still missed the original tolerance on 889 of 904 logits. Ch
 only the normalization to direct division missed on 885. Both experiments stayed out of
 the production path. [Measured trajectories and DSR receipts](results/cpu_native_trajectory_2026-11-22.json)
 
+Replaying the first Muon step reproduced all 48 archived post-step matrices
+exactly. The native/reference L2 weight gap was 0.021105 with BF16 and
+0.0000068874 with FP32 orthogonalization on the same gradients.
+
+The four-arm, two-step CPU training probe used the original parquet and tokenizer
+inputs. At step two, 892 of 904 logits missed tolerance in the BF16 pair. All
+904 passed with FP32 orthogonalization, with a maximum absolute difference of
+`4.77 × 10⁻⁷` and validation BPB 1.434953 on both backends. The precision change
+also changes the CPU training trajectory within each backend. The reference
+backend's FP32 and BF16 logits differed by up to 0.00404 on this prompt.
+
+The production CPU Muon path now uses FP32. DSR rebuilt the locked CPython
+3.14 Linux wheel with SHA-256
+`56baec1f242c4a3ff48728e6413c0c254326462ed9d0c240539ce4468f45025a`.
+Its installed extension matched the previously qualified ELF byte for byte.
+Two new runs through `scripts.base_train` and the production checkpoint loader
+reproduced zero of 904 tolerance violations at both steps. The fresh-wheel
+Quick Start, scan and decode run passed 20 tests and skipped one CUDA-only
+test. The optimizer and native kernel subset passed 14 tests with the same
+CUDA-only skip. [CPU Muon evidence and DSR receipts](results/cpu_native_muon_2026-11-24.json)
+
 To identify the backend in an affected environment, start a fresh process.
 
 ```bash

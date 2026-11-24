@@ -19,6 +19,7 @@ import pytest
 import torch
 
 from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
+from bio_inspired_nanochat.muon import zeropower_via_newtonschulz5
 from bio_inspired_nanochat.synaptic import SynapticConfig
 
 pytestmark = pytest.mark.unit
@@ -89,3 +90,16 @@ def test_default_recipe_never_rises_above_its_initial_loss():
 def test_planted_negative_legacy_scalar_lr_stalls_far_behind_the_default_recipe():
     legacy, default = _losses(scalar_lr=LEGACY_SCALAR_LR), _losses()
     assert legacy[-1] > default[-1] + 1.0, (legacy, default)
+
+
+def test_cpu_muon_keeps_small_gradient_changes_across_a_bfloat16_boundary():
+    midpoint = 1 + 2**-8
+    lower = torch.tensor([[midpoint - 2**-22, 0.4], [0.3, 0.9]], dtype=torch.float32)
+    upper = lower.clone()
+    upper[0, 0] = midpoint + 2**-22
+    assert lower.bfloat16()[0, 0] != upper.bfloat16()[0, 0]
+
+    low_update = zeropower_via_newtonschulz5(lower, steps=5)
+    high_update = zeropower_via_newtonschulz5(upper, steps=5)
+    assert low_update.dtype == high_update.dtype == torch.float32
+    torch.testing.assert_close(low_update, high_update, rtol=0, atol=2e-6)

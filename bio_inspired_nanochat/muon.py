@@ -23,7 +23,8 @@ def zeropower_via_newtonschulz5(G: Tensor, steps: int) -> Tensor:
     if G.ndim < 2:
         raise ValueError("Muon expects 2D parameters only") # batched Muon implementation by @scottjmaddox, and put into practice in the record by @YouJiacheng
     a, b, c = (3.4445, -4.7750,  2.0315)
-    X = G.bfloat16()
+    # Keep CPU gradients in FP32 so a rounding boundary does not amplify backend noise.
+    X = G.float() if G.device.type == "cpu" else G.bfloat16()
     if G.size(-2) > G.size(-1):
         X = X.mT
 
@@ -47,8 +48,7 @@ class Muon(torch.optim.Optimizer):
 
     Muon internally runs standard SGD-momentum, and then performs an orthogonalization post-
     processing step, in which each 2D parameter's update is replaced with the nearest orthogonal
-    matrix. To efficiently orthogonalize each update, we use a Newton-Schulz iteration, which has
-    the advantage that it can be stably run in bfloat16 on the GPU.
+    matrix. The Newton-Schulz iteration uses FP32 on CPU and BF16 on the GPU.
 
     Some warnings:
     - This optimizer should not be used for the embedding layer, the final fully connected layer,
