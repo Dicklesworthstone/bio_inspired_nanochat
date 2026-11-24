@@ -1528,9 +1528,9 @@ decision, before applying the conditional two-action matrix update.
 - [x] Seal 80 new matched pairs with seed 811060. Verify all 160
   answers independently. Exclude overlap in full question text or
   operation tuple with the ladder, KL and mixed sibling panels.
-- [ ] Exercise the digit selector and one-token intervention on a
+- [x] Exercise the digit selector and one-token intervention on a
   small Qwen model, and check the exact test on known examples.
-- [ ] Roll in only on side zero, in five consecutive batches of
+- [x] Roll in only on side zero, in five consecutive batches of
   16, using the same pinned Qwen checkpoint and BF16 top-50 sampler.
   Use seed 811061 with salts `qwen.digit.guide.0` through
   `qwen.digit.guide.4`. Consider token positions 16 through 95
@@ -1569,3 +1569,40 @@ The sealed panel SHA-256 is `741f0d46a69896f30c83b89897556cce46642f3d59c5af70452
 The driver SHA-256 is `2172cbd13d3f9d9108e45181872203d3168f7de70b4400ee828c08bda79708db`.
 The audit SHA-256 is `23c49a03b7cdc6cfe21844acbc356b84722e68f5b8065c47e840b251da17134d`.
 The frozen input checksum list SHA-256 is `b04c784dfe542faa55a97f79a68d5ef67f01ce705138f6068cd15dcf857c1fc6`.
+
+Before either reward block, the first independent audit flagged
+one of 32 action probabilities under its fixed absolute tolerance
+of `1 × 10⁻⁷`. For the flagged action at `digit.packing.11.0`,
+the archived CUDA float32 softmax was `0.9042928814888` and the
+float64 reconstruction was `0.9042930501684`. The discrepancy
+concerns the displayed probability. The frozen support and the
+arithmetic outcomes are the quantities used for the intervention
+and its efficacy gate.
+
+- [x] Rerun the audit with exact CUDA replay from the archived
+  logits and an independent CPU reconstruction of the support
+  hash, digit ranking and probability floor. Require equality
+  for every stored CUDA probability and rejection of a one-ULP
+  perturbation in each. Keep the first failed receipt. The driver,
+  frozen manifest, random seeds and reward gate retain their
+  registered values.
+- [x] Decode the reward-free prefixes with the pinned tokenizer.
+  Identify forks inside an open `\\boxed{...}` expression and
+  report that breakdown descriptively to check whether the
+  study branched at final-answer digits.
+
+The revised audit SHA-256 is `0f051b5710e06565ac1c9aca5ca41c43a6f6a33aaacd2006a9413dbce1e9d8d2`.
+The exact CUDA probability replay SHA-256 is `d961a00a3494ea0730046574cf46682846bacf040740b086a46e5ce28d2185a3`.
+The prefix context audit SHA-256 is `c377664d333e3fd7b0f45f7648947dca887e31136e56d8406a13376f45de7373`.
+
+### Frozen digit forks
+
+The reward-free selector found 16 eligible stems among the first
+34. It archived all 80 guide continuations. The independent audit
+reproduced all 16 packed support hashes, and the CUDA replay
+matched 32 of 32 probabilities bit for bit and rejected 32 one-ULP
+changes. The minimum selected probability was 0.0159 in the guide
+and 0.0180 in canonical prefill. Zero of the 16 prefixes ended
+inside an open boxed expression.
+
+The frozen manifest SHA-256 is `406df7c14585a2ba268f0f99c7b635c4e5bfd4128461b211e39b81cc8239d1a1`.
