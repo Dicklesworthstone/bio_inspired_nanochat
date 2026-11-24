@@ -1371,5 +1371,17 @@ from 0.000018 to 0.000050. Budget qualification establishes drift
 control at sampled baseline prefixes. The fresh transfer run
 tests the resulting accuracy and termination behavior.
 
+Packing exceeded both budgets at the next larger grid point for
+each direction. At twice the selected compressed norm, pooled
+fixed-support KL was 0.00476, while packing alone reached 0.00586.
+Pooled JS was 0.001259, just above its budget. These pooled
+calculations are descriptive and did not change the frozen choices.
+
 [Calibration results and receipts](../../results/qwen_kl_calibration_2026-11-23.json) ·
 [Sealed panels and per-prefix drift](../../results/qwen_kl_calibration_2026-11-23.json.gz)
+
+The fresh zero-write packing panel produced 60/128 correct
+responses, 128/128 parseable responses and 28/32 mixed groups.
+The register check scored 28/32 correct. None of the 160 zero-write
+responses reached the token cap. The independent audit recovered
+both packing qualification counts from the raw completions.
