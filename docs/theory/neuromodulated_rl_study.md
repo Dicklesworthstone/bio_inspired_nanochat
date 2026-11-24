@@ -1638,3 +1638,40 @@ guide a KL-matched matrix update that transfers to new prompts.
 
 [Digit-only results, source and receipts](../../results/qwen_digit_sibling_2026-11-24.json) ·
 [All frozen contexts and suffix draws](../../results/qwen_digit_sibling_2026-11-24.json.gz)
+
+### Registered digit-credit write construction
+
+- [x] Verify the published compressed archive, then bind the
+  frozen prefix manifest and discovery rewards to the archive.
+  The discovery file SHA-256 is `0b5486d3d3a2bd7844a08b824b8eb745d2f079ba40fe06996d209a0f77e0da86`.
+- [ ] Run the two-prefix Qwen fixture. Check local gradient
+  parity and zero-signal behavior, and reject a reversed gradient
+  and a corrupted support hash.
+- [ ] On the pinned checkpoint, reproduce all 16 supports in the
+  same 16-row prefill geometry. Capture the last MLP input and
+  analytical two-digit feedback at each prefix before reading
+  the discovery rewards. Retain one input and one feedback row.
+- [ ] Use the eight qualifying discovery gaps to form the average
+  local matrix gradient. Compare its float64 entries with
+  autograd on an additive last-projection write at the same
+  prefixes. Anchor the differentiable norm-and-head computation
+  to the actual BF16 logit differences at zero write. Require
+  relative L2 and maximum absolute error at most `1 × 10⁻¹⁰`.
+  Reject the reversed direction against the same oracle.
+- [ ] Measure three resident-model post-reward assemblies per
+  method. The local method starts with the retained vectors.
+  The incumbent replays the eight eligible prefixes through
+  the frozen model before same-layer autograd. Report capture
+  time separately along with both post-reward measurements and
+  the logical trace size.
+- [ ] Freeze normalized reward, higher-prior, reversed and
+  incumbent directions. The prior direction uses the policy's
+  chosen digit sign on the same forks and ignores the reward
+  magnitudes. Choose the smaller ID on exact prior ties.
+- [ ] Check disjoint packing panels, calibrate common policy KL,
+  repeat the drift test on fresh prefixes, then compare frozen
+  writes with the zero-write policy on independent prompts.
+
+The construction driver SHA-256 is `261a09edf905936eb5c015301c3fe800c1e8d5c660335e7f7084172909ffccd5`.
+Its exact input checksum list SHA-256 is
+`0b0c0e7cd40f33d49ec89b5fc0fd6b433bf145c7debeba92bbd8f0d1346fdc4c`.
