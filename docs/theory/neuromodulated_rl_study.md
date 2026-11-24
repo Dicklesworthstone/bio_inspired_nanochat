@@ -1137,7 +1137,7 @@ on this group.
 
 ### Registered single-write adaptation trial
 
-- [ ] Use the reserved L1 adaptation questions, including both
+- [x] Use the reserved L1 adaptation questions, including both
   wordings. Draw four BF16 continuations per question with the
   frozen sampler and 512-token limit. Derive each batch seed with
   `stable_seed_u64(811030, salt="qwen.single_write.adaptation.L1.<offset>")`
@@ -1155,11 +1155,14 @@ on this group.
   exact-support and gradient checks.
 - [ ] Freeze the writes before evaluating the reserved L1
   transfer questions. Use four samples per question per arm,
-  identical batch seeds derived from base seed 811031 and the
-  same 512-token cap. Merge the replay and exact evaluations
+  the same 512-token cap, and batch seeds generated with
+  `stable_seed_u64(811031, salt="qwen.single_write.transfer.L1.<offset>")`
+  reduced modulo `2**63`. Merge the replay and exact evaluations
   only when their deployed writes match bit for bit. Record
   all actual scored lengths, truncation and parseability by
-  arm and wording.
+  arm and wording. Apply the frozen write as a FP32 input-matrix
+  product added to the down-projection output in its BF16 dtype.
+  Check zero-write logits bit for bit before sampling transfer.
 - [ ] Require the compressed arm to gain at least 4 of 64
   correct samples over both the rotated-reward and zero-write
   arms. In both comparisons require a one-sided exact pair
@@ -1167,6 +1170,30 @@ on this group.
   whether compressed finishes within two correct samples of
   it. Publish every outcome, including a failed or inconclusive
   pilot, and keep the official GSM8K test split sealed.
+- [ ] Run compressed, rotated and zero on the same GPU for
+  the primary contrasts. Run exact and an independent zero on
+  the second RTX 4090, along with replay if its write differs.
+  Require the two zero runs to agree token for token before
+  interpreting the cross-device contrast with exact.
 
-The adaptation qualification script SHA-256 is
-`04c9a674b87d7c19a7955c88133253110325212a6524070cc0c5826cdb80da40`.
+| Registered source | SHA-256 |
+| --- | --- |
+| Adaptation qualification | `04c9a674b87d7c19a7955c88133253110325212a6524070cc0c5826cdb80da40` |
+| Cached adaptation replay | `5847074a2b53d3a1a0d4af0b97208eaff13889ce0a6ae7cf676696473d5b3512` |
+| Transfer evaluation | `d2121bfe719b84ce0e44d665558924ab532cc13368d20b2801810fde56101dc6` |
+
+Adaptation passed at 49/64 correct, 64/64 parseable and 4/16
+mixed reward groups. The best constant scored 4/64, the exchanged
+labels scored 0/64 and the paired exact `p` was 1/256.
+The three candidate writes used 17,453 scored tokens. The
+compressed coordinates matched the projected exact matrix at
+relative error `4.19 × 10⁻⁷` and retained 29.55% of squared
+gradient norm on this adaptation batch.
+
+The initial FP32 norm report was low. An independent FP64 sum
+over the archived matrix values confirmed all three Frobenius
+norms were within `4 × 10⁻⁸` of the registered 0.5. The candidate
+matrices were preserved byte for byte.
+
+[Adaptation gate, write digests and receipts](../../results/qwen_single_write_2026-11-23_adaptation.json) ·
+[Saved adaptation trajectories](../../results/qwen_single_write_2026-11-23_adaptation.json.gz)
