@@ -123,8 +123,75 @@ answers were correct in 0/144 pairs in all three conditions. The mean
 margin favoring each pair's correct bindings over the swapped bindings
 was negative in all three active-write seeds.
 
-These trials measure writes first enabled at evaluation. The remaining
-test is whether training with the eviction in the loop can learn a readout
-that improves paired recall over a trained delta-memory comparator.
-The [experiment archive](../results/post_eviction_pairs_2026-11-24.json)
+These trials measure writes first enabled at evaluation. The
+[experiment archive](../results/post_eviction_pairs_2026-11-24.json)
 contains the drivers, per-seed measurements, and DSR receipts.
+
+### Training the memory rules directly
+
+The follow-up removes attention during training as well as evaluation.
+Each arm learns 16-dimensional key and value embeddings, a linear
+readout, and scalar write and decay rates. It receives the same
+decomposed key and value IDs, and the training loss backpropagates through
+the episode's independent writes. The projected Hebbian arm uses fixed
+production projections and normalized writes under a neutral gate. At
+the default rates, its functional recurrence matched the production
+fast matrix and eligibility factors across 80 writes, with a maximum
+absolute difference of $1.67\times10^{-16}$ in float64.
+
+The five seeds each train for 768 updates on episodes of two or eight
+distinct bindings. The two counterfactual episodes share all keys and
+swap the first two values. The shared query asks for the first key, and
+the score requires both answers to be correct. Cleared memory gives
+identical logits on every pair. Thirty-two bindings test length
+extrapolation. The delta arm implements a scalar-gated update
+$W\leftarrow\alpha W+\beta k^\mathsf{T}(v-k\alpha W)$. It draws on the
+[gated delta rule](https://arxiv.org/abs/2412.06464).
+
+| Trained writer | Mutable state | 2 bindings | 8 bindings | 32 bindings |
+|---|---:|---:|---:|---:|
+| Projected Hebbian | 2,048 bytes | 2,389 | 349 | 0 |
+| Scalar-gated delta | 1,024 bytes | 2,560 | 2,304 | 7 |
+| Decayed outer product | 1,024 bytes | 2,560 | 2,547 | 1,303 |
+
+Each cell is out of 2,560 conflicting pairs. The projected rule lost to
+both controls on all five seeds at eight bindings. Its gap to delta was
+−76.4 percentage points, versus the prespecified +5 point gain required
+for a positive result. At 32 bindings, the simple outer-product memory
+extrapolated better than both rules. Training left the isolated projection
+scalar positive for 10,472 of the 20,480 key–value combinations across
+the five Hebbian models.
+
+### Separating cross-event interference from sign errors
+
+Expanding the product of the two eligibility factors gives both
+same-event terms $k_i^\mathsf{T}v_i$ and cross-event terms
+$k_i^\mathsf{T}v_j$ for $i\ne j$. A cross-event term has coefficient
+proportional to $(v_iP_{\mathrm{out}})\cdot(k_jP_{\mathrm{in}})$.
+It can write an unobserved binding even when the original keys and
+values are orthogonal. The same-event intervention keeps just the
+diagonal of this expansion. Its trace decays by the square of the
+factor decay. A second intervention also takes the absolute value
+of each same-event projection scalar. Both keep the normalized write,
+fast-matrix cap, and training protocol. The trace recurrence matched
+the explicit expansion across 28 steps to $4.34\times10^{-19}$.
+
+| Trained writer | Mutable state | 2 bindings | 8 bindings | 32 bindings |
+|---|---:|---:|---:|---:|
+| Projected Hebbian | 2,048 bytes | 1,451 | 213 | 0 |
+| Same-event signed | 2,048 bytes | 1,516 | 879 | 0 |
+| Same-event sign-aligned | 2,048 bytes | 1,533 | 920 | 1 |
+| Scalar-gated delta | 1,024 bytes | 1,536 | 1,366 | 4 |
+
+Each cell is out of 1,536 conflicting pairs over three fresh seeds. At
+eight bindings, dropping cross-event products improved paired recall by
+43.4 percentage points. Sign alignment added 2.7 points pooled, with a
+2-pair loss on one seed. The best same-event variant scored below delta
+on every seed. This isolates cross-event interference as a material
+failure mode of the neutral-gate recurrence. Production training in
+`GPTSynaptic` uses detached writes, and this assay has explicit binding
+IDs and differentiates through the writes. Its result applies to the
+controlled memory component.
+
+The [trained-memory archive](../results/trained_evicted_recall_2026-11-24.json)
+contains both experiment drivers, paired outcomes, and terminal receipts.

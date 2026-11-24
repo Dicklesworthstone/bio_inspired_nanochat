@@ -1,0 +1,1915 @@
+{
+  "mask_encoding": "Each hexadecimal digit encodes four chronological held-out episode success bits, most-significant bit first. Leading zeros are preserved.",
+  "production_reference": {
+    "revision": "0a3a0c4c1625f6ad75409f99dbd6d5e204f9a9f6",
+    "same_synaptic_runtime_at": "acca0798cdcce66587a9762a84d175344d2df93b"
+  },
+  "trace_term_interventions": {
+    "algebra_witness": {
+      "episode_steps": 28,
+      "max_abs_error": 4.336808689942018e-19
+    },
+    "dsr_receipt": {
+      "command": "quality",
+      "details": {
+        "checks": [
+          {
+            "command": "set -e; export CUDA_VISIBLE_DEVICES=1 UV_OFFLINE=true UV_PROJECT_ENVIRONMENT=/data/projects/bio_inspired_nanochat/.venv OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 RAYON_NUM_THREADS=1 PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1; test \"$(git rev-parse HEAD)\" = 0a3a0c4c1625f6ad75409f99dbd6d5e204f9a9f6; printf '%s  %s\\n' 3b1981fc8f32b279b48e0d57936cfe922e7bd0782ec8255819211ee9095e3a83 /data/projects/bio-train-eviction.pyS1nyoz/train_memories.py c5ffd887a8d5983219fac4fdf59b3d160e2ce5d32498ede0629fa5fbc2657293 /data/projects/bio-train-eviction.pyS1nyoz/isolate_trace_terms.py | sha256sum --check; flock -w 60 /tmp/bio_inspired_nanochat-trj-gpu1.lock taskset -c 53 uv run --no-sync python /data/projects/bio-train-eviction.pyS1nyoz/isolate_trace_terms.py /data/projects/bio-train-eviction.pyS1nyoz/trace-terms.json; sha256sum /data/projects/bio-train-eviction.pyS1nyoz/train_memories.py /data/projects/bio-train-eviction.pyS1nyoz/isolate_trace_terms.py /data/projects/bio-train-eviction.pyS1nyoz/trace-terms.json",
+            "cwd": "/data/projects/bio-prefill-scan.Nq3wZNFe/source",
+            "duration_ms": 207372,
+            "executed": true,
+            "exit_code": 0,
+            "log_path": "/home/ubuntu/.local/state/dsr/quality-logs/bio-evicted-trace-terms/20261124T174118-EKne3ZnA/check-1.log",
+            "log_sha256": "4ba9a336489ae6e646b973526977881c2195d1359ab0612b9775e8f2396f6142",
+            "output_preview": "941,\n  \"arm\": \"projected_hebb\",\n  \"both\": {\n    \"2\": 498,\n    \"8\": 73,\n    \"32\": 0\n  },\n  \"seconds\": 17.08\n}\n{\n  \"seed\": 947,\n  \"arm\": \"same_event_aligned\",\n  \"both\": {\n    \"2\": 511,\n    \"8\": 296,\n    \"32\": 0\n  },\n  \"seconds\": 12.38\n}\n{\n  \"seed\": 947,\n  \"arm\": \"gated_delta\",\n  \"both\": {\n    \"2\": 512,\n    \"8\": 458,\n    \"32\": 1\n  },\n  \"seconds\": 7.63\n}\n{\n  \"seed\": 947,\n  \"arm\": \"projected_hebb\",\n  \"both\": {\n    \"2\": 484,\n    \"8\": 77,\n    \"32\": 0\n  },\n  \"seconds\": 19.76\n}\n{\n  \"seed\": 947,\n  \"arm\": \"same_event_signed\",\n  \"both\": {\n    \"2\": 501,\n    \"8\": 277,\n    \"32\": 0\n  },\n  \"seconds\": 12.92\n}\n3b1981fc8f32b279b48e0d57936cfe922e7bd0782ec8255819211ee9095e3a83  /data/projects/bio-train-eviction.pyS1nyoz/train_memories.py\nc5ffd887a8d5983219fac4fdf59b3d160e2ce5d32498ede0629fa5fbc2657293  /data/projects/bio-train-eviction.pyS1nyoz/isolate_trace_terms.py\n2a9efce3c3bb5b1b671e27500377889ec71f5d2da40cc9f3e45fbf87f5363d23  /data/projects/bio-train-eviction.pyS1nyoz/trace-terms.json\n\n# exit_code: 0\n",
+            "passed": true,
+            "status": "passed",
+            "timeout_seconds": 900
+          }
+        ],
+        "config_path": "/data/projects/bio-train-eviction.pyS1nyoz/bio-evicted-trace-terms.yaml",
+        "config_sha256": "3e560288d3b0ef11f9c71776874cd1482158be2187d0e94507201d216fe6fce1",
+        "config_sha256_after": "3e560288d3b0ef11f9c71776874cd1482158be2187d0e94507201d216fe6fce1",
+        "config_snapshot_path": "/home/ubuntu/.local/state/dsr/quality-logs/bio-evicted-trace-terms/20261124T174118-EKne3ZnA/checks-config.yaml",
+        "dry_run": false,
+        "dsr_version": "0.2.3",
+        "duration_ms": 208098,
+        "executed": 1,
+        "failed": 0,
+        "interrupted": 0,
+        "not_run": 0,
+        "observed": 1,
+        "passed": 1,
+        "planned": 0,
+        "run_dir": "/home/ubuntu/.local/state/dsr/quality-logs/bio-evicted-trace-terms/20261124T174118-EKne3ZnA",
+        "skipped": false,
+        "source_after": "0a3a0c4c1625f6ad75409f99dbd6d5e204f9a9f6|06fd1218e96460edbed295f43295296b239edf0fd942a0a64c047704ad719a8b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+        "source_before": "0a3a0c4c1625f6ad75409f99dbd6d5e204f9a9f6|06fd1218e96460edbed295f43295296b239edf0fd942a0a64c047704ad719a8b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+        "status": "passed",
+        "timeout_seconds": 900,
+        "tool": "bio-evicted-trace-terms",
+        "total": 1
+      },
+      "duration_ms": 0,
+      "exit_code": 0,
+      "run_id": "a5fc06f2-61f7-44b0-9e10-a9302e67b607",
+      "started_at": "2026-11-24T22:46:09Z",
+      "status": "success",
+      "tool": "dsr",
+      "version": "0.2.3"
+    },
+    "gpu": "NVIDIA GeForce RTX 4090",
+    "parameters": {
+      "arms": [
+        "projected_hebb",
+        "same_event_signed",
+        "same_event_aligned",
+        "gated_delta"
+      ],
+      "loads": [
+        2,
+        8,
+        32
+      ],
+      "panel": 512,
+      "seeds": [
+        937,
+        941,
+        947
+      ]
+    },
+    "pooled_scores": {
+      "2": {
+        "gated_delta": {
+          "both_correct": 1536,
+          "conflicting_pairs": 1536,
+          "correct": 3072,
+          "queries": 3072
+        },
+        "projected_hebb": {
+          "both_correct": 1451,
+          "conflicting_pairs": 1536,
+          "correct": 2986,
+          "queries": 3072
+        },
+        "same_event_aligned": {
+          "both_correct": 1533,
+          "conflicting_pairs": 1536,
+          "correct": 3069,
+          "queries": 3072
+        },
+        "same_event_signed": {
+          "both_correct": 1516,
+          "conflicting_pairs": 1536,
+          "correct": 3052,
+          "queries": 3072
+        }
+      },
+      "32": {
+        "gated_delta": {
+          "both_correct": 4,
+          "conflicting_pairs": 1536,
+          "correct": 137,
+          "queries": 3072
+        },
+        "projected_hebb": {
+          "both_correct": 0,
+          "conflicting_pairs": 1536,
+          "correct": 48,
+          "queries": 3072
+        },
+        "same_event_aligned": {
+          "both_correct": 1,
+          "conflicting_pairs": 1536,
+          "correct": 93,
+          "queries": 3072
+        },
+        "same_event_signed": {
+          "both_correct": 0,
+          "conflicting_pairs": 1536,
+          "correct": 31,
+          "queries": 3072
+        }
+      },
+      "8": {
+        "gated_delta": {
+          "both_correct": 1366,
+          "conflicting_pairs": 1536,
+          "correct": 2862,
+          "queries": 3072
+        },
+        "projected_hebb": {
+          "both_correct": 213,
+          "conflicting_pairs": 1536,
+          "correct": 1215,
+          "queries": 3072
+        },
+        "same_event_aligned": {
+          "both_correct": 920,
+          "conflicting_pairs": 1536,
+          "correct": 2325,
+          "queries": 3072
+        },
+        "same_event_signed": {
+          "both_correct": 879,
+          "conflicting_pairs": 1536,
+          "correct": 2214,
+          "queries": 3072
+        }
+      }
+    },
+    "pytorch": "2.9.1+cu128",
+    "results": {
+      "937": {
+        "gated_delta": {
+          "evaluation": {
+            "loads": {
+              "2": {
+                "both_correct": 512,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 1024,
+                "mean_nll": 0.08798898756504059,
+                "mean_paired_margin": 7.832296848297119,
+                "pair_success_hex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "32": {
+                "both_correct": 2,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 52,
+                "mean_nll": 4.5984649658203125,
+                "mean_paired_margin": 1.185453176498413,
+                "pair_success_hex": "00000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000000000000000000000008000000000000",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "8": {
+                "both_correct": 460,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 961,
+                "mean_nll": 0.6809278726577759,
+                "mean_paired_margin": 5.786018371582031,
+                "pair_success_hex": "ff7fff7fbff7fffff7ffffffffbffffe7fdf9fffdffff7ffefff9fff77ff97ffaffe3ffffdbfc3ffffff6fffff6fff7f5feb7d7feffffefbffdfff3ffffefffe",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              }
+            },
+            "positive_isolated_projection_pairs": 2049,
+            "projection_pair_count": 4096
+          },
+          "learned_parameter_count": 3138,
+          "mutable_state_bytes": 1024,
+          "training": {
+            "decay": 0.9958959817886353,
+            "loss_samples": [
+              4.171131610870361,
+              2.9939239025115967,
+              1.4777154922485352,
+              0.7835251688957214,
+              0.5311754941940308,
+              0.37872838973999023,
+              0.3150393068790436
+            ],
+            "seconds": 9.837360496167094,
+            "step": 0.9368058443069458
+          }
+        },
+        "projected_hebb": {
+          "evaluation": {
+            "loads": {
+              "2": {
+                "both_correct": 469,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 981,
+                "mean_nll": 0.6960969567298889,
+                "mean_paired_margin": 5.2246294021606445,
+                "pair_success_hex": "fffefefbfebfcf7f3fffffbefffffffffe7efbb7f7fffffe9fdfdfffeffdffffffdfff7edffffeff7bfff7dffffffee7ffff7ffffefbfffffffdfffffffbffff",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "32": {
+                "both_correct": 0,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 14,
+                "mean_nll": 4.197974681854248,
+                "mean_paired_margin": 0.19134142994880676,
+                "pair_success_hex": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "8": {
+                "both_correct": 63,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 401,
+                "mean_nll": 2.9701786041259766,
+                "mean_paired_margin": 1.543455958366394,
+                "pair_success_hex": "0200005e02015000010020042004008010084002000a000000200121230801121920040c000000200081200002004004001000001440044402400000010808cc",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              }
+            },
+            "positive_isolated_projection_pairs": 2355,
+            "projection_pair_count": 4096
+          },
+          "learned_parameter_count": 3138,
+          "mutable_state_bytes": 2048,
+          "training": {
+            "decay": 0.9859258532524109,
+            "loss_samples": [
+              4.168201923370361,
+              4.122681617736816,
+              3.8584675788879395,
+              3.6394972801208496,
+              3.5310237407684326,
+              3.372309684753418,
+              3.308131694793701
+            ],
+            "seconds": 23.38773651001975,
+            "step": 0.6569992899894714
+          }
+        },
+        "same_event_aligned": {
+          "evaluation": {
+            "loads": {
+              "2": {
+                "both_correct": 512,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 1024,
+                "mean_nll": 0.215256929397583,
+                "mean_paired_margin": 7.194120407104492,
+                "pair_success_hex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "32": {
+                "both_correct": 0,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 27,
+                "mean_nll": 4.008576393127441,
+                "mean_paired_margin": 0.2869783639907837,
+                "pair_success_hex": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "8": {
+                "both_correct": 322,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 796,
+                "mean_nll": 2.2233219146728516,
+                "mean_paired_margin": 2.4476490020751953,
+                "pair_success_hex": "17cf3f473b76b97033df798c2bf0b0e66bff5efa7fe4e31bfdcbc9fd1683c93fe87ddc939a9d9bfcfdbf5fdfdf4d7b55cbe86547fecfda8f8d9e69ceed36dcee",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              }
+            },
+            "positive_isolated_projection_pairs": 2064,
+            "projection_pair_count": 4096
+          },
+          "learned_parameter_count": 3138,
+          "mutable_state_bytes": 2048,
+          "training": {
+            "decay": 0.3940347731113434,
+            "loss_samples": [
+              4.1743693351745605,
+              3.642348289489746,
+              3.135956048965454,
+              2.7066824436187744,
+              2.387038230895996,
+              2.103523015975952,
+              1.939616322517395
+            ],
+            "seconds": 17.170483366120607,
+            "step": 0.8362465500831604
+          }
+        },
+        "same_event_signed": {
+          "evaluation": {
+            "loads": {
+              "2": {
+                "both_correct": 509,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 1021,
+                "mean_nll": 0.2726033926010132,
+                "mean_paired_margin": 5.957884311676025,
+                "pair_success_hex": "ffffffffffffffffffffffffffffffffffffffffffdffffffffffffffdffffffffffffbfffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "32": {
+                "both_correct": 0,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 9,
+                "mean_nll": 4.196664810180664,
+                "mean_paired_margin": 0.23493140935897827,
+                "pair_success_hex": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "8": {
+                "both_correct": 298,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 752,
+                "mean_nll": 2.339599132537842,
+                "mean_paired_margin": 1.9841378927230835,
+                "pair_success_hex": "c98b91fe6a3bc5e2c73ecee6f3f332e2fe1a38f2cfe59d76e8f9e3ea33bb7b1a6feccda832ba72ee97ccbf68567635fa79854d7be3f45acc0dd15da6a783ca7f",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              }
+            },
+            "positive_isolated_projection_pairs": 2496,
+            "projection_pair_count": 4096
+          },
+          "learned_parameter_count": 3138,
+          "mutable_state_bytes": 2048,
+          "training": {
+            "decay": 0.2451159805059433,
+            "loss_samples": [
+              4.170140266418457,
+              4.043298721313477,
+              3.4870548248291016,
+              2.939495801925659,
+              2.5453128814697266,
+              2.155092477798462,
+              1.872260332107544
+            ],
+            "seconds": 15.757223978172988,
+            "step": 0.8746557235717773
+          }
+        }
+      },
+      "941": {
+        "gated_delta": {
+          "evaluation": {
+            "loads": {
+              "2": {
+                "both_correct": 512,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 1024,
+                "mean_nll": 0.09135449677705765,
+                "mean_paired_margin": 7.887511730194092,
+                "pair_success_hex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "32": {
+                "both_correct": 1,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 41,
+                "mean_nll": 4.617730140686035,
+                "mean_paired_margin": 1.2166470289230347,
+                "pair_success_hex": "00000000000008000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "8": {
+                "both_correct": 448,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 946,
+                "mean_nll": 0.7017688751220703,
+                "mean_paired_margin": 5.8043646812438965,
+                "pair_success_hex": "eff9fffdfff7f3f5fdfbf7f63fbcff7dfcfdaffff3ffeffff7bfffffffbffd6ffffbffffffbefffffbfdffeff3feffeeffbfebdfbdffedbff7efeffffb7fbebd",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              }
+            },
+            "positive_isolated_projection_pairs": 2030,
+            "projection_pair_count": 4096
+          },
+          "learned_parameter_count": 3138,
+          "mutable_state_bytes": 1024,
+          "training": {
+            "decay": 0.9959087371826172,
+            "loss_samples": [
+              4.154770851135254,
+              2.9432921409606934,
+              1.4922293424606323,
+              0.7658777832984924,
+              0.5627413988113403,
+              0.42105793952941895,
+              0.30691370368003845
+            ],
+            "seconds": 5.762782709207386,
+            "step": 0.9377081990242004
+          }
+        },
+        "projected_hebb": {
+          "evaluation": {
+            "loads": {
+              "2": {
+                "both_correct": 498,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 1009,
+                "mean_nll": 0.6008754372596741,
+                "mean_paired_margin": 5.391201496124268,
+                "pair_success_hex": "ffffffffffbffeffffffffeffefffffffffffffff7fefffff7ffbfdffff7ffdffbfffffffffffffffff7ffffffffffffffffffffffffff7fffffffffffffffff",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "32": {
+                "both_correct": 0,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 18,
+                "mean_nll": 4.230052947998047,
+                "mean_paired_margin": 0.21656686067581177,
+                "pair_success_hex": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "8": {
+                "both_correct": 73,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 402,
+                "mean_nll": 2.9643361568450928,
+                "mean_paired_margin": 1.574623703956604,
+                "pair_success_hex": "0108e021400d00000180200802903002080000180c00000201128102000a01200828051004000040001024000081000000400113020023240036002089201104",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              }
+            },
+            "positive_isolated_projection_pairs": 1606,
+            "projection_pair_count": 4096
+          },
+          "learned_parameter_count": 3138,
+          "mutable_state_bytes": 2048,
+          "training": {
+            "decay": 0.987987220287323,
+            "loss_samples": [
+              4.1689534187316895,
+              4.110518932342529,
+              3.833407402038574,
+              3.66684627532959,
+              3.5193400382995605,
+              3.417449951171875,
+              3.332292318344116
+            ],
+            "seconds": 17.08073849324137,
+            "step": 0.6515740752220154
+          }
+        },
+        "same_event_aligned": {
+          "evaluation": {
+            "loads": {
+              "2": {
+                "both_correct": 510,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 1022,
+                "mean_nll": 0.22809353470802307,
+                "mean_paired_margin": 7.278285980224609,
+                "pair_success_hex": "fffffffffffffffffffffffffffffffffffffffdfffdffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "32": {
+                "both_correct": 1,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 31,
+                "mean_nll": 4.023139953613281,
+                "mean_paired_margin": 0.28212207555770874,
+                "pair_success_hex": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "8": {
+                "both_correct": 302,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 768,
+                "mean_nll": 2.225620985031128,
+                "mean_paired_margin": 2.4039406776428223,
+                "pair_success_hex": "39ccef353ebfa85089787ef47c7cce5c3ddf3ffdb956ae7a8f2dd774f4ba6f7d371f7cde6e1eb426f94d9e847993af70f7ffab8f55e9288e3bbc88a93954be13",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              }
+            },
+            "positive_isolated_projection_pairs": 2019,
+            "projection_pair_count": 4096
+          },
+          "learned_parameter_count": 3138,
+          "mutable_state_bytes": 2048,
+          "training": {
+            "decay": 0.3956298530101776,
+            "loss_samples": [
+              4.1581621170043945,
+              3.640839099884033,
+              3.137800455093384,
+              2.6883368492126465,
+              2.398038148880005,
+              2.140932559967041,
+              1.8955538272857666
+            ],
+            "seconds": 15.294980582781136,
+            "step": 0.83545982837677
+          }
+        },
+        "same_event_signed": {
+          "evaluation": {
+            "loads": {
+              "2": {
+                "both_correct": 506,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 1018,
+                "mean_nll": 0.27877986431121826,
+                "mean_paired_margin": 6.147029876708984,
+                "pair_success_hex": "fffffff7fffffffffffffffffffffffffffffffffffeffffffffffdfffffffdffbffffffffffffefffffffffffffffffffffffffffffffffffffffffffffffff",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "32": {
+                "both_correct": 0,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 9,
+                "mean_nll": 4.222855091094971,
+                "mean_paired_margin": 0.23230330646038055,
+                "pair_success_hex": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "8": {
+                "both_correct": 304,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 749,
+                "mean_nll": 2.3227386474609375,
+                "mean_paired_margin": 2.025628089904785,
+                "pair_success_hex": "b6ea8e6b9b0f1b788e6ae7b4494e23fb7fbb1cb5ec6ea7fddefbdb38762aca7426fc13d4eb4cf1677a7fdf6d5b9843b7b6bd9387c99beb7ecf958dc4f9add686",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              }
+            },
+            "positive_isolated_projection_pairs": 1600,
+            "projection_pair_count": 4096
+          },
+          "learned_parameter_count": 3138,
+          "mutable_state_bytes": 2048,
+          "training": {
+            "decay": 0.24372148513793945,
+            "loss_samples": [
+              4.171819686889648,
+              3.9839138984680176,
+              3.4274256229400635,
+              2.9183106422424316,
+              2.495187759399414,
+              2.1314640045166016,
+              1.8625141382217407
+            ],
+            "seconds": 18.154618743807077,
+            "step": 0.8750681281089783
+          }
+        }
+      },
+      "947": {
+        "gated_delta": {
+          "evaluation": {
+            "loads": {
+              "2": {
+                "both_correct": 512,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 1024,
+                "mean_nll": 0.09406524896621704,
+                "mean_paired_margin": 7.845921516418457,
+                "pair_success_hex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "32": {
+                "both_correct": 1,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 44,
+                "mean_nll": 4.531542778015137,
+                "mean_paired_margin": 1.2071104049682617,
+                "pair_success_hex": "00000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000000000000000",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "8": {
+                "both_correct": 458,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 955,
+                "mean_nll": 0.6885442733764648,
+                "mean_paired_margin": 5.8219499588012695,
+                "pair_success_hex": "fffe7ff7fff3efffddfffffcdfbffdf7f7effdf7aff3ddfffffbffdfebfffbfff7d77f77f5ffdfbfbf7fff7ffff7ff7dfff77effdff7fffdfefffdfffffffeff",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              }
+            },
+            "positive_isolated_projection_pairs": 2042,
+            "projection_pair_count": 4096
+          },
+          "learned_parameter_count": 3138,
+          "mutable_state_bytes": 1024,
+          "training": {
+            "decay": 0.9959518909454346,
+            "loss_samples": [
+              4.15402889251709,
+              2.992203950881958,
+              1.4810667037963867,
+              0.8043282628059387,
+              0.506203293800354,
+              0.398621529340744,
+              0.31098300218582153
+            ],
+            "seconds": 7.629178718198091,
+            "step": 0.9368187785148621
+          }
+        },
+        "projected_hebb": {
+          "evaluation": {
+            "loads": {
+              "2": {
+                "both_correct": 484,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 996,
+                "mean_nll": 0.6666233539581299,
+                "mean_paired_margin": 5.218573570251465,
+                "pair_success_hex": "fffffbfffefffff7fbfffffffbff777fffffdfffffffffdffffffdffffffffffe7fffff7defdff7ffefffff7fffbfffdffffbfdffbfbf7fbffffffffffffffff",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "32": {
+                "both_correct": 0,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 16,
+                "mean_nll": 4.202030181884766,
+                "mean_paired_margin": 0.20031686127185822,
+                "pair_success_hex": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "8": {
+                "both_correct": 77,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 412,
+                "mean_nll": 3.019108295440674,
+                "mean_paired_margin": 1.5030748844146729,
+                "pair_success_hex": "240020082004018000000888485200041200500123084c200005001000a000424000a08080010220000208e10000013114000222608484016080800008020113",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              }
+            },
+            "positive_isolated_projection_pairs": 2239,
+            "projection_pair_count": 4096
+          },
+          "learned_parameter_count": 3138,
+          "mutable_state_bytes": 2048,
+          "training": {
+            "decay": 0.9832819104194641,
+            "loss_samples": [
+              4.167354583740234,
+              4.146345615386963,
+              3.8901286125183105,
+              3.684434413909912,
+              3.561089038848877,
+              3.4343886375427246,
+              3.364987373352051
+            ],
+            "seconds": 19.76321936910972,
+            "step": 0.6551887392997742
+          }
+        },
+        "same_event_aligned": {
+          "evaluation": {
+            "loads": {
+              "2": {
+                "both_correct": 511,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 1023,
+                "mean_nll": 0.223064124584198,
+                "mean_paired_margin": 7.156175136566162,
+                "pair_success_hex": "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffbffffffffffffff",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "32": {
+                "both_correct": 0,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 35,
+                "mean_nll": 4.012025833129883,
+                "mean_paired_margin": 0.2860988974571228,
+                "pair_success_hex": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "8": {
+                "both_correct": 296,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 761,
+                "mean_nll": 2.2222418785095215,
+                "mean_paired_margin": 2.490706443786621,
+                "pair_success_hex": "66f8db7fc9edbac1751f26fa17b8ab677e0bcd6e0fe25f38c7d938976f6cb1949d47c6b0c5cbd4143b72b09fe77c7fb5c67b9e1dafa308ddb96afd6f677603e7",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              }
+            },
+            "positive_isolated_projection_pairs": 2062,
+            "projection_pair_count": 4096
+          },
+          "learned_parameter_count": 3138,
+          "mutable_state_bytes": 2048,
+          "training": {
+            "decay": 0.3922429382801056,
+            "loss_samples": [
+              4.151183605194092,
+              3.6489694118499756,
+              3.119955539703369,
+              2.7119293212890625,
+              2.378096580505371,
+              2.1014628410339355,
+              1.903324842453003
+            ],
+            "seconds": 12.379163175821304,
+            "step": 0.8433585166931152
+          }
+        },
+        "same_event_signed": {
+          "evaluation": {
+            "loads": {
+              "2": {
+                "both_correct": 501,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 1013,
+                "mean_nll": 0.3150615096092224,
+                "mean_paired_margin": 5.8122429847717285,
+                "pair_success_hex": "fffffffffffffffffff7dfffffffffffff7ffffffffffffffffffffffffffffff7ffffffdfffffffffff7ffffb5fffffffffffffff7fffffffffffdfffffffff",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "32": {
+                "both_correct": 0,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 13,
+                "mean_nll": 4.198980808258057,
+                "mean_paired_margin": 0.21932359039783478,
+                "pair_success_hex": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "8": {
+                "both_correct": 277,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 713,
+                "mean_nll": 2.388400077819824,
+                "mean_paired_margin": 1.9992176294326782,
+                "pair_success_hex": "7519583b9b3ee2ed96db52f7cf264cc5fa9ce8f8474a2b886a5381153a5a317e2759878b12119711d23f221726eaf81ffddeb6d381977dd9c75fc9fbb3b390bf",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              }
+            },
+            "positive_isolated_projection_pairs": 2304,
+            "projection_pair_count": 4096
+          },
+          "learned_parameter_count": 3138,
+          "mutable_state_bytes": 2048,
+          "training": {
+            "decay": 0.24125854671001434,
+            "loss_samples": [
+              4.169883728027344,
+              4.120340824127197,
+              3.562148332595825,
+              3.015247106552124,
+              2.6058359146118164,
+              2.229245662689209,
+              1.9576671123504639
+            ],
+            "seconds": 12.919522677082568,
+            "step": 0.8759143352508545
+          }
+        }
+      }
+    },
+    "scope": "Fresh matched seeds. Signed same-event trace removes cross-event products, then the aligned trace takes the absolute value of the projected same-event scalar. Normalized write, norm cap, trainable step/decay, learned embeddings, readout, sampling and train budget match the projected arm. The numerical witness compares with the explicitly expanded trace product.",
+    "source": {
+      "driver": "\"\"\"Train matched interventions on signed, same-event eligibility.\"\"\"\nimport json\nimport sys\nfrom pathlib import Path\n\nimport torch\nfrom torch.nn import functional as F\n\nfrom train_memories import CONSOLE, LOADS, PANEL, Writer, evaluate, make_data, outer, train_model\n\n\nSEEDS = (937, 941, 947)\nARMS = (\"projected_hebb\", \"same_event_signed\", \"same_event_aligned\", \"gated_delta\")\n\n\nclass SameEventWriter(Writer):\n    \"\"\"Keep the production normalization and omit the cross-event products.\"\"\"\n\n    def state_history(self, keys, values):\n        decay, step = self.decay_logit.sigmoid(), self.step_logit.sigmoid()\n        weights = keys.new_zeros(keys.size(0), keys.size(2), values.size(2))\n        trace = torch.zeros_like(weights)\n        source_signs = ((keys @ self.proj_in) * (values @ self.proj_out)).sum(dim=-1)\n        if self.arm == \"same_event_aligned\":\n            source_signs = source_signs.abs()\n        for key, value, sign in zip(keys.unbind(1), values.unbind(1), source_signs.unbind(1), strict=True):\n            trace = self.trace_decay**2 * trace + 0.05**2 * sign[:, None, None] * outer(key, value)\n            norm = torch.linalg.vector_norm(trace, dim=(-2, -1), keepdim=True)\n            proposed = decay * weights + step * trace / norm.clamp_min(1e-12)\n            bounded = proposed / (torch.linalg.vector_norm(proposed, dim=(-2, -1), keepdim=True) / self.cap).clamp_min(1.0)\n            weights = torch.where(norm > 1e-12, bounded, weights)\n            yield weights, trace, None\n\n    def state_bytes(self):\n        return 2 * super().state_bytes()\n\n\n@torch.no_grad()\ndef verify_diagonal():\n    native = Writer(\"projected_hebb\", 953).double()\n    signed = SameEventWriter(\"same_event_signed\", 953).double()\n    aligned = SameEventWriter(\"same_event_aligned\", 953).double()\n    rng = torch.Generator().manual_seed(943)\n    x = F.normalize(torch.randn((4, 7, 16), generator=rng, dtype=torch.float64), dim=-1)\n    y = F.normalize(torch.randn((4, 7, 16), generator=rng, dtype=torch.float64), dim=-1)\n    basis_u = 0.05 * outer(x, y @ native.proj_out)\n    basis_v = 0.05 * outer(x @ native.proj_in, y)\n    max_error = 0.0\n    for index, (a, b, c) in enumerate(zip(native.state_history(x, y),\n                                         signed.state_history(x, y),\n                                         aligned.state_history(x, y), strict=True)):\n        u, v = a[1:]\n        signed_trace, aligned_trace = b[1], c[1]\n        full = torch.zeros_like(signed_trace)\n        diag = torch.zeros_like(full)\n        abs_diag = torch.zeros_like(full)\n        for i in range(index + 1):\n            for j in range(index + 1):\n                term = native.trace_decay**(2 * index - i - j) * (basis_u[:, i] @ basis_v[:, j])\n                full += term\n                if i == j:\n                    diag += term\n                    sign = ((x[:, i] @ native.proj_in) * (y[:, i] @ native.proj_out)).sum(dim=-1)\n                    abs_diag += term * sign.sign()[:, None, None]\n        for actual, expected in ((u @ v, full), (signed_trace, diag), (aligned_trace, abs_diag)):\n            torch.testing.assert_close(actual, expected, atol=1e-15, rtol=1e-13)\n            max_error = max(max_error, float((actual - expected).abs().max()))\n    return {\"episode_steps\": x.size(0) * x.size(1), \"max_abs_error\": max_error}\n\n\ndef main():\n    torch.set_num_threads(1)\n    torch.set_float32_matmul_precision(\"highest\")\n    device = torch.device(\"cuda\")\n    witness = verify_diagonal()\n    CONSOLE.print_json(data={\"algebra_witness\": witness})\n    rows = {}\n    for index, seed in enumerate(SEEDS):\n        training, heldout = make_data(seed, device)\n        row = {}\n        for arm in ARMS[index % len(ARMS):] + ARMS[:index % len(ARMS)]:\n            cls = SameEventWriter if arm.startswith(\"same_event\") else Writer\n            model = cls(arm, seed).to(device)\n            trained = train_model(model, training)\n            scores = evaluate(model, heldout)\n            row[arm] = {\"training\": trained, \"evaluation\": scores,\n                        \"mutable_state_bytes\": model.state_bytes(),\n                        \"learned_parameter_count\": sum(p.numel() for p in model.parameters())}\n            CONSOLE.print_json(data={\"seed\": seed, \"arm\": arm,\n                                     \"both\": {load: s[\"both_correct\"] for load, s in scores[\"loads\"].items()},\n                                     \"seconds\": round(trained[\"seconds\"], 2)})\n        rows[seed] = row\n    out = {\"scope\": \"Fresh matched seeds. Signed same-event trace removes cross-event products, then the aligned trace takes the absolute value of the projected same-event scalar. Normalized write, norm cap, trainable step/decay, learned embeddings, readout, sampling and train budget match the projected arm. The numerical witness compares with the explicitly expanded trace product.\",\n           \"parameters\": {\"arms\": ARMS, \"seeds\": SEEDS, \"loads\": LOADS, \"panel\": PANEL},\n           \"algebra_witness\": witness, \"results\": rows,\n           \"pytorch\": torch.__version__, \"gpu\": torch.cuda.get_device_name(0)}\n    with Path(sys.argv[1]).open(\"x\", encoding=\"utf-8\") as stream:\n        json.dump(out, stream, indent=2, sort_keys=True, allow_nan=False)\n        stream.write(\"\\n\")\n\n\nif __name__ == \"__main__\":\n    main()\n",
+      "driver_file": "isolate_trace_terms.py",
+      "driver_sha256": "c5ffd887a8d5983219fac4fdf59b3d160e2ce5d32498ede0629fa5fbc2657293",
+      "dsr_checks": [
+        "set -e; export CUDA_VISIBLE_DEVICES=1 UV_OFFLINE=true UV_PROJECT_ENVIRONMENT=/data/projects/bio_inspired_nanochat/.venv OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 RAYON_NUM_THREADS=1 PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1; test \"$(git rev-parse HEAD)\" = 0a3a0c4c1625f6ad75409f99dbd6d5e204f9a9f6; printf '%s  %s\\n' 3b1981fc8f32b279b48e0d57936cfe922e7bd0782ec8255819211ee9095e3a83 /data/projects/bio-train-eviction.pyS1nyoz/train_memories.py c5ffd887a8d5983219fac4fdf59b3d160e2ce5d32498ede0629fa5fbc2657293 /data/projects/bio-train-eviction.pyS1nyoz/isolate_trace_terms.py | sha256sum --check; flock -w 60 /tmp/bio_inspired_nanochat-trj-gpu1.lock taskset -c 53 uv run --no-sync python /data/projects/bio-train-eviction.pyS1nyoz/isolate_trace_terms.py /data/projects/bio-train-eviction.pyS1nyoz/trace-terms.json; sha256sum /data/projects/bio-train-eviction.pyS1nyoz/train_memories.py /data/projects/bio-train-eviction.pyS1nyoz/isolate_trace_terms.py /data/projects/bio-train-eviction.pyS1nyoz/trace-terms.json"
+      ],
+      "raw_result_sha256": "2a9efce3c3bb5b1b671e27500377889ec71f5d2da40cc9f3e45fbf87f5363d23"
+    }
+  },
+  "trained_memory_comparison": {
+    "decision_rule": "Projected Hebbian advantage at 8 writes requires a pooled gain of at least 5 percentage points on paired recall and no seed-level loss against the scalar-gated delta control.",
+    "dsr_receipt": {
+      "command": "quality",
+      "details": {
+        "checks": [
+          {
+            "command": "set -e; export CUDA_VISIBLE_DEVICES=0 UV_OFFLINE=true UV_PROJECT_ENVIRONMENT=/data/projects/bio_inspired_nanochat/.venv OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 RAYON_NUM_THREADS=1 PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1; test \"$(git rev-parse HEAD)\" = 0a3a0c4c1625f6ad75409f99dbd6d5e204f9a9f6; printf '%s  %s\\n' 3b1981fc8f32b279b48e0d57936cfe922e7bd0782ec8255819211ee9095e3a83 /data/projects/bio-train-eviction.pyS1nyoz/train_memories.py | sha256sum --check; flock -w 60 /tmp/bio_inspired_nanochat-trj-gpu0.lock taskset -c 52 uv run --no-sync python /data/projects/bio-train-eviction.pyS1nyoz/train_memories.py /data/projects/bio-train-eviction.pyS1nyoz/trained.json; sha256sum /data/projects/bio-train-eviction.pyS1nyoz/train_memories.py /data/projects/bio-train-eviction.pyS1nyoz/trained.json",
+            "cwd": "/data/projects/bio-prefill-scan.Nq3wZNFe/source",
+            "duration_ms": 205726,
+            "executed": true,
+            "exit_code": 0,
+            "log_path": "/home/ubuntu/.local/state/dsr/quality-logs/bio-train-evicted-memories/20261124T173842-Jg7qJCtS/check-1.log",
+            "log_sha256": "730fdeea86875d4dcc5b51994789646e0dc78f01fc3161e84e64a56294e28a94",
+            "output_preview": "ds\": 5.97\n}\n{\n  \"seed\": 919,\n  \"arm\": \"projected_hebb\",\n  \"both\": {\n    \"2\": 507,\n    \"8\": 72,\n    \"32\": 0\n  },\n  \"seconds\": 24.97\n}\n{\n  \"seed\": 919,\n  \"arm\": \"outer_product\",\n  \"both\": {\n    \"2\": 512,\n    \"8\": 510,\n    \"32\": 257\n  },\n  \"seconds\": 6.9\n}\n{\n  \"seed\": 919,\n  \"arm\": \"gated_delta\",\n  \"both\": {\n    \"2\": 512,\n    \"8\": 471,\n    \"32\": 2\n  },\n  \"seconds\": 10.16\n}\n{\n  \"seed\": 929,\n  \"arm\": \"outer_product\",\n  \"both\": {\n    \"2\": 512,\n    \"8\": 512,\n    \"32\": 267\n  },\n  \"seconds\": 8.54\n}\n{\n  \"seed\": 929,\n  \"arm\": \"gated_delta\",\n  \"both\": {\n    \"2\": 512,\n    \"8\": 463,\n    \"32\": 1\n  },\n  \"seconds\": 14.13\n}\n{\n  \"seed\": 929,\n  \"arm\": \"projected_hebb\",\n  \"both\": {\n    \"2\": 458,\n    \"8\": 65,\n    \"32\": 0\n  },\n  \"seconds\": 21.41\n}\n3b1981fc8f32b279b48e0d57936cfe922e7bd0782ec8255819211ee9095e3a83  /data/projects/bio-train-eviction.pyS1nyoz/train_memories.py\n51737ff243d721b71bb8e45a1b9487ce22d27a6521a7db765a80e6624f800c60  /data/projects/bio-train-eviction.pyS1nyoz/trained.json\n\n# exit_code: 0\n",
+            "passed": true,
+            "status": "passed",
+            "timeout_seconds": 900
+          }
+        ],
+        "config_path": "/data/projects/bio-train-eviction.pyS1nyoz/bio-train-evicted-memories.yaml",
+        "config_sha256": "e77451c1a6ed4a6f8036d2df1c431ed28216c8034c5f3410dfb2151afb3c0958",
+        "config_sha256_after": "e77451c1a6ed4a6f8036d2df1c431ed28216c8034c5f3410dfb2151afb3c0958",
+        "config_snapshot_path": "/home/ubuntu/.local/state/dsr/quality-logs/bio-train-evicted-memories/20261124T173842-Jg7qJCtS/checks-config.yaml",
+        "dry_run": false,
+        "dsr_version": "0.2.3",
+        "duration_ms": 206494,
+        "executed": 1,
+        "failed": 0,
+        "interrupted": 0,
+        "not_run": 0,
+        "observed": 1,
+        "passed": 1,
+        "planned": 0,
+        "run_dir": "/home/ubuntu/.local/state/dsr/quality-logs/bio-train-evicted-memories/20261124T173842-Jg7qJCtS",
+        "skipped": false,
+        "source_after": "0a3a0c4c1625f6ad75409f99dbd6d5e204f9a9f6|06fd1218e96460edbed295f43295296b239edf0fd942a0a64c047704ad719a8b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+        "source_before": "0a3a0c4c1625f6ad75409f99dbd6d5e204f9a9f6|06fd1218e96460edbed295f43295296b239edf0fd942a0a64c047704ad719a8b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+        "status": "passed",
+        "timeout_seconds": 900,
+        "tool": "bio-train-evicted-memories",
+        "total": 1
+      },
+      "duration_ms": 0,
+      "exit_code": 0,
+      "run_id": "d1e36ddd-41e5-43f3-b523-8fedcce7e0c5",
+      "started_at": "2026-11-24T22:43:53Z",
+      "status": "success",
+      "tool": "dsr",
+      "version": "0.2.3"
+    },
+    "forward_parity": {
+      "independent_episodes": 5,
+      "max_abs_error": 1.6653345369377348e-16,
+      "writes_per_episode": 16
+    },
+    "gpu": "NVIDIA GeForce RTX 4090",
+    "paired_correct_count_gaps_hebb_minus_delta": {
+      "2": [
+        -49,
+        -41,
+        -22,
+        -5,
+        -54
+      ],
+      "32": [
+        0,
+        -4,
+        0,
+        -2,
+        -1
+      ],
+      "8": [
+        -391,
+        -382,
+        -385,
+        -399,
+        -398
+      ]
+    },
+    "parameters": {
+      "arms": [
+        "projected_hebb",
+        "outer_product",
+        "gated_delta"
+      ],
+      "batch": 64,
+      "loads": [
+        2,
+        8,
+        32
+      ],
+      "panel": 512,
+      "seeds": [
+        891,
+        907,
+        911,
+        919,
+        929
+      ],
+      "steps": 768,
+      "train_loads": [
+        2,
+        8
+      ],
+      "vocab": 64,
+      "width": 16
+    },
+    "pooled_scores": {
+      "2": {
+        "gated_delta": {
+          "both_correct": 2560,
+          "conflicting_pairs": 2560,
+          "correct": 5120,
+          "queries": 5120
+        },
+        "outer_product": {
+          "both_correct": 2560,
+          "conflicting_pairs": 2560,
+          "correct": 5120,
+          "queries": 5120
+        },
+        "projected_hebb": {
+          "both_correct": 2389,
+          "conflicting_pairs": 2560,
+          "correct": 4946,
+          "queries": 5120
+        }
+      },
+      "32": {
+        "gated_delta": {
+          "both_correct": 7,
+          "conflicting_pairs": 2560,
+          "correct": 222,
+          "queries": 5120
+        },
+        "outer_product": {
+          "both_correct": 1303,
+          "conflicting_pairs": 2560,
+          "correct": 3528,
+          "queries": 5120
+        },
+        "projected_hebb": {
+          "both_correct": 0,
+          "conflicting_pairs": 2560,
+          "correct": 88,
+          "queries": 5120
+        }
+      },
+      "8": {
+        "gated_delta": {
+          "both_correct": 2304,
+          "conflicting_pairs": 2560,
+          "correct": 4808,
+          "queries": 5120
+        },
+        "outer_product": {
+          "both_correct": 2547,
+          "conflicting_pairs": 2560,
+          "correct": 5105,
+          "queries": 5120
+        },
+        "projected_hebb": {
+          "both_correct": 349,
+          "conflicting_pairs": 2560,
+          "correct": 1980,
+          "queries": 5120
+        }
+      }
+    },
+    "projected_gain_threshold_met": false,
+    "pytorch": "2.9.1+cu128",
+    "results": {
+      "891": {
+        "gated_delta": {
+          "evaluation": {
+            "loads": {
+              "2": {
+                "both_correct": 512,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 1024,
+                "mean_nll": 0.09061700105667114,
+                "mean_paired_margin": 8.121280670166016,
+                "pair_success_hex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "32": {
+                "both_correct": 0,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 38,
+                "mean_nll": 4.527406692504883,
+                "mean_paired_margin": 1.2070937156677246,
+                "pair_success_hex": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "8": {
+                "both_correct": 462,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 967,
+                "mean_nll": 0.6888577342033386,
+                "mean_paired_margin": 5.766369819641113,
+                "pair_success_hex": "ffff5ffeffffffedfefffd7ffffffdfffffffffffbfdffef9f77bff777ffffff7fffb7f7fffffffdbdff7bdfffeddfdfff9ff7fffeef7fffdfffafff57fb5fbf",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              }
+            },
+            "positive_isolated_projection_pairs": 2047,
+            "projection_pair_count": 4096
+          },
+          "learned_parameter_count": 3138,
+          "mutable_state_bytes": 1024,
+          "training": {
+            "decay": 0.995871365070343,
+            "loss_samples": [
+              4.205484390258789,
+              2.963984489440918,
+              1.4903680086135864,
+              0.8034542202949524,
+              0.5285123586654663,
+              0.39610323309898376,
+              0.2943672239780426
+            ],
+            "seconds": 6.1900519779883325,
+            "step": 0.9367076754570007
+          }
+        },
+        "outer_product": {
+          "evaluation": {
+            "loads": {
+              "2": {
+                "both_correct": 512,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 1024,
+                "mean_nll": 0.08015494048595428,
+                "mean_paired_margin": 8.142488479614258,
+                "pair_success_hex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "32": {
+                "both_correct": 261,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 712,
+                "mean_nll": 1.0730868577957153,
+                "mean_paired_margin": 6.844389915466309,
+                "pair_success_hex": "9c4c026981ce88f4b72cc5831a2fb964a18f6acd70597b179adf4e9be614f64b1fe57dbb4c811440c077ef049b8ef10f47a7ddca00ac7593e667549c78318ffd",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "8": {
+                "both_correct": 510,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 1022,
+                "mean_nll": 0.19257038831710815,
+                "mean_paired_margin": 7.702242851257324,
+                "pair_success_hex": "fffffffffffffffffffffffffffffffffffffffffffffffffffffffff7ffffffffffffffffffffffffffffffffffffffffdfffffffffffffffffffffffffffff",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              }
+            },
+            "positive_isolated_projection_pairs": 2042,
+            "projection_pair_count": 4096
+          },
+          "learned_parameter_count": 3138,
+          "mutable_state_bytes": 1024,
+          "training": {
+            "decay": 0.9947263598442078,
+            "loss_samples": [
+              4.207056999206543,
+              2.8476638793945312,
+              1.2678279876708984,
+              0.5746529698371887,
+              0.32852405309677124,
+              0.22929158806800842,
+              0.16475778818130493
+            ],
+            "seconds": 4.082875219173729,
+            "step": 0.9384973049163818
+          }
+        },
+        "projected_hebb": {
+          "evaluation": {
+            "loads": {
+              "2": {
+                "both_correct": 463,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 973,
+                "mean_nll": 0.6795110702514648,
+                "mean_paired_margin": 5.164188861846924,
+                "pair_success_hex": "ffaf7b6fcfffebfff3fffff47ffffbfff7fbfbffff7ff7feffffff5dafffefffeebfff7fffffffffbefbffeffffffff6fffffdffef67ff7fffdcfffffffffbff",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "32": {
+                "both_correct": 0,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 17,
+                "mean_nll": 4.191571235656738,
+                "mean_paired_margin": 0.23906861245632172,
+                "pair_success_hex": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "8": {
+                "both_correct": 71,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 408,
+                "mean_nll": 3.005446672439575,
+                "mean_paired_margin": 1.5272068977355957,
+                "pair_success_hex": "02009044002009305404a94000002000010240000409881094408000104080008100000420000000a040a180010020000040080106014e0000041081061000cc",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              }
+            },
+            "positive_isolated_projection_pairs": 2189,
+            "projection_pair_count": 4096
+          },
+          "learned_parameter_count": 3138,
+          "mutable_state_bytes": 2048,
+          "training": {
+            "decay": 0.9825170636177063,
+            "loss_samples": [
+              4.216559410095215,
+              4.142693519592285,
+              3.87237548828125,
+              3.6516361236572266,
+              3.4914541244506836,
+              3.3960320949554443,
+              3.353292942047119
+            ],
+            "seconds": 18.904438361991197,
+            "step": 0.651445209980011
+          }
+        }
+      },
+      "907": {
+        "gated_delta": {
+          "evaluation": {
+            "loads": {
+              "2": {
+                "both_correct": 512,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 1024,
+                "mean_nll": 0.09336742013692856,
+                "mean_paired_margin": 7.985937595367432,
+                "pair_success_hex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "32": {
+                "both_correct": 4,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 52,
+                "mean_nll": 4.532009601593018,
+                "mean_paired_margin": 1.1815136671066284,
+                "pair_success_hex": "00000000000000000000000100000010000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000040000",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "8": {
+                "both_correct": 461,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 961,
+                "mean_nll": 0.685539722442627,
+                "mean_paired_margin": 5.745291709899902,
+                "pair_success_hex": "ffffbdfbfffff7ffef7df5ffdffffbfffdfffffffebff57f7cfffffbff7effbfff7ffdffff3fffd7d6ffe5d3ffff9ffffffddfffedffdffffedfffffffdfbfbf",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              }
+            },
+            "positive_isolated_projection_pairs": 2063,
+            "projection_pair_count": 4096
+          },
+          "learned_parameter_count": 3138,
+          "mutable_state_bytes": 1024,
+          "training": {
+            "decay": 0.995891809463501,
+            "loss_samples": [
+              4.190752983093262,
+              3.014261245727539,
+              1.532699704170227,
+              0.8265739679336548,
+              0.5276787281036377,
+              0.3872515559196472,
+              0.3257311284542084
+            ],
+            "seconds": 5.8134774579666555,
+            "step": 0.936449408531189
+          }
+        },
+        "outer_product": {
+          "evaluation": {
+            "loads": {
+              "2": {
+                "both_correct": 512,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 1024,
+                "mean_nll": 0.08185215294361115,
+                "mean_paired_margin": 8.044499397277832,
+                "pair_success_hex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "32": {
+                "both_correct": 272,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 705,
+                "mean_nll": 1.0878223180770874,
+                "mean_paired_margin": 6.824397563934326,
+                "pair_success_hex": "6dfb35a0f43b75213cda65a1adccd152cfd5e9af52f9ede3fe3c22923257d2c4744b3e612985ddf518c0ed0a3a91cca9768ef139aa6f9aa74d2d6cdc8d8c5e3b",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "8": {
+                "both_correct": 508,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 1019,
+                "mean_nll": 0.1929032802581787,
+                "mean_paired_margin": 7.606812477111816,
+                "pair_success_hex": "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffdffffbffffffffff7ffffffffffffffffffffffffffffffffffffffffbf",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              }
+            },
+            "positive_isolated_projection_pairs": 2043,
+            "projection_pair_count": 4096
+          },
+          "learned_parameter_count": 3138,
+          "mutable_state_bytes": 1024,
+          "training": {
+            "decay": 0.9947408437728882,
+            "loss_samples": [
+              4.190272808074951,
+              2.908348560333252,
+              1.3295609951019287,
+              0.6039694547653198,
+              0.3356177806854248,
+              0.23309680819511414,
+              0.17659465968608856
+            ],
+            "seconds": 4.137834141030908,
+            "step": 0.9382926225662231
+          }
+        },
+        "projected_hebb": {
+          "evaluation": {
+            "loads": {
+              "2": {
+                "both_correct": 471,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 982,
+                "mean_nll": 0.6859866976737976,
+                "mean_paired_margin": 5.243018627166748,
+                "pair_success_hex": "fbfffd9feffdebffdffeffffffffeffbfffdff9fffffdeffeffffffdbffdfdfffffefbefffb7effbfffffffffffaffffffffff7ff7f7effffefc7ffdfffdffff",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "32": {
+                "both_correct": 0,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 14,
+                "mean_nll": 4.186622619628906,
+                "mean_paired_margin": 0.205323725938797,
+                "pair_success_hex": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "8": {
+                "both_correct": 79,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 420,
+                "mean_nll": 2.970400810241699,
+                "mean_paired_margin": 1.5400491952896118,
+                "pair_success_hex": "b05000420160002401010a8200a0120011000100023830002008c0400e480846008100005821a000000a100418400e000084100001000c008000400841809400",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              }
+            },
+            "positive_isolated_projection_pairs": 2046,
+            "projection_pair_count": 4096
+          },
+          "learned_parameter_count": 3138,
+          "mutable_state_bytes": 2048,
+          "training": {
+            "decay": 0.9875368475914001,
+            "loss_samples": [
+              4.171818733215332,
+              4.1274847984313965,
+              3.864647388458252,
+              3.6643526554107666,
+              3.538264751434326,
+              3.395355463027954,
+              3.3081398010253906
+            ],
+            "seconds": 18.35728423576802,
+            "step": 0.6464696526527405
+          }
+        }
+      },
+      "911": {
+        "gated_delta": {
+          "evaluation": {
+            "loads": {
+              "2": {
+                "both_correct": 512,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 1024,
+                "mean_nll": 0.09302885085344315,
+                "mean_paired_margin": 7.955067157745361,
+                "pair_success_hex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "32": {
+                "both_correct": 0,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 46,
+                "mean_nll": 4.521204471588135,
+                "mean_paired_margin": 1.1185948848724365,
+                "pair_success_hex": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "8": {
+                "both_correct": 447,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 945,
+                "mean_nll": 0.7299251556396484,
+                "mean_paired_margin": 5.63704776763916,
+                "pair_success_hex": "77db7ff77ddffff97afffffdffbfffefefffffffefff7fff7ffefbff3ffdff7ef7fbf9efbffffffffd7f5ff7afffddffb7bbffb5fefffeffa6ffbfef7fbdecdf",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              }
+            },
+            "positive_isolated_projection_pairs": 2054,
+            "projection_pair_count": 4096
+          },
+          "learned_parameter_count": 3138,
+          "mutable_state_bytes": 1024,
+          "training": {
+            "decay": 0.9958890080451965,
+            "loss_samples": [
+              4.169421195983887,
+              2.9701552391052246,
+              1.4979252815246582,
+              0.7942487001419067,
+              0.5345572233200073,
+              0.3782738447189331,
+              0.30777281522750854
+            ],
+            "seconds": 9.285991337150335,
+            "step": 0.936409056186676
+          }
+        },
+        "outer_product": {
+          "evaluation": {
+            "loads": {
+              "2": {
+                "both_correct": 512,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 1024,
+                "mean_nll": 0.08087292313575745,
+                "mean_paired_margin": 8.065534591674805,
+                "pair_success_hex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "32": {
+                "both_correct": 246,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 689,
+                "mean_nll": 1.1295031309127808,
+                "mean_paired_margin": 6.7544965744018555,
+                "pair_success_hex": "df193ce92125615a7b05f6220b6b8477f70d722e401085619f70c8620294df5b19b19436451be4c563195ff92f71e24889d412bcf198ce379698cc708f3d9b82",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "8": {
+                "both_correct": 507,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 1018,
+                "mean_nll": 0.1968323290348053,
+                "mean_paired_margin": 7.6046624183654785,
+                "pair_success_hex": "fffffffffffffffffffdffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7ffff7ffffffffffffffffffffffffb7ffffffffffffff",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              }
+            },
+            "positive_isolated_projection_pairs": 2042,
+            "projection_pair_count": 4096
+          },
+          "learned_parameter_count": 3138,
+          "mutable_state_bytes": 1024,
+          "training": {
+            "decay": 0.9947482943534851,
+            "loss_samples": [
+              4.168968200683594,
+              2.8419008255004883,
+              1.2707310914993286,
+              0.5704885125160217,
+              0.32845380902290344,
+              0.21603646874427795,
+              0.16353152692317963
+            ],
+            "seconds": 5.970982055179775,
+            "step": 0.9384581446647644
+          }
+        },
+        "projected_hebb": {
+          "evaluation": {
+            "loads": {
+              "2": {
+                "both_correct": 490,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 1002,
+                "mean_nll": 0.7145047783851624,
+                "mean_paired_margin": 5.3038153648376465,
+                "pair_success_hex": "bffcfdbfffffffffff7fffbffeffff9fff7fbffffbfffff7fffffffbfffbffffffffbffffffffbfffdffffffffbffffeffffffffffffffffffffffffffffbfff",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "32": {
+                "both_correct": 0,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 22,
+                "mean_nll": 4.243311882019043,
+                "mean_paired_margin": 0.1961757391691208,
+                "pair_success_hex": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "8": {
+                "both_correct": 62,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 373,
+                "mean_nll": 3.061351776123047,
+                "mean_paired_margin": 1.4994940757751465,
+                "pair_success_hex": "000640400000002100000804000080001011121b000084004100000501160100000011448020000001440c4020a0722000040100c000000020160000e2000020",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              }
+            },
+            "positive_isolated_projection_pairs": 1957,
+            "projection_pair_count": 4096
+          },
+          "learned_parameter_count": 3138,
+          "mutable_state_bytes": 2048,
+          "training": {
+            "decay": 0.985235333442688,
+            "loss_samples": [
+              4.17676305770874,
+              4.147373199462891,
+              3.9077515602111816,
+              3.6978118419647217,
+              3.5307607650756836,
+              3.463724374771118,
+              3.384657382965088
+            ],
+            "seconds": 20.631916324142367,
+            "step": 0.6672719120979309
+          }
+        }
+      },
+      "919": {
+        "gated_delta": {
+          "evaluation": {
+            "loads": {
+              "2": {
+                "both_correct": 512,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 1024,
+                "mean_nll": 0.09181451797485352,
+                "mean_paired_margin": 8.00312614440918,
+                "pair_success_hex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "32": {
+                "both_correct": 2,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 46,
+                "mean_nll": 4.5858378410339355,
+                "mean_paired_margin": 1.2050929069519043,
+                "pair_success_hex": "00000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000000000000000004000",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "8": {
+                "both_correct": 471,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 975,
+                "mean_nll": 0.6613216400146484,
+                "mean_paired_margin": 5.826739311218262,
+                "pair_success_hex": "fbdffffffffe3f9fbfd7bfdf7fffebffffffdf7ffffbffffffff3fbfabfffffffffdfffffbfffffcff79fffefff7fffffebfff77fffdfffffffefffdfffbffff",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              }
+            },
+            "positive_isolated_projection_pairs": 2030,
+            "projection_pair_count": 4096
+          },
+          "learned_parameter_count": 3138,
+          "mutable_state_bytes": 1024,
+          "training": {
+            "decay": 0.9959436058998108,
+            "loss_samples": [
+              4.1495361328125,
+              2.986985206604004,
+              1.4729664325714111,
+              0.7901135683059692,
+              0.5544292330741882,
+              0.3946070671081543,
+              0.3351830840110779
+            ],
+            "seconds": 10.163642177823931,
+            "step": 0.936627984046936
+          }
+        },
+        "outer_product": {
+          "evaluation": {
+            "loads": {
+              "2": {
+                "both_correct": 512,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 1024,
+                "mean_nll": 0.07954199612140656,
+                "mean_paired_margin": 8.1069917678833,
+                "pair_success_hex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "32": {
+                "both_correct": 257,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 704,
+                "mean_nll": 1.11167311668396,
+                "mean_paired_margin": 6.851329326629639,
+                "pair_success_hex": "8beba1af794a28926cc5cd1375113aba5eb337748409d0973749671eb0685b30a42cd78fab263fcba31b71f42e2e0eb614ee6590463f31a468a30bfc5cc4ffd0",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "8": {
+                "both_correct": 510,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 1022,
+                "mean_nll": 0.18475015461444855,
+                "mean_paired_margin": 7.717167377471924,
+                "pair_success_hex": "ffffdfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffff",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              }
+            },
+            "positive_isolated_projection_pairs": 2061,
+            "projection_pair_count": 4096
+          },
+          "learned_parameter_count": 3138,
+          "mutable_state_bytes": 1024,
+          "training": {
+            "decay": 0.9947919249534607,
+            "loss_samples": [
+              4.149484157562256,
+              2.8639063835144043,
+              1.2596222162246704,
+              0.5762807130813599,
+              0.3486819267272949,
+              0.2334471344947815,
+              0.17682215571403503
+            ],
+            "seconds": 6.9028109959326684,
+            "step": 0.9386041760444641
+          }
+        },
+        "projected_hebb": {
+          "evaluation": {
+            "loads": {
+              "2": {
+                "both_correct": 507,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 1019,
+                "mean_nll": 0.5083535313606262,
+                "mean_paired_margin": 5.57310152053833,
+                "pair_success_hex": "fffffffffffffffffffffffffffff7ffffffffffffffffdfffffffffffffffffffbffffffffffbfffffffffffffff7ffffffffffffffffffffffffffffffffff",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "32": {
+                "both_correct": 0,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 21,
+                "mean_nll": 4.199792385101318,
+                "mean_paired_margin": 0.22552944719791412,
+                "pair_success_hex": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "8": {
+                "both_correct": 72,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 408,
+                "mean_nll": 2.9522876739501953,
+                "mean_paired_margin": 1.5889875888824463,
+                "pair_success_hex": "0018048420b000480000103150000001048828000000021019100000140001405400080032181100442000002834001010204029000800050040003a40a01400",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              }
+            },
+            "positive_isolated_projection_pairs": 2176,
+            "projection_pair_count": 4096
+          },
+          "learned_parameter_count": 3138,
+          "mutable_state_bytes": 2048,
+          "training": {
+            "decay": 0.9905357956886292,
+            "loss_samples": [
+              4.160959720611572,
+              4.088387489318848,
+              3.803776979446411,
+              3.6309547424316406,
+              3.4948511123657227,
+              3.4117774963378906,
+              3.310777187347412
+            ],
+            "seconds": 24.97153877094388,
+            "step": 0.6530261635780334
+          }
+        }
+      },
+      "929": {
+        "gated_delta": {
+          "evaluation": {
+            "loads": {
+              "2": {
+                "both_correct": 512,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 1024,
+                "mean_nll": 0.0940771996974945,
+                "mean_paired_margin": 7.88920259475708,
+                "pair_success_hex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "32": {
+                "both_correct": 1,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 40,
+                "mean_nll": 4.617698669433594,
+                "mean_paired_margin": 1.2617741823196411,
+                "pair_success_hex": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000080000000000000",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "8": {
+                "both_correct": 463,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 960,
+                "mean_nll": 0.7170939445495605,
+                "mean_paired_margin": 5.905390739440918,
+                "pair_success_hex": "deffdefffff7cffdffebffff7fffffffff7ffeb5deffbfdfff7f5fdfffefffffbefffefeffffd7fffffffffff7fbfdfffbdf75ef2ffffffffebffffdbfff7ffb",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              }
+            },
+            "positive_isolated_projection_pairs": 2055,
+            "projection_pair_count": 4096
+          },
+          "learned_parameter_count": 3138,
+          "mutable_state_bytes": 1024,
+          "training": {
+            "decay": 0.9958935976028442,
+            "loss_samples": [
+              4.161486625671387,
+              2.943852424621582,
+              1.4945299625396729,
+              0.8282469511032104,
+              0.5485132336616516,
+              0.4240822494029999,
+              0.3233810067176819
+            ],
+            "seconds": 14.129575246013701,
+            "step": 0.9369676113128662
+          }
+        },
+        "outer_product": {
+          "evaluation": {
+            "loads": {
+              "2": {
+                "both_correct": 512,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 1024,
+                "mean_nll": 0.08125174790620804,
+                "mean_paired_margin": 7.977865695953369,
+                "pair_success_hex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "32": {
+                "both_correct": 267,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 718,
+                "mean_nll": 1.0802054405212402,
+                "mean_paired_margin": 6.978704452514648,
+                "pair_success_hex": "ecbd119133b36a5bc3710d4c721ddd5aa51df8f1f0dee7e4ca1f3fc372bda08bca9f15232cbb88814b66429ca1e745dc2c9b71b6ffc0016eeb23d9c83c6738ee",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "8": {
+                "both_correct": 512,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 1024,
+                "mean_nll": 0.1920384168624878,
+                "mean_paired_margin": 7.964649200439453,
+                "pair_success_hex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              }
+            },
+            "positive_isolated_projection_pairs": 2036,
+            "projection_pair_count": 4096
+          },
+          "learned_parameter_count": 3138,
+          "mutable_state_bytes": 1024,
+          "training": {
+            "decay": 0.9947481751441956,
+            "loss_samples": [
+              4.161703586578369,
+              2.8304033279418945,
+              1.2686469554901123,
+              0.5873608589172363,
+              0.3418540954589844,
+              0.25037479400634766,
+              0.17275823652744293
+            ],
+            "seconds": 8.544517331756651,
+            "step": 0.9388760924339294
+          }
+        },
+        "projected_hebb": {
+          "evaluation": {
+            "loads": {
+              "2": {
+                "both_correct": 458,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 970,
+                "mean_nll": 0.7048285007476807,
+                "mean_paired_margin": 5.293538570404053,
+                "pair_success_hex": "ff6f5fffffffdfdfffbfffffff3ffbeb7bfffafffc7ffffffdfd77fffffdffbf9fff3fffdaffffff6ef9fbfbffff6fff7fff7f7beefbfffffbfbcfffbffffbff",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "32": {
+                "both_correct": 0,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 14,
+                "mean_nll": 4.213286399841309,
+                "mean_paired_margin": 0.2024647295475006,
+                "pair_success_hex": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              },
+              "8": {
+                "both_correct": 65,
+                "cleared_both_correct": 0,
+                "conflicting_pairs": 512,
+                "correct": 371,
+                "mean_nll": 3.0600228309631348,
+                "mean_paired_margin": 1.5214179754257202,
+                "pair_success_hex": "00288a00100010004081800108020502018000000008080001410000000110011282003024100212000004086041200841200140420020004480603080820000",
+                "queries": 1024,
+                "same_logits_pairs": 0
+              }
+            },
+            "positive_isolated_projection_pairs": 2104,
+            "projection_pair_count": 4096
+          },
+          "learned_parameter_count": 3138,
+          "mutable_state_bytes": 2048,
+          "training": {
+            "decay": 0.9857037663459778,
+            "loss_samples": [
+              4.161626815795898,
+              4.130758762359619,
+              3.872187614440918,
+              3.668596029281616,
+              3.569591522216797,
+              3.4603042602539062,
+              3.3654561042785645
+            ],
+            "seconds": 21.407551412004977,
+            "step": 0.6657168865203857
+          }
+        }
+      }
+    },
+    "scope": "Supervised component experiment with decomposed key/value IDs. No attention or replay of visible support is available to the readout. Gradient flows through all writes of an independently reset episode. The projected rule matches the fixed-gate fast-matrix recurrence at the initial rates and learns scalar decay and step alongside matched embeddings and readout. Whole-model training and biological gates are outside this experiment.",
+    "source": {
+      "driver": "\"\"\"Train three memory rules on matched support/query binding episodes.\"\"\"\nimport json\nimport math\nimport sys\nfrom pathlib import Path\nfrom time import perf_counter\n\nimport torch\nfrom rich.console import Console\nfrom torch import nn\nfrom torch.nn import functional as F\n\nfrom bio_inspired_nanochat.synaptic import SynapticConfig, SynapticLinear\n\n\nVOCAB = 64\nWIDTH = 16\nSTEPS = 768\nBATCH = 64\nPANEL = 512\nSEEDS = (891, 907, 911, 919, 929)\nARMS = (\"projected_hebb\", \"outer_product\", \"gated_delta\")\nLOADS = (2, 8, 32)\nCONSOLE = Console()\n\n\ndef outer(left, right):\n    return left.unsqueeze(-1) * right.unsqueeze(-2)\n\n\nclass Writer(nn.Module):\n    def __init__(self, arm, seed):\n        super().__init__()\n        self.arm = arm\n        torch.manual_seed(seed)\n        self.keys = nn.Embedding(VOCAB, WIDTH)\n        self.values = nn.Embedding(VOCAB, WIDTH)\n        self.readout = nn.Linear(WIDTH, VOCAB)\n        self.decay_logit = nn.Parameter(torch.tensor(math.log(19.0)))\n        self.step_logit = nn.Parameter(torch.tensor(0.0))\n        # Use the projections and trace defaults from a production instance.\n        layer = SynapticLinear(WIDTH, WIDTH, self.config(), bias=False)\n        self.register_buffer(\"proj_in\", layer.proj_in.clone())\n        self.register_buffer(\"proj_out\", layer.proj_out.clone())\n        self.trace_decay = layer.cfg.post_trace_decay\n        self.cap = layer.cfg.fast_weight_max_norm\n\n    @staticmethod\n    def config():\n        return SynapticConfig(enable_hebbian=True, post_slow_lr=0.0)\n\n    def features(self, keys, values):\n        return F.normalize(self.keys(keys), dim=-1), F.normalize(self.values(values), dim=-1)\n\n    def state_history(self, keys, values):\n        decay, step = self.decay_logit.sigmoid(), self.step_logit.sigmoid()\n        batch, _, width = keys.shape\n        weights = keys.new_zeros(batch, width, width)\n        if self.arm == \"projected_hebb\":\n            rank = self.proj_in.shape[1]\n            left = keys.new_zeros(batch, width, rank)\n            right = keys.new_zeros(batch, rank, width)\n            key_modes = (keys @ self.proj_in).unbind(dim=1)\n            value_modes = (values @ self.proj_out).unbind(dim=1)\n            for key, value, px, py in zip(keys.unbind(1), values.unbind(1), key_modes, value_modes, strict=True):\n                left = self.trace_decay * left + 0.05 * outer(key, py)\n                right = self.trace_decay * right + 0.05 * outer(px, value)\n                product = left @ right\n                norm = torch.linalg.vector_norm(product, dim=(-2, -1), keepdim=True)\n                proposed = decay * weights + step * product / norm.clamp_min(1e-12)\n                bounded = proposed / (torch.linalg.vector_norm(proposed, dim=(-2, -1), keepdim=True) / self.cap).clamp_min(1.0)\n                weights = torch.where(norm > 1e-12, bounded, weights)\n                yield weights, left, right\n        else:\n            for key, value in zip(keys.unbind(1), values.unbind(1), strict=True):\n                weights = decay * weights\n                residual = value\n                if self.arm == \"gated_delta\":\n                    residual = value - (key.unsqueeze(1) @ weights).squeeze(1)\n                weights = weights + step * outer(key, residual)\n                yield weights, None, None\n\n    def memory(self, keys, values):\n        for state in self.state_history(keys, values):\n            pass\n        return state[0]\n\n    def query(self, key_features, weights):\n        return self.readout(key_features @ weights)\n\n    def forward(self, keys, values):\n        x, y = self.features(keys, values)\n        return self.query(x, self.memory(x, y))\n\n    def state_bytes(self):\n        floats = WIDTH * WIDTH\n        if self.arm == \"projected_hebb\":\n            floats += self.proj_in.numel() + self.proj_out.numel()\n        return 4 * floats\n\n\n@torch.no_grad()\ndef check_production():\n    \"\"\"Compare each step in multiple independently evolving episodes.\"\"\"\n    model = Writer(\"projected_hebb\", 887).double()\n    layer = SynapticLinear(WIDTH, WIDTH, model.config(), bias=False).double()\n    assert not layer.cfg.enable_stdp\n    assert layer.cfg.fast_weight_normalized\n    layer.proj_in.copy_(model.proj_in)\n    layer.proj_out.copy_(model.proj_out)\n    model.decay_logit.fill_(math.log(layer.cfg.post_fast_decay / (1.0 - layer.cfg.post_fast_decay)))\n    model.step_logit.fill_(math.log(layer.cfg.fast_weight_eta / (1.0 - layer.cfg.fast_weight_eta)))\n    rng = torch.Generator().manual_seed(877)\n    x = F.normalize(torch.randn((5, 16, WIDTH), dtype=torch.float64, generator=rng), dim=-1)\n    y = F.normalize(torch.randn((5, 16, WIDTH), dtype=torch.float64, generator=rng), dim=-1)\n    history = list(model.state_history(x, y))\n    max_error = 0.0\n    for row in range(x.size(0)):\n        layer.reset_sequence_state(reset_fast_weights=True)\n        for index, (weights, left, right) in enumerate(history):\n            left_ref, right_ref = x[row, index:index+1], y[row, index:index+1]\n            layer._update_hebb_traces(left_ref, right_ref, None)\n            layer._apply_hebb_weight_writes(None)\n            for reference, actual in ((layer.w_fast, weights[row]), (layer.u_buf, left[row]), (layer.v_buf, right[row])):\n                torch.testing.assert_close(reference, actual, atol=3e-13, rtol=3e-13)\n                max_error = max(max_error, float((reference - actual).abs().max()))\n    return {\"independent_episodes\": x.size(0), \"writes_per_episode\": x.size(1), \"max_abs_error\": max_error}\n\n\ndef draw(count, load, generator):\n    return tuple(torch.rand((count, VOCAB), generator=generator).argsort(dim=-1)[:, :load].contiguous() for _ in range(2))\n\n\ndef two_pair_code(keys, values):\n    first, second = (keys * VOCAB + values).unbind(dim=1)\n    return (torch.minimum(first, second) * VOCAB**2 + torch.maximum(first, second)).tolist()\n\n\ndef make_data(seed, device):\n    gen = torch.Generator().manual_seed(100_000 + seed)\n    train = [draw(BATCH, LOADS[index % 2], gen) for index in range(STEPS)]\n    seen = set()\n    for keys, values in train[::2]:\n        seen.update(two_pair_code(keys, values))\n    heldout = {}\n    holdout = torch.Generator().manual_seed(200_000 + seed)\n    for load in LOADS:\n        keys, values = draw(PANEL * (2 if load == 2 else 1), load, holdout)\n        swapped = values.clone()\n        swapped[:, :2] = values[:, [1, 0]]\n        if load == 2:\n            valid = [not (a in seen or b in seen) for a, b in zip(two_pair_code(keys, values), two_pair_code(keys, swapped), strict=True)]\n            indices = torch.tensor(valid).nonzero().flatten()[:PANEL]\n            assert len(indices) == PANEL\n            keys, values, swapped = keys[indices], values[indices], swapped[indices]\n        heldout[load] = (keys.to(device), values.to(device), swapped.to(device))\n    return [(keys.to(device), values.to(device)) for keys, values in train], heldout\n\n\ndef train_model(model, data):\n    optimizer = torch.optim.AdamW(model.parameters(), lr=0.005, weight_decay=0.0)\n    torch.cuda.synchronize()\n    start = perf_counter()\n    losses = []\n    for index, (keys, values) in enumerate(data):\n        optimizer.zero_grad(set_to_none=True)\n        logits = model(keys, values)\n        loss = F.cross_entropy(logits.flatten(0, 1), values.flatten())\n        loss.backward()\n        optimizer.step()\n        if index in (0, 127, 255, 383, 511, 639, STEPS - 1):\n            losses.append(float(loss.detach()))\n    torch.cuda.synchronize()\n    assert all(math.isfinite(value) for value in losses)\n    return {\"loss_samples\": losses, \"seconds\": perf_counter() - start,\n            \"decay\": float(model.decay_logit.sigmoid().detach()), \"step\": float(model.step_logit.sigmoid().detach())}\n\n\n@torch.no_grad()\ndef evaluate(model, heldout):\n    results = {}\n    for load, (keys, left_values, right_values) in heldout.items():\n        x, left_y = model.features(keys, left_values)\n        _, right_y = model.features(keys, right_values)\n        xq = x[:, :1]\n        left = model.memory(x, left_y)\n        right = model.memory(x, right_y)\n        left_logits = model.query(xq, left).squeeze(1)\n        right_logits = model.query(xq, right).squeeze(1)\n        left_gold = left_values[:, 0]\n        right_gold = right_values[:, 0]\n        assert torch.all(left_gold != right_gold)\n        cleared_left = model.query(xq, torch.zeros_like(left)).squeeze(1)\n        cleared_right = model.query(xq, torch.zeros_like(right)).squeeze(1)\n        assert torch.equal(cleared_left, cleared_right)\n        lhit = left_logits.argmax(-1) == left_gold\n        rhit = right_logits.argmax(-1) == right_gold\n        same_logits = (left_logits == right_logits).all(dim=-1)\n        index = torch.arange(len(left_gold), device=left_gold.device)\n        margins = ((left_logits[index, left_gold] - left_logits[index, right_gold])\n                   + (right_logits[index, right_gold] - right_logits[index, left_gold])) / 2\n        nll = (F.cross_entropy(left_logits, left_gold) + F.cross_entropy(right_logits, right_gold)) / 2\n        neg = (cleared_left.argmax(-1) == left_gold) & (cleared_right.argmax(-1) == right_gold)\n        assert not neg.any()\n        assert torch.isfinite(margins).all() and torch.isfinite(nll)\n        results[load] = {\"correct\": int(lhit.sum() + rhit.sum()),\n                         \"queries\": 2 * len(left_gold), \"both_correct\": int((lhit & rhit).sum()),\n                         \"conflicting_pairs\": len(left_gold), \"cleared_both_correct\": int(neg.sum()),\n                         \"same_logits_pairs\": int(same_logits.sum()), \"mean_paired_margin\": float(margins.mean()),\n                         \"mean_nll\": float(nll), \"pair_success_bits\": (lhit & rhit).int().tolist()}\n    key_vocab = F.normalize(model.keys.weight, dim=-1)\n    value_vocab = F.normalize(model.values.weight, dim=-1)\n    signs = ((key_vocab @ model.proj_in) @ (value_vocab @ model.proj_out).T).sign()\n    return {\"loads\": results, \"positive_isolated_projection_pairs\": int((signs > 0).sum()),\n            \"projection_pair_count\": signs.numel()}\n\n\ndef main():\n    torch.set_num_threads(1)\n    torch.set_float32_matmul_precision(\"highest\")\n    device = torch.device(\"cuda\")\n    witness = check_production()\n    CONSOLE.print_json(data={\"parity\": witness})\n    results = {}\n    for index, seed in enumerate(SEEDS):\n        training, heldout = make_data(seed, device)\n        row = {}\n        # Rotate the order to distribute one-time warmup and order effects.\n        for arm in ARMS[index % len(ARMS):] + ARMS[:index % len(ARMS)]:\n            model = Writer(arm, seed).to(device)\n            training_run = train_model(model, training)\n            scores = evaluate(model, heldout)\n            row[arm] = {\"training\": training_run, \"evaluation\": scores,\n                        \"mutable_state_bytes\": model.state_bytes(),\n                        \"learned_parameter_count\": sum(p.numel() for p in model.parameters())}\n            CONSOLE.print_json(data={\"seed\": seed, \"arm\": arm,\n                                     \"both\": {load: score[\"both_correct\"] for load, score in scores[\"loads\"].items()},\n                                     \"seconds\": round(training_run[\"seconds\"], 2)})\n        results[seed] = row\n    gaps = {load: [row[\"projected_hebb\"][\"evaluation\"][\"loads\"][load][\"both_correct\"]\n                   - row[\"gated_delta\"][\"evaluation\"][\"loads\"][load][\"both_correct\"] for row in results.values()]\n            for load in LOADS}\n    primary = gaps[8]\n    threshold_met = sum(primary) / (len(SEEDS) * PANEL) >= 0.05 and all(gap >= 0 for gap in primary)\n    result = {\"parameters\": {\"vocab\": VOCAB, \"width\": WIDTH, \"steps\": STEPS, \"batch\": BATCH, \"panel\": PANEL,\n                             \"seeds\": SEEDS, \"arms\": ARMS, \"loads\": LOADS, \"train_loads\": LOADS[:2]},\n              \"scope\": \"Supervised component experiment with decomposed key/value IDs. No attention or replay of visible support is available to the readout. Gradient flows through all writes of an independently reset episode. The projected rule matches the fixed-gate fast-matrix recurrence at the initial rates and learns scalar decay and step alongside matched embeddings and readout. Whole-model training and biological gates are outside this experiment.\",\n              \"decision_rule\": \"Projected Hebbian advantage at 8 writes requires a pooled gain of at least 5 percentage points on paired recall and no seed-level loss against the scalar-gated delta control.\",\n              \"projected_gain_threshold_met\": threshold_met,\n              \"paired_correct_count_gaps_hebb_minus_delta\": gaps,\n              \"forward_parity\": witness, \"results\": results,\n              \"pytorch\": torch.__version__, \"gpu\": torch.cuda.get_device_name(0)}\n    with Path(sys.argv[1]).open(\"x\", encoding=\"utf-8\") as stream:\n        json.dump(result, stream, indent=2, sort_keys=True, allow_nan=False)\n        stream.write(\"\\n\")\n\n\nif __name__ == \"__main__\":\n    main()\n",
+      "driver_file": "train_memories.py",
+      "driver_sha256": "3b1981fc8f32b279b48e0d57936cfe922e7bd0782ec8255819211ee9095e3a83",
+      "dsr_checks": [
+        "set -e; export CUDA_VISIBLE_DEVICES=0 UV_OFFLINE=true UV_PROJECT_ENVIRONMENT=/data/projects/bio_inspired_nanochat/.venv OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 RAYON_NUM_THREADS=1 PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1; test \"$(git rev-parse HEAD)\" = 0a3a0c4c1625f6ad75409f99dbd6d5e204f9a9f6; printf '%s  %s\\n' 3b1981fc8f32b279b48e0d57936cfe922e7bd0782ec8255819211ee9095e3a83 /data/projects/bio-train-eviction.pyS1nyoz/train_memories.py | sha256sum --check; flock -w 60 /tmp/bio_inspired_nanochat-trj-gpu0.lock taskset -c 52 uv run --no-sync python /data/projects/bio-train-eviction.pyS1nyoz/train_memories.py /data/projects/bio-train-eviction.pyS1nyoz/trained.json; sha256sum /data/projects/bio-train-eviction.pyS1nyoz/train_memories.py /data/projects/bio-train-eviction.pyS1nyoz/trained.json"
+      ],
+      "raw_result_sha256": "51737ff243d721b71bb8e45a1b9487ce22d27a6521a7db765a80e6624f800c60"
+    }
+  }
+}
