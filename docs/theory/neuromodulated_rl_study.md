@@ -1542,13 +1542,13 @@ decision, before applying the conditional two-action matrix update.
   16 eligible stems in panel order. Stop with zero suffix draws
   if fewer than 12 qualify. Freeze and independently audit the
   manifest before starting either reward block.
-- [ ] Draw eight suffixes per action in each of two blocks using
+- [x] Draw eight suffixes per action in each of two blocks using
   seeds 811062 and 811063, each salted with
   `qwen.digit.<question ID>`. Check the packed support against
   the manifest before forcing the first action. Use the ordinary
   sampler for the entire remainder. Keep the 512-token cap and
   the independently verified last-boxed-integer reward.
-- [ ] Apply the mixed-study gate unchanged. Include forks whose
+- [x] Apply the mixed-study gate unchanged. Include forks whose
   discovery gap is at least two correct draws in either direction.
   Require at least six such forks, at least six positive oriented
   confirmation gaps, mean gain of at least one correct response
@@ -1557,7 +1557,7 @@ decision, before applying the conditional two-action matrix update.
   confirmation arm counts under a joint no-effect null, with the
   selected forks and directions fixed by discovery.
   [Exact permutation testing](https://arxiv.org/abs/1411.7565)
-- [ ] Report all draws, ties and caps. On discovery-qualified forks,
+- [x] Report all draws, ties and caps. On discovery-qualified forks,
   also report the confirmation difference between the discovery
   winner and the higher-prior digit, choosing the smaller token ID
   on exact prior ties. Report disagreement count, wins, losses,
@@ -1587,7 +1587,7 @@ and its efficacy gate.
   frozen manifest, random seeds and reward gate retain their
   registered values.
 - [x] Decode the reward-free prefixes with the pinned tokenizer.
-  Identify forks inside an open `\\boxed{...}` expression and
+  Identify forks inside an open `\boxed{...}` expression and
   report that breakdown descriptively to check whether the
   study branched at final-answer digits.
 
@@ -1606,3 +1606,35 @@ and 0.0180 in canonical prefill. Zero of the 16 prefixes ended
 inside an open boxed expression.
 
 The frozen manifest SHA-256 is `406df7c14585a2ba268f0f99c7b635c4e5bfd4128461b211e39b81cc8239d1a1`.
+
+### Digit-only replication results
+
+Both blocks checked the frozen support and forced the designated
+digit at each of the 16 shared prefixes. The audit accounted for
+all 512 draws. Discovery had 252 parseable responses and three
+length caps, and confirmation had 252 parseable responses and
+two caps. The eight responses without a parseable answer
+received zero reward.
+
+Eight forks qualified in discovery and all eight repeated
+direction in confirmation. The oriented confirmation gaps
+were `[2, 1, 1, 2, 3, 5, 4, 6]` correct responses out of eight.
+The mean was 3.0 per eight (37.5 percentage points), with
+one-sided exact `p = 1/256 = 0.00390625`. The digit-only
+replication passed all four registered conditions.
+
+Discovery and the higher-prior digit agreed on four of the
+eight qualifying prefixes. Where they disagreed, discovery
+won all four in confirmation, with gaps of one, one, three
+and four correct answers per eight. Including zero on
+agreements, the mean gain over the prior was 1.125 per eight
+(14.06 percentage points). This descriptive comparison makes
+the higher-prior digit a control for the next experiment.
+
+The observed endpoint is terminal arithmetic correctness
+under a forced action at short L1 packing prefixes. The next
+experiment, `hy8.3.10`, tests whether these branch returns can
+guide a KL-matched matrix update that transfers to new prompts.
+
+[Digit-only results, source and receipts](../../results/qwen_digit_sibling_2026-11-24.json) ·
+[All frozen contexts and suffix draws](../../results/qwen_digit_sibling_2026-11-24.json.gz)

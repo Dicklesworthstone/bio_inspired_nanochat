@@ -1,0 +1,902 @@
+{
+  "archive_sha256": "e67180140e983efc58b3467434c7e3473a28eb9bd400d4f90c0d768e97fce5e9",
+  "dsr": {
+    "anchor-recheck": {
+      "checks": [
+        {
+          "duration_ms": 1033,
+          "exit_code": 0,
+          "log_sha256": "216c780e1ddb5109a67cc84dfcbe73cd872802277441b561d0332ada88a28f58",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "3a80b2292fc8cdbd549910950642efb2e195bcff9e7dae8fa8fa5f16c85bb1d4",
+      "exit_code": 0,
+      "receipt_sha256": "269fe6bf06dd352e67df3a1b202dad9deeeebbd522c7e8b2842852035f39112a",
+      "run_id": "38B225AC-0B36-4CDB-A39F-07F134CFA42E",
+      "source_after": "4407fffae654744a0ed4a68619f87f90a71d41b3|7cc162fd3f43e3158bbfcebb5db67f00ae72bb74dcafdfbb4d5a72b407cc4b2d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "4407fffae654744a0ed4a68619f87f90a71d41b3|7cc162fd3f43e3158bbfcebb5db67f00ae72bb74dcafdfbb4d5a72b407cc4b2d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    },
+    "confirmation": {
+      "checks": [
+        {
+          "duration_ms": 1302524,
+          "exit_code": 0,
+          "log_sha256": "ae8db1d04695d695022540422518c96e974980eaf00d7450767cfe41e172308c",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "b468f3113e40c2b39e869d0f9a7ef2cc408d1a8c695a397d5e4069a29c8b81fa",
+      "exit_code": 0,
+      "receipt_sha256": "f3a4db090a153d0821e891b110b755100a4d90143499b2de2dd3753bace67828",
+      "run_id": "381585ee-957b-43e5-8449-fec47869839e",
+      "source_after": "4407fffae654744a0ed4a68619f87f90a71d41b3|7cc162fd3f43e3158bbfcebb5db67f00ae72bb74dcafdfbb4d5a72b407cc4b2d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "4407fffae654744a0ed4a68619f87f90a71d41b3|7cc162fd3f43e3158bbfcebb5db67f00ae72bb74dcafdfbb4d5a72b407cc4b2d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    },
+    "discovery": {
+      "checks": [
+        {
+          "duration_ms": 1230671,
+          "exit_code": 0,
+          "log_sha256": "0a8833436a4704c361eaac541b4c2f1961ae35ad3e42bdd91ce91977ceb757c2",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "addf3b4e4e2bba9558ee6fa4e42ff1079a58c15fe47d5730c67a4ad2a6efe0df",
+      "exit_code": 0,
+      "receipt_sha256": "490159ae67cd60c1e7b690235d74b72ccff33db995904e6c5f84097583aa5f2b",
+      "run_id": "b075d42e-b3d2-48aa-841e-62d3742261db",
+      "source_after": "4407fffae654744a0ed4a68619f87f90a71d41b3|7cc162fd3f43e3158bbfcebb5db67f00ae72bb74dcafdfbb4d5a72b407cc4b2d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "4407fffae654744a0ed4a68619f87f90a71d41b3|7cc162fd3f43e3158bbfcebb5db67f00ae72bb74dcafdfbb4d5a72b407cc4b2d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    },
+    "final-audit": {
+      "checks": [
+        {
+          "duration_ms": 1439,
+          "exit_code": 0,
+          "log_sha256": "33d76f03afb7e05fda44a185a814eb8fd22cf920f82b790e67f90666b7007c4a",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "abd6c9554fe81737c0773e57b63a5df45d2274ba00a6e346707c8bd25ae8068a",
+      "exit_code": 0,
+      "receipt_sha256": "8948e424fd55d0266b4995ffca03bfade494b6ff5cc00c4fac45dbd244cc2857",
+      "run_id": "EF9DCB2E-EEBB-4984-BF68-362C30DC92D2",
+      "source_after": "4407fffae654744a0ed4a68619f87f90a71d41b3|7cc162fd3f43e3158bbfcebb5db67f00ae72bb74dcafdfbb4d5a72b407cc4b2d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "4407fffae654744a0ed4a68619f87f90a71d41b3|7cc162fd3f43e3158bbfcebb5db67f00ae72bb74dcafdfbb4d5a72b407cc4b2d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    },
+    "fixture-sealed": {
+      "checks": [
+        {
+          "duration_ms": 20240,
+          "exit_code": 0,
+          "log_sha256": "4a6348ec491ae1c62b6e63a538daf3c7fd8b140991e75ce547792bda677e9db1",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "65fab25c22f7ff1c2d5075bfe36d3e86b7c571a6d1358a59fab15c4cc70118c1",
+      "exit_code": 0,
+      "receipt_sha256": "bdd11983e7bba9831d6595ff56a3cfcbfe2f3dcb4d02933aca8ddbb2e309c955",
+      "run_id": "70FC0F23-FEE6-4DCA-85A7-EFA7EFBE970C",
+      "source_after": "4407fffae654744a0ed4a68619f87f90a71d41b3|7cc162fd3f43e3158bbfcebb5db67f00ae72bb74dcafdfbb4d5a72b407cc4b2d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "4407fffae654744a0ed4a68619f87f90a71d41b3|7cc162fd3f43e3158bbfcebb5db67f00ae72bb74dcafdfbb4d5a72b407cc4b2d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    },
+    "freeze": {
+      "checks": [
+        {
+          "duration_ms": 354651,
+          "exit_code": 0,
+          "log_sha256": "206b4f5a05eda4818a84c772b718523046ddd9c448479b075d5e1886a086329e",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "b71fc9c16fdfa3e9f7915a8881d7645b7f7e13f7009eb44423438b8e9571a36d",
+      "exit_code": 0,
+      "receipt_sha256": "03a7ff34e1df334d3292e97323bb4f8ed65c478ae6a219a20ab42b906199988e",
+      "run_id": "e4d9c244-e411-4fb5-9fc4-cf97dd7e5d16",
+      "source_after": "4407fffae654744a0ed4a68619f87f90a71d41b3|7cc162fd3f43e3158bbfcebb5db67f00ae72bb74dcafdfbb4d5a72b407cc4b2d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "4407fffae654744a0ed4a68619f87f90a71d41b3|7cc162fd3f43e3158bbfcebb5db67f00ae72bb74dcafdfbb4d5a72b407cc4b2d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    },
+    "mass-audit": {
+      "checks": [
+        {
+          "duration_ms": 40136,
+          "exit_code": 0,
+          "log_sha256": "7c31cedc531ccb17eb03b60db5f40c79e018192de2c64de5356d82ff8e33f8cc",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "972551e6aea7cea5774fe2a74713596f6eb241c65f7fe23bddcd6c8943a1c096",
+      "exit_code": 0,
+      "receipt_sha256": "626cfdc88d0368363f4d81dce5549196e0eb0ada773700b1426a94c46c78ddf2",
+      "run_id": "b27d4ea9-71f9-47cd-8024-f5ee4f8710bc",
+      "source_after": "4407fffae654744a0ed4a68619f87f90a71d41b3|7cc162fd3f43e3158bbfcebb5db67f00ae72bb74dcafdfbb4d5a72b407cc4b2d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "4407fffae654744a0ed4a68619f87f90a71d41b3|7cc162fd3f43e3158bbfcebb5db67f00ae72bb74dcafdfbb4d5a72b407cc4b2d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    },
+    "panel-audit": {
+      "checks": [
+        {
+          "duration_ms": 892,
+          "exit_code": 0,
+          "log_sha256": "49e6887ce220c8a9cb8bcfe8ce5d7bdf6f8f1126d08aff6c18b5c7e0feb09be8",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "72931c0c4df8257a5d8abdd1de91e375153412ba4c88e20f43bf40924871d464",
+      "exit_code": 0,
+      "receipt_sha256": "9933f41f40ec032fecd9d7902ec80f3ce4a8a7412e627b5983f2435a7bb3d77b",
+      "run_id": "04B5C2C0-46D9-476F-8B35-1F0C553DC197",
+      "source_after": "4407fffae654744a0ed4a68619f87f90a71d41b3|7cc162fd3f43e3158bbfcebb5db67f00ae72bb74dcafdfbb4d5a72b407cc4b2d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "4407fffae654744a0ed4a68619f87f90a71d41b3|7cc162fd3f43e3158bbfcebb5db67f00ae72bb74dcafdfbb4d5a72b407cc4b2d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    },
+    "prefix-context": {
+      "checks": [
+        {
+          "duration_ms": 22563,
+          "exit_code": 0,
+          "log_sha256": "b9157f2742ac82613043849268307975f85e0e4c44ed148e19accc88a161d84b",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "ca2895d9ee72593bf1f071916ec9c0b0b81d16972101e07fb70e7053d7ed614b",
+      "exit_code": 0,
+      "receipt_sha256": "b941036e2f7dcbcd786668da802e5702e1b60ce5590ce00ed610ccd29124a1a4",
+      "run_id": "625430FD-3CCE-4F8C-887B-D605FB3CA638",
+      "source_after": "4407fffae654744a0ed4a68619f87f90a71d41b3|7cc162fd3f43e3158bbfcebb5db67f00ae72bb74dcafdfbb4d5a72b407cc4b2d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "4407fffae654744a0ed4a68619f87f90a71d41b3|7cc162fd3f43e3158bbfcebb5db67f00ae72bb74dcafdfbb4d5a72b407cc4b2d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    },
+    "seal": {
+      "checks": [
+        {
+          "duration_ms": 1490,
+          "exit_code": 0,
+          "log_sha256": "c020e0cdfabaf522b2a2e91a146e8314955d7e7298dc8d7156d46f3d9924bbc7",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "06fe8511b8874498a51c77a728d091a5457aabafa4fed28ecaa7147989a0e4a2",
+      "exit_code": 0,
+      "receipt_sha256": "abd9179ad770764f45ba1186dada874076085bdbaa63f758a9d73b111e36c6cd",
+      "run_id": "ADBD6C21-D4E2-41AD-A5CB-40361342C28B",
+      "source_after": "4407fffae654744a0ed4a68619f87f90a71d41b3|7cc162fd3f43e3158bbfcebb5db67f00ae72bb74dcafdfbb4d5a72b407cc4b2d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "4407fffae654744a0ed4a68619f87f90a71d41b3|7cc162fd3f43e3158bbfcebb5db67f00ae72bb74dcafdfbb4d5a72b407cc4b2d|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    }
+  },
+  "original_anchor_audit": {
+    "receipt_sha256": "137f239680c876e2e1ada49a2b6ae505cdbfca6ae79da0289cfe271a3668ab7b",
+    "run_id": "CC2BE377-AB2A-4C71-9B1B-BA86CB504688",
+    "status": "failed"
+  },
+  "registered_protocol": "5bb584f11eff0d6b579f875a25cc11644c7f98eb",
+  "results": {
+    "anchor_sha256": "406df7c14585a2ba268f0f99c7b635c4e5bfd4128461b211e39b81cc8239d1a1",
+    "anchors": 16,
+    "compared_with_prior": {
+      "discordant": 4,
+      "losses": 0,
+      "mean_gain_per_8": 1.125,
+      "ties": 0,
+      "wins": 4
+    },
+    "discovery_qualified": 8,
+    "draws": 512,
+    "eligible": true,
+    "kinds": {
+      "numeric": 16
+    },
+    "mean_confirmation_gain_per_8": 3.0,
+    "pairs": [
+      {
+        "confirmation": {
+          "capped": [
+            0,
+            0
+          ],
+          "correct": [
+            1,
+            0
+          ],
+          "id": "digit.packing.03.0",
+          "parseable": [
+            8,
+            8
+          ]
+        },
+        "confirmation_gain_over_prior": null,
+        "confirmation_gap": 1,
+        "discovery": {
+          "capped": [
+            0,
+            0
+          ],
+          "correct": [
+            0,
+            1
+          ],
+          "id": "digit.packing.03.0",
+          "parseable": [
+            8,
+            8
+          ]
+        },
+        "discovery_gap": -1,
+        "discovery_winner_arm": null,
+        "higher_prior_arm": 0,
+        "id": "digit.packing.03.0",
+        "oriented_confirmation": null
+      },
+      {
+        "confirmation": {
+          "capped": [
+            0,
+            0
+          ],
+          "correct": [
+            5,
+            7
+          ],
+          "id": "digit.packing.06.0",
+          "parseable": [
+            8,
+            8
+          ]
+        },
+        "confirmation_gain_over_prior": null,
+        "confirmation_gap": -2,
+        "discovery": {
+          "capped": [
+            0,
+            0
+          ],
+          "correct": [
+            8,
+            7
+          ],
+          "id": "digit.packing.06.0",
+          "parseable": [
+            8,
+            8
+          ]
+        },
+        "discovery_gap": 1,
+        "discovery_winner_arm": null,
+        "higher_prior_arm": 0,
+        "id": "digit.packing.06.0",
+        "oriented_confirmation": null
+      },
+      {
+        "confirmation": {
+          "capped": [
+            0,
+            0
+          ],
+          "correct": [
+            5,
+            3
+          ],
+          "id": "digit.packing.11.0",
+          "parseable": [
+            7,
+            8
+          ]
+        },
+        "confirmation_gain_over_prior": 0,
+        "confirmation_gap": 2,
+        "discovery": {
+          "capped": [
+            1,
+            0
+          ],
+          "correct": [
+            6,
+            3
+          ],
+          "id": "digit.packing.11.0",
+          "parseable": [
+            7,
+            8
+          ]
+        },
+        "discovery_gap": 3,
+        "discovery_winner_arm": 0,
+        "higher_prior_arm": 0,
+        "id": "digit.packing.11.0",
+        "oriented_confirmation": 2
+      },
+      {
+        "confirmation": {
+          "capped": [
+            0,
+            0
+          ],
+          "correct": [
+            3,
+            2
+          ],
+          "id": "digit.packing.12.0",
+          "parseable": [
+            7,
+            8
+          ]
+        },
+        "confirmation_gain_over_prior": 1,
+        "confirmation_gap": 1,
+        "discovery": {
+          "capped": [
+            0,
+            0
+          ],
+          "correct": [
+            5,
+            3
+          ],
+          "id": "digit.packing.12.0",
+          "parseable": [
+            7,
+            8
+          ]
+        },
+        "discovery_gap": 2,
+        "discovery_winner_arm": 0,
+        "higher_prior_arm": 1,
+        "id": "digit.packing.12.0",
+        "oriented_confirmation": 1
+      },
+      {
+        "confirmation": {
+          "capped": [
+            0,
+            0
+          ],
+          "correct": [
+            8,
+            8
+          ],
+          "id": "digit.packing.13.0",
+          "parseable": [
+            8,
+            8
+          ]
+        },
+        "confirmation_gain_over_prior": null,
+        "confirmation_gap": 0,
+        "discovery": {
+          "capped": [
+            0,
+            0
+          ],
+          "correct": [
+            8,
+            8
+          ],
+          "id": "digit.packing.13.0",
+          "parseable": [
+            8,
+            8
+          ]
+        },
+        "discovery_gap": 0,
+        "discovery_winner_arm": null,
+        "higher_prior_arm": 0,
+        "id": "digit.packing.13.0",
+        "oriented_confirmation": null
+      },
+      {
+        "confirmation": {
+          "capped": [
+            0,
+            0
+          ],
+          "correct": [
+            5,
+            5
+          ],
+          "id": "digit.packing.14.0",
+          "parseable": [
+            8,
+            8
+          ]
+        },
+        "confirmation_gain_over_prior": null,
+        "confirmation_gap": 0,
+        "discovery": {
+          "capped": [
+            0,
+            0
+          ],
+          "correct": [
+            2,
+            3
+          ],
+          "id": "digit.packing.14.0",
+          "parseable": [
+            8,
+            8
+          ]
+        },
+        "discovery_gap": -1,
+        "discovery_winner_arm": null,
+        "higher_prior_arm": 0,
+        "id": "digit.packing.14.0",
+        "oriented_confirmation": null
+      },
+      {
+        "confirmation": {
+          "capped": [
+            0,
+            0
+          ],
+          "correct": [
+            6,
+            7
+          ],
+          "id": "digit.packing.17.0",
+          "parseable": [
+            8,
+            8
+          ]
+        },
+        "confirmation_gain_over_prior": 1,
+        "confirmation_gap": -1,
+        "discovery": {
+          "capped": [
+            0,
+            0
+          ],
+          "correct": [
+            3,
+            5
+          ],
+          "id": "digit.packing.17.0",
+          "parseable": [
+            8,
+            8
+          ]
+        },
+        "discovery_gap": -2,
+        "discovery_winner_arm": 1,
+        "higher_prior_arm": 0,
+        "id": "digit.packing.17.0",
+        "oriented_confirmation": 1
+      },
+      {
+        "confirmation": {
+          "capped": [
+            0,
+            0
+          ],
+          "correct": [
+            3,
+            1
+          ],
+          "id": "digit.packing.19.0",
+          "parseable": [
+            8,
+            8
+          ]
+        },
+        "confirmation_gain_over_prior": 0,
+        "confirmation_gap": 2,
+        "discovery": {
+          "capped": [
+            0,
+            0
+          ],
+          "correct": [
+            6,
+            3
+          ],
+          "id": "digit.packing.19.0",
+          "parseable": [
+            8,
+            8
+          ]
+        },
+        "discovery_gap": 3,
+        "discovery_winner_arm": 0,
+        "higher_prior_arm": 0,
+        "id": "digit.packing.19.0",
+        "oriented_confirmation": 2
+      },
+      {
+        "confirmation": {
+          "capped": [
+            0,
+            0
+          ],
+          "correct": [
+            5,
+            8
+          ],
+          "id": "digit.packing.20.0",
+          "parseable": [
+            8,
+            8
+          ]
+        },
+        "confirmation_gain_over_prior": 3,
+        "confirmation_gap": -3,
+        "discovery": {
+          "capped": [
+            0,
+            0
+          ],
+          "correct": [
+            5,
+            7
+          ],
+          "id": "digit.packing.20.0",
+          "parseable": [
+            8,
+            8
+          ]
+        },
+        "discovery_gap": -2,
+        "discovery_winner_arm": 1,
+        "higher_prior_arm": 0,
+        "id": "digit.packing.20.0",
+        "oriented_confirmation": 3
+      },
+      {
+        "confirmation": {
+          "capped": [
+            0,
+            0
+          ],
+          "correct": [
+            5,
+            7
+          ],
+          "id": "digit.packing.21.0",
+          "parseable": [
+            8,
+            8
+          ]
+        },
+        "confirmation_gain_over_prior": null,
+        "confirmation_gap": -2,
+        "discovery": {
+          "capped": [
+            0,
+            0
+          ],
+          "correct": [
+            5,
+            5
+          ],
+          "id": "digit.packing.21.0",
+          "parseable": [
+            8,
+            8
+          ]
+        },
+        "discovery_gap": 0,
+        "discovery_winner_arm": null,
+        "higher_prior_arm": 0,
+        "id": "digit.packing.21.0",
+        "oriented_confirmation": null
+      },
+      {
+        "confirmation": {
+          "capped": [
+            0,
+            0
+          ],
+          "correct": [
+            7,
+            2
+          ],
+          "id": "digit.packing.24.0",
+          "parseable": [
+            8,
+            8
+          ]
+        },
+        "confirmation_gain_over_prior": 0,
+        "confirmation_gap": 5,
+        "discovery": {
+          "capped": [
+            0,
+            0
+          ],
+          "correct": [
+            7,
+            3
+          ],
+          "id": "digit.packing.24.0",
+          "parseable": [
+            8,
+            8
+          ]
+        },
+        "discovery_gap": 4,
+        "discovery_winner_arm": 0,
+        "higher_prior_arm": 0,
+        "id": "digit.packing.24.0",
+        "oriented_confirmation": 5
+      },
+      {
+        "confirmation": {
+          "capped": [
+            0,
+            0
+          ],
+          "correct": [
+            0,
+            4
+          ],
+          "id": "digit.packing.25.0",
+          "parseable": [
+            8,
+            8
+          ]
+        },
+        "confirmation_gain_over_prior": 4,
+        "confirmation_gap": -4,
+        "discovery": {
+          "capped": [
+            0,
+            0
+          ],
+          "correct": [
+            0,
+            3
+          ],
+          "id": "digit.packing.25.0",
+          "parseable": [
+            8,
+            8
+          ]
+        },
+        "discovery_gap": -3,
+        "discovery_winner_arm": 1,
+        "higher_prior_arm": 0,
+        "id": "digit.packing.25.0",
+        "oriented_confirmation": 4
+      },
+      {
+        "confirmation": {
+          "capped": [
+            0,
+            0
+          ],
+          "correct": [
+            5,
+            6
+          ],
+          "id": "digit.packing.26.0",
+          "parseable": [
+            8,
+            8
+          ]
+        },
+        "confirmation_gain_over_prior": null,
+        "confirmation_gap": -1,
+        "discovery": {
+          "capped": [
+            0,
+            0
+          ],
+          "correct": [
+            7,
+            6
+          ],
+          "id": "digit.packing.26.0",
+          "parseable": [
+            8,
+            8
+          ]
+        },
+        "discovery_gap": 1,
+        "discovery_winner_arm": null,
+        "higher_prior_arm": 0,
+        "id": "digit.packing.26.0",
+        "oriented_confirmation": null
+      },
+      {
+        "confirmation": {
+          "capped": [
+            1,
+            1
+          ],
+          "correct": [
+            7,
+            1
+          ],
+          "id": "digit.packing.28.0",
+          "parseable": [
+            7,
+            7
+          ]
+        },
+        "confirmation_gain_over_prior": 0,
+        "confirmation_gap": 6,
+        "discovery": {
+          "capped": [
+            0,
+            2
+          ],
+          "correct": [
+            5,
+            1
+          ],
+          "id": "digit.packing.28.0",
+          "parseable": [
+            8,
+            6
+          ]
+        },
+        "discovery_gap": 4,
+        "discovery_winner_arm": 0,
+        "higher_prior_arm": 0,
+        "id": "digit.packing.28.0",
+        "oriented_confirmation": 6
+      },
+      {
+        "confirmation": {
+          "capped": [
+            0,
+            0
+          ],
+          "correct": [
+            4,
+            2
+          ],
+          "id": "digit.packing.31.0",
+          "parseable": [
+            8,
+            8
+          ]
+        },
+        "confirmation_gain_over_prior": null,
+        "confirmation_gap": 2,
+        "discovery": {
+          "capped": [
+            0,
+            0
+          ],
+          "correct": [
+            3,
+            3
+          ],
+          "id": "digit.packing.31.0",
+          "parseable": [
+            8,
+            8
+          ]
+        },
+        "discovery_gap": 0,
+        "discovery_winner_arm": null,
+        "higher_prior_arm": 0,
+        "id": "digit.packing.31.0",
+        "oriented_confirmation": null
+      },
+      {
+        "confirmation": {
+          "capped": [
+            0,
+            0
+          ],
+          "correct": [
+            6,
+            5
+          ],
+          "id": "digit.packing.33.0",
+          "parseable": [
+            8,
+            8
+          ]
+        },
+        "confirmation_gain_over_prior": null,
+        "confirmation_gap": 1,
+        "discovery": {
+          "capped": [
+            0,
+            0
+          ],
+          "correct": [
+            6,
+            7
+          ],
+          "id": "digit.packing.33.0",
+          "parseable": [
+            8,
+            8
+          ]
+        },
+        "discovery_gap": -1,
+        "discovery_winner_arm": null,
+        "higher_prior_arm": 0,
+        "id": "digit.packing.33.0",
+        "oriented_confirmation": null
+      }
+    ],
+    "panel": {
+      "overlap": 0,
+      "pairs": 80,
+      "questions": 160,
+      "sha256": "741f0d46a69896f30c83b89897556cce46642f3d59c5af70452b9c481887b412"
+    },
+    "passed": true,
+    "positive_confirmation": 8,
+    "probability_audit": {
+      "above_original_tolerance": 1,
+      "max_float32_vs_float64_error": 1.6867959473643168e-07,
+      "mutations_rejected": 32,
+      "replayed": 32
+    },
+    "signflip": {
+      "denominator": 256,
+      "p": 0.00390625,
+      "tail": 1
+    }
+  },
+  "sources": {
+    "audit_sibling_credit.py": {
+      "content": "\"\"\"Independently verify the frozen probes, held-out signs, and sampling counts.\"\"\"\n\nimport gzip\nimport hashlib\nimport json\nimport math\nimport sys\nfrom array import array\nfrom collections import Counter\nfrom pathlib import Path\n\nfrom audit_whole_model_replay import digest, read, verified_receipt\nfrom ladder_audit import last_box\nfrom sibling_panels import independent\n\n\nVOCABULARY = 151936\nENDS = {151645, 151643}\nBLOCKS = {\"discovery\": 811062, \"confirmation\": 811063}\nDRAWS = 8\n\n\ndef seed(base, salt):\n    return (base ^ int.from_bytes(hashlib.blake2b(salt.encode(), digest_size=8).digest(), \"little\")) % (2**63)\n\n\ndef expected_digest(ids, logits):\n    # A separate CPU path reproduces the packed repeated BF16 sampler values.\n    values = array(\"f\", [-math.inf]) * VOCABULARY\n    for token, logit in zip(ids, logits, strict=True):\n        values[token] = logit\n    if sys.byteorder != \"little\":\n        values.byteswap()\n    one_row = values.tobytes()\n    prev = hashlib.sha256()\n    for _ in range(16):\n        prev.update(one_row)\n    return prev.hexdigest()\n\n\ndef examine_freeze(work):\n    panels = work / \"panels.json\"\n    checked = independent(work / \"ladder.json.gz\", work / \"prior_kl_panels.json\",\n                          work / \"prior_sibling_panels.json\", panels)\n    observed = read(work / \"anchors.json\")\n    assert observed[\"panel_sha256\"] == checked[\"sha256\"]\n    assert observed[\"guide_seeds\"] == [seed(811061, f\"qwen.digit.guide.{batch}\") for batch in range(5)]\n    ids = [row[\"id\"] for row in read(panels)[\"rows\"][::2]]\n    guide = {row[\"id\"]: row[\"roll_in_tokens\"] for row in observed[\"guide\"]}\n    assert list(guide) == ids and all(len(tokens) <= 96 for tokens in guide.values())\n    choices = observed[\"probes\"]\n    selected = [item[\"id\"] for item in choices]\n    assert len(selected) == len(set(selected)) <= 16 and selected == [key for key in ids if key in selected]\n    assert observed[\"eligible\"] == (len(selected) >= 12)\n    skipped = observed[\"unusable\"]\n    assert len(set(skipped)) == len(skipped) and set(selected).isdisjoint(skipped)\n    if len(selected) == 16:\n        assert set(ids[:ids.index(selected[-1]) + 1]) == set(selected) | set(skipped)\n    else:\n        assert set(ids) == set(selected) | set(skipped)\n    digits = observed[\"digit_ids\"]\n    assert len(set(digits)) == len(digits) == 10\n    for probe in choices:\n        start, step = probe[\"prompt_tokens\"], probe[\"roll_in_tokens\"]\n        assert 16 <= step < min(96, len(guide[probe[\"id\"]]))\n        assert probe[\"prefix\"][start:] == guide[probe[\"id\"]][:step]\n        assert len(probe[\"prefix\"]) == start + step and probe[\"pair\"] == probe[\"id\"].removesuffix(\".0\")\n        support, logits = probe[\"support_ids\"], probe[\"support_logits\"]\n        assert 50 <= len(support) == len(logits) and sorted(set(support)) == support\n        assert all(0 <= index < VOCABULARY for index in support) and all(math.isfinite(value) for value in logits)\n        assert min(logits) == sorted(logits, reverse=True)[49]\n        assert expected_digest(support, logits) == probe[\"support_sha256\"]\n        chosen = probe[\"actions\"]\n        assert len(chosen) == len(set(chosen)) == 2 and not set(chosen).intersection(ENDS)\n        assert probe[\"kind\"] == \"numeric\"\n        assert set(chosen).issubset(digits) and guide[probe[\"id\"]][step] in digits\n        guide_masses = probe[\"guide_probabilities\"]\n        assert len(guide_masses) == 2 and all(0.01 - 1e-8 <= mass <= 1 for mass in guide_masses)\n        allowed = set(digits)\n        anchor = max(logits)\n        elements = {k: math.exp(value - anchor) for k, value in zip(support, logits, strict=True)}\n        total = math.fsum(elements.values())\n        masses = [elements[action] / total for action in chosen]\n        alternatives = sorted((elements[choice] / total for choice in allowed.intersection(support)), reverse=True)\n        assert masses == alternatives[:2] and min(masses) >= 0.01 - 1e-8\n        assert all(math.isclose(mass, expected, rel_tol=0, abs_tol=1e-7)\n                   for mass, expected in zip(masses, probe[\"probabilities\"], strict=True))\n    return {\"panel\": checked, \"anchors\": len(choices), \"eligible\": observed[\"eligible\"],\n            \"kinds\": dict(Counter(probe[\"kind\"] for probe in choices)), \"anchor_sha256\": digest(work / \"anchors.json\")}\n\n\ndef read_block(work, block, anchors, targets):\n    stored = read(work / f\"{block}.json\")\n    manifest = read(work / \"anchors.json\")\n    assert stored[\"anchor_sha256\"] == digest(work / \"anchors.json\") and stored[\"phase\"] == block\n    assert stored[\"checkpoint_sha256\"] == manifest[\"checkpoint_sha256\"]\n    assert stored[\"checkpoint_revision\"] == manifest[\"checkpoint_revision\"]\n    assert stored[\"panel_sha256\"] == manifest[\"panel_sha256\"]\n    verified = []\n    for record, probe in zip(stored[\"records\"], anchors, strict=True):\n        ident = probe[\"id\"]\n        assert record[\"id\"] == ident and record[\"support_sha256\"] == probe[\"support_sha256\"]\n        assert record[\"batch_seed\"] == seed(BLOCKS[block], f\"qwen.digit.{ident}\")\n        assert len(record[\"draws\"]) == 16\n        expanded = {\"id\": ident, \"correct\": [0, 0], \"parseable\": [0, 0], \"capped\": [0, 0]}\n        for index, draw in enumerate(record[\"draws\"]):\n            arm, position = divmod(index, DRAWS)\n            assert draw[\"arm\"] == arm and draw[\"draw\"] == position\n            assert draw[\"new_tokens\"][0] == draw[\"action\"] == probe[\"actions\"][arm]\n            measure = last_box(draw[\"text\"])\n            assert measure == draw[\"answer\"] and int(measure == targets[ident]) == draw[\"reward\"]\n            kept = [value for value in draw[\"new_tokens\"] if value not in ENDS]\n            assert len(kept) + probe[\"roll_in_tokens\"] == draw[\"lexical_count\"]\n            assert draw[\"capped\"] == (draw[\"lexical_count\"] == 512)\n            expanded[\"correct\"][arm] += draw[\"reward\"]\n            expanded[\"parseable\"][arm] += measure is not None\n            expanded[\"capped\"][arm] += draw[\"capped\"]\n        verified.append(expanded)\n    return verified\n\n\ndef signflip(deltas):\n    histogram = Counter({0: 1})\n    for value in deltas:\n        if value:\n            next_ = Counter()\n            for total, count in histogram.items():\n                next_[total + value] += count\n                next_[total - value] += count\n            histogram = next_\n    total = sum(deltas)\n    n = sum(histogram.values())\n    tail = sum(count for alternate, count in histogram.items() if alternate >= total)\n    return tail, n\n\n\ndef evaluate(work):\n    freeze = examine_freeze(work)\n    assert freeze == read(work / \"anchor_audit.json\")\n    if not freeze[\"eligible\"]:\n        return {**freeze, \"draws\": 0, \"passed\": False}\n    anchors = read(work / \"anchors.json\")[\"probes\"]\n    gold = {row[\"id\"]: row[\"gold\"] for row in read(work / \"panels.json\")[\"rows\"]}\n    first = read_block(work, \"discovery\", anchors, gold)\n    second = read_block(work, \"confirmation\", anchors, gold)\n    decided, oriented, over_prior = [], [], []\n    for probe, a, b in zip(anchors, first, second, strict=True):\n        d = a[\"correct\"][0] - a[\"correct\"][1]\n        c = b[\"correct\"][0] - b[\"correct\"][1]\n        selected = abs(d) >= 2\n        reward_arm = (0 if d > 0 else 1) if selected else None\n        prior_arm = min(range(2), key=lambda index: (-probe[\"probabilities\"][index], probe[\"actions\"][index]))\n        orientation = (c if reward_arm == 0 else -c) if selected else None\n        advantage = b[\"correct\"][reward_arm] - b[\"correct\"][prior_arm] if reward_arm is not None else None\n        if selected:\n            oriented.append(orientation)\n            over_prior.append(advantage)\n        decided.append({\"id\": a[\"id\"], \"discovery\": a, \"confirmation\": b, \"discovery_gap\": d,\n                        \"confirmation_gap\": c, \"oriented_confirmation\": orientation,\n                        \"discovery_winner_arm\": reward_arm, \"higher_prior_arm\": prior_arm,\n                        \"confirmation_gain_over_prior\": advantage})\n    hits = sum(value > 0 for value in oriented)\n    tail, denominator = signflip(oriented)\n    passed = len(oriented) >= 6 and hits >= 6 and sum(oriented) >= len(oriented) and tail * 40 <= denominator\n    discordant = [row for row in decided if row[\"discovery_winner_arm\"] is not None\n                  and row[\"discovery_winner_arm\"] != row[\"higher_prior_arm\"]]\n    return {**freeze, \"draws\": 32 * len(anchors), \"pairs\": decided, \"discovery_qualified\": len(oriented),\n            \"positive_confirmation\": hits, \"mean_confirmation_gain_per_8\": sum(oriented) / len(oriented) if oriented else None,\n            \"compared_with_prior\": {\"discordant\": len(discordant),\n                                    \"wins\": sum(row[\"confirmation_gain_over_prior\"] > 0 for row in discordant),\n                                    \"losses\": sum(row[\"confirmation_gain_over_prior\"] < 0 for row in discordant),\n                                    \"ties\": sum(row[\"confirmation_gain_over_prior\"] == 0 for row in discordant),\n                                    \"mean_gain_per_8\": sum(over_prior) / len(over_prior) if over_prior else None},\n            \"signflip\": {\"tail\": tail, \"denominator\": denominator, \"p\": tail / denominator}, \"passed\": passed}\n\n\ndef release(work, registration, runner_sha, output):\n    audit = evaluate(work)\n    assert audit == read(work / \"result_audit.json\")\n    pieces = (\"panels\", \"anchors\", *BLOCKS) if audit[\"eligible\"] else (\"panels\", \"anchors\")\n    recorded = {key: read(work / f\"{key}.json\") for key in pieces}\n    raw = gzip.compress(json.dumps(recorded, sort_keys=True, separators=(\",\", \":\"), allow_nan=False).encode(),\n                        compresslevel=9, mtime=0)\n    assert recorded == json.loads(gzip.decompress(raw))\n    scripts = (\"sibling_credit.py\", \"audit_sibling_credit.py\", \"sibling_panels.py\", \"sibling_runtime_fixture.py\",\n               \"ladder_panels.py\", \"ladder_audit.py\", \"qwen_external.py\", \"run_ladder.py\",\n               \"d20_eval.py\", \"public_checkpoint_adapter.py\", \"audit_whole_model_replay.py\")\n    sources = {name: {\"sha256\": digest(work / name), \"content\": (work / name).read_text(encoding=\"utf-8\")} for name in scripts}\n    assert sources[scripts[0]][\"sha256\"] == runner_sha\n    names = (\"seal\", \"panel-audit\", \"fixture-sealed\", \"freeze\", \"anchor-audit\", \"final-audit\")\n    if audit[\"eligible\"]:\n        names += tuple(BLOCKS)\n    receipts = {name: verified_receipt(work / f\"qwen-digit-{name}.json\") for name in names}\n    evidence = {\"registered_protocol\": registration, \"results\": audit, \"sources\": sources, \"dsr\": receipts,\n                \"archive_sha256\": hashlib.sha256(raw).hexdigest()}\n    with output.with_suffix(\".json.gz\").open(\"xb\") as stream:\n        stream.write(raw)\n    with output.open(\"x\", encoding=\"utf-8\") as stream:\n        json.dump(evidence, stream, sort_keys=True, indent=2, allow_nan=False)\n        stream.write(\"\\n\")\n\n\nif __name__ == \"__main__\":\n    if not __debug__:\n        raise RuntimeError(\"The sibling audit requires Python assertions.\")\n    phase, root, *args = sys.argv[1:]\n    directory = Path(root)\n    if phase == \"release\":\n        release(directory, args[0], args[1], Path(args[2]))\n    else:\n        result = examine_freeze(directory) if phase == \"anchor\" else evaluate(directory)\n        name = \"anchor_audit.json\" if phase == \"anchor\" else \"result_audit.json\"\n        with (directory / name).open(\"x\", encoding=\"utf-8\") as stream:\n            json.dump(result, stream, sort_keys=True, indent=2, allow_nan=False)\n            stream.write(\"\\n\")\n",
+      "sha256": "23c49a03b7cdc6cfe21844acbc356b84722e68f5b8065c47e840b251da17134d"
+    },
+    "audit_sibling_credit_repaired.py": {
+      "content": "\"\"\"Independently verify the frozen probes, held-out signs, and sampling counts.\"\"\"\n\nimport gzip\nimport hashlib\nimport json\nimport math\nimport sys\nfrom array import array\nfrom collections import Counter\nfrom pathlib import Path\n\nfrom audit_whole_model_replay import digest, read, verified_receipt\nfrom ladder_audit import last_box\nfrom sibling_panels import independent\n\n\nVOCABULARY = 151936\nENDS = {151645, 151643}\nBLOCKS = {\"discovery\": 811062, \"confirmation\": 811063}\nDRAWS = 8\n\n\ndef seed(base, salt):\n    return (base ^ int.from_bytes(hashlib.blake2b(salt.encode(), digest_size=8).digest(), \"little\")) % (2**63)\n\n\ndef expected_digest(ids, logits):\n    # A separate CPU path reproduces the packed repeated BF16 sampler values.\n    values = array(\"f\", [-math.inf]) * VOCABULARY\n    for token, logit in zip(ids, logits, strict=True):\n        values[token] = logit\n    if sys.byteorder != \"little\":\n        values.byteswap()\n    one_row = values.tobytes()\n    prev = hashlib.sha256()\n    for _ in range(16):\n        prev.update(one_row)\n    return prev.hexdigest()\n\n\ndef examine_freeze(work):\n    panels = work / \"panels.json\"\n    checked = independent(work / \"ladder.json.gz\", work / \"prior_kl_panels.json\",\n                          work / \"prior_sibling_panels.json\", panels)\n    observed = read(work / \"anchors.json\")\n    assert observed[\"panel_sha256\"] == checked[\"sha256\"]\n    assert observed[\"guide_seeds\"] == [seed(811061, f\"qwen.digit.guide.{batch}\") for batch in range(5)]\n    ids = [row[\"id\"] for row in read(panels)[\"rows\"][::2]]\n    guide = {row[\"id\"]: row[\"roll_in_tokens\"] for row in observed[\"guide\"]}\n    assert list(guide) == ids and all(len(tokens) <= 96 for tokens in guide.values())\n    choices = observed[\"probes\"]\n    selected = [item[\"id\"] for item in choices]\n    assert len(selected) == len(set(selected)) <= 16 and selected == [key for key in ids if key in selected]\n    assert observed[\"eligible\"] == (len(selected) >= 12)\n    skipped = observed[\"unusable\"]\n    assert len(set(skipped)) == len(skipped) and set(selected).isdisjoint(skipped)\n    if len(selected) == 16:\n        assert set(ids[:ids.index(selected[-1]) + 1]) == set(selected) | set(skipped)\n    else:\n        assert set(ids) == set(selected) | set(skipped)\n    digits = observed[\"digit_ids\"]\n    assert len(set(digits)) == len(digits) == 10\n    gpu = read(work / \"mass_audit.json\")\n    assert gpu[\"anchors_sha256\"] == digest(work / \"anchors.json\") and gpu[\"gpu\"] == observed[\"gpu\"]\n    assert gpu[\"mutations_rejected\"] == 2 * len(choices)\n    errors = []\n    for probe, replay in zip(choices, gpu[\"checked\"], strict=True):\n        start, step = probe[\"prompt_tokens\"], probe[\"roll_in_tokens\"]\n        assert 16 <= step < min(96, len(guide[probe[\"id\"]]))\n        assert probe[\"prefix\"][start:] == guide[probe[\"id\"]][:step]\n        assert len(probe[\"prefix\"]) == start + step and probe[\"pair\"] == probe[\"id\"].removesuffix(\".0\")\n        support, logits = probe[\"support_ids\"], probe[\"support_logits\"]\n        assert 50 <= len(support) == len(logits) and sorted(set(support)) == support\n        assert all(0 <= index < VOCABULARY for index in support) and all(math.isfinite(value) for value in logits)\n        assert min(logits) == sorted(logits, reverse=True)[49]\n        assert expected_digest(support, logits) == probe[\"support_sha256\"]\n        chosen = probe[\"actions\"]\n        assert len(chosen) == len(set(chosen)) == 2 and not set(chosen).intersection(ENDS)\n        assert probe[\"kind\"] == \"numeric\"\n        assert set(chosen).issubset(digits) and guide[probe[\"id\"]][step] in digits\n        guide_masses = probe[\"guide_probabilities\"]\n        assert len(guide_masses) == 2 and all(0.01 - 1e-8 <= mass <= 1 for mass in guide_masses)\n        allowed = set(digits)\n        anchor = max(logits)\n        elements = {k: math.exp(value - anchor) for k, value in zip(support, logits, strict=True)}\n        total = math.fsum(elements.values())\n        masses = [elements[action] / total for action in chosen]\n        alternatives = sorted((elements[choice] / total for choice in allowed.intersection(support)), reverse=True)\n        assert masses == alternatives[:2] and min(masses) >= 0.01\n        assert replay[\"id\"] == probe[\"id\"] and replay[\"probabilities\"] == probe[\"probabilities\"]\n        assert all(0.01 <= mass <= 1 for mass in replay[\"probabilities\"])\n        errors.extend(abs(mass - observed_mass)\n                      for mass, observed_mass in zip(masses, replay[\"probabilities\"], strict=True))\n    return {\"panel\": checked, \"anchors\": len(choices), \"eligible\": observed[\"eligible\"],\n            \"kinds\": dict(Counter(probe[\"kind\"] for probe in choices)), \"anchor_sha256\": digest(work / \"anchors.json\"),\n            \"probability_audit\": {\"replayed\": len(errors), \"mutations_rejected\": gpu[\"mutations_rejected\"],\n                                  \"above_original_tolerance\": sum(error > 1e-7 for error in errors),\n                                  \"max_float32_vs_float64_error\": max(errors, default=0.0)}}\n\n\ndef read_block(work, block, anchors, targets):\n    stored = read(work / f\"{block}.json\")\n    manifest = read(work / \"anchors.json\")\n    assert stored[\"anchor_sha256\"] == digest(work / \"anchors.json\") and stored[\"phase\"] == block\n    assert stored[\"checkpoint_sha256\"] == manifest[\"checkpoint_sha256\"]\n    assert stored[\"checkpoint_revision\"] == manifest[\"checkpoint_revision\"]\n    assert stored[\"panel_sha256\"] == manifest[\"panel_sha256\"]\n    verified = []\n    for record, probe in zip(stored[\"records\"], anchors, strict=True):\n        ident = probe[\"id\"]\n        assert record[\"id\"] == ident and record[\"support_sha256\"] == probe[\"support_sha256\"]\n        assert record[\"batch_seed\"] == seed(BLOCKS[block], f\"qwen.digit.{ident}\")\n        assert len(record[\"draws\"]) == 16\n        expanded = {\"id\": ident, \"correct\": [0, 0], \"parseable\": [0, 0], \"capped\": [0, 0]}\n        for index, draw in enumerate(record[\"draws\"]):\n            arm, position = divmod(index, DRAWS)\n            assert draw[\"arm\"] == arm and draw[\"draw\"] == position\n            assert draw[\"new_tokens\"][0] == draw[\"action\"] == probe[\"actions\"][arm]\n            measure = last_box(draw[\"text\"])\n            assert measure == draw[\"answer\"] and int(measure == targets[ident]) == draw[\"reward\"]\n            kept = [value for value in draw[\"new_tokens\"] if value not in ENDS]\n            assert len(kept) + probe[\"roll_in_tokens\"] == draw[\"lexical_count\"]\n            assert draw[\"capped\"] == (draw[\"lexical_count\"] == 512)\n            expanded[\"correct\"][arm] += draw[\"reward\"]\n            expanded[\"parseable\"][arm] += measure is not None\n            expanded[\"capped\"][arm] += draw[\"capped\"]\n        verified.append(expanded)\n    return verified\n\n\ndef signflip(deltas):\n    histogram = Counter({0: 1})\n    for value in deltas:\n        if value:\n            next_ = Counter()\n            for total, count in histogram.items():\n                next_[total + value] += count\n                next_[total - value] += count\n            histogram = next_\n    total = sum(deltas)\n    n = sum(histogram.values())\n    tail = sum(count for alternate, count in histogram.items() if alternate >= total)\n    return tail, n\n\n\ndef evaluate(work):\n    freeze = examine_freeze(work)\n    assert freeze == read(work / \"anchor_audit.json\")\n    if not freeze[\"eligible\"]:\n        return {**freeze, \"draws\": 0, \"passed\": False}\n    anchors = read(work / \"anchors.json\")[\"probes\"]\n    gold = {row[\"id\"]: row[\"gold\"] for row in read(work / \"panels.json\")[\"rows\"]}\n    first = read_block(work, \"discovery\", anchors, gold)\n    second = read_block(work, \"confirmation\", anchors, gold)\n    decided, oriented, over_prior = [], [], []\n    for probe, a, b in zip(anchors, first, second, strict=True):\n        d = a[\"correct\"][0] - a[\"correct\"][1]\n        c = b[\"correct\"][0] - b[\"correct\"][1]\n        selected = abs(d) >= 2\n        reward_arm = (0 if d > 0 else 1) if selected else None\n        prior_arm = min(range(2), key=lambda index: (-probe[\"probabilities\"][index], probe[\"actions\"][index]))\n        orientation = (c if reward_arm == 0 else -c) if selected else None\n        advantage = b[\"correct\"][reward_arm] - b[\"correct\"][prior_arm] if reward_arm is not None else None\n        if selected:\n            oriented.append(orientation)\n            over_prior.append(advantage)\n        decided.append({\"id\": a[\"id\"], \"discovery\": a, \"confirmation\": b, \"discovery_gap\": d,\n                        \"confirmation_gap\": c, \"oriented_confirmation\": orientation,\n                        \"discovery_winner_arm\": reward_arm, \"higher_prior_arm\": prior_arm,\n                        \"confirmation_gain_over_prior\": advantage})\n    hits = sum(value > 0 for value in oriented)\n    tail, denominator = signflip(oriented)\n    passed = len(oriented) >= 6 and hits >= 6 and sum(oriented) >= len(oriented) and tail * 40 <= denominator\n    discordant = [row for row in decided if row[\"discovery_winner_arm\"] is not None\n                  and row[\"discovery_winner_arm\"] != row[\"higher_prior_arm\"]]\n    return {**freeze, \"draws\": 32 * len(anchors), \"pairs\": decided, \"discovery_qualified\": len(oriented),\n            \"positive_confirmation\": hits, \"mean_confirmation_gain_per_8\": sum(oriented) / len(oriented) if oriented else None,\n            \"compared_with_prior\": {\"discordant\": len(discordant),\n                                    \"wins\": sum(row[\"confirmation_gain_over_prior\"] > 0 for row in discordant),\n                                    \"losses\": sum(row[\"confirmation_gain_over_prior\"] < 0 for row in discordant),\n                                    \"ties\": sum(row[\"confirmation_gain_over_prior\"] == 0 for row in discordant),\n                                    \"mean_gain_per_8\": sum(over_prior) / len(over_prior) if over_prior else None},\n            \"signflip\": {\"tail\": tail, \"denominator\": denominator, \"p\": tail / denominator}, \"passed\": passed}\n\n\ndef release(work, registration, runner_sha, output):\n    audit = evaluate(work)\n    assert audit == read(work / \"result_audit.json\")\n    pieces = (\"panels\", \"anchors\", \"mass_audit\", \"prefix_context\")\n    if audit[\"eligible\"]:\n        pieces += tuple(BLOCKS)\n    recorded = {key: read(work / f\"{key}.json\") for key in pieces}\n    raw = gzip.compress(json.dumps(recorded, sort_keys=True, separators=(\",\", \":\"), allow_nan=False).encode(),\n                        compresslevel=9, mtime=0)\n    assert recorded == json.loads(gzip.decompress(raw))\n    scripts = (\"sibling_credit.py\", \"audit_sibling_credit.py\", \"audit_sibling_credit_repaired.py\",\n               \"gpu_mass_audit.py\", \"prefix_context.py\", \"sibling_panels.py\", \"sibling_runtime_fixture.py\",\n               \"ladder_panels.py\", \"ladder_audit.py\", \"qwen_external.py\", \"run_ladder.py\",\n               \"d20_eval.py\", \"public_checkpoint_adapter.py\", \"audit_whole_model_replay.py\")\n    sources = {name: {\"sha256\": digest(work / name), \"content\": (work / name).read_text(encoding=\"utf-8\")} for name in scripts}\n    assert sources[scripts[0]][\"sha256\"] == runner_sha\n    names = (\"seal\", \"panel-audit\", \"fixture-sealed\", \"freeze\", \"mass-audit\", \"anchor-recheck\",\n             \"prefix-context\", \"final-audit\")\n    if audit[\"eligible\"]:\n        names += tuple(BLOCKS)\n    receipts = {name: verified_receipt(work / f\"qwen-digit-{name}.json\") for name in names}\n    rejected = work / \"qwen-digit-anchor-audit.json\"\n    first_audit = read(rejected)\n    assert first_audit[\"details\"][\"status\"] == \"failed\"\n    evidence = {\"registered_protocol\": registration, \"results\": audit, \"sources\": sources, \"dsr\": receipts,\n                \"archive_sha256\": hashlib.sha256(raw).hexdigest(), \"original_anchor_audit\": {\n                    \"run_id\": first_audit[\"run_id\"], \"status\": first_audit[\"details\"][\"status\"],\n                    \"receipt_sha256\": digest(rejected)}}\n    with output.with_suffix(\".json.gz\").open(\"xb\") as stream:\n        stream.write(raw)\n    with output.open(\"x\", encoding=\"utf-8\") as stream:\n        json.dump(evidence, stream, sort_keys=True, indent=2, allow_nan=False)\n        stream.write(\"\\n\")\n\n\nif __name__ == \"__main__\":\n    if not __debug__:\n        raise RuntimeError(\"The sibling audit requires Python assertions.\")\n    phase, root, *args = sys.argv[1:]\n    directory = Path(root)\n    if phase == \"release\":\n        release(directory, args[0], args[1], Path(args[2]))\n    else:\n        result = examine_freeze(directory) if phase == \"anchor\" else evaluate(directory)\n        name = \"anchor_audit.json\" if phase == \"anchor\" else \"result_audit.json\"\n        with (directory / name).open(\"x\", encoding=\"utf-8\") as stream:\n            json.dump(result, stream, sort_keys=True, indent=2, allow_nan=False)\n            stream.write(\"\\n\")\n",
+      "sha256": "0f051b5710e06565ac1c9aca5ca41c43a6f6a33aaacd2006a9413dbce1e9d8d2"
+    },
+    "audit_whole_model_replay.py": {
+      "content": "\"\"\"Independently audit the matched replay result and publish terminal evidence.\"\"\"\n\nimport gzip\nimport hashlib\nimport json\nimport math\nimport statistics\nimport sys\nfrom pathlib import Path\n\n\nARCHIVE_SHA = \"eba3267649cf74ad6f0a884e640aa363259c557c7cfbeab08c81102c0c69837e\"\nBASIS_SHA = \"67b7f6725e0d36e4487db167137e38e4b7be6826e4daa938d10703931b111625\"\nROUTES = (\"parallel_four_sequences\", \"cached_original_32_sequences\")\nMETHODS = {\"exact_trace\", \"compressed_trace\", \"whole_model_replay\"}\n\n\ndef read(path):\n    return json.loads(path.read_bytes())\n\n\ndef digest(path):\n    return hashlib.sha256(path.read_bytes()).hexdigest()\n\n\ndef check_matrix(result):\n    return 0 <= result[\"maximum_error\"] <= 6e-7 and 0 <= result[\"relative_error\"] <= 1e-4\n\n\ndef audit(work, evidence):\n    reference = work / \"ladder.json.gz\"\n    basis_path = work / \"compression_canonical.safetensors\"\n    assert digest(reference) == ARCHIVE_SHA == evidence[\"archive_sha256\"]\n    assert digest(basis_path) == BASIS_SHA == evidence[\"canonical_basis_sha256\"]\n    previous = json.loads(gzip.decompress(reference.read_bytes()))[\"trial\"]\n    assert evidence[\"checkpoint_revision\"] == previous[\"checkpoint_revision\"]\n    assert evidence[\"checkpoint_sha256\"] == previous[\"checkpoint_sha256\"]\n    group = previous[\"confirmation\"][\"L1\"][12]\n    assert evidence[\"group\"] == group[\"id\"] == \"confirmation.L1.packing.2.0\"\n    assert evidence[\"rewards\"] == group[\"rewards\"] and evidence[\"seed\"] == group[\"batch_seed\"]\n    total = sum(group[\"lengths\"])\n    longest = max(group[\"lengths\"])\n    assert total == evidence[\"scored_tokens\"] == 1172 and evidence[\"replayed_completions\"] == 32\n    assert longest == evidence[\"longest_scored_completion\"]\n    assert math.isfinite(evidence[\"score_norm\"]) and evidence[\"score_norm\"] > 0\n    assert 0 <= evidence[\"basis_fraction\"] <= 1.0001\n    payload = evidence[\"persistent_bytes\"]\n    assert payload[\"exact_trace\"] == 4 * (8960 + 1536) * total\n    assert payload[\"compressed_trace\"] == 4 * 64 * total\n    assert payload[\"fixed_basis\"] == 4 * 32 * (8960 + 1536)\n    cells = 2 * evidence[\"padded_prompt_tokens\"] + longest - 1\n    assert payload[\"parallel_replay_token_ids_and_prompt_mask\"] == 4 * 8 * cells\n    assert payload[\"cached_replay_token_ids_and_prompt_mask\"] == 32 * 8 * cells\n    tested = evidence[\"qualification\"]\n    assert tuple(name for name in ROUTES if name in tested) in (ROUTES[:1], ROUTES)\n    for candidate in tested.values():\n        ids = candidate[\"candidate_id_mismatch\"]\n        logits = candidate[\"support_logit_mismatch\"]\n        assert 0 <= ids <= logits <= total and 0 <= candidate[\"input_rows_not_bitwise\"] <= total\n        assert candidate[\"qualified\"] == (ids == logits == 0 and check_matrix(candidate))\n    choice = next((route for route in ROUTES if route in tested and tested[route][\"qualified\"]), None)\n    assert choice == evidence[\"selected\"]\n    if choice is not None:\n        assert set(evidence[\"timings\"]) == METHODS\n    else:\n        assert not evidence[\"timings\"]\n    n = 0\n    for method in evidence[\"timings\"].values():\n        rows = method[\"rounds\"]\n        assert len(rows) == 3 and all(check_matrix(row) for row in rows)\n        assert all(row[\"elapsed_ms\"] > 0 and row[\"peak_increment_bytes\"] >= 0 for row in rows)\n        assert method[\"median_ms\"] == statistics.median(row[\"elapsed_ms\"] for row in rows)\n        assert method[\"median_peak_increment_bytes\"] == statistics.median(row[\"peak_increment_bytes\"] for row in rows)\n        n += len(rows)\n    return {\"verified_group\": group[\"id\"], \"verified_token_count\": total, \"qualified_replay\": choice,\n            \"verified_timed_updates\": n, \"routes_tested\": len(tested)}\n\n\ndef verified_receipt(path):\n    record = read(path)\n    details = record[\"details\"]\n    assert record[\"status\"] == \"success\" and record[\"exit_code\"] == 0\n    assert details[\"source_before\"] == details[\"source_after\"]\n    assert details[\"checks\"] and all(row[\"status\"] == \"passed\" for row in details[\"checks\"])\n    return {\"run_id\": record[\"run_id\"], \"status\": record[\"status\"], \"exit_code\": record[\"exit_code\"],\n            \"receipt_sha256\": digest(path), \"config_sha256\": details[\"config_sha256\"],\n            \"source_before\": details[\"source_before\"], \"source_after\": details[\"source_after\"],\n            \"checks\": [{key: row[key] for key in (\"status\", \"exit_code\", \"duration_ms\", \"log_sha256\")}\n                       for row in details[\"checks\"]]}\n\n\ndef publish(work, registered, source_hash, target):\n    raw = work / \"benchmark.json\"\n    evidence = read(raw)\n    independent = read(work / \"replay_audit.json\")\n    assert audit(work, evidence) == independent\n    scripts = (\"whole_model_replay.py\", \"audit_whole_model_replay.py\", \"replay_path_fixture.py\", \"sampler_score.py\",\n               \"ladder_audit.py\", \"qwen_external.py\", \"d20_eval.py\", \"run_ladder.py\", \"public_checkpoint_adapter.py\")\n    sources = {name: {\"content\": (work / name).read_text(encoding=\"utf-8\"), \"sha256\": digest(work / name)}\n               for name in scripts}\n    assert sources[\"whole_model_replay.py\"][\"sha256\"] == source_hash\n    receipts = {name: verified_receipt(work / (name + \".json\")) for name in\n                (\"qwen-whole-model-replay\", \"qwen-replay-cache-fixture\", \"qwen-whole-model-independent-audit\")}\n    evidence.update({\"implementation_basis\": \"ba231d259fbf649d50a995dda11598ce2daa9289\",\n                     \"registered_protocol\": registered, \"raw_sha256\": digest(raw), \"sources\": sources,\n                     \"audit\": independent, \"dsr\": receipts})\n    with target.open(\"x\", encoding=\"utf-8\") as stream:\n        json.dump(evidence, stream, sort_keys=True, indent=2, allow_nan=False)\n        stream.write(\"\\n\")\n\n\nif __name__ == \"__main__\":\n    if not __debug__:\n        raise RuntimeError(\"The replay audit requires Python assertions.\")\n    if sys.argv[1] == \"publish\":\n        publish(Path(sys.argv[2]), sys.argv[3], sys.argv[4], Path(sys.argv[5]))\n    else:\n        base = Path(sys.argv[1])\n        inspected = audit(base, read(base / \"benchmark.json\"))\n        with (base / \"replay_audit.json\").open(\"x\", encoding=\"utf-8\") as out:\n            json.dump(inspected, out, sort_keys=True, indent=2, allow_nan=False)\n            out.write(\"\\n\")\n",
+      "sha256": "1f6998e06ae4a36be0bdf9b1d1a55801a08c59552f10232b08f6d0c68d1ee6d1"
+    },
+    "d20_eval.py": {
+      "content": "\"\"\"Sample fresh paired arithmetic with the pinned D20 checkpoint.\"\"\"\nimport hashlib\nimport json\nimport sys\nfrom decimal import Decimal, InvalidOperation\nfrom pathlib import Path\n\nimport torch\nfrom rich.console import Console\n\nfrom bio_inspired_nanochat.checkpoint_manager import build_model\nfrom bio_inspired_nanochat.common import stable_seed_u64\nfrom bio_inspired_nanochat.engine import Engine\nfrom bio_inspired_nanochat.gpt import GPT\nfrom public_checkpoint_adapter import MODEL_SHA256, TOKENIZER_SHA256\nfrom tasks.gsm8k import extract_answer\n\n\nLETTERS = \"ABCD\"\n\n\ndef sha(path):\n    with path.open(\"rb\") as stream:\n        return hashlib.file_digest(stream, \"sha256\").hexdigest()\n\n\ndef load_public(root):\n    assert sha(root / \"checkpoint/model_000700.pt\") == MODEL_SHA256\n    assert sha(root / \"tokenizer/tokenizer.pkl\") == TOKENIZER_SHA256\n    model, tokenizer, metadata = build_model(root / \"checkpoint\", 700, torch.device(\"cuda\"), \"eval\")\n    assert isinstance(model, GPT) and (model.config.n_layer, model.config.n_embd) == (20, 1280)\n    assert tokenizer.get_vocab_size() == 65536 and metadata[\"step\"] == 700\n    return model, tokenizer\n\n\ndef prompt(tokenizer, row, kind):\n    question = row[\"question\"]\n    if kind == \"free\":\n        text = question + \"\\n\\nKeep any work short. Put the final integer after ####.\"\n    else:\n        options = \"\\n\".join(f\"{letter}. {value}\" for letter, value in zip(LETTERS, row[\"options\"], strict=True))\n        text = f\"{question}\\n\\n{options}\\n\\nAnswer with just the letter.\"\n    conversation = {\"messages\": [{\"role\": \"user\", \"content\": text}, {\"role\": \"assistant\", \"content\": \"\"}]}\n    return tokenizer.render_for_completion(conversation)\n\n\ndef action_tokens(tokenizer, device):\n    options = [tokenizer.encode(f\" {letter}\") for letter in LETTERS]\n    assert all(len(row) == 1 for row in options) and len({row[0] for row in options}) == 4\n    return torch.tensor([row[0] for row in options], dtype=torch.long, device=device)\n\n\ndef padded(tokenizer, rows, device):\n    prompts = [prompt(tokenizer, row, \"choice\") for row in rows]\n    last = [len(row) - 1 for row in prompts]\n    width = max(last) + 1\n    eos = tokenizer.encode_special(\"<|assistant_end|>\")\n    ids = torch.tensor([row + [eos] * (width - len(row)) for row in prompts], dtype=torch.long, device=device)\n    return ids, torch.tensor(last, device=device)\n\n\ndef choose(probability, id_string):\n    seed = stable_seed_u64(440313, salt=f\"d20.arithmetic.choice:{id_string}\") % (2**63)\n    gen = torch.Generator(device=probability.device).manual_seed(seed)\n    return torch.multinomial(probability, 4, replacement=True, generator=gen), seed\n\n\ndef parse_integer(text):\n    answer = extract_answer(text)\n    if answer is None:\n        return None\n    try:\n        value = Decimal(answer)\n        integer = int(value)\n        return integer if value == integer else None\n    except (InvalidOperation, ValueError, OverflowError):\n        return None\n\n\ndef evaluate_free(model, tokenizer, rows, panel):\n    engine = Engine(model, tokenizer)\n    output = []\n    console = Console()\n    for position, row in enumerate(rows, 1):\n        base = prompt(tokenizer, row, \"free\")\n        seed = stable_seed_u64(440313, salt=f\"d20.arithmetic.free:{row['id']}\") % (2**63)\n        with torch.no_grad(), torch.autocast(device_type=\"cuda\", dtype=torch.bfloat16):\n            ids, mask = engine.generate_batch(base, num_samples=4, max_batch_size=4, max_tokens=96,\n                                              temperature=1.0, top_k=50, seed=seed)\n        completions = [tokenizer.decode(sequence[len(base):]) for sequence in ids]\n        parsed = [parse_integer(response) for response in completions]\n        output.append({\"id\": row[\"id\"], \"gold\": row[\"gold\"], \"parsed\": parsed, \"seed\": seed,\n                       \"rewards\": [int(answer == row[\"gold\"]) for answer in parsed],\n                       \"lengths\": [len(sequence)-len(base) for sequence in ids], \"text\": completions,\n                       \"tokens\": ids, \"masks\": mask, \"prompt_length\": len(base)})\n        if position % 8 == 0:\n            console.print(f\"{panel} free form {position}/{len(rows)} questions, \"\n                          f\"{sum(sum(item['rewards']) for item in output)} correct\")\n    return output\n\n\ndef evaluate_choice(model, tokenizer, rows):\n    output = []\n    device = model.get_device()\n    labels = action_tokens(tokenizer, device)\n    for start in range(0, len(rows), 8):\n        batch = rows[start:start+8]\n        ids, last = padded(tokenizer, batch, device)\n        index = torch.arange(len(batch), device=device)\n        with torch.no_grad(), torch.autocast(device_type=\"cuda\", dtype=torch.bfloat16):\n            hidden = model.get_hidden_states(ids)[index, last]\n            logits = model.hidden_to_logits(hidden).index_select(1, labels).float()\n            probabilities = logits.softmax(-1)\n        for row, policy in zip(batch, probabilities, strict=True):\n            sampled, seed = choose(policy, row[\"id\"])\n            selected = sampled.tolist()\n            output.append({\"id\": row[\"id\"], \"label\": row[\"label\"], \"probabilities\": policy.tolist(), \"seed\": seed,\n                           \"samples\": selected, \"rewards\": [int(action == row[\"label\"]) for action in selected]})\n    return {\"label_token_ids\": labels.tolist(), \"rows\": output}\n\n\ndef main(kind, data, data_sha, checkpoint, output, panels):\n    torch.set_num_threads(1)\n    assert sha(data) == data_sha and kind in (\"free\", \"choice\")\n    model, tokenizer = load_public(checkpoint)\n    data = json.loads(data.read_text())[\"panels\"]\n    result = {}\n    for panel in panels:\n        rows = data[panel]\n        if kind == \"free\":\n            result[panel] = evaluate_free(model, tokenizer, rows, panel)\n        else:\n            result[panel] = evaluate_choice(model, tokenizer, rows)\n    record = {\"checkpoint_sha256\": MODEL_SHA256, \"panels_sha256\": data_sha, \"mode\": kind,\n              \"panels\": result, \"gpu\": torch.cuda.get_device_name()}\n    with output.open(\"x\") as stream:\n        json.dump(record, stream, sort_keys=True, separators=(\",\", \":\"), allow_nan=False)\n        stream.write(\"\\n\")\n\n\nif __name__ == \"__main__\":\n    kind, data, data_sha, checkpoint, output, *panels = sys.argv[1:]\n    main(kind, Path(data), data_sha, Path(checkpoint), Path(output), panels)\n",
+      "sha256": "f038cc6b60c3c30187ba9722247eb9be41b190022f49fd5142445b589f25bf75"
+    },
+    "gpu_mass_audit.py": {
+      "content": "\"\"\"Replay archived CUDA likelihoods directly from the verified raw logits.\"\"\"\n\nimport hashlib\nimport json\nimport sys\nfrom pathlib import Path\n\nimport torch\n\n\ndef main(anchor_path, anchor_sha, output):\n    raw = anchor_path.read_bytes()\n    assert hashlib.sha256(raw).hexdigest() == anchor_sha\n    manifest = json.loads(raw)\n    checked = []\n    for probe in manifest[\"probes\"]:\n        scores = torch.full((151936,), -torch.inf, device=\"cuda\", dtype=torch.float32)\n        scores[probe[\"support_ids\"]] = torch.tensor(probe[\"support_logits\"], device=scores.device)\n        actual = scores.softmax(-1)[probe[\"actions\"]]\n        captured = torch.tensor(probe[\"probabilities\"], device=scores.device, dtype=scores.dtype)\n        assert torch.equal(actual, captured), (probe[\"id\"], actual.tolist(), captured.tolist())\n        for index in range(len(captured)):\n            mutated = captured.clone()\n            mutated[index] = torch.nextafter(mutated[index], torch.ones_like(mutated[index]))\n            assert not torch.equal(actual, mutated)\n        checked.append({\"id\": probe[\"id\"], \"probabilities\": actual.tolist()})\n    with output.open(\"x\", encoding=\"utf-8\") as stream:\n        json.dump({\"anchors_sha256\": anchor_sha, \"checked\": checked, \"mutations_rejected\": 2 * len(checked),\n                   \"gpu\": torch.cuda.get_device_name()}, stream, sort_keys=True, indent=2)\n        stream.write(\"\\n\")\n\n\nif __name__ == \"__main__\":\n    if not __debug__:\n        raise RuntimeError(\"The CUDA mass audit requires Python assertions.\")\n    path, digest, target = sys.argv[1:]\n    main(Path(path), digest, Path(target))\n",
+      "sha256": "d961a00a3494ea0730046574cf46682846bacf040740b086a46e5ce28d2185a3"
+    },
+    "ladder_audit.py": {
+      "content": "\"\"\"Independently rebuild integer answers, score gates, and verify selection.\"\"\"\nimport hashlib\nimport json\nimport re\nimport sys\nfrom collections import Counter\nfrom fractions import Fraction\nfrom pathlib import Path\n\n\nMAX_TOKENS = 512\nLEVELS = (\"L1\", \"L2\", \"L3\")\n\n\ndef last_box(text):\n    pattern = r\"\\\\boxed\\s*\\{\\s*([+-]?[0-9]+(?:,[0-9]{3})*(?:\\.[0-9]+)?)\\s*\\}\"\n    for value in reversed(re.findall(pattern, text)):\n        fraction = Fraction(value.replace(\",\", \"\"))\n        if fraction.denominator == 1:\n            return fraction.numerator\n    return None\n\n\ndef read(path):\n    return json.loads(path.read_bytes())\n\n\ndef fingerprint(path):\n    return hashlib.sha256(path.read_bytes()).hexdigest()\n\n\ndef independently_calculate(start, operations):\n    value = start\n    for plus, multiplier, deduction, divisor in operations:\n        fraction = Fraction(value + plus) * multiplier - deduction\n        # Reconstruct Euclidean quotient using an independent rational path.\n        fraction /= divisor\n        quotient = int(fraction)\n        assert quotient <= fraction < quotient + 1\n        value = quotient\n    return value\n\n\ndef check_panels(panels):\n    names = {\"screen\", \"confirmation\", \"adaptation\", \"transfer\"}\n    assert set(panels) == names\n    seen, ids = set(), set()\n    for panel in panels.values():\n        assert set(panel) == set(LEVELS)\n        for rounding, name in enumerate(LEVELS, 1):\n            rows = panel[name]\n            assert len(rows) == 16\n            assert Counter(row[\"family\"] for row in rows) == {\"register\": 8, \"packing\": 8}\n            for one, two in zip(rows[::2], rows[1::2], strict=True):\n                assert one[\"pair\"] == two[\"pair\"] and one[\"family\"] == two[\"family\"]\n                assert one[\"operations\"] == two[\"operations\"] and len(one[\"operations\"]) == rounding\n                assert one[\"gold\"] != two[\"gold\"] and one[\"start\"] != two[\"start\"]\n                assert one[\"side\"] == 0 and two[\"side\"] == 1\n                assert one[\"question\"].replace(str(one[\"start\"]), \"START\", 1) == two[\"question\"].replace(str(two[\"start\"]), \"START\", 1)\n                displayed = [value for step in one[\"operations\"] for value in step]\n                assert {one[\"gold\"], two[\"gold\"]}.isdisjoint([*displayed, one[\"start\"], two[\"start\"]])\n                for entry in (one, two):\n                    low, high = 10 ** (rounding + 1), 10 ** (rounding + 2) - 1\n                    assert low <= entry[\"start\"] <= high\n                    actual = list(map(int, re.findall(r\"\\b\\d+\\b\", entry[\"question\"])))\n                    assert actual == [entry[\"start\"], *displayed]\n                    assert independently_calculate(entry[\"start\"], entry[\"operations\"]) == entry[\"gold\"]\n                    assert entry[\"question\"] not in seen and entry[\"id\"] not in ids\n                    seen.add(entry[\"question\"])\n                    ids.add(entry[\"id\"])\n    assert len(seen) == 192\n    return len(seen)\n\n\ndef exact_test(deltas):\n    nonzero = [value for value in deltas if value]\n    possible = [0]\n    for change in nonzero:\n        possible = [candidate for value in possible for candidate in (value - change, value + change)]\n    tail = sum(value >= sum(nonzero) for value in possible)\n    return {\"p\": tail / len(possible), \"exact_tail\": tail, \"denominator\": len(possible)}\n\n\ndef validate_prompt_records(rows, prediction):\n    assert len(rows) == len(prediction) == 16\n    for source, sample in zip(rows, prediction, strict=True):\n        assert sample[\"id\"] == source[\"id\"] and sample[\"gold\"] == source[\"gold\"]\n        assert all(len(sample[key]) == 4 for key in (\"tokens\", \"masks\", \"text\", \"answers\", \"rewards\", \"lengths\"))\n        for seq, mask, n in zip(sample[\"tokens\"], sample[\"masks\"], sample[\"lengths\"], strict=True):\n            p = sample[\"prompt_length\"]\n            assert len(seq) == len(mask) == p + n and 0 <= n <= MAX_TOKENS\n            assert mask == [0] * p + [1] * n\n\n\ndef score(rows, prediction):\n    validate_prompt_records(rows, prediction)\n    constant = Counter(row[\"gold\"] for row in rows).most_common(1)[0][1] * 4\n    correct = swapped = mixed = parseable = capped = 0\n    wins, changes = set(), []\n    for index in range(0, len(rows), 2):\n        one, two = rows[index:index+2]\n        delta = 0\n        for source, other, observed in ((one, two, prediction[index]), (two, one, prediction[index+1])):\n            reported = [last_box(text) for text in observed[\"text\"]]\n            assert reported == observed[\"answers\"]\n            rewards = [int(value == source[\"gold\"]) for value in reported]\n            assert rewards == observed[\"rewards\"]\n            good = sum(rewards)\n            fake = sum(value == other[\"gold\"] for value in reported)\n            correct += good\n            swapped += fake\n            mixed += 0 < good < 4\n            parseable += sum(value is not None for value in reported)\n            capped += observed[\"lengths\"].count(MAX_TOKENS)\n            if good:\n                wins.add(source[\"gold\"])\n            delta += good - fake\n        changes.append(delta)\n    test = exact_test(changes)\n    gates = {\"parseable\": parseable >= 48, \"correct\": correct >= 16, \"mixed\": mixed >= 4,\n             \"distinct_targets\": len(wins) >= 4, \"constant\": correct > constant, \"paired_gap\": correct - swapped >= 8,\n             \"p\": test[\"exact_tail\"] * 40 <= test[\"denominator\"]}\n    return {\"passed\": all(gates.values()), \"gates\": gates, \"correct\": correct, \"parseable\": parseable,\n            \"mixed_groups\": mixed, \"constant_correct\": constant, \"exchanged_correct\": swapped,\n            \"distinct_correct_values\": len(wins), \"capped\": capped, \"questions\": 16, \"samples\": 64,\n            \"paired_differences\": changes, \"paired_test\": test}\n\n\ndef choose_level(panels, raw):\n    scores = {name: score(panels[\"screen\"][name], raw[name]) for name in LEVELS}\n    return next((name for name in LEVELS if scores[name][\"passed\"]), None), scores\n\n\ndef audit(panel_file, observations):\n    directory, trial = read(panel_file), read(observations)\n    n = check_panels(directory[\"panels\"])\n    assert directory[\"seed\"] == 811023 and trial[\"panels_sha256\"] == fingerprint(panel_file)\n    selected, screening = choose_level(directory[\"panels\"], trial[\"screen\"])\n    assert selected == trial[\"selected_level\"]\n    checked = None\n    if selected is not None:\n        assert set(trial[\"confirmation\"]) == {selected}\n        checked = score(directory[\"panels\"][\"confirmation\"][selected], trial[\"confirmation\"][selected])\n    else:\n        assert not trial[\"confirmation\"]\n    return {\"questions_verified\": n, \"panels_sha256\": trial[\"panels_sha256\"], \"screening\": screening,\n            \"selected_level\": selected, \"confirmation\": checked, \"qualified\": bool(checked and checked[\"passed\"])}\n\n\nif __name__ == \"__main__\":\n    panel, observations, destination = (Path(value) for value in sys.argv[1:])\n    destination.write_text(json.dumps(audit(panel, observations), sort_keys=True, indent=2) + \"\\n\")\n",
+      "sha256": "82a5462fbb7f66daa8f85cb80eb572cd495fc31e056618442bfbe62cba071e09"
+    },
+    "ladder_panels.py": {
+      "content": "\"\"\"Generate the four sealed arithmetic panels without importing a model.\"\"\"\nimport hashlib\nimport json\nimport random\nimport sys\nfrom pathlib import Path\n\n\nSEED = 811023\nPANEL_NAMES = (\"screen\", \"confirmation\", \"adaptation\", \"transfer\")\nLEVELS = {\n    \"L1\": (100, 999, 1, 9, 17),\n    \"L2\": (1_000, 9_999, 2, 31, 41),\n    \"L3\": (10_000, 99_999, 3, 71, 79),\n}\nFAMILIES = (\"register\", \"packing\")\n\n\ndef operations(rng, low, rounds, mult_max, div_max):\n    return [[rng.randint(low // 5, low * 2), rng.randint(3, mult_max),\n             rng.randint(low // 8, low), rng.randint(3, div_max)] for _ in range(rounds)]\n\n\ndef execute(start, groups):\n    current = start\n    for add, times, subtract, divide in groups:\n        numerator = (current + add) * times - subtract\n        assert numerator >= 0\n        current = numerator // divide\n    return current\n\n\ndef render(alias, family, start, rounds):\n    if family == \"register\":\n        lines = [f\"The first value in register {alias} is {start}. The register uses only whole numbers.\"]\n        for add, times, subtract, divide in rounds:\n            lines.append(f\"Add {add}, multiply the result by {times}, subtract {subtract}, \"\n                         f\"then divide by {divide} and round down to a whole number.\")\n        lines.append(\"Carry out the instructions in order. What is the final value in the register?\")\n    else:\n        lines = [f\"Workshop {alias} starts with {start} components.\"]\n        for add, times, subtract, divide in rounds:\n            lines.append(f\"First receive {add} more components. Make {times} copies of the resulting inventory \"\n                         f\"in total, including the original. Then discard {subtract} components. \"\n                         f\"Pack the rest in boxes of {divide}, and ignore any incomplete box. \"\n                         \"The number of full boxes becomes the starting count for the next round.\")\n        lines.append(\"How many full boxes are there in the last round?\")\n    return \"\\n\".join(lines)\n\n\ndef build():\n    rng = random.Random(SEED)\n    result = {}\n    for panel in PANEL_NAMES:\n        result[panel] = {}\n        for level, (low, high, rounds, mult_max, div_max) in LEVELS.items():\n            rows = []\n            for family in FAMILIES:\n                for index in range(4):\n                    while True:\n                        a = rng.randint(low, high)\n                        b = rng.randint(low, high)\n                        groups = operations(rng, low, rounds, mult_max, div_max)\n                        right = [execute(value, groups) for value in (a, b)]\n                        displayed = set([a, b] + [v for group in groups for v in group])\n                        if len(set(right)) == 2 and displayed.isdisjoint(right):\n                            break\n                    pair = f\"{panel}.{level}.{family}.{index}\"\n                    alias = rng.choice((\"Alder\", \"Birch\", \"Copper\", \"Juniper\", \"Larch\", \"Tamarack\"))\n                    for side, beginning in enumerate((a, b)):\n                        rows.append({\"id\": f\"{pair}.{side}\", \"pair\": pair, \"family\": family,\n                                     \"side\": side, \"start\": beginning, \"operations\": groups,\n                                     \"question\": render(alias, family, beginning, groups), \"gold\": right[side]})\n            result[panel][level] = rows\n    return {\"seed\": SEED, \"panels\": result}\n\n\nif __name__ == \"__main__\":\n    output = Path(sys.argv[1])\n    exact = json.dumps(build(), sort_keys=True, separators=(\",\", \":\")).encode() + b\"\\n\"\n    with output.open(\"xb\") as stream:\n        stream.write(exact)\n    print(hashlib.sha256(exact).hexdigest())\n",
+      "sha256": "ec1a07cca209096778dfb82106fea6db5dc01bd9a2fb89effa0e6cd4ca3be501"
+    },
+    "prefix_context.py": {
+      "content": "\"\"\"Describe frozen branch locations without reading any reward samples.\"\"\"\n\nimport hashlib\nimport json\nimport re\nimport sys\nfrom pathlib import Path\n\nfrom transformers import AutoTokenizer\n\nfrom qwen_external import REVISION\n\n\nwork = Path(sys.argv[1])\nindexed = json.loads((work / \"tokenizer_manifest.json\").read_bytes())\nassert indexed[\"sha\"] == REVISION\nblob_ids = {item[\"rfilename\"]: item[\"blobId\"] for item in indexed[\"siblings\"] if \"blobId\" in item}\nfor file in (work / \"tokenizer\").iterdir():\n    content = file.read_bytes()\n    header = f\"blob {len(content)}\\0\".encode()\n    assert hashlib.sha1(header + content, usedforsecurity=False).hexdigest() == blob_ids[file.name]\n\ntokenizer = AutoTokenizer.from_pretrained(work / \"tokenizer\", local_files_only=True, trust_remote_code=False)\nmanifest = (work / \"anchors.json\").read_bytes()\nrows = []\nfor probe in json.loads(manifest)[\"probes\"]:\n    roll_in = probe[\"prefix\"][probe[\"prompt_tokens\"]:]\n    text = tokenizer.decode(roll_in, skip_special_tokens=True)\n    boxes = list(re.finditer(r\"\\\\boxed\\s*\\{\", text))\n    active = False\n    if boxes:\n        depth = 1\n        for match in re.finditer(r\"(?<!\\\\)[{}]\", text[boxes[-1].end():]):\n            depth += 1 if match.group() == \"{\" else -1\n            if depth == 0:\n                break\n        active = depth > 0\n    decoded_actions = [tokenizer.decode([token]) for token in probe[\"actions\"]]\n    assert all(len(value) == 1 and value in \"0123456789\" for value in decoded_actions)\n    rows.append({\"id\": probe[\"id\"], \"inside_box\": active, \"roll_in\": text, \"digits\": decoded_actions})\n\nwith (work / \"prefix_context.json\").open(\"x\", encoding=\"utf-8\") as stream:\n    json.dump({\"anchors_sha256\": hashlib.sha256(manifest).hexdigest(), \"rows\": rows}, stream, indent=2)\n    stream.write(\"\\n\")\n",
+      "sha256": "c377664d333e3fd7b0f45f7648947dca887e31136e56d8406a13376f45de7373"
+    },
+    "public_checkpoint_adapter.py": {
+      "content": "\"\"\"Check native loading and an identity-initialized synaptic residual on public D20 weights.\"\"\"\nimport hashlib\nimport json\nimport sys\nfrom pathlib import Path\n\nimport torch\nfrom rich.console import Console\nfrom torch import nn\n\nfrom bio_inspired_nanochat.checkpoint_manager import build_model\nfrom bio_inspired_nanochat.gpt import GPT\nfrom bio_inspired_nanochat.synaptic import SynapticConfig, SynapticLinear\nfrom bio_inspired_nanochat.tokenizer import RustBPETokenizer\n\n\nREVISION = \"53b7aa58db3e1c512d121a53f747f9649c15bc55\"\nMODEL_SHA256 = \"cd0762cbae420c25b47033ad0816ff1d5a61910a7e2223dff156945225e105b6\"\nTOKENIZER_SHA256 = \"4c060565a46fe83b49d99005acba796f2a630daa7970eb49f7513b89f9fb40e0\"\n\n\ndef sha(path):\n    with path.open(\"rb\") as stream:\n        return hashlib.file_digest(stream, \"sha256\").hexdigest()\n\n\nclass SynapticResidual(nn.Module):\n    def __init__(self, incumbent):\n        super().__init__()\n        self.incumbent = incumbent\n        cfg = SynapticConfig(enable_hebbian=True, enable_stdp=False, enable_presyn=False, enable_metabolism=False)\n        self.adaptation = SynapticLinear(incumbent.in_features, incumbent.out_features,\n                                         cfg, bias=False, use_input_ln=False).to(incumbent.weight)\n        self.register_buffer(\"calcium\", torch.tensor(0.5, device=incumbent.weight.device))\n        self.register_buffer(\"energy\", torch.tensor(0.8, device=incumbent.weight.device))\n        with torch.no_grad():\n            self.adaptation.w_slow.zero_()\n            self.adaptation.w_fast.zero_()\n            self.adaptation.post.fast.zero_()\n            self.adaptation.post.slow.zero_()\n            self.adaptation.post.U.zero_()\n        self.requires_grad_(False)\n        self.adaptation.w_slow.requires_grad_(True)\n\n    def forward(self, x):\n        result = self.incumbent(x)\n        local = self.adaptation(x, self.calcium, self.energy, update_mem=False)\n        return result + local.to(result.dtype)\n\n\ndef identity(actual, expected):\n    assert actual.get_vocab_size() == expected.get_vocab_size() == 65536\n    assert actual.enc._pat_str == expected.enc._pat_str\n    assert actual.enc._mergeable_ranks == expected.enc._mergeable_ranks\n    assert actual.enc._special_tokens == expected.enc._special_tokens\n    return {\"bpe_ranks\": len(actual.enc._mergeable_ranks), \"special_tokens\": len(actual.enc._special_tokens)}\n\n\ndef logits_and_grad(model, inputs, parameter, enable_autocast, actions=None):\n    with torch.autocast(device_type=\"cuda\", dtype=torch.bfloat16, enabled=enable_autocast):\n        logits = model(inputs)[:, -1].float()\n        if actions is None:\n            actions = logits.detach().topk(2, dim=-1).indices\n        sampled = logits.log_softmax(dim=-1).gather(1, actions)\n        score = (sampled[:, 0] - sampled[:, 1]).mean() / 2\n    return logits.detach(), actions, torch.autograd.grad(score, parameter)[0].detach()\n\n\ndef main(root, tokenizer_path, output):\n    torch.set_num_threads(1)\n    paths = root / \"checkpoint\"\n    assert sha(paths / \"model_000700.pt\") == MODEL_SHA256\n    assert sha(root / \"tokenizer/tokenizer.pkl\") == TOKENIZER_SHA256\n    model, tokenizer, meta = build_model(paths, 700, torch.device(\"cuda\"), \"eval\")\n    assert isinstance(model, GPT) and model.config.n_layer == 20 and model.config.n_embd == 1280\n    token_map = identity(tokenizer, RustBPETokenizer.from_directory(tokenizer_path))\n    rotary = model.cos, model.sin\n    model.float()\n    # The production trunk requires its original BF16 rotary tables even\n    # when the model parameters and matmuls are tested in FP32.\n    model.cos, model.sin = rotary\n    torch.set_float32_matmul_precision(\"highest\")\n    model.requires_grad_(False)\n    layer = model.transformer.h[-1].mlp\n    archived = layer.c_proj\n    device = torch.device(\"cuda\")\n    inputs = torch.randint(0, 65528, (2, 32), device=device, generator=torch.Generator(device=device).manual_seed(44031))\n    checks = {}\n    for dtype, low_precision in ((\"fp32\", False), (\"bf16\", True)):\n        layer.c_proj = archived\n        archived.weight.requires_grad_(True)\n        baseline, actions, expected = logits_and_grad(model, inputs, archived.weight, low_precision)\n        layer.c_proj = SynapticResidual(archived)\n        adaptation = layer.c_proj.adaptation\n        adapted, _, result = logits_and_grad(model, inputs, adaptation.w_slow, low_precision, actions)\n        torch.testing.assert_close(adapted, baseline, atol=0, rtol=0)\n        # Matmul and Linear use transposed parameter layouts at the two\n        # sites. Compare after returning to the same orientation.\n        torch.testing.assert_close(result, expected.T, atol=2e-5 if low_precision else 3e-7,\n                                   rtol=.02 if low_precision else 1e-5)\n        assert torch.count_nonzero(adaptation.w_slow) == 0 and expected.norm() > 0\n        checks[dtype] = {\"logits_identical\": True, \"gradient_max_difference\": float((result - expected.T).abs().max()),\n                         \"gradient_relative_error\": float((result - expected.T).norm() / expected.norm())}\n    report = {\"artifact_revision\": REVISION, \"model_sha256\": MODEL_SHA256, \"tokenizer_sha256\": TOKENIZER_SHA256,\n              \"local_token_map_identical\": token_map, \"strict_native_load\": True, \"stored_step\": meta[\"step\"],\n              \"device\": torch.cuda.get_device_name(), \"contexts\": list(inputs.shape), \"numeric_checks\": checks}\n    Console().print(report)\n    output.write_text(json.dumps(report, sort_keys=True, indent=2, allow_nan=False) + \"\\n\")\n\n\nif __name__ == \"__main__\":\n    main(*(Path(value) for value in sys.argv[1:]))\n",
+      "sha256": "4c1f12bb72a12c8b0b672461ec171a26ec504052f3e5156c6c8b7bec1d270aa0"
+    },
+    "qwen_external.py": {
+      "content": "\"\"\"Run the sealed free-form panels on the pinned external arithmetic reference.\"\"\"\nimport hashlib\nimport json\nimport sys\nfrom pathlib import Path\n\nimport torch\nfrom rich.console import Console\nfrom transformers import AutoModelForCausalLM, AutoTokenizer\n\nfrom bio_inspired_nanochat.common import stable_seed_u64\nfrom d20_eval import parse_integer, sha\n\n\nREVISION = \"aafeb0fc6f22cbf0eaeed126eff8be45b0360a35\"\nLFS_SHA = \"08faf1e950173bb44c11d26df28c55da7237dc55c77dbc1cbae4a5d7584540d9\"\nREQUIRED = (\"config.json\", \"generation_config.json\", \"tokenizer.json\", \"tokenizer_config.json\",\n            \"vocab.json\", \"merges.txt\", \"LICENSE\")\n\n\ndef verify(directory, manifest):\n    evidence = json.loads(manifest.read_bytes())\n    assert evidence[\"sha\"] == REVISION and evidence[\"cardData\"][\"license\"] == \"apache-2.0\"\n    indexed = {row[\"rfilename\"]: row for row in evidence[\"siblings\"]}\n    weights = directory / \"model.safetensors\"\n    assert weights.stat().st_size == 3087467144\n    assert sha(weights) == LFS_SHA == indexed[\"model.safetensors\"][\"lfs\"][\"sha256\"]\n    fingerprints = {}\n    for name in REQUIRED:\n        content = (directory / name).read_bytes()\n        header = f\"blob {len(content)}\\0\".encode()\n        assert hashlib.sha1(header + content, usedforsecurity=False).hexdigest() == indexed[name][\"blobId\"]\n        fingerprints[name] = hashlib.sha256(content).hexdigest()\n    return fingerprints\n\n\ndef evaluate(model, tokenizer, rows, panel):\n    console = Console()\n    output = []\n    for offset in range(0, len(rows), 16):\n        batch = rows[offset:offset+16]\n        texts = []\n        for row in batch:\n            content = row[\"question\"] + \"\\n\\nKeep any work short. Put the final integer after ####.\"\n            texts.append(tokenizer.apply_chat_template([{\"role\": \"user\", \"content\": content}],\n                                                       tokenize=False, add_generation_prompt=True))\n        encoded = tokenizer(texts, add_special_tokens=False, padding=True, return_tensors=\"pt\").to(\"cuda\")\n        width = encoded[\"input_ids\"].size(1)\n        seed = stable_seed_u64(440313, salt=f\"external.qwen.free:{panel}:{offset}\") % (2**63)\n        torch.manual_seed(seed)\n        torch.cuda.manual_seed(seed)\n        with torch.inference_mode():\n            tokens = model.generate(**encoded, max_new_tokens=96, do_sample=True, temperature=1.0,\n                                    top_k=50, top_p=1.0, repetition_penalty=1.0, num_return_sequences=4,\n                                    pad_token_id=tokenizer.pad_token_id)\n        stop = model.generation_config.eos_token_id\n        endings = set(stop if isinstance(stop, list) else [stop])\n        endings.add(tokenizer.pad_token_id)\n        for index, row in enumerate(batch):\n            prompt = encoded[\"input_ids\"][index][encoded[\"attention_mask\"][index].bool()].tolist()\n            completion = []\n            for sequence in tokens[index*4:(index+1)*4, width:].tolist():\n                end = next((pos for pos, value in enumerate(sequence) if value in endings), len(sequence))\n                completion.append(sequence[:end])\n            decoded = tokenizer.batch_decode(completion, skip_special_tokens=True)\n            parsed = [parse_integer(response) for response in decoded]\n            output.append({\"id\": row[\"id\"], \"gold\": row[\"gold\"], \"parsed\": parsed, \"seed\": seed,\n                           \"rewards\": [int(answer == row[\"gold\"]) for answer in parsed],\n                           \"lengths\": [len(seq) for seq in completion], \"text\": decoded,\n                           \"tokens\": [prompt + seq for seq in completion], \"prompt_length\": len(prompt),\n                           \"masks\": [[0] * len(prompt) + [1] * len(seq) for seq in completion]})\n        console.print(f\"{panel} external reference {len(output)}/32, {sum(sum(row['rewards']) for row in output)} correct\")\n    return output\n\n\ndef main(data_path, fingerprint, directory, manifest, output):\n    assert sha(data_path) == fingerprint\n    torch.set_num_threads(1)\n    identity = verify(directory, manifest)\n    cuda_device = torch.device(\"cuda:0\")\n    tokenizer = AutoTokenizer.from_pretrained(directory, local_files_only=True, trust_remote_code=False)\n    tokenizer.padding_side = \"left\"\n    assert tokenizer.pad_token_id is not None and tokenizer.chat_template\n    model = AutoModelForCausalLM.from_pretrained(directory, dtype=torch.bfloat16, local_files_only=True,\n                                                trust_remote_code=False, use_safetensors=True).to(cuda_device).eval()\n    assert model.config.model_type == \"qwen2\" and 1_000_000_000 < model.num_parameters() < 2_000_000_000\n    rows = json.loads(data_path.read_bytes())[\"panels\"]\n    scores = {panel: evaluate(model, tokenizer, rows[panel], panel) for panel in (\"screen\", \"confirmation\")}\n    evidence = {\"mode\": \"free\", \"panels\": scores, \"panels_sha256\": fingerprint, \"checkpoint_sha256\": LFS_SHA,\n                \"model_revision\": REVISION, \"input_file_sha256\": identity, \"model_parameters\": model.num_parameters(),\n                \"gpu\": torch.cuda.get_device_name()}\n    with output.open(\"x\") as stream:\n        json.dump(evidence, stream, sort_keys=True, separators=(\",\", \":\"), allow_nan=False)\n        stream.write(\"\\n\")\n\n\nif __name__ == \"__main__\":\n    path, fingerprint, directory, manifest, output = sys.argv[1:]\n    main(Path(path), fingerprint, Path(directory), Path(manifest), Path(output))\n",
+      "sha256": "da909afa549988bbe6719f0ec6d7705ed6a27f5c000a1e4df7fd698fc8801e42"
+    },
+    "run_ladder.py": {
+      "content": "\"\"\"Screen the sealed ladder, then evaluate only the selected confirmation band.\"\"\"\nimport json\nimport re\nimport sys\nfrom decimal import Decimal\nfrom pathlib import Path\n\nimport torch\nfrom rich.console import Console\nfrom transformers import AutoModelForCausalLM, AutoTokenizer\n\nfrom bio_inspired_nanochat.common import stable_seed_u64\nfrom ladder_audit import check_panels, choose_level, fingerprint, score\nfrom qwen_external import LFS_SHA, REVISION, verify\n\n\nSYSTEM_PROMPT = r\"Please reason step by step, and put your final answer within \\boxed{}.\"\nCANDIDATE = re.compile(r\"\\\\boxed\\s*\\{([^{}]*)\\}\")\nINTEGER_PATTERN = re.compile(r\"[+-]?[0-9]+(?:,[0-9]{3})*(?:\\.[0-9]+)?\")\n\n\ndef numerical_box(text):\n    for candidate in reversed(CANDIDATE.findall(text)):\n        payload = candidate.strip()\n        if INTEGER_PATTERN.fullmatch(payload):\n            val = Decimal(payload.replace(\",\", \"\"))\n            if val == int(val):\n                return int(val)\n    return None\n\n\ndef batch_decode(model, tokenizer, group, panel, level, offset):\n    device = model.device\n    texts = [tokenizer.apply_chat_template(\n        [{\"role\": \"system\", \"content\": SYSTEM_PROMPT}, {\"role\": \"user\", \"content\": row[\"question\"]}],\n        tokenize=False, add_generation_prompt=True) for row in group]\n    prefixes = tokenizer(texts, add_special_tokens=False, padding=True, return_tensors=\"pt\").to(device)\n    width = prefixes[\"input_ids\"].shape[1]\n    seed = stable_seed_u64(811024, salt=f\"ladder.{panel}.{level}.{offset}\") % (2**63)\n    torch.manual_seed(seed)\n    torch.cuda.manual_seed(seed)\n    with torch.inference_mode():\n        sequences = model.generate(**prefixes, max_new_tokens=512, do_sample=True, temperature=1.0,\n                                   top_k=50, top_p=1.0, repetition_penalty=1.0, num_return_sequences=4,\n                                   pad_token_id=tokenizer.pad_token_id)\n    ids = sequences[:, width:].tolist()\n    assert len(ids) == len(group) * 4\n    eos = model.generation_config.eos_token_id\n    end_ids = set(eos if isinstance(eos, list) else [eos]) | {tokenizer.pad_token_id}\n    output = []\n    for index, row in enumerate(group):\n        tokens = prefixes[\"input_ids\"][index][prefixes[\"attention_mask\"][index].bool()].tolist()\n        tails = []\n        for seq in ids[4*index:4*(index+1)]:\n            end = next((i for i, value in enumerate(seq) if value in end_ids), len(seq))\n            tails.append(seq[:end])\n        text = tokenizer.batch_decode(tails, skip_special_tokens=True)\n        answers = [numerical_box(value) for value in text]\n        output.append({\"id\": row[\"id\"], \"gold\": row[\"gold\"], \"answers\": answers, \"text\": text,\n                       \"rewards\": [int(answer == row[\"gold\"]) for answer in answers],\n                       \"tokens\": [tokens + tail for tail in tails], \"masks\": [[0] * len(tokens) + [1] * len(tail) for tail in tails],\n                       \"lengths\": list(map(len, tails)), \"prompt_length\": len(tokens), \"batch_seed\": seed})\n    return output\n\n\ndef eval_rows(model, tokenizer, rows, panel, level):\n    console = Console()\n    emitted = []\n    for start in range(0, len(rows), 8):\n        emitted.extend(batch_decode(model, tokenizer, rows[start:start+8], panel, level, start))\n        correct = sum(sum(row[\"rewards\"]) for row in emitted)\n        mixed = sum(0 < sum(row[\"rewards\"]) < 4 for row in emitted)\n        n = len(emitted)\n        console.print(f\"{panel} {level} {n}/{len(rows)} questions  |  {correct}/{4*n} correct  |  {mixed}/{n} mixed\")\n    return emitted\n\n\ndef save(path, result):\n    with path.open(\"x\") as stream:\n        json.dump(result, stream, sort_keys=True, separators=(\",\", \":\"), allow_nan=False)\n        stream.write(\"\\n\")\n\n\ndef main(panel_file, panel_sha, checkpoint, manifest, output):\n    torch.set_num_threads(1)\n    assert fingerprint(panel_file) == panel_sha\n    panels = json.loads(panel_file.read_bytes())[\"panels\"]\n    assert check_panels(panels) == 192\n    hashes = verify(checkpoint, manifest)\n    tokenizer = AutoTokenizer.from_pretrained(checkpoint, local_files_only=True, trust_remote_code=False)\n    tokenizer.padding_side = \"left\"\n    model = AutoModelForCausalLM.from_pretrained(checkpoint, dtype=torch.bfloat16, local_files_only=True,\n                                                trust_remote_code=False, use_safetensors=True).to(\"cuda\").eval()\n    assert model.config.model_type == \"qwen2\" and model.num_parameters() == 1543714304\n    screening, confirmation = {}, {}\n    for level in (\"L1\", \"L2\", \"L3\"):\n        screening[level] = eval_rows(model, tokenizer, panels[\"screen\"][level], \"screen\", level)\n        # Keep rows from every completed stratum even if a later check is interrupted.\n        save(output.parent / f\"screen-{level}.json\", screening[level])\n    selected, decisions = choose_level(panels, screening)\n    save(output.parent / \"selected.json\", {\"level\": selected, \"screening_gates\": decisions, \"panels_sha256\": panel_sha})\n    if selected is not None:\n        confirmation[selected] = eval_rows(model, tokenizer, panels[\"confirmation\"][selected], \"confirmation\", selected)\n        Console().print({\"selected\": selected, \"confirmation\": score(panels[\"confirmation\"][selected], confirmation[selected])})\n    save(output, {\"screen\": screening, \"confirmation\": confirmation, \"panels_sha256\": panel_sha,\n                  \"checkpoint_sha256\": LFS_SHA, \"checkpoint_revision\": REVISION,\n                  \"gpu\": torch.cuda.get_device_name(), \"model_parameters\": model.num_parameters(),\n                  \"checkpoint_files\": hashes, \"selected_level\": selected})\n\n\nif __name__ == \"__main__\":\n    panel, sha, checkpoint, manifest, output = sys.argv[1:]\n    main(Path(panel), sha, Path(checkpoint), Path(manifest), Path(output))\n",
+      "sha256": "d6a97924f0010a7115d1c8942a7a9a6989ce1740fab72269032eca60d5c352fc"
+    },
+    "sibling_credit.py": {
+      "content": "\"\"\"Freeze legal Qwen sibling actions and measure independent conditional returns.\"\"\"\n\nimport hashlib\nimport json\nimport sys\nfrom pathlib import Path\n\nimport torch\nfrom rich.console import Console\nfrom transformers import AutoModelForCausalLM, AutoTokenizer\nfrom transformers.cache_utils import DynamicCache\nfrom transformers.generation.logits_process import LogitsProcessor\n\nfrom bio_inspired_nanochat.common import stable_seed_u64\nfrom ladder_audit import fingerprint, read\nfrom qwen_external import LFS_SHA, REVISION, verify\nfrom run_ladder import SYSTEM_PROMPT, numerical_box\n\n\nGUIDE_SEED = 811061\nBLOCK_SEEDS = {\"discovery\": 811062, \"confirmation\": 811063}\nSTART, STOP = 16, 96\nGUIDE_BATCH = 16\nMAX_PROBES, MIN_PROBES = 16, 12\nREPLICATES = 8\nMIN_ACTION_MASS = 0.01\nK = 50\n\n\ndef rank_mask(raw):\n    return raw.masked_fill(raw < raw.topk(K).values[:, -1:], -torch.inf)\n\n\ndef bytes_digest(tensor):\n    return hashlib.sha256(tensor.detach().to(device=\"cpu\", dtype=torch.float32).contiguous().numpy().tobytes()).hexdigest()\n\n\ndef prompt(tokenizer, model, rows):\n    text = [tokenizer.apply_chat_template(\n        [{\"role\": \"system\", \"content\": SYSTEM_PROMPT}, {\"role\": \"user\", \"content\": item[\"question\"]}],\n        tokenize=False, add_generation_prompt=True,\n    ) for item in rows]\n    return tokenizer(text, add_special_tokens=False, padding=True, return_tensors=\"pt\").to(model.device)\n\n\ndef sampling(tokenizer):\n    return {\"do_sample\": True, \"temperature\": 1.0, \"top_k\": K, \"top_p\": 1.0, \"repetition_penalty\": 1.0,\n            \"pad_token_id\": tokenizer.pad_token_id}\n\n\ndef digit_ids(tokenizer):\n    encoded = [tokenizer.encode(str(digit), add_special_tokens=False) for digit in range(10)]\n    assert all(len(tokens) == 1 for tokens in encoded)\n    return [tokens[0] for tokens in encoded]\n\n\ndef allowed_scores(p, kind, digits, eos):\n    if kind == \"numeric\":\n        return p[digits], digits\n    values = p.clone()\n    values[eos] = 0\n    return values, None\n\n\ndef choices(p, kind, digits, eos):\n    values, table = allowed_scores(p, kind, digits, eos)\n    top = values.topk(2)\n    ids = [table[index] for index in top.indices.tolist()] if table is not None else top.indices.tolist()\n    return ids, top.values.tolist()\n\n\ndef canonical(model, prefix):\n    tokens = torch.tensor(prefix, device=model.device).repeat(2 * REPLICATES, 1)\n    mask = torch.ones_like(tokens)\n    positions = torch.arange(len(prefix), device=model.device).expand_as(tokens).contiguous()\n    kwargs = model.prepare_inputs_for_generation(\n        tokens, next_sequence_length=len(prefix), attention_mask=mask, position_ids=positions,\n        is_first_iteration=True, past_key_values=DynamicCache(config=model.config), logits_to_keep=1, use_cache=True,\n    )\n    raw = model(**kwargs, return_dict=True).logits[:, -1].float()\n    masked = rank_mask(raw)\n    torch.testing.assert_close(masked, masked[0].expand_as(masked), atol=0, rtol=0)\n    return masked\n\n\ndef pick(model, query, original, roll_in, score_rows, digits, eos):\n    ranked = []\n    for step in range(START, min(len(roll_in), STOP)):\n        if roll_in[step] not in digits:\n            continue\n        prior = score_rows[step].softmax(-1)\n        _, masses = choices(prior, \"numeric\", digits, eos)\n        if masses[1] >= MIN_ACTION_MASS:\n            ranked.append((-masses[1], step))\n    for _, step in sorted(ranked)[:4]:\n        prefix = original + roll_in[:step]\n        actual = canonical(model, prefix)\n        actions, masses = choices(actual[0].softmax(-1), \"numeric\", digits, eos)\n        guide_masses = score_rows[step].softmax(-1)[actions].tolist()\n        if min(masses[1], *guide_masses) >= MIN_ACTION_MASS:\n            valid = torch.where(actual[0].isfinite())[0]\n            return {\"id\": query[\"id\"], \"pair\": query[\"pair\"], \"prefix\": prefix, \"prompt_tokens\": len(original),\n                    \"roll_in_tokens\": step, \"kind\": \"numeric\", \"actions\": actions, \"probabilities\": masses,\n                    \"guide_probabilities\": guide_masses,\n                    \"support_ids\": valid.tolist(), \"support_logits\": actual[0, valid].tolist(),\n                    \"support_sha256\": bytes_digest(actual)}\n    return None\n\n\ndef freeze(model, tokenizer, panels):\n    selected = panels[\"rows\"][::2]\n    eos = sorted(set(model.generation_config.eos_token_id) | {tokenizer.pad_token_id})\n    digits = digit_ids(tokenizer)\n    assert set(digits).isdisjoint(eos)\n    exposed, probes, skipped = [], [], []\n    seeds = []\n    for offset in range(0, len(selected), GUIDE_BATCH):\n        batch = selected[offset:offset + GUIDE_BATCH]\n        tokens = prompt(tokenizer, model, batch)\n        seed = stable_seed_u64(GUIDE_SEED, salt=f\"qwen.digit.guide.{offset // GUIDE_BATCH}\") % (2**63)\n        seeds.append(seed)\n        torch.manual_seed(seed)\n        torch.cuda.manual_seed(seed)\n        guide = model.generate(**tokens, **sampling(tokenizer), max_new_tokens=STOP,\n                               return_dict_in_generate=True, output_scores=True)\n        width = tokens.input_ids.shape[1]\n        for index, query in enumerate(batch):\n            original = tokens.input_ids[index][tokens.attention_mask[index].bool()].tolist()\n            produced = guide.sequences[index, width:].tolist()\n            cut = next((step for step, action in enumerate(produced) if action in eos), len(produced))\n            exposed.append({\"id\": query[\"id\"], \"roll_in_tokens\": produced[:cut]})\n            if len(probes) == MAX_PROBES:\n                continue\n            candidate = pick(model, query, original, produced[:cut], [point[index] for point in guide.scores], digits, eos)\n            if candidate is not None:\n                probes.append(candidate)\n            else:\n                skipped.append(query[\"id\"])\n        del guide\n    return {\"probes\": probes, \"guide_seeds\": seeds, \"guide\": exposed, \"unusable\": skipped,\n            \"eligible\": len(probes) >= MIN_PROBES, \"digit_ids\": digits}\n\n\nclass ForceFirst(LogitsProcessor):\n    def __init__(self, prefix, action_ids, support_digest, device):\n        self.prefix = prefix\n        self.targets = torch.tensor(action_ids, device=device)\n        self.support_digest = support_digest\n        self.calls = 0\n\n    def __call__(self, input_ids, scores):\n        if input_ids.shape[1] != len(self.prefix):\n            return scores\n        assert input_ids.shape[0] == len(self.targets)\n        expected = torch.tensor(self.prefix, device=input_ids.device)\n        assert bool((input_ids == expected).all())\n        unmodified = rank_mask(scores)\n        assert bytes_digest(unmodified) == self.support_digest\n        assert bool(unmodified.gather(1, self.targets[:, None]).isfinite().all())\n        self.calls += 1\n        return torch.full_like(scores, -torch.inf).scatter_(1, self.targets[:, None], 0.0)\n\n\ndef suffix(model, tokenizer, probe, gold, block):\n    prefix = probe[\"prefix\"]\n    actions = [action for action in probe[\"actions\"] for _ in range(REPLICATES)]\n    forced = ForceFirst(prefix, actions, probe[\"support_sha256\"], model.device)\n    stem = torch.tensor(prefix, device=model.device).repeat(len(actions), 1)\n    seed = stable_seed_u64(BLOCK_SEEDS[block], salt=f'qwen.digit.{probe[\"id\"]}') % (2**63)\n    torch.manual_seed(seed)\n    torch.cuda.manual_seed(seed)\n    remaining = 512 - probe[\"roll_in_tokens\"]\n    sequence = model.generate(input_ids=stem, attention_mask=torch.ones_like(stem), **sampling(tokenizer),\n                              max_new_tokens=remaining, logits_processor=[forced])\n    assert forced.calls == 1 and sequence[:, len(prefix)].tolist() == actions\n    stops = set(model.generation_config.eos_token_id) | {tokenizer.pad_token_id}\n    rows = []\n    for index, tail in enumerate(sequence[:, len(prefix):].tolist()):\n        end = next((offset for offset, token in enumerate(tail) if token in stops), len(tail))\n        lexical = prefix[probe[\"prompt_tokens\"]:] + tail[:end]\n        text = tokenizer.decode(lexical, skip_special_tokens=True)\n        answer = numerical_box(text)\n        rows.append({\"action\": actions[index], \"arm\": index // REPLICATES, \"draw\": index % REPLICATES,\n                     \"new_tokens\": tail[:end + int(end < len(tail))], \"lexical_count\": len(lexical),\n                     \"capped\": end == remaining, \"text\": text, \"answer\": answer, \"reward\": int(answer == gold)})\n    return {\"id\": probe[\"id\"], \"batch_seed\": seed, \"support_sha256\": probe[\"support_sha256\"], \"draws\": rows}\n\n\n@torch.inference_mode()\ndef main(checkpoint, manifest, panel_path, panel_hash, phase, anchor_file, anchor_hash, output):\n    torch.set_num_threads(1)\n    torch.set_float32_matmul_precision(\"highest\")\n    assert fingerprint(panel_path) == panel_hash\n    panels = read(panel_path)\n    verify(checkpoint, manifest)\n    model = AutoModelForCausalLM.from_pretrained(checkpoint, dtype=torch.bfloat16, local_files_only=True,\n                                                trust_remote_code=False, use_safetensors=True).to(\"cuda\").eval()\n    model.requires_grad_(False)\n    tokenizer = AutoTokenizer.from_pretrained(checkpoint, local_files_only=True, trust_remote_code=False)\n    tokenizer.padding_side = \"left\"\n    console = Console()\n    if phase == \"freeze\":\n        result = freeze(model, tokenizer, panels)\n        console.print({\"eligible_probes\": len(result[\"probes\"]), \"allows_suffix\": result[\"eligible\"]})\n    else:\n        assert fingerprint(anchor_file) == anchor_hash\n        anchors = read(anchor_file)\n        assert anchors[\"eligible\"] and anchors[\"panel_sha256\"] == panel_hash\n        labels = {row[\"id\"]: row[\"gold\"] for row in panels[\"rows\"]}\n        recorded = []\n        for index, probe in enumerate(anchors[\"probes\"]):\n            recorded.append(suffix(model, tokenizer, probe, labels[probe[\"id\"]], phase))\n            console.print(f\"{phase} completed {index + 1}/{len(anchors['probes'])} shared prefixes.\")\n        result = {\"anchor_sha256\": anchor_hash, \"phase\": phase, \"records\": recorded}\n    result.update({\"checkpoint_sha256\": LFS_SHA, \"checkpoint_revision\": REVISION,\n                   \"panel_sha256\": panel_hash, \"gpu\": torch.cuda.get_device_name()})\n    with output.open(\"x\", encoding=\"utf-8\") as stream:\n        json.dump(result, stream, sort_keys=True, allow_nan=False, separators=(\",\", \":\"))\n        stream.write(\"\\n\")\n\n\nif __name__ == \"__main__\":\n    if not __debug__:\n        raise RuntimeError(\"The sibling-action comparison requires Python assertions.\")\n    checkpoint, manifest, panel, seal, phase, anchor, anchor_sha, output = sys.argv[1:]\n    main(Path(checkpoint), Path(manifest), Path(panel), seal, phase, Path(anchor), anchor_sha, Path(output))\n",
+      "sha256": "2172cbd13d3f9d9108e45181872203d3168f7de70b4400ee828c08bda79708db"
+    },
+    "sibling_panels.py": {
+      "content": "\"\"\"Seal fresh paired packing prompts for shared-prefix branch probes.\"\"\"\n\nimport gzip\nimport hashlib\nimport json\nimport random\nimport re\nimport sys\nfrom fractions import Fraction\nfrom pathlib import Path\n\nfrom ladder_panels import execute, operations, render\n\n\nSEED = 811060\nPAIRS = 80\n\n\ndef digest(path):\n    return hashlib.sha256(path.read_bytes()).hexdigest()\n\n\ndef source_rows(ladder, kl, sibling):\n    original = json.loads(gzip.decompress(ladder.read_bytes()))[\"panels\"][\"panels\"]\n    newer = json.loads(kl.read_bytes())[\"panels\"]\n    return ([row for panel in original.values() for level in panel.values() for row in level]\n            + [row for panel in newer.values() for row in panel]\n            + json.loads(sibling.read_bytes())[\"rows\"])\n\n\ndef key(start, groups):\n    return start, tuple(tuple(step) for step in groups)\n\n\ndef recipe(groups):\n    return tuple(tuple(step) for step in groups)\n\n\ndef seal(ladder, kl, sibling, out):\n    previous = source_rows(ladder, kl, sibling)\n    used = {recipe(row[\"operations\"]) for row in previous}\n    rng = random.Random(SEED)\n    rows = []\n    for index in range(PAIRS):\n        while True:\n            first, second = rng.sample(range(100, 1000), 2)\n            instructions = operations(rng, 100, 1, 9, 17)\n            targets = [execute(value, instructions) for value in (first, second)]\n            steps = recipe(instructions)\n            if len(set(targets)) == 2 and set(targets).isdisjoint({first, second, *instructions[0]}) and steps not in used:\n                break\n        used.add(steps)\n        pair = f\"digit.packing.{index:02d}\"\n        alias = rng.choice((\"Ash\", \"Dogwood\", \"Fir\", \"Holly\", \"Linden\", \"Willow\"))\n        for side, start in enumerate((first, second)):\n            rows.append({\"id\": f\"{pair}.{side}\", \"pair\": pair, \"side\": side, \"start\": start,\n                         \"operations\": instructions, \"gold\": targets[side], \"question\": render(alias, \"packing\", start, instructions)})\n    raw = {\"seed\": SEED, \"prior_ladder_sha256\": digest(ladder), \"prior_kl_sha256\": digest(kl),\n           \"prior_sibling_sha256\": digest(sibling), \"rows\": rows}\n    with out.open(\"x\", encoding=\"utf-8\") as stream:\n        json.dump(raw, stream, sort_keys=True, separators=(\",\", \":\"))\n        stream.write(\"\\n\")\n    print(digest(out))\n\n\ndef independent(ladder, kl, sibling, sealed):\n    previous = source_rows(ladder, kl, sibling)\n    occupied = {key(row[\"start\"], row[\"operations\"]) for row in previous}\n    recipes = {recipe(row[\"operations\"]) for row in previous}\n    texts = {row[\"question\"] for row in previous}\n    view = json.loads(sealed.read_bytes())\n    assert view[\"seed\"] == SEED and view[\"prior_ladder_sha256\"] == digest(ladder)\n    assert view[\"prior_kl_sha256\"] == digest(kl) and view[\"prior_sibling_sha256\"] == digest(sibling)\n    rows = view[\"rows\"]\n    assert len(rows) == 2 * PAIRS and len({row[\"id\"] for row in rows}) == 2 * PAIRS\n    for index, (left, right) in enumerate(zip(rows[::2], rows[1::2], strict=True)):\n        assert left[\"pair\"] == right[\"pair\"] == f\"digit.packing.{index:02d}\"\n        assert (left[\"side\"], right[\"side\"]) == (0, 1)\n        assert left[\"operations\"] == right[\"operations\"] and left[\"gold\"] != right[\"gold\"]\n        assert len(left[\"operations\"]) == 1\n        steps = recipe(left[\"operations\"])\n        assert steps not in recipes\n        recipes.add(steps)\n        add, multiply, subtract, divide = left[\"operations\"][0]\n        assert {left[\"gold\"], right[\"gold\"]}.isdisjoint({left[\"start\"], right[\"start\"], add, multiply, subtract, divide})\n        assert left[\"question\"].replace(str(left[\"start\"]), \"START\", 1) == right[\"question\"].replace(str(right[\"start\"]), \"START\", 1)\n        for row in (left, right):\n            assert row[\"id\"] == f'{row[\"pair\"]}.{row[\"side\"]}'\n            qkey = key(row[\"start\"], row[\"operations\"])\n            assert qkey not in occupied and row[\"question\"] not in texts\n            occupied.add(qkey)\n            texts.add(row[\"question\"])\n            numerator = Fraction((row[\"start\"] + add) * multiply - subtract, divide)\n            assert row[\"gold\"] <= numerator < row[\"gold\"] + 1\n            assert list(map(int, re.findall(r\"\\b\\d+\\b\", row[\"question\"]))) == [row[\"start\"], add, multiply, subtract, divide]\n    return {\"pairs\": len(rows) // 2, \"questions\": len(rows), \"overlap\": 0, \"sha256\": digest(sealed)}\n\n\nif __name__ == \"__main__\":\n    if not __debug__:\n        raise RuntimeError(\"The panel audit requires Python assertions.\")\n    command, *args = sys.argv[1:]\n    if command == \"seal\":\n        seal(*map(Path, args))\n    else:\n        assert command == \"audit\"\n        print(json.dumps(independent(*map(Path, args)), sort_keys=True))\n",
+      "sha256": "374a7433018dba4b068d398f03269ba91f139483501141a0666be2fd729faad4"
+    },
+    "sibling_runtime_fixture.py": {
+      "content": "\"\"\"Verify first-token enforcement on a small real Qwen forward path.\"\"\"\n\nimport torch\nfrom transformers import Qwen2Config, Qwen2ForCausalLM\n\nfrom audit_sibling_credit import signflip\nfrom sibling_credit import ForceFirst, REPLICATES, bytes_digest, canonical, pick\n\n\ntorch.set_num_threads(1)\ntorch.manual_seed(98721)\nmodel = Qwen2ForCausalLM(Qwen2Config(vocab_size=80, hidden_size=32, intermediate_size=64, num_hidden_layers=2,\n                                    num_attention_heads=4, num_key_value_heads=2, pad_token_id=0, eos_token_id=None)).eval()\nprefix = [2, 10, 9, 11, 12]\nwith torch.inference_mode():\n    recorded = canonical(model, prefix)\n    qualified = torch.where(recorded[0].isfinite())[0].tolist()\n    first, second = qualified[1:3]\n    targets = [first] * REPLICATES + [second] * REPLICATES\n    processor = ForceFirst(prefix, targets, bytes_digest(recorded), model.device)\n    input_ids = torch.tensor(prefix).repeat(len(targets), 1)\n    generated = model.generate(input_ids=input_ids, attention_mask=torch.ones_like(input_ids), max_new_tokens=6,\n                               do_sample=True, top_k=50, temperature=1.0, top_p=1.0, logits_processor=[processor])\n    assert processor.calls == 1 and generated[:, len(prefix)].tolist() == targets\n    assert generated.shape == (16, len(prefix) + 6)\n\n    digit_tokens = qualified[1:11]\n    guide = torch.zeros(80)\n    steps = [guide] * 17\n    question = {\"id\": \"fixture.0\", \"pair\": \"fixture\"}\n    assert pick(model, question, prefix, [79] * 17, steps, digit_tokens, [0]) is None\n    chosen = pick(model, question, prefix, [79] * 16 + digit_tokens[:1], steps, digit_tokens, [0])\n    assert chosen is not None and chosen[\"kind\"] == \"numeric\"\n    assert chosen[\"roll_in_tokens\"] == 16 and set(chosen[\"actions\"]).issubset(digit_tokens)\n\nassert signflip([]) == (1, 1)\nassert signflip([1, 0, 1]) == (1, 4)\nassert signflip([2, 2, 2, 4, -1, 0, -1, 2]) == (8, 128)\nassert signflip([1, -2]) == (3, 4)\nprint(\"Verified legal digit selection, 16 first-token interventions and four exact-test fixtures.\")\n",
+      "sha256": "583fc7a1183aa299af317770e9151c00a9893d33133c65d3e43a1fc048bccc39"
+    }
+  }
+}
