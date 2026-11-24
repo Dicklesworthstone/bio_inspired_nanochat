@@ -152,6 +152,42 @@ same two ratios including fresh prefill and 20 eager warmup forwards were
 separately.
 [Decode observations and receipts](results/profiles/rtx4090_cached_decode_2026-11-24.json)
 
+The single-prefill follow-up compared one causal forward to a 16-token
+prefill followed by one-token forwards over identical prefixes. All 18 cases
+at 36, 96 and 137 tokens met `rtol=atol=1e-4` for the prefix, forced suffix,
+KV cache and recurrent state. The seeded greedy continuations agreed on all
+384 positions, including 360 model-selected tokens.
+At 36 tokens, median synaptic prefix preparation measured 14.5 ms in one
+call versus 256.6 ms on the staged route. That timing retains and concatenates
+the staged prefix logits.
+
+With one 36-token prefill outside the graph, the packed request including the
+prefill measured 2.56× vanilla for 200 forced tokens and 1.81× for 32 seeded
+greedy tokens. Capturing the prefill as well matched the eager output and
+cache in all 36 sampled requests. These fixed-shape measurements begin with
+token IDs on the GPU and account for capture time separately.
+
+On the interleaved holdout, the median whole-request graph ratios against
+live vanilla graphs were 1.17× for 200 forced tokens after a 36-token prefix,
+1.32× for 32 greedy tokens after a 36-token prefix and 1.32× for 32 greedy
+tokens after a 128-token prefix. Twenty-two of the 24 pairs met 1.50×.
+The holdout matched 7,424 logit vectors and the final caches against eager.
+
+The two-graph experiment delivered the first token to the host before
+replaying the remaining 31. At 36 and 128 prompt tokens, median first-token
+ratios against vanilla were 1.44× and 2.27×, respectively. Complete-request
+ratios were 1.34× and 1.32×. All 2,736 checked logit vectors, emitted IDs and
+final caches matched eager.
+
+Nsight counted 165 synaptic launches per 36-token prefill and 193 per
+128-token prefill, versus 86 for vanilla at both lengths. At 128 tokens,
+the presynaptic scan accounted for 5.82 of 8.56 ms of synaptic kernel-busy
+time across eight requests. Tracing the first-token graph directly gave
+5.76 ms in the scan and 9.58 ms of total synaptic kernel-busy time across
+eight requests, versus 2.61 ms total for vanilla. The unprofiled replay
+supplies the latency comparisons above.
+[Single-prefill measurements and receipts](results/profiles/rtx4090_single_prefill_2026-11-24.json)
+
 The 2,103-case CPU run recorded 2,088 passes, 14 skips and one stale formal
 runtime hash. Refreshing the binding passed all 17 formal-feedback tests and
 the mapped runtime suite's 288 passing cases with three skips. The binding
