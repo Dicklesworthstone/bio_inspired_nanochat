@@ -123,6 +123,40 @@ Cached single-token decoding reached 124 and 51 tokens/s (2.43× slowdown),
 exceeding the 1.50× budget. The relative gate stays red. These measurements
 cover the small single-card test geometry. [First CUDA baseline](results/perf_baselines_rtx4090.json)
 
+On November 24 the same registered CUDA gate measured 315.6 vanilla and 105.2
+synaptic cached tokens/s on the same RTX 4090, a 3.00× slowdown. Nsight counted
+75 vanilla launches and 124 eager synaptic launches per measured token. A
+single fused state append reduced the synaptic count to 90. The first build
+changed a newly initialized negative zero to positive zero and increased
+median paired decode latency by 7.23%. Copying and filling the raw FP32 bits
+then matched 20 state fixtures and 66 actual cached decode steps byte for byte.
+After warming the complete 200-token window on both paths, the bit-preserving
+append reduced median paired decode latency by 24.3% and won seven of eight
+pairs. Median slowdown against live vanilla was 1.63× versus 2.33× for eager
+synaptic append. The 1.50× ceiling still applies.
+
+One run through the normal gate with the production change measured 372.0
+vanilla and 321.5 synaptic cached tokens/s, passing the decode gate at 1.16×.
+The same invocation failed the relative training gate at 2.26× against 2.00×.
+The physical CUDA suite passed all 11 selected tests, and the production
+checkout reproduced the 20 direct fixtures and 66 cached steps.
+
+The fixed-shape CUDA graph experiment reused each graph on four fresh
+prefixes with refreshed KV and recurrent state. Across the vanilla, synaptic
+and packed synaptic arms, all 2,784 logit vectors matched their eager oracles,
+as did the final caches. The packed arm accounted for 928 vectors. The
+packed replay, including state refresh, took 1.21× vanilla graph time for the
+200-token forced window and 1.00× for the 32-token seeded greedy window. The
+same two ratios including fresh prefill and 20 eager warmup forwards were
+3.95× and 3.34×, respectively. The fixed-window benchmark measures capture
+separately.
+[Decode observations and receipts](results/profiles/rtx4090_cached_decode_2026-11-24.json)
+
+The 2,103-case CPU run recorded 2,088 passes, 14 skips and one stale formal
+runtime hash. Refreshing the binding passed all 17 formal-feedback tests and
+the mapped runtime suite's 288 passing cases with three skips. The binding
+uses the same Lean source digest as the archived compiled axiom audit.
+
 The `bio_inspired_nanochat-gpu` profile uses a private checkout and a dedicated uv
 environment on the two-4090 worker. It builds the source-matched native extension,
 runs the CUDA-marked and canonical/Rust parity cases, then executes the registered

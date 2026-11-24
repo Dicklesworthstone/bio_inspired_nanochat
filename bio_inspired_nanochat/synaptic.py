@@ -4251,6 +4251,20 @@ class SynapticCausalSelfAttention(nn.Module):
 
             if T_state < Tk:
                 state_dtype = c_state.dtype
+                if (
+                    Tq == 1
+                    and kv_cache is not None
+                    and cfg.native_presyn
+                    and device.type == "cuda"
+                    and state_dtype == torch.float32
+                    and not train_mode
+                    and not torch.is_grad_enabled()
+                    and "HEAT" not in presyn_state
+                ):
+                    from bio_inspired_nanochat.kernels.presyn_fused import pad_live_decode_state
+
+                    if pad_live_decode_state(presyn_state, Tk, cfg):
+                        T_state = Tk
                 use_cpu_cap = (
                     Tq == 1
                     and cfg.native_presyn
@@ -4327,7 +4341,7 @@ class SynapticCausalSelfAttention(nn.Module):
                         presyn_state["DELAY"] = [
                             _grow_zero(d) for d in presyn_state["DELAY"]
                         ]
-                else:
+                elif T_state < Tk:
                     T_add = Tk - T_state
                     pad_shape = (B, H, T_add)
                     pad_zeros = torch.zeros(pad_shape, device=device, dtype=state_dtype)

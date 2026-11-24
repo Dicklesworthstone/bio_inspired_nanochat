@@ -1,9 +1,14 @@
-from typing import Any, cast
+import math
+import struct
+from typing import TYPE_CHECKING, Any, cast
 
-from bio_inspired_nanochat.torch_imports import torch  # noqa: F401
 import triton
 import triton.language as tl
-import math
+
+from bio_inspired_nanochat.torch_imports import torch
+
+if TYPE_CHECKING:
+    from bio_inspired_nanochat.synaptic import SynapticConfig
 
 @triton.jit
 def _sigmoid(x):
@@ -14,6 +19,82 @@ def _sigmoid(x):
 # -----------------------------------------------------------------------------
 # Live deterministic decode kernel (jyb.2)
 # -----------------------------------------------------------------------------
+
+
+@triton.jit
+def _pad_decode_state_kernel(
+    inputs,
+    output,
+    old_keys,
+    new_keys,
+    plane_size,
+    initial: tl.constexpr,
+    plane_count: tl.constexpr,
+    block: tl.constexpr,
+):
+    offset = tl.program_id(0) * block + tl.arange(0, block)
+    key = offset % new_keys
+    source = (offset // new_keys) * old_keys + key
+    active = offset < plane_size
+    previous = active & (key < old_keys)
+    output_bits = output.to(tl.pointer_type(tl.uint32))
+    for plane in tl.static_range(plane_count):
+        input_bits = inputs[plane].to(tl.pointer_type(tl.uint32))
+        bits = tl.load(input_bits + source, mask=previous, other=initial[plane])
+        tl.store(output_bits + plane * plane_size + offset, bits, mask=active)
+
+
+def pad_live_decode_state(state: dict[str, Any], key_count: int, cfg: "SynapticConfig") -> bool:
+    """Extend contiguous per-connection CUDA state in one copy-and-fill launch."""
+    old = state["C"]
+    batch, heads, old_keys = old.shape
+    names = ("C", "BUF", "RRP", "RES", "PR", "CL", "E", "AMP")
+    delay = state["DELAY"]
+    if (
+        old.dtype != torch.float32
+        or not old.is_cuda
+        or old.numel() == 0
+        or key_count <= old_keys
+        or len(delay) != cfg.endo_delay
+    ):
+        return False
+    inputs = tuple(state[name] for name in names) + tuple(delay)
+    if any(
+        item.shape != old.shape
+        or item.device != old.device
+        or item.dtype != old.dtype
+        or not item.is_contiguous()
+        for item in inputs
+    ):
+        return False
+    # Copy and initialize raw float32 bits, including negative zero.
+    try:
+        fills = struct.pack(
+            "=6f", cfg.init_rrp, cfg.init_reserve, cfg.init_snare,
+            cfg.init_clamp, cfg.init_energy, cfg.init_amp,
+        )
+    except OverflowError:
+        return False
+    initial = (0, 0) + struct.unpack("=6I", fills) + (0,) * len(delay)
+    output = torch.empty(
+        (len(inputs), batch, heads, key_count), device=old.device, dtype=old.dtype
+    )
+    plane_size = batch * heads * key_count
+    block = 128
+    _pad_decode_state_kernel[(triton.cdiv(plane_size, block),)](
+        inputs,
+        output,
+        old_keys,
+        key_count,
+        plane_size,
+        initial=cast(Any, initial),
+        plane_count=cast(Any, len(inputs)),
+        block=cast(Any, block),
+    )
+    planes = output.unbind()
+    state.update(zip(names, planes[: len(names)], strict=True))
+    state["DELAY"] = list(planes[len(names):])
+    return True
 
 
 @triton.jit

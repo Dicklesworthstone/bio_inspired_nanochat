@@ -1,0 +1,2762 @@
+{
+  "bitwise_pad": {
+    "paired_timing": {
+      "gate_passes": {
+        "candidate": 2,
+        "eager": 0
+      },
+      "median_paired_improvement": 0.12687417147869318,
+      "median_ratios": {
+        "candidate": 1.8480642593769887,
+        "eager": 2.068608048258572
+      },
+      "runs": [
+        {
+          "comparisons": {
+            "candidate": {
+              "detail": "synaptic_transformer_cached_tq1_decode (186.3 tok/s) vs standard_transformer_cached_tq1_decode (237.4 tok/s): slowdown=1.27x (budget <= 1.50x)",
+              "max_ratio": 1.5,
+              "mode": "decode",
+              "passed": true,
+              "slowdown_ratio": 1.2740278632665736,
+              "standard_name": "standard_transformer_cached_tq1_decode",
+              "standard_tok_per_sec": 237.35236497260178,
+              "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+              "synaptic_tok_per_sec": 186.30076454060952
+            },
+            "eager": {
+              "detail": "synaptic_transformer_cached_tq1_decode (20.1 tok/s) vs standard_transformer_cached_tq1_decode (237.4 tok/s): slowdown=11.83x (budget <= 1.50x)",
+              "max_ratio": 1.5,
+              "mode": "decode",
+              "passed": false,
+              "slowdown_ratio": 11.825229451052033,
+              "standard_name": "standard_transformer_cached_tq1_decode",
+              "standard_tok_per_sec": 237.35236497260178,
+              "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+              "synaptic_tok_per_sec": 20.071692135452448
+            }
+          },
+          "order": [
+            "vanilla",
+            "eager",
+            "candidate"
+          ],
+          "peak_memory_mb": {
+            "candidate": 9.30078125,
+            "eager": 9.26611328125,
+            "vanilla": 8.9267578125
+          },
+          "seed": 20010
+        },
+        {
+          "comparisons": {
+            "candidate": {
+              "detail": "synaptic_transformer_cached_tq1_decode (150.5 tok/s) vs standard_transformer_cached_tq1_decode (297.4 tok/s): slowdown=1.98x (budget <= 1.50x)",
+              "max_ratio": 1.5,
+              "mode": "decode",
+              "passed": false,
+              "slowdown_ratio": 1.9764649836114232,
+              "standard_name": "standard_transformer_cached_tq1_decode",
+              "standard_tok_per_sec": 297.41661586424414,
+              "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+              "synaptic_tok_per_sec": 150.4790716407232
+            },
+            "eager": {
+              "detail": "synaptic_transformer_cached_tq1_decode (151.3 tok/s) vs standard_transformer_cached_tq1_decode (297.4 tok/s): slowdown=1.97x (budget <= 1.50x)",
+              "max_ratio": 1.5,
+              "mode": "decode",
+              "passed": false,
+              "slowdown_ratio": 1.9659432225348865,
+              "standard_name": "standard_transformer_cached_tq1_decode",
+              "standard_tok_per_sec": 297.41661586424414,
+              "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+              "synaptic_tok_per_sec": 151.2844381541982
+            }
+          },
+          "order": [
+            "candidate",
+            "eager",
+            "vanilla"
+          ],
+          "peak_memory_mb": {
+            "candidate": 9.30078125,
+            "eager": 9.26611328125,
+            "vanilla": 8.9267578125
+          },
+          "seed": 20011
+        },
+        {
+          "comparisons": {
+            "candidate": {
+              "detail": "synaptic_transformer_cached_tq1_decode (140.7 tok/s) vs standard_transformer_cached_tq1_decode (287.7 tok/s): slowdown=2.04x (budget <= 1.50x)",
+              "max_ratio": 1.5,
+              "mode": "decode",
+              "passed": false,
+              "slowdown_ratio": 2.0444840658585686,
+              "standard_name": "standard_transformer_cached_tq1_decode",
+              "standard_tok_per_sec": 287.736507853527,
+              "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+              "synaptic_tok_per_sec": 140.73795568208246
+            },
+            "eager": {
+              "detail": "synaptic_transformer_cached_tq1_decode (127.0 tok/s) vs standard_transformer_cached_tq1_decode (287.7 tok/s): slowdown=2.27x (budget <= 1.50x)",
+              "max_ratio": 1.5,
+              "mode": "decode",
+              "passed": false,
+              "slowdown_ratio": 2.265201329082669,
+              "standard_name": "standard_transformer_cached_tq1_decode",
+              "standard_tok_per_sec": 287.736507853527,
+              "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+              "synaptic_tok_per_sec": 127.02469496168389
+            }
+          },
+          "order": [
+            "vanilla",
+            "eager",
+            "candidate"
+          ],
+          "peak_memory_mb": {
+            "candidate": 9.30078125,
+            "eager": 9.26611328125,
+            "vanilla": 8.9267578125
+          },
+          "seed": 20012
+        },
+        {
+          "comparisons": {
+            "candidate": {
+              "detail": "synaptic_transformer_cached_tq1_decode (191.5 tok/s) vs standard_transformer_cached_tq1_decode (234.2 tok/s): slowdown=1.22x (budget <= 1.50x)",
+              "max_ratio": 1.5,
+              "mode": "decode",
+              "passed": true,
+              "slowdown_ratio": 1.2231767386537031,
+              "standard_name": "standard_transformer_cached_tq1_decode",
+              "standard_tok_per_sec": 234.1921501505499,
+              "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+              "synaptic_tok_per_sec": 191.462233338671
+            },
+            "eager": {
+              "detail": "synaptic_transformer_cached_tq1_decode (111.6 tok/s) vs standard_transformer_cached_tq1_decode (234.2 tok/s): slowdown=2.10x (budget <= 1.50x)",
+              "max_ratio": 1.5,
+              "mode": "decode",
+              "passed": false,
+              "slowdown_ratio": 2.0989511937950693,
+              "standard_name": "standard_transformer_cached_tq1_decode",
+              "standard_tok_per_sec": 234.1921501505499,
+              "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+              "synaptic_tok_per_sec": 111.57579597032556
+            }
+          },
+          "order": [
+            "candidate",
+            "eager",
+            "vanilla"
+          ],
+          "peak_memory_mb": {
+            "candidate": 9.30078125,
+            "eager": 9.26611328125,
+            "vanilla": 8.9267578125
+          },
+          "seed": 20013
+        },
+        {
+          "comparisons": {
+            "candidate": {
+              "detail": "synaptic_transformer_cached_tq1_decode (176.6 tok/s) vs standard_transformer_cached_tq1_decode (303.7 tok/s): slowdown=1.72x (budget <= 1.50x)",
+              "max_ratio": 1.5,
+              "mode": "decode",
+              "passed": false,
+              "slowdown_ratio": 1.7196635351425542,
+              "standard_name": "standard_transformer_cached_tq1_decode",
+              "standard_tok_per_sec": 303.69972108358786,
+              "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+              "synaptic_tok_per_sec": 176.60415242706893
+            },
+            "eager": {
+              "detail": "synaptic_transformer_cached_tq1_decode (149.0 tok/s) vs standard_transformer_cached_tq1_decode (303.7 tok/s): slowdown=2.04x (budget <= 1.50x)",
+              "max_ratio": 1.5,
+              "mode": "decode",
+              "passed": false,
+              "slowdown_ratio": 2.0382649027220747,
+              "standard_name": "standard_transformer_cached_tq1_decode",
+              "standard_tok_per_sec": 303.69972108358786,
+              "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+              "synaptic_tok_per_sec": 148.99914171018744
+            }
+          },
+          "order": [
+            "vanilla",
+            "eager",
+            "candidate"
+          ],
+          "peak_memory_mb": {
+            "candidate": 9.30078125,
+            "eager": 9.26611328125,
+            "vanilla": 8.9267578125
+          },
+          "seed": 20014
+        },
+        {
+          "comparisons": {
+            "candidate": {
+              "detail": "synaptic_transformer_cached_tq1_decode (148.3 tok/s) vs standard_transformer_cached_tq1_decode (365.4 tok/s): slowdown=2.46x (budget <= 1.50x)",
+              "max_ratio": 1.5,
+              "mode": "decode",
+              "passed": false,
+              "slowdown_ratio": 2.464260355373083,
+              "standard_name": "standard_transformer_cached_tq1_decode",
+              "standard_tok_per_sec": 365.3680723529501,
+              "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+              "synaptic_tok_per_sec": 148.2668304736146
+            },
+            "eager": {
+              "detail": "synaptic_transformer_cached_tq1_decode (201.1 tok/s) vs standard_transformer_cached_tq1_decode (365.4 tok/s): slowdown=1.82x (budget <= 1.50x)",
+              "max_ratio": 1.5,
+              "mode": "decode",
+              "passed": false,
+              "slowdown_ratio": 1.8172673399809811,
+              "standard_name": "standard_transformer_cached_tq1_decode",
+              "standard_tok_per_sec": 365.3680723529501,
+              "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+              "synaptic_tok_per_sec": 201.05356229908028
+            }
+          },
+          "order": [
+            "candidate",
+            "eager",
+            "vanilla"
+          ],
+          "peak_memory_mb": {
+            "candidate": 9.30078125,
+            "eager": 9.26611328125,
+            "vanilla": 8.9267578125
+          },
+          "seed": 20015
+        }
+      ]
+    },
+    "parity": {
+      "raw_cases": 20,
+      "traces": [
+        {
+          "batch": 1,
+          "delay_depth": 3,
+          "exact_pad_calls": 80,
+          "kv_heads": 4,
+          "prompt": 16,
+          "steps": 40
+        },
+        {
+          "batch": 2,
+          "delay_depth": 0,
+          "exact_pad_calls": 14,
+          "kv_heads": 2,
+          "prompt": 29,
+          "steps": 7
+        },
+        {
+          "batch": 2,
+          "delay_depth": 3,
+          "exact_pad_calls": 18,
+          "kv_heads": 2,
+          "prompt": 123,
+          "steps": 9
+        },
+        {
+          "batch": 1,
+          "delay_depth": 1,
+          "exact_pad_calls": 20,
+          "kv_heads": 4,
+          "prompt": 250,
+          "steps": 10
+        }
+      ]
+    },
+    "parity_run": {
+      "checks": [
+        {
+          "duration_ms": 129263,
+          "exit_code": 0,
+          "log_sha256": "d64872a267eb0eb3d89c152e2cd6037410cb5c5fb266dd8cd87e701309a6327c",
+          "status": "passed"
+        }
+      ],
+      "receipt_sha256": "716c402ecb774b37489105ef3b86e9a24ce8262c2b9e7c82fb352499b4f11793",
+      "run_id": "7f5042bb-5070-467d-a81e-18305a9a70f8",
+      "source_before": "a83d76779fd592b9668d6f2ed6b475b341bc36b1|c32a3acb585f760c03fc78ba45fe1a4eb064da46f1ed33b61e2a9f59e60aeecc|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "stable_source_and_config": true,
+      "status": "passed"
+    },
+    "run": {
+      "checks": [
+        {
+          "duration_ms": 105253,
+          "exit_code": 1,
+          "log_sha256": "9e0def6fa99d171f295b0c1837b0de6b42c7dc8ff054f6d5176a9df9b021fd0c",
+          "status": "failed"
+        },
+        {
+          "duration_ms": 55386,
+          "exit_code": 1,
+          "log_sha256": "7253904114f65bb7784c26ed7a0f950fdebd9979b7d4ff5f8544dbead619ad05",
+          "status": "failed"
+        },
+        {
+          "duration_ms": 147448,
+          "exit_code": 0,
+          "log_sha256": "9cb7bf3aa7ff0648eb6be80aa3f1e131520a5ad2bc07c923bcdf1e762a905f75",
+          "status": "passed"
+        }
+      ],
+      "receipt_sha256": "4286bed39cfcd89c5713031fdfbe08f236864d90bdfbb240f78410deeeeb10c8",
+      "run_id": "e910db55-bc2f-4f9a-b6b0-f788fca3b6fe",
+      "source_before": "a83d76779fd592b9668d6f2ed6b475b341bc36b1|c32a3acb585f760c03fc78ba45fe1a4eb064da46f1ed33b61e2a9f59e60aeecc|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "stable_source_and_config": true,
+      "status": "failed"
+    },
+    "warmed_heldout": {
+      "gate_passes": {
+        "candidate": 3,
+        "eager": 1
+      },
+      "median_paired_improvement": 0.24315301987166948,
+      "median_ratios": {
+        "candidate": 1.6283921284104177,
+        "eager": 2.3254229351581728
+      },
+      "runs": [
+        {
+          "comparisons": {
+            "candidate": {
+              "detail": "synaptic_transformer_cached_tq1_decode (71.0 tok/s) vs standard_transformer_cached_tq1_decode (111.6 tok/s): slowdown=1.57x (budget <= 1.50x)",
+              "max_ratio": 1.5,
+              "mode": "decode",
+              "passed": false,
+              "slowdown_ratio": 1.57296017178391,
+              "standard_name": "standard_transformer_cached_tq1_decode",
+              "standard_tok_per_sec": 111.60250057328719,
+              "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+              "synaptic_tok_per_sec": 70.95062073104984
+            },
+            "eager": {
+              "detail": "synaptic_transformer_cached_tq1_decode (65.4 tok/s) vs standard_transformer_cached_tq1_decode (111.6 tok/s): slowdown=1.71x (budget <= 1.50x)",
+              "max_ratio": 1.5,
+              "mode": "decode",
+              "passed": false,
+              "slowdown_ratio": 1.7054480049600986,
+              "standard_name": "standard_transformer_cached_tq1_decode",
+              "standard_tok_per_sec": 111.60250057328719,
+              "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+              "synaptic_tok_per_sec": 65.43881739502125
+            }
+          },
+          "order": [
+            "vanilla",
+            "eager",
+            "candidate"
+          ],
+          "peak_memory_mb": {
+            "candidate": 9.30078125,
+            "eager": 9.26611328125,
+            "vanilla": 8.9267578125
+          },
+          "seed": 20020
+        },
+        {
+          "comparisons": {
+            "candidate": {
+              "detail": "synaptic_transformer_cached_tq1_decode (86.0 tok/s) vs standard_transformer_cached_tq1_decode (121.6 tok/s): slowdown=1.41x (budget <= 1.50x)",
+              "max_ratio": 1.5,
+              "mode": "decode",
+              "passed": true,
+              "slowdown_ratio": 1.414169229435833,
+              "standard_name": "standard_transformer_cached_tq1_decode",
+              "standard_tok_per_sec": 121.56362419497475,
+              "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+              "synaptic_tok_per_sec": 85.96115773461652
+            },
+            "eager": {
+              "detail": "synaptic_transformer_cached_tq1_decode (62.1 tok/s) vs standard_transformer_cached_tq1_decode (121.6 tok/s): slowdown=1.96x (budget <= 1.50x)",
+              "max_ratio": 1.5,
+              "mode": "decode",
+              "passed": false,
+              "slowdown_ratio": 1.9566803252019096,
+              "standard_name": "standard_transformer_cached_tq1_decode",
+              "standard_tok_per_sec": 121.56362419497475,
+              "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+              "synaptic_tok_per_sec": 62.12748328341811
+            }
+          },
+          "order": [
+            "candidate",
+            "eager",
+            "vanilla"
+          ],
+          "peak_memory_mb": {
+            "candidate": 9.30078125,
+            "eager": 9.26611328125,
+            "vanilla": 8.9267578125
+          },
+          "seed": 20021
+        },
+        {
+          "comparisons": {
+            "candidate": {
+              "detail": "synaptic_transformer_cached_tq1_decode (91.9 tok/s) vs standard_transformer_cached_tq1_decode (154.7 tok/s): slowdown=1.68x (budget <= 1.50x)",
+              "max_ratio": 1.5,
+              "mode": "decode",
+              "passed": false,
+              "slowdown_ratio": 1.6838240850369255,
+              "standard_name": "standard_transformer_cached_tq1_decode",
+              "standard_tok_per_sec": 154.72780033609203,
+              "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+              "synaptic_tok_per_sec": 91.89071572919028
+            },
+            "eager": {
+              "detail": "synaptic_transformer_cached_tq1_decode (55.3 tok/s) vs standard_transformer_cached_tq1_decode (154.7 tok/s): slowdown=2.80x (budget <= 1.50x)",
+              "max_ratio": 1.5,
+              "mode": "decode",
+              "passed": false,
+              "slowdown_ratio": 2.7958429202750956,
+              "standard_name": "standard_transformer_cached_tq1_decode",
+              "standard_tok_per_sec": 154.72780033609203,
+              "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+              "synaptic_tok_per_sec": 55.34209351105736
+            }
+          },
+          "order": [
+            "vanilla",
+            "eager",
+            "candidate"
+          ],
+          "peak_memory_mb": {
+            "candidate": 9.30078125,
+            "eager": 9.26611328125,
+            "vanilla": 8.9267578125
+          },
+          "seed": 20022
+        },
+        {
+          "comparisons": {
+            "candidate": {
+              "detail": "synaptic_transformer_cached_tq1_decode (63.1 tok/s) vs standard_transformer_cached_tq1_decode (203.4 tok/s): slowdown=3.22x (budget <= 1.50x)",
+              "max_ratio": 1.5,
+              "mode": "decode",
+              "passed": false,
+              "slowdown_ratio": 3.2215807385562596,
+              "standard_name": "standard_transformer_cached_tq1_decode",
+              "standard_tok_per_sec": 203.40704526584335,
+              "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+              "synaptic_tok_per_sec": 63.13889415573037
+            },
+            "eager": {
+              "detail": "synaptic_transformer_cached_tq1_decode (50.9 tok/s) vs standard_transformer_cached_tq1_decode (203.4 tok/s): slowdown=4.00x (budget <= 1.50x)",
+              "max_ratio": 1.5,
+              "mode": "decode",
+              "passed": false,
+              "slowdown_ratio": 3.9951542692856528,
+              "standard_name": "standard_transformer_cached_tq1_decode",
+              "standard_tok_per_sec": 203.40704526584335,
+              "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+              "synaptic_tok_per_sec": 50.91343952087568
+            }
+          },
+          "order": [
+            "candidate",
+            "eager",
+            "vanilla"
+          ],
+          "peak_memory_mb": {
+            "candidate": 9.30078125,
+            "eager": 9.26611328125,
+            "vanilla": 8.9267578125
+          },
+          "seed": 20023
+        },
+        {
+          "comparisons": {
+            "candidate": {
+              "detail": "synaptic_transformer_cached_tq1_decode (107.2 tok/s) vs standard_transformer_cached_tq1_decode (121.8 tok/s): slowdown=1.14x (budget <= 1.50x)",
+              "max_ratio": 1.5,
+              "mode": "decode",
+              "passed": true,
+              "slowdown_ratio": 1.1360849189030442,
+              "standard_name": "standard_transformer_cached_tq1_decode",
+              "standard_tok_per_sec": 121.80974943520211,
+              "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+              "synaptic_tok_per_sec": 107.21887722338262
+            },
+            "eager": {
+              "detail": "synaptic_transformer_cached_tq1_decode (38.9 tok/s) vs standard_transformer_cached_tq1_decode (121.8 tok/s): slowdown=3.13x (budget <= 1.50x)",
+              "max_ratio": 1.5,
+              "mode": "decode",
+              "passed": false,
+              "slowdown_ratio": 3.1330404146076054,
+              "standard_name": "standard_transformer_cached_tq1_decode",
+              "standard_tok_per_sec": 121.80974943520211,
+              "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+              "synaptic_tok_per_sec": 38.879086547135415
+            }
+          },
+          "order": [
+            "vanilla",
+            "eager",
+            "candidate"
+          ],
+          "peak_memory_mb": {
+            "candidate": 9.30078125,
+            "eager": 9.26611328125,
+            "vanilla": 8.9267578125
+          },
+          "seed": 20024
+        },
+        {
+          "comparisons": {
+            "candidate": {
+              "detail": "synaptic_transformer_cached_tq1_decode (107.3 tok/s) vs standard_transformer_cached_tq1_decode (211.7 tok/s): slowdown=1.97x (budget <= 1.50x)",
+              "max_ratio": 1.5,
+              "mode": "decode",
+              "passed": false,
+              "slowdown_ratio": 1.9729126480982044,
+              "standard_name": "standard_transformer_cached_tq1_decode",
+              "standard_tok_per_sec": 211.73621378625714,
+              "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+              "synaptic_tok_per_sec": 107.32163635848802
+            },
+            "eager": {
+              "detail": "synaptic_transformer_cached_tq1_decode (84.9 tok/s) vs standard_transformer_cached_tq1_decode (211.7 tok/s): slowdown=2.49x (budget <= 1.50x)",
+              "max_ratio": 1.5,
+              "mode": "decode",
+              "passed": false,
+              "slowdown_ratio": 2.4943426721722135,
+              "standard_name": "standard_transformer_cached_tq1_decode",
+              "standard_tok_per_sec": 211.73621378625714,
+              "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+              "synaptic_tok_per_sec": 84.88657799446031
+            }
+          },
+          "order": [
+            "candidate",
+            "eager",
+            "vanilla"
+          ],
+          "peak_memory_mb": {
+            "candidate": 9.30078125,
+            "eager": 9.26611328125,
+            "vanilla": 8.9267578125
+          },
+          "seed": 20025
+        },
+        {
+          "comparisons": {
+            "candidate": {
+              "detail": "synaptic_transformer_cached_tq1_decode (76.9 tok/s) vs standard_transformer_cached_tq1_decode (177.0 tok/s): slowdown=2.30x (budget <= 1.50x)",
+              "max_ratio": 1.5,
+              "mode": "decode",
+              "passed": false,
+              "slowdown_ratio": 2.300384953433433,
+              "standard_name": "standard_transformer_cached_tq1_decode",
+              "standard_tok_per_sec": 177.00897356317714,
+              "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+              "synaptic_tok_per_sec": 76.94754449640392
+            },
+            "eager": {
+              "detail": "synaptic_transformer_cached_tq1_decode (118.5 tok/s) vs standard_transformer_cached_tq1_decode (177.0 tok/s): slowdown=1.49x (budget <= 1.50x)",
+              "max_ratio": 1.5,
+              "mode": "decode",
+              "passed": true,
+              "slowdown_ratio": 1.49320093072843,
+              "standard_name": "standard_transformer_cached_tq1_decode",
+              "standard_tok_per_sec": 177.00897356317714,
+              "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+              "synaptic_tok_per_sec": 118.54330513765929
+            }
+          },
+          "order": [
+            "vanilla",
+            "eager",
+            "candidate"
+          ],
+          "peak_memory_mb": {
+            "candidate": 9.30078125,
+            "eager": 9.26611328125,
+            "vanilla": 8.9267578125
+          },
+          "seed": 20026
+        },
+        {
+          "comparisons": {
+            "candidate": {
+              "detail": "synaptic_transformer_cached_tq1_decode (123.0 tok/s) vs standard_transformer_cached_tq1_decode (174.4 tok/s): slowdown=1.42x (budget <= 1.50x)",
+              "max_ratio": 1.5,
+              "mode": "decode",
+              "passed": true,
+              "slowdown_ratio": 1.4179447255418811,
+              "standard_name": "standard_transformer_cached_tq1_decode",
+              "standard_tok_per_sec": 174.38079245687797,
+              "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+              "synaptic_tok_per_sec": 122.98137530730381
+            },
+            "eager": {
+              "detail": "synaptic_transformer_cached_tq1_decode (80.9 tok/s) vs standard_transformer_cached_tq1_decode (174.4 tok/s): slowdown=2.16x (budget <= 1.50x)",
+              "max_ratio": 1.5,
+              "mode": "decode",
+              "passed": false,
+              "slowdown_ratio": 2.1565031981441316,
+              "standard_name": "standard_transformer_cached_tq1_decode",
+              "standard_tok_per_sec": 174.38079245687797,
+              "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+              "synaptic_tok_per_sec": 80.86275624675568
+            }
+          },
+          "order": [
+            "candidate",
+            "eager",
+            "vanilla"
+          ],
+          "peak_memory_mb": {
+            "candidate": 9.30078125,
+            "eager": 9.26611328125,
+            "vanilla": 8.9267578125
+          },
+          "seed": 20027
+        }
+      ]
+    },
+    "warmed_heldout_run": {
+      "checks": [
+        {
+          "duration_ms": 177146,
+          "exit_code": 0,
+          "log_sha256": "2f352fec0f5ae706ca8a13a68fb32be79f1c09b0ea77ec40971a2d2747cc0ad2",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 95260,
+          "exit_code": 1,
+          "log_sha256": "88eb95a18a7c36ba61e81b0caafa2d43ce72b1e69f4c21f16f3a240c28bfd787",
+          "status": "failed"
+        }
+      ],
+      "receipt_sha256": "e3834f38cbe5a4209d8042d151e67cbb757e17a016e7c12c6628064b2f15774e",
+      "run_id": "550138d6-f281-42e1-845d-35d7b5173c42",
+      "source_before": "a83d76779fd592b9668d6f2ed6b475b341bc36b1|c32a3acb585f760c03fc78ba45fe1a4eb064da46f1ed33b61e2a9f59e60aeecc|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "stable_source_and_config": true,
+      "status": "failed"
+    }
+  },
+  "date": "2026-11-24",
+  "device": "NVIDIA GeForce RTX 4090",
+  "driver": "595.99.02",
+  "float_pad": {
+    "first_failing_fixture": {
+      "batch": 1,
+      "delay_depth": 0,
+      "expected_bits": "0x80000000",
+      "field": "PR",
+      "heads": 4,
+      "new_keys": 17,
+      "observed_bits": "0x00000000",
+      "old_keys": 16
+    },
+    "nsight": {
+      "sqlite_sha256": "7754110876804cd15d92f417ecea53c462e57233141591d4965cd353cc7db0aa",
+      "windows": {
+        "candidate": {
+          "all_kernel_counts": {
+            "CatArrayBatchedCopy_alignedK_contig": 800,
+            "_pad_decode_state_kernel": 400,
+            "bitonicSortKVInPlace": 400,
+            "elementwise_kernel": 2800,
+            "gatherTopK": 400,
+            "gemvNSP_kernel": 1200,
+            "indexSelectSmallIndex": 200,
+            "kernel": 2200,
+            "presyn_live_decode_kernel": 400,
+            "softmax_warp_forward": 400,
+            "vectorized_elementwise_kernel": 7000,
+            "vectorized_layer_norm_kernel": 1800
+          },
+          "cat_launches": 800,
+          "kernel_busy_ms": 32.208717,
+          "kernel_busy_percent": 0.3113542533574528,
+          "kernel_busy_percent_by_bin": [
+            1.7922935583004627,
+            1.5074844191970758,
+            1.9144612285776164,
+            0.6050402228492047,
+            0.014910025766581613,
+            0.010146241600495372,
+            0.008568624766272006,
+            0.008229321145676172,
+            0.009558501995588628,
+            0.06366341266438874,
+            1.3073967841286178,
+            1.3339059669992719,
+            1.3803692961273026,
+            1.4965986697055382,
+            0.9361908897809212,
+            0.02103489112297821,
+            0.010857715859066693,
+            0.007208510252943405,
+            0.015528699034904501,
+            0.01481722477633318,
+            0.003186167331862876,
+            0.011477355804371337,
+            0.005846462385651297,
+            0.001670417824471799,
+            0.09351439786096812,
+            0.778022235349266,
+            0.8309826004716687,
+            1.0148261955387239,
+            0.9695016118952,
+            0.23701469577148035,
+            0.0032171009952790203,
+            0.004794717829502386,
+            0.0048565851563346744,
+            0.004177011238161252,
+            0.005011253473415397,
+            0.0036820726235029413,
+            0.0015466831708072213,
+            0.015528699034904501,
+            0.0022272237659623985,
+            0.13391279560547098,
+            0.48198610977978207,
+            0.6946250787793407,
+            0.7150364632490872,
+            0.5890803858804377,
+            0.24314439451278572,
+            0.0015466831708072213,
+            0.003062432678198298,
+            0.009960639619998506,
+            0.004021376244098775,
+            0.002196290102546254,
+            0.011785725761551026,
+            0.0042688455514279305,
+            0.02122145978045683,
+            0.00482565149291853,
+            0.004794717829502386,
+            0.2684471645102101,
+            0.6607575507235712,
+            0.7161288082384698,
+            0.7914455119179091,
+            0.7465936333184633,
+            0.0852241760654414,
+            0.006960074268632496,
+            0.0038976415904341975,
+            0.006155799019812741,
+            0.006094898369962206,
+            0.0015776168342233657,
+            0.004641016189403419,
+            0.012404399029873914,
+            0.0036192386196888977,
+            0.01481722477633318,
+            0.45161215233607355,
+            0.40672160665735746,
+            0.45720341199854164,
+            0.38782017163311144,
+            0.2729035453960984,
+            0.0022272237659623985,
+            0.0025674940635399875,
+            0.008537691102855861,
+            0.004392580205092508,
+            0.0008970762390681883,
+            0.014662556459252457,
+            0.004145110897763353,
+            0.0016394841610556546,
+            0.001670417824471799,
+            0.005228755794310163,
+            0.0027221623806207096,
+            0.003866707927018053,
+            0.12528133683538492,
+            0.4555059272185807,
+            1.0364816932839884,
+            1.751887427140106,
+            1.2563562394919796,
+            0.044420740665583394,
+            0.014137650858159757,
+            0.016116438639811246,
+            0.00754781387353924,
+            0.009249165361427183,
+            0.007331278229626229,
+            0.03542001128846712,
+            1.6432899683328221
+          ],
+          "kernel_count": 18000,
+          "kernel_time_by_name_ms": {
+            "bitonicSortKVInPlace": 1.608596,
+            "elementwise_kernel": 3.716855,
+            "gatherTopK": 1.773054,
+            "gemvNSP_kernel": 2.082756,
+            "kernel": 3.522801,
+            "presyn_live_decode_kernel": 5.129575,
+            "vectorized_elementwise_kernel": 7.685827,
+            "vectorized_layer_norm_kernel": 3.572373
+          },
+          "name": "cached_decode_candidate",
+          "pad_launches": 400,
+          "runtime_api_time_by_name_ms": {
+            "cuLaunchKernelEx": 184.448749,
+            "cudaDeviceSynchronize_v3020": 0.164948,
+            "cudaLaunchKernel_v7000": 2140.368978
+          },
+          "steps": 200,
+          "wall_ms": 10344.7172
+        },
+        "eager": {
+          "all_kernel_counts": {
+            "CatArrayBatchedCopy_alignedK_contig": 5200,
+            "bitonicSortKVInPlace": 400,
+            "elementwise_kernel": 2800,
+            "gatherTopK": 400,
+            "gemvNSP_kernel": 1200,
+            "indexSelectSmallIndex": 200,
+            "kernel": 2200,
+            "presyn_live_decode_kernel": 400,
+            "softmax_warp_forward": 400,
+            "vectorized_elementwise_kernel": 9800,
+            "vectorized_layer_norm_kernel": 1800
+          },
+          "cat_launches": 5200,
+          "kernel_busy_ms": 40.084194,
+          "kernel_busy_percent": 0.7454735667226692,
+          "kernel_busy_percent_by_bin": [
+            1.8956201464203866,
+            2.2625228872517793,
+            1.6469652618142407,
+            2.5366994341298224,
+            2.2534695299477545,
+            0.05534673651762053,
+            0.01600889475617196,
+            0.022793333849977275,
+            0.014937667597766402,
+            0.06838186004759372,
+            0.028863620657038666,
+            0.025828477521906364,
+            0.011904383751656217,
+            0.010176658004852807,
+            0.012737560430416097,
+            0.03564805998991224,
+            0.9824417685752092,
+            2.0392854706559267,
+            2.3992270947270553,
+            2.287633535860362,
+            1.3522122737785836,
+            0.859853210635173,
+            1.2339495393983586,
+            1.9323971216944016,
+            1.6445475616303393,
+            0.3251230218842038,
+            0.012916098530360002,
+            0.027078242059696066,
+            0.04606834711955572,
+            0.02505481298270779,
+            0.030172898856236235,
+            0.0059512619911419925,
+            0.006129799850876252,
+            0.013628389959715164,
+            0.006962976659131439,
+            0.006070287230964833,
+            0.009641044425650029,
+            0.40052551131197284,
+            0.9677570476101154,
+            1.049397185514301,
+            2.656340210438112,
+            1.673708745386935,
+            1.0123877938349648,
+            2.5575864567725994,
+            1.686790363151214,
+            1.1128506567254803,
+            0.06915552539257547,
+            0.009999979914490779,
+            0.010831296823878426,
+            0.019044038725829576,
+            0.04136127083843685,
+            0.021067467448642654,
+            0.010117145384941387,
+            0.02707824256328893,
+            0.01618743261590622,
+            0.010176658004852807,
+            0.019579651950857157,
+            0.02892313381485367,
+            0.19407437306988484,
+            1.4224836595083648,
+            1.4342708777895703,
+            2.9741897296205866,
+            2.1256513005330024,
+            1.460406216777545,
+            1.6078208360675044,
+            3.234728545360715,
+            1.9106247657155533,
+            0.12706130328025378,
+            0.018210861692894497,
+            0.024876275585614886,
+            0.027554343018987428,
+            0.021484055788022594,
+            0.03511244574773776,
+            0.028567917858151184,
+            0.03683831172516894,
+            0.0032136814752166763,
+            0.00928396887884192,
+            0.40874197239849325,
+            1.3240646643298541,
+            2.7093622352404427,
+            2.011024452675908,
+            1.2968543786447295,
+            0.7421930415315513,
+            1.589251038885769,
+            1.5358663876194258,
+            2.82021936798044,
+            1.1888445528136191,
+            0.016726765733853465,
+            0.003035143671929089,
+            0.0059512619911419925,
+            0.038625550091883766,
+            0.0510618278839983,
+            0.008452651953993693,
+            0.001725865977431178,
+            0.02630457800084761,
+            0.010117145384941387,
+            0.15445756877515607,
+            0.23059652400177436,
+            1.3406686852851402,
+            0.7916424640925487
+          ],
+          "kernel_count": 24800,
+          "kernel_time_by_name_ms": {
+            "CatArrayBatchedCopy_alignedK_contig": 7.512469,
+            "elementwise_kernel": 3.720542,
+            "gatherTopK": 1.778454,
+            "gemvNSP_kernel": 2.08016,
+            "kernel": 3.51724,
+            "presyn_live_decode_kernel": 5.076456,
+            "vectorized_elementwise_kernel": 10.252479,
+            "vectorized_layer_norm_kernel": 3.583355
+          },
+          "name": "cached_decode_eager",
+          "pad_launches": 0,
+          "runtime_api_time_by_name_ms": {
+            "cuLaunchKernelEx": 43.919364,
+            "cuModuleLoadData": 5.078631,
+            "cudaDeviceSynchronize_v3020": 0.123992,
+            "cudaLaunchKernel_v7000": 1254.671038
+          },
+          "steps": 200,
+          "wall_ms": 5377.010774
+        },
+        "vanilla": {
+          "all_kernel_counts": {
+            "CatArrayBatchedCopy_alignedK_contig": 800,
+            "dot_kernel": 400,
+            "elementwise_kernel": 4000,
+            "fmha_cutlassF_f32_aligned_64x64_rf_sm80": 400,
+            "indexSelectSmallIndex": 200,
+            "kernel": 2200,
+            "reduce_1Block_kernel": 400,
+            "vectorized_elementwise_kernel": 4600,
+            "vectorized_layer_norm_kernel": 2000
+          },
+          "cat_launches": 800,
+          "kernel_busy_ms": 27.942731,
+          "kernel_busy_percent": 1.1073648949263457,
+          "kernel_busy_percent_by_bin": [
+            3.148651064995409,
+            0.9189160377251939,
+            0.13696455926607193,
+            0.0,
+            0.01724688990266326,
+            0.015598290132555743,
+            0.021304980800154208,
+            0.015978736233349788,
+            0.01724688990266326,
+            0.005960322245773333,
+            0.006213952979636028,
+            0.006340768346567376,
+            0.006467583713498723,
+            0.0,
+            0.017758114350605255,
+            0.0202904587090156,
+            0.006467583713498723,
+            0.041975886454276023,
+            0.012305053572557314,
+            0.010272044721439149,
+            0.0361463411231783,
+            0.01737370526959461,
+            0.006340768346567376,
+            0.0,
+            0.00913070641905702,
+            0.0,
+            0.014837397342964537,
+            0.005960322245773333,
+            0.006340768346567376,
+            0.006340768346567376,
+            0.0,
+            0.0,
+            0.006340768346567376,
+            0.013696059085813419,
+            0.02422569806410398,
+            0.03842505618019829,
+            0.0101452293545078,
+            0.05922277635693929,
+            1.9701084291202164,
+            2.154624788005327,
+            2.6192999665207446,
+            2.535839706961391,
+            3.2733939180538916,
+            2.8859808980390578,
+            2.7684230528936986,
+            2.0134990995118205,
+            2.400646504714995,
+            2.8087463765976506,
+            3.1859388706338607,
+            2.617516729225612,
+            2.9613250779171447,
+            2.7955773933378736,
+            2.909061294820563,
+            2.346238751477399,
+            2.953957897694477,
+            2.868218820708236,
+            3.3440181884940023,
+            2.0738869920524414,
+            0.2543955890444997,
+            0.18477791557940654,
+            0.029674794685929075,
+            0.05047647901889291,
+            0.04248314792200142,
+            0.02346084288229929,
+            0.08737975079591503,
+            0.02346084288229929,
+            0.009130706057208946,
+            0.021051350910603686,
+            0.012681536693134751,
+            0.0,
+            0.006467583713498723,
+            0.037917794712472905,
+            0.006340768346567376,
+            0.035888747419307386,
+            0.01838822820504539,
+            0.09270203322681503,
+            0.017250852882879867,
+            0.1329064675242688,
+            0.07063615938076057,
+            0.0,
+            0.09980368981977,
+            0.34595628396893263,
+            2.8447738297468033,
+            4.241522244108881,
+            4.357078784244855,
+            2.871147463088307,
+            2.8682266330014152,
+            2.4357625675514747,
+            2.751172200010819,
+            0.869842453702979,
+            1.3418492494214544,
+            2.0734748421099143,
+            3.0565475665617203,
+            4.661800074313802,
+            5.255161434971359,
+            1.5588461941618563,
+            2.2686397288370417,
+            1.9824174456729904,
+            1.8743469751661825,
+            3.653859833749017
+          ],
+          "kernel_count": 15000,
+          "kernel_time_by_name_ms": {
+            "CatArrayBatchedCopy_alignedK_contig": 1.256258,
+            "dot_kernel": 0.589926,
+            "elementwise_kernel": 5.970308,
+            "fmha_cutlassF_f32_aligned_64x64_rf_sm80": 7.619022,
+            "kernel": 3.554144,
+            "reduce_1Block_kernel": 0.512803,
+            "vectorized_elementwise_kernel": 4.984332,
+            "vectorized_layer_norm_kernel": 3.106971
+          },
+          "name": "cached_decode_vanilla",
+          "pad_launches": 0,
+          "runtime_api_time_by_name_ms": {
+            "cudaDeviceSynchronize_v3020": 0.163486,
+            "cudaLaunchKernel_v7000": 625.908336,
+            "cudaStreamIsCapturing_v10000": 1.721817
+          },
+          "steps": 200,
+          "wall_ms": 2523.353515
+        }
+      }
+    },
+    "nsight_summary_run": {
+      "checks": [
+        {
+          "duration_ms": 27387,
+          "exit_code": 0,
+          "log_sha256": "a84499e80b4b8ca4aaaba73c40c974f9c8a0191bbd6c0b428ead9d0bbe67f40d",
+          "status": "passed"
+        }
+      ],
+      "receipt_sha256": "2d561016fef28bf25abb531719137fa3282f8a923ee8621acc1d948aebad7e33",
+      "run_id": "da453f03-c1a9-469c-8b14-2f93d4d50522",
+      "source_before": "a83d76779fd592b9668d6f2ed6b475b341bc36b1|926f18c3c1dbb3889a778cc20d93360ef34bb4383c363cb6613ab12199550775|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "stable_source_and_config": true,
+      "status": "passed"
+    },
+    "outcome": "Rejected. Float masked loads normalized a negative zero to a positive zero. Timing is diagnostic.",
+    "paired_timing": {
+      "gate_passes": {
+        "candidate": 1,
+        "eager": 2
+      },
+      "median_paired_improvement": -0.07231274474822791,
+      "median_ratios": {
+        "candidate": 1.9684306431378875,
+        "eager": 1.9122918990306674
+      },
+      "runs": [
+        {
+          "comparisons": {
+            "candidate": {
+              "detail": "synaptic_transformer_cached_tq1_decode (134.5 tok/s) vs standard_transformer_cached_tq1_decode (413.5 tok/s): slowdown=3.07x (budget <= 1.50x)",
+              "max_ratio": 1.5,
+              "mode": "decode",
+              "passed": false,
+              "slowdown_ratio": 3.0748367959335976,
+              "standard_name": "standard_transformer_cached_tq1_decode",
+              "standard_tok_per_sec": 413.47501358783586,
+              "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+              "synaptic_tok_per_sec": 134.47055600955707
+            },
+            "eager": {
+              "detail": "synaptic_transformer_cached_tq1_decode (66.8 tok/s) vs standard_transformer_cached_tq1_decode (413.5 tok/s): slowdown=6.19x (budget <= 1.50x)",
+              "max_ratio": 1.5,
+              "mode": "decode",
+              "passed": false,
+              "slowdown_ratio": 6.190677418302891,
+              "standard_name": "standard_transformer_cached_tq1_decode",
+              "standard_tok_per_sec": 413.47501358783586,
+              "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+              "synaptic_tok_per_sec": 66.78994650333205
+            }
+          },
+          "order": [
+            "vanilla",
+            "eager",
+            "candidate"
+          ],
+          "peak_memory_mb": {
+            "candidate": 9.30078125,
+            "eager": 9.26611328125,
+            "vanilla": 8.9267578125
+          },
+          "seed": 20010
+        },
+        {
+          "comparisons": {
+            "candidate": {
+              "detail": "synaptic_transformer_cached_tq1_decode (105.5 tok/s) vs standard_transformer_cached_tq1_decode (215.8 tok/s): slowdown=2.05x (budget <= 1.50x)",
+              "max_ratio": 1.5,
+              "mode": "decode",
+              "passed": false,
+              "slowdown_ratio": 2.046893567270764,
+              "standard_name": "standard_transformer_cached_tq1_decode",
+              "standard_tok_per_sec": 215.84946439799143,
+              "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+              "synaptic_tok_per_sec": 105.45221688580291
+            },
+            "eager": {
+              "detail": "synaptic_transformer_cached_tq1_decode (121.4 tok/s) vs standard_transformer_cached_tq1_decode (215.8 tok/s): slowdown=1.78x (budget <= 1.50x)",
+              "max_ratio": 1.5,
+              "mode": "decode",
+              "passed": false,
+              "slowdown_ratio": 1.7782826127279285,
+              "standard_name": "standard_transformer_cached_tq1_decode",
+              "standard_tok_per_sec": 215.84946439799143,
+              "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+              "synaptic_tok_per_sec": 121.38085524374168
+            }
+          },
+          "order": [
+            "candidate",
+            "eager",
+            "vanilla"
+          ],
+          "peak_memory_mb": {
+            "candidate": 9.30078125,
+            "eager": 9.26611328125,
+            "vanilla": 8.9267578125
+          },
+          "seed": 20011
+        },
+        {
+          "comparisons": {
+            "candidate": {
+              "detail": "synaptic_transformer_cached_tq1_decode (156.5 tok/s) vs standard_transformer_cached_tq1_decode (246.4 tok/s): slowdown=1.57x (budget <= 1.50x)",
+              "max_ratio": 1.5,
+              "mode": "decode",
+              "passed": false,
+              "slowdown_ratio": 1.5745895717327416,
+              "standard_name": "standard_transformer_cached_tq1_decode",
+              "standard_tok_per_sec": 246.37326123665244,
+              "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+              "synaptic_tok_per_sec": 156.4682414132423
+            },
+            "eager": {
+              "detail": "synaptic_transformer_cached_tq1_decode (201.7 tok/s) vs standard_transformer_cached_tq1_decode (246.4 tok/s): slowdown=1.22x (budget <= 1.50x)",
+              "max_ratio": 1.5,
+              "mode": "decode",
+              "passed": true,
+              "slowdown_ratio": 1.2217009810261585,
+              "standard_name": "standard_transformer_cached_tq1_decode",
+              "standard_tok_per_sec": 246.37326123665244,
+              "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+              "synaptic_tok_per_sec": 201.6641265440526
+            }
+          },
+          "order": [
+            "vanilla",
+            "eager",
+            "candidate"
+          ],
+          "peak_memory_mb": {
+            "candidate": 9.30078125,
+            "eager": 9.26611328125,
+            "vanilla": 8.9267578125
+          },
+          "seed": 20012
+        },
+        {
+          "comparisons": {
+            "candidate": {
+              "detail": "synaptic_transformer_cached_tq1_decode (214.4 tok/s) vs standard_transformer_cached_tq1_decode (290.2 tok/s): slowdown=1.35x (budget <= 1.50x)",
+              "max_ratio": 1.5,
+              "mode": "decode",
+              "passed": true,
+              "slowdown_ratio": 1.3538447060260597,
+              "standard_name": "standard_transformer_cached_tq1_decode",
+              "standard_tok_per_sec": 290.199020016866,
+              "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+              "synaptic_tok_per_sec": 214.35177810657999
+            },
+            "eager": {
+              "detail": "synaptic_transformer_cached_tq1_decode (213.0 tok/s) vs standard_transformer_cached_tq1_decode (290.2 tok/s): slowdown=1.36x (budget <= 1.50x)",
+              "max_ratio": 1.5,
+              "mode": "decode",
+              "passed": true,
+              "slowdown_ratio": 1.3625997892907993,
+              "standard_name": "standard_transformer_cached_tq1_decode",
+              "standard_tok_per_sec": 290.199020016866,
+              "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+              "synaptic_tok_per_sec": 212.97450821411593
+            }
+          },
+          "order": [
+            "candidate",
+            "eager",
+            "vanilla"
+          ],
+          "peak_memory_mb": {
+            "candidate": 9.30078125,
+            "eager": 9.26611328125,
+            "vanilla": 8.9267578125
+          },
+          "seed": 20013
+        },
+        {
+          "comparisons": {
+            "candidate": {
+              "detail": "synaptic_transformer_cached_tq1_decode (212.3 tok/s) vs standard_transformer_cached_tq1_decode (401.3 tok/s): slowdown=1.89x (budget <= 1.50x)",
+              "max_ratio": 1.5,
+              "mode": "decode",
+              "passed": false,
+              "slowdown_ratio": 1.889967719005011,
+              "standard_name": "standard_transformer_cached_tq1_decode",
+              "standard_tok_per_sec": 401.28896154472136,
+              "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+              "synaptic_tok_per_sec": 212.32582837763135
+            },
+            "eager": {
+              "detail": "synaptic_transformer_cached_tq1_decode (194.8 tok/s) vs standard_transformer_cached_tq1_decode (401.3 tok/s): slowdown=2.06x (budget <= 1.50x)",
+              "max_ratio": 1.5,
+              "mode": "decode",
+              "passed": false,
+              "slowdown_ratio": 2.059642445094105,
+              "standard_name": "standard_transformer_cached_tq1_decode",
+              "standard_tok_per_sec": 401.28896154472136,
+              "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+              "synaptic_tok_per_sec": 194.83428422275813
+            }
+          },
+          "order": [
+            "vanilla",
+            "eager",
+            "candidate"
+          ],
+          "peak_memory_mb": {
+            "candidate": 9.30078125,
+            "eager": 9.26611328125,
+            "vanilla": 8.9267578125
+          },
+          "seed": 20014
+        },
+        {
+          "comparisons": {
+            "candidate": {
+              "detail": "synaptic_transformer_cached_tq1_decode (111.9 tok/s) vs standard_transformer_cached_tq1_decode (353.5 tok/s): slowdown=3.16x (budget <= 1.50x)",
+              "max_ratio": 1.5,
+              "mode": "decode",
+              "passed": false,
+              "slowdown_ratio": 3.1583481435389347,
+              "standard_name": "standard_transformer_cached_tq1_decode",
+              "standard_tok_per_sec": 353.4977024898262,
+              "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+              "synaptic_tok_per_sec": 111.92486908480312
+            },
+            "eager": {
+              "detail": "synaptic_transformer_cached_tq1_decode (172.7 tok/s) vs standard_transformer_cached_tq1_decode (353.5 tok/s): slowdown=2.05x (budget <= 1.50x)",
+              "max_ratio": 1.5,
+              "mode": "decode",
+              "passed": false,
+              "slowdown_ratio": 2.0463011853334065,
+              "standard_name": "standard_transformer_cached_tq1_decode",
+              "standard_tok_per_sec": 353.4977024898262,
+              "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+              "synaptic_tok_per_sec": 172.7495957210377
+            }
+          },
+          "order": [
+            "candidate",
+            "eager",
+            "vanilla"
+          ],
+          "peak_memory_mb": {
+            "candidate": 9.30078125,
+            "eager": 9.26611328125,
+            "vanilla": 8.9267578125
+          },
+          "seed": 20015
+        }
+      ]
+    },
+    "run": {
+      "checks": [
+        {
+          "duration_ms": 31576,
+          "exit_code": 1,
+          "log_sha256": "a3584142670bf8429bbb1fb836a51fd4825ed0c50400d184dbcb129287b3fdc9",
+          "status": "failed"
+        },
+        {
+          "duration_ms": 70651,
+          "exit_code": 0,
+          "log_sha256": "9b8f9dd50b479f302450589874c0c068f6f2ca81e3870ed90c13ac4833897769",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 180448,
+          "exit_code": 0,
+          "log_sha256": "1c37171804c0b487138762a60fe3f193de0577d859af164d7de1450797e37622",
+          "status": "passed"
+        }
+      ],
+      "receipt_sha256": "24d44225f89970aeefce1d498a67b4ddc9400ea4195ace6e6a4555bbb2ed27d6",
+      "run_id": "dcd39b8c-33a3-45cf-832e-798f8b60d280",
+      "source_before": "a83d76779fd592b9668d6f2ed6b475b341bc36b1|926f18c3c1dbb3889a778cc20d93360ef34bb4383c363cb6613ab12199550775|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "stable_source_and_config": true,
+      "status": "failed"
+    }
+  },
+  "graphs": {
+    "composition_run": {
+      "checks": [
+        {
+          "duration_ms": 154658,
+          "exit_code": 0,
+          "log_sha256": "c07575cfa2c208c9c7944bcefb82d251c33f6bedf71dc7237730d7b26c138cc3",
+          "status": "passed"
+        }
+      ],
+      "receipt_sha256": "8cf45e2c7e603ecd1a7ff29415615f5d41793655a78ab0b11c7b500e94cf75c5",
+      "run_id": "8ee9e3dd-596b-4962-b314-19685b5d5ba1",
+      "source_before": "a83d76779fd592b9668d6f2ed6b475b341bc36b1|c32a3acb585f760c03fc78ba45fe1a4eb064da46f1ed33b61e2a9f59e60aeecc|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "stable_source_and_config": true,
+      "status": "passed"
+    },
+    "excluded_comparator_unpacking_error": {
+      "checks": [
+        {
+          "duration_ms": 95860,
+          "exit_code": 1,
+          "log_sha256": "c13159dc3ba057f69cc7c5845ad344e69bc0c971d0a1d5412d4887aad3d4c3b2",
+          "status": "failed"
+        }
+      ],
+      "receipt_sha256": "2e43300a4cdafcb9fc0bdd9d8cb03002c5f0f2988a2211c20655a959bd8a49b7",
+      "run_id": "26be02fd-3600-45d4-82ec-e240dcd6fb22",
+      "source_before": "a83d76779fd592b9668d6f2ed6b475b341bc36b1|b99ab6bc6e04b5a0c03cdc75946b02abd6ddca4010600b019ec5dd5d2b5fce0b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "stable_source_and_config": true,
+      "status": "failed"
+    },
+    "packed_composition": {
+      "forced": {
+        "eager_decode_ns_median_synaptic_over_vanilla": 2.6194832980426486,
+        "eager_decode_ns_median_synaptic_packed_over_vanilla": 2.5243914241834764,
+        "eager_total_ns_median_synaptic_over_vanilla": 2.6714642703800937,
+        "eager_total_ns_median_synaptic_packed_over_vanilla": 3.012264905954212,
+        "graph_refresh_and_decode_ns_median_synaptic_over_vanilla": 1.5607639421644535,
+        "graph_refresh_and_decode_ns_median_synaptic_packed_over_vanilla": 1.2120195088190893,
+        "graph_total_ns_median_synaptic_over_vanilla": 2.3986489590697215,
+        "graph_total_ns_median_synaptic_packed_over_vanilla": 3.950021781323454,
+        "synaptic": {
+          "capture_ns": 7825226830,
+          "capture_peak_allocated_increase_bytes": 258048,
+          "captured_pad_launches": 0,
+          "decode_only_break_even_requests": 3,
+          "eager_decode_ns_median": 2915768310.0,
+          "eager_total_ns_median": 3253720427.0,
+          "graph_refresh_and_decode_ns_median": 42469109.5,
+          "graph_total_ns_median": 477225603.5,
+          "mode": "forced",
+          "requests": [
+            {
+              "eager_decode_ns": 2317635460,
+              "eager_prefix_ns": 351622286,
+              "exact_steps": 200,
+              "graph_prefix_ns": 423770875,
+              "graph_refresh_and_decode_ns": 38680133,
+              "seed": 34212
+            },
+            {
+              "eager_decode_ns": 3513901160,
+              "eager_prefix_ns": 426506506,
+              "exact_steps": 200,
+              "graph_prefix_ns": 524218255,
+              "graph_refresh_and_decode_ns": 45840655,
+              "seed": 34213
+            },
+            {
+              "eager_decode_ns": 3574469553,
+              "eager_prefix_ns": 263713555,
+              "exact_steps": 200,
+              "graph_prefix_ns": 403043137,
+              "graph_refresh_and_decode_ns": 57453763,
+              "seed": 34214
+            },
+            {
+              "eager_decode_ns": 2180871371,
+              "eager_prefix_ns": 437887709,
+              "exact_steps": 200,
+              "graph_prefix_ns": 452902635,
+              "graph_refresh_and_decode_ns": 39097564,
+              "seed": 34215
+            }
+          ],
+          "tokens_per_request": 200
+        },
+        "synaptic_packed": {
+          "capture_ns": 7152686542,
+          "capture_peak_allocated_increase_bytes": 294400,
+          "captured_pad_launches": 400,
+          "decode_only_break_even_requests": 3,
+          "eager_decode_ns_median": 2809920766.5,
+          "eager_total_ns_median": 3668799903.0,
+          "graph_refresh_and_decode_ns_median": 32979612.0,
+          "graph_total_ns_median": 785880535.5,
+          "mode": "forced",
+          "requests": [
+            {
+              "eager_decode_ns": 3333578167,
+              "eager_prefix_ns": 962929636,
+              "exact_steps": 200,
+              "graph_prefix_ns": 355854658,
+              "graph_refresh_and_decode_ns": 32819783,
+              "seed": 34212
+            },
+            {
+              "eager_decode_ns": 2286263366,
+              "eager_prefix_ns": 688854274,
+              "exact_steps": 200,
+              "graph_prefix_ns": 747217220,
+              "graph_refresh_and_decode_ns": 34109847,
+              "seed": 34213
+            },
+            {
+              "eager_decode_ns": 3824788597,
+              "eager_prefix_ns": 743726636,
+              "exact_steps": 200,
+              "graph_prefix_ns": 757483707,
+              "graph_refresh_and_decode_ns": 32950297,
+              "seed": 34214
+            },
+            {
+              "eager_decode_ns": 2009102239,
+              "eager_prefix_ns": 1031989764,
+              "exact_steps": 200,
+              "graph_prefix_ns": 1349988173,
+              "graph_refresh_and_decode_ns": 33008927,
+              "seed": 34215
+            }
+          ],
+          "tokens_per_request": 200
+        },
+        "vanilla": {
+          "capture_ns": 4598371189,
+          "capture_peak_allocated_increase_bytes": 8627712,
+          "captured_pad_launches": 0,
+          "decode_only_break_even_requests": 5,
+          "eager_decode_ns_median": 1113108189.0,
+          "eager_total_ns_median": 1217953937.5,
+          "graph_refresh_and_decode_ns_median": 27210463.0,
+          "graph_total_ns_median": 198956000.5,
+          "mode": "forced",
+          "requests": [
+            {
+              "eager_decode_ns": 1269064176,
+              "eager_prefix_ns": 113320677,
+              "exact_steps": 200,
+              "graph_prefix_ns": 77950460,
+              "graph_refresh_and_decode_ns": 26852474,
+              "seed": 34212
+            },
+            {
+              "eager_decode_ns": 957152202,
+              "eager_prefix_ns": 96370820,
+              "exact_steps": 200,
+              "graph_prefix_ns": 126557353,
+              "graph_refresh_and_decode_ns": 27156141,
+              "seed": 34213
+            },
+            {
+              "eager_decode_ns": 2064561349,
+              "eager_prefix_ns": 121714188,
+              "exact_steps": 200,
+              "graph_prefix_ns": 304768553,
+              "graph_refresh_and_decode_ns": 28553598,
+              "seed": 34214
+            },
+            {
+              "eager_decode_ns": 443185516,
+              "eager_prefix_ns": 152716098,
+              "exact_steps": 200,
+              "graph_prefix_ns": 216933722,
+              "graph_refresh_and_decode_ns": 27264785,
+              "seed": 34215
+            }
+          ],
+          "tokens_per_request": 200
+        }
+      },
+      "greedy": {
+        "eager_decode_ns_median_synaptic_over_vanilla": 2.2396452083964364,
+        "eager_decode_ns_median_synaptic_packed_over_vanilla": 1.6537078113005577,
+        "eager_total_ns_median_synaptic_over_vanilla": 3.0326894594624703,
+        "eager_total_ns_median_synaptic_packed_over_vanilla": 2.004889440336499,
+        "graph_refresh_and_decode_ns_median_synaptic_over_vanilla": 1.2210602660793124,
+        "graph_refresh_and_decode_ns_median_synaptic_packed_over_vanilla": 1.0017417673723439,
+        "graph_total_ns_median_synaptic_over_vanilla": 6.023217162989738,
+        "graph_total_ns_median_synaptic_packed_over_vanilla": 3.3443235937843827,
+        "synaptic": {
+          "capture_ns": 879528404,
+          "capture_peak_allocated_increase_bytes": 87552,
+          "captured_pad_launches": 0,
+          "decode_only_break_even_requests": 2,
+          "eager_decode_ns_median": 485277835.5,
+          "eager_total_ns_median": 1034185775.5,
+          "graph_refresh_and_decode_ns_median": 7761288.0,
+          "graph_total_ns_median": 1002341704.0,
+          "mode": "greedy",
+          "requests": [
+            {
+              "eager_decode_ns": 312340117,
+              "eager_prefix_ns": 729285135,
+              "exact_steps": 32,
+              "graph_prefix_ns": 673701522,
+              "graph_refresh_and_decode_ns": 8059926,
+              "seed": 34212
+            },
+            {
+              "eager_decode_ns": 502551639,
+              "eager_prefix_ns": 524194660,
+              "exact_steps": 32,
+              "graph_prefix_ns": 1015936897,
+              "graph_refresh_and_decode_ns": 7615094,
+              "seed": 34213
+            },
+            {
+              "eager_decode_ns": 468004032,
+              "eager_prefix_ns": 282500582,
+              "exact_steps": 32,
+              "graph_prefix_ns": 973223935,
+              "graph_refresh_and_decode_ns": 7907482,
+              "seed": 34214
+            },
+            {
+              "eager_decode_ns": 620455655,
+              "eager_prefix_ns": 797516231,
+              "exact_steps": 32,
+              "graph_prefix_ns": 1110440360,
+              "graph_refresh_and_decode_ns": 7199866,
+              "seed": 34215
+            }
+          ],
+          "tokens_per_request": 32
+        },
+        "synaptic_packed": {
+          "capture_ns": 864556889,
+          "capture_peak_allocated_increase_bytes": 94720,
+          "captured_pad_launches": 64,
+          "decode_only_break_even_requests": 3,
+          "eager_decode_ns_median": 358319141.0,
+          "eager_total_ns_median": 683692863.5,
+          "graph_refresh_and_decode_ns_median": 6367258.5,
+          "graph_total_ns_median": 556538959.0,
+          "mode": "greedy",
+          "requests": [
+            {
+              "eager_decode_ns": 619856223,
+              "eager_prefix_ns": 1212348505,
+              "exact_steps": 32,
+              "graph_prefix_ns": 289804563,
+              "graph_refresh_and_decode_ns": 8738547,
+              "seed": 34212
+            },
+            {
+              "eager_decode_ns": 242733826,
+              "eager_prefix_ns": 305436834,
+              "exact_steps": 32,
+              "graph_prefix_ns": 1781064021,
+              "graph_refresh_and_decode_ns": 5734183,
+              "seed": 34213
+            },
+            {
+              "eager_decode_ns": 285129803,
+              "eager_prefix_ns": 369812374,
+              "exact_steps": 32,
+              "graph_prefix_ns": 729405470,
+              "graph_refresh_and_decode_ns": 6358502,
+              "seed": 34214
+            },
+            {
+              "eager_decode_ns": 431508479,
+              "eager_prefix_ns": 280935071,
+              "exact_steps": 32,
+              "graph_prefix_ns": 370937931,
+              "graph_refresh_and_decode_ns": 6376015,
+              "seed": 34215
+            }
+          ],
+          "tokens_per_request": 32
+        },
+        "vanilla": {
+          "capture_ns": 425848674,
+          "capture_peak_allocated_increase_bytes": 37888,
+          "captured_pad_launches": 0,
+          "decode_only_break_even_requests": 3,
+          "eager_decode_ns_median": 216676210.0,
+          "eager_total_ns_median": 341012751.0,
+          "graph_refresh_and_decode_ns_median": 6356187.5,
+          "graph_total_ns_median": 166413011.0,
+          "mode": "greedy",
+          "requests": [
+            {
+              "eager_decode_ns": 218956579,
+              "eager_prefix_ns": 94792505,
+              "exact_steps": 32,
+              "graph_prefix_ns": 159840263,
+              "graph_refresh_and_decode_ns": 7703499,
+              "seed": 34212
+            },
+            {
+              "eager_decode_ns": 514043209,
+              "eager_prefix_ns": 188761399,
+              "exact_steps": 32,
+              "graph_prefix_ns": 260748295,
+              "graph_refresh_and_decode_ns": 8009533,
+              "seed": 34213
+            },
+            {
+              "eager_decode_ns": 214395841,
+              "eager_prefix_ns": 153880577,
+              "exact_steps": 32,
+              "graph_prefix_ns": 113326688,
+              "graph_refresh_and_decode_ns": 5008876,
+              "seed": 34214
+            },
+            {
+              "eager_decode_ns": 159403796,
+              "eager_prefix_ns": 96978367,
+              "exact_steps": 32,
+              "graph_prefix_ns": 160781976,
+              "graph_refresh_and_decode_ns": 4500284,
+              "seed": 34215
+            }
+          ],
+          "tokens_per_request": 32
+        }
+      }
+    },
+    "run": {
+      "checks": [
+        {
+          "duration_ms": 261991,
+          "exit_code": 0,
+          "log_sha256": "16f76e73b10dfbe77f31aed2dd646902606a6cc88e99bb324afafcff736588eb",
+          "status": "passed"
+        }
+      ],
+      "receipt_sha256": "215cf648ffcbce24d14a9e447de6e6b1a0209330ccd150926cec2a89596b18bc",
+      "run_id": "6338410e-ecd3-4caf-bcc1-2d416602ea00",
+      "source_before": "a83d76779fd592b9668d6f2ed6b475b341bc36b1|b99ab6bc6e04b5a0c03cdc75946b02abd6ddca4010600b019ec5dd5d2b5fce0b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "stable_source_and_config": true,
+      "status": "passed"
+    },
+    "scope": "Static batch and window geometry. Forced tokens or fixed-length device-greedy replay seeded by one supplied token. Start-of-window KV, recurrent state and input tensors are refreshed before replay. Graph total includes fresh prefill and 20 eager warmup forwards for each sampled request. Graph capture is separate. The initial net reserved-memory differences are allocator observations, including any concurrent cache trimming within the process.",
+    "timing_and_parity": {
+      "forced": {
+        "eager_decode_ns_median_synaptic_over_vanilla": 2.1581279875177524,
+        "eager_total_ns_median_synaptic_over_vanilla": 2.4181070441983517,
+        "graph_refresh_and_decode_ns_median_synaptic_over_vanilla": 1.5936027517663194,
+        "graph_total_ns_median_synaptic_over_vanilla": 3.507081027713412,
+        "synaptic": {
+          "capture_ns": 6911094503,
+          "decode_only_break_even_requests": 3,
+          "eager_decode_ns_median": 2507536583.0,
+          "eager_total_ns_median": 3177346920.0,
+          "extra_reserved_bytes_after_capture": -2097152,
+          "graph_refresh_and_decode_ns_median": 44105311.5,
+          "graph_total_ns_median": 471599020.0,
+          "mode": "forced",
+          "requests": [
+            {
+              "eager_decode_ns": 3846691334,
+              "eager_prefix_ns": 746884828,
+              "exact_steps": 200,
+              "graph_prefix_ns": 277653489,
+              "graph_refresh_and_decode_ns": 39925163,
+              "seed": 34202
+            },
+            {
+              "eager_decode_ns": 2142173924,
+              "eager_prefix_ns": 598609532,
+              "exact_steps": 200,
+              "graph_prefix_ns": 360623846,
+              "graph_refresh_and_decode_ns": 61729216,
+              "seed": 34203
+            },
+            {
+              "eager_decode_ns": 1659844405,
+              "eager_prefix_ns": 874849496,
+              "exact_steps": 200,
+              "graph_prefix_ns": 476506836,
+              "graph_refresh_and_decode_ns": 44338142,
+              "seed": 34204
+            },
+            {
+              "eager_decode_ns": 2872899242,
+              "eager_prefix_ns": 741011142,
+              "exact_steps": 200,
+              "graph_prefix_ns": 1116576235,
+              "graph_refresh_and_decode_ns": 43872481,
+              "seed": 34205
+            }
+          ],
+          "tokens_per_request": 200
+        },
+        "vanilla": {
+          "capture_ns": 3947386349,
+          "decode_only_break_even_requests": 4,
+          "eager_decode_ns_median": 1161903556.0,
+          "eager_total_ns_median": 1313981086.0,
+          "extra_reserved_bytes_after_capture": 25165824,
+          "graph_refresh_and_decode_ns_median": 27676478.0,
+          "graph_total_ns_median": 134470523.0,
+          "mode": "forced",
+          "requests": [
+            {
+              "eager_decode_ns": 1021706691,
+              "eager_prefix_ns": 158308391,
+              "exact_steps": 200,
+              "graph_prefix_ns": 77442809,
+              "graph_refresh_and_decode_ns": 27714915,
+              "seed": 34202
+            },
+            {
+              "eager_decode_ns": 1506187899,
+              "eager_prefix_ns": 115970411,
+              "exact_steps": 200,
+              "graph_prefix_ns": 135219870,
+              "graph_refresh_and_decode_ns": 27638041,
+              "seed": 34203
+            },
+            {
+              "eager_decode_ns": 974550618,
+              "eager_prefix_ns": 68636074,
+              "exact_steps": 200,
+              "graph_prefix_ns": 91792603,
+              "graph_refresh_and_decode_ns": 42326197,
+              "seed": 34204
+            },
+            {
+              "eager_decode_ns": 1302100421,
+              "eager_prefix_ns": 145846669,
+              "exact_steps": 200,
+              "graph_prefix_ns": 107340597,
+              "graph_refresh_and_decode_ns": 27481649,
+              "seed": 34205
+            }
+          ],
+          "tokens_per_request": 200
+        }
+      },
+      "greedy": {
+        "eager_decode_ns_median_synaptic_over_vanilla": 5.3542354065181685,
+        "eager_total_ns_median_synaptic_over_vanilla": 5.450166487359932,
+        "graph_refresh_and_decode_ns_median_synaptic_over_vanilla": 1.64333365986087,
+        "graph_total_ns_median_synaptic_over_vanilla": 10.173715576995068,
+        "synaptic": {
+          "capture_ns": 954745808,
+          "decode_only_break_even_requests": 2,
+          "eager_decode_ns_median": 624171269.5,
+          "eager_total_ns_median": 1228055019.5,
+          "extra_reserved_bytes_after_capture": -2097152,
+          "graph_refresh_and_decode_ns_median": 7909816.0,
+          "graph_total_ns_median": 689181538.0,
+          "mode": "greedy",
+          "requests": [
+            {
+              "eager_decode_ns": 1221810647,
+              "eager_prefix_ns": 1243068858,
+              "exact_steps": 32,
+              "graph_prefix_ns": 903998868,
+              "graph_refresh_and_decode_ns": 7862027,
+              "seed": 34202
+            },
+            {
+              "eager_decode_ns": 483386705,
+              "eager_prefix_ns": 590064718,
+              "exact_steps": 32,
+              "graph_prefix_ns": 564644677,
+              "graph_refresh_and_decode_ns": 7957605,
+              "seed": 34203
+            },
+            {
+              "eager_decode_ns": 231014469,
+              "eager_prefix_ns": 621102626,
+              "exact_steps": 32,
+              "graph_prefix_ns": 329261069,
+              "graph_refresh_and_decode_ns": 7154743,
+              "seed": 34204
+            },
+            {
+              "eager_decode_ns": 764955834,
+              "eager_prefix_ns": 617702782,
+              "exact_steps": 32,
+              "graph_prefix_ns": 768362591,
+              "graph_refresh_and_decode_ns": 37398203,
+              "seed": 34205
+            }
+          ],
+          "tokens_per_request": 32
+        },
+        "vanilla": {
+          "capture_ns": 358266662,
+          "decode_only_break_even_requests": 4,
+          "eager_decode_ns_median": 116575238.5,
+          "eager_total_ns_median": 225324313.0,
+          "extra_reserved_bytes_after_capture": -2097152,
+          "graph_refresh_and_decode_ns_median": 4813274.5,
+          "graph_total_ns_median": 67741380.5,
+          "mode": "greedy",
+          "requests": [
+            {
+              "eager_decode_ns": 94555261,
+              "eager_prefix_ns": 76555970,
+              "exact_steps": 32,
+              "graph_prefix_ns": 56817452,
+              "graph_refresh_and_decode_ns": 4781209,
+              "seed": 34202
+            },
+            {
+              "eager_decode_ns": 88172794,
+              "eager_prefix_ns": 57606109,
+              "exact_steps": 32,
+              "graph_prefix_ns": 62528513,
+              "graph_refresh_and_decode_ns": 4984921,
+              "seed": 34203
+            },
+            {
+              "eager_decode_ns": 138595216,
+              "eager_prefix_ns": 488894255,
+              "exact_steps": 32,
+              "graph_prefix_ns": 63330454,
+              "graph_refresh_and_decode_ns": 4638873,
+              "seed": 34204
+            },
+            {
+              "eager_decode_ns": 172094541,
+              "eager_prefix_ns": 107442854,
+              "exact_steps": 32,
+              "graph_prefix_ns": 65074227,
+              "graph_refresh_and_decode_ns": 4845340,
+              "seed": 34205
+            }
+          ],
+          "tokens_per_request": 32
+        }
+      }
+    }
+  },
+  "host_cpu_affinity": [
+    52
+  ],
+  "official_gate": {
+    "observation_sha256": "9c585bdabdb05e4048af3b3833e9c9005f5e728fe2ac3767c66d57b2601689b8",
+    "observations": {
+      "relative_budget": [
+        {
+          "detail": "synaptic_transformer_train (457.5 tok/s) vs standard_transformer_train (5182.6 tok/s): slowdown=11.33x (budget <= 2.00x)",
+          "max_ratio": 2.0,
+          "mode": "train",
+          "passed": false,
+          "slowdown_ratio": 11.328277945550527,
+          "standard_name": "standard_transformer_train",
+          "standard_tok_per_sec": 5182.63249040427,
+          "synaptic_name": "synaptic_transformer_train",
+          "synaptic_tok_per_sec": 457.4951740515762
+        },
+        {
+          "detail": "synaptic_transformer_cached_tq1_decode (105.2 tok/s) vs standard_transformer_cached_tq1_decode (315.6 tok/s): slowdown=3.00x (budget <= 1.50x)",
+          "max_ratio": 1.5,
+          "mode": "decode",
+          "passed": false,
+          "slowdown_ratio": 3.00065869140469,
+          "standard_name": "standard_transformer_cached_tq1_decode",
+          "standard_tok_per_sec": 315.5771956148217,
+          "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+          "synaptic_tok_per_sec": 105.16930716538488
+        }
+      ],
+      "results": [
+        {
+          "batch_size": 2,
+          "benchmark_config": {
+            "batch_size": 2,
+            "device": "cuda",
+            "measure_steps": 5,
+            "mode": "train",
+            "n_embd": 64,
+            "n_head": 4,
+            "n_layer": 2,
+            "name": "standard_transformer_train",
+            "seq_len": 32,
+            "synaptic": false,
+            "vocab_size": 128,
+            "warmup_steps": 2
+          },
+          "device": "cuda",
+          "latency_ms": 12.348936591297388,
+          "mode": "train",
+          "name": "standard_transformer_train",
+          "peak_memory_mb": 18.45947265625,
+          "seq_len": 32,
+          "steps_measured": 5,
+          "synaptic": false,
+          "timestamp": 1795538750.1136189,
+          "tok_per_sec": 5182.63249040427
+        },
+        {
+          "batch_size": 2,
+          "benchmark_config": {
+            "batch_size": 2,
+            "device": "cuda",
+            "measure_steps": 5,
+            "mode": "train",
+            "n_embd": 64,
+            "n_head": 4,
+            "n_layer": 2,
+            "name": "synaptic_transformer_train",
+            "seq_len": 32,
+            "synaptic": true,
+            "vocab_size": 128,
+            "warmup_steps": 2
+          },
+          "device": "cuda",
+          "latency_ms": 139.8921860381961,
+          "mode": "train",
+          "name": "synaptic_transformer_train",
+          "peak_memory_mb": 19.53564453125,
+          "seq_len": 32,
+          "steps_measured": 5,
+          "synaptic": true,
+          "timestamp": 1795538770.3287818,
+          "tok_per_sec": 457.4951740515762
+        },
+        {
+          "batch_size": 1,
+          "benchmark_config": {
+            "batch_size": 1,
+            "device": "cuda",
+            "measure_steps": 200,
+            "mode": "decode",
+            "n_embd": 64,
+            "n_head": 4,
+            "n_layer": 2,
+            "name": "standard_transformer_cached_tq1_decode",
+            "seq_len": 16,
+            "synaptic": false,
+            "vocab_size": 128,
+            "warmup_steps": 20
+          },
+          "device": "cuda",
+          "latency_ms": 3.1687967758625746,
+          "mode": "decode",
+          "name": "standard_transformer_cached_tq1_decode",
+          "peak_memory_mb": 17.0517578125,
+          "seq_len": 16,
+          "steps_measured": 200,
+          "synaptic": false,
+          "timestamp": 1795538771.4838512,
+          "tok_per_sec": 315.5771956148217
+        },
+        {
+          "batch_size": 1,
+          "benchmark_config": {
+            "batch_size": 1,
+            "device": "cuda",
+            "measure_steps": 200,
+            "mode": "decode",
+            "n_embd": 64,
+            "n_head": 4,
+            "n_layer": 2,
+            "name": "synaptic_transformer_cached_tq1_decode",
+            "seq_len": 16,
+            "synaptic": true,
+            "vocab_size": 128,
+            "warmup_steps": 20
+          },
+          "device": "cuda",
+          "latency_ms": 9.508477586787194,
+          "mode": "decode",
+          "name": "synaptic_transformer_cached_tq1_decode",
+          "peak_memory_mb": 17.39111328125,
+          "seq_len": 16,
+          "steps_measured": 200,
+          "synaptic": true,
+          "timestamp": 1795538774.5676317,
+          "tok_per_sec": 105.16930716538488
+        }
+      ]
+    },
+    "run": {
+      "checks": [
+        {
+          "duration_ms": 66258,
+          "exit_code": 1,
+          "log_sha256": "7719771bf80a7f8347ebf0733fc2948c0714853a5a0edff378d58ba99e3abdd9",
+          "status": "failed"
+        }
+      ],
+      "receipt_sha256": "9191718153d75073225f833ac078de49f2fd9d2a48625700c4d8196d4b59f40c",
+      "run_id": "0191838e-0ee2-41fe-8aa1-3892c2f4b7b5",
+      "source_before": "a83d76779fd592b9668d6f2ed6b475b341bc36b1|b99ab6bc6e04b5a0c03cdc75946b02abd6ddca4010600b019ec5dd5d2b5fce0b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "stable_source_and_config": true,
+      "status": "failed"
+    }
+  },
+  "pci_bus": "00000000:41:00.0",
+  "production": {
+    "cpu_collection_sha256": "7c8ac9fcb523387e482457ddb4a3f8a8f4b5465fdaa7e4ce93d083caf4e83a7b",
+    "cpu_quality": {
+      "checks": [
+        {
+          "duration_ms": 260198,
+          "exit_code": 1,
+          "log_sha256": "9ea159c9431492436f61e739265135fee4d8d125e737a1b9b85c2114e6adaeff",
+          "status": "failed"
+        }
+      ],
+      "receipt_sha256": "b6f5e1c7b1fece2052240f3eaf4e832882df941484137c5ce3957fcb0f484703",
+      "run_id": "92a36c2c-2b63-48d5-a673-7d991c313b1c",
+      "source_before": "a83d76779fd592b9668d6f2ed6b475b341bc36b1|f5283b63e3bde26429cac9fed2620d3cfb5663bf1f5037d79f81328fc4aa820a|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "stable_source_and_config": true,
+      "status": "failed"
+    },
+    "cpu_suite": {
+      "collected": 2103,
+      "files": 198,
+      "shards": [
+        {
+          "errors": 0,
+          "exit_code": 0,
+          "expected_tests": 263,
+          "failures": 0,
+          "files": [
+            "tests/test_bistable_latch.py",
+            "tests/test_certificate_bundle.py",
+            "tests/test_composition.py",
+            "tests/test_deliberation.py",
+            "tests/test_determinism_policy.py",
+            "tests/test_e2e_neuromod_rl.py",
+            "tests/test_e2e_scaleup_decode.py",
+            "tests/test_full_space_cmaes.py",
+            "tests/test_glial_homeostasis.py",
+            "tests/test_hf_bio_adapter.py",
+            "tests/test_hypothesis_generator.py",
+            "tests/test_lifecycle_health_credit.py",
+            "tests/test_neuromod.py",
+            "tests/test_niah_eval.py",
+            "tests/test_package_footprint.py",
+            "tests/test_rustbpe.py",
+            "tests/test_scaleup_telemetry.py",
+            "tests/test_scaleup_tying.py",
+            "tests/test_synaptic_granularity.py",
+            "tests/test_synaptic_optimizer_stability.py",
+            "tests/test_tropical_falsification.py",
+            "tests/test_ultrametric_memory.py",
+            "tests/test_working_memory_api.py",
+            "tests/test_working_memory_chunked_eval.py"
+          ],
+          "index": 1,
+          "log_sha256": "c524514dfcce4d9af12f1990243acd827e8b5bb40415b8fccd1c1d4d306ef348",
+          "passed": 263,
+          "pytest_summary_tail": [
+            "........................................................................ [ 27%]",
+            "........................................................................ [ 54%]",
+            "........................................................................ [ 82%]",
+            "...............................................                          [100%]",
+            "263 passed in 47.90s"
+          ],
+          "skipped": 0,
+          "tests": 263,
+          "xml_sha256": "3bf7b710e135eecb8d4273794e740ee48d63c015fd0af00f964c7dad2c5564f0"
+        },
+        {
+          "errors": 0,
+          "exit_code": 0,
+          "expected_tests": 263,
+          "failures": 0,
+          "files": [
+            "tests/test_cmaes_resume_security.py",
+            "tests/test_curriculum_topology.py",
+            "tests/test_cusp_certificate.py",
+            "tests/test_dataloader.py",
+            "tests/test_dream_curriculum.py",
+            "tests/test_e2e_quick_start.py",
+            "tests/test_e2e_scaling_law.py",
+            "tests/test_e2e_sheaf_detector_eval.py",
+            "tests/test_eval_stats.py",
+            "tests/test_experiment_runner.py",
+            "tests/test_genome_marketplace.py",
+            "tests/test_learnable_kinetics.py",
+            "tests/test_loss_eval.py",
+            "tests/test_mc_ensemble.py",
+            "tests/test_mechanism_redundancy.py",
+            "tests/test_param_census.py",
+            "tests/test_perf_regression.py",
+            "tests/test_presyn_canonical.py",
+            "tests/test_presyn_scan_kernel.py",
+            "tests/test_run_budgeting.py",
+            "tests/test_sequence_reset.py",
+            "tests/test_trained_hebbian_binding.py",
+            "tests/test_validate_all.py",
+            "tests/test_working_memory_suite.py"
+          ],
+          "index": 2,
+          "log_sha256": "bdd267cf2cada4bc937f3c94034bccd1d0250cf77bd925156bf2556420e7ab98",
+          "passed": 262,
+          "pytest_summary_tail": [
+            "........................................................................ [ 27%]",
+            "........................................................................ [ 54%]",
+            "........................................................................ [ 82%]",
+            "...........................s...................                          [100%]",
+            "=========================== short test summary info ============================",
+            "SKIPPED [1] tests/test_presyn_scan_kernel.py:202: CUDA not available (gpu-marked test)",
+            "262 passed, 1 skipped in 126.31s (0:02:06)"
+          ],
+          "skipped": 1,
+          "tests": 263,
+          "xml_sha256": "8f2edcf9ce438231f56428649cf459438645fdcf5b9edb75029104c6402eb496"
+        },
+        {
+          "errors": 0,
+          "exit_code": 0,
+          "expected_tests": 263,
+          "failures": 0,
+          "files": [
+            "tests/test_associative_credit.py",
+            "tests/test_async_population.py",
+            "tests/test_bio_storybook.py",
+            "tests/test_checkpoint_roundtrip.py",
+            "tests/test_core_eval.py",
+            "tests/test_dream_replay.py",
+            "tests/test_e2e_theory_artifacts.py",
+            "tests/test_e2e_uncertainty.py",
+            "tests/test_flex_canonical.py",
+            "tests/test_function_preserving_splitmerge.py",
+            "tests/test_homeostatic_safety.py",
+            "tests/test_logit_softcap.py",
+            "tests/test_metacognition.py",
+            "tests/test_metrics_schema.py",
+            "tests/test_metriplectic_falsification.py",
+            "tests/test_neuroscore_lifecycle.py",
+            "tests/test_optogenetic_stimulation.py",
+            "tests/test_presyn_backend_parity.py",
+            "tests/test_presyn_golden.py",
+            "tests/test_reasoning_trace_decoder.py",
+            "tests/test_results_registry.py",
+            "tests/test_singular_perturbation_theory.py",
+            "tests/test_synaptic_serving_engine.py",
+            "tests/test_tropical_certificate.py",
+            "tests/test_xpoll.py"
+          ],
+          "index": 3,
+          "log_sha256": "c006e91204b242516820b29d65d07c89db086d2233dd1efa61aa883c250c9eb3",
+          "passed": 261,
+          "pytest_summary_tail": [
+            "  This will allow you to use print statements or breakpoints. Note: This doesn't work with the backwards pass and may produce incorrect results.",
+            "    _warn_once(",
+            "",
+            "-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html",
+            "=========================== short test summary info ============================",
+            "SKIPPED [1] tests/test_flex_canonical.py:271: flex_attention unavailable in this environment: flex_attention requires dynamo support",
+            "SKIPPED [1] tests/test_presyn_backend_parity.py:154: CUDA backend unavailable",
+            "261 passed, 2 skipped, 1 warning in 18.39s"
+          ],
+          "skipped": 2,
+          "tests": 263,
+          "xml_sha256": "33ac819390815a2c07512d05d218e53a09737308c15c5f9aca67da30d38b2ea1"
+        },
+        {
+          "errors": 0,
+          "exit_code": 0,
+          "expected_tests": 263,
+          "failures": 0,
+          "files": [
+            "tests/test_attention_bias_clamp.py",
+            "tests/test_base_eval.py",
+            "tests/test_bio_telemetry_api.py",
+            "tests/test_cmaes_genome.py",
+            "tests/test_e2e_capability_frontier.py",
+            "tests/test_e2e_wave2_compositions.py",
+            "tests/test_enable_synapses.py",
+            "tests/test_engine.py",
+            "tests/test_eval_plasticity_isolation.py",
+            "tests/test_framework_smoke.py",
+            "tests/test_homeostasis_guards.py",
+            "tests/test_hybrid_optimizer.py",
+            "tests/test_neural_society.py",
+            "tests/test_neuroscore_credit.py",
+            "tests/test_patch_clamp.py",
+            "tests/test_presyn_rust_parity.py",
+            "tests/test_result_interpreter.py",
+            "tests/test_scaleup_memory.py",
+            "tests/test_self_correcting_generator.py",
+            "tests/test_separation_gauge.py",
+            "tests/test_sheaf_binding.py",
+            "tests/test_sleep_consolidation.py",
+            "tests/test_spectral_stability.py",
+            "tests/test_syn_cfg_cli_overrides.py",
+            "tests/test_vesicle_conservation.py"
+          ],
+          "index": 4,
+          "log_sha256": "5c585e536003066af086e167d5cef30d8c59e5881346925c587eb651015a8328",
+          "passed": 262,
+          "pytest_summary_tail": [
+            "........................................................................ [ 27%]",
+            "..............................................s......................... [ 54%]",
+            "........................................................................ [ 82%]",
+            "...............................................                          [100%]",
+            "=========================== short test summary info ============================",
+            "SKIPPED [1] tests/test_neuroscore_credit.py:43: CUDA not available",
+            "262 passed, 1 skipped in 10.04s"
+          ],
+          "skipped": 1,
+          "tests": 263,
+          "xml_sha256": "a98295a322b036e9cb23d2d04833abb9dea69ea2038630bf7658c3565e196551"
+        },
+        {
+          "errors": 0,
+          "exit_code": 0,
+          "expected_tests": 263,
+          "failures": 0,
+          "files": [
+            "tests/test_backend_dispatcher.py",
+            "tests/test_causal_deliberation.py",
+            "tests/test_chat_eval.py",
+            "tests/test_cmaes_multi_fidelity.py",
+            "tests/test_curiosity_rl.py",
+            "tests/test_cusp_falsification.py",
+            "tests/test_cusp_latch.py",
+            "tests/test_divergence_guard.py",
+            "tests/test_e2e_online_learning.py",
+            "tests/test_e2e_wake_sleep.py",
+            "tests/test_episodic_write_policy.py",
+            "tests/test_eval_repetition.py",
+            "tests/test_impossibility_limits.py",
+            "tests/test_master_sde.py",
+            "tests/test_neuromorphic_sparse.py",
+            "tests/test_optimizer_moment_reset.py",
+            "tests/test_presyn_fused_live.py",
+            "tests/test_presyn_rust_dispatch.py",
+            "tests/test_rollout_credit.py",
+            "tests/test_scaleup_ablation_e2e.py",
+            "tests/test_scaleup_recipe.py",
+            "tests/test_stochastic_thermo.py",
+            "tests/test_synaptic_invariants.py",
+            "tests/test_synthetic_tasks.py",
+            "tests/test_theory_discovery.py"
+          ],
+          "index": 5,
+          "log_sha256": "e375620a0725ed6d0564e581e81a313dd8cbddaddc265750190a6a856d97d7a0",
+          "passed": 255,
+          "pytest_summary_tail": [
+            "",
+            "-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html",
+            "=========================== short test summary info ============================",
+            "SKIPPED [3] tests/test_presyn_fused_live.py:155: CUDA not available (gpu-marked test)",
+            "SKIPPED [3] tests/test_presyn_fused_live.py:181: CUDA not available (gpu-marked test)",
+            "SKIPPED [1] tests/test_presyn_fused_live.py:222: CUDA not available (gpu-marked test)",
+            "SKIPPED [1] tests/test_presyn_fused_live.py:289: CUDA not available (gpu-marked test)",
+            "255 passed, 8 skipped, 6 warnings in 92.41s (0:01:32)"
+          ],
+          "skipped": 8,
+          "tests": 263,
+          "xml_sha256": "b9fc55888586a3294619188baa03e2f742c767a57b957f279f4a4afea548a248"
+        },
+        {
+          "errors": 0,
+          "exit_code": 0,
+          "expected_tests": 263,
+          "failures": 0,
+          "files": [
+            "tests/test_ablation_matrix.py",
+            "tests/test_bdnf_metaplasticity.py",
+            "tests/test_chat_sft_rl_checkpoint.py",
+            "tests/test_continual_learning.py",
+            "tests/test_deliberation_compute_curve.py",
+            "tests/test_distributed_lifecycle.py",
+            "tests/test_e2e_eval_matrix.py",
+            "tests/test_e2e_matrix_pipeline.py",
+            "tests/test_e2e_pareto_efficiency.py",
+            "tests/test_energy_guided_search.py",
+            "tests/test_gradient_validation.py",
+            "tests/test_hebbian_training_plasticity.py",
+            "tests/test_lifecycle_health_relative.py",
+            "tests/test_matrix_launch.py",
+            "tests/test_metriplectic_integrator.py",
+            "tests/test_neuroviz_v2.py",
+            "tests/test_presyn_migration.py",
+            "tests/test_probing.py",
+            "tests/test_run_logging.py",
+            "tests/test_scaleup_ddp.py",
+            "tests/test_selective_decoding.py",
+            "tests/test_sheaf_obstruction.py",
+            "tests/test_speculative_decoder.py",
+            "tests/test_tune_bio_params.py",
+            "tests/test_wake_sleep_scheduler.py"
+          ],
+          "index": 6,
+          "log_sha256": "b8ecc336661ba2a7bd176e71259bb195b411684cf11cd085f930898ec4f66e37",
+          "passed": 263,
+          "pytest_summary_tail": [
+            "........................................................................ [ 27%]",
+            "........................................................................ [ 54%]",
+            "........................................................................ [ 82%]",
+            "...............................................                          [100%]",
+            "263 passed in 241.65s (0:04:01)"
+          ],
+          "skipped": 0,
+          "tests": 263,
+          "xml_sha256": "4e3d713eabef82d01d58381a86339151764dc436128e320ec5251b2bf8a0eb31"
+        },
+        {
+          "errors": 0,
+          "exit_code": 0,
+          "expected_tests": 263,
+          "failures": 0,
+          "files": [
+            "tests/test_ablation_registry.py",
+            "tests/test_ach_exploration.py",
+            "tests/test_adaptive_compute.py",
+            "tests/test_affine_scan.py",
+            "tests/test_chunked_tbptt.py",
+            "tests/test_conformal_abstention.py",
+            "tests/test_constrained_energy_decoder.py",
+            "tests/test_diff_recurrence_wiring.py",
+            "tests/test_differentiable_recurrence.py",
+            "tests/test_e2e_probe_lesion_stim.py",
+            "tests/test_e2e_structural_lifecycle.py",
+            "tests/test_eval_determinism.py",
+            "tests/test_fast_weight_comparison.py",
+            "tests/test_harness_smoke.py",
+            "tests/test_metriplectic_theory.py",
+            "tests/test_online_fast_adaptation.py",
+            "tests/test_persistent_memory.py",
+            "tests/test_presyn_param_census.py",
+            "tests/test_router_contrastive.py",
+            "tests/test_scaleup_config.py",
+            "tests/test_sheaf_detector.py",
+            "tests/test_structural_geometry.py",
+            "tests/test_structural_nas_evaluation.py",
+            "tests/test_synaptic_debugger.py",
+            "tests/test_xpoll_benchmark.py"
+          ],
+          "index": 7,
+          "log_sha256": "7664b50b7441b535e6f87f5bb78560da1b555abb863788c5e459c5085831f13b",
+          "passed": 262,
+          "pytest_summary_tail": [
+            "........................................................................ [ 27%]",
+            "................................................s....................... [ 54%]",
+            "........................................................................ [ 82%]",
+            "...............................................                          [100%]",
+            "=========================== short test summary info ============================",
+            "SKIPPED [1] tests/test_diff_recurrence_wiring.py:281: installed PyTorch does not support torch.compile on Python 3.14",
+            "262 passed, 1 skipped in 14.61s"
+          ],
+          "skipped": 1,
+          "tests": 263,
+          "xml_sha256": "a0417d311ff5c760296c575a750e8df7fa80d1313d1b0dc61d2082fb586ef260"
+        },
+        {
+          "errors": 0,
+          "exit_code": 1,
+          "expected_tests": 262,
+          "failures": 1,
+          "files": [
+            "tests/test_ai_neuroscientist.py",
+            "tests/test_chunked_training_regime.py",
+            "tests/test_cmaes_load_params.py",
+            "tests/test_dataset.py",
+            "tests/test_e2e_cmaes.py",
+            "tests/test_e2e_decode_parity.py",
+            "tests/test_e2e_retrofit_mgr.py",
+            "tests/test_e2e_train_bio.py",
+            "tests/test_fmri_attractor_viz.py",
+            "tests/test_formal_feedback.py",
+            "tests/test_free_energy_deliberation.py",
+            "tests/test_gauge_consolidation.py",
+            "tests/test_kinetics_ablation.py",
+            "tests/test_metriplectic_runtime.py",
+            "tests/test_neuromod_mechanism.py",
+            "tests/test_ordinal_scheduler.py",
+            "tests/test_property_invariants.py",
+            "tests/test_rank_eligibility.py",
+            "tests/test_rust_kernels.py",
+            "tests/test_scaleup_checkpoint.py",
+            "tests/test_scaleup_e2e.py",
+            "tests/test_stdp.py",
+            "tests/test_structural_falsification.py",
+            "tests/test_tune_proxy.py",
+            "tests/test_variable_expert_count.py"
+          ],
+          "index": 8,
+          "log_sha256": "acedbc56b9ca6fb3a3a7d9b7c118c335b07fbae67de047fe11393664374a9bcf",
+          "passed": 260,
+          "pytest_summary_tail": [
+            "             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+            "scripts/formal_feedback.py:329: in validate_manifest",
+            "    raise FormalFeedbackError(",
+            "E   scripts.formal_feedback.FormalFeedbackError: stale runtime hash for bio_inspired_nanochat/synaptic.py: expected 7d1c194e0d34ae9116685e99cc62ae3dd7c47b9a54c367720229646f1c0fd7e9, actual d8d017346db059967e6b8a5a57f8f68d03df32b3670de3afb8bba8c2af521ca2",
+            "=========================== short test summary info ============================",
+            "SKIPPED [1] tests/test_e2e_decode_parity.py:517: CUDA not available (gpu-marked test)",
+            "FAILED tests/test_formal_feedback.py::test_live_formal_contract_matches_repository_head",
+            "1 failed, 260 passed, 1 skipped in 120.39s (0:02:00)"
+          ],
+          "skipped": 1,
+          "tests": 262,
+          "xml_sha256": "a2bb611c53e0dec38bab64aa74e70fb6658979c773bdb0ad5877d9a7ccabf3be"
+        }
+      ]
+    },
+    "formal_rebind": {
+      "compiled_lean_origin": "afe60310-4007-40c5-a835-a7a8f2b1fc95",
+      "compiled_lean_sha256": "831498bc2853d86701250ea89024ab5f5f6190d2e3a5a9ae66f93a7d5d42d963",
+      "manifest_tests_passed": 17,
+      "mapped_runtime_passed": 288,
+      "mapped_runtime_skipped": 3,
+      "original_failed_node": "tests/test_formal_feedback.py::test_live_formal_contract_matches_repository_head",
+      "run": {
+        "checks": [
+          {
+            "duration_ms": 2628,
+            "exit_code": 0,
+            "log_sha256": "42fb5e6c5897dce300e8546f07e4fb9b1489f52feef7d950ac623fa12ad6fbd6",
+            "status": "passed"
+          },
+          {
+            "duration_ms": 83895,
+            "exit_code": 0,
+            "log_sha256": "d5bdf7bd1510ff902239b0dd0c407618798d7fd22e6e7b7ff2c1bedc2ffdb4ee",
+            "status": "passed"
+          }
+        ],
+        "receipt_sha256": "e4684131009e19e6e92d3acb1c11b8e599a9bcdedac25b44db187a1426f550c2",
+        "run_id": "5bcd2d8d-ebcf-4813-a7f8-f0e3664707a7",
+        "source_before": "a83d76779fd592b9668d6f2ed6b475b341bc36b1|e77cffe2af76a8a8d9522d7b2ca3bdad4d21fa008560075b661dbd1330f16a61|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+        "stable_source_and_config": true,
+        "status": "passed"
+      }
+    },
+    "gpu_gate_observations": {
+      "relative_budget": [
+        {
+          "detail": "synaptic_transformer_train (1653.6 tok/s) vs standard_transformer_train (3738.1 tok/s): slowdown=2.26x (budget <= 2.00x)",
+          "max_ratio": 2.0,
+          "mode": "train",
+          "passed": false,
+          "slowdown_ratio": 2.2606068919266895,
+          "standard_name": "standard_transformer_train",
+          "standard_tok_per_sec": 3738.1450540028723,
+          "synaptic_name": "synaptic_transformer_train",
+          "synaptic_tok_per_sec": 1653.6024318747848
+        },
+        {
+          "detail": "synaptic_transformer_cached_tq1_decode (321.5 tok/s) vs standard_transformer_cached_tq1_decode (372.0 tok/s): slowdown=1.16x (budget <= 1.50x)",
+          "max_ratio": 1.5,
+          "mode": "decode",
+          "passed": true,
+          "slowdown_ratio": 1.1567537380019792,
+          "standard_name": "standard_transformer_cached_tq1_decode",
+          "standard_tok_per_sec": 371.95114894454383,
+          "synaptic_name": "synaptic_transformer_cached_tq1_decode",
+          "synaptic_tok_per_sec": 321.5473931270818
+        }
+      ],
+      "results": [
+        {
+          "batch_size": 2,
+          "benchmark_config": {
+            "batch_size": 2,
+            "device": "cuda",
+            "measure_steps": 5,
+            "mode": "train",
+            "n_embd": 64,
+            "n_head": 4,
+            "n_layer": 2,
+            "name": "standard_transformer_train",
+            "seq_len": 32,
+            "synaptic": false,
+            "vocab_size": 128,
+            "warmup_steps": 2
+          },
+          "device": "cuda",
+          "latency_ms": 17.12079094722867,
+          "mode": "train",
+          "name": "standard_transformer_train",
+          "peak_memory_mb": 18.45947265625,
+          "seq_len": 32,
+          "steps_measured": 5,
+          "synaptic": false,
+          "timestamp": 1795541651.6443543,
+          "tok_per_sec": 3738.1450540028723
+        },
+        {
+          "batch_size": 2,
+          "benchmark_config": {
+            "batch_size": 2,
+            "device": "cuda",
+            "measure_steps": 5,
+            "mode": "train",
+            "n_embd": 64,
+            "n_head": 4,
+            "n_layer": 2,
+            "name": "synaptic_transformer_train",
+            "seq_len": 32,
+            "synaptic": true,
+            "vocab_size": 128,
+            "warmup_steps": 2
+          },
+          "device": "cuda",
+          "latency_ms": 38.7033780105412,
+          "mode": "train",
+          "name": "synaptic_transformer_train",
+          "peak_memory_mb": 19.53564453125,
+          "seq_len": 32,
+          "steps_measured": 5,
+          "synaptic": true,
+          "timestamp": 1795541663.2467978,
+          "tok_per_sec": 1653.6024318747848
+        },
+        {
+          "batch_size": 1,
+          "benchmark_config": {
+            "batch_size": 1,
+            "device": "cuda",
+            "measure_steps": 200,
+            "mode": "decode",
+            "n_embd": 64,
+            "n_head": 4,
+            "n_layer": 2,
+            "name": "standard_transformer_cached_tq1_decode",
+            "seq_len": 16,
+            "synaptic": false,
+            "vocab_size": 128,
+            "warmup_steps": 20
+          },
+          "device": "cuda",
+          "latency_ms": 2.6885251002386212,
+          "mode": "decode",
+          "name": "standard_transformer_cached_tq1_decode",
+          "peak_memory_mb": 17.0517578125,
+          "seq_len": 16,
+          "steps_measured": 200,
+          "synaptic": false,
+          "timestamp": 1795541663.999982,
+          "tok_per_sec": 371.95114894454383
+        },
+        {
+          "batch_size": 1,
+          "benchmark_config": {
+            "batch_size": 1,
+            "device": "cuda",
+            "measure_steps": 200,
+            "mode": "decode",
+            "n_embd": 64,
+            "n_head": 4,
+            "n_layer": 2,
+            "name": "synaptic_transformer_cached_tq1_decode",
+            "seq_len": 16,
+            "synaptic": true,
+            "vocab_size": 128,
+            "warmup_steps": 20
+          },
+          "device": "cuda",
+          "latency_ms": 3.109961459413171,
+          "mode": "decode",
+          "name": "synaptic_transformer_cached_tq1_decode",
+          "peak_memory_mb": 17.42578125,
+          "seq_len": 16,
+          "steps_measured": 200,
+          "synaptic": true,
+          "timestamp": 1795541665.147131,
+          "tok_per_sec": 321.5473931270818
+        }
+      ]
+    },
+    "gpu_parity": {
+      "raw_cases": 20,
+      "traces": [
+        {
+          "batch": 1,
+          "delay_depth": 3,
+          "exact_pad_calls": 80,
+          "kv_heads": 4,
+          "prompt": 16,
+          "steps": 40
+        },
+        {
+          "batch": 2,
+          "delay_depth": 0,
+          "exact_pad_calls": 14,
+          "kv_heads": 2,
+          "prompt": 29,
+          "steps": 7
+        },
+        {
+          "batch": 2,
+          "delay_depth": 3,
+          "exact_pad_calls": 18,
+          "kv_heads": 2,
+          "prompt": 123,
+          "steps": 9
+        },
+        {
+          "batch": 1,
+          "delay_depth": 1,
+          "exact_pad_calls": 20,
+          "kv_heads": 4,
+          "prompt": 250,
+          "steps": 10
+        }
+      ]
+    },
+    "gpu_quality": {
+      "checks": [
+        {
+          "duration_ms": 73470,
+          "exit_code": 0,
+          "log_sha256": "164c228fe52e66efe43812ee19de9bae21e931a26bc5ad6c4f27662951c89463",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 211751,
+          "exit_code": 0,
+          "log_sha256": "ed7f50b837be65f28acc70d4e6c775fbff12a0180822de73858056944e90dec5",
+          "status": "passed"
+        },
+        {
+          "duration_ms": 41422,
+          "exit_code": 1,
+          "log_sha256": "2e68235ff172bdc20f93a4c568d3efa4d4ee4f63f02dc4c794f266c866048754",
+          "status": "failed"
+        }
+      ],
+      "receipt_sha256": "01fb37926046f05fd883e2beb7d9ead11dc37ed7828b5e22c7719231bcd9f87b",
+      "run_id": "b2ab55db-e8f3-48ae-be0f-4f0ac4067fe0",
+      "source_before": "a83d76779fd592b9668d6f2ed6b475b341bc36b1|f5283b63e3bde26429cac9fed2620d3cfb5663bf1f5037d79f81328fc4aa820a|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "stable_source_and_config": true,
+      "status": "failed"
+    },
+    "gpu_test_result": {
+      "deselected": 29,
+      "passed": 11
+    },
+    "source_patch": "production.patch"
+  },
+  "python": "3.14.2",
+  "source_revision": "a83d76779fd592b9668d6f2ed6b475b341bc36b1",
+  "sources": {
+    "cpu_suite.py": {
+      "content": "\"\"\"Run the complete CPU pytest collection as file-disjoint DSR shards.\"\"\"\nimport hashlib\nimport json\nimport subprocess\nimport sys\nimport xml.etree.ElementTree as ET\nfrom collections import Counter\nfrom pathlib import Path\n\nroot = Path(sys.argv[1])\npython = sys.executable\ncollected = subprocess.run(\n    [python, \"-m\", \"pytest\", \"tests/\", \"--collect-only\", \"-q\"],\n    check=True, text=True, stdout=subprocess.PIPE,\n)\nwith (root / \"collected.txt\").open(\"x\", encoding=\"utf-8\") as stream:\n    stream.write(collected.stdout)\nnodes = [line for line in collected.stdout.splitlines()\n         if line.startswith(\"tests/\") and \"::\" in line]\nassert nodes and len(nodes) == len(set(nodes)), len(nodes)\nfile_counts = Counter(node.split(\"::\", 1)[0] for node in nodes)\ngroups = [[] for _ in range(8)]\nweights = [0] * len(groups)\nfor name, count in sorted(file_counts.items(), key=lambda row: (-row[1], row[0])):\n    i = min(range(len(groups)), key=weights.__getitem__)\n    groups[i].append(name)\n    weights[i] += count\nassert sum(weights) == len(nodes) and sum(map(len, groups)) == len(file_counts)\nprint(f\"Collected {len(nodes)} tests in {len(file_counts)} files, shard sizes {weights}\", flush=True)\n\nrunning = []\nfor i, files in enumerate(groups, 1):\n    prefix = root / f\"shard-{i}\"\n    path = prefix.with_suffix(\".log\")\n    xml = prefix.with_suffix(\".xml\")\n    with path.open(\"x\", encoding=\"utf-8\") as stream:\n        child = subprocess.Popen(\n            [python, \"-m\", \"pytest\", \"-q\", \"--tb=short\",\n             \"--basetemp\", str(root / f\"pytest-temp-{i}\"), \"--junitxml\", str(xml), *sorted(files)],\n            stdout=stream, stderr=subprocess.STDOUT,\n        )\n    running.append((i, child, path, xml))\n\nsummary = []\nfor i, child, path, xml in running:\n    status = child.wait()\n    suite = ET.parse(xml).getroot().find(\"testsuite\") if xml.is_file() else None\n    report = {\"index\": i, \"exit_code\": status, \"files\": sorted(groups[i-1]),\n              \"expected_tests\": weights[i-1], \"log_sha256\": hashlib.sha256(path.read_bytes()).hexdigest()}\n    if suite is not None:\n        key_map = {\"tests\": \"tests\", \"skipped\": \"skipped\", \"failures\": \"failures\", \"errors\": \"errors\"}\n        report.update({key: int(suite.attrib[value]) for key, value in key_map.items()})\n        report[\"passed\"] = report[\"tests\"] - sum(report[k] for k in (\"skipped\", \"failures\", \"errors\"))\n        report[\"xml_sha256\"] = hashlib.sha256(xml.read_bytes()).hexdigest()\n    with path.open(encoding=\"utf-8\") as stream:\n        tail = stream.read().splitlines()[-8:]\n    report[\"pytest_summary_tail\"] = tail\n    summary.append(report)\n    print(i, json.dumps({k: v for k, v in report.items() if k != \"files\"}), flush=True)\nwith (root / \"suite-summary.json\").open(\"x\", encoding=\"utf-8\") as stream:\n    json.dump({\"collected\": len(nodes), \"files\": len(file_counts), \"shards\": summary},\n              stream, sort_keys=True, indent=2)\n    stream.write(\"\\n\")\nexit(any(row[\"exit_code\"] or row.get(\"tests\") != row[\"expected_tests\"] for row in summary))\n",
+      "sha256": "e16d43775f7a962915f3213221f42aafd51ef3beafed7fd090fdf5216ace3810"
+    },
+    "decode_probe.py": {
+      "content": "\"\"\"Test one-launch state append on the production CUDA cached decode seam.\"\"\"\nimport json\nimport statistics\nimport sys\nfrom dataclasses import asdict, replace\nfrom pathlib import Path\n\nimport torch\n\nfrom bio_inspired_nanochat.engine import Engine, KVCache\nfrom bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig\nfrom bio_inspired_nanochat.kernels import presyn_fused\nfrom bio_inspired_nanochat.perf_regression import PerfRegressionHarness, STANDARD_BENCHMARK_CONFIGS\nfrom bio_inspired_nanochat.synaptic import SynapticConfig, build_presyn_state\n\n\ndef bit_equal(a, b):\n    return torch.equal(a.contiguous().view(torch.uint8), b.contiguous().view(torch.uint8))\n\n\ndef state_values(state):\n    for key in (\"C\", \"BUF\", \"RRP\", \"RES\", \"PR\", \"CL\", \"E\", \"AMP\"):\n        yield state[key]\n    yield from state[\"DELAY\"]\n\n\ndef eager_pad(state, key_count, cfg):\n    old = state[\"C\"]\n    shape = (*old.shape[:2], key_count - old.shape[2])\n    initials = (\n        0.0, 0.0, cfg.init_rrp, cfg.init_reserve, cfg.init_snare,\n        cfg.init_clamp, cfg.init_energy, cfg.init_amp,\n    )\n    names = (\"C\", \"BUF\", \"RRP\", \"RES\", \"PR\", \"CL\", \"E\", \"AMP\")\n    for key, value in zip(names, initials, strict=True):\n        state[key] = torch.cat((state[key], torch.full(shape, value, device=old.device, dtype=old.dtype)), dim=2)\n    state[\"DELAY\"] = [torch.cat((plane, torch.zeros(shape, device=old.device, dtype=old.dtype)), dim=2)\n                      for plane in state[\"DELAY\"]]\n\n\ndef raw_parity(implementation):\n    cases = 0\n    for batch, heads, old_keys, new_keys in (\n        (1, 4, 16, 17), (2, 3, 31, 32), (1, 4, 127, 128), (2, 3, 128, 129), (2, 3, 257, 259),\n    ):\n        for depth in (0, 1, 3, 5):\n            config = SynapticConfig(\n                endo_delay=depth, init_rrp=0.512345, init_reserve=16.34875,\n                init_snare=-0.0, init_clamp=0.8625126, init_energy=0.9285, init_amp=1.2975,\n            )\n            state = build_presyn_state(batch, old_keys, heads, torch.device(\"cuda\"), torch.float32, config)\n            for item in state_values(state):\n                item.uniform_(-0.1, 0.9)\n            expected = {**state}\n            live_inputs = [value.clone() for value in state_values(state)]\n            old_views = list(state_values(state))\n            eager_pad(expected, new_keys, config)\n            assert implementation(state, new_keys, config)\n            assert all(bit_equal(a, b) for a, b in zip(state_values(state), state_values(expected), strict=True))\n            assert all(bit_equal(a, b) for a, b in zip(old_views, live_inputs, strict=True))\n            cases += 1\n    config = SynapticConfig()\n    state = build_presyn_state(2, 8, 2, torch.device(\"cuda\"), torch.float32, config)\n    state[\"C\"] = state[\"C\"].transpose(0, 1)\n    assert not implementation(state, 9, config)\n    assert state[\"C\"].shape == (2, 2, 8)\n    return cases\n\n\ndef trajectories(implementation):\n    comparisons = []\n    args = [(1, 4, 16, 40, 3), (2, 2, 29, 7, 0), (2, 2, 123, 9, 3), (1, 4, 250, 10, 1)]\n    for seed, (batch, kv_heads, prompt, steps, delay) in enumerate(args, 19628):\n        torch.manual_seed(seed)\n        config = GPTSynapticConfig(\n            sequence_len=prompt + steps, n_layer=2, n_head=4, n_kv_head=kv_heads, n_embd=64,\n            vocab_size=128, syn_cfg=SynapticConfig(native_presyn=True, native_genetics=True, endo_delay=delay),\n        )\n        model = GPTSynaptic(config).to(\"cuda\").eval()\n        model.reset_sequence_state()\n        engine = Engine(model, tokenizer=None)\n        tokens = torch.randint(0, config.vocab_size, (batch, prompt + steps), device=\"cuda\")\n        old = KVCache(batch, kv_heads, prompt + steps, 16, 2)\n        candidate = KVCache(batch, kv_heads, prompt + steps, 16, 2)\n        engine._forward(tokens[:, :prompt], old)\n        engine._forward(tokens[:, :prompt], candidate)\n        calls = 0\n\n        def count_pad(*args, **kwargs):\n            nonlocal calls\n            used = implementation(*args, **kwargs)\n            calls += used\n            return used\n\n        for pos in range(prompt, prompt + steps):\n            presyn_fused.pad_live_decode_state = lambda *_args, **_kwargs: False\n            expected = engine._forward(tokens[:, pos:pos+1], old)\n            presyn_fused.pad_live_decode_state = count_pad\n            actual = engine._forward(tokens[:, pos:pos+1], candidate)\n            assert bit_equal(expected, actual), (seed, pos, \"logits\")\n            assert old.pos == candidate.pos == pos + 1\n            assert bit_equal(old.kv_cache[:, :, :, :, :old.pos], candidate.kv_cache[:, :, :, :, :old.pos])\n            for layer, (a, b) in enumerate(zip(old.presyn_state, candidate.presyn_state, strict=True)):\n                assert all(bit_equal(x, y) for x, y in zip(state_values(a), state_values(b), strict=True)), (seed, pos, layer)\n        assert calls == 2 * steps, (calls, steps)\n        comparisons.append({\"batch\": batch, \"kv_heads\": kv_heads, \"prompt\": prompt, \"steps\": steps,\n                            \"delay_depth\": delay, \"exact_pad_calls\": calls})\n    return comparisons\n\n\ndef bench(implementation, mode):\n    harness = PerfRegressionHarness()\n    standard, syn = [replace(cfg, device=\"cuda\") for cfg in STANDARD_BENCHMARK_CONFIGS if cfg.mode==\"decode\"]\n    output = []\n\n    def run(phase, seed):\n        torch.manual_seed(seed)\n        presyn_fused.pad_live_decode_state = (implementation if phase == \"candidate\"\n                                               else lambda *_args, **_kwargs: False)\n        cfg = standard if phase == \"vanilla\" else syn\n        if mode == \"profile\":\n            cfg = replace(cfg, name=f\"cached_decode_{phase}\")\n        return harness.run_benchmark(cfg, nvtx=mode==\"profile\")\n\n    if mode == \"profile\":\n        for phase in (\"vanilla\", \"eager\", \"candidate\"):\n            output.append(asdict(run(phase, 20004)))\n        return output\n    for index, seed in enumerate(range(20010, 20016)):\n        order = [\"vanilla\", \"eager\", \"candidate\"][::(-1 if index % 2 else 1)]\n        results = {phase: run(phase, seed) for phase in order}\n        comparisons = {phase: asdict(harness.evaluate_budget_gates([results[\"vanilla\"], results[phase]])[0])\n                       for phase in (\"eager\", \"candidate\")}\n        output.append({\"seed\": seed, \"order\": order, \"comparisons\": comparisons,\n                       \"peak_memory_mb\": {phase: results[phase].peak_memory_mb for phase in results}})\n    return output\n\n\ndef main():\n    mode, out = sys.argv[1:]\n    implementation = presyn_fused.pad_live_decode_state\n    try:\n        if mode == \"parity\":\n            with torch.inference_mode():\n                result = {\"raw_cases\": raw_parity(implementation), \"traces\": trajectories(implementation)}\n        elif mode == \"profile\":\n            result = {\"benchmarks\": bench(implementation, mode)}\n        else:\n            runs = bench(implementation, mode)\n            result = {\n                \"runs\": runs,\n                \"median_paired_improvement\": statistics.median(\n                    1.0 - row[\"comparisons\"][\"candidate\"][\"slowdown_ratio\"] /\n                    row[\"comparisons\"][\"eager\"][\"slowdown_ratio\"] for row in runs\n                ),\n                \"median_ratios\": {\n                    phase: statistics.median(row[\"comparisons\"][phase][\"slowdown_ratio\"] for row in runs)\n                    for phase in (\"eager\", \"candidate\")\n                },\n                \"gate_passes\": {\n                    phase: sum(row[\"comparisons\"][phase][\"passed\"] for row in runs)\n                    for phase in (\"eager\", \"candidate\")\n                },\n            }\n    finally:\n        presyn_fused.pad_live_decode_state = implementation\n    with Path(out).open(\"x\", encoding=\"utf-8\") as stream:\n        json.dump(result, stream, sort_keys=True, indent=2, allow_nan=False)\n        stream.write(\"\\n\")\n    print(json.dumps({k:v for k,v in result.items() if k!=\"runs\"}, sort_keys=True))\n\n\nif __name__ == \"__main__\":\n    main()\n",
+      "sha256": "77ac8241ec7fdf14caca9afa59e392a8ec69a71999402ef168a4dccb6ab02528"
+    },
+    "decode_probe_bits.py": {
+      "content": "\"\"\"Test one-launch state append on the production CUDA cached decode seam.\"\"\"\nimport json\nimport statistics\nimport sys\nfrom dataclasses import asdict, replace\nfrom pathlib import Path\n\nimport torch\n\nfrom bio_inspired_nanochat.engine import Engine, KVCache\nfrom bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig\nfrom bio_inspired_nanochat.kernels import presyn_fused\nfrom bio_inspired_nanochat.perf_regression import PerfRegressionHarness, STANDARD_BENCHMARK_CONFIGS\nfrom bio_inspired_nanochat.synaptic import SynapticConfig, build_presyn_state\n\n\ndef bit_equal(a, b):\n    return torch.equal(a.contiguous().view(torch.uint8), b.contiguous().view(torch.uint8))\n\n\ndef state_values(state):\n    for key in (\"C\", \"BUF\", \"RRP\", \"RES\", \"PR\", \"CL\", \"E\", \"AMP\"):\n        yield state[key]\n    yield from state[\"DELAY\"]\n\n\ndef eager_pad(state, key_count, cfg):\n    old = state[\"C\"]\n    shape = (*old.shape[:2], key_count - old.shape[2])\n    initials = (\n        0.0, 0.0, cfg.init_rrp, cfg.init_reserve, cfg.init_snare,\n        cfg.init_clamp, cfg.init_energy, cfg.init_amp,\n    )\n    names = (\"C\", \"BUF\", \"RRP\", \"RES\", \"PR\", \"CL\", \"E\", \"AMP\")\n    for key, value in zip(names, initials, strict=True):\n        state[key] = torch.cat((state[key], torch.full(shape, value, device=old.device, dtype=old.dtype)), dim=2)\n    state[\"DELAY\"] = [torch.cat((plane, torch.zeros(shape, device=old.device, dtype=old.dtype)), dim=2)\n                      for plane in state[\"DELAY\"]]\n\n\ndef raw_parity(implementation):\n    cases = 0\n    for batch, heads, old_keys, new_keys in (\n        (1, 4, 16, 17), (2, 3, 31, 32), (1, 4, 127, 128), (2, 3, 128, 129), (2, 3, 257, 259),\n    ):\n        for depth in (0, 1, 3, 5):\n            config = SynapticConfig(\n                endo_delay=depth, init_rrp=0.512345, init_reserve=16.34875,\n                init_snare=-0.0, init_clamp=0.8625126, init_energy=0.9285, init_amp=1.2975,\n            )\n            state = build_presyn_state(batch, old_keys, heads, torch.device(\"cuda\"), torch.float32, config)\n            for item in state_values(state):\n                item.uniform_(-0.1, 0.9)\n            expected = {**state}\n            live_inputs = [value.clone() for value in state_values(state)]\n            old_views = list(state_values(state))\n            eager_pad(expected, new_keys, config)\n            assert implementation(state, new_keys, config)\n            for plane, (a, b) in enumerate(zip(state_values(state), state_values(expected), strict=True)):\n                assert bit_equal(a, b), (batch, heads, old_keys, new_keys, depth, plane,\n                                         a[0, 0, -1].view(torch.int32).item(),\n                                         b[0, 0, -1].view(torch.int32).item())\n            assert all(bit_equal(a, b) for a, b in zip(old_views, live_inputs, strict=True))\n            cases += 1\n    config = SynapticConfig()\n    state = build_presyn_state(2, 8, 2, torch.device(\"cuda\"), torch.float32, config)\n    state[\"C\"] = state[\"C\"].transpose(0, 1)\n    assert not implementation(state, 9, config)\n    assert state[\"C\"].shape == (2, 2, 8)\n    return cases\n\n\ndef trajectories(implementation):\n    comparisons = []\n    args = [(1, 4, 16, 40, 3), (2, 2, 29, 7, 0), (2, 2, 123, 9, 3), (1, 4, 250, 10, 1)]\n    for seed, (batch, kv_heads, prompt, steps, delay) in enumerate(args, 19628):\n        torch.manual_seed(seed)\n        config = GPTSynapticConfig(\n            sequence_len=prompt + steps, n_layer=2, n_head=4, n_kv_head=kv_heads, n_embd=64,\n            vocab_size=128, syn_cfg=SynapticConfig(native_presyn=True, native_genetics=True, endo_delay=delay),\n        )\n        model = GPTSynaptic(config).to(\"cuda\").eval()\n        model.reset_sequence_state()\n        engine = Engine(model, tokenizer=None)\n        tokens = torch.randint(0, config.vocab_size, (batch, prompt + steps), device=\"cuda\")\n        old = KVCache(batch, kv_heads, prompt + steps, 16, 2)\n        candidate = KVCache(batch, kv_heads, prompt + steps, 16, 2)\n        engine._forward(tokens[:, :prompt], old)\n        engine._forward(tokens[:, :prompt], candidate)\n        calls = 0\n\n        def count_pad(*args, **kwargs):\n            nonlocal calls\n            used = implementation(*args, **kwargs)\n            calls += used\n            return used\n\n        for pos in range(prompt, prompt + steps):\n            presyn_fused.pad_live_decode_state = lambda *_args, **_kwargs: False\n            expected = engine._forward(tokens[:, pos:pos+1], old)\n            presyn_fused.pad_live_decode_state = count_pad\n            actual = engine._forward(tokens[:, pos:pos+1], candidate)\n            assert bit_equal(expected, actual), (seed, pos, \"logits\")\n            assert old.pos == candidate.pos == pos + 1\n            assert bit_equal(old.kv_cache[:, :, :, :, :old.pos], candidate.kv_cache[:, :, :, :, :old.pos])\n            for layer, (a, b) in enumerate(zip(old.presyn_state, candidate.presyn_state, strict=True)):\n                assert all(bit_equal(x, y) for x, y in zip(state_values(a), state_values(b), strict=True)), (seed, pos, layer)\n        assert calls == 2 * steps, (calls, steps)\n        comparisons.append({\"batch\": batch, \"kv_heads\": kv_heads, \"prompt\": prompt, \"steps\": steps,\n                            \"delay_depth\": delay, \"exact_pad_calls\": calls})\n    return comparisons\n\n\ndef bench(implementation, mode):\n    harness = PerfRegressionHarness()\n    standard, syn = [replace(cfg, device=\"cuda\") for cfg in STANDARD_BENCHMARK_CONFIGS if cfg.mode==\"decode\"]\n    output = []\n\n    def run(phase, seed):\n        torch.manual_seed(seed)\n        presyn_fused.pad_live_decode_state = (implementation if phase == \"candidate\"\n                                               else lambda *_args, **_kwargs: False)\n        cfg = standard if phase == \"vanilla\" else syn\n        if mode == \"profile\":\n            cfg = replace(cfg, name=f\"cached_decode_{phase}\")\n        return harness.run_benchmark(cfg, nvtx=mode==\"profile\")\n\n    if mode == \"profile\":\n        for phase in (\"vanilla\", \"eager\", \"candidate\"):\n            output.append(asdict(run(phase, 20004)))\n        return output\n    for index, seed in enumerate(range(20010, 20016)):\n        order = [\"vanilla\", \"eager\", \"candidate\"][::(-1 if index % 2 else 1)]\n        results = {phase: run(phase, seed) for phase in order}\n        comparisons = {phase: asdict(harness.evaluate_budget_gates([results[\"vanilla\"], results[phase]])[0])\n                       for phase in (\"eager\", \"candidate\")}\n        output.append({\"seed\": seed, \"order\": order, \"comparisons\": comparisons,\n                       \"peak_memory_mb\": {phase: results[phase].peak_memory_mb for phase in results}})\n    return output\n\n\ndef main():\n    mode, out = sys.argv[1:]\n    implementation = presyn_fused.pad_live_decode_state\n    try:\n        if mode == \"parity\":\n            with torch.inference_mode():\n                result = {\"raw_cases\": raw_parity(implementation), \"traces\": trajectories(implementation)}\n        elif mode == \"profile\":\n            result = {\"benchmarks\": bench(implementation, mode)}\n        else:\n            runs = bench(implementation, mode)\n            result = {\n                \"runs\": runs,\n                \"median_paired_improvement\": statistics.median(\n                    1.0 - row[\"comparisons\"][\"candidate\"][\"slowdown_ratio\"] /\n                    row[\"comparisons\"][\"eager\"][\"slowdown_ratio\"] for row in runs\n                ),\n                \"median_ratios\": {\n                    phase: statistics.median(row[\"comparisons\"][phase][\"slowdown_ratio\"] for row in runs)\n                    for phase in (\"eager\", \"candidate\")\n                },\n                \"gate_passes\": {\n                    phase: sum(row[\"comparisons\"][phase][\"passed\"] for row in runs)\n                    for phase in (\"eager\", \"candidate\")\n                },\n            }\n    finally:\n        presyn_fused.pad_live_decode_state = implementation\n    with Path(out).open(\"x\", encoding=\"utf-8\") as stream:\n        json.dump(result, stream, sort_keys=True, indent=2, allow_nan=False)\n        stream.write(\"\\n\")\n    print(json.dumps({k:v for k,v in result.items() if k!=\"runs\"}, sort_keys=True))\n\n\nif __name__ == \"__main__\":\n    main()\n",
+      "sha256": "aa5d8f96950a58e4e95238266cfa792f628d68bf792959a062e1d1c45a6a4bcf"
+    },
+    "decode_probe_exact.py": {
+      "content": "\"\"\"Test one-launch state append on the production CUDA cached decode seam.\"\"\"\nimport json\nimport statistics\nimport sys\nfrom dataclasses import asdict, replace\nfrom pathlib import Path\n\nimport torch\n\nfrom bio_inspired_nanochat.engine import Engine, KVCache\nfrom bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig\nfrom bio_inspired_nanochat.kernels import presyn_fused\nfrom bio_inspired_nanochat.perf_regression import PerfRegressionHarness, STANDARD_BENCHMARK_CONFIGS\nfrom bio_inspired_nanochat.synaptic import SynapticConfig, build_presyn_state\n\n\ndef bit_equal(a, b):\n    return torch.equal(a.contiguous().view(torch.uint8), b.contiguous().view(torch.uint8))\n\n\ndef state_values(state):\n    for key in (\"C\", \"BUF\", \"RRP\", \"RES\", \"PR\", \"CL\", \"E\", \"AMP\"):\n        yield state[key]\n    yield from state[\"DELAY\"]\n\n\ndef eager_pad(state, key_count, cfg):\n    old = state[\"C\"]\n    shape = (*old.shape[:2], key_count - old.shape[2])\n    initials = (\n        0.0, 0.0, cfg.init_rrp, cfg.init_reserve, cfg.init_snare,\n        cfg.init_clamp, cfg.init_energy, cfg.init_amp,\n    )\n    names = (\"C\", \"BUF\", \"RRP\", \"RES\", \"PR\", \"CL\", \"E\", \"AMP\")\n    for key, value in zip(names, initials, strict=True):\n        state[key] = torch.cat((state[key], torch.full(shape, value, device=old.device, dtype=old.dtype)), dim=2)\n    state[\"DELAY\"] = [torch.cat((plane, torch.zeros(shape, device=old.device, dtype=old.dtype)), dim=2)\n                      for plane in state[\"DELAY\"]]\n\n\ndef raw_parity(implementation):\n    cases = 0\n    for batch, heads, old_keys, new_keys in (\n        (1, 4, 16, 17), (2, 3, 31, 32), (1, 4, 127, 128), (2, 3, 128, 129), (2, 3, 257, 259),\n    ):\n        for depth in (0, 1, 3, 5):\n            config = SynapticConfig(\n                endo_delay=depth, init_rrp=0.512345, init_reserve=16.34875,\n                init_snare=-0.0, init_clamp=0.8625126, init_energy=0.9285, init_amp=1.2975,\n            )\n            state = build_presyn_state(batch, old_keys, heads, torch.device(\"cuda\"), torch.float32, config)\n            for item in state_values(state):\n                item.uniform_(-0.1, 0.9)\n            expected = {**state}\n            live_inputs = [value.clone() for value in state_values(state)]\n            old_views = list(state_values(state))\n            eager_pad(expected, new_keys, config)\n            assert implementation(state, new_keys, config)\n            for plane, (a, b) in enumerate(zip(state_values(state), state_values(expected), strict=True)):\n                assert bit_equal(a, b), (batch, heads, old_keys, new_keys, depth, plane,\n                                         a[0, 0, -1].view(torch.int32).item(),\n                                         b[0, 0, -1].view(torch.int32).item())\n            assert all(bit_equal(a, b) for a, b in zip(old_views, live_inputs, strict=True))\n            cases += 1\n    config = SynapticConfig()\n    state = build_presyn_state(2, 8, 2, torch.device(\"cuda\"), torch.float32, config)\n    state[\"C\"] = state[\"C\"].transpose(0, 1)\n    assert not implementation(state, 9, config)\n    assert state[\"C\"].shape == (2, 2, 8)\n    return cases\n\n\ndef trajectories(implementation):\n    comparisons = []\n    args = [(1, 4, 16, 40, 3), (2, 2, 29, 7, 0), (2, 2, 123, 9, 3), (1, 4, 250, 10, 1)]\n    for seed, (batch, kv_heads, prompt, steps, delay) in enumerate(args, 19628):\n        torch.manual_seed(seed)\n        config = GPTSynapticConfig(\n            sequence_len=prompt + steps, n_layer=2, n_head=4, n_kv_head=kv_heads, n_embd=64,\n            vocab_size=128, syn_cfg=SynapticConfig(native_presyn=True, native_genetics=True, endo_delay=delay),\n        )\n        model = GPTSynaptic(config).to(\"cuda\").eval()\n        model.reset_sequence_state()\n        engine = Engine(model, tokenizer=None)\n        tokens = torch.randint(0, config.vocab_size, (batch, prompt + steps), device=\"cuda\")\n        old = KVCache(batch, kv_heads, prompt + steps, 16, 2)\n        candidate = KVCache(batch, kv_heads, prompt + steps, 16, 2)\n        engine._forward(tokens[:, :prompt], old)\n        engine._forward(tokens[:, :prompt], candidate)\n        calls = 0\n\n        def count_pad(*args, **kwargs):\n            nonlocal calls\n            used = implementation(*args, **kwargs)\n            calls += used\n            return used\n\n        for pos in range(prompt, prompt + steps):\n            presyn_fused.pad_live_decode_state = lambda *_args, **_kwargs: False\n            expected, _ = engine._forward(tokens[:, pos:pos+1], old)\n            presyn_fused.pad_live_decode_state = count_pad\n            actual, _ = engine._forward(tokens[:, pos:pos+1], candidate)\n            assert bit_equal(expected, actual), (seed, pos, \"logits\")\n            assert old.pos == candidate.pos == pos + 1\n            assert bit_equal(old.kv_cache[:, :, :, :, :old.pos], candidate.kv_cache[:, :, :, :, :old.pos])\n            for layer, (a, b) in enumerate(zip(old.presyn_state, candidate.presyn_state, strict=True)):\n                assert all(bit_equal(x, y) for x, y in zip(state_values(a), state_values(b), strict=True)), (seed, pos, layer)\n        assert calls == 2 * steps, (calls, steps)\n        comparisons.append({\"batch\": batch, \"kv_heads\": kv_heads, \"prompt\": prompt, \"steps\": steps,\n                            \"delay_depth\": delay, \"exact_pad_calls\": calls})\n    return comparisons\n\n\ndef bench(implementation, mode):\n    harness = PerfRegressionHarness()\n    standard, syn = [replace(cfg, device=\"cuda\") for cfg in STANDARD_BENCHMARK_CONFIGS if cfg.mode==\"decode\"]\n    output = []\n\n    def run(phase, seed):\n        torch.manual_seed(seed)\n        presyn_fused.pad_live_decode_state = (implementation if phase == \"candidate\"\n                                               else lambda *_args, **_kwargs: False)\n        cfg = standard if phase == \"vanilla\" else syn\n        if mode == \"profile\":\n            cfg = replace(cfg, name=f\"cached_decode_{phase}\")\n        return harness.run_benchmark(cfg, nvtx=mode==\"profile\")\n\n    if mode == \"profile\":\n        for phase in (\"vanilla\", \"eager\", \"candidate\"):\n            output.append(asdict(run(phase, 20004)))\n        return output\n    for index, seed in enumerate(range(20010, 20016)):\n        order = [\"vanilla\", \"eager\", \"candidate\"][::(-1 if index % 2 else 1)]\n        results = {phase: run(phase, seed) for phase in order}\n        comparisons = {phase: asdict(harness.evaluate_budget_gates([results[\"vanilla\"], results[phase]])[0])\n                       for phase in (\"eager\", \"candidate\")}\n        output.append({\"seed\": seed, \"order\": order, \"comparisons\": comparisons,\n                       \"peak_memory_mb\": {phase: results[phase].peak_memory_mb for phase in results}})\n    return output\n\n\ndef main():\n    mode, out = sys.argv[1:]\n    implementation = presyn_fused.pad_live_decode_state\n    try:\n        if mode == \"parity\":\n            with torch.inference_mode():\n                result = {\"raw_cases\": raw_parity(implementation), \"traces\": trajectories(implementation)}\n        elif mode == \"profile\":\n            result = {\"benchmarks\": bench(implementation, mode)}\n        else:\n            runs = bench(implementation, mode)\n            result = {\n                \"runs\": runs,\n                \"median_paired_improvement\": statistics.median(\n                    1.0 - row[\"comparisons\"][\"candidate\"][\"slowdown_ratio\"] /\n                    row[\"comparisons\"][\"eager\"][\"slowdown_ratio\"] for row in runs\n                ),\n                \"median_ratios\": {\n                    phase: statistics.median(row[\"comparisons\"][phase][\"slowdown_ratio\"] for row in runs)\n                    for phase in (\"eager\", \"candidate\")\n                },\n                \"gate_passes\": {\n                    phase: sum(row[\"comparisons\"][phase][\"passed\"] for row in runs)\n                    for phase in (\"eager\", \"candidate\")\n                },\n            }\n    finally:\n        presyn_fused.pad_live_decode_state = implementation\n    with Path(out).open(\"x\", encoding=\"utf-8\") as stream:\n        json.dump(result, stream, sort_keys=True, indent=2, allow_nan=False)\n        stream.write(\"\\n\")\n    print(json.dumps({k:v for k,v in result.items() if k!=\"runs\"}, sort_keys=True))\n\n\nif __name__ == \"__main__\":\n    main()\n",
+      "sha256": "e5429e4cfd1b4142e1df62ae318d4bc2b81720e98522b7c5fff02f742ed28dd9"
+    },
+    "decode_probe_holdout.py": {
+      "content": "\"\"\"Test one-launch state append on the production CUDA cached decode seam.\"\"\"\nimport json\nimport statistics\nimport sys\nfrom dataclasses import asdict, replace\nfrom pathlib import Path\n\nimport torch\n\nfrom bio_inspired_nanochat.engine import Engine, KVCache\nfrom bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig\nfrom bio_inspired_nanochat.kernels import presyn_fused\nfrom bio_inspired_nanochat.perf_regression import PerfRegressionHarness, STANDARD_BENCHMARK_CONFIGS\nfrom bio_inspired_nanochat.synaptic import SynapticConfig, build_presyn_state\n\n\ndef bit_equal(a, b):\n    return torch.equal(a.contiguous().view(torch.uint8), b.contiguous().view(torch.uint8))\n\n\ndef state_values(state):\n    for key in (\"C\", \"BUF\", \"RRP\", \"RES\", \"PR\", \"CL\", \"E\", \"AMP\"):\n        yield state[key]\n    yield from state[\"DELAY\"]\n\n\ndef eager_pad(state, key_count, cfg):\n    old = state[\"C\"]\n    shape = (*old.shape[:2], key_count - old.shape[2])\n    initials = (\n        0.0, 0.0, cfg.init_rrp, cfg.init_reserve, cfg.init_snare,\n        cfg.init_clamp, cfg.init_energy, cfg.init_amp,\n    )\n    names = (\"C\", \"BUF\", \"RRP\", \"RES\", \"PR\", \"CL\", \"E\", \"AMP\")\n    for key, value in zip(names, initials, strict=True):\n        state[key] = torch.cat((state[key], torch.full(shape, value, device=old.device, dtype=old.dtype)), dim=2)\n    state[\"DELAY\"] = [torch.cat((plane, torch.zeros(shape, device=old.device, dtype=old.dtype)), dim=2)\n                      for plane in state[\"DELAY\"]]\n\n\ndef raw_parity(implementation):\n    cases = 0\n    for batch, heads, old_keys, new_keys in (\n        (1, 4, 16, 17), (2, 3, 31, 32), (1, 4, 127, 128), (2, 3, 128, 129), (2, 3, 257, 259),\n    ):\n        for depth in (0, 1, 3, 5):\n            config = SynapticConfig(\n                endo_delay=depth, init_rrp=0.512345, init_reserve=16.34875,\n                init_snare=-0.0, init_clamp=0.8625126, init_energy=0.9285, init_amp=1.2975,\n            )\n            state = build_presyn_state(batch, old_keys, heads, torch.device(\"cuda\"), torch.float32, config)\n            for item in state_values(state):\n                item.uniform_(-0.1, 0.9)\n            expected = {**state}\n            live_inputs = [value.clone() for value in state_values(state)]\n            old_views = list(state_values(state))\n            eager_pad(expected, new_keys, config)\n            assert implementation(state, new_keys, config)\n            for plane, (a, b) in enumerate(zip(state_values(state), state_values(expected), strict=True)):\n                assert bit_equal(a, b), (batch, heads, old_keys, new_keys, depth, plane,\n                                         a[0, 0, -1].view(torch.int32).item(),\n                                         b[0, 0, -1].view(torch.int32).item())\n            assert all(bit_equal(a, b) for a, b in zip(old_views, live_inputs, strict=True))\n            cases += 1\n    config = SynapticConfig()\n    state = build_presyn_state(2, 8, 2, torch.device(\"cuda\"), torch.float32, config)\n    state[\"C\"] = state[\"C\"].transpose(0, 1)\n    assert not implementation(state, 9, config)\n    assert state[\"C\"].shape == (2, 2, 8)\n    return cases\n\n\ndef trajectories(implementation):\n    comparisons = []\n    args = [(1, 4, 16, 40, 3), (2, 2, 29, 7, 0), (2, 2, 123, 9, 3), (1, 4, 250, 10, 1)]\n    for seed, (batch, kv_heads, prompt, steps, delay) in enumerate(args, 19628):\n        torch.manual_seed(seed)\n        config = GPTSynapticConfig(\n            sequence_len=prompt + steps, n_layer=2, n_head=4, n_kv_head=kv_heads, n_embd=64,\n            vocab_size=128, syn_cfg=SynapticConfig(native_presyn=True, native_genetics=True, endo_delay=delay),\n        )\n        model = GPTSynaptic(config).to(\"cuda\").eval()\n        model.reset_sequence_state()\n        engine = Engine(model, tokenizer=None)\n        tokens = torch.randint(0, config.vocab_size, (batch, prompt + steps), device=\"cuda\")\n        old = KVCache(batch, kv_heads, prompt + steps, 16, 2)\n        candidate = KVCache(batch, kv_heads, prompt + steps, 16, 2)\n        engine._forward(tokens[:, :prompt], old)\n        engine._forward(tokens[:, :prompt], candidate)\n        calls = 0\n\n        def count_pad(*args, **kwargs):\n            nonlocal calls\n            used = implementation(*args, **kwargs)\n            calls += used\n            return used\n\n        for pos in range(prompt, prompt + steps):\n            presyn_fused.pad_live_decode_state = lambda *_args, **_kwargs: False\n            expected, _ = engine._forward(tokens[:, pos:pos+1], old)\n            presyn_fused.pad_live_decode_state = count_pad\n            actual, _ = engine._forward(tokens[:, pos:pos+1], candidate)\n            assert bit_equal(expected, actual), (seed, pos, \"logits\")\n            assert old.pos == candidate.pos == pos + 1\n            assert bit_equal(old.kv_cache[:, :, :, :, :old.pos], candidate.kv_cache[:, :, :, :, :old.pos])\n            for layer, (a, b) in enumerate(zip(old.presyn_state, candidate.presyn_state, strict=True)):\n                assert all(bit_equal(x, y) for x, y in zip(state_values(a), state_values(b), strict=True)), (seed, pos, layer)\n        assert calls == 2 * steps, (calls, steps)\n        comparisons.append({\"batch\": batch, \"kv_heads\": kv_heads, \"prompt\": prompt, \"steps\": steps,\n                            \"delay_depth\": delay, \"exact_pad_calls\": calls})\n    return comparisons\n\n\ndef bench(implementation, mode):\n    harness = PerfRegressionHarness()\n    standard, syn = [replace(cfg, device=\"cuda\") for cfg in STANDARD_BENCHMARK_CONFIGS if cfg.mode==\"decode\"]\n    output = []\n\n    def run(phase, seed):\n        torch.manual_seed(seed)\n        presyn_fused.pad_live_decode_state = (implementation if phase == \"candidate\"\n                                               else lambda *_args, **_kwargs: False)\n        cfg = standard if phase == \"vanilla\" else syn\n        if mode == \"profile\":\n            cfg = replace(cfg, name=f\"cached_decode_{phase}\")\n        return harness.run_benchmark(cfg, nvtx=mode==\"profile\")\n\n    if mode == \"profile\":\n        for phase in (\"vanilla\", \"eager\", \"candidate\"):\n            output.append(asdict(run(phase, 20004)))\n        return output\n    for phase in (\"vanilla\", \"eager\", \"candidate\"):\n        run(phase, 20019)\n    for index, seed in enumerate(range(20020, 20028)):\n        order = [\"vanilla\", \"eager\", \"candidate\"][::(-1 if index % 2 else 1)]\n        results = {phase: run(phase, seed) for phase in order}\n        comparisons = {phase: asdict(harness.evaluate_budget_gates([results[\"vanilla\"], results[phase]])[0])\n                       for phase in (\"eager\", \"candidate\")}\n        output.append({\"seed\": seed, \"order\": order, \"comparisons\": comparisons,\n                       \"peak_memory_mb\": {phase: results[phase].peak_memory_mb for phase in results}})\n    return output\n\n\ndef main():\n    mode, out = sys.argv[1:]\n    implementation = presyn_fused.pad_live_decode_state\n    try:\n        if mode == \"parity\":\n            with torch.inference_mode():\n                result = {\"raw_cases\": raw_parity(implementation), \"traces\": trajectories(implementation)}\n        elif mode == \"profile\":\n            result = {\"benchmarks\": bench(implementation, mode)}\n        else:\n            runs = bench(implementation, mode)\n            result = {\n                \"runs\": runs,\n                \"median_paired_improvement\": statistics.median(\n                    1.0 - row[\"comparisons\"][\"candidate\"][\"slowdown_ratio\"] /\n                    row[\"comparisons\"][\"eager\"][\"slowdown_ratio\"] for row in runs\n                ),\n                \"median_ratios\": {\n                    phase: statistics.median(row[\"comparisons\"][phase][\"slowdown_ratio\"] for row in runs)\n                    for phase in (\"eager\", \"candidate\")\n                },\n                \"gate_passes\": {\n                    phase: sum(row[\"comparisons\"][phase][\"passed\"] for row in runs)\n                    for phase in (\"eager\", \"candidate\")\n                },\n            }\n    finally:\n        presyn_fused.pad_live_decode_state = implementation\n    with Path(out).open(\"x\", encoding=\"utf-8\") as stream:\n        json.dump(result, stream, sort_keys=True, indent=2, allow_nan=False)\n        stream.write(\"\\n\")\n    print(json.dumps({k:v for k,v in result.items() if k!=\"runs\"}, sort_keys=True))\n\n\nif __name__ == \"__main__\":\n    main()\n",
+      "sha256": "77a0a182b59ea0ac90a337e47b8ceb7aab05feda649fe9c248a893989ef24886"
+    },
+    "formal.patch": {
+      "content": "diff --git a/formal/lean/proof_artifacts.json b/formal/lean/proof_artifacts.json\nindex 638cc31..fa115b8 100644\n--- a/formal/lean/proof_artifacts.json\n+++ b/formal/lean/proof_artifacts.json\n@@ -1267,6 +1267,23 @@\n         }\n       ],\n       \"change_scope\": \"The preceding full CPU suite passed 2081 tests and rejected this source only at the stale runtime binding. DSR A19D3300-5ECA-4915-BBA8-E6421B4ABE79 independently observed all 140 reward-step write commits. The proof file is byte-identical. Energy conservation remains a statement about the original metriplectic transition.\"\n+    },\n+    {\n+      \"cycle_id\": \"cuda-decode-padding-runtime-binding-2026-11-24\",\n+      \"frog_id\": \"bio_inspired_nanochat-4nk\",\n+      \"hash_scope\": \"formal/lean/BioInspiredNanochat.lean\",\n+      \"artifact_hash\": \"sha256:831498bc2853d86701250ea89024ab5f5f6190d2e3a5a9ae66f93a7d5d42d963\",\n+      \"theorem_ids\": [\"BioInspiredNanochat.Metriplectic.energyRate_zero\"],\n+      \"axioms\": [\"propext\", \"Classical.choice\", \"Quot.sound\"],\n+      \"sorry_or_admit_present\": false,\n+      \"runtime_mapping\": [\n+        {\n+          \"path\": \"bio_inspired_nanochat/synaptic.py\",\n+          \"sha256\": \"d8d017346db059967e6b8a5a57f8f68d03df32b3670de3afb8bba8c2af521ca2\",\n+          \"change\": \"Inference-only native CUDA cache extension copies and initializes FP32 fields before the existing release transition. State carrying heat uses the existing extension path. The changed branch adds no transition to the reduced exact-real metriplectic model.\"\n+        }\n+      ],\n+      \"change_scope\": \"The compiled artifact with this Lean digest was audited in DSR afe60310-4007-40c5-a835-a7a8f2b1fc95. The CPU suite rejected the stale synaptic.py digest before rebinding. Independent byte comparisons cover the CUDA storage optimization; the Lean theorem concerns the reduced energy rate.\"\n     }\n   ]\n }\n",
+      "sha256": "22aa3b4da6c028f1c72f56d5ee204c1eb90f09b5b09aab692da73c45c705b886"
+    },
+    "graph_combo.py": {
+      "content": "\"\"\"Measure fixed-geometry CUDA graph replay over the actual cached forward seam.\"\"\"\nfrom __future__ import annotations\n\nimport json\nimport math\nimport statistics\nimport sys\nfrom pathlib import Path\nfrom time import perf_counter_ns\n\nimport torch\n\nfrom bio_inspired_nanochat.engine import Engine, KVCache\nfrom bio_inspired_nanochat.gpt import GPT, GPTConfig\nfrom bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig\nfrom bio_inspired_nanochat.kernels import presyn_fused\nfrom bio_inspired_nanochat.synaptic import SynapticConfig\n\nPROMPT = 16\nWARM = 20\nSTART = PROMPT + WARM\n\n\ndef synchronize():\n    torch.cuda.synchronize()\n\n\ndef cache_values(states):\n    if states is None:\n        return ()\n    fields = []\n    for layer in states:\n        for key, field in layer.items():\n            if isinstance(field, list):\n                fields.extend((key, item) for item in field)\n            else:\n                fields.append((key, field))\n    return tuple(fields)\n\n\ndef exact(a, b):\n    return a.shape == b.shape and torch.equal(\n        a.contiguous().view(torch.uint8), b.contiguous().view(torch.uint8)\n    )\n\n\ndef prepare(engine, sequence, steps):\n    reset = getattr(engine.model, \"reset_sequence_state\", None)\n    if reset is not None:\n        reset()\n    cache = KVCache(1, 4, START + steps, 16, 2)\n    engine._forward(sequence[:, :PROMPT], cache)\n    for offset in range(PROMPT, START):\n        engine._forward(sequence[:, offset:offset+1], cache)\n    assert cache.pos == START\n    return cache\n\n\ndef forward_chunk(engine, cache, inputs, geometry):\n    steps, greedy = geometry\n    current = inputs[:, 0:1]\n    logits, fed = [], []\n    for step in range(steps):\n        token = current if greedy else inputs[:, step:step+1]\n        fed.append(token)\n        result = engine._forward(token, cache)\n        output = result[0] if isinstance(result, tuple) else result\n        logits.append(output)\n        if greedy:\n            current = output[:, -1, :].argmax(dim=-1, keepdim=True)\n    return logits, torch.cat(fed, dim=1)\n\n\ndef check(eager, replay):\n    oracle_cache, oracle_logits, oracle_tokens = eager\n    static_cache, static_logits, static_tokens = replay\n    assert exact(oracle_tokens, static_tokens), \"token trajectory\"\n    assert len(oracle_logits) == len(static_logits)\n    assert all(exact(a, b) for a, b in zip(oracle_logits, static_logits, strict=True)), \"logits\"\n    assert oracle_cache.pos == static_cache.pos\n    pos = static_cache.pos\n    assert exact(oracle_cache.kv_cache[:, :, :, :, :pos], static_cache.kv_cache[:, :, :, :, :pos]), \"KV cache\"\n    source = cache_values(oracle_cache.presyn_state)\n    target = cache_values(static_cache.presyn_state)\n    for (ka, a), (kb, b) in zip(source, target, strict=True):\n        assert ka == kb and exact(a, b), (\"presyn\", ka, kb)\n    return len(static_logits)\n\n\ndef create_engine(synaptic, steps):\n    args = dict(sequence_len=START + steps, n_layer=2, n_head=4, n_kv_head=4, n_embd=64, vocab_size=128)\n    torch.manual_seed(34200)\n    if synaptic:\n        model = GPTSynaptic(GPTSynapticConfig(\n            **args, syn_cfg=SynapticConfig(native_presyn=True, native_genetics=True),\n        ))\n    else:\n        model = GPT(GPTConfig(**args))\n    return Engine(model.to(\"cuda\").eval(), tokenizer=None)\n\n\ndef sequence_for(seed, steps):\n    gen = torch.Generator(device=\"cuda\").manual_seed(seed)\n    return torch.randint(0, 128, (1, START + steps), device=\"cuda\", generator=gen)\n\n\ndef no_pad(*args, **kwargs):\n    return False\n\n\ndef one_arm(synaptic, geometry, packed=False):\n    steps, greedy = geometry\n    engine = create_engine(synaptic, steps)\n    sample = sequence_for(34201, steps)\n    warm_stream = torch.cuda.Stream()\n    warm_stream.wait_stream(torch.cuda.current_stream())\n    with torch.cuda.stream(warm_stream):\n        warm_cache = prepare(engine, sample, steps)\n        forward_chunk(engine, warm_cache, sample[:, START:], geometry)\n    torch.cuda.current_stream().wait_stream(warm_stream)\n\n    static_cache = prepare(engine, sample, steps)\n    static_initial_state = cache_values(static_cache.presyn_state)\n    static_input = sample[:, START:].clone()\n    graph = torch.cuda.CUDAGraph()\n    synchronize()\n    torch.cuda.reset_peak_memory_stats()\n    bytes_before = torch.cuda.memory_allocated()\n    original_pad = presyn_fused.pad_live_decode_state\n    captured_pads = 0\n\n    def counted_pad(*args, **kwargs):\n        nonlocal captured_pads\n        used = original_pad(*args, **kwargs)\n        captured_pads += used\n        return used\n\n    started = perf_counter_ns()\n    try:\n        if packed:\n            presyn_fused.pad_live_decode_state = counted_pad\n        with torch.cuda.graph(graph):\n            static_logits, static_tokens = forward_chunk(engine, static_cache, static_input, geometry)\n    finally:\n        presyn_fused.pad_live_decode_state = original_pad\n    synchronize()\n    capture_ns = perf_counter_ns() - started\n    extra_allocated_bytes = torch.cuda.max_memory_allocated() - bytes_before\n    assert captured_pads == (2 * steps if packed else 0), captured_pads\n    graph.replay()\n    synchronize()\n\n    def eager(sequence):\n        try:\n            if packed:\n                presyn_fused.pad_live_decode_state = no_pad\n            synchronize()\n            tick = perf_counter_ns()\n            cache = prepare(engine, sequence, steps)\n            synchronize()\n            prefix = perf_counter_ns() - tick\n            tick = perf_counter_ns()\n            logits, tokens = forward_chunk(engine, cache, sequence[:, START:], geometry)\n            synchronize()\n            return (cache, logits, tokens), prefix, perf_counter_ns() - tick\n        finally:\n            presyn_fused.pad_live_decode_state = original_pad\n\n    def replay(sequence):\n        synchronize()\n        tick = perf_counter_ns()\n        seed_cache = prepare(engine, sequence, steps)\n        synchronize()\n        prefix = perf_counter_ns() - tick\n        tick = perf_counter_ns()\n        static_cache.kv_cache[:, :, :, :, :START, :].copy_(\n            seed_cache.kv_cache[:, :, :, :, :START, :]\n        )\n        for (old_key, old_value), (new_key, new_value) in zip(\n            static_initial_state, cache_values(seed_cache.presyn_state), strict=True\n        ):\n            assert old_key == new_key and old_value.shape == new_value.shape\n            old_value.copy_(new_value)\n        static_input.copy_(sequence[:, START:])\n        graph.replay()\n        synchronize()\n        return (static_cache, static_logits, static_tokens), prefix, perf_counter_ns() - tick\n\n    rows = []\n    for i, seed in enumerate(range(34212, 34216)):\n        sequence = sequence_for(seed, steps)\n        if i % 2 == 0:\n            a, a_prefix, a_time = eager(sequence)\n            b, b_prefix, b_time = replay(sequence)\n        else:\n            b, b_prefix, b_time = replay(sequence)\n            a, a_prefix, a_time = eager(sequence)\n        exact_count = check(a, b)\n        rows.append({\n            \"seed\": seed, \"eager_prefix_ns\": a_prefix, \"eager_decode_ns\": a_time,\n            \"graph_prefix_ns\": b_prefix, \"graph_refresh_and_decode_ns\": b_time,\n            \"exact_steps\": exact_count,\n        })\n    eager_decode_ns = statistics.median(row[\"eager_decode_ns\"] for row in rows)\n    graph_decode_ns = statistics.median(row[\"graph_refresh_and_decode_ns\"] for row in rows)\n    difference = eager_decode_ns - graph_decode_ns\n    return {\n        \"tokens_per_request\": steps, \"mode\": \"greedy\" if greedy else \"forced\",\n        \"capture_ns\": capture_ns, \"capture_peak_allocated_increase_bytes\": extra_allocated_bytes,\n        \"captured_pad_launches\": captured_pads,\n        \"eager_decode_ns_median\": eager_decode_ns, \"graph_refresh_and_decode_ns_median\": graph_decode_ns,\n        \"eager_total_ns_median\": statistics.median(row[\"eager_prefix_ns\"] + row[\"eager_decode_ns\"] for row in rows),\n        \"graph_total_ns_median\": statistics.median(row[\"graph_prefix_ns\"] + row[\"graph_refresh_and_decode_ns\"] for row in rows),\n        \"decode_only_break_even_requests\": math.ceil(capture_ns / difference) if difference > 0 else None,\n        \"requests\": rows,\n    }\n\n\ndef main():\n    result = {}\n    pad = presyn_fused.pad_live_decode_state\n    with torch.inference_mode():\n        for name, geometry in {\"forced\": (200, False), \"greedy\": (32, True)}.items():\n            try:\n                presyn_fused.pad_live_decode_state = no_pad\n                vanilla = one_arm(False, geometry)\n                legacy = one_arm(True, geometry)\n                presyn_fused.pad_live_decode_state = pad\n                packed = one_arm(True, geometry, packed=True)\n            finally:\n                presyn_fused.pad_live_decode_state = pad\n            result[name] = {\"vanilla\": vanilla, \"synaptic\": legacy, \"synaptic_packed\": packed}\n            performance = result[name]\n            for metric in (\n                \"eager_decode_ns_median\", \"graph_refresh_and_decode_ns_median\",\n                \"eager_total_ns_median\", \"graph_total_ns_median\",\n            ):\n                performance[metric + \"_synaptic_over_vanilla\"] = (\n                    performance[\"synaptic\"][metric] / performance[\"vanilla\"][metric]\n                )\n                performance[metric + \"_synaptic_packed_over_vanilla\"] = (\n                    performance[\"synaptic_packed\"][metric] / performance[\"vanilla\"][metric]\n                )\n            print(name, json.dumps(performance, sort_keys=True), flush=True)\n    with Path(sys.argv[1]).open(\"x\", encoding=\"utf-8\") as stream:\n        json.dump(result, stream, indent=2, sort_keys=True, allow_nan=False)\n        stream.write(\"\\n\")\n\n\nif __name__ == \"__main__\":\n    main()\n",
+      "sha256": "4cf54bc265006c1cc574897325da21922dbf865e6c62738b7d50fd94ff4d5a25"
+    },
+    "graph_probe.py": {
+      "content": "\"\"\"Measure fixed-geometry CUDA graph replay over the actual cached forward seam.\"\"\"\nfrom __future__ import annotations\n\nimport json\nimport math\nimport statistics\nimport sys\nfrom pathlib import Path\nfrom time import perf_counter_ns\n\nimport torch\n\nfrom bio_inspired_nanochat.engine import Engine, KVCache\nfrom bio_inspired_nanochat.gpt import GPT, GPTConfig\nfrom bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig\nfrom bio_inspired_nanochat.synaptic import SynapticConfig\n\nPROMPT = 16\nWARM = 20\nSTART = PROMPT + WARM\n\n\ndef synchronize():\n    torch.cuda.synchronize()\n\n\ndef cache_values(states):\n    if states is None:\n        return ()\n    fields = []\n    for layer in states:\n        for key, field in layer.items():\n            if isinstance(field, list):\n                fields.extend((key, item) for item in field)\n            else:\n                fields.append((key, field))\n    return tuple(fields)\n\n\ndef exact(a, b):\n    return a.shape == b.shape and torch.equal(\n        a.contiguous().view(torch.uint8), b.contiguous().view(torch.uint8)\n    )\n\n\ndef prepare(engine, sequence, steps):\n    reset = getattr(engine.model, \"reset_sequence_state\", None)\n    if reset is not None:\n        reset()\n    cache = KVCache(1, 4, START + steps, 16, 2)\n    engine._forward(sequence[:, :PROMPT], cache)\n    for offset in range(PROMPT, START):\n        engine._forward(sequence[:, offset:offset+1], cache)\n    assert cache.pos == START\n    return cache\n\n\ndef forward_chunk(engine, cache, inputs, geometry):\n    steps, greedy = geometry\n    current = inputs[:, 0:1]\n    logits, fed = [], []\n    for step in range(steps):\n        token = current if greedy else inputs[:, step:step+1]\n        fed.append(token)\n        output = engine._forward(token, cache)\n        logits.append(output)\n        if greedy:\n            current = output[:, -1, :].argmax(dim=-1, keepdim=True)\n    return logits, torch.cat(fed, dim=1)\n\n\ndef check(eager, replay):\n    oracle_cache, oracle_logits, oracle_tokens = eager\n    static_cache, static_logits, static_tokens = replay\n    assert exact(oracle_tokens, static_tokens), \"token trajectory\"\n    assert len(oracle_logits) == len(static_logits)\n    assert all(exact(a, b) for a, b in zip(oracle_logits, static_logits, strict=True)), \"logits\"\n    assert oracle_cache.pos == static_cache.pos\n    pos = static_cache.pos\n    assert exact(oracle_cache.kv_cache[:, :, :, :, :pos], static_cache.kv_cache[:, :, :, :, :pos]), \"KV cache\"\n    source = cache_values(oracle_cache.presyn_state)\n    target = cache_values(static_cache.presyn_state)\n    for (ka, a), (kb, b) in zip(source, target, strict=True):\n        assert ka == kb and exact(a, b), (\"presyn\", ka, kb)\n    return len(static_logits)\n\n\ndef create_engine(synaptic, steps):\n    args = dict(sequence_len=START + steps, n_layer=2, n_head=4, n_kv_head=4, n_embd=64, vocab_size=128)\n    torch.manual_seed(34200)\n    if synaptic:\n        model = GPTSynaptic(GPTSynapticConfig(\n            **args, syn_cfg=SynapticConfig(native_presyn=True, native_genetics=True),\n        ))\n    else:\n        model = GPT(GPTConfig(**args))\n    return Engine(model.to(\"cuda\").eval(), tokenizer=None)\n\n\ndef sequence_for(seed, steps):\n    gen = torch.Generator(device=\"cuda\").manual_seed(seed)\n    return torch.randint(0, 128, (1, START + steps), device=\"cuda\", generator=gen)\n\n\ndef one_arm(synaptic, geometry):\n    steps, greedy = geometry\n    engine = create_engine(synaptic, steps)\n    sample = sequence_for(34201, steps)\n    warm_stream = torch.cuda.Stream()\n    warm_stream.wait_stream(torch.cuda.current_stream())\n    with torch.cuda.stream(warm_stream):\n        warm_cache = prepare(engine, sample, steps)\n        forward_chunk(engine, warm_cache, sample[:, START:], geometry)\n    torch.cuda.current_stream().wait_stream(warm_stream)\n\n    static_cache = prepare(engine, sample, steps)\n    static_initial_state = cache_values(static_cache.presyn_state)\n    static_input = sample[:, START:].clone()\n    graph = torch.cuda.CUDAGraph()\n    synchronize()\n    bytes_before = torch.cuda.memory_reserved()\n    started = perf_counter_ns()\n    with torch.cuda.graph(graph):\n        static_logits, static_tokens = forward_chunk(engine, static_cache, static_input, geometry)\n    synchronize()\n    capture_ns = perf_counter_ns() - started\n    extra_reserved_bytes = torch.cuda.memory_reserved() - bytes_before\n    graph.replay()\n    synchronize()\n\n    def eager(sequence):\n        synchronize()\n        tick = perf_counter_ns()\n        cache = prepare(engine, sequence, steps)\n        synchronize()\n        prefix = perf_counter_ns() - tick\n        tick = perf_counter_ns()\n        logits, tokens = forward_chunk(engine, cache, sequence[:, START:], geometry)\n        synchronize()\n        return (cache, logits, tokens), prefix, perf_counter_ns() - tick\n\n    def replay(sequence):\n        synchronize()\n        tick = perf_counter_ns()\n        seed_cache = prepare(engine, sequence, steps)\n        synchronize()\n        prefix = perf_counter_ns() - tick\n        tick = perf_counter_ns()\n        static_cache.kv_cache[:, :, :, :, :START, :].copy_(\n            seed_cache.kv_cache[:, :, :, :, :START, :]\n        )\n        for (old_key, old_value), (new_key, new_value) in zip(\n            static_initial_state, cache_values(seed_cache.presyn_state), strict=True\n        ):\n            assert old_key == new_key and old_value.shape == new_value.shape\n            old_value.copy_(new_value)\n        static_input.copy_(sequence[:, START:])\n        graph.replay()\n        synchronize()\n        return (static_cache, static_logits, static_tokens), prefix, perf_counter_ns() - tick\n\n    rows = []\n    for i, seed in enumerate(range(34202, 34206)):\n        sequence = sequence_for(seed, steps)\n        if i % 2 == 0:\n            a, a_prefix, a_time = eager(sequence)\n            b, b_prefix, b_time = replay(sequence)\n        else:\n            b, b_prefix, b_time = replay(sequence)\n            a, a_prefix, a_time = eager(sequence)\n        exact_count = check(a, b)\n        rows.append({\n            \"seed\": seed, \"eager_prefix_ns\": a_prefix, \"eager_decode_ns\": a_time,\n            \"graph_prefix_ns\": b_prefix, \"graph_refresh_and_decode_ns\": b_time,\n            \"exact_steps\": exact_count,\n        })\n    eager_decode_ns = statistics.median(row[\"eager_decode_ns\"] for row in rows)\n    graph_decode_ns = statistics.median(row[\"graph_refresh_and_decode_ns\"] for row in rows)\n    difference = eager_decode_ns - graph_decode_ns\n    return {\n        \"tokens_per_request\": steps, \"mode\": \"greedy\" if greedy else \"forced\",\n        \"capture_ns\": capture_ns, \"extra_reserved_bytes_after_capture\": extra_reserved_bytes,\n        \"eager_decode_ns_median\": eager_decode_ns, \"graph_refresh_and_decode_ns_median\": graph_decode_ns,\n        \"eager_total_ns_median\": statistics.median(row[\"eager_prefix_ns\"] + row[\"eager_decode_ns\"] for row in rows),\n        \"graph_total_ns_median\": statistics.median(row[\"graph_prefix_ns\"] + row[\"graph_refresh_and_decode_ns\"] for row in rows),\n        \"decode_only_break_even_requests\": math.ceil(capture_ns / difference) if difference > 0 else None,\n        \"requests\": rows,\n    }\n\n\ndef main():\n    result = {}\n    with torch.inference_mode():\n        for name, geometry in {\"forced\": (200, False), \"greedy\": (32, True)}.items():\n            result[name] = {\"vanilla\": one_arm(False, geometry), \"synaptic\": one_arm(True, geometry)}\n            performance = result[name]\n            for metric in (\n                \"eager_decode_ns_median\", \"graph_refresh_and_decode_ns_median\",\n                \"eager_total_ns_median\", \"graph_total_ns_median\",\n            ):\n                performance[metric + \"_synaptic_over_vanilla\"] = (\n                    performance[\"synaptic\"][metric] / performance[\"vanilla\"][metric]\n                )\n            print(name, json.dumps(performance, sort_keys=True), flush=True)\n    with Path(sys.argv[1]).open(\"x\", encoding=\"utf-8\") as stream:\n        json.dump(result, stream, indent=2, sort_keys=True, allow_nan=False)\n        stream.write(\"\\n\")\n\n\nif __name__ == \"__main__\":\n    main()\n",
+      "sha256": "9abdb401d1c4b7dc299317d045fd0f5a3ad939c0f1bfc66a8ea387503968ad34"
+    },
+    "graph_probe_exact.py": {
+      "content": "\"\"\"Measure fixed-geometry CUDA graph replay over the actual cached forward seam.\"\"\"\nfrom __future__ import annotations\n\nimport json\nimport math\nimport statistics\nimport sys\nfrom pathlib import Path\nfrom time import perf_counter_ns\n\nimport torch\n\nfrom bio_inspired_nanochat.engine import Engine, KVCache\nfrom bio_inspired_nanochat.gpt import GPT, GPTConfig\nfrom bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig\nfrom bio_inspired_nanochat.synaptic import SynapticConfig\n\nPROMPT = 16\nWARM = 20\nSTART = PROMPT + WARM\n\n\ndef synchronize():\n    torch.cuda.synchronize()\n\n\ndef cache_values(states):\n    if states is None:\n        return ()\n    fields = []\n    for layer in states:\n        for key, field in layer.items():\n            if isinstance(field, list):\n                fields.extend((key, item) for item in field)\n            else:\n                fields.append((key, field))\n    return tuple(fields)\n\n\ndef exact(a, b):\n    return a.shape == b.shape and torch.equal(\n        a.contiguous().view(torch.uint8), b.contiguous().view(torch.uint8)\n    )\n\n\ndef prepare(engine, sequence, steps):\n    reset = getattr(engine.model, \"reset_sequence_state\", None)\n    if reset is not None:\n        reset()\n    cache = KVCache(1, 4, START + steps, 16, 2)\n    engine._forward(sequence[:, :PROMPT], cache)\n    for offset in range(PROMPT, START):\n        engine._forward(sequence[:, offset:offset+1], cache)\n    assert cache.pos == START\n    return cache\n\n\ndef forward_chunk(engine, cache, inputs, geometry):\n    steps, greedy = geometry\n    current = inputs[:, 0:1]\n    logits, fed = [], []\n    for step in range(steps):\n        token = current if greedy else inputs[:, step:step+1]\n        fed.append(token)\n        result = engine._forward(token, cache)\n        output = result[0] if isinstance(result, tuple) else result\n        logits.append(output)\n        if greedy:\n            current = output[:, -1, :].argmax(dim=-1, keepdim=True)\n    return logits, torch.cat(fed, dim=1)\n\n\ndef check(eager, replay):\n    oracle_cache, oracle_logits, oracle_tokens = eager\n    static_cache, static_logits, static_tokens = replay\n    assert exact(oracle_tokens, static_tokens), \"token trajectory\"\n    assert len(oracle_logits) == len(static_logits)\n    assert all(exact(a, b) for a, b in zip(oracle_logits, static_logits, strict=True)), \"logits\"\n    assert oracle_cache.pos == static_cache.pos\n    pos = static_cache.pos\n    assert exact(oracle_cache.kv_cache[:, :, :, :, :pos], static_cache.kv_cache[:, :, :, :, :pos]), \"KV cache\"\n    source = cache_values(oracle_cache.presyn_state)\n    target = cache_values(static_cache.presyn_state)\n    for (ka, a), (kb, b) in zip(source, target, strict=True):\n        assert ka == kb and exact(a, b), (\"presyn\", ka, kb)\n    return len(static_logits)\n\n\ndef create_engine(synaptic, steps):\n    args = dict(sequence_len=START + steps, n_layer=2, n_head=4, n_kv_head=4, n_embd=64, vocab_size=128)\n    torch.manual_seed(34200)\n    if synaptic:\n        model = GPTSynaptic(GPTSynapticConfig(\n            **args, syn_cfg=SynapticConfig(native_presyn=True, native_genetics=True),\n        ))\n    else:\n        model = GPT(GPTConfig(**args))\n    return Engine(model.to(\"cuda\").eval(), tokenizer=None)\n\n\ndef sequence_for(seed, steps):\n    gen = torch.Generator(device=\"cuda\").manual_seed(seed)\n    return torch.randint(0, 128, (1, START + steps), device=\"cuda\", generator=gen)\n\n\ndef one_arm(synaptic, geometry):\n    steps, greedy = geometry\n    engine = create_engine(synaptic, steps)\n    sample = sequence_for(34201, steps)\n    warm_stream = torch.cuda.Stream()\n    warm_stream.wait_stream(torch.cuda.current_stream())\n    with torch.cuda.stream(warm_stream):\n        warm_cache = prepare(engine, sample, steps)\n        forward_chunk(engine, warm_cache, sample[:, START:], geometry)\n    torch.cuda.current_stream().wait_stream(warm_stream)\n\n    static_cache = prepare(engine, sample, steps)\n    static_initial_state = cache_values(static_cache.presyn_state)\n    static_input = sample[:, START:].clone()\n    graph = torch.cuda.CUDAGraph()\n    synchronize()\n    bytes_before = torch.cuda.memory_reserved()\n    started = perf_counter_ns()\n    with torch.cuda.graph(graph):\n        static_logits, static_tokens = forward_chunk(engine, static_cache, static_input, geometry)\n    synchronize()\n    capture_ns = perf_counter_ns() - started\n    extra_reserved_bytes = torch.cuda.memory_reserved() - bytes_before\n    graph.replay()\n    synchronize()\n\n    def eager(sequence):\n        synchronize()\n        tick = perf_counter_ns()\n        cache = prepare(engine, sequence, steps)\n        synchronize()\n        prefix = perf_counter_ns() - tick\n        tick = perf_counter_ns()\n        logits, tokens = forward_chunk(engine, cache, sequence[:, START:], geometry)\n        synchronize()\n        return (cache, logits, tokens), prefix, perf_counter_ns() - tick\n\n    def replay(sequence):\n        synchronize()\n        tick = perf_counter_ns()\n        seed_cache = prepare(engine, sequence, steps)\n        synchronize()\n        prefix = perf_counter_ns() - tick\n        tick = perf_counter_ns()\n        static_cache.kv_cache[:, :, :, :, :START, :].copy_(\n            seed_cache.kv_cache[:, :, :, :, :START, :]\n        )\n        for (old_key, old_value), (new_key, new_value) in zip(\n            static_initial_state, cache_values(seed_cache.presyn_state), strict=True\n        ):\n            assert old_key == new_key and old_value.shape == new_value.shape\n            old_value.copy_(new_value)\n        static_input.copy_(sequence[:, START:])\n        graph.replay()\n        synchronize()\n        return (static_cache, static_logits, static_tokens), prefix, perf_counter_ns() - tick\n\n    rows = []\n    for i, seed in enumerate(range(34202, 34206)):\n        sequence = sequence_for(seed, steps)\n        if i % 2 == 0:\n            a, a_prefix, a_time = eager(sequence)\n            b, b_prefix, b_time = replay(sequence)\n        else:\n            b, b_prefix, b_time = replay(sequence)\n            a, a_prefix, a_time = eager(sequence)\n        exact_count = check(a, b)\n        rows.append({\n            \"seed\": seed, \"eager_prefix_ns\": a_prefix, \"eager_decode_ns\": a_time,\n            \"graph_prefix_ns\": b_prefix, \"graph_refresh_and_decode_ns\": b_time,\n            \"exact_steps\": exact_count,\n        })\n    eager_decode_ns = statistics.median(row[\"eager_decode_ns\"] for row in rows)\n    graph_decode_ns = statistics.median(row[\"graph_refresh_and_decode_ns\"] for row in rows)\n    difference = eager_decode_ns - graph_decode_ns\n    return {\n        \"tokens_per_request\": steps, \"mode\": \"greedy\" if greedy else \"forced\",\n        \"capture_ns\": capture_ns, \"extra_reserved_bytes_after_capture\": extra_reserved_bytes,\n        \"eager_decode_ns_median\": eager_decode_ns, \"graph_refresh_and_decode_ns_median\": graph_decode_ns,\n        \"eager_total_ns_median\": statistics.median(row[\"eager_prefix_ns\"] + row[\"eager_decode_ns\"] for row in rows),\n        \"graph_total_ns_median\": statistics.median(row[\"graph_prefix_ns\"] + row[\"graph_refresh_and_decode_ns\"] for row in rows),\n        \"decode_only_break_even_requests\": math.ceil(capture_ns / difference) if difference > 0 else None,\n        \"requests\": rows,\n    }\n\n\ndef main():\n    result = {}\n    with torch.inference_mode():\n        for name, geometry in {\"forced\": (200, False), \"greedy\": (32, True)}.items():\n            result[name] = {\"vanilla\": one_arm(False, geometry), \"synaptic\": one_arm(True, geometry)}\n            performance = result[name]\n            for metric in (\n                \"eager_decode_ns_median\", \"graph_refresh_and_decode_ns_median\",\n                \"eager_total_ns_median\", \"graph_total_ns_median\",\n            ):\n                performance[metric + \"_synaptic_over_vanilla\"] = (\n                    performance[\"synaptic\"][metric] / performance[\"vanilla\"][metric]\n                )\n            print(name, json.dumps(performance, sort_keys=True), flush=True)\n    with Path(sys.argv[1]).open(\"x\", encoding=\"utf-8\") as stream:\n        json.dump(result, stream, indent=2, sort_keys=True, allow_nan=False)\n        stream.write(\"\\n\")\n\n\nif __name__ == \"__main__\":\n    main()\n",
+      "sha256": "75346a9c3785bb76bc3bdac1aae4b64269af7426c51d5410d0eea395c67e2625"
+    },
+    "pad-bits.patch": {
+      "content": "diff --git a/bio_inspired_nanochat/kernels/presyn_fused.py b/bio_inspired_nanochat/kernels/presyn_fused.py\nindex 62df16d..a43e5ef 100644\n--- a/bio_inspired_nanochat/kernels/presyn_fused.py\n+++ b/bio_inspired_nanochat/kernels/presyn_fused.py\n@@ -1,3 +1,4 @@\n+import struct\n from typing import Any, cast\n \n from bio_inspired_nanochat.torch_imports import torch  # noqa: F401\n@@ -16,6 +17,70 @@ def _sigmoid(x):\n # -----------------------------------------------------------------------------\n \n \n+@triton.jit\n+def _pad_decode_state_kernel(\n+    inputs,\n+    output,\n+    old_keys,\n+    new_keys,\n+    plane_size,\n+    initial: tl.constexpr,\n+    block: tl.constexpr,\n+):\n+    offset = tl.program_id(0) * block + tl.arange(0, block)\n+    key = offset % new_keys\n+    source = (offset // new_keys) * old_keys + key\n+    active = offset < plane_size\n+    previous = active & (key < old_keys)\n+    output_bits = output.to(tl.pointer_type(tl.uint32))\n+    for plane in tl.static_range(len(initial)):\n+        input_bits = inputs[plane].to(tl.pointer_type(tl.uint32))\n+        bits = tl.load(input_bits + source, mask=previous, other=initial[plane])\n+        tl.store(output_bits + plane * plane_size + offset, bits, mask=active)\n+\n+\n+def pad_live_decode_state(state: dict[str, Any], key_count: int, cfg: Any) -> bool:\n+    \"\"\"Extend contiguous per-connection CUDA state in one copy-and-fill launch.\"\"\"\n+    old = state[\"C\"]\n+    batch, heads, old_keys = old.shape\n+    names = (\"C\", \"BUF\", \"RRP\", \"RES\", \"PR\", \"CL\", \"E\", \"AMP\")\n+    delay = state[\"DELAY\"]\n+    if (\n+        old.dtype != torch.float32 or not old.is_cuda or old.numel() == 0\n+        or key_count <= old_keys or len(delay) != cfg.endo_delay\n+    ):\n+        return False\n+    inputs = tuple(state[name] for name in names) + tuple(delay)\n+    if any(\n+        item.shape != old.shape or item.device != old.device\n+        or item.dtype != old.dtype or not item.is_contiguous()\n+        for item in inputs\n+    ):\n+        return False\n+    # Copy and initialize raw float32 bits, including negative zero.\n+    try:\n+        initial = (0, 0) + struct.unpack(\n+            \"=6I\", struct.pack(\n+                \"=6f\", cfg.init_rrp, cfg.init_reserve, cfg.init_snare,\n+                cfg.init_clamp, cfg.init_energy, cfg.init_amp,\n+            ),\n+        ) + (0,) * len(delay)\n+    except OverflowError:\n+        return False\n+    output = torch.empty(\n+        (len(inputs), batch, heads, key_count), device=old.device, dtype=old.dtype\n+    )\n+    plane_size = batch * heads * key_count\n+    block = 128\n+    _pad_decode_state_kernel[(triton.cdiv(plane_size, block),)](\n+        inputs, output, old_keys, key_count, plane_size, initial, block\n+    )\n+    planes = output.unbind()\n+    state.update(zip(names, planes[:len(names)], strict=True))\n+    state[\"DELAY\"] = list(planes[len(names):])\n+    return True\n+\n+\n @triton.jit\n def _stable_softplus(x):\n     \"\"\"Numerically stable float32 softplus for finite values and +/-inf.\"\"\"\ndiff --git a/bio_inspired_nanochat/synaptic.py b/bio_inspired_nanochat/synaptic.py\nindex c30137c..5b18d42 100644\n--- a/bio_inspired_nanochat/synaptic.py\n+++ b/bio_inspired_nanochat/synaptic.py\n@@ -4251,6 +4251,20 @@ class SynapticCausalSelfAttention(nn.Module):\n \n             if T_state < Tk:\n                 state_dtype = c_state.dtype\n+                if (\n+                    Tq == 1\n+                    and kv_cache is not None\n+                    and cfg.native_presyn\n+                    and device.type == \"cuda\"\n+                    and state_dtype == torch.float32\n+                    and not train_mode\n+                    and not torch.is_grad_enabled()\n+                    and \"HEAT\" not in presyn_state\n+                ):\n+                    from bio_inspired_nanochat.kernels.presyn_fused import pad_live_decode_state\n+\n+                    if pad_live_decode_state(presyn_state, Tk, cfg):\n+                        T_state = Tk\n                 use_cpu_cap = (\n                     Tq == 1\n                     and cfg.native_presyn\n@@ -4327,7 +4341,7 @@ class SynapticCausalSelfAttention(nn.Module):\n                         presyn_state[\"DELAY\"] = [\n                             _grow_zero(d) for d in presyn_state[\"DELAY\"]\n                         ]\n-                else:\n+                elif T_state < Tk:\n                     T_add = Tk - T_state\n                     pad_shape = (B, H, T_add)\n                     pad_zeros = torch.zeros(pad_shape, device=device, dtype=state_dtype)\n",
+      "sha256": "f652969f60521f48c670adef82c37b421977e84c71f4488757200131131689e1"
+    },
+    "pad.patch": {
+      "content": "diff --git a/bio_inspired_nanochat/kernels/presyn_fused.py b/bio_inspired_nanochat/kernels/presyn_fused.py\nindex 62df16d..bb347df 100644\n--- a/bio_inspired_nanochat/kernels/presyn_fused.py\n+++ b/bio_inspired_nanochat/kernels/presyn_fused.py\n@@ -16,6 +16,59 @@ def _sigmoid(x):\n # -----------------------------------------------------------------------------\n \n \n+@triton.jit\n+def _pad_decode_state_kernel(\n+    inputs,\n+    output,\n+    old_keys,\n+    new_keys,\n+    plane_size,\n+    initial: tl.constexpr,\n+    block: tl.constexpr,\n+):\n+    offset = tl.program_id(0) * block + tl.arange(0, block)\n+    key = offset % new_keys\n+    source = (offset // new_keys) * old_keys + key\n+    active = offset < plane_size\n+    previous = active & (key < old_keys)\n+    for plane in tl.static_range(len(initial)):\n+        values = tl.load(inputs[plane] + source, mask=previous, other=initial[plane])\n+        tl.store(output + plane * plane_size + offset, values, mask=active)\n+\n+\n+def pad_live_decode_state(state: dict[str, Any], key_count: int, cfg: Any) -> bool:\n+    \"\"\"Extend contiguous per-connection CUDA state in one copy-and-fill launch.\"\"\"\n+    old = state[\"C\"]\n+    batch, heads, old_keys = old.shape\n+    names = (\"C\", \"BUF\", \"RRP\", \"RES\", \"PR\", \"CL\", \"E\", \"AMP\")\n+    delay = state[\"DELAY\"]\n+    if old.numel() == 0 or key_count <= old_keys or len(delay) != cfg.endo_delay:\n+        return False\n+    inputs = tuple(state[name] for name in names) + tuple(delay)\n+    if any(\n+        item.shape != old.shape or item.device != old.device\n+        or item.dtype != old.dtype or not item.is_contiguous()\n+        for item in inputs\n+    ):\n+        return False\n+    initial = (\n+        0.0, 0.0, float(cfg.init_rrp), float(cfg.init_reserve), float(cfg.init_snare),\n+        float(cfg.init_clamp), float(cfg.init_energy), float(cfg.init_amp),\n+    ) + (0.0,) * len(delay)\n+    output = torch.empty(\n+        (len(inputs), batch, heads, key_count), device=old.device, dtype=old.dtype\n+    )\n+    plane_size = batch * heads * key_count\n+    block = 128\n+    _pad_decode_state_kernel[(triton.cdiv(plane_size, block),)](\n+        inputs, output, old_keys, key_count, plane_size, initial, block\n+    )\n+    planes = output.unbind()\n+    state.update(zip(names, planes[:len(names)], strict=True))\n+    state[\"DELAY\"] = list(planes[len(names):])\n+    return True\n+\n+\n @triton.jit\n def _stable_softplus(x):\n     \"\"\"Numerically stable float32 softplus for finite values and +/-inf.\"\"\"\ndiff --git a/bio_inspired_nanochat/synaptic.py b/bio_inspired_nanochat/synaptic.py\nindex c30137c..5b18d42 100644\n--- a/bio_inspired_nanochat/synaptic.py\n+++ b/bio_inspired_nanochat/synaptic.py\n@@ -4251,6 +4251,20 @@ class SynapticCausalSelfAttention(nn.Module):\n \n             if T_state < Tk:\n                 state_dtype = c_state.dtype\n+                if (\n+                    Tq == 1\n+                    and kv_cache is not None\n+                    and cfg.native_presyn\n+                    and device.type == \"cuda\"\n+                    and state_dtype == torch.float32\n+                    and not train_mode\n+                    and not torch.is_grad_enabled()\n+                    and \"HEAT\" not in presyn_state\n+                ):\n+                    from bio_inspired_nanochat.kernels.presyn_fused import pad_live_decode_state\n+\n+                    if pad_live_decode_state(presyn_state, Tk, cfg):\n+                        T_state = Tk\n                 use_cpu_cap = (\n                     Tq == 1\n                     and cfg.native_presyn\n@@ -4327,7 +4341,7 @@ class SynapticCausalSelfAttention(nn.Module):\n                         presyn_state[\"DELAY\"] = [\n                             _grow_zero(d) for d in presyn_state[\"DELAY\"]\n                         ]\n-                else:\n+                elif T_state < Tk:\n                     T_add = Tk - T_state\n                     pad_shape = (B, H, T_add)\n                     pad_zeros = torch.zeros(pad_shape, device=device, dtype=state_dtype)\n",
+      "sha256": "49b77fbface75eada7f33145681848156af9aa01c30b4f09d10bb2e4125b7809"
+    },
+    "production.patch": {
+      "content": "diff --git a/bio_inspired_nanochat/kernels/presyn_fused.py b/bio_inspired_nanochat/kernels/presyn_fused.py\nindex 62df16d..07be6c9 100644\n--- a/bio_inspired_nanochat/kernels/presyn_fused.py\n+++ b/bio_inspired_nanochat/kernels/presyn_fused.py\n@@ -1,9 +1,14 @@\n-from typing import Any, cast\n+import math\n+import struct\n+from typing import TYPE_CHECKING, Any, cast\n \n-from bio_inspired_nanochat.torch_imports import torch  # noqa: F401\n import triton\n import triton.language as tl\n-import math\n+\n+from bio_inspired_nanochat.torch_imports import torch\n+\n+if TYPE_CHECKING:\n+    from bio_inspired_nanochat.synaptic import SynapticConfig\n \n @triton.jit\n def _sigmoid(x):\n@@ -16,6 +21,82 @@ def _sigmoid(x):\n # -----------------------------------------------------------------------------\n \n \n+@triton.jit\n+def _pad_decode_state_kernel(\n+    inputs,\n+    output,\n+    old_keys,\n+    new_keys,\n+    plane_size,\n+    initial: tl.constexpr,\n+    plane_count: tl.constexpr,\n+    block: tl.constexpr,\n+):\n+    offset = tl.program_id(0) * block + tl.arange(0, block)\n+    key = offset % new_keys\n+    source = (offset // new_keys) * old_keys + key\n+    active = offset < plane_size\n+    previous = active & (key < old_keys)\n+    output_bits = output.to(tl.pointer_type(tl.uint32))\n+    for plane in tl.static_range(plane_count):\n+        input_bits = inputs[plane].to(tl.pointer_type(tl.uint32))\n+        bits = tl.load(input_bits + source, mask=previous, other=initial[plane])\n+        tl.store(output_bits + plane * plane_size + offset, bits, mask=active)\n+\n+\n+def pad_live_decode_state(state: dict[str, Any], key_count: int, cfg: \"SynapticConfig\") -> bool:\n+    \"\"\"Extend contiguous per-connection CUDA state in one copy-and-fill launch.\"\"\"\n+    old = state[\"C\"]\n+    batch, heads, old_keys = old.shape\n+    names = (\"C\", \"BUF\", \"RRP\", \"RES\", \"PR\", \"CL\", \"E\", \"AMP\")\n+    delay = state[\"DELAY\"]\n+    if (\n+        old.dtype != torch.float32\n+        or not old.is_cuda\n+        or old.numel() == 0\n+        or key_count <= old_keys\n+        or len(delay) != cfg.endo_delay\n+    ):\n+        return False\n+    inputs = tuple(state[name] for name in names) + tuple(delay)\n+    if any(\n+        item.shape != old.shape\n+        or item.device != old.device\n+        or item.dtype != old.dtype\n+        or not item.is_contiguous()\n+        for item in inputs\n+    ):\n+        return False\n+    # Copy and initialize raw float32 bits, including negative zero.\n+    try:\n+        fills = struct.pack(\n+            \"=6f\", cfg.init_rrp, cfg.init_reserve, cfg.init_snare,\n+            cfg.init_clamp, cfg.init_energy, cfg.init_amp,\n+        )\n+    except OverflowError:\n+        return False\n+    initial = (0, 0) + struct.unpack(\"=6I\", fills) + (0,) * len(delay)\n+    output = torch.empty(\n+        (len(inputs), batch, heads, key_count), device=old.device, dtype=old.dtype\n+    )\n+    plane_size = batch * heads * key_count\n+    block = 128\n+    _pad_decode_state_kernel[(triton.cdiv(plane_size, block),)](\n+        inputs,\n+        output,\n+        old_keys,\n+        key_count,\n+        plane_size,\n+        initial=cast(Any, initial),\n+        plane_count=cast(Any, len(inputs)),\n+        block=cast(Any, block),\n+    )\n+    planes = output.unbind()\n+    state.update(zip(names, planes[: len(names)], strict=True))\n+    state[\"DELAY\"] = list(planes[len(names):])\n+    return True\n+\n+\n @triton.jit\n def _stable_softplus(x):\n     \"\"\"Numerically stable float32 softplus for finite values and +/-inf.\"\"\"\ndiff --git a/bio_inspired_nanochat/synaptic.py b/bio_inspired_nanochat/synaptic.py\nindex c30137c..5b18d42 100644\n--- a/bio_inspired_nanochat/synaptic.py\n+++ b/bio_inspired_nanochat/synaptic.py\n@@ -4251,6 +4251,20 @@ class SynapticCausalSelfAttention(nn.Module):\n \n             if T_state < Tk:\n                 state_dtype = c_state.dtype\n+                if (\n+                    Tq == 1\n+                    and kv_cache is not None\n+                    and cfg.native_presyn\n+                    and device.type == \"cuda\"\n+                    and state_dtype == torch.float32\n+                    and not train_mode\n+                    and not torch.is_grad_enabled()\n+                    and \"HEAT\" not in presyn_state\n+                ):\n+                    from bio_inspired_nanochat.kernels.presyn_fused import pad_live_decode_state\n+\n+                    if pad_live_decode_state(presyn_state, Tk, cfg):\n+                        T_state = Tk\n                 use_cpu_cap = (\n                     Tq == 1\n                     and cfg.native_presyn\n@@ -4327,7 +4341,7 @@ class SynapticCausalSelfAttention(nn.Module):\n                         presyn_state[\"DELAY\"] = [\n                             _grow_zero(d) for d in presyn_state[\"DELAY\"]\n                         ]\n-                else:\n+                elif T_state < Tk:\n                     T_add = Tk - T_state\n                     pad_shape = (B, H, T_add)\n                     pad_zeros = torch.zeros(pad_shape, device=device, dtype=state_dtype)\ndiff --git a/tests/test_presyn_fused_live.py b/tests/test_presyn_fused_live.py\nindex 03596af..f22df20 100644\n--- a/tests/test_presyn_fused_live.py\n+++ b/tests/test_presyn_fused_live.py\n@@ -152,6 +152,32 @@ def test_native_presyn_is_default_off_and_cpu_falls_back():\n     )\n \n \n+@pytest.mark.gpu\n+@pytest.mark.parametrize(\"delay_depth\", (0, 3, 5))\n+def test_live_decode_state_padding_preserves_prefix_and_float32_fill_bits(delay_depth: int):\n+    from bio_inspired_nanochat.kernels.presyn_fused import pad_live_decode_state\n+\n+    device = torch.device(\"cuda\")\n+    cfg = SynapticConfig(endo_delay=delay_depth, init_snare=-0.0, init_rrp=0.512345)\n+    state = build_presyn_state(2, 128, 3, device, torch.float32, cfg)\n+    expected = build_presyn_state(2, 129, 3, device, torch.float32, cfg)\n+    fields = (\"C\", \"BUF\", \"RRP\", \"RES\", \"PR\", \"CL\", \"E\", \"AMP\")\n+    old_pairs = [(state[name], expected[name]) for name in fields]\n+    old_pairs.extend(zip(state[\"DELAY\"], expected[\"DELAY\"], strict=True))\n+    for live, padded in old_pairs:\n+        live.uniform_(0.0, 1.0)\n+        padded[..., :128].copy_(live)\n+\n+    with torch.inference_mode():\n+        assert pad_live_decode_state(state, 129, cfg)\n+        for live, padded in [(state[name], expected[name]) for name in fields] + list(\n+            zip(state[\"DELAY\"], expected[\"DELAY\"], strict=True)\n+        ):\n+            assert torch.equal(live.view(torch.int32), padded.view(torch.int32))\n+        for old, padded in old_pairs:\n+            assert torch.equal(old, padded[..., :128])\n+\n+\n @pytest.mark.gpu\n @pytest.mark.golden\n @pytest.mark.parametrize((\"t_key\", \"topk\"), ((11, 4), (137, 4), (257, 32)))\n",
+      "sha256": "21cda6f3ce0545237e1edd9a39c10e893b2f5a899d838ebe2f68e891325c8ac7"
+    },
+    "read_atlas.py": {
+      "content": "\"\"\"Summarize GPU kernel launch counts from the existing NVTX windows.\"\"\"\nimport hashlib\nimport json\nimport sqlite3\nimport sys\nfrom contextlib import closing\nfrom dataclasses import asdict\nfrom pathlib import Path\n\nfrom scripts.cuda_profile_atlas import _window\n\n\ndef counts(connection, name):\n    start, end, tid = connection.execute(\n        \"SELECT start, end, globalTid FROM NVTX_EVENTS WHERE text = ? AND end > start\", (name,),\n    ).fetchone()\n    pid = (tid >> 24) << 24\n    return dict(connection.execute(\n        \"SELECT s.value, COUNT(*) FROM CUPTI_ACTIVITY_KIND_KERNEL k \"\n        \"JOIN StringIds s ON s.id = k.shortName WHERE k.globalPid = ? \"\n        \"AND k.start < ? AND k.end > ? GROUP BY s.value\", (pid, end, start),\n    ))\n\n\ndatabase, output = map(Path, sys.argv[1:])\nwith closing(sqlite3.connect(database.resolve().as_uri() + \"?mode=ro\", uri=True)) as db:\n    cases = {}\n    for arm in (\"vanilla\", \"eager\", \"candidate\"):\n        name = f\"cached_decode_{arm}\"\n        result = asdict(_window(db, name, 200))\n        result[\"all_kernel_counts\"] = counts(db, name)\n        result[\"cat_launches\"] = sum(n for key, n in result[\"all_kernel_counts\"].items() if \"CatArray\" in key)\n        result[\"pad_launches\"] = sum(n for key, n in result[\"all_kernel_counts\"].items() if \"pad_decode_state\" in key)\n        cases[arm] = result\nwith database.open(\"rb\") as stream:\n    sha256 = hashlib.file_digest(stream, \"sha256\").hexdigest()\nresult = {\"windows\": cases, \"sqlite_sha256\": sha256}\nwith output.open(\"x\", encoding=\"utf-8\") as stream:\n    json.dump(result, stream, sort_keys=True, indent=2, allow_nan=False)\n    stream.write(\"\\n\")\nprint(json.dumps({key: {metric: row[metric] for metric in (\n    \"steps\", \"kernel_count\", \"cat_launches\", \"pad_launches\", \"kernel_busy_ms\", \"wall_ms\",\n)} for key, row in cases.items()}))\n",
+      "sha256": "b6681409988ee442cd1fc1425a12682449ed66678d2493ee61c85dd45b8223e2"
+    }
+  },
+  "torch": "2.9.1+cu128",
+  "triton": "3.5.1",
+  "worker": "trj"
+}

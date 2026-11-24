@@ -1267,6 +1267,23 @@
         }
       ],
       "change_scope": "The preceding full CPU suite passed 2081 tests and rejected this source only at the stale runtime binding. DSR A19D3300-5ECA-4915-BBA8-E6421B4ABE79 independently observed all 140 reward-step write commits. The proof file is byte-identical. Energy conservation remains a statement about the original metriplectic transition."
+    },
+    {
+      "cycle_id": "cuda-decode-padding-runtime-binding-2026-11-24",
+      "frog_id": "bio_inspired_nanochat-4nk",
+      "hash_scope": "formal/lean/BioInspiredNanochat.lean",
+      "artifact_hash": "sha256:831498bc2853d86701250ea89024ab5f5f6190d2e3a5a9ae66f93a7d5d42d963",
+      "theorem_ids": ["BioInspiredNanochat.Metriplectic.energyRate_zero"],
+      "axioms": ["propext", "Classical.choice", "Quot.sound"],
+      "sorry_or_admit_present": false,
+      "runtime_mapping": [
+        {
+          "path": "bio_inspired_nanochat/synaptic.py",
+          "sha256": "d8d017346db059967e6b8a5a57f8f68d03df32b3670de3afb8bba8c2af521ca2",
+          "change": "Inference-only native CUDA cache extension copies and initializes FP32 fields before the existing release transition. State carrying heat uses the existing extension path. The changed branch adds no transition to the reduced exact-real metriplectic model."
+        }
+      ],
+      "change_scope": "The compiled artifact with this Lean digest was audited in DSR afe60310-4007-40c5-a835-a7a8f2b1fc95. The CPU suite rejected the stale synaptic.py digest before rebinding. Independent byte comparisons cover the CUDA storage optimization; the Lean theorem concerns the reduced energy rate."
     }
   ]
 }

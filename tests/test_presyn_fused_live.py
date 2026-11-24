@@ -153,6 +153,32 @@ def test_native_presyn_is_default_off_and_cpu_falls_back():
 
 
 @pytest.mark.gpu
+@pytest.mark.parametrize("delay_depth", (0, 3, 5))
+def test_live_decode_state_padding_preserves_prefix_and_float32_fill_bits(delay_depth: int):
+    from bio_inspired_nanochat.kernels.presyn_fused import pad_live_decode_state
+
+    device = torch.device("cuda")
+    cfg = SynapticConfig(endo_delay=delay_depth, init_snare=-0.0, init_rrp=0.512345)
+    state = build_presyn_state(2, 128, 3, device, torch.float32, cfg)
+    expected = build_presyn_state(2, 129, 3, device, torch.float32, cfg)
+    fields = ("C", "BUF", "RRP", "RES", "PR", "CL", "E", "AMP")
+    old_pairs = [(state[name], expected[name]) for name in fields]
+    old_pairs.extend(zip(state["DELAY"], expected["DELAY"], strict=True))
+    for live, padded in old_pairs:
+        live.uniform_(0.0, 1.0)
+        padded[..., :128].copy_(live)
+
+    with torch.inference_mode():
+        assert pad_live_decode_state(state, 129, cfg)
+        for live, padded in [(state[name], expected[name]) for name in fields] + list(
+            zip(state["DELAY"], expected["DELAY"], strict=True)
+        ):
+            assert torch.equal(live.view(torch.int32), padded.view(torch.int32))
+        for old, padded in old_pairs:
+            assert torch.equal(old, padded[..., :128])
+
+
+@pytest.mark.gpu
 @pytest.mark.golden
 @pytest.mark.parametrize(("t_key", "topk"), ((11, 4), (137, 4), (257, 32)))
 def test_live_decode_kernel_matches_canonical_release_state_and_logit_scatter(
