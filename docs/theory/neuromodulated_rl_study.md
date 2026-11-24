@@ -1245,3 +1245,30 @@ sampling a new, adequately powered transfer panel.
 
 [Transfer scores, source and DSR receipts](../../results/qwen_single_write_2026-11-23_transfer.json) ·
 [All transfer continuations](../../results/qwen_single_write_2026-11-23_transfer.json.gz)
+
+### Registered fixed-prefix termination diagnostic
+
+- [ ] Replay the adaptation tokens through the frozen checkpoint.
+  Match both content support digests. Capture the final MLP input,
+  down-projection output and pre-MLP residual at every sampled
+  EOS and every 32nd scored content action. Require the unchanged
+  residual reconstruction to yield identical logits.
+- [ ] At each captured prefix, measure the sum of the two EOS
+  probabilities under the actual top-k policy. Compare the
+  original exact, compressed and rotated writes at norms
+  0.5 and 0.125. Measure whether the retained set changes and
+  compute KL after renormalizing both distributions on the
+  original support. This keeps the KL finite when the actual
+  selected sets differ.
+- [ ] Add the exact score contribution of sampled EOS with
+  group-centered reward to the original dense numerator.
+  Normalize this direction at the same two radii. On correct
+  EOS prefixes in mixed groups, require the 0.5-norm EOS-aware
+  write to improve mean termination probability over the
+  original exact write by at least one percentage point.
+  Require its mean content KL to stay within 10% of the
+  original exact write. Record the quarter-radius comparisons
+  and every matched prefix even if this directional gate fails.
+- [ ] Preserve the failed transfer panel for audit. The probe
+  uses fixed adaptation prefixes and executes no new generation.
+  The registered diagnostic SHA-256 is `00f774bc64bba78448d035138d512d3bc04c42ea20243f86e1b03bf3d5c593f9`.
