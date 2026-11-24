@@ -1647,24 +1647,24 @@ guide a KL-matched matrix update that transfers to new prompts.
 - [x] Run the two-prefix Qwen fixture. Check local gradient
   parity and zero-signal behavior, and reject a reversed gradient
   and a corrupted support hash.
-- [ ] On the pinned checkpoint, reproduce all 16 supports in the
+- [x] On the pinned checkpoint, reproduce all 16 supports in the
   same 16-row prefill geometry. Capture the last MLP input and
   analytical two-digit feedback at each prefix before reading
   the discovery rewards. Retain one input and one feedback row.
-- [ ] Use the eight qualifying discovery gaps to form the average
+- [x] Use the eight qualifying discovery gaps to form the average
   local matrix gradient. Compare its float64 entries with
   autograd on an additive last-projection write at the same
   prefixes. Anchor the differentiable norm-and-head computation
   to the actual BF16 logit differences at zero write. Require
   relative L2 and maximum absolute error at most `1 × 10⁻¹⁰`.
   Reject the reversed direction against the same oracle.
-- [ ] Measure three resident-model post-reward assemblies per
+- [x] Measure three resident-model post-reward assemblies per
   method. The local method starts with the retained vectors.
   The incumbent replays the eight eligible prefixes through
   the frozen model before same-layer autograd. Report capture
   time separately along with both post-reward measurements and
   the logical trace size.
-- [ ] Freeze normalized reward, higher-prior, reversed and
+- [x] Freeze normalized reward, higher-prior, reversed and
   incumbent directions. The prior direction uses the policy's
   chosen digit sign on the same forks and ignores the reward
   magnitudes. Choose the smaller ID on exact prior ties.
@@ -1732,3 +1732,30 @@ The panel generation source hash is `1ab9358774243a62267c95ff6d43673cac50093f4d9
 The evaluation source hash is `e64ef1c55f8614d46268ee8b728125b6c808821e61a4a2bed06575c4e164faa0`.
 The evaluation input checksum list hash is `f37d250db9c84db2094ed0bd79113cc4cb3a59bbd60c274a72b15cdbafa6186c`.
 The paired audit source hash is `0b03c25b56ac22f1673a62f09788f06dfdb7b77a35adbbeb7e5b8122fbaf4ded`.
+
+The first evaluation fixture passed its paired inference cases
+and failed lint on an unused import. Removing that import gave
+the execution source SHA-256
+`6e751e9b5a78bd43bc947ca678b7b27157eddcf6342b1c69ceb5772ebcdd9cd3`.
+
+### Observed digit-write construction
+
+On the RTX 4090 the driver reproduced all 16 archived supports.
+The gradient used eight discovery-qualified forks. The local and
+autograd matrices agreed to relative L2 error `2.27 × 10⁻¹⁶`
+and maximum entry error `3.47 × 10⁻¹⁸`. Both yielded the same
+normalized FP32 matrix byte for byte. The two construction methods
+therefore share their calibration and transfer direction.
+
+| Method | Median post-reward time | Peak incremental bytes |
+| --- | ---: | ---: |
+| Assembly from retained traces | 3.562 ms | 222,298,112 |
+| Replay and same-layer autograd | 4,211.763 ms | 330,531,328 |
+
+Each median covers three runs with the model resident. The local
+method replayed the original prefixes once before reading rewards.
+That capture took 22.11 s and retained 1,343,488 logical bytes
+across 16 prefixes. The other method replayed only the eight
+eligible prefixes after reading rewards. These measurements
+isolate when the computation occurs and expose the capture cost
+for a workload that starts with archived prefixes.
