@@ -1302,3 +1302,48 @@ threshold and its source remain archived.
 
 [Fixed-prefix EOS results, source and DSR receipts](../../results/qwen_eos_credit_2026-11-23.json) ·
 [Per-prefix probabilities and divergence](../../results/qwen_eos_credit_2026-11-23.json.gz)
+
+### Registered write-size calibration
+
+- [ ] Seal 56 new L1 questions with generator seed 811040.
+  Calibration and verification each use three packing pairs
+  and one register pair. The reserved transfer panel uses
+  sixteen packing pairs and four register pairs. Audit all
+  rational quotients and check disjointness against each other
+  and the original ladder. The sealed panel SHA-256 is
+  `c6ae7d997fe857ff4f0fdf271af73a1782ed5b1d377ce8a0d33879cc83c73b38`.
+- [ ] Keep the exact, compressed and rotated directions from
+  the earlier adaptation run. Draw four baseline BF16 samples
+  per calibration question with the same top-k sampler and cap.
+  Use batch seeds from `stable_seed_u64(811041, salt="qwen.kl.<panel>.L1")`
+  modulo `2**63`. Measure every 32nd scored content prefix
+  and each sampled EOS. Require the unchanged reconstruction
+  to match the actual retained sampler logits at every measured
+  prefix.
+- [ ] Evaluate each direction at fractions 1/32, 1/16, 1/8, 1/4,
+  1/2 and 1 of its original 0.5 norm. In both wording strata,
+  require mean KL on the original support at most 0.005 nats
+  and mean Jensen–Shannon divergence on the two actual masked
+  policies at most 0.00125 nats. The latter compares the
+  union of the supports and bounds mean total variation at
+  0.05 by Pinsker's inequality and Jensen's inequality. Record
+  actual total variation and changes in support separately.
+  For each arm choose the largest consecutive passing fraction
+  starting from the smallest tested fraction.
+- [ ] Freeze the chosen sizes and repeat the drift checks on the
+  independent verification panel at those sizes only. Require
+  all three arms to pass both budgets for each wording.
+  Preserve the reserved transfer panel if any arm fails and
+  keep the original selections in the record.
+- [ ] After verification passes, qualify the zero-write policy
+  on the fresh transfer panel before comparing writes. Use the
+  same sampler with four responses per question, and require
+  at least 96/128 parseable packing responses and 8/32 mixed
+  packing groups. For the primary transfer comparison, expect
+  compressed to gain at least 8/128 packing answers over both
+  zero and rotated with a one-sided exact pair-sign-flip
+  `p ≤ 0.025` on both contrasts. Report exact-write accuracy,
+  capped responses, actual lengths and the register controls.
+
+The registered calibration source SHA-256 is
+`7794436112d6cbb4a91abaf492126cf5af5fe972417541ecbb2f289d1bd5567a`.
