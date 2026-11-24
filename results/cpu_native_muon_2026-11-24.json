@@ -1,4 +1,142 @@
 {
+  "broad_cpu_validation": {
+    "source_base": "d593363ddcec73be56e855dc2b08a85be8767606",
+    "candidate_muon_blob": "7393de18956850af479f8f6fcfb949c7a9c6fe73",
+    "collected_tests": 2100,
+    "collection_sha256": "492198b48171807d9b924985e0389a99c97bcce0c3c935cc76c13cba54c9121d",
+    "covered_once_by_prefix_and_suffix": {
+      "passed": 2088,
+      "skipped": 11,
+      "failed": 1,
+      "different_workers_and_torch_builds": true
+    },
+    "first_1485_cases": {
+      "passed": 1473,
+      "skipped": 11,
+      "failed": 1
+    },
+    "original_suite_attempt": {
+      "host": "trj",
+      "torch": "2.9.1+cu128 with CUDA hidden",
+      "run_id": "7a323276-cfb0-409f-80de-34cc889b4d73",
+      "status": "failed",
+      "receipt_sha256": "255dca86b7a181e5f95e7580dcf0b7e21ee437946c987be0bb9ed3c8b2552b9c",
+      "check_timeout_seconds": 5400,
+      "exit_code": 124,
+      "completed_before_timeout": 1578,
+      "passed_before_timeout": 1561,
+      "skipped_before_timeout": 11,
+      "failed_before_timeout": 6,
+      "log_sha256": "3983489528a9b4947d7fa628672ba43b54b322253bc93338b63449bf6b968efb"
+    },
+    "suite_suffix_on_csd": {
+      "scope": "47 files, ordered by the original collection, starting at tests/test_scaleup_checkpoint.py",
+      "torch": "2.9.1+cpu",
+      "native_wheel_sha256": "56baec1f242c4a3ff48728e6413c0c254326462ed9d0c240539ce4468f45025a",
+      "passed": 615,
+      "skipped": 0,
+      "failed": 0,
+      "shards": [
+        {
+          "collected_ordinals": [1486, 1665],
+          "passed": 180,
+          "run_id": "0cafb23d-cfcb-41ee-b0d2-0984cce5bf3d",
+          "receipt_sha256": "ea4c1e1e3905bd47ec0cf5e1cea8f8111b64df972fd8260b80ca4720c30dfa74",
+          "log_sha256": "588a386ddafd05eeae18f72a3f85c320c38dac64f651b0aee591db4b7ad2c382"
+        },
+        {
+          "collected_ordinals": [1666, 1920],
+          "passed": 255,
+          "run_id": "4afb0dc4-7672-4e8f-82cf-347bd37f2b4a",
+          "receipt_sha256": "4bf093cd388d041382782c802ffed1afaf8f603adb2644be8be29b673aa3d0d5",
+          "log_sha256": "a9080f0cc5b93e6b541a8e47e25291cdfb3489b4c4a77f76ebab8590ce8728f9"
+        },
+        {
+          "collected_ordinals": [1921, 2100],
+          "passed": 180,
+          "run_id": "96d39baa-69fb-4f6e-8830-b69a714a60e2",
+          "receipt_sha256": "bebfcbd3672e3c9d4487fccb35af67b0e584a250b01e1e1e4787cd02534252d1",
+          "log_sha256": "d022436125ff8b7b727f1017ed51a5fcee45a38b1e892022de047b2b9b9c9500"
+        }
+      ]
+    },
+    "paired_gloo_on_trj": {
+      "torch": "2.9.1+cu128 with CUDA hidden",
+      "status": "failed",
+      "run_id": "8e00e23a-6745-4f6b-8a0c-6934bc496201",
+      "receipt_sha256": "fd3e7ac0abfe457adf205cb5a438025c36da1d77889a7b1fea3d5319750525df",
+      "optimizer_timeout_seconds": 30,
+      "deliberate_crash_timeout_seconds": 5,
+      "checks": [
+        {"revision": "baseline", "passed": 1, "timed_out": 5, "log_sha256": "e7ba9017d9b996e9db9fd5047db15ebcf518dc2f6ad998a03c5be99321c102d2"},
+        {"revision": "candidate", "passed": 1, "timed_out": 5, "log_sha256": "f2926eaef24154c37025c07daf41be2a6a4cf41f9b065fe9daff9b03e1ddd2d6"}
+      ]
+    },
+    "paired_gloo_on_csd": {
+      "torch": "2.9.1+cpu",
+      "status": "passed",
+      "run_id": "951cd00a-d694-4d3f-ba0a-83f72fa0b078",
+      "receipt_sha256": "d9c7e988cfb94bee0863b297d1ab5343e5b3b3c23ff2816d98474dcdb94b0084",
+      "checks": [
+        {"revision": "baseline", "passed": 6, "log_sha256": "b0c1bad134db73ecb87bb29747186640cf63e2b10c69a6323ddb5cb89eeb9779"},
+        {"revision": "candidate", "passed": 6, "log_sha256": "0ab2eed5e5ad80a5ea07151d13cb9d3698762e726ff2d1150f0af363633fde8c"}
+      ]
+    }
+  },
+  "cpu_throughput_followup": {
+    "test": "tests/test_perf_regression.py::test_live_throughput_budget_gate_passes",
+    "training_optimizer": "AdamW",
+    "training_slowdown_budget": 2,
+    "baseline": {
+      "revision": "d593363ddcec73be56e855dc2b08a85be8767606",
+      "vanilla_tokens_per_second": 2284.4,
+      "synaptic_tokens_per_second": 503.1,
+      "slowdown": 4.54
+    },
+    "candidate": {
+      "muon_blob": "7393de18956850af479f8f6fcfb949c7a9c6fe73",
+      "vanilla_tokens_per_second": 2326.5,
+      "synaptic_tokens_per_second": 726.7,
+      "slowdown": 3.2
+    },
+    "triage_dsr": {
+      "run_id": "1b3dcf3b-034e-4150-b510-24835474549d",
+      "status": "failed",
+      "source": "d593363ddcec73be56e855dc2b08a85be8767606|f42e3c01f2ade601188838ba59314acd3a3e9441be548b501cb580c49cc87330|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "checks": [
+        {
+          "status": "failed",
+          "duration_ms": 54677,
+          "log_sha256": "148eb209ad194ac5d42f09e78d2aefbcde769951bb4ecfa580001eaf70a843b0"
+        },
+        {
+          "status": "failed",
+          "duration_ms": 56499,
+          "log_sha256": "e2af5fa2b477339343425ee1b6114e4cef5059cb81cdb9b9fcb39ef7143d98e6"
+        }
+      ],
+      "stable": true
+    },
+    "diagnostic_profile": {
+      "dsr": {
+        "run_id": "1593d0f0-1ea9-46cf-bfe2-c98d50785cb8",
+        "status": "passed",
+        "source": "d593363ddcec73be56e855dc2b08a85be8767606|f42e3c01f2ade601188838ba59314acd3a3e9441be548b501cb580c49cc87330|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+        "checks": [
+          {
+            "status": "passed",
+            "duration_ms": 47578,
+            "log_sha256": "838d5171898ba384b0713dc06d987e578c4f55c440a0b226b999b2a2fe65239b"
+          }
+        ],
+        "stable": true
+      },
+      "largest_synaptic_frame": "_rust_detached_scan",
+      "calls": 14,
+      "own_seconds": 0.729180291,
+      "cumulative_seconds": 0.9474965460000001
+    }
+  },
   "dsr": {
     "first-step": {
       "checks": [

@@ -222,6 +222,30 @@ Quick Start, scan and decode run passed 20 tests and skipped one CUDA-only
 test. The optimizer and native kernel subset passed 14 tests with the same
 CUDA-only skip. [CPU Muon evidence and DSR receipts](results/cpu_native_muon_2026-11-24.json)
 
+The unchanged live CPU throughput test uses AdamW and failed on both the
+pre-change and FP32 Muon revisions on the same DSR worker. The measured
+synaptic training slowdowns were 4.54× and 3.20× against a 2.00× ceiling.
+In a separate diagnostic profile, the native detached-scan wrapper accounted
+for the most self time among the measured synaptic training frames. Performance
+follow-up is tracked in `bio_inspired_nanochat-r2d`.
+[Paired throughput receipts](results/cpu_native_muon_2026-11-24.json)
+
+The two-process Gloo tests passed all six cases on both revisions on `csd`
+with PyTorch `2.9.1+cpu`. On `trj` with CUDA hidden and PyTorch `2.9.1+cu128`,
+both revisions reproduced the broad run's five failures. Four
+optimizer cases exceeded the 30-second worker deadline and the deliberate
+crash case exceeded its five-second deadline. The timeout cleanup case
+passed. The existing deadlines were used on both hosts.
+[Distributed optimizer receipts](results/cpu_native_muon_2026-11-24.json)
+
+The single-worker CPU suite reached 1,578 of 2,100 collected cases before
+DSR's 90-minute deadline. The first 1,485 cases produced 1,473 passes,
+11 skips and the live throughput failure. The remaining 615 cases all
+passed in three DSR shards on `csd`, using the qualified native extension
+and the CPU PyTorch build. Standing CI qualification remains open under
+`bio_inspired_nanochat-u0fl.1`.
+[CPU suite split and receipts](results/cpu_native_muon_2026-11-24.json)
+
 To identify the backend in an affected environment, start a fresh process.
 
 ```bash
