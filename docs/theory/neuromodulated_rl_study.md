@@ -1688,13 +1688,13 @@ Its exact input checksum list SHA-256 is
   before addition. Use reward, higher-prior, reversed and
   same-layer autograd directions. Share the transfer run for
   reward and autograd only if the deployed matrices are identical.
-- [ ] Draw four zero-write calibration continuations per question
+- [x] Draw four zero-write calibration continuations per question
   with the BF16 top-50 sampler and 512-token cap. Measure each
   32nd content step and sampled EOS. Verify exact reconstruction
   of the original retained logits before measuring any drift.
   Use base seed 811041 and salt
   `qwen.kl.digit-write-calibration.L1`.
-- [ ] For each unit direction measure fixed-support KL at norm
+- [x] For each unit direction measure fixed-support KL at norm
   0.03125. Estimate the target norm by multiplying 0.03125 by the
   square root of target KL 0.002 over the observed KL, floored at
   `1 × 10⁻¹²`. Multiply that estimate by `[0.5, 0.64, 0.8,
@@ -1759,3 +1759,58 @@ across 16 prefixes. The other method replayed only the eight
 eligible prefixes after reading rewards. These measurements
 isolate when the computation occurs and expose the capture cost
 for a workload that starts with archived prefixes.
+
+### First KL matching result
+
+The independent audit reproduced the scale selection on 303
+baseline prefixes. Reward and reversed entered the registered
+KL band. The higher-prior direction reached 0.000548 KL and
+0.000178 dynamic JS at the maximum 0.25 norm. Its KL never
+reached the 0.0014 floor. Verification and transfer therefore
+stopped with zero held-out transfer draws.
+
+| Direction | Measured norm | Mean fixed-support KL | Mean dynamic JS |
+| --- | ---: | ---: | ---: |
+| Reward | 0.13597 | 0.001699 | 0.000486 |
+| Reversed | 0.16648 | 0.002396 | 0.000639 |
+| Higher prior, norm ceiling | 0.25000 | 0.000548 | 0.000178 |
+
+An exploratory check of the rejected grid found three candidates
+with mean KL 0.00048549, 0.00048544 and 0.00049674 for reward,
+reversed and prior respectively. Their ratio was 1.0233. This
+supplies a lower-drift hypothesis. The first trial remains a failed
+match at its original dose.
+
+[First trial and DSR receipts](../../results/qwen_digit_write_2026-11-24.json) ·
+[All first-trial drift measurements](../../results/qwen_digit_write_2026-11-24.json.gz)
+
+### Registered lower-drift transfer trial
+
+- [x] Seal 56 entirely fresh questions with seed 811080. Keep
+  the 8/8/8/32 calibration, verification, adaptation and transfer
+  split. Audit disjointness against every archived predecessor and
+  the first write trial's questions.
+- [ ] Use the same frozen matrices, support reconstruction,
+  512-token cap and fixed-support KL measure. Draw baseline
+  continuations with seed 811041 and salts
+  `qwen.kl.digit-low-calibration.L1` and
+  `qwen.kl.digit-low-verification.L1`.
+- [ ] Measure a fixed 17-point grid of norms `2^(j/4)` for
+  integer `j = -24,…,-8`. Target KL 0.0005. Choose the measured
+  norm closest in log KL within `[0.00035, 0.00065]` and dynamic
+  JS at most 0.0005. Use the same smaller-norm tie break and
+  max-to-min KL ratio at most 1.55.
+- [ ] Replay the frozen selections on the new verification
+  panel. Require KL in `[0.00020, 0.0010]`, dynamic JS at most
+  0.0005 and max-to-min KL ratio at most 1.8. Stop before transfer
+  if the matching, verification or audit gate fails.
+- [ ] Follow the original zero baseline, device parity, paired
+  effect, exact inference and harm requirements. Use seeds 811081
+  and 811082 with salts `qwen.digit-low.<split>.L1.<batch offset>`
+  for adaptation and transfer. Preserve all outcomes.
+
+The fresh panel SHA-256 is `06b5662a3e72bac460a01b0ee5c7d6877a6c4966082204f6102896d92e5c8cce`.
+The panel source SHA-256 is `84a7b723706c092701b8ce61feffa3fcd05a8cdce56e875cc83fc94e2728c0b7`.
+The evaluation source SHA-256 is `5ad8a195eababb9253d1c41b1674c6aef7c7e197666e88b51f6c28567dd64286`.
+The input checksum list SHA-256 is `2c1458a0f6bf8f526fb92f0ab266a81f0cbe30b7f0d42fb2fc1b88feba0cdaab`.
+The audit source SHA-256 is `5d1eea81a91a7be5387e77cc28737f8dc5f4f1acd0ee9c04ab4b161bf00e8eea`.
