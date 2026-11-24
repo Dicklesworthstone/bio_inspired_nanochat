@@ -959,16 +959,16 @@ when sampling. Repeat the fixed L1 confirmation batch that contains the
 previously selected first mixed group. Use the identical seed, eight
 questions, four BF16 samples per question and 512-token limit.
 
-- [ ] Require all 32 continuations in that batch, up to their archived
+- [x] Require all 32 continuations in that batch, up to their archived
   stop tokens, to match the previous record. Capture the final MLP
   input and the residual before final RMSNorm at generation time.
-- [ ] Read Transformers' returned post-processor scores for each
+- [x] Read Transformers' returned post-processor scores for each
   scored action. Match every finite candidate and score against the
   original logit at or above its fiftieth-largest value. Account for
   all boundary ties and require restricted softmax probabilities to
   agree with the sampler's full masked probabilities within `10⁻⁶`.
   Verify that intentionally dropping a tied candidate fails.
-- [ ] On all 1,262 scored tokens in the predetermined group, compare
+- [x] On all 1,262 scored tokens in the predetermined group, compare
   the detached analytical update with FP64 autograd. At the zero
   write, the differentiable score takes the captured sampler logits
   as its values. Its tangent adds the change produced by a final
@@ -976,7 +976,7 @@ questions, four BF16 samples per question and 512-token limit.
   unembedding. Hold the sampled actions and support fixed. Require
   relative Frobenius error at most `10⁻⁴` and maximum absolute error
   at most `6 × 10⁻⁷`.
-- [ ] Archive all support IDs, logits, cutoffs and selected actions.
+- [x] Archive all support IDs, logits, cutoffs and selected actions.
   Independently verify the archive against the prior episode and
   publish the DSR receipts. The preregistered sampler script SHA-256
   is `07763d5c3e215448f8f012d9d02131de8082fbc81c9800e9cb623f5c192a0122`.
@@ -985,3 +985,51 @@ questions, four BF16 samples per question and 512-token limit.
   calibration and evaluation groups, retained bytes and stopping
   thresholds before fitting a basis. Preserve the reserved
   adaptation and transfer panels for the subsequent learning study.
+
+All 32 completions reproduced token for token before EOS or padding.
+The first mixed group still had rewards `[1, 0, 1, 1]`. Across its
+1,262 scored actions, 456 sampling distributions had more than 50
+candidates because of boundary ties. The largest support had 58.
+Capturing the ties preserved 661 candidate occurrences beyond a
+hard 50 per position. The largest probability discrepancy between
+the restricted and full masked softmax was `3.58 × 10⁻⁷`.
+
+The detached score matched FP64 autograd at relative Frobenius error
+`4.83 × 10⁻⁷` and maximum absolute error `3.33 × 10⁻⁹` for the
+8,960 × 1,536 matrix. An independent CPU audit recovered every
+action and the objective from the archived candidates and logits.
+This measures the fixed-support tangent anchored at logits actually
+used by BF16 generation. The initial launch failed during imports.
+Staging the missing archived helper allowed the preregistered
+script to run byte for byte on retry.
+
+[Source and DSR receipts](../../results/qwen_sampler_score_2026-11-23.json) ·
+[Per-action sampler support](../../results/qwen_sampler_score_2026-11-23.json.gz)
+
+### Registered held-out compression screen
+
+- [ ] Replay the eight packing questions from L1 confirmation with
+  the same batch seed. Score the actual retained support for all
+  four completions per question. Fit separate rank-32 input and
+  feedback bases without reward weights on both sides of packing
+  pairs 0 and 1. Use uncentered randomized PCA with seed 811027,
+  48 sketch vectors and two power iterations. Freeze both bases
+  before projecting either side of pairs 2 and 3.
+- [ ] On each held-out mixed group, verify that outer products of
+  the projected inputs and feedback agree with projecting the
+  resulting dense matrix (relative Frobenius error at most
+  `10⁻⁴`). Require at least two mixed groups and at least 25%
+  retained squared gradient norm in each. Require alignment with
+  the exact update to beat a random orthogonal basis of the same
+  rank (seed 811028), the fitted basis with rewards rotated by one
+  within the question, and the zero update.
+- [ ] Record both rank-32 factors and their fixed storage costs.
+  Compare a dense update, a compressed coordinate update and a
+  compressed update expanded to the full matrix. Use two warmups
+  and five synchronized rounds per method with rotating order in
+  the same invocation. These timings start with stored activations
+  and feedback. Record whole-model post-reward replay separately
+  if the compression direction qualifies.
+- [ ] Require the registered direction gate before preparing any
+  adaptation or transfer rollouts. The preregistered compression
+  script SHA-256 is `e2371546f72172827af5b54f8f5c0408102dd938701257df9284e8f852c508d3`.
