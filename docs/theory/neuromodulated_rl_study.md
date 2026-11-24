@@ -1034,7 +1034,7 @@ script to run byte for byte on retry.
   script SHA-256 is `e2371546f72172827af5b54f8f5c0408102dd938701257df9284e8f852c508d3`.
 - [x] Re-orthogonalize the frozen spans in FP64 and rerun the
   independent `10⁻⁵` Gram check.
-- [ ] Compare against whole-model post-reward replay on the
+- [x] Compare against whole-model post-reward replay on the
   same trajectories. Register update sizes, matched sampling
   budgets and the smallest meaningful accuracy gain before
   releasing the adaptation and transfer panels.
@@ -1077,21 +1077,21 @@ The report contains the normalization source and output digest.
 Each time is the median of five synchronized updates on RTX 4090
 with the decision-time vectors in memory. The timing starts after
 reward and excludes generation, projection of incoming vectors and
-storage allocation for the surrounding model. Whole-model replay
-timing and learning gains are still pending in `hy8.3.6`.
+storage allocation for the surrounding model. The whole-model replay
+comparison follows below. Learning gains are still pending in `hy8.3.6`.
 
 [Compression measurements, source and receipts](../../results/qwen_sampler_score_2026-11-23_compression.json) ·
 [Frozen FP32 bases](../../results/qwen_sampler_score_2026-11-23_compression.safetensors)
 
 ### Registered whole-model replay comparison
 
-- [ ] Replay the published packing batch with the original seed.
+- [x] Replay the published packing batch with the original seed.
   Require the same 32 completions and use the first held-out mixed
   group, packing pair 2, side 0, with 1,172 scored tokens. Capture
   its decision-time vectors and actual sampler support. Use the
   normalized rank-32 spans from the compression study without
   refitting.
-- [ ] Check parallel teacher-forced replay on the four relevant
+- [x] Check parallel teacher-forced replay on the four relevant
   sequences first. If it fails, check single-token cached replay
   with the original 32-sequence batch geometry. Replay runs the
   whole frozen model over fixed token IDs and reconstructs the
@@ -1100,7 +1100,7 @@ timing and learning gains are still pending in `hy8.3.6`.
   `10⁻⁴`, and maximum absolute error at most `6 × 10⁻⁷`.
   Record failed routes and withhold the matched comparison if
   neither qualifies.
-- [ ] Use the first eligible route in three timed rounds. Synchronize
+- [x] Use the first eligible route in three timed rounds. Synchronize
   PyTorch at each method boundary and rotate the order of
   replay, the exact stored vectors and the compressed stored
   vectors expanded to a dense write. The qualification replay
@@ -1108,5 +1108,65 @@ timing and learning gains are still pending in `hy8.3.6`.
   update. Check every timed update against its own reference
   matrix. Report logical retained bytes, median elapsed
   post-reward time and incremental peak tensor bytes.
-- [ ] Preserve the adaptation and transfer panels. The registered
+- [x] Preserve the adaptation and transfer panels for this comparison. The registered
   benchmark source SHA-256 is `0c592655daf77bb10b629b6f90a45db0525657081bc7ee6c7620f9f7dbbbc27c`.
+
+The four-sequence parallel replay changed candidate IDs at 762 of
+1,172 scored positions, changed retained scores at all 1,172 and
+had relative gradient error of 3.26%. The difference combines
+parallel teacher forcing with the change in batch geometry.
+Cached replay in the original 32-sequence geometry recovered
+every sampler support, retained logit and matrix entry exactly.
+All nine timed updates agreed with their own references.
+
+| RTX 4090 method | Median post-reward time | Logical retained state | Median incremental peak bytes |
+| --- | ---: | ---: | ---: |
+| Exact stored trace | 1.278 ms | 49,205,248 bytes | 110,100,480 |
+| Compressed stored trace expanded to dense | 1.161 ms | 300,032 bytes plus 1,343,488 shared basis bytes | 56,885,248 |
+| Cached replay in the original geometry | 67.445 s | 142,848 bytes of token IDs and prompt masks | 1,189,081,088 |
+
+The timings measure three post-reward updates per method with
+the model resident. The retained modes start from prepared vectors.
+Replay includes the frozen-model forward passes and reconstructs the
+same analytical update. The measurement is specific to the original
+batch geometry required by the two replay routes tried here. The
+normalized compressed trace retained 36.28% of squared gradient norm
+on this group.
+
+[Replay benchmark, source and DSR receipts](../../results/qwen_whole_model_replay_2026-11-23.json)
+
+### Registered single-write adaptation trial
+
+- [ ] Use the reserved L1 adaptation questions, including both
+  wordings. Draw four BF16 continuations per question with the
+  frozen sampler and 512-token limit. Derive each batch seed with
+  `stable_seed_u64(811030, salt="qwen.single_write.adaptation.L1.<offset>")`
+  reduced modulo `2**63`. Reapply the registered
+  L1 qualification gates to the initial samples. Stop before any
+  transfer rollout if the adaptation panel misses a gate.
+- [ ] From the same decision-time states and actions, form one
+  final-projection write per arm. Use the exact trace, cached
+  post-reward replay, the normalized rank-32 trace, the same rank
+  with rewards rotated by one within each question, and zero
+  write. Use total scored tokens as the denominator, center
+  rewards in each group and scale each nonzero write to 0.5
+  Frobenius norm. Freeze every other parameter. Stop if a
+  nonzero arm has no usable direction or if replay fails the
+  exact-support and gradient checks.
+- [ ] Freeze the writes before evaluating the reserved L1
+  transfer questions. Use four samples per question per arm,
+  identical batch seeds derived from base seed 811031 and the
+  same 512-token cap. Merge the replay and exact evaluations
+  only when their deployed writes match bit for bit. Record
+  all actual scored lengths, truncation and parseability by
+  arm and wording.
+- [ ] Require the compressed arm to gain at least 4 of 64
+  correct samples over both the rotated-reward and zero-write
+  arms. In both comparisons require a one-sided exact pair
+  sign-flip `p ≤ 0.025`. Report the exact-arm contrast and
+  whether compressed finishes within two correct samples of
+  it. Publish every outcome, including a failed or inconclusive
+  pilot, and keep the official GSM8K test split sealed.
+
+The adaptation qualification script SHA-256 is
+`04c9a674b87d7c19a7955c88133253110325212a6524070cc0c5826cdb80da40`.
