@@ -1335,7 +1335,7 @@ threshold and its source remain archived.
   all three arms to pass both budgets for each wording.
   Preserve the reserved transfer panel if any arm fails and
   keep the original selections in the record.
-- [ ] After verification passes, qualify the zero-write policy
+- [x] After verification passes, qualify the zero-write policy
   on the fresh transfer panel before comparing writes. Use the
   same sampler with four responses per question, and require
   at least 96/128 parseable packing responses and 8/32 mixed
@@ -1385,3 +1385,40 @@ responses, 128/128 parseable responses and 28/32 mixed groups.
 The register check scored 28/32 correct. None of the 160 zero-write
 responses reached the token cap. The independent audit recovered
 both packing qualification counts from the raw completions.
+
+### Calibrated transfer results
+
+| Transfer arm | Packing correct / 128 | Packing parseable / 128 | Packing hit limit | Median packing tokens | Register correct / 32 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Zero | 60 | 128 | 0 | 312 | 28 |
+| Exact | 65 | 128 | 0 | 308.5 | 28 |
+| Rotated | 62 | 127 | 1 | 312 | 28 |
+| Compressed | 61 | 127 | 1 | 320 | 28 |
+
+Compressed gained one correct packing response over zero and
+finished one behind rotated. The registered one-sided exact
+paired p-values were 0.500 and 0.683 respectively. The primary
+gain gate failed on both contrasts. The duplicate zero runs
+matched token for token, and the audit verified all 800 sampled
+responses including the duplicate. Independently recomputed
+byte digests tied the three deployed matrices to their frozen
+directions and chosen scales.
+
+The calibrated writes produced at most one capped response per
+arm on this fresh panel. The earlier pilot used different
+questions and a 0.5 norm for each write. The new comparison used
+the same drift ceilings for each direction with different
+Frobenius norms. These experiments qualify the calibration
+procedure and complete the registered transfer trial in
+`hy8.3.7`. Native GSM8K qualification remains open.
+
+An exploratory audit of the four mixed adaptation groups found
+ten shared prefixes with different next actions and different
+observed mean rewards across those actions. Thirty of 4,939
+actions occurred at those prefixes, including sampled EOS in the
+denominator. This measures observed sibling coverage in the
+archived batch and motivates deliberately sampling continuations
+from both actions at the same state in `hy8.3.8`.
+
+[Transfer comparison and DSR receipts](../../results/qwen_kl_calibration_2026-11-23_transfer.json) ·
+[All sampled transfer responses](../../results/qwen_kl_calibration_2026-11-23_transfer.json.gz)

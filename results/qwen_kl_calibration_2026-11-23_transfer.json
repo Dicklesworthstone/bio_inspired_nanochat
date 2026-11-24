@@ -1,0 +1,360 @@
+{
+  "archived_branch_coverage": {
+    "adaptation_sha256": "9b533997d648e3f7cde6a359faf2ab234ce7c18c99b72ba31a8cbc4f7919d740",
+    "groups": [
+      {
+        "actions": 1345,
+        "actions_at_contrasting_prefixes": 6,
+        "contrasting_prefixes": 2,
+        "question": "adaptation.L1.packing.0.0"
+      },
+      {
+        "actions": 1192,
+        "actions_at_contrasting_prefixes": 6,
+        "contrasting_prefixes": 2,
+        "question": "adaptation.L1.packing.0.1"
+      },
+      {
+        "actions": 1213,
+        "actions_at_contrasting_prefixes": 9,
+        "contrasting_prefixes": 3,
+        "question": "adaptation.L1.packing.2.1"
+      },
+      {
+        "actions": 1189,
+        "actions_at_contrasting_prefixes": 9,
+        "contrasting_prefixes": 3,
+        "question": "adaptation.L1.packing.3.0"
+      }
+    ],
+    "summary": {
+      "actions": 4939,
+      "actions_at_contrasting_prefixes": 30,
+      "contrasting_prefixes": 10
+    },
+    "dsr": {
+      "status": "success",
+      "run_id": "6129DC5C-C878-48CF-96D6-94F83EBD0283",
+      "exit_code": 0,
+      "config_sha256": "938361f55b63dd5ad8449ae44c05e6041ed02ff769c767c22ff232839b67f638",
+      "source_before": "b08435e6e5a62a08e87e5e4ba0ee54e5d443f371|30ad86a9aa50fa62343f51a401bc9dafc589f71212ee1b90b177fdc7dca4dc4b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "b08435e6e5a62a08e87e5e4ba0ee54e5d443f371|30ad86a9aa50fa62343f51a401bc9dafc589f71212ee1b90b177fdc7dca4dc4b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "checks": [
+        {
+          "status": "passed",
+          "exit_code": 0,
+          "duration_ms": 1109,
+          "log_sha256": "d8f048f72f545867e04af3863e11b6054eb3eb136d0a06bd8575b90ad955d07b"
+        }
+      ],
+      "receipt_sha256": "c82bfa8ad7a49e89444e8af9962c007b9d7c032e81ce0d274c5244e062c059c9"
+    },
+    "source": {
+      "name": "audit_branch_coverage.py",
+      "content": "\"\"\"Count observed reward contrasts among sibling actions at the same prefix.\"\"\"\n\nimport hashlib\nimport json\nimport sys\nfrom collections import defaultdict\nfrom fractions import Fraction\nfrom pathlib import Path\n\n\ndef inspect(adaptation):\n    payload = adaptation.read_bytes()\n    run = json.loads(payload)\n    groups = []\n    for index, item in enumerate(run[\"observations\"]):\n        if len(set(item[\"rewards\"])) == 1:\n            continue\n        physical = run[\"replay_batches\"][index // 8]\n        width = len(physical[\"prompt_attention\"][0])\n        by_prefix = defaultdict(lambda: defaultdict(list))\n        n = 0\n        for sample, (tokens, reward) in enumerate(zip(item[\"tokens\"], item[\"rewards\"], strict=True)):\n            actions = tokens[item[\"prompt_length\"]:]\n            complete = physical[\"sequences\"][4 * (index % 8) + sample]\n            eos = complete[width + len(actions)]\n            assert eos in (151645, 151643)\n            actions.append(eos)\n            n += len(actions)\n            for offset, action in enumerate(actions):\n                by_prefix[tuple(actions[:offset])][action].append(reward)\n        branched = [children for children in by_prefix.values()\n                    if len(children) > 1 and len({Fraction(sum(r), len(r)) for r in children.values()}) > 1]\n        groups.append({\"question\": item[\"id\"], \"actions\": n, \"contrasting_prefixes\": len(branched),\n                       \"actions_at_contrasting_prefixes\": sum(sum(map(len, children.values())) for children in branched)})\n    assert len(groups) == run[\"gate\"][\"mixed_groups\"] == 4\n    summary = {key: sum(row[key] for row in groups)\n               for key in (\"actions\", \"contrasting_prefixes\", \"actions_at_contrasting_prefixes\")}\n    return {\"adaptation_sha256\": hashlib.sha256(payload).hexdigest(), \"summary\": summary, \"groups\": groups}\n\n\nif __name__ == \"__main__\":\n    if not __debug__:\n        raise RuntimeError(\"The branch audit requires Python assertions.\")\n    raw, output = map(Path, sys.argv[1:])\n    result = inspect(raw)\n    with output.open(\"x\", encoding=\"utf-8\") as stream:\n        json.dump(result, stream, sort_keys=True, indent=2)\n        stream.write(\"\\n\")\n",
+      "sha256": "6bf5904528e5570b78c752ca342db02549aeda9fe0de6c54b8b07fd761a3d32b"
+    }
+  },
+  "archive_sha256": "d753e23ebadf06bb0808a8509d3c421971305662d04e3ef0a6ce704c4d66f66e",
+  "arms": {
+    "compressed": {
+      "packing": {
+        "capped": 1,
+        "correct": 61,
+        "median_tokens": 320.0,
+        "mixed_groups": 28,
+        "parseable": 127,
+        "samples": 128,
+        "scored_tokens": 41390
+      },
+      "register": {
+        "capped": 0,
+        "correct": 28,
+        "median_tokens": 227.5,
+        "mixed_groups": 0,
+        "parseable": 32,
+        "samples": 32,
+        "scored_tokens": 7365
+      }
+    },
+    "exact": {
+      "packing": {
+        "capped": 0,
+        "correct": 65,
+        "median_tokens": 308.5,
+        "mixed_groups": 26,
+        "parseable": 128,
+        "samples": 128,
+        "scored_tokens": 40907
+      },
+      "register": {
+        "capped": 0,
+        "correct": 28,
+        "median_tokens": 226.5,
+        "mixed_groups": 0,
+        "parseable": 32,
+        "samples": 32,
+        "scored_tokens": 7312
+      }
+    },
+    "rotated": {
+      "packing": {
+        "capped": 1,
+        "correct": 62,
+        "median_tokens": 312.0,
+        "mixed_groups": 28,
+        "parseable": 127,
+        "samples": 128,
+        "scored_tokens": 40704
+      },
+      "register": {
+        "capped": 0,
+        "correct": 28,
+        "median_tokens": 226.0,
+        "mixed_groups": 0,
+        "parseable": 32,
+        "samples": 32,
+        "scored_tokens": 7304
+      }
+    },
+    "zero": {
+      "packing": {
+        "capped": 0,
+        "correct": 60,
+        "median_tokens": 312.0,
+        "mixed_groups": 28,
+        "parseable": 128,
+        "samples": 128,
+        "scored_tokens": 40466
+      },
+      "register": {
+        "capped": 0,
+        "correct": 28,
+        "median_tokens": 229.0,
+        "mixed_groups": 0,
+        "parseable": 32,
+        "samples": 32,
+        "scored_tokens": 7378
+      }
+    }
+  },
+  "baseline": {
+    "packing": {
+      "capped": 0,
+      "correct": 60,
+      "median_tokens": 312.0,
+      "mixed_groups": 28,
+      "parseable": 128,
+      "samples": 128,
+      "scored_tokens": 40466
+    },
+    "register": {
+      "capped": 0,
+      "correct": 28,
+      "median_tokens": 229.0,
+      "mixed_groups": 0,
+      "parseable": 32,
+      "samples": 32,
+      "scored_tokens": 7378
+    }
+  },
+  "baseline_qualified": true,
+  "cross_device_zero_identical": true,
+  "dsr": {
+    "transfer-audit": {
+      "checks": [
+        {
+          "duration_ms": 1495,
+          "exit_code": 0,
+          "log_sha256": "5f14a6c2db4325e7ab4fab0250ebd730e00d6fcb52b1a2d4f1b5a5a832311619",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "0be9aa89b3a05b29185572c10a29723b37f05731670af41d262a384498b812b1",
+      "exit_code": 0,
+      "receipt_sha256": "b465cfb6dc174e4e8fe0485d558da5974545632830b0d984ab303bf7f851ea0e",
+      "run_id": "532F7F61-B7BE-4D9D-BAD9-6C7A3DC03904",
+      "source_after": "b08435e6e5a62a08e87e5e4ba0ee54e5d443f371|30ad86a9aa50fa62343f51a401bc9dafc589f71212ee1b90b177fdc7dca4dc4b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "b08435e6e5a62a08e87e5e4ba0ee54e5d443f371|30ad86a9aa50fa62343f51a401bc9dafc589f71212ee1b90b177fdc7dca4dc4b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    },
+    "transfer-baseline": {
+      "checks": [
+        {
+          "duration_ms": 652407,
+          "exit_code": 0,
+          "log_sha256": "6b8f552bd040f9104f80151542945839776f25616123e31861d02c595984ac74",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "2f849370a81394b649cff46580e37c6a0a12bca106f4e02d66f8dd5a5873601b",
+      "exit_code": 0,
+      "receipt_sha256": "aa328123095677e15c2af1f0802cf390384ec92b8c27ddaa55c02282649fc801",
+      "run_id": "995a7e88-4520-44dc-97ac-30665d22d41f",
+      "source_after": "b08435e6e5a62a08e87e5e4ba0ee54e5d443f371|30ad86a9aa50fa62343f51a401bc9dafc589f71212ee1b90b177fdc7dca4dc4b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "b08435e6e5a62a08e87e5e4ba0ee54e5d443f371|30ad86a9aa50fa62343f51a401bc9dafc589f71212ee1b90b177fdc7dca4dc4b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    },
+    "transfer-primary": {
+      "checks": [
+        {
+          "duration_ms": 2047201,
+          "exit_code": 0,
+          "log_sha256": "25af500ffd9cac67a947821d1236de5d864491fa0a032d7d48d11ee9478257f7",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "849304b2bbca84f5bf1939f185d624878b007d1eb9513e097ba83c65cf104182",
+      "exit_code": 0,
+      "receipt_sha256": "4c23548465a9fbe1ee66989e789b6d3e450c911667492437e72efca027fcd4e2",
+      "run_id": "03f4b1f8-f1c5-44e8-8416-dd5622ec3e01",
+      "source_after": "b08435e6e5a62a08e87e5e4ba0ee54e5d443f371|30ad86a9aa50fa62343f51a401bc9dafc589f71212ee1b90b177fdc7dca4dc4b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "b08435e6e5a62a08e87e5e4ba0ee54e5d443f371|30ad86a9aa50fa62343f51a401bc9dafc589f71212ee1b90b177fdc7dca4dc4b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    },
+    "transfer-reference": {
+      "checks": [
+        {
+          "duration_ms": 1720206,
+          "exit_code": 0,
+          "log_sha256": "b52e1c3a6f7c43c9063801e3061108907d459c89b6c0da98088d80edcd68ddee",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "48cfa378e79ce810391f2d820adb5c88acb2005b6fefbe3e3b980783326e21b2",
+      "exit_code": 0,
+      "receipt_sha256": "047e6f2bc443d9aa6a8549182b988502fe2777b221646e4049a6b585717f3036",
+      "run_id": "d1632044-ec30-4d21-8309-6f22257694e4",
+      "source_after": "b08435e6e5a62a08e87e5e4ba0ee54e5d443f371|30ad86a9aa50fa62343f51a401bc9dafc589f71212ee1b90b177fdc7dca4dc4b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "b08435e6e5a62a08e87e5e4ba0ee54e5d443f371|30ad86a9aa50fa62343f51a401bc9dafc589f71212ee1b90b177fdc7dca4dc4b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    },
+    "zero-audit": {
+      "checks": [
+        {
+          "duration_ms": 1972,
+          "exit_code": 0,
+          "log_sha256": "fa7ce448ae8ae4167a091ecc893d7efd498649b6616b5a1289b4b1755c3138fb",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "3d5c12e249f6b106ca91a24cfb4ff3bccf1dcd6363a9425fba33613dbd879fdc",
+      "exit_code": 0,
+      "receipt_sha256": "273572ff59f3aa22dd6a187c36d2c8da8f4fa914a92207efda6cc334873c227d",
+      "run_id": "DB9FF41C-E22E-435B-ACF1-834FE4E230F0",
+      "source_after": "b08435e6e5a62a08e87e5e4ba0ee54e5d443f371|30ad86a9aa50fa62343f51a401bc9dafc589f71212ee1b90b177fdc7dca4dc4b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "b08435e6e5a62a08e87e5e4ba0ee54e5d443f371|30ad86a9aa50fa62343f51a401bc9dafc589f71212ee1b90b177fdc7dca4dc4b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    }
+  },
+  "packing_contrasts": {
+    "exact": {
+      "denominator": 4096,
+      "one_sided_p": 0.8291015625,
+      "packing_correct_gain": -4,
+      "pair_gains": [
+        -1,
+        0,
+        -3,
+        -1,
+        -1,
+        -1,
+        -1,
+        1,
+        1,
+        1,
+        -2,
+        0,
+        0,
+        0,
+        1,
+        2
+      ],
+      "passed": false,
+      "tail": 3396
+    },
+    "rotated": {
+      "denominator": 16384,
+      "one_sided_p": 0.68328857421875,
+      "packing_correct_gain": -1,
+      "pair_gains": [
+        -1,
+        -1,
+        2,
+        -1,
+        -1,
+        -1,
+        1,
+        -1,
+        0,
+        0,
+        -1,
+        1,
+        -1,
+        1,
+        1,
+        1
+      ],
+      "passed": false,
+      "tail": 11195
+    },
+    "zero": {
+      "denominator": 4096,
+      "one_sided_p": 0.5,
+      "packing_correct_gain": 1,
+      "pair_gains": [
+        0,
+        -1,
+        2,
+        -2,
+        0,
+        0,
+        -1,
+        1,
+        2,
+        -2,
+        1,
+        1,
+        -1,
+        0,
+        2,
+        -1
+      ],
+      "passed": false,
+      "tail": 2048
+    }
+  },
+  "primary_passed": false,
+  "reference_zero": {
+    "packing": {
+      "capped": 0,
+      "correct": 60,
+      "median_tokens": 312.0,
+      "mixed_groups": 28,
+      "parseable": 128,
+      "samples": 128,
+      "scored_tokens": 40466
+    },
+    "register": {
+      "capped": 0,
+      "correct": 28,
+      "median_tokens": 229.0,
+      "mixed_groups": 0,
+      "parseable": 32,
+      "samples": 32,
+      "scored_tokens": 7378
+    }
+  },
+  "registered_protocol": "b94a786f99a25470466316770fec421eac3872a8",
+  "sources": {
+    "audit_qwen_kl_transfer.py": {
+      "content": "\"\"\"Rebuild the paired transfer result from the sealed questions and raw completions.\"\"\"\n\nimport gzip\nimport hashlib\nimport json\nimport statistics\nimport struct\nimport sys\nfrom collections import Counter\nfrom pathlib import Path\n\nimport numpy as np\n\nfrom audit_whole_model_replay import digest, read, verified_receipt\nfrom ladder_audit import last_box\n\n\ndef arm_audit(panel, arm):\n    rows = arm[\"observations\"]\n    assert len(rows) == 40\n    for index, (item, row) in enumerate(zip(panel, rows, strict=True)):\n        assert (item[\"id\"], item[\"family\"], item[\"gold\"]) == (row[\"id\"], row[\"family\"], row[\"gold\"])\n        offset = index // 8 * 8\n        key = hashlib.blake2b(f\"qwen.kl.transfer.L1.{offset}\".encode(), digest_size=8).digest()\n        assert row[\"batch_seed\"] == (811042 ^ int.from_bytes(key, \"little\")) % (2**63)\n        answers = [last_box(text) for text in row[\"text\"]]\n        assert len(answers) == 4 and answers == row[\"answers\"]\n        assert [int(answer == row[\"gold\"]) for answer in answers] == row[\"rewards\"]\n        for tokens, length in zip(row[\"tokens\"], row[\"lengths\"], strict=True):\n            assert len(tokens) == row[\"prompt_length\"] + length and 0 <= length <= 512\n    totals = {}\n    for name in (\"packing\", \"register\"):\n        wording = [row for row in rows if row[\"family\"] == name]\n        lengths = [length for row in wording for length in row[\"lengths\"]]\n        totals[name] = {\"samples\": 4 * len(wording), \"correct\": sum(sum(row[\"rewards\"]) for row in wording),\n                        \"parseable\": sum(sum(a is not None for a in row[\"answers\"]) for row in wording),\n                        \"mixed_groups\": sum(0 < sum(row[\"rewards\"]) < 4 for row in wording),\n                        \"capped\": lengths.count(512), \"median_tokens\": statistics.median(lengths),\n                        \"scored_tokens\": sum(lengths)}\n    return totals\n\n\ndef contrast(main, control):\n    left, right = main[\"observations\"][:32], control[\"observations\"][:32]\n    differences = [sum(a[\"rewards\"]) - sum(b[\"rewards\"]) for a, b in zip(left, right, strict=True)]\n    paired = [a + b for a, b in zip(differences[::2], differences[1::2], strict=True)]\n    total = sum(paired)\n    possibilities = Counter({0: 1})\n    for delta in paired:\n        if delta:\n            next_values = Counter()\n            for value, count in possibilities.items():\n                next_values[value + delta] += count\n                next_values[value - delta] += count\n            possibilities = next_values\n    denominator = sum(possibilities.values())\n    tail = sum(count for value, count in possibilities.items() if value >= total)\n    return {\"packing_correct_gain\": total, \"pair_gains\": paired, \"tail\": tail, \"denominator\": denominator,\n            \"one_sided_p\": tail / denominator, \"passed\": total >= 8 and tail * 40 <= denominator}\n\n\ndef deployed_digests(work, calibration):\n    frozen = work / \"adaptation.safetensors\"\n    assert digest(frozen) == calibration[\"candidate_sha256\"]\n    values = {}\n    with frozen.open(\"rb\") as stream:\n        header_size, = struct.unpack(\"<Q\", stream.read(8))\n        header = json.loads(stream.read(header_size))\n        for arm, value in header.items():\n            assert value[\"dtype\"] == \"F32\" and value[\"shape\"] == [8960, 1536]\n            start, end = value[\"data_offsets\"]\n            stream.seek(8 + header_size + start)\n            tensor = np.frombuffer(stream.read(end - start), dtype=\"<f4\")\n            shifted = tensor * np.float32(calibration[\"chosen_scales\"][arm])\n            values[arm] = hashlib.sha256(shifted.astype(\"<f4\", copy=False).tobytes()).hexdigest()\n    return values\n\n\ndef inspect(work, baseline_only=False):\n    sealed, cal = work / \"panels.json\", work / \"calibration.json\"\n    pane = read(sealed)[\"panels\"][\"transfer\"]\n    assert read(cal)[\"qualified\"] and len(pane) == 40\n    baseline = read(work / \"transfer-baseline.json\")\n    assert baseline[\"panel_sha256\"] == digest(sealed) and baseline[\"calibration_sha256\"] == digest(cal)\n    assert set(baseline[\"arms\"]) == {\"zero\"}\n    initial = arm_audit(pane, baseline[\"arms\"][\"zero\"])\n    packing = initial[\"packing\"]\n    gate = packing[\"parseable\"] >= 96 and packing[\"mixed_groups\"] >= 8\n    assert baseline[\"baseline_gate\"] == {\"packing_parseable\": packing[\"parseable\"],\n                                           \"packing_mixed_groups\": packing[\"mixed_groups\"], \"passed\": gate}\n    result = {\"baseline\": initial, \"baseline_qualified\": gate}\n    if baseline_only or not gate:\n        return result\n    primary, reference = (read(work / name) for name in (\"transfer-primary.json\", \"transfer-reference.json\"))\n    for observed in (primary, reference):\n        assert observed[\"panel_sha256\"] == digest(sealed) and observed[\"calibration_sha256\"] == digest(cal)\n    assert set(primary[\"arms\"]) == {\"compressed\", \"rotated\"} and set(reference[\"arms\"]) == {\"exact\", \"zero\"}\n    companion = arm_audit(pane, reference[\"arms\"][\"zero\"])\n    zero_equal = reference[\"arms\"][\"zero\"][\"observations\"] == baseline[\"arms\"][\"zero\"][\"observations\"]\n    arms = {**baseline[\"arms\"], **primary[\"arms\"], \"exact\": reference[\"arms\"][\"exact\"]}\n    weights = deployed_digests(work, read(cal))\n    for name, arm in arms.items():\n        assert arm[\"deployed_sha256\"] == weights.get(name)\n        for row, control in zip(arm[\"observations\"], arms[\"zero\"][\"observations\"], strict=True):\n            n = row[\"prompt_length\"]\n            assert control[\"prompt_length\"] == n\n            assert [tokens[:n] for tokens in row[\"tokens\"]] == [tokens[:n] for tokens in control[\"tokens\"]]\n    detailed = {name: arm_audit(pane, arm) for name, arm in arms.items()}\n    results = {name: contrast(arms[\"compressed\"], arms[name]) for name in (\"zero\", \"rotated\", \"exact\")}\n    return {**result, \"arms\": detailed, \"packing_contrasts\": results,\n            \"primary_passed\": all(results[name][\"passed\"] for name in (\"zero\", \"rotated\")),\n            \"cross_device_zero_identical\": zero_equal, \"reference_zero\": companion, \"verified_responses\": 800}\n\n\ndef publish(work, protocol, driver_hash, output):\n    regenerated = inspect(work)\n    assert regenerated == read(work / \"transfer_audit.json\")\n    assert inspect(work, baseline_only=True) == read(work / \"baseline_audit.json\")\n    names = [\"transfer-baseline\"]\n    if regenerated[\"baseline_qualified\"]:\n        names.extend((\"transfer-primary\", \"transfer-reference\"))\n    tapes = {name: read(work / (name + \".json\")) for name in names}\n    packed = gzip.compress(json.dumps(tapes, sort_keys=True, separators=(\",\", \":\"), allow_nan=False).encode(),\n                           compresslevel=9, mtime=0)\n    assert json.loads(gzip.decompress(packed)) == tapes\n    scripts = (\"evaluate_qwen_kl_transfer.py\", \"audit_qwen_kl_transfer.py\")\n    sources = {name: {\"sha256\": digest(work / name), \"content\": (work / name).read_text(encoding=\"utf-8\")} for name in scripts}\n    assert sources[scripts[0]][\"sha256\"] == driver_hash\n    receipts = {name: verified_receipt(work / (\"qwen-kl-\" + name + \".json\"))\n                for name in (*names, \"transfer-audit\", \"zero-audit\")}\n    full = {**regenerated, \"registered_protocol\": protocol, \"archive_sha256\": hashlib.sha256(packed).hexdigest(),\n            \"sources\": sources, \"dsr\": receipts}\n    with output.with_suffix(\".json.gz\").open(\"xb\") as stream:\n        stream.write(packed)\n    with output.open(\"x\", encoding=\"utf-8\") as stream:\n        json.dump(full, stream, sort_keys=True, indent=2)\n        stream.write(\"\\n\")\n\n\nif __name__ == \"__main__\":\n    if not __debug__:\n        raise RuntimeError(\"The transfer audit requires Python assertions.\")\n    if sys.argv[1] == \"publish\":\n        publish(Path(sys.argv[2]), sys.argv[3], sys.argv[4], Path(sys.argv[5]))\n    elif sys.argv[1] == \"baseline\":\n        root = Path(sys.argv[2])\n        result = inspect(root, baseline_only=True)\n        with (root / \"baseline_audit.json\").open(\"x\", encoding=\"utf-8\") as file:\n            json.dump(result, file, sort_keys=True, indent=2, allow_nan=False)\n            file.write(\"\\n\")\n    else:\n        root = Path(sys.argv[1])\n        result = inspect(root)\n        with (root / \"transfer_audit.json\").open(\"x\", encoding=\"utf-8\") as file:\n            json.dump(result, file, sort_keys=True, indent=2, allow_nan=False)\n            file.write(\"\\n\")\n",
+      "sha256": "ee0bed773b22a7544390eeace1173554aa43c8e91b577899ab9267af1f63840d"
+    },
+    "evaluate_qwen_kl_transfer.py": {
+      "content": "\"\"\"Apply frozen KL-sized writes to the disjoint paired packing transfer panel.\"\"\"\n\nimport hashlib\nimport json\nimport sys\nfrom pathlib import Path\n\nimport torch\nfrom rich.console import Console\nfrom safetensors.torch import load\nfrom transformers import AutoModelForCausalLM, AutoTokenizer\n\nfrom bio_inspired_nanochat.common import stable_seed_u64\nfrom calibrate_qwen_kl import tokenize\nfrom ladder_audit import fingerprint, read\nfrom qwen_external import LFS_SHA, REVISION, verify\nfrom run_ladder import numerical_box\n\n\nTRANSFER_SEED = 811042\n\n\n@torch.inference_mode()\ndef sample(model, tokenizer, panel, offset):\n    encoded = tokenize(model, tokenizer, panel)\n    width = encoded.input_ids.shape[1]\n    seed = stable_seed_u64(TRANSFER_SEED, salt=f\"qwen.kl.transfer.L1.{offset}\") % (2**63)\n    torch.manual_seed(seed)\n    torch.cuda.manual_seed(seed)\n    generated = model.generate(\n        **encoded, max_new_tokens=512, do_sample=True, temperature=1.0, top_k=50, top_p=1.0,\n        repetition_penalty=1.0, pad_token_id=tokenizer.pad_token_id, num_return_sequences=4,\n    )\n    tails = generated[:, width:].tolist()\n    eos = set(model.generation_config.eos_token_id) | {tokenizer.pad_token_id}\n    result = []\n    for index, row in enumerate(panel):\n        prefix = encoded.input_ids[index][encoded.attention_mask[index].bool()].tolist()\n        responses = [tokens[:next((i for i, token in enumerate(tokens) if token in eos), len(tokens))]\n                     for tokens in tails[4 * index:4 * index + 4]]\n        text = tokenizer.batch_decode(responses, skip_special_tokens=True)\n        answers = [numerical_box(value) for value in text]\n        result.append({\"id\": row[\"id\"], \"family\": row[\"family\"], \"gold\": row[\"gold\"],\n                       \"answers\": answers, \"text\": text, \"rewards\": [int(value == row[\"gold\"]) for value in answers],\n                       \"lengths\": list(map(len, responses)), \"tokens\": [prefix + suffix for suffix in responses],\n                       \"prompt_length\": len(prefix), \"batch_seed\": seed})\n    return result\n\n\ndef evaluate(model, tokenizer, panel, name, direction):\n    console = Console()\n    observed = []\n\n    def write(_, args, output):\n        return output + (args[0].float() @ direction).to(output.dtype)\n\n    handle = model.model.layers[-1].mlp.down_proj.register_forward_hook(write) if direction is not None else None\n    try:\n        for offset in range(0, len(panel), 8):\n            observed.extend(sample(model, tokenizer, panel[offset:offset + 8], offset))\n            console.print(f\"{name} transfer sampled {len(observed)}/{len(panel)} questions.\")\n    finally:\n        if handle is not None:\n            handle.remove()\n    return {\"observations\": observed,\n            \"deployed_sha256\": hashlib.sha256(direction.cpu().numpy().tobytes()).hexdigest() if direction is not None else None}\n\n\ndef baseline_gate(rows):\n    packing = [row for row in rows if row[\"family\"] == \"packing\"]\n    assert len(packing) == 32\n    parseable = sum(sum(answer is not None for answer in row[\"answers\"]) for row in packing)\n    mixed = sum(0 < sum(row[\"rewards\"]) < 4 for row in packing)\n    return {\"packing_parseable\": parseable, \"packing_mixed_groups\": mixed, \"passed\": parseable >= 96 and mixed >= 8}\n\n\n@torch.inference_mode()\ndef main(checkpoint, manifest, sealed, calibration, frozen_writes, output, prior_gate, arms):\n    torch.set_num_threads(1)\n    torch.set_float32_matmul_precision(\"highest\")\n    match = read(calibration)\n    assert match[\"qualified\"] and fingerprint(sealed) == match[\"panel_sha256\"]\n    assert fingerprint(frozen_writes) == match[\"candidate_sha256\"]\n    if prior_gate is not None:\n        baseline = read(prior_gate)\n        assert baseline[\"calibration_sha256\"] == fingerprint(calibration)\n        assert baseline[\"baseline_gate\"][\"passed\"] and baseline_gate(baseline[\"arms\"][\"zero\"][\"observations\"]) == baseline[\"baseline_gate\"]\n    else:\n        assert arms == [\"zero\"]\n    assert set(arms).issubset({\"zero\", \"exact\", \"compressed\", \"rotated\"}) and len(arms) == len(set(arms))\n    sealed_data = read(sealed)\n    panel = sealed_data[\"panels\"][\"transfer\"]\n    assert len(panel) == 40\n    weights = load(frozen_writes.read_bytes()) if set(arms) != {\"zero\"} else {}\n    verify(checkpoint, manifest)\n    model = AutoModelForCausalLM.from_pretrained(checkpoint, dtype=torch.bfloat16, local_files_only=True,\n                                                trust_remote_code=False, use_safetensors=True).to(\"cuda\").eval()\n    model.requires_grad_(False)\n    tokenizer = AutoTokenizer.from_pretrained(checkpoint, local_files_only=True, trust_remote_code=False)\n    tokenizer.padding_side = \"left\"\n    result = {\"panel_sha256\": fingerprint(sealed), \"calibration_sha256\": fingerprint(calibration),\n              \"checkpoint_sha256\": LFS_SHA, \"checkpoint_revision\": REVISION, \"seed\": TRANSFER_SEED,\n              \"arms\": {}, \"gpu\": torch.cuda.get_device_name()}\n    for arm in arms:\n        direction = None if arm == \"zero\" else weights[arm].cuda() * match[\"chosen_scales\"][arm]\n        if direction is not None:\n            assert abs(float(direction.double().norm()) - (0.5 * match[\"chosen_scales\"][arm])) < 1e-6\n        data = evaluate(model, tokenizer, panel, arm, direction)\n        result[\"arms\"][arm] = data\n        if arm == \"zero\":\n            result[\"baseline_gate\"] = baseline_gate(data[\"observations\"])\n        persisted = output.with_name(f\"{output.stem}-{arm}.json\")\n        with persisted.open(\"x\", encoding=\"utf-8\") as stream:\n            json.dump(data, stream, sort_keys=True, allow_nan=False, separators=(\",\", \":\"))\n            stream.write(\"\\n\")\n    with output.open(\"x\", encoding=\"utf-8\") as stream:\n        json.dump(result, stream, sort_keys=True, allow_nan=False, separators=(\",\", \":\"))\n        stream.write(\"\\n\")\n\n\nif __name__ == \"__main__\":\n    if not __debug__:\n        raise RuntimeError(\"The transfer check requires Python assertions.\")\n    paths = tuple(map(Path, sys.argv[1:7]))\n    prior = None if sys.argv[7] == \"-\" else Path(sys.argv[7])\n    main(*paths, prior, sys.argv[8:])\n",
+      "sha256": "8d6dc2e452c16d1328183210e156ee89e9b1322ebf4d62beb39bd6afd194fe32"
+    }
+  },
+  "verified_responses": 800
+}
