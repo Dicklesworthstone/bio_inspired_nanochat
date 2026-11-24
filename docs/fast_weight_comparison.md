@@ -60,3 +60,71 @@ writes (`docs/online_learning_status.md`), and evaluation ran with stochastic ve
 with `chunk_len` (bead `hwxb.9`); until it runs, this page supports no claim about relative
 working-memory quality.
 
+## 4. Recall after eviction
+
+The November 24 component screen supplies the same normalized key features
+and correct value to each writer. The 24 queried bindings are older than
+the recent 32-entry window. Each arm is evaluated on eight held-out streams
+at both interference levels, after separate calibration of the two
+recurrent rules and the sign-aligned diagnostic. The delta comparator uses
+a scalar-gated delta update over the same feature space. The cosine cache
+fits 73 entries under the synaptic writer's mutable-state ceiling.
+
+| Writer | Mutable state | 32 later writes, clean / noisy | 128 later writes, clean / noisy |
+|---|---:|---:|---:|
+| Native projected Hebbian | 2,436 bytes | 15 / 11 | 13 / 15 |
+| Gated delta rule | 1,024 bytes | 36 / 32 | 13 / 21 |
+| Sign-aligned Hebbian, fresh trace per write | 2,436 bytes | 12 / 15 | 16 / 25 |
+| Cosine cache | 2,413 bytes | 22 / 20 | 15 / 12 |
+| Recent window | 1,060 bytes | 16 / 12 | 12 / 15 |
+
+Each count is out of 192 scored queries. When the probe exposes an exact
+key ID, a 256-byte dictionary answers all 192 at each interference level.
+The native writer's median sequential CPU write phase was 31.1 ms for
+96 writes, versus 1.36 ms for the delta update. The cosine cache's time
+includes block admission. These measurements belong to the research driver.
+
+For a fresh trace and one paired event with key $x$ and value $y$, the
+projected trace product is proportional to
+$(x P_{\mathrm{in}} P_{\mathrm{out}}^\mathsf{T} y^\mathsf{T})x^\mathsf{T}y$.
+Normalization preserves that scalar's sign. In an exhaustive 16-by-16
+basis-pair check with one fixed pair of projection matrices, native
+argmax recall succeeded on all **137** positive-sign cases and failed on all
+**119** negative-sign cases. Explicit sign alignment recovered **256/256**.
+Its crowded-stream results above show how much recall survives that repair.
+
+### Trained models with online writes at evaluation
+
+The model experiment presents two prefixes containing the same keys and
+values with different bindings. The two query suffixes are identical,
+and both answers must be correct to count as successful paired recall.
+Training uses ordinary in-window supervision. The evaluation writes the
+prefix into per-layer fast weights, replaces the original KV cache and
+reads the suffix with writes disabled. Frozen reads and explicit clearing
+of the fast state are controls. Their logits match within each
+counterfactual pair.
+
+In the four-pair pilot, only one of three trained seeds reached the
+prespecified 50% within-window floor. That seed answered 96/96 inside
+the window, then 7/96 with writes after eviction and 6/96 with frozen
+memory. None of its 48 counterfactual pairs had both answers correct
+after eviction. In the separate two-pair trial, three fresh seeds reached
+288/288 within the window. They answered 14/288 after eviction with or
+without active writes, and none of the 144 pairs had both answers correct.
+Active writes changed the logits in all 144 pairs.
+
+The position-matched control used the same two-pair setup and filled a
+separate cache with public separator tokens before reading the hidden
+prefix. This preserved the original query positions while keeping the
+hidden keys and values out of the query's attention cache. It reproduced
+288/288 in-window answers. After eviction, active writes yielded 24/288
+correct answers versus 21/288 for frozen and cleared memory. Both
+answers were correct in 0/144 pairs in all three conditions. The mean
+margin favoring each pair's correct bindings over the swapped bindings
+was negative in all three active-write seeds.
+
+These trials measure writes first enabled at evaluation. The remaining
+test is whether training with the eviction in the loop can learn a readout
+that improves paired recall over a trained delta-memory comparator.
+The [experiment archive](../results/post_eviction_pairs_2026-11-24.json)
+contains the drivers, per-seed measurements, and DSR receipts.
