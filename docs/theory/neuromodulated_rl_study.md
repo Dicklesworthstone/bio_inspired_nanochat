@@ -1082,3 +1082,31 @@ timing and learning gains are still pending in `hy8.3.6`.
 
 [Compression measurements, source and receipts](../../results/qwen_sampler_score_2026-11-23_compression.json) ·
 [Frozen FP32 bases](../../results/qwen_sampler_score_2026-11-23_compression.safetensors)
+
+### Registered whole-model replay comparison
+
+- [ ] Replay the published packing batch with the original seed.
+  Require the same 32 completions and use the first held-out mixed
+  group, packing pair 2, side 0, with 1,172 scored tokens. Capture
+  its decision-time vectors and actual sampler support. Use the
+  normalized rank-32 spans from the compression study without
+  refitting.
+- [ ] Check parallel teacher-forced replay on the four relevant
+  sequences first. If it fails, check single-token cached replay
+  with the original 32-sequence batch geometry. Replay runs the
+  whole frozen model over fixed token IDs and reconstructs the
+  delayed gradient. Require identical candidate IDs and retained
+  logits at every scored token, relative gradient error at most
+  `10⁻⁴`, and maximum absolute error at most `6 × 10⁻⁷`.
+  Record failed routes and withhold the matched comparison if
+  neither qualifies.
+- [ ] Use the first eligible route in three timed rounds. Synchronize
+  PyTorch at each method boundary and rotate the order of
+  replay, the exact stored vectors and the compressed stored
+  vectors expanded to a dense write. The qualification replay
+  serves as a warmup and each retained method has one untimed
+  update. Check every timed update against its own reference
+  matrix. Report logical retained bytes, median elapsed
+  post-reward time and incremental peak tensor bytes.
+- [ ] Preserve the adaptation and transfer panels. The registered
+  benchmark source SHA-256 is `0c592655daf77bb10b629b6f90a45db0525657081bc7ee6c7620f9f7dbbbc27c`.
