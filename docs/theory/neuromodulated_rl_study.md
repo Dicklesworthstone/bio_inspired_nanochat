@@ -1248,19 +1248,19 @@ sampling a new, adequately powered transfer panel.
 
 ### Registered fixed-prefix termination diagnostic
 
-- [ ] Replay the adaptation tokens through the frozen checkpoint.
+- [x] Replay the adaptation tokens through the frozen checkpoint.
   Match both content support digests. Capture the final MLP input,
   down-projection output and pre-MLP residual at every sampled
   EOS and every 32nd scored content action. Require the unchanged
   residual reconstruction to yield identical logits.
-- [ ] At each captured prefix, measure the sum of the two EOS
+- [x] At each captured prefix, measure the sum of the two EOS
   probabilities under the actual top-k policy. Compare the
   original exact, compressed and rotated writes at norms
   0.5 and 0.125. Measure whether the retained set changes and
   compute KL after renormalizing both distributions on the
   original support. This keeps the KL finite when the actual
   selected sets differ.
-- [ ] Add the exact score contribution of sampled EOS with
+- [x] Add the exact score contribution of sampled EOS with
   group-centered reward to the original dense numerator.
   Normalize this direction at the same two radii. On correct
   EOS prefixes in mixed groups, require the 0.5-norm EOS-aware
@@ -1269,6 +1269,36 @@ sampling a new, adequately powered transfer panel.
   Require its mean content KL to stay within 10% of the
   original exact write. Record the quarter-radius comparisons
   and every matched prefix even if this directional gate fails.
-- [ ] Preserve the failed transfer panel for audit. The probe
+- [x] Preserve the failed transfer panel for audit. The probe
   uses fixed adaptation prefixes and executes no new generation.
   The registered diagnostic SHA-256 is `00f774bc64bba78448d035138d512d3bc04c42ea20243f86e1b03bf3d5c593f9`.
+
+The diagnostic matched both support digests and the unchanged
+logits on 518 content and 64 EOS prefixes. The sampled EOS
+contribution was 0.0693% of the content numerator's Frobenius
+norm. Adding it gave cosine 0.99999976 with the original direction.
+
+At the nine correct mixed-group EOS prefixes, the original
+0.5-norm exact write assigned mean stop probability 99.8042%.
+Adding EOS credit raised it by 0.0069 percentage points, with
+mean content KL 99.70% of the original write's KL. The registered
+one-point improvement gate failed. The selected EOS prefixes had
+only 0.1958 points of headroom, so that threshold could never
+pass on these prefixes. This limits inference about termination
+earlier in a response.
+
+| Direction | Content KL at norm 0.5 | Content KL at norm 0.125 | Changed supports at 0.5 / 0.125, out of 518 |
+| --- | ---: | ---: | ---: |
+| Exact | 0.04893 | 0.003086 | 500 / 391 |
+| Compressed | 0.12531 | 0.006240 | 507 / 454 |
+| Rotated | 0.10125 | 0.005724 | 518 / 476 |
+| Exact including EOS | 0.04879 | 0.003083 | 499 / 391 |
+
+Quarter-radius writes reduced fixed-support KL, even though most
+actual top-k sets still changed. The next experiment in `hy8.3.7`
+will calibrate write size on independent prefixes and test actual
+completion lengths on fresh questions. The failed one-point
+threshold and its source remain archived.
+
+[Fixed-prefix EOS results, source and DSR receipts](../../results/qwen_eos_credit_2026-11-23.json) ·
+[Per-prefix probabilities and divergence](../../results/qwen_eos_credit_2026-11-23.json.gz)

@@ -1,0 +1,165 @@
+{
+  "adaptation_sha256": "9b533997d648e3f7cde6a359faf2ab234ce7c18c99b72ba31a8cbc4f7919d740",
+  "candidate_writes_sha256": "8e2a30a452b1fdabfdedbca6610dd4ea182c645e8be5d017288608c961290c3a",
+  "checkpoint_revision": "aafeb0fc6f22cbf0eaeed126eff8be45b0360a35",
+  "checkpoint_sha256": "08faf1e950173bb44c11d26df28c55da7237dc55c77dbc1cbae4a5d7584540d9",
+  "combined_direction_cosine": 0.9999997598080691,
+  "content_stride": 32,
+  "dsr": {
+    "qwen-eos-credit-fixed-prefix": {
+      "checks": [
+        {
+          "duration_ms": 366547,
+          "exit_code": 0,
+          "log_sha256": "eeba3df73b931c9771b7629f3fb7fb56a3665fa7b71e5411adf096b4a577ce4c",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "599b0fadbb20f21bf40fb094d7931f424b2fbd74ee652b965edaef89e014a255",
+      "exit_code": 0,
+      "receipt_sha256": "e90dd6a97cee96293311f38ae97dcddbd45ae7b51beb25fd7278ca1fe4230e20",
+      "run_id": "fec6748b-5302-498e-8ff5-13b21b92758a",
+      "source_after": "ba231d259fbf649d50a995dda11598ce2daa9289|9da5f4f11571805ba52dbfb25874f23d9b2cacf666ab15cc7092f32789782d72|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "ba231d259fbf649d50a995dda11598ce2daa9289|9da5f4f11571805ba52dbfb25874f23d9b2cacf666ab15cc7092f32789782d72|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    },
+    "qwen-eos-credit-independent-audit": {
+      "checks": [
+        {
+          "duration_ms": 1008,
+          "exit_code": 0,
+          "log_sha256": "389d23850c1f936f5090a65357a11a1ed97e128a69f03c8666c6d7dd818b1155",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "0769a8d8b68c3ca6277d4945386e9489ff099ca30cd81dc27cf9c442a7a80aae",
+      "exit_code": 0,
+      "receipt_sha256": "82ee2084249c491df35d2feb3e09b998845ec322fc37d03722d6b946158d19f8",
+      "run_id": "0B0BA558-29A2-47E1-AB1C-8D077B64A2F4",
+      "source_after": "ba231d259fbf649d50a995dda11598ce2daa9289|9da5f4f11571805ba52dbfb25874f23d9b2cacf666ab15cc7092f32789782d72|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "ba231d259fbf649d50a995dda11598ce2daa9289|9da5f4f11571805ba52dbfb25874f23d9b2cacf666ab15cc7092f32789782d72|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    },
+    "qwen-eos-support-fixture-reference": {
+      "checks": [
+        {
+          "duration_ms": 17734,
+          "exit_code": 0,
+          "log_sha256": "c11966d066f331cff5a70e49f3f9ab9a6cf9722111f9aff101d2e688b1b78525",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "a682231eb2a2ee4efbefc19333f7d914a8f64c9c557d3c1b99d7208b8b09fc51",
+      "exit_code": 0,
+      "receipt_sha256": "f1c657b6987265edca5496076d86c22bf6f30b0dac88f79cb0f95e48399b8389",
+      "run_id": "A2C374F7-2E39-4C78-B702-80C553ABD12C",
+      "source_after": "ba231d259fbf649d50a995dda11598ce2daa9289|9da5f4f11571805ba52dbfb25874f23d9b2cacf666ab15cc7092f32789782d72|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "ba231d259fbf649d50a995dda11598ce2daa9289|9da5f4f11571805ba52dbfb25874f23d9b2cacf666ab15cc7092f32789782d72|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    }
+  },
+  "eos_ids": [
+    151645,
+    151643
+  ],
+  "eos_to_content_numerator_norm": 0.0006931030908391804,
+  "first_fixture_attempt": {
+    "cause": "The fixture boost did not put EOS over the expected 0.5 probability",
+    "receipt_sha256": "9af72dffafd3894a119b56488cceff90024cc1efa700b3c0391bca0fb4017b01",
+    "run_id": "3FD1D257-9A79-4E36-85CA-B5407AAA322D",
+    "status": "failure"
+  },
+  "gpu": "NVIDIA GeForce RTX 4090",
+  "matched_support_sha256": [
+    "887bc1416097529710227982284c0b953c337631ada753fe2b0582e6088f4b60",
+    "1ff6535e3df654d58dce2da795c158fc0107928f7fb821812b48beb2ce94a350"
+  ],
+  "records_archive_sha256": "c6381c8ddf7cc837ad5bcc8cef7f9054247984d8bc6d88fcd0ead19c88f1b7bb",
+  "registered_protocol": "759b1bf36422bea4de2461242c456c708b88958d",
+  "sources": {
+    "audit_eos_credit.py": {
+      "content": "\"\"\"Verify the fixed-prefix termination diagnostic and its registered gate.\"\"\"\n\nimport gzip\nimport hashlib\nimport json\nimport math\nimport statistics\nimport sys\nfrom pathlib import Path\n\nfrom audit_whole_model_replay import digest, read, verified_receipt\n\n\nARMS = tuple(f\"{arm}_{size}\" for arm in (\"exact\", \"compressed\", \"rotated\", \"exact_with_eos\")\n             for size in (\"full\", \"quarter\"))\n\n\ndef audit(work):\n    adaptation_path = work / \"adaptation.json\"\n    observed = read(adaptation_path)\n    result = read(work / \"termination.json\")\n    assert result[\"adaptation_sha256\"] == digest(adaptation_path)\n    assert result[\"candidate_writes_sha256\"] == observed[\"candidate_writes\"][\"sha256\"]\n    assert result[\"checkpoint_sha256\"] == observed[\"checkpoint_sha256\"] and result[\"content_stride\"] == 32\n    assert result[\"matched_support_sha256\"] == [batch[\"support_sha256\"] for batch in observed[\"replay_batches\"]]\n    assert result[\"eos_ids\"] == [151645, 151643]\n    assert 0 <= result[\"eos_to_content_numerator_norm\"] and -1 <= result[\"combined_direction_cosine\"] <= 1.000001\n    expected = {}\n    for index, item in enumerate(observed[\"observations\"]):\n        batch = observed[\"replay_batches\"][index // 8]\n        width = len(batch[\"prompt_attention\"][0])\n        baseline = statistics.mean(item[\"rewards\"])\n        for sample, length in enumerate(item[\"lengths\"]):\n            row = (index % 8) * 4 + sample\n            for step in (*range(31, length, 32), length):\n                kind = \"eos\" if step == length else \"content\"\n                token = batch[\"sequences\"][row][width + step]\n                expected[(item[\"id\"], sample, step, kind)] = (row, item[\"rewards\"][sample], item[\"rewards\"][sample] - baseline, token)\n    records = result[\"records\"]\n    for item in records:\n        key = (item[\"question\"], item[\"sample\"], item[\"step\"], item[\"kind\"])\n        assert expected.pop(key) == (item[\"row\"], item[\"reward\"], item[\"centered_reward\"], item[\"action\"])\n        assert 0 <= item[\"zero_eos_mass\"] <= 1.000001\n        if item[\"kind\"] == \"eos\":\n            assert item[\"action\"] in result[\"eos_ids\"] and item[\"zero_eos_mass\"] > 0\n        for arm in ARMS:\n            measure = item[arm]\n            assert 0 <= measure[\"eos_mass\"] <= 1.000001\n            assert math.isfinite(measure[\"fixed_support_kl\"]) and measure[\"fixed_support_kl\"] >= 0\n            assert isinstance(measure[\"dynamic_support_changed\"], bool)\n    assert not expected\n    eos = [row for row in records if row[\"kind\"] == \"eos\"]\n    content = [row for row in records if row[\"kind\"] == \"content\"]\n    successful_mixed = [row for row in eos if row[\"reward\"] == 1 and row[\"centered_reward\"] != 0]\n    assert len(eos) == 64 and len(successful_mixed) > 0 and len(content) > 0\n    summaries = {}\n    for arm in ARMS:\n        summaries[arm] = {\n            \"mean_stop_mass_at_eos\": statistics.mean(row[arm][\"eos_mass\"] for row in eos),\n            \"mean_stop_mass_successful_mixed\": statistics.mean(row[arm][\"eos_mass\"] for row in successful_mixed),\n            \"mean_content_kl\": statistics.mean(row[arm][\"fixed_support_kl\"] for row in content),\n            \"changed_content_supports\": sum(row[arm][\"dynamic_support_changed\"] for row in content),\n            \"changed_eos_supports\": sum(row[arm][\"dynamic_support_changed\"] for row in eos),\n        }\n    exact, amended = summaries[\"exact_full\"], summaries[\"exact_with_eos_full\"]\n    eos_change = amended[\"mean_stop_mass_successful_mixed\"] - exact[\"mean_stop_mass_successful_mixed\"]\n    kl_ratio = amended[\"mean_content_kl\"] / exact[\"mean_content_kl\"]\n    qualifies = eos_change >= 0.01 and kl_ratio <= 1.1\n    return {\"content_prefixes\": len(content), \"eos_prefixes\": len(eos),\n            \"successful_mixed_eos_prefixes\": len(successful_mixed),\n            \"zero_mean_eos_mass\": statistics.mean(row[\"zero_eos_mass\"] for row in eos),\n            \"zero_mean_eos_mass_successful_mixed\": statistics.mean(row[\"zero_eos_mass\"] for row in successful_mixed),\n            \"arms\": summaries, \"registered_eos_mass_change\": eos_change, \"registered_content_kl_ratio\": kl_ratio,\n            \"registered_direction_passes\": qualifies}\n\n\ndef publish(work, registration, source_hash, output):\n    audited = audit(work)\n    assert audited == read(work / \"eos_audit.json\")\n    raw_path = work / \"termination.json\"\n    raw = read(raw_path)\n    scripts = (\"eos_credit_diagnostic.py\", \"eos_support_fixture.py\", \"eos_support_fixture_first.py\", \"audit_eos_credit.py\")\n    sources = {name: {\"sha256\": digest(work / name), \"content\": (work / name).read_text(encoding=\"utf-8\")}\n               for name in scripts}\n    assert sources[scripts[0]][\"sha256\"] == source_hash\n    receipts = {name: verified_receipt(work / (name + \".json\")) for name in\n                (\"qwen-eos-credit-fixed-prefix\", \"qwen-eos-support-fixture-reference\", \"qwen-eos-credit-independent-audit\")}\n    file = work / \"qwen-eos-support-fixture.json\"\n    fixture = read(file)\n    assert fixture[\"status\"] == \"failure\"\n    packed = gzip.compress(raw_path.read_bytes(), compresslevel=9, mtime=0)\n    assert json.loads(gzip.decompress(packed)) == raw\n    report = {key: value for key, value in raw.items() if key != \"records\"}\n    report.update({\"registered_protocol\": registration, \"summary\": audited, \"sources\": sources, \"dsr\": receipts,\n                   \"records_archive_sha256\": hashlib.sha256(packed).hexdigest(),\n                   \"first_fixture_attempt\": {\"run_id\": fixture[\"run_id\"], \"status\": fixture[\"status\"],\n                                             \"receipt_sha256\": digest(file),\n                                             \"cause\": \"The fixture boost did not put EOS over the expected 0.5 probability\"}})\n    with output.with_suffix(\".json.gz\").open(\"xb\") as stream:\n        stream.write(packed)\n    with output.open(\"x\", encoding=\"utf-8\") as stream:\n        json.dump(report, stream, sort_keys=True, allow_nan=False, indent=2)\n        stream.write(\"\\n\")\n\n\nif __name__ == \"__main__\":\n    if not __debug__:\n        raise RuntimeError(\"The fixed-prefix audit requires Python assertions.\")\n    if sys.argv[1] == \"publish\":\n        publish(Path(sys.argv[2]), sys.argv[3], sys.argv[4], Path(sys.argv[5]))\n    else:\n        directory = Path(sys.argv[1])\n        result = audit(directory)\n        with (directory / \"eos_audit.json\").open(\"x\", encoding=\"utf-8\") as stream:\n            json.dump(result, stream, sort_keys=True, indent=2, allow_nan=False)\n            stream.write(\"\\n\")\n",
+      "sha256": "d9b0f320d5183564ead3aef303c6669ca1b88caeecbda3e0e3a7947c5cebd480"
+    },
+    "eos_credit_diagnostic.py": {
+      "content": "\"\"\"Measure termination and KL at fixed archived Qwen prefixes.\"\"\"\n\nimport json\nimport sys\nfrom collections import defaultdict\nfrom pathlib import Path\n\nimport torch\nfrom rich.console import Console\nfrom safetensors.torch import load\nfrom transformers import AutoModelForCausalLM\nfrom transformers.cache_utils import DynamicCache\n\nfrom ladder_audit import fingerprint, read\nfrom qualify_single_write import support_identity\nfrom qwen_external import LFS_SHA, REVISION, verify\nfrom sampler_score import analytical_feedback\n\n\nEOS = (151645, 151643)\nSTRIDE = 32\nK = 50\n\n\ndef rank_mask(raw):\n    logits = raw.float()\n    return logits.masked_fill(logits < logits.topk(K).values[:, -1:], -torch.inf)\n\n\ndef event_plan(batch, cases):\n    width = len(batch[\"prompt_attention\"][0])\n    plan = defaultdict(list)\n    caps = []\n    for slot, case in enumerate(cases):\n        rewards = case[\"rewards\"]\n        for sample, length in enumerate(case[\"lengths\"]):\n            row = slot * 4 + sample\n            caps.append(length)\n            token = batch[\"sequences\"][row][width + length]\n            assert token in EOS and length < 512\n            identity = {\"question\": case[\"id\"], \"sample\": sample, \"row\": row, \"reward\": rewards[sample],\n                        \"centered_reward\": rewards[sample] - sum(rewards) / 4}\n            plan[length].append({**identity, \"kind\": \"eos\", \"step\": length, \"action\": token})\n            for step in range(STRIDE - 1, length, STRIDE):\n                plan[step].append({**identity, \"kind\": \"content\", \"step\": step,\n                                   \"action\": batch[\"sequences\"][row][width + step]})\n    return plan, caps\n\n\ndef capture(model, batch, cases):\n    plan, caps = event_plan(batch, cases)\n    device = model.device\n    limit = max(caps) + 1\n    base_attention = torch.tensor(batch[\"prompt_attention\"], device=device).repeat_interleave(4, dim=0)\n    width = base_attention.shape[1]\n    tokens = torch.tensor(batch[\"sequences\"], device=device)[:, :width + limit - 1]\n    attention = torch.cat((base_attention, base_attention.new_ones((32, limit - 1))), dim=-1)\n    positions = (attention.cumsum(-1) - 1).masked_fill(attention == 0, 0)\n    layer = model.model.layers[-1]\n    cache = DynamicCache(config=model.config)\n    partial, data, scores = {}, [], []\n    step = 0\n\n    def residual_hook(_, args):\n        if step in plan:\n            partial[\"before\"] = args[0].clone()\n\n    def down_hook(_, args, output):\n        if step in plan:\n            partial[\"x\"] = args[0].clone()\n            partial[\"down\"] = output.clone()\n\n    hooks = (layer.post_attention_layernorm.register_forward_pre_hook(residual_hook),\n             layer.mlp.down_proj.register_forward_hook(down_hook))\n    try:\n        for step in range(limit):\n            end = width + step\n            kw = model.prepare_inputs_for_generation(\n                tokens[:, :end], next_sequence_length=1 if step else width,\n                attention_mask=attention[:, :end].contiguous(), position_ids=positions[:, :end],\n                is_first_iteration=step == 0, past_key_values=cache, logits_to_keep=1, use_cache=True,\n            )\n            output = model(**kw, return_dict=True)\n            cache = output.past_key_values\n            raw = output.logits[:, -1]\n            if step < limit - 1:\n                scores.append(rank_mask(raw))\n            if step in plan:\n                before, down = partial[\"before\"], partial[\"down\"]\n                reconstructed = model.lm_head(model.model.norm(before + down))[:, -1]\n                torch.testing.assert_close(reconstructed, raw, atol=0, rtol=0)\n                data.append((plan[step], partial[\"x\"], before, down, raw.clone()))\n                partial.clear()\n    finally:\n        for hook in hooks:\n            hook.remove()\n    support = support_identity(scores, caps)\n    assert support == batch[\"support_sha256\"]\n    return data, support\n\n\ndef added_terminal_score(model, records):\n    n = 0\n    tensor = torch.zeros((8960, 1536), device=model.device)\n    for events, x, before, down, raw in records:\n        selected = [event for event in events if event[\"kind\"] == \"eos\" and event[\"centered_reward\"] != 0]\n        if not selected:\n            continue\n        rows = [event[\"row\"] for event in selected]\n        target = torch.tensor([event[\"action\"] for event in selected], device=model.device)\n        masked = rank_mask(raw[rows])\n        counts = masked.isfinite().sum(-1)\n        support = masked.topk(int(counts.max()))\n        found = (support.indices == target[:, None]) & support.values.isfinite()\n        assert bool((found.sum(-1) == 1).all())\n        coordinates = found.to(torch.long).argmax(-1)\n        norm = model.model.norm\n        atoms = model.lm_head.weight[support.indices].float()\n        feedback = analytical_feedback(\n            (before + down)[rows, -1].float(), norm.weight.float(), norm.variance_epsilon,\n            atoms, support.values, coordinates,\n        )\n        weights = torch.tensor([event[\"centered_reward\"] for event in selected], device=model.device)\n        tensor.addmm_(x[rows, -1].float().T, feedback * weights[:, None])\n        n += len(rows)\n    assert n == 16\n    return tensor\n\n\ndef compare_distributions(original, shifted):\n    reference = rank_mask(original)\n    alternative = rank_mask(shifted)\n    previous_support = reference.isfinite()\n    old = reference.softmax(-1)[:, list(EOS)].sum(-1)\n    stop = alternative.softmax(-1)[:, list(EOS)].sum(-1)\n    count = previous_support.sum(-1)\n    support = reference.topk(int(count.max()))\n    valid = support.values.isfinite()\n    fixed = shifted.gather(1, support.indices).double().masked_fill(~valid, -torch.inf)\n    log_reference = support.values.double().log_softmax(-1)\n    log_alternative = fixed.log_softmax(-1)\n    terms = log_reference.exp() * (log_reference - log_alternative)\n    kl = terms.masked_fill(~valid, 0.0).sum(-1).clamp_min(0.0)\n    changed = (previous_support != alternative.isfinite()).any(-1)\n    return old.tolist(), stop.tolist(), kl.tolist(), changed.tolist()\n\n\ndef diagnostic(model, prepared, weights):\n    console = Console()\n    records, supports = [], []\n    for index, batch in enumerate(prepared[\"replay_batches\"]):\n        retained, support = capture(model, batch, prepared[\"observations\"][8 * index:8 * index + 8])\n        records.extend(retained)\n        supports.append(support)\n        console.print(f\"Replayed and matched support for adaptation batch {index + 1}/2.\")\n    terminal_sum = added_terminal_score(model, records)\n    content_size = prepared[\"candidate_writes\"][\"scored_tokens\"]\n    content_norm = prepared[\"candidate_writes\"][\"unscaled_gradient_norms\"][\"exact\"]\n    content_sum = weights[\"exact\"] * (2 * content_norm * content_size)\n    combined = content_sum + terminal_sum\n    ratio = float(terminal_sum.double().norm() / content_sum.double().norm())\n    angle = float((combined.double() * content_sum.double()).sum() / (combined.double().norm() * content_sum.double().norm()))\n    weights[\"exact_with_eos\"] = combined * (0.5 / float(combined.double().norm()))\n    output = []\n    for events, x, before, down, raw in records:\n        rows = [event[\"row\"] for event in events]\n        observed = [dict(event) for event in events]\n        for arm, write in weights.items():\n            for name, scale in ((\"full\", 1.0), (\"quarter\", 0.25)):\n                perturbation = (x.float() @ (write * scale)).to(down.dtype)\n                new = model.lm_head(model.model.norm(before + (down + perturbation)))[:, -1]\n                old, stop, kl, changed = compare_distributions(raw[rows], new[rows])\n                for event, base, probability, divergence, moves in zip(observed, old, stop, kl, changed, strict=True):\n                    event[\"zero_eos_mass\"] = base\n                    event[f\"{arm}_{name}\"] = {\"eos_mass\": probability, \"fixed_support_kl\": divergence,\n                                              \"dynamic_support_changed\": moves}\n        output.extend(observed)\n    assert sum(row[\"kind\"] == \"eos\" for row in output) == 64\n    return {\"records\": output, \"matched_support_sha256\": supports, \"eos_to_content_numerator_norm\": ratio,\n            \"combined_direction_cosine\": angle}\n\n\n@torch.inference_mode()\ndef main(checkpoint, manifest, adaptation, candidate, output):\n    torch.set_num_threads(1)\n    torch.set_float32_matmul_precision(\"highest\")\n    prepared = read(adaptation)\n    assert prepared[\"gate\"][\"passed\"] and prepared[\"checkpoint_sha256\"] == LFS_SHA\n    assert fingerprint(candidate) == prepared[\"candidate_writes\"][\"sha256\"]\n    verify(checkpoint, manifest)\n    model = AutoModelForCausalLM.from_pretrained(checkpoint, dtype=torch.bfloat16, local_files_only=True,\n                                                trust_remote_code=False, use_safetensors=True).to(\"cuda\").eval()\n    model.requires_grad_(False)\n    assert tuple(model.generation_config.eos_token_id) == EOS\n    weights = {name: value.cuda() for name, value in load(candidate.read_bytes()).items()}\n    result = diagnostic(model, prepared, weights)\n    result.update({\"adaptation_sha256\": fingerprint(adaptation), \"candidate_writes_sha256\": fingerprint(candidate),\n                   \"checkpoint_sha256\": LFS_SHA, \"checkpoint_revision\": REVISION, \"gpu\": torch.cuda.get_device_name(),\n                   \"content_stride\": STRIDE, \"eos_ids\": EOS})\n    with output.open(\"x\", encoding=\"utf-8\") as stream:\n        json.dump(result, stream, sort_keys=True, allow_nan=False, separators=(\",\", \":\"))\n        stream.write(\"\\n\")\n\n\nif __name__ == \"__main__\":\n    if not __debug__:\n        raise RuntimeError(\"The termination diagnostic requires Python assertions.\")\n    main(*(Path(value) for value in sys.argv[1:]))\n",
+      "sha256": "00f774bc64bba78448d035138d512d3bc04c42ea20243f86e1b03bf3d5c593f9"
+    },
+    "eos_support_fixture.py": {
+      "content": "\"\"\"Exercise fixed-support KL independently of dynamic stopping mass.\"\"\"\n\nimport torch\n\nfrom eos_credit_diagnostic import EOS, compare_distributions\n\n\nreference = torch.full((1, 151936), -20.0)\nreference[0, :50] = torch.linspace(3.0, 1.0, 50)\nidentical = compare_distributions(reference, reference)\nassert identical == ([0.0], [0.0], [0.0], [False])\nshifted = reference.clone()\nshifted[0, EOS[0]] = 8.0\nold, stop, kl, support_changed = compare_distributions(reference, shifted)\nassert old == [0.0] and stop[0] > 0.5 and kl == [0.0] and support_changed == [True]\nshifted[0, 0] = 5.0\n_, _, kl, changed = compare_distributions(reference, shifted)\nassert kl[0] > 0.0 and changed == [True]\nprint(\"Fixed-support KL and dynamic EOS mass crossed the expected independent controls.\")\n",
+      "sha256": "f77fe2620d4f5924649e7ab12268a4527ed81447199222fcc098200fee72fda3"
+    },
+    "eos_support_fixture_first.py": {
+      "content": "\"\"\"Exercise fixed-support KL independently of dynamic stopping mass.\"\"\"\n\nimport torch\n\nfrom eos_credit_diagnostic import EOS, compare_distributions\n\n\nreference = torch.full((1, 151936), -20.0)\nreference[0, :50] = torch.linspace(3.0, 1.0, 50)\nidentical = compare_distributions(reference, reference)\nassert identical == ([0.0], [0.0], [0.0], [False])\nshifted = reference.clone()\nshifted[0, EOS[0]] = 5.0\nold, stop, kl, support_changed = compare_distributions(reference, shifted)\nassert old == [0.0] and stop[0] > 0.5 and kl == [0.0] and support_changed == [True]\nshifted[0, 0] = 5.0\n_, _, kl, changed = compare_distributions(reference, shifted)\nassert kl[0] > 0.0 and changed == [True]\nprint(\"Fixed-support KL and dynamic EOS mass crossed the expected independent controls.\")\n",
+      "sha256": "93b88d9cde73657272e6dec16356733ca28a45a96cb7c4b200ced494c6102bac"
+    }
+  },
+  "summary": {
+    "arms": {
+      "compressed_full": {
+        "changed_content_supports": 507,
+        "changed_eos_supports": 64,
+        "mean_content_kl": 0.12531026570185438,
+        "mean_stop_mass_at_eos": 0.9982040543109179,
+        "mean_stop_mass_successful_mixed": 0.9968138999409146
+      },
+      "compressed_quarter": {
+        "changed_content_supports": 454,
+        "changed_eos_supports": 56,
+        "mean_content_kl": 0.006240242959331285,
+        "mean_stop_mass_at_eos": 0.999137912876904,
+        "mean_stop_mass_successful_mixed": 0.9980185031890869
+      },
+      "exact_full": {
+        "changed_content_supports": 500,
+        "changed_eos_supports": 64,
+        "mean_content_kl": 0.04893442962228786,
+        "mean_stop_mass_at_eos": 0.9990854663774371,
+        "mean_stop_mass_successful_mixed": 0.998042000664605
+      },
+      "exact_quarter": {
+        "changed_content_supports": 391,
+        "changed_eos_supports": 52,
+        "mean_content_kl": 0.003086114003856683,
+        "mean_stop_mass_at_eos": 0.9992074361070991,
+        "mean_stop_mass_successful_mixed": 0.9981248709890578
+      },
+      "exact_with_eos_full": {
+        "changed_content_supports": 499,
+        "changed_eos_supports": 64,
+        "mean_content_kl": 0.04878538943698865,
+        "mean_stop_mass_at_eos": 0.9990987228229642,
+        "mean_stop_mass_successful_mixed": 0.9981111884117126
+      },
+      "exact_with_eos_quarter": {
+        "changed_content_supports": 391,
+        "changed_eos_supports": 51,
+        "mean_content_kl": 0.003082535205325423,
+        "mean_stop_mass_at_eos": 0.9992121290415525,
+        "mean_stop_mass_successful_mixed": 0.998124983575609
+      },
+      "rotated_full": {
+        "changed_content_supports": 518,
+        "changed_eos_supports": 64,
+        "mean_content_kl": 0.10125075082041314,
+        "mean_stop_mass_at_eos": 0.9974890099838376,
+        "mean_stop_mass_successful_mixed": 0.9941936797565885
+      },
+      "rotated_quarter": {
+        "changed_content_supports": 476,
+        "changed_eos_supports": 64,
+        "mean_content_kl": 0.005723644274790655,
+        "mean_stop_mass_at_eos": 0.9990279143676162,
+        "mean_stop_mass_successful_mixed": 0.9976585242483351
+      }
+    },
+    "content_prefixes": 518,
+    "eos_prefixes": 64,
+    "registered_content_kl_ratio": 0.9969542878817713,
+    "registered_direction_passes": false,
+    "registered_eos_mass_change": 6.91877471076241e-05,
+    "successful_mixed_eos_prefixes": 9,
+    "zero_mean_eos_mass": 0.999235968105495,
+    "zero_mean_eos_mass_successful_mixed": 0.9981640577316284
+  }
+}
