@@ -1144,7 +1144,7 @@ on this group.
   reduced modulo `2**63`. Reapply the registered
   L1 qualification gates to the initial samples. Stop before any
   transfer rollout if the adaptation panel misses a gate.
-- [ ] From the same decision-time states and actions, form one
+- [x] From the same decision-time states and actions, form one
   final-projection write per arm. Use the exact trace, cached
   post-reward replay, the normalized rank-32 trace, the same rank
   with rewards rotated by one within each question, and zero
@@ -1153,7 +1153,7 @@ on this group.
   Frobenius norm. Freeze every other parameter. Stop if a
   nonzero arm has no usable direction or if replay fails the
   exact-support and gradient checks.
-- [ ] Freeze the writes before evaluating the reserved L1
+- [x] Freeze the writes before evaluating the reserved L1
   transfer questions. Use four samples per question per arm,
   the same 512-token cap, and batch seeds generated with
   `stable_seed_u64(811031, salt="qwen.single_write.transfer.L1.<offset>")`
@@ -1163,18 +1163,26 @@ on this group.
   arm and wording. Apply the frozen write as a FP32 input-matrix
   product added to the down-projection output in its BF16 dtype.
   Check zero-write logits bit for bit before sampling transfer.
-- [ ] Require the compressed arm to gain at least 4 of 64
+- [x] Require the compressed arm to gain at least 4 of 64
   correct samples over both the rotated-reward and zero-write
   arms. In both comparisons require a one-sided exact pair
   sign-flip `p ≤ 0.025`. Report the exact-arm contrast and
   whether compressed finishes within two correct samples of
   it. Publish every outcome, including a failed or inconclusive
   pilot, and keep the official GSM8K test split sealed.
-- [ ] Run compressed, rotated and zero on the same GPU for
+- [x] Run compressed, rotated and zero on the same GPU for
   the primary contrasts. Run exact and an independent zero on
   the second RTX 4090, along with replay if its write differs.
   Require the two zero runs to agree token for token before
   interpreting the cross-device contrast with exact.
+
+The paired gate needs at least six positive pairs. If there are
+`k` positive pairs, all sign assignments that keep those pairs
+positive contribute to the one-sided tail, so `p ≥ 2⁻ᵏ`.
+A perfect zero-write score on the register wording would leave
+only four packing pairs in which to gain. In that case the
+registered comparison can estimate a gain but cannot certify one
+at `p ≤ 0.025`.
 
 | Registered source | SHA-256 |
 | --- | --- |
@@ -1197,3 +1205,43 @@ matrices were preserved byte for byte.
 
 [Adaptation gate, write digests and receipts](../../results/qwen_single_write_2026-11-23_adaptation.json) ·
 [Saved adaptation trajectories](../../results/qwen_single_write_2026-11-23_adaptation.json.gz)
+
+Cached replay recovered the archived support and logits on
+all 17,453 adaptation tokens across both batches. Its normalized
+dense write matched the exact decision-time-trace write bit for bit.
+The two arms therefore share one transfer evaluation.
+
+### Single-write transfer results
+
+| Transfer arm | Correct / 64 | Parseable / 64 | Hit 512-token limit | Median scored tokens |
+| --- | ---: | ---: | ---: | ---: |
+| Zero | 55 | 63 | 1 | 250.5 |
+| Exact and matched replay | 47 | 55 | 9 | 255.5 |
+| Rank-32 rotated reward | 37 | 41 | 23 | 272.5 |
+| Rank-32 compressed | 34 | 38 | 26 | 299.0 |
+
+Compressed had 21 fewer correct samples than zero and three fewer
+than rotated reward. The registered one-sided exact paired p-values
+were 1 and 0.875 respectively. Against zero, the deficit was
+19 packing answers and two register answers. Every unparseable
+response reached the token limit in this pilot, and every response
+that reached it was unparseable. The two devices produced identical
+zero-write continuations. An independent audit scored all 320 draws,
+including the duplicated zero arm.
+
+This completes the matched single-write pilot in `hy8.3.6`.
+The measured storage and replay tradeoff comes from reconstructing
+the same gradient. The 0.5-norm write failed the transfer gain gate.
+Native GSM8K qualification remains open under `hy8.3.3` with the
+official test split still sealed.
+
+The saved adaptation trajectories contained 64 sampled EOS actions
+just beyond their scoring masks. Sixteen came from mixed-reward
+groups and would have had nonzero centered coefficients. This
+identifies an omitted term in the tested objective. The measured
+length shifts alone leave its effect unresolved. The follow-up,
+`hy8.3.7`, will distinguish EOS credit from write size before
+sampling a new, adequately powered transfer panel.
+
+[Transfer scores, source and DSR receipts](../../results/qwen_single_write_2026-11-23_transfer.json) ·
+[All transfer continuations](../../results/qwen_single_write_2026-11-23_transfer.json.gz)
