@@ -1,0 +1,430 @@
+{
+  "termination_credit_diagnostic": {
+    "excluded_eos_with_nonzero_centered_reward": {
+      "151645": 16
+    },
+    "sampled_eos_after_score_mask": {
+      "151645": 64
+    },
+    "dsr": {
+      "status": "success",
+      "run_id": "80544A81-54A6-4713-BB25-C34ADB17521E",
+      "exit_code": 0,
+      "config_sha256": "5990bc60fa96f9f24be512de2f04780670d0d6c848ba5c075ef45ff7af17c58b",
+      "source_before": "ba231d259fbf649d50a995dda11598ce2daa9289|9da5f4f11571805ba52dbfb25874f23d9b2cacf666ab15cc7092f32789782d72|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "ba231d259fbf649d50a995dda11598ce2daa9289|9da5f4f11571805ba52dbfb25874f23d9b2cacf666ab15cc7092f32789782d72|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "checks": [
+        {
+          "status": "passed",
+          "exit_code": 0,
+          "duration_ms": 1147,
+          "log_sha256": "9d232b3ead8cb2f78e1b9e2b3f1bbba38abc2fce1848216ce0c38d55b80d5a44"
+        }
+      ],
+      "receipt_sha256": "80f3c43b5233c7a87f200f09d201d9b126b5ce3cdb1f63d07508febba4188819"
+    },
+    "source": {
+      "name": "audit_termination_credit.py",
+      "sha256": "72041c55e21d8a48c202fa48e9f5347b4ced46acdea2b23e9bbfd7197cf19a5e",
+      "content": "\"\"\"Count sampled stop actions excluded by the completed adaptation mask.\"\"\"\n\nimport json\nimport sys\nfrom collections import Counter\nfrom pathlib import Path\n\n\ndef audit(path):\n    run = json.loads(path.read_bytes())\n    terminal = Counter()\n    weighted = Counter()\n    eos = {151645, 151643}\n    for offset, batch in enumerate(run[\"replay_batches\"]):\n        width = len(batch[\"prompt_attention\"][0])\n        for index, row in enumerate(run[\"observations\"][8 * offset:8 * offset + 8]):\n            mixed = 0 < sum(row[\"rewards\"]) < 4\n            for sample, length in enumerate(row[\"lengths\"]):\n                sequence = batch[\"sequences\"][4 * index + sample]\n                assert length < 512 and width + length < len(sequence)\n                token = sequence[width + length]\n                assert token in eos\n                assert len(row[\"masks\"][sample]) == row[\"prompt_length\"] + length\n                terminal[token] += 1\n                if mixed:\n                    weighted[token] += 1\n    assert sum(terminal.values()) == 64\n    assert sum(weighted.values()) == 4 * run[\"gate\"][\"mixed_groups\"] == 16\n    return {\"sampled_eos_after_score_mask\": dict(terminal),\n            \"excluded_eos_with_nonzero_centered_reward\": dict(weighted)}\n\n\nif __name__ == \"__main__\":\n    if not __debug__:\n        raise RuntimeError(\"The stop audit requires Python assertions.\")\n    base, target = map(Path, sys.argv[1:])\n    result = audit(base)\n    with target.open(\"x\", encoding=\"utf-8\") as stream:\n        json.dump(result, stream, sort_keys=True, indent=2)\n        stream.write(\"\\n\")\n"
+    }
+  },
+  "arms": {
+    "compressed": {
+      "by_wording": {
+        "packing": {
+          "correct": 4,
+          "n": 32,
+          "parseable": 8
+        },
+        "register": {
+          "correct": 30,
+          "n": 32,
+          "parseable": 30
+        }
+      },
+      "capped_and_unparseable": 26,
+      "median_scored_length": 299.0,
+      "score": {
+        "capped": 26,
+        "constant_correct": 4,
+        "correct": 34,
+        "distinct_correct_values": 12,
+        "exchanged_correct": 0,
+        "gates": {
+          "constant": true,
+          "correct": true,
+          "distinct_targets": true,
+          "mixed": true,
+          "p": true,
+          "paired_gap": true,
+          "parseable": false
+        },
+        "mixed_groups": 6,
+        "paired_differences": [
+          7,
+          8,
+          7,
+          8,
+          1,
+          0,
+          2,
+          1
+        ],
+        "paired_test": {
+          "denominator": 128,
+          "exact_tail": 1,
+          "p": 0.0078125
+        },
+        "parseable": 38,
+        "passed": false,
+        "questions": 16,
+        "samples": 64
+      },
+      "scored_tokens": 22902
+    },
+    "exact": {
+      "by_wording": {
+        "packing": {
+          "correct": 15,
+          "n": 32,
+          "parseable": 23
+        },
+        "register": {
+          "correct": 32,
+          "n": 32,
+          "parseable": 32
+        }
+      },
+      "capped_and_unparseable": 9,
+      "median_scored_length": 255.5,
+      "score": {
+        "capped": 9,
+        "constant_correct": 4,
+        "correct": 47,
+        "distinct_correct_values": 16,
+        "exchanged_correct": 0,
+        "gates": {
+          "constant": true,
+          "correct": true,
+          "distinct_targets": true,
+          "mixed": true,
+          "p": true,
+          "paired_gap": true,
+          "parseable": true
+        },
+        "mixed_groups": 8,
+        "paired_differences": [
+          8,
+          8,
+          8,
+          8,
+          4,
+          3,
+          4,
+          4
+        ],
+        "paired_test": {
+          "denominator": 256,
+          "exact_tail": 1,
+          "p": 0.00390625
+        },
+        "parseable": 55,
+        "passed": true,
+        "questions": 16,
+        "samples": 64
+      },
+      "scored_tokens": 18811
+    },
+    "rotated": {
+      "by_wording": {
+        "packing": {
+          "correct": 7,
+          "n": 32,
+          "parseable": 11
+        },
+        "register": {
+          "correct": 30,
+          "n": 32,
+          "parseable": 30
+        }
+      },
+      "capped_and_unparseable": 23,
+      "median_scored_length": 272.5,
+      "score": {
+        "capped": 23,
+        "constant_correct": 4,
+        "correct": 37,
+        "distinct_correct_values": 12,
+        "exchanged_correct": 0,
+        "gates": {
+          "constant": true,
+          "correct": true,
+          "distinct_targets": true,
+          "mixed": true,
+          "p": true,
+          "paired_gap": true,
+          "parseable": false
+        },
+        "mixed_groups": 5,
+        "paired_differences": [
+          8,
+          6,
+          8,
+          8,
+          1,
+          0,
+          4,
+          2
+        ],
+        "paired_test": {
+          "denominator": 128,
+          "exact_tail": 1,
+          "p": 0.0078125
+        },
+        "parseable": 41,
+        "passed": false,
+        "questions": 16,
+        "samples": 64
+      },
+      "scored_tokens": 22330
+    },
+    "zero": {
+      "by_wording": {
+        "packing": {
+          "correct": 23,
+          "n": 32,
+          "parseable": 31
+        },
+        "register": {
+          "correct": 32,
+          "n": 32,
+          "parseable": 32
+        }
+      },
+      "capped_and_unparseable": 1,
+      "median_scored_length": 250.5,
+      "score": {
+        "capped": 1,
+        "constant_correct": 4,
+        "correct": 55,
+        "distinct_correct_values": 16,
+        "exchanged_correct": 0,
+        "gates": {
+          "constant": true,
+          "correct": true,
+          "distinct_targets": true,
+          "mixed": true,
+          "p": true,
+          "paired_gap": true,
+          "parseable": true
+        },
+        "mixed_groups": 6,
+        "paired_differences": [
+          8,
+          8,
+          8,
+          8,
+          7,
+          4,
+          5,
+          7
+        ],
+        "paired_test": {
+          "denominator": 256,
+          "exact_tail": 1,
+          "p": 0.00390625
+        },
+        "parseable": 63,
+        "passed": true,
+        "questions": 16,
+        "samples": 64
+      },
+      "scored_tokens": 17316
+    }
+  },
+  "comparisons": {
+    "exact": {
+      "by_wording_difference": {
+        "packing": -11,
+        "register": -2
+      },
+      "cleared_primary_threshold": false,
+      "correct_difference": -13,
+      "exact_denominator": 64,
+      "exact_tail": 64,
+      "p": 1.0,
+      "paired_differences": [
+        -1,
+        0,
+        -1,
+        0,
+        -3,
+        -3,
+        -2,
+        -3
+      ]
+    },
+    "rotated": {
+      "by_wording_difference": {
+        "packing": -3,
+        "register": 0
+      },
+      "cleared_primary_threshold": false,
+      "correct_difference": -3,
+      "exact_denominator": 32,
+      "exact_tail": 28,
+      "p": 0.875,
+      "paired_differences": [
+        -1,
+        2,
+        -1,
+        0,
+        0,
+        0,
+        -2,
+        -1
+      ]
+    },
+    "zero": {
+      "by_wording_difference": {
+        "packing": -19,
+        "register": -2
+      },
+      "cleared_primary_threshold": false,
+      "correct_difference": -21,
+      "exact_denominator": 64,
+      "exact_tail": 64,
+      "p": 1.0,
+      "paired_differences": [
+        -1,
+        0,
+        -1,
+        0,
+        -6,
+        -4,
+        -3,
+        -6
+      ]
+    }
+  },
+  "compressed_within_two_of_exact": false,
+  "cross_device_zero_completions_match": true,
+  "dsr": {
+    "qwen-single-write-replay": {
+      "checks": [
+        {
+          "duration_ms": 279218,
+          "exit_code": 0,
+          "log_sha256": "1b4a59a8b849eaac481b49a18eafdab161f01d0f493d06122846906bfe14e9d7",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "53951290f2af8ffc148f094b8f06c1668a8efe93a0bdb535334507f535331253",
+      "exit_code": 0,
+      "receipt_sha256": "ad19e30a89a7b8465746127f41fb8a105c1f6b9f39a4bedb2f05200f27954ae7",
+      "run_id": "cce89550-d838-4513-8586-cfbc257bfbb0",
+      "source_after": "ba231d259fbf649d50a995dda11598ce2daa9289|9da5f4f11571805ba52dbfb25874f23d9b2cacf666ab15cc7092f32789782d72|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "ba231d259fbf649d50a995dda11598ce2daa9289|9da5f4f11571805ba52dbfb25874f23d9b2cacf666ab15cc7092f32789782d72|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    },
+    "qwen-single-write-transfer-audit": {
+      "checks": [
+        {
+          "duration_ms": 1498,
+          "exit_code": 0,
+          "log_sha256": "18e6f09b314e35565b06ad1afb3d929b44c315db19d8230128d361d04f06ab0d",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "d88acf22042c81e9a8d0a954fb23e8f49b5ba251d52a75b840384d675a20e5c0",
+      "exit_code": 0,
+      "receipt_sha256": "4b1d079d5b6e3acd80b320f6401ab65f1fb0e46a21e80d88d78ea0bba59f972f",
+      "run_id": "14F07605-0E2D-41F9-92D1-324CAED6ED9E",
+      "source_after": "ba231d259fbf649d50a995dda11598ce2daa9289|9da5f4f11571805ba52dbfb25874f23d9b2cacf666ab15cc7092f32789782d72|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "ba231d259fbf649d50a995dda11598ce2daa9289|9da5f4f11571805ba52dbfb25874f23d9b2cacf666ab15cc7092f32789782d72|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    },
+    "qwen-single-write-transfer-primary": {
+      "checks": [
+        {
+          "duration_ms": 647184,
+          "exit_code": 0,
+          "log_sha256": "5e4c612eae047971500eac649d5eae9766b7f1df70404a8cda59b8834a632d45",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "2e0c21669c1c608f8e4cac8fd3c99c0245031ba9e339bc413dcfd51c1443925d",
+      "exit_code": 0,
+      "receipt_sha256": "5f24a2b927b987380563ade48e74856a659a0b817112915f3489c5a9032bc002",
+      "run_id": "a45cb44c-348f-4827-9942-7b52ca6fdf0a",
+      "source_after": "ba231d259fbf649d50a995dda11598ce2daa9289|9da5f4f11571805ba52dbfb25874f23d9b2cacf666ab15cc7092f32789782d72|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "ba231d259fbf649d50a995dda11598ce2daa9289|9da5f4f11571805ba52dbfb25874f23d9b2cacf666ab15cc7092f32789782d72|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    },
+    "qwen-single-write-transfer-reference": {
+      "checks": [
+        {
+          "duration_ms": 465714,
+          "exit_code": 0,
+          "log_sha256": "113fb8a5b179bb79b001def3507a08156dcc3c63c512c2137a8e6d701a1dcd4a",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "143d8094b7c2d931f925058a02c619da0f32ef2ac269d92bc4835660bc326b0c",
+      "exit_code": 0,
+      "receipt_sha256": "a452d49834d1d5c798e8526a4d0e31516f35eebe0021a9ba2deb1d0d2ee13340",
+      "run_id": "c8a26ec6-b515-40ae-bee7-d7d408b5a238",
+      "source_after": "ba231d259fbf649d50a995dda11598ce2daa9289|9da5f4f11571805ba52dbfb25874f23d9b2cacf666ab15cc7092f32789782d72|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "ba231d259fbf649d50a995dda11598ce2daa9289|9da5f4f11571805ba52dbfb25874f23d9b2cacf666ab15cc7092f32789782d72|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    }
+  },
+  "primary_passed": false,
+  "records_archive_sha256": "11046578f3568697a8aafe5c0becf5de71199f26ca39492c79e4e800e4b20a64",
+  "registered_protocol": "286c7d89a8c50afb06202d182d26b1f2735a4c11",
+  "replay": {
+    "adaptation_sha256": "9b533997d648e3f7cde6a359faf2ab234ce7c18c99b72ba31a8cbc4f7919d740",
+    "batch_results": [
+      {
+        "expected_support_sha256": "887bc1416097529710227982284c0b953c337631ada753fe2b0582e6088f4b60",
+        "replayed_support_sha256": "887bc1416097529710227982284c0b953c337631ada753fe2b0582e6088f4b60",
+        "scored_tokens": 7670,
+        "steps": 315,
+        "support_equal": true
+      },
+      {
+        "expected_support_sha256": "1ff6535e3df654d58dce2da795c158fc0107928f7fb821812b48beb2ce94a350",
+        "replayed_support_sha256": "1ff6535e3df654d58dce2da795c158fc0107928f7fb821812b48beb2ce94a350",
+        "scored_tokens": 9783,
+        "steps": 383,
+        "support_equal": true
+      }
+    ],
+    "candidate_writes_sha256": "8e2a30a452b1fdabfdedbca6610dd4ea182c645e8be5d017288608c961290c3a",
+    "checkpoint_sha256": "08faf1e950173bb44c11d26df28c55da7237dc55c77dbc1cbae4a5d7584540d9",
+    "deployed_write_bitwise": true,
+    "normalized_write": {
+      "maximum_error": 0.0,
+      "relative_error": 0.0
+    },
+    "qualified": true,
+    "scored_tokens": 17453
+  },
+  "replay_reuses_exact_by_write_identity": true,
+  "sources": {
+    "audit_single_write_transfer.py": {
+      "content": "\"\"\"Score the paired transfer comparison independently of the GPU evaluators.\"\"\"\n\nimport gzip\nimport hashlib\nimport itertools\nimport json\nimport statistics\nimport struct\nimport sys\nfrom pathlib import Path\n\nfrom audit_whole_model_replay import digest, read, verified_receipt\nfrom ladder_audit import score\n\n\ndef matrix_hashes(path):\n    with path.open(\"rb\") as stream:\n        size, = struct.unpack(\"<Q\", stream.read(8))\n        header = json.loads(stream.read(size))\n        result = {}\n        for name, item in header.items():\n            assert item[\"shape\"] == [8960, 1536] and item[\"dtype\"] == \"F32\"\n            start, end = item[\"data_offsets\"]\n            stream.seek(8 + size + start)\n            prefix = stream.read(end - start)\n            assert len(prefix) == end - start == 4 * 8960 * 1536\n            result[name] = hashlib.sha256(prefix).hexdigest()\n    return result\n\n\ndef contrast(panel, candidate, comparator):\n    differences = [sum(left[\"rewards\"]) - sum(right[\"rewards\"])\n                   for left, right in zip(candidate, comparator, strict=True)]\n    paired = [left + right for left, right in zip(differences[::2], differences[1::2], strict=True)]\n    eligible = [value for value in paired if value != 0]\n    observed = sum(paired)\n    exact = [sum(sign * delta for sign, delta in zip(signs, eligible, strict=True))\n             for signs in itertools.product((-1, 1), repeat=len(eligible))]\n    tail = sum(result >= observed for result in exact)\n    family = {name: sum(value for item, value in zip(panel, differences, strict=True) if item[\"family\"] == name)\n              for name in (\"register\", \"packing\")}\n    return {\"correct_difference\": observed, \"paired_differences\": paired, \"by_wording_difference\": family,\n            \"exact_tail\": tail, \"exact_denominator\": len(exact), \"p\": tail / len(exact),\n            \"cleared_primary_threshold\": observed >= 4 and tail * 40 <= len(exact)}\n\n\ndef inspect(work):\n    archive = work / \"ladder.json.gz\"\n    adaptation_path, replay_path = work / \"adaptation.json\", work / \"adaptation_replay.json\"\n    adapted, replay = read(adaptation_path), read(replay_path)\n    assert replay[\"qualified\"] and adapted[\"gate\"][\"passed\"]\n    assert replay[\"adaptation_sha256\"] == digest(adaptation_path)\n    assert all(batch[\"support_equal\"] for batch in replay[\"batch_results\"]) and len(replay[\"batch_results\"]) == 2\n    write_file = work / \"adaptation.safetensors\"\n    assert digest(write_file) == replay[\"candidate_writes_sha256\"] == adapted[\"candidate_writes\"][\"sha256\"]\n    weights = matrix_hashes(write_file)\n    if not replay[\"deployed_write_bitwise\"]:\n        separate = work / \"adaptation_replay.safetensors\"\n        assert digest(separate) == replay[\"separate_write_sha256\"]\n        weights.update(matrix_hashes(separate))\n    panel = json.loads(gzip.decompress(archive.read_bytes()))[\"panels\"][\"panels\"][\"transfer\"][\"L1\"]\n    primary, reference = (read(work / name) for name in (\"transfer-primary.json\", \"transfer-reference.json\"))\n    for lane in (primary, reference):\n        assert lane[\"replay_sha256\"] == digest(replay_path) and lane[\"zero_identity\"]\n        assert lane[\"archive_sha256\"] == digest(archive) == adapted[\"archive_sha256\"]\n        assert lane[\"checkpoint_sha256\"] == replay[\"checkpoint_sha256\"] and lane[\"seed\"] == 811031\n    assert set(primary[\"arms\"]) == {\"compressed\", \"rotated\", \"zero\"}\n    expected = {\"exact\", \"zero\"} if replay[\"deployed_write_bitwise\"] else {\"exact\", \"replay\", \"zero\"}\n    assert set(reference[\"arms\"]) == expected\n    zero_equal = all(left[\"tokens\"] == right[\"tokens\"] for left, right in zip(\n        primary[\"arms\"][\"zero\"][\"observations\"], reference[\"arms\"][\"zero\"][\"observations\"], strict=True,\n    ))\n    arms = {**reference[\"arms\"], **primary[\"arms\"]}\n    details = {}\n    zero = arms[\"zero\"][\"observations\"]\n    for name, arm in arms.items():\n        rows = arm[\"observations\"]\n        audited = score(panel, rows)\n        assert arm[\"deployed_write_sha256\"] == weights.get(name)\n        assert arm[\"summary\"] == audited\n        assert all(row[\"id\"] == counterpart[\"id\"] and row[\"batch_seed\"] == counterpart[\"batch_seed\"]\n                   for row, counterpart in zip(rows, zero, strict=True))\n        for row, control in zip(rows, zero, strict=True):\n            assert row[\"prompt_length\"] == control[\"prompt_length\"]\n            length = row[\"prompt_length\"]\n            assert [tokens[:length] for tokens in row[\"tokens\"]] == [tokens[:length] for tokens in control[\"tokens\"]]\n        detail = {}\n        for family in (\"register\", \"packing\"):\n            selection = [row for item, row in zip(panel, rows, strict=True) if item[\"family\"] == family]\n            detail[family] = {\"n\": 4 * len(selection), \"correct\": sum(sum(row[\"rewards\"]) for row in selection),\n                              \"parseable\": sum(sum(answer is not None for answer in row[\"answers\"]) for row in selection)}\n        completions = [(length, answer) for row in rows\n                       for length, answer in zip(row[\"lengths\"], row[\"answers\"], strict=True)]\n        capped_and_unparseable = sum(length == 512 and answer is None for length, answer in completions)\n        details[name] = {\"score\": audited, \"by_wording\": detail,\n                         \"scored_tokens\": sum(length for length, _ in completions),\n                         \"median_scored_length\": statistics.median(length for length, _ in completions),\n                         \"capped_and_unparseable\": capped_and_unparseable}\n    comparisons = {name: contrast(panel, arms[\"compressed\"][\"observations\"], arms[name][\"observations\"])\n                   for name in arms if name != \"compressed\"}\n    qualification = all(comparisons[name][\"cleared_primary_threshold\"] for name in (\"zero\", \"rotated\"))\n    comparable = abs(comparisons[\"exact\"][\"correct_difference\"]) <= 2 if zero_equal else None\n    return {\"primary_passed\": qualification, \"comparisons\": comparisons, \"arms\": details,\n            \"cross_device_zero_completions_match\": zero_equal,\n            \"compressed_within_two_of_exact\": comparable,\n            \"replay_reuses_exact_by_write_identity\": replay[\"deployed_write_bitwise\"],\n            \"verified_draws_including_duplicate_zero\": 64 * (len(arms) + 1)}\n\n\ndef publish(work, registration, output):\n    audit = inspect(work)\n    assert audit == read(work / \"transfer_audit.json\")\n    scripts = (\"replay_single_write.py\", \"evaluate_single_write.py\", \"audit_single_write_transfer.py\")\n    sources = {name: {\"sha256\": digest(work / name), \"content\": (work / name).read_text(encoding=\"utf-8\")} for name in scripts}\n    receipts = {name: verified_receipt(work / (name + \".json\")) for name in\n                (\"qwen-single-write-replay\", \"qwen-single-write-transfer-primary\",\n                 \"qwen-single-write-transfer-reference\", \"qwen-single-write-transfer-audit\")}\n    recorded = {name: read(work / (name + \".json\"))\n                for name in (\"adaptation_replay\", \"transfer-primary\", \"transfer-reference\")}\n    zipped = gzip.compress(json.dumps(recorded, sort_keys=True, separators=(\",\", \":\"), allow_nan=False).encode(),\n                           compresslevel=9, mtime=0)\n    assert json.loads(gzip.decompress(zipped)) == recorded\n    report = {**audit, \"registered_protocol\": registration, \"sources\": sources, \"dsr\": receipts,\n              \"records_archive_sha256\": hashlib.sha256(zipped).hexdigest(), \"replay\": recorded[\"adaptation_replay\"]}\n    with output.with_suffix(\".json.gz\").open(\"xb\") as stream:\n        stream.write(zipped)\n    with output.open(\"x\", encoding=\"utf-8\") as stream:\n        json.dump(report, stream, sort_keys=True, indent=2, allow_nan=False)\n        stream.write(\"\\n\")\n\n\nif __name__ == \"__main__\":\n    if not __debug__:\n        raise RuntimeError(\"The transfer audit requires Python assertions.\")\n    if sys.argv[1] == \"publish\":\n        publish(Path(sys.argv[2]), sys.argv[3], Path(sys.argv[4]))\n    else:\n        directory = Path(sys.argv[1])\n        result = inspect(directory)\n        with (directory / \"transfer_audit.json\").open(\"x\", encoding=\"utf-8\") as stream:\n            json.dump(result, stream, sort_keys=True, indent=2, allow_nan=False)\n            stream.write(\"\\n\")\n",
+      "sha256": "2a19a67cae675918faecac2aee7de121ac9f794ec7f40e6476db6af2307e4cfa"
+    },
+    "evaluate_single_write.py": {
+      "content": "\"\"\"Evaluate registered single-write arms on the reserved paired transfer panel.\"\"\"\n\nimport gzip\nimport hashlib\nimport json\nimport sys\nfrom pathlib import Path\n\nimport torch\nfrom rich.console import Console\nfrom safetensors.torch import load\nfrom transformers import AutoModelForCausalLM, AutoTokenizer\n\nfrom bio_inspired_nanochat.common import stable_seed_u64\nfrom ladder_audit import fingerprint, read, score\nfrom qwen_external import LFS_SHA, REVISION, verify\nfrom run_ladder import SYSTEM_PROMPT, numerical_box\nfrom whole_model_replay import ARCHIVE_SHA, TOP_K\n\n\nTRANSFER_SEED = 811031\n\n\ndef encode(model, tokenizer, questions):\n    prompts = [tokenizer.apply_chat_template(\n        [{\"role\": \"system\", \"content\": SYSTEM_PROMPT}, {\"role\": \"user\", \"content\": row[\"question\"]}],\n        tokenize=False, add_generation_prompt=True,\n    ) for row in questions]\n    return tokenizer(prompts, add_special_tokens=False, padding=True, return_tensors=\"pt\").to(model.device)\n\n\ndef injector(delta):\n    def apply(_, inputs, output):\n        return output + (inputs[0].float() @ delta).to(output.dtype)\n    return apply\n\n\n@torch.inference_mode()\ndef verify_zero(model, tokens):\n    target = model.model.layers[-1].mlp.down_proj\n    zero = torch.zeros((8960, 1536), device=model.device)\n    expected = model(input_ids=tokens, use_cache=False, logits_to_keep=1).logits\n    handle = target.register_forward_hook(injector(zero))\n    try:\n        actual = model(input_ids=tokens, use_cache=False, logits_to_keep=1).logits\n    finally:\n        handle.remove()\n    assert torch.equal(actual.view(torch.int16), expected.view(torch.int16))\n\n\n@torch.inference_mode()\ndef sample_transfer(model, tokenizer, questions, offset):\n    prefix = encode(model, tokenizer, questions)\n    width = prefix.input_ids.shape[-1]\n    seed = stable_seed_u64(TRANSFER_SEED, salt=f\"qwen.single_write.transfer.L1.{offset}\") % (2**63)\n    torch.manual_seed(seed)\n    torch.cuda.manual_seed(seed)\n    output = model.generate(\n        **prefix, max_new_tokens=512, do_sample=True, temperature=1.0, top_k=TOP_K,\n        top_p=1.0, repetition_penalty=1.0, num_return_sequences=4, pad_token_id=tokenizer.pad_token_id,\n    )\n    rows = output[:, width:].tolist()\n    assert len(rows) == len(questions) * 4\n    stop = model.generation_config.eos_token_id\n    endings = set(stop if isinstance(stop, list) else [stop]) | {tokenizer.pad_token_id}\n    result = []\n    for index, row in enumerate(questions):\n        prompt = prefix.input_ids[index][prefix.attention_mask[index].bool()].tolist()\n        suffixes = [sample[:next((i for i, token in enumerate(sample) if token in endings), len(sample))]\n                    for sample in rows[index * 4:index * 4 + 4]]\n        text = tokenizer.batch_decode(suffixes, skip_special_tokens=True)\n        answers = [numerical_box(response) for response in text]\n        result.append({\"id\": row[\"id\"], \"gold\": row[\"gold\"], \"text\": text, \"answers\": answers,\n                       \"rewards\": [int(answer == row[\"gold\"]) for answer in answers],\n                       \"tokens\": [prompt + suf for suf in suffixes], \"lengths\": list(map(len, suffixes)),\n                       \"masks\": [[0] * len(prompt) + [1] * len(suf) for suf in suffixes],\n                       \"prompt_length\": len(prompt), \"batch_seed\": seed})\n    return result\n\n\ndef assess(model, tokenizer, panel, delta, name):\n    target = model.model.layers[-1].mlp.down_proj\n    handle = target.register_forward_hook(injector(delta)) if delta is not None else None\n    records = []\n    console = Console()\n    try:\n        for offset in range(0, len(panel), 8):\n            records.extend(sample_transfer(model, tokenizer, panel[offset:offset + 8], offset))\n            console.print(f\"Transfer {name}: sampled {len(records)}/{len(panel)} questions.\")\n    finally:\n        if handle is not None:\n            handle.remove()\n    return {\"observations\": records, \"summary\": score(panel, records),\n            \"deployed_write_sha256\": hashlib.sha256(delta.cpu().numpy().tobytes()).hexdigest() if delta is not None else None}\n\n\ndef main(checkpoint, manifest, archive, adaptation, candidates_path, replay_path, output, arms):\n    torch.set_num_threads(1)\n    torch.set_float32_matmul_precision(\"highest\")\n    qualified = read(replay_path)\n    prepared = read(adaptation)\n    assert qualified[\"qualified\"] and prepared[\"gate\"][\"passed\"]\n    assert qualified[\"adaptation_sha256\"] == fingerprint(adaptation)\n    assert qualified[\"candidate_writes_sha256\"] == fingerprint(candidates_path) == prepared[\"candidate_writes\"][\"sha256\"]\n    deltas = load(candidates_path.read_bytes())\n    if not qualified[\"deployed_write_bitwise\"]:\n        replay_write = replay_path.with_suffix(\".safetensors\")\n        assert fingerprint(replay_write) == qualified[\"separate_write_sha256\"]\n        deltas.update(load(replay_write.read_bytes()))\n    assert set(arms).issubset(set(deltas) | {\"zero\"}) and len(arms) == len(set(arms))\n    assert fingerprint(archive) == ARCHIVE_SHA == prepared[\"archive_sha256\"]\n    verify(checkpoint, manifest)\n    tokenizer = AutoTokenizer.from_pretrained(checkpoint, local_files_only=True, trust_remote_code=False)\n    tokenizer.padding_side = \"left\"\n    model = AutoModelForCausalLM.from_pretrained(checkpoint, dtype=torch.bfloat16, local_files_only=True,\n                                                trust_remote_code=False, use_safetensors=True).to(\"cuda\").eval()\n    model.requires_grad_(False)\n    prompt = prepared[\"observations\"][0]\n    input_ids = torch.tensor([prompt[\"tokens\"][0][:prompt[\"prompt_length\"]]], device=model.device)\n    verify_zero(model, input_ids)\n    study = json.loads(gzip.decompress(archive.read_bytes()))\n    panel = study[\"panels\"][\"panels\"][\"transfer\"][\"L1\"]\n    result = {\"archive_sha256\": ARCHIVE_SHA, \"checkpoint_sha256\": LFS_SHA, \"checkpoint_revision\": REVISION,\n              \"replay_sha256\": fingerprint(replay_path), \"seed\": TRANSFER_SEED, \"zero_identity\": True, \"arms\": {},\n              \"gpu\": torch.cuda.get_device_name()}\n    for name in arms:\n        delta = deltas[name].to(model.device) if name != \"zero\" else None\n        if delta is not None:\n            assert delta.shape == (8960, 1536) and delta.dtype == torch.float32\n            assert abs(float(delta.double().norm()) - 0.5) <= 1e-5\n        result[\"arms\"][name] = assess(model, tokenizer, panel, delta, name)\n        # Each terminal arm gets its own record even if a subsequent arm fails.\n        with output.with_name(f\"{output.stem}-{name}.json\").open(\"x\", encoding=\"utf-8\") as stream:\n            json.dump(result[\"arms\"][name], stream, sort_keys=True, allow_nan=False, separators=(\",\", \":\"))\n            stream.write(\"\\n\")\n    with output.open(\"x\", encoding=\"utf-8\") as stream:\n        json.dump(result, stream, sort_keys=True, allow_nan=False, separators=(\",\", \":\"))\n        stream.write(\"\\n\")\n\n\nif __name__ == \"__main__\":\n    if not __debug__:\n        raise RuntimeError(\"The transfer comparison requires Python assertions.\")\n    main(*(Path(value) for value in sys.argv[1:8]), sys.argv[8:])\n",
+      "sha256": "d2121bfe719b84ce0e44d665558924ab532cc13368d20b2801810fde56101dc6"
+    },
+    "replay_single_write.py": {
+      "content": "\"\"\"Reconstruct the adaptation write from fixed token IDs after rewards arrive.\"\"\"\n\nimport hashlib\nimport json\nimport sys\nfrom pathlib import Path\n\nimport torch\nfrom rich.console import Console\nfrom safetensors.torch import load, save\nfrom transformers import AutoModelForCausalLM\nfrom transformers.cache_utils import DynamicCache\n\nfrom compress_sampler_trace import indexed_groups\nfrom ladder_audit import fingerprint, read\nfrom qualify_single_write import deltas, support_identity\nfrom qwen_external import LFS_SHA, REVISION, verify\nfrom whole_model_replay import BASIS_SHA, TOP_K, errors\n\n\n@torch.inference_mode()\ndef replay_batch(model, batch, observed):\n    device = model.device\n    caps = [row[\"lengths\"][sample] for row in observed for sample in range(4)]\n    limit = max(caps)\n    prompt_attention = torch.tensor(batch[\"prompt_attention\"], device=device).repeat_interleave(4, dim=0)\n    width = prompt_attention.shape[1]\n    sequence = torch.tensor(batch[\"sequences\"], device=device)[:, :width + limit - 1].contiguous()\n    mask = torch.cat((prompt_attention, prompt_attention.new_ones((32, limit - 1))), dim=-1)\n    position = (mask.cumsum(-1) - 1).masked_fill(mask == 0, 0)\n    trimmed = [tokens[row[\"prompt_length\"]:] for row in observed for tokens in row[\"tokens\"]]\n    assert [len(tokens) for tokens in trimmed] == caps\n    x, residuals, scores = [], [], []\n    block = model.model.layers[-1]\n\n    def input_hook(_, args):\n        x.append(args[0][:, -1].clone())\n\n    def residual_hook(_, _args, output):\n        residuals.append(output[:, -1].clone())\n\n    handles = (block.mlp.down_proj.register_forward_pre_hook(input_hook), block.register_forward_hook(residual_hook))\n    cache = DynamicCache(config=model.config)\n    try:\n        for step in range(limit):\n            end = width + step\n            kwargs = model.prepare_inputs_for_generation(\n                sequence[:, :end], next_sequence_length=1 if step else width,\n                attention_mask=mask[:, :end].contiguous(), position_ids=position[:, :end],\n                is_first_iteration=step == 0, past_key_values=cache, logits_to_keep=1, use_cache=True,\n            )\n            formed = model(**kwargs, return_dict=True)\n            cache = formed.past_key_values\n            logits = formed.logits[:, -1].float()\n            cutoff = logits.topk(TOP_K).values[:, -1:]\n            scores.append(logits.masked_fill(logits < cutoff, -torch.inf))\n    finally:\n        for handle in handles:\n            handle.remove()\n    actual = support_identity(scores, caps)\n    stats = {\"scored_tokens\": sum(caps), \"steps\": limit, \"expected_support_sha256\": batch[\"support_sha256\"],\n             \"replayed_support_sha256\": actual, \"support_equal\": actual == batch[\"support_sha256\"]}\n    if stats[\"support_equal\"]:\n        return indexed_groups(model, x, residuals, scores, observed, trimmed), stats\n    return [], stats\n\n\ndef main(checkpoint, manifest, adaptation, candidates_path, basis_path, output):\n    torch.set_num_threads(1)\n    torch.set_float32_matmul_precision(\"highest\")\n    prepared = read(adaptation)\n    assert prepared[\"gate\"][\"passed\"] and prepared[\"checkpoint_sha256\"] == LFS_SHA\n    assert prepared[\"checkpoint_revision\"] == REVISION and len(prepared[\"replay_batches\"]) == 2\n    candidate_bytes = candidates_path.read_bytes()\n    assert hashlib.sha256(candidate_bytes).hexdigest() == prepared[\"candidate_writes\"][\"sha256\"]\n    assert fingerprint(basis_path) == BASIS_SHA == prepared[\"canonical_basis_sha256\"]\n    basis = {name: value.cuda() for name, value in load(basis_path.read_bytes()).items()}\n    verify(checkpoint, manifest)\n    model = AutoModelForCausalLM.from_pretrained(checkpoint, dtype=torch.bfloat16, local_files_only=True,\n                                                trust_remote_code=False, use_safetensors=True).to(\"cuda\").eval()\n    model.requires_grad_(False)\n    report = {\"adaptation_sha256\": fingerprint(adaptation), \"candidate_writes_sha256\": fingerprint(candidates_path),\n              \"batch_results\": [], \"qualified\": False, \"checkpoint_sha256\": LFS_SHA}\n    groups = []\n    console = Console()\n    for index, batch in enumerate(prepared[\"replay_batches\"]):\n        data, tested = replay_batch(model, batch, prepared[\"observations\"][index * 8:index * 8 + 8])\n        report[\"batch_results\"].append(tested)\n        console.print({\"replayed_batch\": index, **tested})\n        if not tested[\"support_equal\"]:\n            break\n        groups.extend(data)\n    if len(groups) == 16:\n        weights, details = deltas(groups, basis)\n        expected = load(candidate_bytes)[\"exact\"].contiguous()\n        actual = weights[\"exact\"]\n        error = errors(actual, expected)\n        identical = torch.equal(actual.view(torch.int32), expected.view(torch.int32))\n        qualified = error[\"relative_error\"] <= 1e-4 and error[\"maximum_error\"] <= 6e-7\n        report.update({\"qualified\": qualified, \"normalized_write\": error, \"deployed_write_bitwise\": identical,\n                       \"scored_tokens\": details[\"scored_tokens\"]})\n        if qualified and not identical:\n            replay = save({\"replay\": actual})\n            with output.with_suffix(\".safetensors\").open(\"xb\") as stream:\n                stream.write(replay)\n            report[\"separate_write_sha256\"] = hashlib.sha256(replay).hexdigest()\n    console.print({key: report[key] for key in (\"qualified\", \"scored_tokens\", \"deployed_write_bitwise\") if key in report})\n    with output.open(\"x\", encoding=\"utf-8\") as stream:\n        json.dump(report, stream, sort_keys=True, allow_nan=False, indent=2)\n        stream.write(\"\\n\")\n\n\nif __name__ == \"__main__\":\n    if not __debug__:\n        raise RuntimeError(\"The adaptation replay requires Python assertions.\")\n    main(*(Path(value) for value in sys.argv[1:]))\n",
+      "sha256": "5847074a2b53d3a1a0d4af0b97208eaff13889ce0a6ae7cf676696473d5b3512"
+    }
+  },
+  "verified_draws_including_duplicate_zero": 320
+}
