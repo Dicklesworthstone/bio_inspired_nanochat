@@ -1425,11 +1425,11 @@ from both actions at the same state in `hy8.3.8`.
 
 ### Registered sibling-continuation study
 
-- [ ] Seal 16 new paired L1 packing questions with seed 811050.
+- [x] Seal 16 new paired L1 packing questions with seed 811050.
   Independently check 32 answers and zero overlap in wording
   or arithmetic recipes with the original ladder or KL panels.
   The panel SHA-256 is `5fec0aee39eaf223c620f0b6585c50e321ed1d5e52cb402f8b129451cdc59d4b`.
-- [ ] Use side zero of each pair for the probe pool. Roll in for
+- [x] Use side zero of each pair for the probe pool. Roll in for
   at most 96 tokens with the original BF16 top-k sampler.
   Use base seed 811051 and salt `qwen.sibling.guide`. Consider
   positions 16 through 95, starting at zero. Prefer positions
@@ -1462,3 +1462,10 @@ from both actions at the same state in `hy8.3.8`.
 
 The registered sibling driver SHA-256 is
 `dca7b9d70146239a0e08da68aed0281b6783042eb245f138be0fba9d676b00d9`.
+
+The frozen manifest contains 12 probes, five digit pairs and
+seven other action pairs. The weaker action's baseline mass
+ranged from 0.0373 to 0.4685. The independent audit reproduced
+the packed support hash for every probe before either suffix
+block started. The frozen manifest SHA-256 is
+`594852e00175781dcb345529436a7904a2356316ce85f553b0c3a26afcb49089`.
