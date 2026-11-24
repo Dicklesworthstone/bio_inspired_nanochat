@@ -1442,7 +1442,7 @@ from both actions at the same state in `hy8.3.8`.
   canonical prefill with 16 identical rows. Freeze up to 12
   eligible probes in panel order before scoring any suffix.
   Stop if fewer than eight probes qualify.
-- [ ] At each probe, draw eight suffixes from each sibling action
+- [x] At each probe, draw eight suffixes from each sibling action
   in each of two blocks. Use base seeds 811052 for discovery and
   811053 for confirmation, salted with `qwen.sibling.<question ID>`.
   Check the packed support and retained logits against the frozen
@@ -1451,7 +1451,7 @@ from both actions at the same state in `hy8.3.8`.
   includes the roll-in and forced action. Decode the whole
   response and compare the last boxed integer with the sealed
   answer.
-- [ ] Orient each probe by the discovery difference in correct
+- [x] Orient each probe by the discovery difference in correct
   counts, and include it only if the absolute difference is at
   least two of eight. Require at least six such probes. On that
   fixed set, require at least six positive confirmation gaps,
@@ -1469,3 +1469,46 @@ ranged from 0.0373 to 0.4685. The independent audit reproduced
 the packed support hash for every probe before either suffix
 block started. The frozen manifest SHA-256 is
 `594852e00175781dcb345529436a7904a2356316ce85f553b0c3a26afcb49089`.
+
+### Local score for the conditional two-action objective
+
+At a fixed prefix, hold both suffix return means `Q_A` and
+`Q_B` fixed. Renormalize the model probabilities on the two
+sibling actions to obtain `ρ_A` and `ρ_B`. The derivative of
+`ρ_A Q_A + ρ_B Q_B` with respect to their logit difference is
+`ρ_A ρ_B (Q_A − Q_B)`. The corresponding matrix derivative is
+this scalar times `x ⊗ Jᵀ(u_A − u_B)`, where `J` is the learned
+RMSNorm Jacobian and `u` is an unembedding row. One captured
+input and one feedback vector per prefix suffice until the
+suffix rewards arrive.
+
+Five float64 fixtures matched autograd to `3.81 × 10⁻¹⁶`
+maximum absolute error and central differences to
+`8.81 × 10⁻¹²`. The fixtures hold the two returns fixed and
+cover equal rewards, unequal logits and positive and negative
+reward differences.
+
+### Sibling-continuation results
+
+Both blocks matched the frozen support at all 12 prefixes and
+then forced the designated first action. The independent
+audit recovered 384 parseable responses from 384 draws. One
+confirmation response reached the length cap.
+
+Eight probes qualified on discovery. Their oriented confirmation
+differences in correct counts were `[2, 2, 2, 4, -1, 0, -1, 2]`.
+Five were positive, two negative and one tied. The mean was
+1.25 correct responses per eight draws, with exact one-sided
+`p = 8/128 = 0.0625`. The experiment met the effect-size
+floor and missed both the six-positive and p-value gates.
+The gate stopped the write experiment.
+
+In an exploratory breakdown, all three discovery-qualified
+digit probes repeated direction. Among the five selected
+general-token probes, two repeated direction, two reversed
+and one tied. This motivates the independent digit-only
+replication in `hy8.3.9`. The current result tests the mixed
+probe pool and completes `hy8.3.8`.
+
+[Sibling comparisons, source and receipts](../../results/qwen_sibling_credit_2026-11-23.json) ·
+[All frozen probes and suffix draws](../../results/qwen_sibling_credit_2026-11-23.json.gz)
