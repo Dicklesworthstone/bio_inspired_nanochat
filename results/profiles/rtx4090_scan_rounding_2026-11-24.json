@@ -1,0 +1,1267 @@
+{
+  "assembly_evidence": {
+    "incumbent_1.llir": "fffa8bf27c83903c9a13087f0866d955e3cff7e0c81757c323eced66d7562278",
+    "incumbent_1.ptx": "6d62d263268d523a1353779b162668222ceb4e82818dc396cd49ab79a9a9e794",
+    "register_1.llir": "3a9c7c8859ce129bca7bbb2aa25b3b8b5290b9d0f8f47a476cb261a054762470",
+    "register_1.ptx": "566d5b6a16c2f0f0af5e26478602e400cf04abb802af6baff84a6da6000acd18"
+  },
+  "device_index": 1,
+  "dsr_runs": {
+    "bio-presyn-fp32-witness": {
+      "check": {
+        "command": "set -e; export CUDA_VISIBLE_DEVICES=1 UV_OFFLINE=true UV_PROJECT_ENVIRONMENT=/data/projects/bio_inspired_nanochat/.venv OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 RAYON_NUM_THREADS=1 PYTHONPATH=.:/data/projects/bio-prefill-scan.Nq3wZNFe; test \"$(git rev-parse HEAD)\" = 0a3a0c4c1625f6ad75409f99dbd6d5e204f9a9f6; sha256sum /data/projects/bio-scan-ulp.iUGf4MTg/scan_arithmetic.py /data/projects/bio-prefill-scan.Nq3wZNFe/key_local_register.py /data/projects/bio-prefill-scan.Nq3wZNFe/scan_model_holdout.py; flock -w 70 /tmp/bio_inspired_nanochat-trj-gpu1.lock taskset -c 53 uv run --no-sync python /data/projects/bio-scan-ulp.iUGf4MTg/scan_arithmetic.py /data/projects/bio-scan-ulp.iUGf4MTg; sha256sum /data/projects/bio-scan-ulp.iUGf4MTg/scan_arithmetic.py /data/projects/bio-prefill-scan.Nq3wZNFe/key_local_register.py /data/projects/bio-prefill-scan.Nq3wZNFe/scan_model_holdout.py",
+        "cwd": "/data/projects/bio-prefill-scan.Nq3wZNFe/source",
+        "duration_ms": 47362,
+        "executed": true,
+        "exit_code": 0,
+        "log_path": "/home/ubuntu/.local/state/dsr/quality-logs/bio-presyn-fp32-witness/20261124T141250-NVohCOvQ/check-1.log",
+        "log_sha256": "2bc8361df7d27a7fa014a277ab4c01ae0285eb17f1e0cd7e01a61b323b9f9a0d",
+        "output_preview": "rst\": [0, 9, 112], \"max_abs\": 1.9073486328125e-06}, \"PR\": {\"bitwise_mismatches\": 526, \"first\": [0, 0, 1], \"max_abs\": 1.7881393432617188e-07}, \"CL\": {\"bitwise_mismatches\": 1206, \"first\": [0, 0, 0], \"max_abs\": 5.066394805908203e-07}, \"E\": {\"bitwise_mismatches\": 562, \"first\": [0, 0, 0], \"max_abs\": 1.1920928955078125e-07}, \"delay_0\": {\"bitwise_mismatches\": 40, \"first\": [0, 0, 17], \"max_abs\": 5.960464477539063e-08}, \"delay_1\": {\"bitwise_mismatches\": 42, \"first\": [0, 0, 2], \"max_abs\": 1.4901161193847656e-08}, \"delay_2\": {\"bitwise_mismatches\": 39, \"first\": [0, 0, 8], \"max_abs\": 1.862645149230957e-08}}}}\n43daa6fc5ffb73666d356e02c7fd18836614c44f3216e34030e1fd5f5d2774e6  /data/projects/bio-scan-ulp.iUGf4MTg/scan_arithmetic.py\ne322997a9552b07800c809fd0e3b848d41e4ea1d62cde25ef425f1b7c7bf3854  /data/projects/bio-prefill-scan.Nq3wZNFe/key_local_register.py\ne130738dc7bb878b7ee72fd6226aded95e14f7408374ece7607eeacd0a80f4f3  /data/projects/bio-prefill-scan.Nq3wZNFe/scan_model_holdout.py\n\n# exit_code: 0\n",
+        "passed": true,
+        "status": "passed",
+        "timeout_seconds": 420
+      },
+      "config_sha256": "d2ee216db3af20e74dd2fb9be275a500220e4dd1a7c134937ca17f0b98886f7b",
+      "run_id": "d155f802-60ab-4bed-be54-9989d4be6d80",
+      "source": "0a3a0c4c1625f6ad75409f99dbd6d5e204f9a9f6|06fd1218e96460edbed295f43295296b239edf0fd942a0a64c047704ad719a8b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    },
+    "bio-presyn-rounding-holdout": {
+      "check": {
+        "command": "set -e; export CUDA_VISIBLE_DEVICES=1 UV_OFFLINE=true UV_PROJECT_ENVIRONMENT=/data/projects/bio_inspired_nanochat/.venv OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 RAYON_NUM_THREADS=1 PYTHONPATH=.:/data/projects/bio-prefill-scan.Nq3wZNFe; test \"$(git rev-parse HEAD)\" = 0a3a0c4c1625f6ad75409f99dbd6d5e204f9a9f6; sha256sum /data/projects/bio-scan-ulp.iUGf4MTg/scan_rounding_gate.py /data/projects/bio-scan-ulp.iUGf4MTg/key_local_rounding.py /data/projects/bio-scan-ulp.iUGf4MTg/scan_arithmetic.py /data/projects/bio-prefill-scan.Nq3wZNFe/scan_model_holdout.py /data/projects/bio-prefill-scan.Nq3wZNFe/scan_probe_live.py; flock -w 60 /tmp/bio_inspired_nanochat-trj-gpu1.lock taskset -c 53 uv run --no-sync python /data/projects/bio-scan-ulp.iUGf4MTg/scan_rounding_gate.py /data/projects/bio-scan-ulp.iUGf4MTg/rounding-gate.json; sha256sum /data/projects/bio-scan-ulp.iUGf4MTg/scan_rounding_gate.py /data/projects/bio-scan-ulp.iUGf4MTg/key_local_rounding.py /data/projects/bio-scan-ulp.iUGf4MTg/scan_arithmetic.py /data/projects/bio-prefill-scan.Nq3wZNFe/scan_model_holdout.py /data/projects/bio-prefill-scan.Nq3wZNFe/scan_probe_live.py",
+        "cwd": "/data/projects/bio-prefill-scan.Nq3wZNFe/source",
+        "duration_ms": 51933,
+        "executed": true,
+        "exit_code": 0,
+        "log_path": "/home/ubuntu/.local/state/dsr/quality-logs/bio-presyn-rounding-holdout/20261124T141554-xce0dCrm/check-1.log",
+        "log_sha256": "63edcd3edc562e47d1d2c9b44d0170b08b71564f00e45627af46b3979d7e65e4",
+        "output_preview": " \"capture_added_bytes\": {\"vanilla\": 21744640, \"current\": 13223936, \"register\": 13223936}, \"median_ns\": {\"vanilla\": 1609093.5, \"current\": 6079518.5, \"register\": 3380200.0}, \"median_paired_ratio\": {\"register_over_current\": 0.5627589282419523, \"register_over_vanilla\": 2.0868510020408833, \"current_over_vanilla\": 3.7103946173697375}, \"at_most_1_5_vanilla\": 0}\nfbc48b2cee489117a8e8541e7d9111954516f948170391738954243fd1b80bc2  /data/projects/bio-scan-ulp.iUGf4MTg/scan_rounding_gate.py\nf7b7098cef65f133b66c92804ad624789a3210d82ee0cd0727c66ac86b4c3ad6  /data/projects/bio-scan-ulp.iUGf4MTg/key_local_rounding.py\n43daa6fc5ffb73666d356e02c7fd18836614c44f3216e34030e1fd5f5d2774e6  /data/projects/bio-scan-ulp.iUGf4MTg/scan_arithmetic.py\ne130738dc7bb878b7ee72fd6226aded95e14f7408374ece7607eeacd0a80f4f3  /data/projects/bio-prefill-scan.Nq3wZNFe/scan_model_holdout.py\na94bbae30f064a78cd1706aa75d6e128e45761a9b19e9db39c77dea377e91739  /data/projects/bio-prefill-scan.Nq3wZNFe/scan_probe_live.py\n\n# exit_code: 0\n",
+        "passed": true,
+        "status": "passed",
+        "timeout_seconds": 360
+      },
+      "config_sha256": "09014dbe7ebbaae4b2c72e23ec11eeb30184161ec46dceec405cf834a9314f14",
+      "run_id": "587a5b63-f458-49e1-8a11-7a8fca386d74",
+      "source": "0a3a0c4c1625f6ad75409f99dbd6d5e204f9a9f6|06fd1218e96460edbed295f43295296b239edf0fd942a0a64c047704ad719a8b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    }
+  },
+  "gpu": "NVIDIA GeForce RTX 4090",
+  "host_affinity": 53,
+  "prior_experiment": "rtx4090_first_token_2026-11-24.json",
+  "repair_log_tail": "e130738dc7bb878b7ee72fd6226aded95e14f7408374ece7607eeacd0a80f4f3  /data/projects/bio-prefill-scan.Nq3wZNFe/scan_model_holdout.py\na94bbae30f064a78cd1706aa75d6e128e45761a9b19e9db39c77dea377e91739  /data/projects/bio-prefill-scan.Nq3wZNFe/scan_probe_live.py\n{\"first_active\": 1, \"comparisons\": {\"release\": {\"bitwise_mismatches\": 0, \"first\": null, \"max_abs\": 0.0}, \"C\": {\"bitwise_mismatches\": 0, \"first\": null, \"max_abs\": 0.0}, \"BUF\": {\"bitwise_mismatches\": 0, \"first\": null, \"max_abs\": 0.0}, \"RRP\": {\"bitwise_mismatches\": 0, \"first\": null, \"max_abs\": 0.0}, \"RES\": {\"bitwise_mismatches\": 0, \"first\": null, \"max_abs\": 0.0}, \"PR\": {\"bitwise_mismatches\": 0, \"first\": null, \"max_abs\": 0.0}, \"CL\": {\"bitwise_mismatches\": 0, \"first\": null, \"max_abs\": 0.0}, \"E\": {\"bitwise_mismatches\": 0, \"first\": null, \"max_abs\": 0.0}, \"delay_0\": {\"bitwise_mismatches\": 0, \"first\": null, \"max_abs\": 0.0}, \"delay_1\": {\"bitwise_mismatches\": 0, \"first\": null, \"max_abs\": 0.0}, \"delay_2\": {\"bitwise_mismatches\": 0, \"first\": null, \"max_abs\": 0.0}}}\n{\"first_active\": 65, \"comparisons\": {\"release\": {\"bitwise_mismatches\": 0, \"first\": null, \"max_abs\": 0.0}, \"C\": {\"bitwise_mismatches\": 0, \"first\": null, \"max_abs\": 0.0}, \"BUF\": {\"bitwise_mismatches\": 0, \"first\": null, \"max_abs\": 0.0}, \"RRP\": {\"bitwise_mismatches\": 0, \"first\": null, \"max_abs\": 0.0}, \"RES\": {\"bitwise_mismatches\": 0, \"first\": null, \"max_abs\": 0.0}, \"PR\": {\"bitwise_mismatches\": 0, \"first\": null, \"max_abs\": 0.0}, \"CL\": {\"bitwise_mismatches\": 0, \"first\": null, \"max_abs\": 0.0}, \"E\": {\"bitwise_mismatches\": 0, \"first\": null, \"max_abs\": 0.0}, \"delay_0\": {\"bitwise_mismatches\": 0, \"first\": null, \"max_abs\": 0.0}, \"delay_1\": {\"bitwise_mismatches\": 0, \"first\": null, \"max_abs\": 0.0}, \"delay_2\": {\"bitwise_mismatches\": 0, \"first\": null, \"max_abs\": 0.0}}}\n{\"prefix\": 128, \"max_abs\": {\"logits\": 0.0, \"kv\": 0.0, \"C\": 0.0, \"BUF\": 0.0, \"RRP\": 0.0, \"RES\": 0.0, \"PR\": 0.0, \"CL\": 0.0, \"E\": 0.0, \"AMP\": 0.0, \"DELAY\": 0.0}, \"capture_ns\": {\"vanilla\": 44994493, \"current\": 146795446, \"register\": 118777463}, \"capture_added_bytes\": {\"vanilla\": 21744640, \"current\": 13223936, \"register\": 13223936}, \"median_ns\": {\"vanilla\": 1609093.5, \"current\": 6079518.5, \"register\": 3380200.0}, \"median_paired_ratio\": {\"register_over_current\": 0.5627589282419523, \"register_over_vanilla\": 2.0868510020408833, \"current_over_vanilla\": 3.7103946173697375}, \"at_most_1_5_vanilla\": 0}\nfbc48b2cee489117a8e8541e7d9111954516f948170391738954243fd1b80bc2  /data/projects/bio-scan-ulp.iUGf4MTg/scan_rounding_gate.py\nf7b7098cef65f133b66c92804ad624789a3210d82ee0cd0727c66ac86b4c3ad6  /data/projects/bio-scan-ulp.iUGf4MTg/key_local_rounding.py\n43daa6fc5ffb73666d356e02c7fd18836614c44f3216e34030e1fd5f5d2774e6  /data/projects/bio-scan-ulp.iUGf4MTg/scan_arithmetic.py\ne130738dc7bb878b7ee72fd6226aded95e14f7408374ece7607eeacd0a80f4f3  /data/projects/bio-prefill-scan.Nq3wZNFe/scan_model_holdout.py\na94bbae30f064a78cd1706aa75d6e128e45761a9b19e9db39c77dea377e91739  /data/projects/bio-prefill-scan.Nq3wZNFe/scan_probe_live.py\n\n# exit_code: 0\n",
+  "rounding_repair": {
+    "direct": [
+      {
+        "comparisons": {
+          "BUF": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "C": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "CL": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "E": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "PR": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "RES": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "RRP": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "delay_0": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "delay_1": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "delay_2": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "release": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          }
+        },
+        "first_active": 1
+      },
+      {
+        "comparisons": {
+          "BUF": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "C": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "CL": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "E": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "PR": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "RES": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "RRP": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "delay_0": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "delay_1": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "delay_2": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "release": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          }
+        },
+        "first_active": 65
+      }
+    ],
+    "trial": {
+      "at_most_1_5_vanilla": 0,
+      "capture_added_bytes": {
+        "current": 13223936,
+        "register": 13223936,
+        "vanilla": 21744640
+      },
+      "capture_ns": {
+        "current": 146795446,
+        "register": 118777463,
+        "vanilla": 44994493
+      },
+      "max_abs": {
+        "AMP": 0.0,
+        "BUF": 0.0,
+        "C": 0.0,
+        "CL": 0.0,
+        "DELAY": 0.0,
+        "E": 0.0,
+        "PR": 0.0,
+        "RES": 0.0,
+        "RRP": 0.0,
+        "kv": 0.0,
+        "logits": 0.0
+      },
+      "measures": [
+        {
+          "ns": {
+            "current": 6048887,
+            "register": 3803131,
+            "vanilla": 1590168
+          },
+          "order": [
+            "register",
+            "current",
+            "vanilla"
+          ],
+          "seed": 88271
+        },
+        {
+          "ns": {
+            "current": 6096105,
+            "register": 3499943,
+            "vanilla": 1829856
+          },
+          "order": [
+            "vanilla",
+            "current",
+            "register"
+          ],
+          "seed": 88272
+        },
+        {
+          "ns": {
+            "current": 6201682,
+            "register": 3343160,
+            "vanilla": 1642024
+          },
+          "order": [
+            "current",
+            "vanilla",
+            "register"
+          ],
+          "seed": 88273
+        },
+        {
+          "ns": {
+            "current": 6169021,
+            "register": 3484815,
+            "vanilla": 1654889
+          },
+          "order": [
+            "current",
+            "register",
+            "vanilla"
+          ],
+          "seed": 88274
+        },
+        {
+          "ns": {
+            "current": 6171336,
+            "register": 3470458,
+            "vanilla": 1696958
+          },
+          "order": [
+            "vanilla",
+            "register",
+            "current"
+          ],
+          "seed": 88275
+        },
+        {
+          "ns": {
+            "current": 7807059,
+            "register": 3624387,
+            "vanilla": 1663775
+          },
+          "order": [
+            "register",
+            "vanilla",
+            "current"
+          ],
+          "seed": 88276
+        },
+        {
+          "ns": {
+            "current": 6226259,
+            "register": 3506817,
+            "vanilla": 1785263
+          },
+          "order": [
+            "register",
+            "current",
+            "vanilla"
+          ],
+          "seed": 88277
+        },
+        {
+          "ns": {
+            "current": 6196984,
+            "register": 3842505,
+            "vanilla": 1755757
+          },
+          "order": [
+            "vanilla",
+            "current",
+            "register"
+          ],
+          "seed": 88278
+        },
+        {
+          "ns": {
+            "current": 6253230,
+            "register": 3412059,
+            "vanilla": 1684304
+          },
+          "order": [
+            "current",
+            "vanilla",
+            "register"
+          ],
+          "seed": 88279
+        },
+        {
+          "ns": {
+            "current": 6192436,
+            "register": 3396410,
+            "vanilla": 1571883
+          },
+          "order": [
+            "current",
+            "register",
+            "vanilla"
+          ],
+          "seed": 88280
+        },
+        {
+          "ns": {
+            "current": 6065557,
+            "register": 3276255,
+            "vanilla": 1548730
+          },
+          "order": [
+            "vanilla",
+            "register",
+            "current"
+          ],
+          "seed": 88281
+        },
+        {
+          "ns": {
+            "current": 6046753,
+            "register": 3377455,
+            "vanilla": 1593744
+          },
+          "order": [
+            "register",
+            "vanilla",
+            "current"
+          ],
+          "seed": 88282
+        },
+        {
+          "ns": {
+            "current": 6072130,
+            "register": 3382945,
+            "vanilla": 1556725
+          },
+          "order": [
+            "register",
+            "current",
+            "vanilla"
+          ],
+          "seed": 88283
+        },
+        {
+          "ns": {
+            "current": 6200230,
+            "register": 3537955,
+            "vanilla": 1634270
+          },
+          "order": [
+            "vanilla",
+            "current",
+            "register"
+          ],
+          "seed": 88284
+        },
+        {
+          "ns": {
+            "current": 6314594,
+            "register": 3556169,
+            "vanilla": 1795382
+          },
+          "order": [
+            "current",
+            "vanilla",
+            "register"
+          ],
+          "seed": 88285
+        },
+        {
+          "ns": {
+            "current": 6086907,
+            "register": 3280312,
+            "vanilla": 1586591
+          },
+          "order": [
+            "current",
+            "register",
+            "vanilla"
+          ],
+          "seed": 88286
+        },
+        {
+          "ns": {
+            "current": 5839154,
+            "register": 3201675,
+            "vanilla": 1618380
+          },
+          "order": [
+            "vanilla",
+            "register",
+            "current"
+          ],
+          "seed": 88287
+        },
+        {
+          "ns": {
+            "current": 5743274,
+            "register": 3346346,
+            "vanilla": 1591350
+          },
+          "order": [
+            "register",
+            "vanilla",
+            "current"
+          ],
+          "seed": 88288
+        },
+        {
+          "ns": {
+            "current": 5781436,
+            "register": 3322421,
+            "vanilla": 1591551
+          },
+          "order": [
+            "register",
+            "current",
+            "vanilla"
+          ],
+          "seed": 88289
+        },
+        {
+          "ns": {
+            "current": 5707096,
+            "register": 3241239,
+            "vanilla": 1611217
+          },
+          "order": [
+            "vanilla",
+            "current",
+            "register"
+          ],
+          "seed": 88290
+        },
+        {
+          "ns": {
+            "current": 5712997,
+            "register": 3182981,
+            "vanilla": 1579949
+          },
+          "order": [
+            "current",
+            "vanilla",
+            "register"
+          ],
+          "seed": 88291
+        },
+        {
+          "ns": {
+            "current": 5831310,
+            "register": 3259333,
+            "vanilla": 1562356
+          },
+          "order": [
+            "current",
+            "register",
+            "vanilla"
+          ],
+          "seed": 88292
+        },
+        {
+          "ns": {
+            "current": 5730871,
+            "register": 3237984,
+            "vanilla": 1545484
+          },
+          "order": [
+            "vanilla",
+            "register",
+            "current"
+          ],
+          "seed": 88293
+        },
+        {
+          "ns": {
+            "current": 5800191,
+            "register": 3287696,
+            "vanilla": 1606970
+          },
+          "order": [
+            "register",
+            "vanilla",
+            "current"
+          ],
+          "seed": 88294
+        }
+      ],
+      "median_ns": {
+        "current": 6079518.5,
+        "register": 3380200.0,
+        "vanilla": 1609093.5
+      },
+      "median_paired_ratio": {
+        "current_over_vanilla": 3.7103946173697375,
+        "register_over_current": 0.5627589282419523,
+        "register_over_vanilla": 2.0868510020408833
+      },
+      "prefix": 128
+    }
+  },
+  "scope": "Two frozen first-layer 64-query blocks from the width-640, 10-layer, 10-head synthetic 128-token counterexample, seed 88292. The repair replays the original 24-prompt panel with captures retained and compares against live vanilla and the unchanged incumbent.",
+  "source_revision": "0a3a0c4c1625f6ad75409f99dbd6d5e204f9a9f6",
+  "sources": {
+    "bio-presyn-fp32-witness.yaml": {
+      "content": "{\"tools\":{\"bio-presyn-fp32-witness\":{\"checks\":[\"set -e; export CUDA_VISIBLE_DEVICES=1 UV_OFFLINE=true UV_PROJECT_ENVIRONMENT=/data/projects/bio_inspired_nanochat/.venv OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 RAYON_NUM_THREADS=1 PYTHONPATH=.:/data/projects/bio-prefill-scan.Nq3wZNFe; test \\\"$(git rev-parse HEAD)\\\" = 0a3a0c4c1625f6ad75409f99dbd6d5e204f9a9f6; sha256sum /data/projects/bio-scan-ulp.iUGf4MTg/scan_arithmetic.py /data/projects/bio-prefill-scan.Nq3wZNFe/key_local_register.py /data/projects/bio-prefill-scan.Nq3wZNFe/scan_model_holdout.py; flock -w 70 /tmp/bio_inspired_nanochat-trj-gpu1.lock taskset -c 53 uv run --no-sync python /data/projects/bio-scan-ulp.iUGf4MTg/scan_arithmetic.py /data/projects/bio-scan-ulp.iUGf4MTg; sha256sum /data/projects/bio-scan-ulp.iUGf4MTg/scan_arithmetic.py /data/projects/bio-prefill-scan.Nq3wZNFe/key_local_register.py /data/projects/bio-prefill-scan.Nq3wZNFe/scan_model_holdout.py\"]}}}\n",
+      "sha256": "d2ee216db3af20e74dd2fb9be275a500220e4dd1a7c134937ca17f0b98886f7b"
+    },
+    "bio-presyn-rounding-holdout.yaml": {
+      "content": "{\"tools\":{\"bio-presyn-rounding-holdout\":{\"checks\":[\"set -e; export CUDA_VISIBLE_DEVICES=1 UV_OFFLINE=true UV_PROJECT_ENVIRONMENT=/data/projects/bio_inspired_nanochat/.venv OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 RAYON_NUM_THREADS=1 PYTHONPATH=.:/data/projects/bio-prefill-scan.Nq3wZNFe; test \\\"$(git rev-parse HEAD)\\\" = 0a3a0c4c1625f6ad75409f99dbd6d5e204f9a9f6; sha256sum /data/projects/bio-scan-ulp.iUGf4MTg/scan_rounding_gate.py /data/projects/bio-scan-ulp.iUGf4MTg/key_local_rounding.py /data/projects/bio-scan-ulp.iUGf4MTg/scan_arithmetic.py /data/projects/bio-prefill-scan.Nq3wZNFe/scan_model_holdout.py /data/projects/bio-prefill-scan.Nq3wZNFe/scan_probe_live.py; flock -w 60 /tmp/bio_inspired_nanochat-trj-gpu1.lock taskset -c 53 uv run --no-sync python /data/projects/bio-scan-ulp.iUGf4MTg/scan_rounding_gate.py /data/projects/bio-scan-ulp.iUGf4MTg/rounding-gate.json; sha256sum /data/projects/bio-scan-ulp.iUGf4MTg/scan_rounding_gate.py /data/projects/bio-scan-ulp.iUGf4MTg/key_local_rounding.py /data/projects/bio-scan-ulp.iUGf4MTg/scan_arithmetic.py /data/projects/bio-prefill-scan.Nq3wZNFe/scan_model_holdout.py /data/projects/bio-prefill-scan.Nq3wZNFe/scan_probe_live.py\"]}}}\n",
+      "sha256": "09014dbe7ebbaae4b2c72e23ec11eeb30184161ec46dceec405cf834a9314f14"
+    },
+    "key_local_rounding.py": {
+      "content": "\"\"\"Use the incumbent rounding points for the register-resident recurrence.\"\"\"\nimport triton\nimport triton.language as tl\n\nfrom bio_inspired_nanochat.kernels.presyn_fused import _sigmoid, _stable_softplus\nfrom scan_probe import Launch\n\n\n@triton.jit\ndef key_local_scan(\n    Drive, Idx, Valid, Uniform, Noise, State, Delay, ERaw, Rec, Mask,\n    rho_c, rho_b, alpha_ca, alpha_buf_on, alpha_buf_off, syt_fast_kd,\n    syt_slow_kd, doc2_gain, complexin_bias, q_beta, qmax, prime_rate,\n    unprime_per_release, nsf_recover, rec_rate, energy_fill, energy_max,\n    energy_use, stochastic_frac, count_cap,\n    N_SEQUENCE, T_KEY, FIRST_ACTIVE, TOPK, T_QUERY: tl.constexpr,\n    NUM_TILES: tl.constexpr, K_PAD: tl.constexpr, BLOCK_KEYS: tl.constexpr,\n    N_DELAY: tl.constexpr, STOCHASTIC: tl.constexpr, RECORD: tl.constexpr,\n):\n    tl.static_assert(not (STOCHASTIC or RECORD))\n    sequence, tile = tl.program_id(0), tl.program_id(1)\n    key = tile * BLOCK_KEYS + tl.arange(0, BLOCK_KEYS)\n    state_offset = sequence * T_KEY + key\n    state_plane = N_SEQUENCE * T_KEY\n    exists = key < T_KEY\n    c = tl.load(State + 0*state_plane + state_offset, exists, 0.0)\n    buf = tl.load(State + 1*state_plane + state_offset, exists, 0.0)\n    rrp = tl.load(State + 2*state_plane + state_offset, exists, 0.0)\n    res = tl.load(State + 3*state_plane + state_offset, exists, 0.0)\n    pr = tl.load(State + 4*state_plane + state_offset, exists, 0.0)\n    cl = tl.load(State + 5*state_plane + state_offset, exists, 0.0)\n    energy = tl.load(State + 6*state_plane + state_offset, exists, 0.0)\n    delay_values = ()\n    for slot in tl.static_range(N_DELAY):\n        delay_values += (tl.load(Delay + slot*state_plane + state_offset, exists, 0.0),)\n    edge = tl.arange(0, K_PAD)\n    for t in range(tl.maximum(0, tile * BLOCK_KEYS + 1 - FIRST_ACTIVE), T_QUERY):\n        active = exists & (key < FIRST_ACTIVE + t)\n        offset = (sequence*T_QUERY+t)*TOPK + edge\n        idx = tl.load(Idx + offset, edge < TOPK, 0)\n        valid = tl.load(Valid + offset, edge < TOPK, 0).to(tl.int1) & (edge < TOPK)\n        drive = tl.load(Drive + offset, edge < TOPK, 0).to(tl.float32)\n        owns = active[:, None] & valid[None, :] & (key[:, None] == idx[None, :])\n        calcium = tl.maximum(\n            rho_c*c[:, None] + alpha_ca*_stable_softplus(drive)[None, :]\n            - alpha_buf_on*c[:, None]*(1.0-buf[:, None]) + alpha_buf_off*buf[:, None], 0.0,\n        )\n        fast = calcium / (calcium + syt_fast_kd)\n        slow = calcium / (calcium + syt_slow_kd)\n        sensor = 0.7*fast + 0.3*slow + doc2_gain*_sigmoid(4.0*(calcium-0.12))\n        fuse = _sigmoid(3.0*sensor + 2.0*pr[:, None] - 2.0*(cl[:, None]+complexin_bias))\n        probability = tl.minimum(tl.maximum(fuse*_sigmoid(drive)[None, :], 0.0), 1.0)\n        release = tl.where(owns, probability*rrp[:, None], 0.0)\n        qamp = _sigmoid(q_beta*(energy-0.5))*qmax\n        tl.store(ERaw + tl.broadcast_to(offset[None, :], (BLOCK_KEYS, K_PAD)), release*qamp[:, None], owns)\n\n        drive_sum = tl.sum(tl.where(owns, drive[None, :], 0.0), 1)\n        release_sum = tl.sum(release, 1)\n        access = (tl.sum(owns.to(tl.int32), 1) > 0).to(tl.float32)\n        influx = alpha_buf_on * c\n        unbound = 1.0 - buf\n        c_driven = tl.fma(alpha_ca * _stable_softplus(drive_sum), access, rho_c * c)\n        c_bound = tl.fma(-influx, unbound, c_driven)\n        c_new = tl.maximum(tl.fma(alpha_buf_off, buf, c_bound), 0.0)\n        buf_bound = tl.fma(rho_b, buf, influx * unbound)\n        buf_new = tl.minimum(tl.maximum(tl.fma(-alpha_buf_off, buf, buf_bound), 0.0), 1.0)\n        rrp_new = tl.maximum(rrp-release_sum, 0.0)\n        res_new = res\n        if N_DELAY > 0:\n            res_new = res + delay_values[0]\n            next_delay = ()\n            for slot in tl.static_range(N_DELAY-1):\n                next_delay += (tl.where(active, delay_values[slot+1], delay_values[slot]),)\n            delay_values = next_delay + (\n                tl.where(active, release_sum*rec_rate, delay_values[N_DELAY-1]),\n            )\n        take = tl.minimum(res_new, 1.0)\n        res_new = tl.maximum(res_new - prime_rate*take, 0.0)\n        rrp_new = tl.minimum(tl.maximum(rrp_new + prime_rate*take, 0.0), 30.0)\n        retained = tl.fma(-unprime_per_release, release_sum, 1.0)\n        pr_new = tl.minimum(tl.maximum(tl.fma(retained, pr, nsf_recover * (1.0 - pr)), 0.0), 1.0)\n        cl_new = tl.minimum(tl.maximum(cl*0.995 + 0.005 - unprime_per_release*release_sum, 0.0), 1.0)\n        energy_new = tl.minimum(tl.maximum(energy + energy_fill*(energy_max-energy) - energy_use*release_sum, 0.0), energy_max)\n        c = tl.where(active, c_new, c)\n        buf = tl.where(active, buf_new, buf)\n        rrp = tl.where(active, rrp_new, rrp)\n        res = tl.where(active, res_new, res)\n        pr = tl.where(active, pr_new, pr)\n        cl = tl.where(active, cl_new, cl)\n        energy = tl.where(active, energy_new, energy)\n\n    tl.store(State + 0*state_plane + state_offset, c, exists)\n    tl.store(State + 1*state_plane + state_offset, buf, exists)\n    tl.store(State + 2*state_plane + state_offset, rrp, exists)\n    tl.store(State + 3*state_plane + state_offset, res, exists)\n    tl.store(State + 4*state_plane + state_offset, pr, exists)\n    tl.store(State + 5*state_plane + state_offset, cl, exists)\n    tl.store(State + 6*state_plane + state_offset, energy, exists)\n    for slot in tl.static_range(N_DELAY):\n        tl.store(Delay + slot*state_plane + state_offset, delay_values[slot], exists)\n\n\nclass KeyLocal(Launch):\n    def __init__(self):\n        super().__init__(key_local_scan, 4, key_block=4)\n\n    def __getitem__(self, grid):\n        def launch(*args, **kw):\n            self.calls += 1\n            assert not kw[\"STOCHASTIC\"] and not kw[\"RECORD\"]\n            kw[\"BLOCK_KEYS\"] = self.key_block\n            kw[\"NUM_TILES\"] = triton.cdiv(kw[\"T_KEY\"], self.key_block)\n            return self.kernel[(*grid,kw[\"NUM_TILES\"])](*args, num_warps=self.warps, **kw)\n        return launch\n",
+      "sha256": "f7b7098cef65f133b66c92804ad624789a3210d82ee0cd0727c66ac86b4c3ad6"
+    },
+    "scan_arithmetic.py": {
+      "content": "\"\"\"Isolate FP32 drift on frozen inputs from the width-640 counterexample.\"\"\"\nimport json\nimport sys\nfrom pathlib import Path\n\nimport torch\nimport triton\n\nfrom bio_inspired_nanochat.kernels import presyn_fused\nfrom key_local_register import key_local_scan\nfrom scan_edge_cases import NAMES, clone\nfrom scan_model_holdout import call, ids, model\nfrom scan_probe_live import use_kernel\n\n\nclass CaptureLaunch:\n    def __init__(self, kernel, split_keys, fusion):\n        self.kernel = kernel\n        self.split_keys = split_keys\n        self.fusion = fusion\n        self.compiled = None\n\n    def __getitem__(self, grid):\n        def launch(*args, **kw):\n            if self.split_keys:\n                kw[\"BLOCK_KEYS\"] = 4\n                kw[\"NUM_TILES\"] = triton.cdiv(kw[\"T_KEY\"], 4)\n                actual_grid = (*grid, kw[\"NUM_TILES\"])\n            else:\n                actual_grid = grid\n            self.compiled = self.kernel[actual_grid](\n                *args, num_warps=4, enable_fp_fusion=self.fusion, **kw,\n            )\n            return self.compiled\n        return launch\n\n\ndef bit_difference(left, right):\n    delta = ~torch.eq(left.contiguous().view(torch.int32),right.contiguous().view(torch.int32))\n    where = delta.nonzero()\n    return {\"bitwise_mismatches\":len(where),\"first\":where[0].tolist() if len(where) else None,\n            \"max_abs\":(left-right).abs().max().item()}\n\n\ndef select_inputs():\n    saved = []\n    original = presyn_fused.presyn_detached_scan\n\n    def record(state, drive, idx, valid, cfg, **kw):\n        if len(saved) < 2:\n            saved.append((clone(state), drive.clone(), idx.clone(), valid.clone(), cfg, kw))\n        return original(state,drive,idx,valid,cfg,**kw)\n\n    presyn_fused.presyn_detached_scan = record\n    try:\n        call(model(True),ids(88292,128))\n    finally:\n        presyn_fused.presyn_detached_scan = original\n    assert len(saved) == 2\n    return saved\n\n\ndef compare(root):\n    baseline = presyn_fused.presyn_detached_scan_kernel\n    variants = {\n        \"incumbent\": CaptureLaunch(baseline,False,True),\n        \"register\": CaptureLaunch(key_local_scan,True,True),\n        \"incumbent_no_fma\": CaptureLaunch(baseline,False,False),\n        \"register_no_fma\": CaptureLaunch(key_local_scan,True,False),\n    }\n    rows = []\n    for state0,drive,idx,valid,cfg,kw in select_inputs():\n        first = kw[\"first_active_key_count\"]\n        outputs = {}\n        for name,launch in variants.items():\n            state = clone(state0)\n            with use_kernel(launch):\n                exposed,_,_ = presyn_fused.presyn_detached_scan(state,drive,idx,valid,cfg,**kw)\n            outputs[name] = {\"release\":exposed,**{key:state[key] for key in NAMES},\n                             **{f\"delay_{slot}\":v for slot,v in enumerate(state[\"DELAY\"])}}\n            for form in (\"ptx\",\"llir\"):\n                with (root / f\"{name}_{first}.{form}\").open(\"x\",encoding=\"utf-8\") as stream:\n                    stream.write(launch.compiled.asm[form])\n        rows.append({\n            \"first_active\":first,\n            \"by_pair\":{\n                f\"{a}__{b}\":{field:bit_difference(left,outputs[b][field]) for field,left in outputs[a].items()}\n                for a,b in ((\"incumbent\",\"register\"),(\"incumbent_no_fma\",\"register_no_fma\"),\n                            (\"incumbent\",\"incumbent_no_fma\"),(\"incumbent\",\"register_no_fma\"))\n            },\n        })\n        print(json.dumps(rows[-1]),flush=True)\n    assert any(row[\"by_pair\"][\"incumbent__register\"][\"release\"][\"bitwise_mismatches\"] for row in rows)\n    return rows\n\n\nif __name__ == \"__main__\":\n    root = Path(sys.argv[1])\n    with torch.inference_mode():\n        report = compare(root)\n    with (root / \"arithmetic.json\").open(\"x\",encoding=\"utf-8\") as stream:\n        json.dump(report,stream,indent=2,sort_keys=True,allow_nan=False)\n        stream.write(\"\\n\")\n",
+      "sha256": "43daa6fc5ffb73666d356e02c7fd18836614c44f3216e34030e1fd5f5d2774e6"
+    },
+    "scan_rounding_gate.py": {
+      "content": "\"\"\"Test explicit incumbent rounding on the frozen witness and full width-640 model.\"\"\"\nimport json\nimport sys\nfrom pathlib import Path\n\nimport torch\n\nfrom bio_inspired_nanochat.kernels import presyn_fused\nfrom key_local_rounding import KeyLocal\nfrom scan_arithmetic import bit_difference, select_inputs\nfrom scan_edge_cases import NAMES, clone\nimport scan_model_holdout as holdout\nimport scan_probe_live\n\n\ndef check_tensor(name,left,right,maxima):\n    assert left.shape == right.shape and left.dtype == right.dtype, name\n    assert torch.equal(left.contiguous().view(torch.uint8),right.contiguous().view(torch.uint8)), (\n        name, (left.float()-right.float()).abs().max().item(),\n    )\n    maxima[name]=0.0\n\n\ndef run():\n    current=presyn_fused.presyn_detached_scan_kernel\n    repair=KeyLocal()\n    direct=[]\n    for state0,drive,idx,valid,cfg,kw in select_inputs():\n        outputs=[]\n        for kernel in (current,repair):\n            state=clone(state0)\n            with scan_probe_live.use_kernel(kernel):\n                out,_,_=presyn_fused.presyn_detached_scan(state,drive,idx,valid,cfg,**kw)\n            outputs.append({\"release\":out,**{k:state[k] for k in NAMES},\n                            **{f\"delay_{i}\":v for i,v in enumerate(state[\"DELAY\"])}})\n        comparisons={name:bit_difference(value,outputs[1][name]) for name,value in outputs[0].items()}\n        case={\"first_active\":kw[\"first_active_key_count\"],\"comparisons\":comparisons}\n        direct.append(case)\n        print(json.dumps(case),flush=True)\n    assert all(metric[\"bitwise_mismatches\"]==0 for case in direct for metric in case[\"comparisons\"].values())\n    holdout.compare_tensor=check_tensor\n    scan_probe_live.compare_tensor=check_tensor\n    kernels={\"vanilla\":current,\"current\":current,\"register\":repair}\n    engines={name:holdout.model(name!=\"vanilla\") for name in kernels}\n    trial=holdout.trial(128,engines,kernels)\n    print(json.dumps({key:value for key,value in trial.items() if key!=\"measures\"}),flush=True)\n    return {\"direct\":direct,\"trial\":trial}\n\n\nif __name__==\"__main__\":\n    with torch.inference_mode():\n        report=run()\n    with Path(sys.argv[1]).open(\"x\",encoding=\"utf-8\") as stream:\n        json.dump(report,stream,indent=2,sort_keys=True,allow_nan=False)\n        stream.write(\"\\n\")\n",
+      "sha256": "fbc48b2cee489117a8e8541e7d9111954516f948170391738954243fd1b80bc2"
+    }
+  },
+  "witness": [
+    {
+      "by_pair": {
+        "incumbent__incumbent_no_fma": {
+          "BUF": {
+            "bitwise_mismatches": 256,
+            "first": [
+              0,
+              0,
+              1
+            ],
+            "max_abs": 8.940696716308594e-08
+          },
+          "C": {
+            "bitwise_mismatches": 110,
+            "first": [
+              0,
+              0,
+              7
+            ],
+            "max_abs": 4.76837158203125e-07
+          },
+          "CL": {
+            "bitwise_mismatches": 581,
+            "first": [
+              0,
+              0,
+              0
+            ],
+            "max_abs": 4.172325134277344e-07
+          },
+          "E": {
+            "bitwise_mismatches": 196,
+            "first": [
+              0,
+              0,
+              1
+            ],
+            "max_abs": 1.1920928955078125e-07
+          },
+          "PR": {
+            "bitwise_mismatches": 378,
+            "first": [
+              0,
+              0,
+              0
+            ],
+            "max_abs": 1.7881393432617188e-07
+          },
+          "RES": {
+            "bitwise_mismatches": 1,
+            "first": [
+              0,
+              3,
+              0
+            ],
+            "max_abs": 1.9073486328125e-06
+          },
+          "RRP": {
+            "bitwise_mismatches": 39,
+            "first": [
+              0,
+              0,
+              4
+            ],
+            "max_abs": 1.1920928955078125e-07
+          },
+          "delay_0": {
+            "bitwise_mismatches": 32,
+            "first": [
+              0,
+              0,
+              4
+            ],
+            "max_abs": 7.450580596923828e-09
+          },
+          "delay_1": {
+            "bitwise_mismatches": 42,
+            "first": [
+              0,
+              0,
+              4
+            ],
+            "max_abs": 7.450580596923828e-09
+          },
+          "delay_2": {
+            "bitwise_mismatches": 31,
+            "first": [
+              0,
+              0,
+              4
+            ],
+            "max_abs": 3.725290298461914e-09
+          },
+          "release": {
+            "bitwise_mismatches": 2493,
+            "first": [
+              0,
+              0,
+              3,
+              2
+            ],
+            "max_abs": 9.5367431640625e-07
+          }
+        },
+        "incumbent__register": {
+          "BUF": {
+            "bitwise_mismatches": 237,
+            "first": [
+              0,
+              0,
+              0
+            ],
+            "max_abs": 8.940696716308594e-08
+          },
+          "C": {
+            "bitwise_mismatches": 48,
+            "first": [
+              0,
+              0,
+              5
+            ],
+            "max_abs": 4.76837158203125e-07
+          },
+          "CL": {
+            "bitwise_mismatches": 1,
+            "first": [
+              0,
+              4,
+              9
+            ],
+            "max_abs": 2.9802322387695312e-08
+          },
+          "E": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "PR": {
+            "bitwise_mismatches": 369,
+            "first": [
+              0,
+              0,
+              0
+            ],
+            "max_abs": 1.7881393432617188e-07
+          },
+          "RES": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "RRP": {
+            "bitwise_mismatches": 1,
+            "first": [
+              0,
+              2,
+              1
+            ],
+            "max_abs": 1.4901161193847656e-08
+          },
+          "delay_0": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "delay_1": {
+            "bitwise_mismatches": 1,
+            "first": [
+              0,
+              2,
+              1
+            ],
+            "max_abs": 1.862645149230957e-09
+          },
+          "delay_2": {
+            "bitwise_mismatches": 1,
+            "first": [
+              0,
+              2,
+              1
+            ],
+            "max_abs": 9.313225746154785e-10
+          },
+          "release": {
+            "bitwise_mismatches": 61,
+            "first": [
+              0,
+              0,
+              58,
+              3
+            ],
+            "max_abs": 5.960464477539063e-08
+          }
+        },
+        "incumbent__register_no_fma": {
+          "BUF": {
+            "bitwise_mismatches": 256,
+            "first": [
+              0,
+              0,
+              1
+            ],
+            "max_abs": 8.940696716308594e-08
+          },
+          "C": {
+            "bitwise_mismatches": 110,
+            "first": [
+              0,
+              0,
+              7
+            ],
+            "max_abs": 4.76837158203125e-07
+          },
+          "CL": {
+            "bitwise_mismatches": 581,
+            "first": [
+              0,
+              0,
+              0
+            ],
+            "max_abs": 4.172325134277344e-07
+          },
+          "E": {
+            "bitwise_mismatches": 196,
+            "first": [
+              0,
+              0,
+              1
+            ],
+            "max_abs": 1.1920928955078125e-07
+          },
+          "PR": {
+            "bitwise_mismatches": 378,
+            "first": [
+              0,
+              0,
+              0
+            ],
+            "max_abs": 1.7881393432617188e-07
+          },
+          "RES": {
+            "bitwise_mismatches": 1,
+            "first": [
+              0,
+              3,
+              0
+            ],
+            "max_abs": 1.9073486328125e-06
+          },
+          "RRP": {
+            "bitwise_mismatches": 39,
+            "first": [
+              0,
+              0,
+              4
+            ],
+            "max_abs": 1.1920928955078125e-07
+          },
+          "delay_0": {
+            "bitwise_mismatches": 32,
+            "first": [
+              0,
+              0,
+              4
+            ],
+            "max_abs": 7.450580596923828e-09
+          },
+          "delay_1": {
+            "bitwise_mismatches": 42,
+            "first": [
+              0,
+              0,
+              4
+            ],
+            "max_abs": 7.450580596923828e-09
+          },
+          "delay_2": {
+            "bitwise_mismatches": 31,
+            "first": [
+              0,
+              0,
+              4
+            ],
+            "max_abs": 3.725290298461914e-09
+          },
+          "release": {
+            "bitwise_mismatches": 2493,
+            "first": [
+              0,
+              0,
+              3,
+              2
+            ],
+            "max_abs": 9.5367431640625e-07
+          }
+        },
+        "incumbent_no_fma__register_no_fma": {
+          "BUF": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "C": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "CL": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "E": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "PR": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "RES": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "RRP": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "delay_0": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "delay_1": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "delay_2": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "release": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          }
+        }
+      },
+      "first_active": 1
+    },
+    {
+      "by_pair": {
+        "incumbent__incumbent_no_fma": {
+          "BUF": {
+            "bitwise_mismatches": 542,
+            "first": [
+              0,
+              0,
+              2
+            ],
+            "max_abs": 8.940696716308594e-08
+          },
+          "C": {
+            "bitwise_mismatches": 300,
+            "first": [
+              0,
+              0,
+              2
+            ],
+            "max_abs": 7.152557373046875e-07
+          },
+          "CL": {
+            "bitwise_mismatches": 1206,
+            "first": [
+              0,
+              0,
+              0
+            ],
+            "max_abs": 5.066394805908203e-07
+          },
+          "E": {
+            "bitwise_mismatches": 562,
+            "first": [
+              0,
+              0,
+              0
+            ],
+            "max_abs": 1.1920928955078125e-07
+          },
+          "PR": {
+            "bitwise_mismatches": 526,
+            "first": [
+              0,
+              0,
+              1
+            ],
+            "max_abs": 1.7881393432617188e-07
+          },
+          "RES": {
+            "bitwise_mismatches": 1,
+            "first": [
+              0,
+              9,
+              112
+            ],
+            "max_abs": 1.9073486328125e-06
+          },
+          "RRP": {
+            "bitwise_mismatches": 100,
+            "first": [
+              0,
+              0,
+              2
+            ],
+            "max_abs": 9.5367431640625e-07
+          },
+          "delay_0": {
+            "bitwise_mismatches": 40,
+            "first": [
+              0,
+              0,
+              17
+            ],
+            "max_abs": 5.960464477539063e-08
+          },
+          "delay_1": {
+            "bitwise_mismatches": 42,
+            "first": [
+              0,
+              0,
+              2
+            ],
+            "max_abs": 1.4901161193847656e-08
+          },
+          "delay_2": {
+            "bitwise_mismatches": 39,
+            "first": [
+              0,
+              0,
+              8
+            ],
+            "max_abs": 1.862645149230957e-08
+          },
+          "release": {
+            "bitwise_mismatches": 3215,
+            "first": [
+              0,
+              0,
+              0,
+              4
+            ],
+            "max_abs": 1.430511474609375e-06
+          }
+        },
+        "incumbent__register": {
+          "BUF": {
+            "bitwise_mismatches": 452,
+            "first": [
+              0,
+              0,
+              0
+            ],
+            "max_abs": 5.960464477539063e-08
+          },
+          "C": {
+            "bitwise_mismatches": 114,
+            "first": [
+              0,
+              0,
+              2
+            ],
+            "max_abs": 2.384185791015625e-07
+          },
+          "CL": {
+            "bitwise_mismatches": 1,
+            "first": [
+              0,
+              3,
+              44
+            ],
+            "max_abs": 2.9802322387695312e-08
+          },
+          "E": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "PR": {
+            "bitwise_mismatches": 539,
+            "first": [
+              0,
+              0,
+              1
+            ],
+            "max_abs": 1.7881393432617188e-07
+          },
+          "RES": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "RRP": {
+            "bitwise_mismatches": 1,
+            "first": [
+              0,
+              9,
+              80
+            ],
+            "max_abs": 1.4901161193847656e-08
+          },
+          "delay_0": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "delay_1": {
+            "bitwise_mismatches": 1,
+            "first": [
+              0,
+              0,
+              27
+            ],
+            "max_abs": 3.725290298461914e-09
+          },
+          "delay_2": {
+            "bitwise_mismatches": 1,
+            "first": [
+              0,
+              9,
+              80
+            ],
+            "max_abs": 9.313225746154785e-10
+          },
+          "release": {
+            "bitwise_mismatches": 54,
+            "first": [
+              0,
+              0,
+              3,
+              25
+            ],
+            "max_abs": 1.1920928955078125e-07
+          }
+        },
+        "incumbent__register_no_fma": {
+          "BUF": {
+            "bitwise_mismatches": 542,
+            "first": [
+              0,
+              0,
+              2
+            ],
+            "max_abs": 8.940696716308594e-08
+          },
+          "C": {
+            "bitwise_mismatches": 300,
+            "first": [
+              0,
+              0,
+              2
+            ],
+            "max_abs": 7.152557373046875e-07
+          },
+          "CL": {
+            "bitwise_mismatches": 1206,
+            "first": [
+              0,
+              0,
+              0
+            ],
+            "max_abs": 5.066394805908203e-07
+          },
+          "E": {
+            "bitwise_mismatches": 562,
+            "first": [
+              0,
+              0,
+              0
+            ],
+            "max_abs": 1.1920928955078125e-07
+          },
+          "PR": {
+            "bitwise_mismatches": 526,
+            "first": [
+              0,
+              0,
+              1
+            ],
+            "max_abs": 1.7881393432617188e-07
+          },
+          "RES": {
+            "bitwise_mismatches": 1,
+            "first": [
+              0,
+              9,
+              112
+            ],
+            "max_abs": 1.9073486328125e-06
+          },
+          "RRP": {
+            "bitwise_mismatches": 100,
+            "first": [
+              0,
+              0,
+              2
+            ],
+            "max_abs": 9.5367431640625e-07
+          },
+          "delay_0": {
+            "bitwise_mismatches": 40,
+            "first": [
+              0,
+              0,
+              17
+            ],
+            "max_abs": 5.960464477539063e-08
+          },
+          "delay_1": {
+            "bitwise_mismatches": 42,
+            "first": [
+              0,
+              0,
+              2
+            ],
+            "max_abs": 1.4901161193847656e-08
+          },
+          "delay_2": {
+            "bitwise_mismatches": 39,
+            "first": [
+              0,
+              0,
+              8
+            ],
+            "max_abs": 1.862645149230957e-08
+          },
+          "release": {
+            "bitwise_mismatches": 3215,
+            "first": [
+              0,
+              0,
+              0,
+              4
+            ],
+            "max_abs": 1.430511474609375e-06
+          }
+        },
+        "incumbent_no_fma__register_no_fma": {
+          "BUF": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "C": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "CL": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "E": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "PR": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "RES": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "RRP": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "delay_0": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "delay_1": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "delay_2": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          },
+          "release": {
+            "bitwise_mismatches": 0,
+            "first": null,
+            "max_abs": 0.0
+          }
+        }
+      },
+      "first_active": 65
+    }
+  ],
+  "worker": "trj"
+}

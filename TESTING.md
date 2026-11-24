@@ -222,8 +222,20 @@ The width-640, 10-layer synthetic model exceeded logit tolerance on one
 of 24 independently replayed 128-token prompts. All 24 first-token IDs
 agreed. The first attention key-set change and the first out-of-tolerance
 logits both appeared at zero-based position 118. Eager and captured runs
-both reached an absolute logit error of 0.00267 on that prompt. The scan
-remains an experiment pending full-model parity.
+both reached an absolute logit error of 0.00267 on that prompt.
+
+Replaying two frozen 64-query blocks from that prompt found 61 and 54
+bitwise release differences with the default Triton builds. The two
+kernels matched bit for bit with multiply-add contraction disabled on
+both. Explicitly matching the incumbent's fused rounding for the calcium,
+buffer and priming updates restored bitwise parity against the normal
+incumbent on both blocks. In a replay of the original 24-prompt panel,
+all 3,072 logit vectors, emitted first tokens, KV and recurrent state
+matched bit for bit. Median paired first-token latency fell 44% relative
+to the live synaptic incumbent. The repaired prototype took 2.09× live
+vanilla, with zero of 24 pairs within 1.50×. The experiment uses the same
+synthetic model and prompt seeds as the counterexample.
+[Rounding diagnosis, repair and DSR receipts](results/profiles/rtx4090_scan_rounding_2026-11-24.json)
 
 The live `Engine.generate` now copies the decode cache only when generation
 needs a second token. The previous and revised engines agreed on 2,688
