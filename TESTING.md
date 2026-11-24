@@ -230,6 +230,27 @@ for the most self time among the measured synaptic training frames. Performance
 follow-up is tracked in `bio_inspired_nanochat-r2d`.
 [Paired throughput receipts](results/cpu_native_muon_2026-11-24.json)
 
+The follow-up on `csd` measured 30 warmed scan calls. Median wrapper time
+was 1.955 ms, including 0.914 ms in the native call, 0.546 ms in preparation,
+0.044 ms at the Python-to-Rust boundary and 0.432 ms after the call. RNG
+accounted for 0.389 ms within preparation. Across the 30 calls, the native
+call accounted for 53.9% of measured wrapper time.
+
+Two isolated Rust builds preserved the sampled release, gradient, state and
+delay bytes. Skipping masked-edge arithmetic improved median paired training
+slowdown by 1.67% over 12 pairs. Reusing per-field state views improved it by
+2.61% over a separate 12 pairs. Both missed the 5% intervention threshold and
+their median slowdowns, 2.07× and 2.24×, exceeded the existing 2.00× gate. Each
+pair used one live vanilla measurement in the same process. Both candidates
+were left out of the production kernel.
+
+Preallocating the TorchScript random-draw buffers reproduced the draws and
+generator states byte for byte in 192 cases. The candidate increased median
+paired training slowdown by 5.78% across 12 fresh pairs. Its median measured
+32-query RNG time rose from 0.275 ms to 0.309 ms. The experiment stayed out of
+the trainer.
+[Scan timings and DSR receipts](results/profiles/cpu_presyn_scan_2026-11-24.json)
+
 The two-process Gloo tests passed all six cases on both revisions on `csd`
 with PyTorch `2.9.1+cpu`. On `trj` with CUDA hidden and PyTorch `2.9.1+cu128`,
 both revisions reproduced the broad run's five failures. Four
