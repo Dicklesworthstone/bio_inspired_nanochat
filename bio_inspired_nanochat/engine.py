@@ -430,7 +430,7 @@ class Engine:
     @torch.inference_mode()
     def generate(self, tokens, num_samples=1, max_tokens=None, temperature=1.0, top_k=None, seed=42,
                  yield_metrics=False, deliberation=None, self_correction=None, selective=None):
-        """Same as generate, but does single prefill and then clones the KV cache.
+        """Stream from a single prefill and clone its cache when decoding continues.
 
         ``deliberation`` (bead r00r.1.2): an optional ``DeliberationConfig`` (or a prebuilt
         ``DeliberationController``) that turns on free-energy "ponder". Per token, bounded candidate
@@ -643,13 +643,13 @@ class Engine:
         # 1) Run a batch 1 prefill of the prompt tokens
         m = self.model.config
         kv_model_kwargs = {"num_heads": m.n_kv_head, "head_dim": m.n_embd // m.n_head, "num_layers": m.n_layer}
-        kv_cache_prefill = KVCache(
+        kv_cache = KVCache(
             batch_size=1,
             seq_len=len(tokens),
             **kv_model_kwargs,
         )
         ids = torch.tensor([tokens], dtype=torch.long, device=device)
-        result = self._forward(ids, kv_cache_prefill)
+        result = self._forward(ids, kv_cache)
         # Handle both GPT (returns logits) and GPTSynaptic (returns (logits, None))
         if isinstance(result, tuple):
             logits, _ = result
@@ -662,30 +662,19 @@ class Engine:
         prefill_temperature = temperature
         prefill_candidate_scores = None
         if max_tokens is None or max_tokens > 0:
-            logits, prefill_candidate_scores = _deliberated_logits(logits, kv_cache_prefill)
+            logits, prefill_candidate_scores = _deliberated_logits(logits, kv_cache)
             prefill_temperature = _decode_temperature(
-                kv_cache_prefill,
+                kv_cache,
                 prefill_candidate_scores,
             )
         next_ids = sample_next_token(logits, rng, prefill_temperature, top_k)  # (B, 1)
         sampled_tokens = next_ids[:, 0].tolist()
 
-        # 2) Replicate the KV cache for each sample/row
-        kv_length_hint = (len(tokens) + max_tokens) if max_tokens is not None else self.model.config.sequence_len
-        kv_cache_decode = KVCache(
-            batch_size=num_samples,
-            seq_len=kv_length_hint,
-            **kv_model_kwargs,
-        )
-        kv_cache_decode.prefill(kv_cache_prefill)
-        del kv_cache_prefill # no need to keep this memory around
-
-        # 3) Initialize states for each sample
+        # 2) Initialize states for each sample
         row_states = [RowState(tokens.copy()) for _ in range(num_samples)]
 
-        # 4) Main generation loop
+        # 3) Main generation loop
         num_generated = 0
-        first_iteration = True
         while True:
             # Stop condition: we've reached max tokens
             if max_tokens is not None and num_generated >= max_tokens:
@@ -695,19 +684,27 @@ class Engine:
                 break
 
             # Get sampled tokens - either from prefill or from forward pass
-            if first_iteration:
-                # Use the tokens we already sampled from prefill
-                if num_samples == 1:
-                    sampled_tokens = [sampled_tokens[0]]
-                else:
+            if num_generated == 0:
+                if num_samples > 1:
                     # Sample independently per row from the same prefill logits
                     logits_rep = logits.expand(num_samples, -1).contiguous()
                     next_ids = sample_next_token(logits_rep, rng, prefill_temperature, top_k)
                     sampled_tokens = next_ids[:, 0].tolist()
-                first_iteration = False
             else:
+                if num_generated == 1:
+                    # The prompt logits already supplied the first token. Allocate and copy
+                    # the decode cache only if another model forward is needed.
+                    kv_length_hint = (
+                        len(tokens) + max_tokens if max_tokens is not None else m.sequence_len
+                    )
+                    decode_cache = KVCache(
+                        batch_size=num_samples, seq_len=kv_length_hint, **kv_model_kwargs,
+                    )
+                    decode_cache.prefill(kv_cache)
+                    kv_cache = decode_cache
+                    del decode_cache
                 # Forward the model and get the next token for each row
-                result = self._forward(ids, kv_cache_decode)  # (B, T, vocab_size) or (logits, None)
+                result = self._forward(ids, kv_cache)  # (B, T, vocab_size) or (logits, None)
                 # Handle both GPT (returns logits) and GPTSynaptic (returns (logits, None))
                 if isinstance(result, tuple):
                     logits, _ = result
@@ -716,11 +713,11 @@ class Engine:
                 logits = logits[:, -1, :]  # (B, vocab_size) at last time step
                 # r00r.1.6: candidate-specific relaxed free energy is an additive energy term in
                 # the actual decode logits. The branch cache is isolated; max_iters=0 is identity.
-                logits, candidate_scores = _deliberated_logits(logits, kv_cache_decode)
+                logits, candidate_scores = _deliberated_logits(logits, kv_cache)
                 next_ids = sample_next_token(
                     logits,
                     rng,
-                    _decode_temperature(kv_cache_decode, candidate_scores),
+                    _decode_temperature(kv_cache, candidate_scores),
                     top_k,
                 )  # (B, 1)
                 sampled_tokens = next_ids[:, 0].tolist()
@@ -820,7 +817,7 @@ class Engine:
                     }
                 
                 # 2. Presynaptic Stats (RRP, C)
-                presyn_state = kv_cache_decode.presyn_state
+                presyn_state = kv_cache.presyn_state
                 if isinstance(presyn_state, list):
                     presyn_state = presyn_state[-1] if presyn_state else None
                 if presyn_state:
@@ -840,6 +837,8 @@ class Engine:
                             t = presyn_state[state_key]  # (B, H, T)
                             if t.shape[-1] > 0:
                                 last_val = t[..., -1]  # (B, H)
+                                if num_generated == 0 and num_samples > 1:
+                                    last_val = last_val.expand(num_samples, *last_val.shape[1:])
                                 presyn_stats[out_key] = (
                                     last_val.float().cpu().numpy().tolist()
                                 )

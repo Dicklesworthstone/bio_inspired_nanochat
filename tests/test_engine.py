@@ -895,6 +895,51 @@ def test_generate_resets_per_sequence_state_at_start():
     assert calls["n"] == 1, "generate() must reset per-sequence state exactly once at the start"
 
 
+@pytest.mark.parametrize("num_samples", [1, 3])
+@pytest.mark.parametrize("max_tokens", [1, 2])
+def test_generate_copies_prefill_cache_only_when_decoding_continues(
+    monkeypatch, num_samples, max_tokens,
+):
+    from bio_inspired_nanochat.engine import Engine
+    from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
+
+    class Tokenizer:
+        def encode_special(self, _name):
+            return -1
+
+        def get_bos_token_id(self):
+            return -2
+
+    cfg = GPTSynapticConfig(
+        sequence_len=16, vocab_size=64, n_layer=1, n_head=2, n_kv_head=2, n_embd=32,
+    )
+    copies = []
+    prefill = KVCache.prefill
+
+    def track_prefill(destination, source):
+        copies.append((destination.kv_shape[2], source.pos))
+        prefill(destination, source)
+
+    monkeypatch.setattr(KVCache, "prefill", track_prefill)
+    engine = Engine(GPTSynaptic(cfg).eval(), Tokenizer())
+    stream = engine.generate(
+        [1, 2, 3], num_samples=num_samples, max_tokens=max_tokens, temperature=0,
+        yield_metrics=True,
+    )
+
+    _, masks, metrics = next(stream)
+    assert copies == []
+    assert masks == [1] * num_samples
+    assert len(metrics["presyn"]["c"]) == num_samples
+    assert metrics["presyn"]["c"] == [metrics["presyn"]["c"][0]] * num_samples
+    remaining = list(stream)
+    assert len(remaining) == max_tokens - 1
+    assert copies == ([(num_samples, 3)] if max_tokens == 2 else [])
+    if remaining:
+        assert remaining[0][1] == [1] * num_samples
+        assert len(remaining[0][2]["presyn"]["c"]) == num_samples
+
+
 def test_gpt_synaptic_init_weights_after_to_empty_is_finite():
     from bio_inspired_nanochat.gpt_synaptic import GPTSynaptic, GPTSynapticConfig
     from bio_inspired_nanochat.synaptic import SynapticConfig, SynapticLinear
