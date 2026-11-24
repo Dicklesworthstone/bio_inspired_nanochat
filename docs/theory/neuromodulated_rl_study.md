@@ -1422,3 +1422,43 @@ from both actions at the same state in `hy8.3.8`.
 
 [Transfer comparison and DSR receipts](../../results/qwen_kl_calibration_2026-11-23_transfer.json) ·
 [All sampled transfer responses](../../results/qwen_kl_calibration_2026-11-23_transfer.json.gz)
+
+### Registered sibling-continuation study
+
+- [ ] Seal 16 new paired L1 packing questions with seed 811050.
+  Independently check 32 answers and zero overlap in wording
+  or arithmetic recipes with the original ladder or KL panels.
+  The panel SHA-256 is `5fec0aee39eaf223c620f0b6585c50e321ed1d5e52cb402f8b129451cdc59d4b`.
+- [ ] Use side zero of each pair for the probe pool. Roll in for
+  at most 96 tokens with the original BF16 top-k sampler.
+  Use base seed 811051 and salt `qwen.sibling.guide`. Consider
+  positions 16 through 95, starting at zero. Prefer positions
+  where the guide sampled a decimal digit and there are two
+  distinct legal digits. Then consider any two legal nonterminal
+  actions. In each class, rank by the smaller of the top two
+  eligible probabilities, with earlier positions breaking ties.
+  Try at most four positions per class. Require both actions
+  to have policy mass at least 0.01 in the guide and in a
+  canonical prefill with 16 identical rows. Freeze up to 12
+  eligible probes in panel order before scoring any suffix.
+  Stop if fewer than eight probes qualify.
+- [ ] At each probe, draw eight suffixes from each sibling action
+  in each of two blocks. Use base seeds 811052 for discovery and
+  811053 for confirmation, salted with `qwen.sibling.<question ID>`.
+  Check the packed support and retained logits against the frozen
+  hash before forcing the first action. Let the usual sampler
+  generate every subsequent token. The 512-token response cap
+  includes the roll-in and forced action. Decode the whole
+  response and compare the last boxed integer with the sealed
+  answer.
+- [ ] Orient each probe by the discovery difference in correct
+  counts, and include it only if the absolute difference is at
+  least two of eight. Require at least six such probes. On that
+  fixed set, require at least six positive confirmation gaps,
+  mean oriented confirmation difference of at least one correct
+  response per eight, and one-sided exact sign-flip `p ≤ 0.025`.
+  Report every probe, both blocks and capped responses.
+  Require confirmation before any write experiment.
+
+The registered sibling driver SHA-256 is
+`dca7b9d70146239a0e08da68aed0281b6783042eb245f138be0fba9d676b00d9`.
