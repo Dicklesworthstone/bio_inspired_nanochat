@@ -1790,17 +1790,17 @@ match at its original dose.
   the 8/8/8/32 calibration, verification, adaptation and transfer
   split. Audit disjointness against every archived predecessor and
   the first write trial's questions.
-- [ ] Use the same frozen matrices, support reconstruction,
+- [x] Use the same frozen matrices, support reconstruction,
   512-token cap and fixed-support KL measure. Draw baseline
   continuations with seed 811041 and salts
   `qwen.kl.digit-low-calibration.L1` and
   `qwen.kl.digit-low-verification.L1`.
-- [ ] Measure a fixed 17-point grid of norms `2^(j/4)` for
+- [x] Measure a fixed 17-point grid of norms `2^(j/4)` for
   integer `j = -24,…,-8`. Target KL 0.0005. Choose the measured
   norm closest in log KL within `[0.00035, 0.00065]` and dynamic
   JS at most 0.0005. Use the same smaller-norm tie break and
   max-to-min KL ratio at most 1.55.
-- [ ] Replay the frozen selections on the new verification
+- [x] Replay the frozen selections on the new verification
   panel. Require KL in `[0.00020, 0.0010]`, dynamic JS at most
   0.0005 and max-to-min KL ratio at most 1.8. Stop before transfer
   if the matching, verification or audit gate fails.
@@ -1814,3 +1814,30 @@ The panel source SHA-256 is `84a7b723706c092701b8ce61feffa3fcd05a8cdce56e875cc83
 The evaluation source SHA-256 is `5ad8a195eababb9253d1c41b1674c6aef7c7e197666e88b51f6c28567dd64286`.
 The input checksum list SHA-256 is `2c1458a0f6bf8f526fb92f0ab266a81f0cbe30b7f0d42fb2fc1b88feba0cdaab`.
 The audit source SHA-256 is `5d1eea81a91a7be5387e77cc28737f8dc5f4f1acd0ee9c04ab4b161bf00e8eea`.
+
+### Lower-drift result
+
+The three directions matched on 333 calibration prefixes. Their
+largest-to-smallest mean KL ratio was 1.40. On 312 held-out
+prefixes the higher-prior direction fell to 0.000151 KL, below
+the 0.00020 floor, and the ratio rose to 2.99, above 1.8.
+Dynamic JS stayed below 0.0005 for all directions. The independent
+audit reproduced the selections and both gate failures.
+
+| Direction | Frozen norm | Calibration KL | Verification KL |
+| --- | ---: | ---: | ---: |
+| Reward | 0.08839 | 0.000546 | 0.000450 |
+| Higher prior | 0.21022 | 0.000579 | 0.000151 |
+| Reversed | 0.07433 | 0.000413 | 0.000368 |
+
+In an exploratory check, giving each verification question equal
+weight left the ratio at 2.98. Dropping one matched pair at a time
+left ratios from 2.18 to 3.44 across the four omissions. A single
+question pair does not account for the failed match.
+
+Both transfer panels remain sealed. `hy8.3.10` remains open for
+an actual paired accuracy test once a control matches drift
+on held-out prompts.
+
+[Lower-drift result and receipts](../../results/qwen_digit_write_2026-11-24_low_drift.json) ·
+[Lower-drift panels and measurements](../../results/qwen_digit_write_2026-11-24_low_drift.json.gz)
