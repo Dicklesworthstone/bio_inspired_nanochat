@@ -980,7 +980,7 @@ questions, four BF16 samples per question and 512-token limit.
   Independently verify the archive against the prior episode and
   publish the DSR receipts. The preregistered sampler script SHA-256
   is `07763d5c3e215448f8f012d9d02131de8082fbc81c9800e9cb623f5c192a0122`.
-- [ ] Proceed to a separate, held-out compression comparison only
+- [x] Proceed to a separate, held-out compression comparison only
   after sampler and gradient agreement. Register projection ranks,
   calibration and evaluation groups, retained bytes and stopping
   thresholds before fitting a basis. Preserve the reserved
@@ -1008,14 +1008,14 @@ script to run byte for byte on retry.
 
 ### Registered held-out compression screen
 
-- [ ] Replay the eight packing questions from L1 confirmation with
+- [x] Replay the eight packing questions from L1 confirmation with
   the same batch seed. Score the actual retained support for all
   four completions per question. Fit separate rank-32 input and
   feedback bases without reward weights on both sides of packing
   pairs 0 and 1. Use uncentered randomized PCA with seed 811027,
   48 sketch vectors and two power iterations. Freeze both bases
   before projecting either side of pairs 2 and 3.
-- [ ] On each held-out mixed group, verify that outer products of
+- [x] On each held-out mixed group, verify that outer products of
   the projected inputs and feedback agree with projecting the
   resulting dense matrix (relative Frobenius error at most
   `10⁻⁴`). Require at least two mixed groups and at least 25%
@@ -1023,13 +1023,62 @@ script to run byte for byte on retry.
   the exact update to beat a random orthogonal basis of the same
   rank (seed 811028), the fitted basis with rewards rotated by one
   within the question, and the zero update.
-- [ ] Record both rank-32 factors and their fixed storage costs.
+- [x] Record both rank-32 factors and their fixed storage costs.
   Compare a dense update, a compressed coordinate update and a
   compressed update expanded to the full matrix. Use two warmups
   and five synchronized rounds per method with rotating order in
   the same invocation. These timings start with stored activations
-  and feedback. Record whole-model post-reward replay separately
-  if the compression direction qualifies.
-- [ ] Require the registered direction gate before preparing any
+  and feedback.
+- [x] Require the registered direction gate before preparing any
   adaptation or transfer rollouts. The preregistered compression
   script SHA-256 is `e2371546f72172827af5b54f8f5c0408102dd938701257df9284e8f852c508d3`.
+- [x] Re-orthogonalize the frozen spans in FP64 and rerun the
+  independent `10⁻⁵` Gram check.
+- [ ] Compare against whole-model post-reward replay on the
+  same trajectories. Register update sizes, matched sampling
+  budgets and the smallest meaningful accuracy gain before
+  releasing the adaptation and transfer panels.
+
+The unweighted fit used 4,662 calibration tokens. The four
+held-out questions contained 4,610 tokens, including 2,336 from
+two mixed groups. The signed direction for each mixed group beat
+its controls and cleared the 25% threshold.
+
+| Held-out packing question | Squared gradient norm retained | Same-size random basis | Alignment with rotated rewards |
+| --- | ---: | ---: | ---: |
+| Pair 2, first question | 36.28% | 0.00738% | −36.28% |
+| Pair 3, first question | 34.76% | 0.00693% | 16.24% |
+
+The projected outer products matched the coordinates formed from
+the exact matrix with at most `5.22 × 10⁻⁷` relative error.
+The FP32 trace vectors used 256 bytes per token with the two
+rank-32 projections and 41,984 bytes per token at full width.
+The frozen bases occupy 1,343,488 bytes, excluding the file header.
+
+The feedback basis missed the independent Gram-matrix tolerance
+of `10⁻⁵` with a maximum entry error of `1.37 × 10⁻⁵`.
+The failed audit remains archived. An independent calculation
+bounded retention under the orthogonal projections onto the same
+spans by dividing the measured squared norms by the products of the
+extreme Gram eigenvalues. The lower bounds were 36.277% and
+34.755%, both above the registered 25% floor. The current artifact
+contains the original FP32 factors used in the measurement.
+FP64 QR with a positive diagonal then normalized the same spans
+without refitting. After FP32 storage, the normalized factors
+passed the original check with maximum Gram error
+`1.25 × 10⁻⁸` and relative span residual `2.72 × 10⁻⁸`.
+The report contains the normalization source and output digest.
+
+| Held-out packing question | Dense update (ms) | Compressed coordinates (ms) | Compressed to dense (ms) |
+| --- | ---: | ---: | ---: |
+| Pair 2, first question | 0.971 | 0.287 | 0.474 |
+| Pair 3, first question | 0.905 | 0.233 | 0.500 |
+
+Each time is the median of five synchronized updates on RTX 4090
+with the decision-time vectors in memory. The timing starts after
+reward and excludes generation, projection of incoming vectors and
+storage allocation for the surrounding model. Whole-model replay
+timing and learning gains are still pending in `hy8.3.6`.
+
+[Compression measurements, source and receipts](../../results/qwen_sampler_score_2026-11-23_compression.json) ·
+[Frozen FP32 bases](../../results/qwen_sampler_score_2026-11-23_compression.safetensors)

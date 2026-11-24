@@ -1,0 +1,270 @@
+{
+  "canonical_basis": {
+    "canonical_sha256": "67b7f6725e0d36e4487db167137e38e4b7be6826e4daa938d10703931b111625",
+    "checks": {
+      "feedback": {
+        "gram_max_error": 6.344292202697943e-9,
+        "relative_span_error": 2.585545910539264e-8
+      },
+      "input": {
+        "gram_max_error": 1.2454377618373734e-8,
+        "relative_span_error": 2.7147864736349023e-8
+      }
+    },
+    "method": "FP64 reduced QR with positive diagonal, then FP32 storage",
+    "source_sha256": "276e443ac5a50d135f92cfdf11cfa816f2b39f9734d6eda9a38458f18bf06cd7",
+    "dsr": {
+      "status": "success",
+      "run_id": "56AA54BC-71A9-46B8-BB58-571F4214C63D",
+      "exit_code": 0,
+      "source_before": "bf4b9f132d7ddf7a4f1c684d641b5e4343e99500|ce215bed268acce379ca39c172e2e8ee6fda28f753c0de91002a2140af3dfb05|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_after": "bf4b9f132d7ddf7a4f1c684d641b5e4343e99500|ce215bed268acce379ca39c172e2e8ee6fda28f753c0de91002a2140af3dfb05|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "configuration_sha256": "40f40ef8ab8bf5de43f5dbdfd59d56f54ff4ed5e60c6739d270d3a0fca736109",
+      "checks": [
+        {
+          "status": "passed",
+          "exit_code": 0,
+          "log_sha256": "8a8cb51d88af8519c866fbb416f7884d7a66a56cfcf07150223cd0ca78f33450",
+          "duration_ms": 6935
+        }
+      ],
+      "receipt_sha256": "30f820fd8fc5c5172193d951db5553aa6ba3059e75fc913cc914d7f2bb96efef"
+    },
+    "source": {
+      "name": "orthogonalize_trace_basis.py",
+      "content": "\"\"\"Normalize the archived spans without refitting or accessing evaluation rows.\"\"\"\n\nimport hashlib\nimport json\nimport sys\nfrom pathlib import Path\n\nimport torch\nfrom safetensors.torch import load, save\n\n\ndef normalize(original, canonical):\n    reference = original.read_bytes()\n    basis = load(reference)\n    normalized, results = {}, {}\n    for name, matrix in basis.items():\n        seed = matrix.double()\n        orthogonal, triangular = torch.linalg.qr(seed, mode=\"reduced\")\n        signs = torch.diagonal(triangular).sign()\n        assert bool(signs.ne(0).all())\n        saved = (orthogonal * signs).float().contiguous()\n        result = saved.double()\n        gram_error = float((result.T @ result - torch.eye(result.shape[1], dtype=torch.float64)).abs().max())\n        error = float((seed - result @ (result.T @ seed)).norm() / seed.norm())\n        assert gram_error <= 1e-5 and error <= 1e-6\n        normalized[name] = saved\n        results[name] = {\"gram_max_error\": gram_error, \"relative_span_error\": error}\n    payload = save(dict(sorted(normalized.items())))\n    with canonical.open(\"xb\") as stream:\n        stream.write(payload)\n    return {\"source_sha256\": hashlib.sha256(reference).hexdigest(),\n            \"canonical_sha256\": hashlib.sha256(payload).hexdigest(), \"checks\": results,\n            \"method\": \"FP64 reduced QR with positive diagonal, then FP32 storage\"}\n\n\nif __name__ == \"__main__\":\n    if not __debug__:\n        raise RuntimeError(\"The basis audit requires Python assertions.\")\n    torch.set_num_threads(1)\n    original, canonical, destination = map(Path, sys.argv[1:])\n    record = normalize(original, canonical)\n    with destination.open(\"x\", encoding=\"utf-8\") as stream:\n        json.dump(record, stream, sort_keys=True, indent=2)\n        stream.write(\"\\n\")\n",
+      "sha256": "5077c178c4991cca659a7ed71c05372925407565142b8ef2a2ff68254ed0443f"
+    }
+  },
+  "archive_sha256": "eba3267649cf74ad6f0a884e640aa363259c557c7cfbeab08c81102c0c69837e",
+  "audit": {
+    "gram_eigenvalue_extrema": {
+      "feedback": [
+        0.9999849532086555,
+        1.0000050235755846
+      ],
+      "input": [
+        1.0000017630294353,
+        1.000007713314632
+      ]
+    },
+    "held_out_questions": 4,
+    "held_out_tokens": 4610,
+    "mixed_groups": 2,
+    "orthogonal_retention_bounds": {
+      "confirmation.L1.packing.2.0": [
+        0.36276964344638907,
+        0.3627790830981575
+      ],
+      "confirmation.L1.packing.3.0": [
+        0.34755350906025584,
+        0.3475625527720319
+      ]
+    },
+    "orthogonality_guard_passed": false,
+    "orthogonality_max_error": {
+      "feedback": 1.3693433629669016e-05,
+      "input": 7.24545609687155e-06
+    },
+    "passed": true,
+    "qualified_groups": 2
+  },
+  "basis_artifact_sha256": "276e443ac5a50d135f92cfdf11cfa816f2b39f9734d6eda9a38458f18bf06cd7",
+  "basis_bytes": 1343488,
+  "basis_sha256": [
+    "318c4f79cc2b4a5119781455682f94b58c9789725665e07bf3bce2dc7a7201b9",
+    "961b583e0b02ef1b56af705ebeb86e32b821bca70511cbafbaf5dfb94b7a4b70"
+  ],
+  "calibration_ids": [
+    "confirmation.L1.packing.0.0",
+    "confirmation.L1.packing.0.1",
+    "confirmation.L1.packing.1.0",
+    "confirmation.L1.packing.1.1"
+  ],
+  "calibration_tokens": 4662,
+  "device": "NVIDIA GeForce RTX 4090",
+  "dsr": {
+    "qwen-heldout-compression-bounds": {
+      "checks": [
+        {
+          "duration_ms": 3931,
+          "exit_code": 0,
+          "log_sha256": "3752752cec78ccbb1d167fdebf5b28a48e92876b6fa7ae1189b4de06ba505384",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "059a7c841cf5de8f31b7f582751e8f1ddf9494f48d64c9778b4e10dce594f82d",
+      "exit_code": 0,
+      "receipt_sha256": "0d31d3510181fe4e01231165110bad25f286c5985bc127960b77bd0fa714c7a0",
+      "run_id": "CFC81934-433C-4312-A69B-CDDB35713B8D",
+      "source_after": "bf4b9f132d7ddf7a4f1c684d641b5e4343e99500|ce215bed268acce379ca39c172e2e8ee6fda28f753c0de91002a2140af3dfb05|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "bf4b9f132d7ddf7a4f1c684d641b5e4343e99500|ce215bed268acce379ca39c172e2e8ee6fda28f753c0de91002a2140af3dfb05|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    },
+    "qwen-heldout-trace-compression": {
+      "checks": [
+        {
+          "duration_ms": 233033,
+          "exit_code": 0,
+          "log_sha256": "69d39f0e11325c3b95f5945c64a3c4c0838dc22f829cb83e9407a8c3557d1df6",
+          "status": "passed"
+        }
+      ],
+      "config_sha256": "3c0bdcc11242a53a39ae2500e47c2f0b5c7add352d9c6b867c6279a49522ade4",
+      "exit_code": 0,
+      "receipt_sha256": "f438afd10ec86b21080b988c12449ceb11f7a6ffa801378b7d3f9a5255368fd3",
+      "run_id": "59415b85-d837-4cc9-8151-b2493e820b8e",
+      "source_after": "bf4b9f132d7ddf7a4f1c684d641b5e4343e99500|ce215bed268acce379ca39c172e2e8ee6fda28f753c0de91002a2140af3dfb05|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "bf4b9f132d7ddf7a4f1c684d641b5e4343e99500|ce215bed268acce379ca39c172e2e8ee6fda28f753c0de91002a2140af3dfb05|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "success"
+    }
+  },
+  "exact_bytes_per_token": 41984,
+  "held_out": [
+    {
+      "coordinate_relative_error": 4.141772802271244e-07,
+      "exact_gradient_norm": 0.15227238499651152,
+      "id": "confirmation.L1.packing.2.0",
+      "learned_fraction": 0.36277426401756824,
+      "mixed": true,
+      "passed": true,
+      "post_reward_update_ms": {
+        "compressed_coordinates": {
+          "median": 0.287158,
+          "samples": [
+            0.287158,
+            0.412032,
+            0.488635,
+            0.243796,
+            0.268372
+          ]
+        },
+        "compressed_dense": {
+          "median": 0.473807,
+          "samples": [
+            0.518791,
+            0.473807,
+            0.493444,
+            0.429154,
+            0.466774
+          ]
+        },
+        "exact_dense": {
+          "median": 0.970868,
+          "samples": [
+            1.019469,
+            0.8863,
+            0.970868,
+            0.911487,
+            0.983402
+          ]
+        }
+      },
+      "random_fraction": 7.377123732613022e-05,
+      "rewards": [
+        0,
+        1,
+        0,
+        1
+      ],
+      "scored_tokens": 1172,
+      "shuffled_alignment": -0.36277426401756824
+    },
+    {
+      "id": "confirmation.L1.packing.2.1",
+      "mixed": false,
+      "rewards": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "scored_tokens": 1094
+    },
+    {
+      "coordinate_relative_error": 5.21357477216531e-07,
+      "exact_gradient_norm": 0.18433133553857456,
+      "id": "confirmation.L1.packing.3.0",
+      "learned_fraction": 0.34755793582461225,
+      "mixed": true,
+      "passed": true,
+      "post_reward_update_ms": {
+        "compressed_coordinates": {
+          "median": 0.232756,
+          "samples": [
+            0.232756,
+            0.2403,
+            0.318847,
+            0.221926,
+            0.209983
+          ]
+        },
+        "compressed_dense": {
+          "median": 0.499636,
+          "samples": [
+            0.548627,
+            0.574997,
+            0.499636,
+            0.420147,
+            0.429865
+          ]
+        },
+        "exact_dense": {
+          "median": 0.905406,
+          "samples": [
+            0.933318,
+            0.857035,
+            0.869118,
+            0.905406,
+            0.908862
+          ]
+        }
+      },
+      "random_fraction": 6.930669510467827e-05,
+      "rewards": [
+        0,
+        0,
+        1,
+        1
+      ],
+      "scored_tokens": 1164,
+      "shuffled_alignment": 0.16238417686566617
+    },
+    {
+      "id": "confirmation.L1.packing.3.1",
+      "mixed": false,
+      "rewards": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "scored_tokens": 1180
+    }
+  ],
+  "orthogonality_audit_failure": {
+    "receipt_sha256": "2151b87da4ddc492e801840264372c74289ad03191fb60216a077714457b13a5",
+    "run_id": "634B11FB-C15E-416B-B0EE-BB5CF80480C0",
+    "status": "failure"
+  },
+  "passed": true,
+  "rank_per_side": 32,
+  "registered_protocol": "c36bdc50ecc548a8544f78a959f8951f13b13e18",
+  "replayed_completions": 32,
+  "sampler_registration": "f20347852127b2ff9230d28428606066b3c3bf69",
+  "sketch_bytes_per_token": 256,
+  "sources": {
+    "audit_trace_compression.py": {
+      "content": "\"\"\"Audit the held-out trace screen against its sealed inputs and frozen factors.\"\"\"\n\nimport gzip\nimport hashlib\nimport json\nimport math\nimport statistics\nimport sys\nfrom pathlib import Path\n\nimport torch\nfrom safetensors.torch import load\n\nfrom audit_sampler_score import read\nfrom publish_sampler_score import terminal_receipt\n\n\ndef inspect(archive, evidence, factor_path):\n    packed = archive.read_bytes()\n    recorded = read(evidence)\n    factors = factor_path.read_bytes()\n    assert hashlib.sha256(packed).hexdigest() == recorded[\"archive_sha256\"]\n    assert hashlib.sha256(factors).hexdigest() == recorded[\"basis_artifact_sha256\"]\n    rank = recorded[\"rank_per_side\"]\n    assert rank == 32 and recorded[\"replayed_completions\"] == 32\n    identity = torch.eye(rank, dtype=torch.float64)\n    matrices = load(factors)\n    assert set(matrices) == {\"input\", \"feedback\"}\n    widths = (8960, 1536)\n    orthogonal_error = {}\n    eigenvalues = {}\n    for index, (name, width) in enumerate(zip((\"input\", \"feedback\"), widths, strict=True)):\n        matrix = matrices[name]\n        assert torch.isfinite(matrix).all() and tuple(matrix.shape) == (width, rank) and matrix.dtype == torch.float32\n        assert hashlib.sha256(matrix.numpy().tobytes()).hexdigest() == recorded[\"basis_sha256\"][index]\n        precision = matrix.double()\n        gram = precision.T @ precision\n        orthogonal_error[name] = float((gram - identity).abs().max())\n        spectrum = torch.linalg.eigvalsh(gram)\n        eigenvalues[name] = [float(spectrum[0]), float(spectrum[-1])]\n        assert 0 < eigenvalues[name][0] <= eigenvalues[name][1]\n    smallest_scale = math.prod(bounds[0] for bounds in eigenvalues.values())\n    largest_scale = math.prod(bounds[1] for bounds in eigenvalues.values())\n    assert recorded[\"basis_bytes\"] == rank * sum(widths) * 4\n    assert recorded[\"sketch_bytes_per_token\"] == rank * 2 * 4\n    assert recorded[\"exact_bytes_per_token\"] == sum(widths) * 4\n    packing = json.loads(gzip.decompress(packed))[\"trial\"][\"confirmation\"][\"L1\"][8:]\n    assert recorded[\"calibration_ids\"] == [row[\"id\"] for row in packing[:4]]\n    assert recorded[\"calibration_tokens\"] == sum(sum(row[\"lengths\"]) for row in packing[:4])\n    mixed, successes, tested = 0, 0, 0\n    retention_bounds = {}\n    for report, source in zip(recorded[\"held_out\"], packing[4:], strict=True):\n        assert report[\"id\"] == source[\"id\"] and report[\"rewards\"] == source[\"rewards\"]\n        assert report[\"scored_tokens\"] == sum(source[\"lengths\"])\n        tested += report[\"scored_tokens\"]\n        assert report[\"mixed\"] == (0 < sum(report[\"rewards\"]) < 4)\n        if report[\"mixed\"]:\n            mixed += 1\n            learned = report[\"learned_fraction\"]\n            control = report[\"random_fraction\"]\n            rotated = report[\"shuffled_alignment\"]\n            assert all(math.isfinite(value) for value in (learned, control, rotated))\n            assert 0 <= learned <= 1.0001 and 0 <= control <= 1.0001\n            assert 0 < report[\"exact_gradient_norm\"] and 0 <= report[\"coordinate_relative_error\"] <= 1e-4\n            qualified = learned >= 0.25 and learned > max(0, control, rotated)\n            assert report[\"passed\"] == qualified\n            lower, upper = learned / largest_scale, learned / smallest_scale\n            # Gram conditioning bounds the orthogonal projection onto the existing spans.\n            # A pass needs a lower bound above the registered gradient-retention floor.\n            if qualified:\n                assert lower >= 0.25 and lower > control\n            retention_bounds[report[\"id\"]] = [lower, upper]\n            successes += int(qualified)\n            method = report[\"post_reward_update_ms\"]\n            assert set(method) == {\"exact_dense\", \"compressed_coordinates\", \"compressed_dense\"}\n            for timer in method.values():\n                assert len(timer[\"samples\"]) == 5 and all(elapsed > 0 for elapsed in timer[\"samples\"])\n                assert statistics.median(timer[\"samples\"]) == timer[\"median\"]\n    verify = mixed >= 2 and successes == mixed\n    assert recorded[\"passed\"] == verify\n    return {\"orthogonality_max_error\": orthogonal_error, \"orthogonality_guard_passed\": all(\n                error <= 1e-5 for error in orthogonal_error.values()),\n            \"gram_eigenvalue_extrema\": eigenvalues, \"orthogonal_retention_bounds\": retention_bounds,\n            \"held_out_questions\": len(packing[4:]),\n            \"held_out_tokens\": tested, \"mixed_groups\": mixed, \"qualified_groups\": successes, \"passed\": verify}\n\n\ndef publish(work, registration, digest, output):\n    archive = work / \"ladder.json.gz\"\n    raw = work / \"compression.json\"\n    audit_path = work / \"compression_audit.json\"\n    assert inspect(archive, raw, work / \"compression.safetensors\") == read(audit_path)\n    report = read(raw)\n    roots = [\"compress_sampler_trace.py\", \"audit_trace_compression.py\", \"audit_trace_compression_first.py\"]\n    scripts = {name: {\"sha256\": hashlib.sha256((work / name).read_bytes()).hexdigest(),\n                      \"content\": (work / name).read_text(encoding=\"utf-8\")} for name in roots}\n    assert scripts[\"compress_sampler_trace.py\"][\"sha256\"] == digest\n    receipts = {name: terminal_receipt(work / (name + \".json\")) for name in\n                (\"qwen-heldout-trace-compression\", \"qwen-heldout-compression-bounds\")}\n    prior_audit_path = work / \"qwen-heldout-compression-audit.json\"\n    prior_audit = read(prior_audit_path)\n    assert prior_audit[\"status\"] == \"failure\"\n    assert \"orthogonal_error[name] <= 1e-5\" in prior_audit[\"details\"][\"checks\"][0][\"output_preview\"]\n    report.update({\"registered_protocol\": registration, \"sampler_registration\": \"f20347852127b2ff9230d28428606066b3c3bf69\",\n                   \"audit\": read(audit_path), \"sources\": scripts, \"dsr\": receipts,\n                   \"orthogonality_audit_failure\": {\"run_id\": prior_audit[\"run_id\"], \"status\": prior_audit[\"status\"],\n                                                   \"receipt_sha256\": hashlib.sha256(prior_audit_path.read_bytes()).hexdigest()}})\n    with output.open(\"x\", encoding=\"utf-8\") as stream:\n        json.dump(report, stream, sort_keys=True, indent=2, allow_nan=False)\n        stream.write(\"\\n\")\n\n\nif __name__ == \"__main__\":\n    if not __debug__:\n        raise RuntimeError(\"The compression audit requires Python assertions.\")\n    if sys.argv[1] == \"publish\":\n        publish(Path(sys.argv[2]), sys.argv[3], sys.argv[4], Path(sys.argv[5]))\n    else:\n        prior, raw_evidence, frozen_basis, result = map(Path, sys.argv[1:])\n        verified = inspect(prior, raw_evidence, frozen_basis)\n        with result.open(\"x\", encoding=\"utf-8\") as stream:\n            json.dump(verified, stream, sort_keys=True, indent=2, allow_nan=False)\n            stream.write(\"\\n\")\n",
+      "sha256": "d26f4c565ecff5a6dbda9206da740939f50771c4d21276f592751bccc827f0f3"
+    },
+    "audit_trace_compression_first.py": {
+      "content": "\"\"\"Audit the held-out trace screen against its sealed inputs and frozen factors.\"\"\"\n\nimport gzip\nimport hashlib\nimport json\nimport math\nimport statistics\nimport sys\nfrom pathlib import Path\n\nimport torch\nfrom safetensors.torch import load\n\nfrom audit_sampler_score import read\nfrom publish_sampler_score import terminal_receipt\n\n\ndef inspect(archive, evidence, factor_path):\n    packed = archive.read_bytes()\n    recorded = read(evidence)\n    factors = factor_path.read_bytes()\n    assert hashlib.sha256(packed).hexdigest() == recorded[\"archive_sha256\"]\n    assert hashlib.sha256(factors).hexdigest() == recorded[\"basis_artifact_sha256\"]\n    rank = recorded[\"rank_per_side\"]\n    assert rank == 32 and recorded[\"replayed_completions\"] == 32\n    identity = torch.eye(rank, dtype=torch.float64)\n    matrices = load(factors)\n    assert set(matrices) == {\"input\", \"feedback\"}\n    widths = (8960, 1536)\n    orthogonal_error = {}\n    for index, (name, width) in enumerate(zip((\"input\", \"feedback\"), widths, strict=True)):\n        matrix = matrices[name]\n        assert torch.isfinite(matrix).all() and tuple(matrix.shape) == (width, rank) and matrix.dtype == torch.float32\n        assert hashlib.sha256(matrix.numpy().tobytes()).hexdigest() == recorded[\"basis_sha256\"][index]\n        precision = matrix.double()\n        orthogonal_error[name] = float((precision.T @ precision - identity).abs().max())\n        assert orthogonal_error[name] <= 1e-5\n    assert recorded[\"basis_bytes\"] == rank * sum(widths) * 4\n    assert recorded[\"sketch_bytes_per_token\"] == rank * 2 * 4\n    assert recorded[\"exact_bytes_per_token\"] == sum(widths) * 4\n    packing = json.loads(gzip.decompress(packed))[\"trial\"][\"confirmation\"][\"L1\"][8:]\n    assert recorded[\"calibration_ids\"] == [row[\"id\"] for row in packing[:4]]\n    assert recorded[\"calibration_tokens\"] == sum(sum(row[\"lengths\"]) for row in packing[:4])\n    mixed, successes, tested = 0, 0, 0\n    for report, source in zip(recorded[\"held_out\"], packing[4:], strict=True):\n        assert report[\"id\"] == source[\"id\"] and report[\"rewards\"] == source[\"rewards\"]\n        assert report[\"scored_tokens\"] == sum(source[\"lengths\"])\n        tested += report[\"scored_tokens\"]\n        assert report[\"mixed\"] == (0 < sum(report[\"rewards\"]) < 4)\n        if report[\"mixed\"]:\n            mixed += 1\n            learned = report[\"learned_fraction\"]\n            control = report[\"random_fraction\"]\n            rotated = report[\"shuffled_alignment\"]\n            assert all(math.isfinite(value) for value in (learned, control, rotated))\n            assert 0 <= learned <= 1.0001 and 0 <= control <= 1.0001\n            assert 0 < report[\"exact_gradient_norm\"] and 0 <= report[\"coordinate_relative_error\"] <= 1e-4\n            qualified = learned >= 0.25 and learned > max(0, control, rotated)\n            assert report[\"passed\"] == qualified\n            successes += int(qualified)\n            method = report[\"post_reward_update_ms\"]\n            assert set(method) == {\"exact_dense\", \"compressed_coordinates\", \"compressed_dense\"}\n            for timer in method.values():\n                assert len(timer[\"samples\"]) == 5 and all(elapsed > 0 for elapsed in timer[\"samples\"])\n                assert statistics.median(timer[\"samples\"]) == timer[\"median\"]\n    verify = mixed >= 2 and successes == mixed\n    assert recorded[\"passed\"] == verify\n    return {\"orthogonality_max_error\": orthogonal_error, \"held_out_questions\": len(packing[4:]),\n            \"held_out_tokens\": tested, \"mixed_groups\": mixed, \"qualified_groups\": successes, \"passed\": verify}\n\n\ndef publish(work, registration, digest, output):\n    archive = work / \"ladder.json.gz\"\n    raw = work / \"compression.json\"\n    audit_path = work / \"compression_audit.json\"\n    assert inspect(archive, raw, work / \"compression.safetensors\") == read(audit_path)\n    report = read(raw)\n    roots = [\"compress_sampler_trace.py\", \"audit_trace_compression.py\"]\n    scripts = {name: {\"sha256\": hashlib.sha256((work / name).read_bytes()).hexdigest(),\n                      \"content\": (work / name).read_text(encoding=\"utf-8\")} for name in roots}\n    assert scripts[\"compress_sampler_trace.py\"][\"sha256\"] == digest\n    receipts = {name: terminal_receipt(work / (name + \".json\")) for name in\n                (\"qwen-heldout-trace-compression\", \"qwen-heldout-compression-audit\")}\n    report.update({\"registered_protocol\": registration, \"sampler_registration\": \"f20347852127b2ff9230d28428606066b3c3bf69\",\n                   \"audit\": read(audit_path), \"sources\": scripts, \"dsr\": receipts})\n    with output.open(\"x\", encoding=\"utf-8\") as stream:\n        json.dump(report, stream, sort_keys=True, indent=2, allow_nan=False)\n        stream.write(\"\\n\")\n\n\nif __name__ == \"__main__\":\n    if not __debug__:\n        raise RuntimeError(\"The compression audit requires Python assertions.\")\n    if sys.argv[1] == \"publish\":\n        publish(Path(sys.argv[2]), sys.argv[3], sys.argv[4], Path(sys.argv[5]))\n    else:\n        prior, raw_evidence, frozen_basis, result = map(Path, sys.argv[1:])\n        verified = inspect(prior, raw_evidence, frozen_basis)\n        with result.open(\"x\", encoding=\"utf-8\") as stream:\n            json.dump(verified, stream, sort_keys=True, indent=2, allow_nan=False)\n            stream.write(\"\\n\")\n",
+      "sha256": "920b096143eb087e5454888e3b1215a2d5662415a7d6a47d94a33378e184a60a"
+    },
+    "compress_sampler_trace.py": {
+      "content": "\"\"\"Measure held-out gradient retention by a fixed two-sided Qwen score sketch.\"\"\"\n\nimport gzip\nimport hashlib\nimport json\nimport statistics\nimport sys\nimport time\nfrom pathlib import Path\n\nimport torch\nfrom rich.console import Console\nfrom safetensors.torch import save\nfrom transformers import AutoModelForCausalLM, AutoTokenizer\n\nfrom ladder_audit import fingerprint\nfrom qwen_external import LFS_SHA, verify\nfrom sampler_score import analytical_feedback, generate\n\n\nRANK = 32\nCALIBRATION_SEED = 811027\nCONTROL_SEED = 811028\nCHUNK = 64\nROUNDS = 5\n\n\ndef capture_batch(model, tokenizer, questions, observations):\n    block = model.model.layers[-1]\n    inputs, residuals = [], []\n\n    def capture_inputs(_module, args):\n        inputs.append(args[0][:, -1].clone())\n\n    def capture_residuals(_module, _inputs, output):\n        residuals.append(output[:, -1].clone())\n\n    leases = [block.mlp.down_proj.register_forward_pre_hook(capture_inputs),\n              block.register_forward_hook(capture_residuals)]\n    seed = observations[0][\"batch_seed\"]\n    assert all(row[\"batch_seed\"] == seed for row in observations)\n    try:\n        encoded, generated, _, _, _ = generate(model, tokenizer, questions, seed, 0)\n    finally:\n        for lease in leases:\n            lease.remove()\n    eos = model.generation_config.eos_token_id\n    stops = set(eos if isinstance(eos, list) else [eos]) | {tokenizer.pad_token_id}\n    tails = generated.sequences[:, encoded.input_ids.shape[1]:].tolist()\n    trimmed = [row[:next((index for index, value in enumerate(row) if value in stops), len(row))] for row in tails]\n    assert len(trimmed) == 32 and len(inputs) == len(residuals) == len(generated.scores)\n    for index, archived in enumerate(observations):\n        prefix = encoded.input_ids[index][encoded.attention_mask[index].bool()].tolist()\n        assert [prefix + row for row in trimmed[4 * index:4 * index + 4]] == archived[\"tokens\"]\n    return indexed_groups(model, inputs, residuals, generated.scores, observations, trimmed)\n\n\ndef indexed_groups(model, inputs, residuals, scores, observations, trimmed):\n    groups = []\n    for slot, group in enumerate(observations):\n        positions = [(4 * slot + sample, step, token) for sample in range(4)\n                     for step, token in enumerate(trimmed[4 * slot + sample])]\n        device = model.device\n        x = torch.stack([inputs[step][row] for row, step, _ in positions]).float()\n        norm, head = model.model.norm, model.lm_head.weight.detach()\n        pieces = []\n        for first in range(0, len(positions), CHUNK):\n            window = positions[first:first + CHUNK]\n            masked = torch.stack([scores[step][row] for row, step, _ in window])\n            count = masked.isfinite().sum(-1)\n            assert int(count.min()) >= 50\n            value, ids = masked.topk(int(count.max()), dim=-1)\n            actions = torch.tensor([token for _, _, token in window], device=device)\n            action_mask = (ids == actions[:, None]) & value.isfinite()\n            assert bool((action_mask.sum(-1) == 1).all())\n            columns = action_mask.to(torch.long).argmax(-1)\n            r = torch.stack([residuals[step][row] for row, step, _ in window]).float()\n            pieces.append(analytical_feedback(r, norm.weight.detach().float(), norm.variance_epsilon,\n                                              head[ids].float(), value, columns))\n        source = torch.tensor([row % 4 for row, _, _ in positions], device=device)\n        groups.append((group, x, torch.cat(pieces), source))\n    return groups\n\n\ndef basis(groups):\n    torch.manual_seed(CALIBRATION_SEED)\n    torch.cuda.manual_seed(CALIBRATION_SEED)\n    active = torch.cat([group[1] for group in groups])\n    feedback = torch.cat([group[2] for group in groups])\n    estimate = [torch.pca_lowrank(values, q=RANK + 16, center=False, niter=2)[2][:, :RANK].contiguous()\n                for values in (active, feedback)]\n    torch.manual_seed(CONTROL_SEED)\n    torch.cuda.manual_seed(CONTROL_SEED)\n    random = [torch.linalg.qr(torch.randn(matrix.shape, device=matrix.device), mode=\"reduced\").Q.contiguous()\n              for matrix in estimate]\n    return estimate, random, len(active)\n\n\ndef dot(left, right):\n    return (left * right).sum()\n\n\ndef time_updates(exact, coordinates, dense):\n    names = {\"exact_dense\": exact, \"compressed_coordinates\": coordinates, \"compressed_dense\": dense}\n    durations = {name: [] for name in names}\n    order = list(names)\n    for operation in names.values():\n        for _ in range(2):\n            operation()\n    torch.cuda.synchronize()\n    for index in range(ROUNDS):\n        for offset in range(len(order)):\n            name = order[(index + offset) % len(order)]\n            torch.cuda.synchronize()\n            begin = time.perf_counter_ns()\n            names[name]()\n            torch.cuda.synchronize()\n            durations[name].append((time.perf_counter_ns() - begin) / 1e6)\n    return {name: {\"samples\": samples, \"median\": statistics.median(samples)} for name, samples in durations.items()}\n\n\ndef score(group, learned, random):\n    info, x, f, source = group\n    values = torch.tensor(info[\"rewards\"], dtype=torch.float32, device=x.device)\n    weights = (values - values.mean())[source]\n    denominator = len(weights)\n    left, right = learned\n    low_x, low_f = x @ left, f @ right\n    if not bool(weights.ne(0).any()):\n        assert bool((low_f * weights[:, None] == 0).all())\n        return {\"id\": info[\"id\"], \"rewards\": info[\"rewards\"], \"scored_tokens\": denominator, \"mixed\": False}\n    exact = x.T @ (f * weights[:, None]) / denominator\n    magnitude = float(exact.square().sum())\n    assert magnitude > 0\n\n    def sketch(a, b, coefficient):\n        return a.T @ (b * coefficient[:, None]) / denominator\n\n    coordinates = sketch(low_x, low_f, weights)\n    expected_coordinates = left.T @ exact @ right\n    relative = float((coordinates - expected_coordinates).norm()) / float(expected_coordinates.norm())\n    assert relative <= 1e-4\n    randomized = sketch(x @ random[0], f @ random[1], weights)\n    shuffled_reward = values.roll(1)\n    shuffled = sketch(low_x, low_f, (shuffled_reward - shuffled_reward.mean())[source])\n    learned_fraction = float(coordinates.square().sum()) / magnitude\n    shuffle_alignment = float(dot(expected_coordinates, shuffled)) / magnitude\n    random_fraction = float(randomized.square().sum()) / magnitude\n    timers = time_updates(\n        lambda: x.T @ (f * weights[:, None]) / denominator,\n        lambda: sketch(low_x, low_f, weights),\n        lambda: left @ sketch(low_x, low_f, weights) @ right.T,\n    )\n    return {\"id\": info[\"id\"], \"rewards\": info[\"rewards\"], \"mixed\": True, \"scored_tokens\": denominator,\n            \"exact_gradient_norm\": magnitude ** 0.5, \"learned_fraction\": learned_fraction,\n            \"random_fraction\": random_fraction, \"shuffled_alignment\": shuffle_alignment,\n            \"coordinate_relative_error\": relative, \"post_reward_update_ms\": timers,\n            \"passed\": learned_fraction >= 0.25 and learned_fraction > random_fraction\n            and learned_fraction > shuffle_alignment and learned_fraction > 0}\n\n\ndef main(checkpoint, manifest, archive, archive_sha, output):\n    torch.set_num_threads(1)\n    torch.set_float32_matmul_precision(\"highest\")\n    assert fingerprint(archive) == archive_sha\n    sealed = json.loads(gzip.decompress(archive.read_bytes()))\n    assert sealed[\"trial\"][\"checkpoint_sha256\"] == LFS_SHA and sealed[\"frozen_qualified_setting\"][\"level\"] == \"L1\"\n    verify(checkpoint, manifest)\n    tokenizer = AutoTokenizer.from_pretrained(checkpoint, local_files_only=True, trust_remote_code=False)\n    tokenizer.padding_side = \"left\"\n    model = AutoModelForCausalLM.from_pretrained(checkpoint, dtype=torch.bfloat16, local_files_only=True,\n                                                trust_remote_code=False, use_safetensors=True).to(\"cuda\").eval()\n    model.requires_grad_(False)\n    questions = sealed[\"panels\"][\"panels\"][\"confirmation\"][\"L1\"][8:]\n    observations = sealed[\"trial\"][\"confirmation\"][\"L1\"][8:]\n    assert len(questions) == len(observations) == 8 and all(row[\"family\"] == \"packing\" for row in questions)\n    groups = capture_batch(model, tokenizer, questions, observations)\n    fitted, random, tokens = basis(groups[:4])\n    factors = save({\"input\": fitted[0].cpu(), \"feedback\": fitted[1].cpu()})\n    with output.with_suffix(\".safetensors\").open(\"xb\") as stream:\n        stream.write(factors)\n    assessed = [score(group, fitted, random) for group in groups[4:]]\n    mixed = [row for row in assessed if row[\"mixed\"]]\n    passed = len(mixed) >= 2 and all(item[\"passed\"] for item in mixed)\n    basis_sha = [hashlib.sha256(matrix.cpu().numpy().tobytes()).hexdigest() for matrix in fitted]\n    report = {\"archive_sha256\": archive_sha, \"basis_sha256\": basis_sha,\n              \"basis_artifact_sha256\": hashlib.sha256(factors).hexdigest(), \"rank_per_side\": RANK,\n              \"calibration_ids\": [row[0][\"id\"] for row in groups[:4]], \"calibration_tokens\": tokens,\n              \"held_out\": assessed, \"passed\": passed, \"replayed_completions\": 32,\n              \"exact_bytes_per_token\": 4 * (8960 + 1536), \"sketch_bytes_per_token\": 4 * (2 * RANK),\n              \"basis_bytes\": 4 * RANK * (8960 + 1536), \"device\": torch.cuda.get_device_name()}\n    Console().print({\"passed\": passed, \"mixed\": [{key: row[key] for key\n                     in (\"id\", \"learned_fraction\", \"random_fraction\", \"shuffled_alignment\")} for row in mixed]})\n    with output.open(\"x\", encoding=\"utf-8\") as stream:\n        json.dump(report, stream, sort_keys=True, allow_nan=False, indent=2)\n        stream.write(\"\\n\")\n\n\nif __name__ == \"__main__\":\n    if not __debug__:\n        raise RuntimeError(\"The compression screen requires Python assertions.\")\n    main(Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3]), sys.argv[4], Path(sys.argv[5]))\n",
+      "sha256": "e2371546f72172827af5b54f8f5c0408102dd938701257df9284e8f852c508d3"
+    }
+  }
+}
