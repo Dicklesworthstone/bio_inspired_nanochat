@@ -1305,14 +1305,14 @@ threshold and its source remain archived.
 
 ### Registered write-size calibration
 
-- [ ] Seal 56 new L1 questions with generator seed 811040.
+- [x] Seal 56 new L1 questions with generator seed 811040.
   Calibration and verification each use three packing pairs
   and one register pair. The reserved transfer panel uses
   sixteen packing pairs and four register pairs. Audit all
   rational quotients and check disjointness against each other
   and the original ladder. The sealed panel SHA-256 is
   `c6ae7d997fe857ff4f0fdf271af73a1782ed5b1d377ce8a0d33879cc83c73b38`.
-- [ ] Keep the exact, compressed and rotated directions from
+- [x] Keep the exact, compressed and rotated directions from
   the earlier adaptation run. Draw four baseline BF16 samples
   per calibration question with the same top-k sampler and cap.
   Use batch seeds from `stable_seed_u64(811041, salt="qwen.kl.<panel>.L1")`
@@ -1320,7 +1320,7 @@ threshold and its source remain archived.
   and each sampled EOS. Require the unchanged reconstruction
   to match the actual retained sampler logits at every measured
   prefix.
-- [ ] Evaluate each direction at fractions 1/32, 1/16, 1/8, 1/4,
+- [x] Evaluate each direction at fractions 1/32, 1/16, 1/8, 1/4,
   1/2 and 1 of its original 0.5 norm. In both wording strata,
   require mean KL on the original support at most 0.005 nats
   and mean Jensen–Shannon divergence on the two actual masked
@@ -1330,7 +1330,7 @@ threshold and its source remain archived.
   actual total variation and changes in support separately.
   For each arm choose the largest consecutive passing fraction
   starting from the smallest tested fraction.
-- [ ] Freeze the chosen sizes and repeat the drift checks on the
+- [x] Freeze the chosen sizes and repeat the drift checks on the
   independent verification panel at those sizes only. Require
   all three arms to pass both budgets for each wording.
   Preserve the reserved transfer panel if any arm fails and
@@ -1344,6 +1344,32 @@ threshold and its source remain archived.
   zero and rotated with a one-sided exact pair-sign-flip
   `p ≤ 0.025` on both contrasts. Report exact-write accuracy,
   capped responses, actual lengths and the register controls.
+  Use `stable_seed_u64(811042, salt="qwen.kl.transfer.L1.<offset>")`
+  modulo `2**63` for each eight-question batch. Run zero, compressed
+  and rotated on the same GPU. Run exact with a duplicate zero on
+  the second RTX 4090 and check token agreement across the zero arms
+  before interpreting the exact-arm comparison.
 
 The registered calibration source SHA-256 is
 `7794436112d6cbb4a91abaf492126cf5af5fe972417541ecbb2f289d1bd5567a`.
+The registered transfer source SHA-256 is
+`8d6dc2e452c16d1328183210e156ee89e9b1322ebf4d62beb39bd6afd194fe32`.
+
+The panel and result audits checked all 56 questions and reproduced
+the selection from 320 calibration prefixes. All three frozen sizes
+cleared both budgets on 316 new verification prefixes. Packing used
+249 verification prefixes and register used 67.
+
+| Direction | Selected Frobenius norm | Verification packing KL | Verification packing JS | Dynamic total variation | Packing supports changed |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Exact | 0.0625 | 0.001658 | 0.000435 | 0.00824 | 162/249 |
+| Compressed | 0.03125 | 0.000889 | 0.000252 | 0.00620 | 152/249 |
+| Rotated | 0.0625 | 0.002331 | 0.000606 | 0.01016 | 190/249 |
+
+Register mean KL ranged from 0.000071 to 0.000196 and mean JS
+from 0.000018 to 0.000050. Budget qualification establishes drift
+control at sampled baseline prefixes. The fresh transfer run
+tests the resulting accuracy and termination behavior.
+
+[Calibration results and receipts](../../results/qwen_kl_calibration_2026-11-23.json) ·
+[Sealed panels and per-prefix drift](../../results/qwen_kl_calibration_2026-11-23.json.gz)
