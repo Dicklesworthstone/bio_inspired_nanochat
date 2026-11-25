@@ -107,3 +107,40 @@ The rule failed the overall gate and both guard margins. The pilot uses exact co
 The [experiment archive](../results/delayed_learning_pilots_2026-11-24.json) contains the four frozen drivers, the per-seed outcomes, the recount script, and terminal DSR receipts. To reproduce each study, extract its driver and use the receipt command with the paths mapped into a fresh working directory. The supervised study downloads only the pinned public Qwen checkpoint and recomputes its published weight hash.
 
 The local adversarial pass checked the original falsifiers. The memory reader's durable record can shadow a correct newer observation while waiting for a second source. The adapter's fixed projection spends three quarters of its coefficients on earlier depths. The experiment establishes a loss for that feature layout. The trace counterexamples distinguish update exactness from feature capacity. NTM capabilities and Agent Mail were checked. Cross-model review is pending the separate BrennerBot workspace and roster selection.
+
+## Exact score storage versus optimized factor replay
+
+The fixed-policy score identity admits a separate engineering question even after the capacity no-go. A delayed scalar reward can weight a retained per-trajectory score matrix, or it can weight saved score factors for a single GEMM at feedback time. The scope is one exact final-readout update on pinned Qwen. The model policy stays frozen.
+
+- [x] Pin the driver and public checkpoint, and qualify a shared live top-32 rollout with fixed uniforms and no early stopping.
+- [x] Run live compact BF16-feature replay, FP32 replay, per-token accumulation, and 16-token accumulation in the same invocation.
+- [x] Match sampled tokens and support IDs and compare each reward-weighted score to a factor-derived FP64 oracle for every completed round.
+- [x] Time prefill, generation, trace collection, and gradient reduction in each completed round. Report post-feedback time and both retained and peak storage, with the primary timeout visible.
+- [x] Compare device work on the same shapes in a separate CUDA-graph probe. Its synthetic factors on device isolate collection and reduction from model execution and host scheduling.
+- [x] Repeat the 24-by-192 comparison on the second GPU. Keep its timing independent of the registered gate and retain any disagreement.
+- [x] Verify the size prediction and archive the timeout and follow-up measurements.
+- [ ] Qualify the registered latency gate in a fresh complete cohort, if there is a deployment need for rank-16 rollout storage. Delayed-reward learning still requires a separate capacity success.
+
+The scheduled shapes are (batch, new tokens) of (8, 16), (8, 384), and (24, 192), at feature width 1,536 and readout rank 16. EOS is suppressed until the final draw to make the three horizons exact. A fixed signed coefficient per trajectory arrives after the rollout. Compact replay retains each native BF16 feature and an FP32 score residual, and its feedback path needs one weighted GEMM. FP32 replay trades retention for conversion time. The accumulator uses FP32 and can discard its scratch chunk once the final chunk is reduced.
+
+The size witness predicts `4*D*R` bytes per trajectory for a dense score and `T*(2*D+4*R)` for compact replay. At these dimensions the storage crossover is between 31 and 32 decisions. The 16-token case exercises the unfavorable side. A bounded result advances only when the same streaming arm halves retained bytes relative to compact replay and stays within 5% of the fastest replay median end to end on both long shapes. Maximum score disagreement must stay within the prespecified FP64 comparison. The experiment includes model execution and stops at the gradient. It does not measure learning, optimizer effects, or reward quality.
+
+The comparison uses a rank-16 basis. At rank 128 with the same feature width the crossover moves to 220 decisions. A single sum across all trajectories would discard information for arbitrary delayed coefficients. A coefficient vector that selects just one trajectory must recover that trajectory's score.
+
+### Storage and timing evidence
+
+The first RTX 4090 invocation completed eight of the nine planned live rounds and hit its 900-second DSR limit before the last round reported. Each completed round printed only after within-round token and support hashes matched and all four gradients passed the FP64 tolerance. The compact final JSON was written only after the full cohort, so the partial receipt and its log are the source for these medians. The registered two-shape latency gate remains unmeasured.
+
+| Live primary shape | Complete rounds | Compact replay median | FP32 replay median | Token accumulator median | Chunk accumulator median |
+|---|---:|---:|---:|---:|---:|
+| 8 by 16 | 3/3 | 1.60 s | 1.81 s | 1.82 s | 1.65 s |
+| 8 by 384 | 3/3 | 38.68 s | 41.41 s | 35.65 s | 40.01 s |
+| 24 by 192 | 2/3 | — | — | — | — |
+
+The corresponding score-store sizes follow directly from the sealed tensor dimensions. Compact replay and either accumulator require 0.383 and 0.750 MiB at 8 by 16, 9.188 and 0.750 MiB at 8 by 384, and 13.781 and 2.250 MiB at 24 by 192. These figures cover score state retained while waiting for feedback. KV cache and model parameters are separate.
+
+The device-only comparison includes collection and reduction and uses synthetic inputs on a second RTX 4090. It excludes model execution and Python dispatch. The chunk accumulator consumed 1.06 ms versus compact replay's 0.66 ms at 8 by 384, and 0.66 ms versus 0.37 ms at 24 by 192. Per-token accumulation cost 1.36 and 0.93 ms respectively. Every graph output agreed with its FP64 control within the separately specified fixture tolerance. The storage savings trade off against more device work.
+
+The independent second-GPU live run completed all three 24-by-192 rounds and verified the predicted 6.125-fold reduction in retained score state. The four update paths matched their FP64 reference to at most `4.65e-7` relative Frobenius error. Compact replay took a median of 18.56 s end to end. Chunk accumulation took 19.61 s and per-token accumulation took 23.10 s, 5.63% and 24.45% slower respectively. Neither stayed within the 5% latency allowance in this run. Compact replay itself ranged from 18.40 to 23.96 s. The chunk accumulator's 13.781-to-2.250 MiB reduction in retained score state corresponded to a 206.7-to-187.4 MB reduction in incremental peak PyTorch allocations on this workload. The latter includes other rollout allocations and illustrates the smaller system-level effect.
+
+The [score-storage archive](../results/delayed_score_replay_2026-11-24.json) includes the primary timeout log, the device-only and second-GPU DSR receipts, the frozen drivers, and the recount script. The narrow result is a memory tradeoff for one frozen policy and one fixed-rank gradient. Its registered end-to-end latency gate remains open.

@@ -1,0 +1,795 @@
+{
+  "device_only": {
+    "data": {
+      "gpu": "NVIDIA GeForce RTX 4090",
+      "graph_repeats_per_observation": 12,
+      "measurements": {
+        "24x192": {
+          "chunk_accumulator": {
+            "median_device_ms": 0.6600960095723469,
+            "round_device_ms": [
+              0.6575653155644735,
+              0.6617600123087565,
+              0.6625253359476725,
+              0.6567253271738688,
+              0.666538675626119,
+              0.662442684173584,
+              0.6584320068359375,
+              0.6535679896672567
+            ]
+          },
+          "compact_replay": {
+            "median_device_ms": 0.37204933166503906,
+            "round_device_ms": [
+              0.3713759978612264,
+              0.3729066848754883,
+              0.37956265608469647,
+              0.3742719888687134,
+              0.3659093379974365,
+              0.37033867835998535,
+              0.3725573221842448,
+              0.3715413411458333
+            ]
+          },
+          "fp32_replay": {
+            "median_device_ms": 0.5315840045611064,
+            "round_device_ms": [
+              0.5524479945500692,
+              0.5225813388824463,
+              0.5323919852574667,
+              0.5393919944763184,
+              0.5321386655171713,
+              0.5310293436050415,
+              0.5299866596857706,
+              0.5275306701660156
+            ]
+          },
+          "step_accumulator": {
+            "median_device_ms": 0.9298773606618246,
+            "round_device_ms": [
+              0.9402026335398356,
+              0.9280693531036377,
+              0.9309013684590658,
+              0.9285120169321696,
+              0.9288533528645834,
+              0.928767999013265,
+              0.935914675394694,
+              0.9318400224049886
+            ]
+          }
+        },
+        "8x16": {
+          "chunk_accumulator": {
+            "median_device_ms": 0.05102933446566264,
+            "round_device_ms": [
+              0.0531626691420873,
+              0.3109546701113383,
+              0.05085866649945577,
+              0.05195466677347819,
+              0.05120000243186951,
+              0.04983466863632202,
+              0.04991999765237173,
+              0.050154666105906166
+            ]
+          },
+          "compact_replay": {
+            "median_device_ms": 0.03733333324392637,
+            "round_device_ms": [
+              0.04390400151411692,
+              0.03967999915281931,
+              0.037290667494138084,
+              0.03711999952793121,
+              0.03737599899371465,
+              0.03703466554482778,
+              0.0365226666132609,
+              0.03754666695992152
+            ]
+          },
+          "fp32_replay": {
+            "median_device_ms": 0.04928000022967657,
+            "round_device_ms": [
+              0.05213866631189982,
+              0.04949333270390829,
+              0.048725331823031105,
+              0.0506879985332489,
+              0.04906666775544485,
+              0.051370665431022644,
+              0.04887733360131582,
+              0.04821333289146423
+            ]
+          },
+          "step_accumulator": {
+            "median_device_ms": 0.06404266754786173,
+            "round_device_ms": [
+              0.06459733347098033,
+              0.0647680014371872,
+              0.06528000036875407,
+              0.06408533453941345,
+              0.06400000055631001,
+              0.06382933259010315,
+              0.06400000055631001,
+              0.06391466657320659
+            ]
+          }
+        },
+        "8x384": {
+          "chunk_accumulator": {
+            "median_device_ms": 1.0585120121637979,
+            "round_device_ms": [
+              1.118890682856242,
+              1.1180373032887776,
+              1.053440014521281,
+              1.0586453278859456,
+              1.0516479810078938,
+              1.058730681737264,
+              1.0583786964416504,
+              1.0489173730214436
+            ]
+          },
+          "compact_replay": {
+            "median_device_ms": 0.66375599304835,
+            "round_device_ms": [
+              0.6888480186462402,
+              0.6870933373769125,
+              0.6541653474171957,
+              0.6638746658960978,
+              0.65228799978892,
+              0.6636373202006022,
+              0.712170680363973,
+              0.6428159872690836
+            ]
+          },
+          "fp32_replay": {
+            "median_device_ms": 0.988105336825053,
+            "round_device_ms": [
+              1.0489173730214436,
+              1.0480639934539795,
+              0.9877946376800537,
+              0.9884160359700521,
+              0.9815706411997477,
+              0.9897813002268473,
+              0.985088030497233,
+              0.9791999657948812
+            ]
+          },
+          "step_accumulator": {
+            "median_device_ms": 1.3583787282307944,
+            "round_device_ms": [
+              1.4504106839497883,
+              1.4479360580444336,
+              1.4429866472880046,
+              1.3587627410888672,
+              1.3552640279134114,
+              1.3527894020080566,
+              1.3579947153727214,
+              1.3533679644266765
+            ]
+          }
+        }
+      },
+      "scope": "Synthetic BF16 features and FP32 residuals already on device. Timed CUDA graph only, including collection and reduction. No model, Python launch costs, allocation at replay time, or live-rollout gate."
+    },
+    "driver_source": "\"\"\"Measure exact score-storage device work with CUDA graphs and no model forward.\"\"\"\nimport json\nimport statistics\nimport sys\nfrom pathlib import Path\n\nimport torch\nfrom rich.console import Console\n\nfrom compare_score_replay import MODES, RANK, SHAPES, make_store\n\n\ndef construct(mode, features, scores, weights):\n    steps, batch, width = features.shape\n    keepalive = []\n    graph = torch.cuda.CUDAGraph()\n    with torch.cuda.graph(graph):\n        memory = make_store(mode, steps, batch, width)\n        if mode == \"chunk_accumulator\":\n            keepalive.extend((memory.features, memory.residuals))\n        for index, (feature, score) in enumerate(zip(features.unbind(), scores.unbind(), strict=True)):\n            memory.push(index, feature, score)\n        memory.end()\n        result = memory.reduce(weights)\n    return graph, memory, result, keepalive\n\n\ndef main():\n    torch.set_num_threads(1)\n    torch.set_float32_matmul_precision(\"highest\")\n    torch.manual_seed(19257)\n    measurements = {}\n    with torch.inference_mode():\n        for batch, steps in SHAPES:\n            x = torch.randn((steps, batch, 1536), device=\"cuda\", dtype=torch.bfloat16)\n            y = torch.randn((steps, batch, RANK), device=\"cuda\", dtype=torch.float32)\n            weights = torch.linspace(-1.0, 1.0, batch, device=\"cuda\")\n            ideal = x.flatten(0, 1).double().T @ (y.double() * weights[None, :, None]).flatten(0, 1)\n            # Prime the matmul library on the capture stream before any graph is captured.\n            warm = torch.cuda.Stream()\n            warm.wait_stream(torch.cuda.current_stream())\n            with torch.cuda.stream(warm):\n                for mode in MODES:\n                    scratch = make_store(mode, steps, batch, 1536)\n                    for idx, (feature, score) in enumerate(zip(x.unbind(), y.unbind(), strict=True)):\n                        scratch.push(idx, feature, score)\n                    scratch.end()\n                    scratch.reduce(weights)\n            torch.cuda.current_stream().wait_stream(warm)\n            graphs = {mode: construct(mode, x, y, weights) for mode in MODES}\n            torch.cuda.synchronize()\n            for graph, _, result, _ in graphs.values():\n                graph.replay()\n                torch.testing.assert_close(result.double(), ideal, atol=3e-3, rtol=2e-5)\n            cohort = {mode: [] for mode in MODES}\n            for cohort_idx in range(8):\n                for mode in MODES[cohort_idx % 4:] + MODES[:cohort_idx % 4]:\n                    begin, end = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)\n                    begin.record()\n                    for _ in range(12):\n                        graphs[mode][0].replay()\n                    end.record()\n                    end.synchronize()\n                    cohort[mode].append(begin.elapsed_time(end) / 12)\n            measurements[f\"{batch}x{steps}\"] = {mode: {\"round_device_ms\": values, \"median_device_ms\": statistics.median(values)}\n                                                   for mode, values in cohort.items()}\n    record = {\"scope\": \"Synthetic BF16 features and FP32 residuals already on device. Timed CUDA graph only, including collection and reduction. No model, Python launch costs, allocation at replay time, or live-rollout gate.\",\n              \"graph_repeats_per_observation\": 12, \"gpu\": torch.cuda.get_device_name(), \"measurements\": measurements}\n    Console().print_json(data={shape: {mode: row[\"median_device_ms\"] for mode, row in scores.items()}\n                               for shape, scores in measurements.items()})\n    with Path(sys.argv[1]).open(\"x\", encoding=\"utf-8\") as output:\n        json.dump(record, output, sort_keys=True, allow_nan=False)\n\n\nif __name__ == \"__main__\":\n    main()\n",
+    "dsr_receipt": {
+      "command": "quality",
+      "details": {
+        "checks": [
+          {
+            "command": "set -e; export CUDA_VISIBLE_DEVICES=1 UV_OFFLINE=true UV_PROJECT_ENVIRONMENT=/data/projects/bio_inspired_nanochat/.venv OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1; test \"$(git rev-parse HEAD)\" = 0a3a0c4c1625f6ad75409f99dbd6d5e204f9a9f6; printf '%s  %s\\n' 0cee28f0a514da55e0c129400b97b3bb6912316042d10e0d97d424e40e3bb4f7 /data/projects/bio-score-replay.U3tLED35/score_device_cost.py fedf1ed7c4f88f93f35665881f1aef1a89430d5fe7a8a6675c6765209e2f90d8 /data/projects/bio-score-replay.U3tLED35/compare_score_replay.py | sha256sum --check; flock -w 60 /tmp/bio_inspired_nanochat-trj-gpu1.lock taskset -c 53 uv run --no-sync python /data/projects/bio-score-replay.U3tLED35/score_device_cost.py /data/projects/bio-score-replay.U3tLED35/device-cost.json; sha256sum /data/projects/bio-score-replay.U3tLED35/device-cost.json",
+            "cwd": "/data/projects/bio-prefill-scan.Nq3wZNFe/source",
+            "duration_ms": 56393,
+            "executed": true,
+            "exit_code": 0,
+            "log_path": "/home/ubuntu/.local/state/dsr/quality-logs/bio-score-graph-cost/20261124T192349-tt6OlGWH/check-1.log",
+            "log_sha256": "766533c05a06b95df5ad50dc60ddb1c60206a2810d27f317aecf88c95098669b",
+            "output_preview": "_JOBS=16\n# env: DSR_CURRENT_TOOL=\n# env: CARGO_INCREMENTAL=0\n# env: DSR_RUST_NATIVE_ENV_NAMES\n# started_monotonic_ms: 3306036990\n# timeout_seconds: 420\n# ----\n/data/projects/bio-score-replay.U3tLED35/score_device_cost.py: OK\n/data/projects/bio-score-replay.U3tLED35/compare_score_replay.py: OK\n{\n  \"8x16\": {\n    \"compact_replay\": 0.03733333324392637,\n    \"fp32_replay\": 0.04928000022967657,\n    \"step_accumulator\": 0.06404266754786173,\n    \"chunk_accumulator\": 0.05102933446566264\n  },\n  \"8x384\": {\n    \"compact_replay\": 0.66375599304835,\n    \"fp32_replay\": 0.988105336825053,\n    \"step_accumulator\": 1.3583787282307944,\n    \"chunk_accumulator\": 1.0585120121637979\n  },\n  \"24x192\": {\n    \"compact_replay\": 0.37204933166503906,\n    \"fp32_replay\": 0.5315840045611064,\n    \"step_accumulator\": 0.9298773606618246,\n    \"chunk_accumulator\": 0.6600960095723469\n  }\n}\nf07126d455d32f4b538a4a690165be7b0e93cd8f893a79455ad94716053d5df8  /data/projects/bio-score-replay.U3tLED35/device-cost.json\n\n# exit_code: 0\n",
+            "passed": true,
+            "status": "passed",
+            "timeout_seconds": 420
+          }
+        ],
+        "config_path": "/data/projects/bio-score-replay.U3tLED35/bio-score-graph-cost.yaml",
+        "config_sha256": "67cfe0c1a258a43c40ec3d9d67717db702a8b570db109bc2f306ae8db8f197e9",
+        "config_sha256_after": "67cfe0c1a258a43c40ec3d9d67717db702a8b570db109bc2f306ae8db8f197e9",
+        "config_snapshot_path": "/home/ubuntu/.local/state/dsr/quality-logs/bio-score-graph-cost/20261124T192349-tt6OlGWH/checks-config.yaml",
+        "dry_run": false,
+        "dsr_version": "0.2.3",
+        "duration_ms": 57640,
+        "executed": 1,
+        "failed": 0,
+        "interrupted": 0,
+        "not_run": 0,
+        "observed": 1,
+        "passed": 1,
+        "planned": 0,
+        "run_dir": "/home/ubuntu/.local/state/dsr/quality-logs/bio-score-graph-cost/20261124T192349-tt6OlGWH",
+        "skipped": false,
+        "source_after": "0a3a0c4c1625f6ad75409f99dbd6d5e204f9a9f6|06fd1218e96460edbed295f43295296b239edf0fd942a0a64c047704ad719a8b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+        "source_before": "0a3a0c4c1625f6ad75409f99dbd6d5e204f9a9f6|06fd1218e96460edbed295f43295296b239edf0fd942a0a64c047704ad719a8b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+        "status": "passed",
+        "timeout_seconds": 420,
+        "tool": "bio-score-graph-cost",
+        "total": 1
+      },
+      "duration_ms": 0,
+      "exit_code": 0,
+      "run_id": "526aba3c-f9f8-4d6f-b429-0f5e47afd484",
+      "started_at": "2026-11-25T00:27:54Z",
+      "status": "success",
+      "tool": "dsr",
+      "version": "0.2.3"
+    },
+    "raw_result_sha256": "f07126d455d32f4b538a4a690165be7b0e93cd8f893a79455ad94716053d5df8",
+    "source_sha256": "0cee28f0a514da55e0c129400b97b3bb6912316042d10e0d97d424e40e3bb4f7"
+  },
+  "primary_incomplete": {
+    "complete_shape_medians": {
+      "8x16": {
+        "chunk_accumulator": {
+          "median_e2e_ms": 1649.0114098414779,
+          "median_feedback_ms": 2.4561788886785507
+        },
+        "compact_replay": {
+          "median_e2e_ms": 1596.3296410627663,
+          "median_feedback_ms": 3.1441268511116505
+        },
+        "fp32_replay": {
+          "median_e2e_ms": 1808.864387217909,
+          "median_feedback_ms": 3.688075114041567
+        },
+        "step_accumulator": {
+          "median_e2e_ms": 1822.0222839154303,
+          "median_feedback_ms": 2.4566100910305977
+        }
+      },
+      "8x384": {
+        "chunk_accumulator": {
+          "median_e2e_ms": 40005.414254032075,
+          "median_feedback_ms": 2.6476369239389896
+        },
+        "compact_replay": {
+          "median_e2e_ms": 38677.32915608212,
+          "median_feedback_ms": 3.847754094749689
+        },
+        "fp32_replay": {
+          "median_e2e_ms": 41412.97138715163,
+          "median_feedback_ms": 8.058328181505203
+        },
+        "step_accumulator": {
+          "median_e2e_ms": 35646.957179997116,
+          "median_feedback_ms": 2.461859956383705
+        }
+      }
+    },
+    "driver_source": "\"\"\"Compare exact delayed score stores while generating the same live Qwen rollout.\"\"\"\nimport hashlib\nimport json\nimport statistics\nimport sys\nfrom pathlib import Path\nfrom time import perf_counter\n\nimport torch\nfrom rich.console import Console\nfrom transformers import AutoModelForCausalLM, AutoTokenizer\n\n\nMODES = (\"compact_replay\", \"fp32_replay\", \"step_accumulator\", \"chunk_accumulator\")\nSHAPES = ((8, 16), (8, 384), (24, 192))\nROUNDS, RANK, TOP_K, CHUNK = 3, 16, 32, 16\nTEMPERATURE = 0.75\nREVISION = \"aafeb0fc6f22cbf0eaeed126eff8be45b0360a35\"\nWEIGHT_SHA256 = \"08faf1e950173bb44c11d26df28c55da7237dc55c77dbc1cbae4a5d7584540d9\"\nCONSOLE = Console()\n\n\ndef nbytes(tensor):\n    return tensor.numel() * tensor.element_size()\n\n\nclass FactorReplay:\n    def __init__(self, steps, batch, width, rank, *, compact):\n        dtype = torch.bfloat16 if compact else torch.float32\n        self.hidden = torch.empty((steps, batch, width), dtype=dtype, device=\"cuda\")\n        self.residual = torch.empty((steps, batch, rank), dtype=torch.float32, device=\"cuda\")\n        self.peak = self.retained_bytes()\n\n    def push(self, step, feature, residual):\n        self.hidden[step].copy_(feature)\n        self.residual[step].copy_(residual)\n\n    def end(self):\n        return\n\n    def retained_bytes(self):\n        return nbytes(self.hidden) + nbytes(self.residual)\n\n    def reduce(self, feedback, dtype=torch.float32):\n        features = self.hidden.flatten(0, 1).to(dtype)\n        residuals = (self.residual.to(dtype) * feedback[None, :, None]).flatten(0, 1)\n        return features.T @ residuals\n\n\nclass ScoreAccumulator:\n    def __init__(self, batch, width, rank, chunk):\n        self.acc = torch.zeros((batch, width, rank), dtype=torch.float32, device=\"cuda\")\n        self.filled = 0\n        self.chunk = chunk\n        self.features = None\n        self.residuals = None\n        self.peak = nbytes(self.acc)\n        if chunk > 1:\n            self.features = torch.empty((batch, chunk, width), dtype=torch.bfloat16, device=\"cuda\")\n            self.residuals = torch.empty((batch, chunk, rank), dtype=torch.float32, device=\"cuda\")\n            self.peak += nbytes(self.features) + nbytes(self.residuals)\n\n    def _flush(self):\n        if self.filled:\n            features = self.features[:, :self.filled].transpose(1, 2).float()\n            residuals = self.residuals[:, :self.filled]\n            torch.baddbmm(self.acc, features, residuals, out=self.acc)\n            self.filled = 0\n\n    def push(self, _step, feature, residual):\n        if self.chunk == 1:\n            torch.baddbmm(self.acc, feature.float().unsqueeze(-1), residual.unsqueeze(1), out=self.acc)\n            return\n        self.features[:, self.filled].copy_(feature)\n        self.residuals[:, self.filled].copy_(residual)\n        self.filled += 1\n        if self.filled == self.chunk:\n            self._flush()\n\n    def end(self):\n        self._flush()\n        self.features, self.residuals = None, None\n\n    def retained_bytes(self):\n        return nbytes(self.acc)\n\n    def reduce(self, feedback):\n        return (feedback @ self.acc.flatten(1)).view(self.acc.shape[1:])\n\n\ndef make_store(mode, steps, batch, width):\n    if mode.endswith(\"replay\"):\n        return FactorReplay(steps, batch, width, RANK, compact=mode == \"compact_replay\")\n    return ScoreAccumulator(batch, width, RANK, 1 if mode == \"step_accumulator\" else CHUNK)\n\n\ndef select(logits, noise, eos, *, last):\n    if not last:\n        logits.index_fill_(1, eos, -torch.inf)\n    top, support = logits.topk(TOP_K, dim=-1, sorted=True)\n    probability = (top / TEMPERATURE).softmax(-1)\n    cumulative = probability.cumsum(dim=-1)\n    selected = (noise[:, None] >= cumulative).sum(1).clamp_max(TOP_K - 1)\n    actions = support.gather(1, selected[:, None])\n    return actions, support, probability, selected\n\n\ndef snapshot(value):\n    return hashlib.sha256(value.cpu().contiguous().numpy().tobytes()).hexdigest()\n\n\ndef run(model, tokenizer, basis, batch, steps, mode, seed, *, oracle=False):\n    prompts = [\"Calculate, then explain how you got the result. \"\n               f\"What is {10 + i} multiplied by {28 + i % 10}? Answer:\" for i in range(batch)]\n    enc = tokenizer(prompts, return_tensors=\"pt\", add_special_tokens=False, padding=True).to(\"cuda\")\n    assert int(enc.attention_mask.min()) == 1\n    gen = torch.Generator(device=\"cuda\").manual_seed(seed)\n    uniforms = torch.rand((steps, batch), generator=gen, device=\"cuda\")\n    eos_ids = model.generation_config.eos_token_id\n    eos = torch.tensor(eos_ids if isinstance(eos_ids, list) else [eos_ids], device=\"cuda\")\n    row_indices = torch.arange(batch, device=\"cuda\")\n    tokens = torch.empty((steps, batch), dtype=torch.int32, device=\"cuda\")\n    supports = torch.empty((steps, batch, TOP_K), dtype=torch.int32, device=\"cuda\")\n\n    torch.cuda.synchronize()\n    base_bytes = torch.cuda.memory_allocated()\n    torch.cuda.reset_peak_memory_stats()\n    start = perf_counter()\n    memory = make_store(mode, steps, batch, model.config.hidden_size)\n    current = enc.input_ids\n    cache = None\n    for step in range(steps):\n        out = model.model(input_ids=current, past_key_values=cache, use_cache=True)\n        cache = out.past_key_values\n        feature = out.last_hidden_state[:, -1].contiguous()\n        logits = model.lm_head(feature).float()\n        current, support, probability, choice = select(logits, uniforms[step], eos, last=step == steps - 1)\n        support_basis = basis[support]\n        residual = (support_basis[row_indices, choice] -\n                    (probability[:, None] @ support_basis).squeeze(1)) / TEMPERATURE\n        memory.push(step, feature, residual)\n        tokens[step].copy_(current[:, 0])\n        supports[step].copy_(support)\n    memory.end()\n    torch.cuda.synchronize()\n    feedback_boundary = perf_counter()\n    pre_feedback_peak = torch.cuda.max_memory_allocated()\n    pre_feedback_live = torch.cuda.memory_allocated()\n    feedback = torch.linspace(-1.0, 1.0, batch, device=\"cuda\").roll(seed % batch)\n    torch.cuda.reset_peak_memory_stats()\n    gradient = memory.reduce(feedback)\n    torch.cuda.synchronize()\n    finish = perf_counter()\n    feedback_peak = torch.cuda.max_memory_allocated()\n    assert not torch.isin(tokens[:-1], eos).any()\n    elapsed = {\n        \"end_to_end_ms\": (finish - start) * 1000,\n        \"through_rollout_ms\": (feedback_boundary - start) * 1000,\n        \"feedback_ms\": (finish - feedback_boundary) * 1000,\n        \"retained_score_bytes\": memory.retained_bytes(),\n        \"peak_persistent_tables_bytes\": memory.peak,\n        \"peak_live_delta_bytes\": max(pre_feedback_peak, feedback_peak) - base_bytes,\n        \"feedback_peak_delta_bytes\": feedback_peak - pre_feedback_live,\n        \"token_sha256\": snapshot(tokens),\n        \"support_sha256\": snapshot(supports),\n        \"prefill_tokens\": enc.input_ids.numel(),\n        \"final_eos\": int(torch.isin(tokens[-1], eos).sum()),\n    }\n    reference = memory.reduce(feedback, torch.float64) if oracle else None\n    return gradient, elapsed, reference\n\n\ndef check_gradient(gradient, ideal):\n    delta = gradient.double() - ideal\n    max_error = float(delta.abs().max())\n    relative = float(delta.norm() / ideal.norm())\n    if relative > 3e-6 or max_error > 3e-4:\n        raise RuntimeError(f\"score comparison exceeded tolerance: {relative=} {max_error=}\")\n    return {\"relative_frobenius\": relative, \"maximum_absolute\": max_error}\n\n\ndef summarize(rows):\n    result = {}\n    for shape, trials in rows.items():\n        summary = {}\n        for mode in MODES:\n            trials_by_mode = [trial[mode] for trial in trials]\n            summary[mode] = {\n                \"median_e2e_ms\": statistics.median(row[\"end_to_end_ms\"] for row in trials_by_mode),\n                \"median_feedback_ms\": statistics.median(row[\"feedback_ms\"] for row in trials_by_mode),\n                \"retained_bytes\": trials_by_mode[0][\"retained_score_bytes\"],\n                \"peak_persistent_tables_bytes\": trials_by_mode[0][\"peak_persistent_tables_bytes\"],\n                \"median_feedback_peak_delta_bytes\": statistics.median(row[\"feedback_peak_delta_bytes\"] for row in trials_by_mode),\n            }\n        fastest = min(summary[\"compact_replay\"][\"median_e2e_ms\"], summary[\"fp32_replay\"][\"median_e2e_ms\"])\n        for mode in MODES:\n            summary[mode][\"e2e_over_fastest_replay\"] = summary[mode][\"median_e2e_ms\"] / fastest\n            summary[mode][\"compact_retention_ratio\"] = summary[\"compact_replay\"][\"retained_bytes\"] / summary[mode][\"retained_bytes\"]\n        result[shape] = summary\n    return result\n\n\ndef main():\n    torch.set_num_threads(1)\n    torch.set_float32_matmul_precision(\"highest\")\n    snapshot_dir, target = map(Path, sys.argv[1:])\n    tokenizer = AutoTokenizer.from_pretrained(snapshot_dir, local_files_only=True, trust_remote_code=False)\n    model = AutoModelForCausalLM.from_pretrained(snapshot_dir, dtype=torch.bfloat16, attn_implementation=\"sdpa\",\n                                                use_safetensors=True, local_files_only=True,\n                                                trust_remote_code=False).to(\"cuda\").eval()\n    gen = torch.Generator(device=\"cuda\").manual_seed(20261124)\n    basis = torch.randn((model.config.vocab_size, RANK), generator=gen, device=\"cuda\") * 0.25\n    rows = {}\n    with torch.inference_mode():\n        for mode in MODES:\n            run(model, tokenizer, basis, 8, 16, mode, 909)\n        for batch, steps in SHAPES:\n            shape = f\"{batch}x{steps}\"\n            rows[shape] = []\n            for trial in range(ROUNDS):\n                seed = 4100 + trial\n                order = (trial + SHAPES.index((batch, steps))) % len(MODES)\n                trials, gradients, ideal = {}, {}, None\n                for mode in MODES[order:] + MODES[:order]:\n                    gradient, timing, reference = run(model, tokenizer, basis, batch, steps, mode, seed,\n                                                      oracle=mode == \"compact_replay\")\n                    if reference is not None:\n                        ideal = reference\n                    trials[mode] = timing\n                    gradients[mode] = gradient\n                for key in (\"token_sha256\", \"support_sha256\", \"final_eos\"):\n                    assert len({row[key] for row in trials.values()}) == 1, key\n                for mode, timing in trials.items():\n                    timing.update(check_gradient(gradients[mode], ideal))\n                rows[shape].append(trials)\n                CONSOLE.print_json(data={\"shape\": shape, \"round\": trial, \"scores\": {m: [v[\"end_to_end_ms\"], v[\"feedback_ms\"]]\n                                                                                      for m, v in trials.items()}})\n    summary = summarize(rows)\n    gates = {mode: all(summary[shape][mode][\"compact_retention_ratio\"] >= 2 and\n                       summary[shape][mode][\"e2e_over_fastest_replay\"] <= 1.05\n                       for shape in (\"8x384\", \"24x192\")) for mode in MODES[2:]}\n    record = {\"model_revision\": REVISION, \"weights_sha256\": WEIGHT_SHA256, \"gpu\": torch.cuda.get_device_name(),\n              \"pytorch\": torch.__version__, \"readout_rank\": RANK, \"top_k\": TOP_K, \"chunk\": CHUNK,\n              \"temperature\": TEMPERATURE, \"rounds\": ROUNDS, \"shapes\": SHAPES,\n              \"scope\": \"Pinned Qwen unadapted, exact score at zero readout offset, fixed-horizon cached sampling, arbitrary fixed signed coefficients released after the live rollout, no optimizer step. The FP64 reference reduces the same captured float32 residuals and native BF16 features. Persistent table bytes exclude temporary conversions and common sampling/KV tables.\",\n              \"advances_storage_gate\": gates, \"summary\": summary, \"rows\": rows}\n    CONSOLE.print_json(data={\"summary\": summary, \"advances_storage_gate\": gates})\n    with target.open(\"x\", encoding=\"utf-8\") as stream:\n        json.dump(record, stream, sort_keys=True, allow_nan=False)\n\n\nif __name__ == \"__main__\":\n    main()\n",
+    "dsr_receipt": {
+      "command": "quality",
+      "details": {
+        "checks": [
+          {
+            "command": "set -e; export CUDA_VISIBLE_DEVICES=0 UV_OFFLINE=true UV_PROJECT_ENVIRONMENT=/data/projects/bio_inspired_nanochat/.venv OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1; test \"$(git rev-parse HEAD)\" = 0a3a0c4c1625f6ad75409f99dbd6d5e204f9a9f6; printf '%s  %s\\n' fedf1ed7c4f88f93f35665881f1aef1a89430d5fe7a8a6675c6765209e2f90d8 /data/projects/bio-score-replay.U3tLED35/compare_score_replay.py 08faf1e950173bb44c11d26df28c55da7237dc55c77dbc1cbae4a5d7584540d9 /data/projects/bio-learning-pilot.XRewL9V1/weights/model.safetensors a48e6ab280ad87a25f06da604d486aa819b9c1bc467dae7c25fe5d05c57f5511 /data/projects/bio-learning-pilot.XRewL9V1/weights/config.json c0382117ea329cdf097041132f6d735924b697924d6f6fc3945713e96ce87539 /data/projects/bio-learning-pilot.XRewL9V1/weights/tokenizer.json d743761ff02297cc5cdf38a612b0f78d5cdf5ceb3f251ab1d25ad353d24b1887 /data/projects/bio-learning-pilot.XRewL9V1/weights/tokenizer_config.json | sha256sum --check; flock -w 60 /tmp/bio_inspired_nanochat-trj-gpu0.lock taskset -c 52 uv run --no-sync python /data/projects/bio-score-replay.U3tLED35/compare_score_replay.py /data/projects/bio-learning-pilot.XRewL9V1/weights /data/projects/bio-score-replay.U3tLED35/measurements.json; sha256sum /data/projects/bio-score-replay.U3tLED35/measurements.json",
+            "cwd": "/data/projects/bio-prefill-scan.Nq3wZNFe/source",
+            "duration_ms": 901448,
+            "executed": true,
+            "exit_code": 124,
+            "log_path": "/home/ubuntu/.local/state/dsr/quality-logs/bio-score-vs-factor-replay/20261124T191806-jCjKuexY/check-1.log",
+            "log_sha256": "b206e149e564ca716a0cf3b943804c89d789264460301aa5e785412cf650beaf",
+            "output_preview": "6610.35623122007,\n      2.379173878580332\n    ],\n    \"fp32_replay\": [\n      36410.88877804577,\n      3.8927593268454075\n    ],\n    \"step_accumulator\": [\n      32120.447240304202,\n      2.461859956383705\n    ]\n  }\n}\n{\n  \"shape\": \"24x192\",\n  \"round\": 0,\n  \"scores\": {\n    \"step_accumulator\": [\n      25441.474453080446,\n      5.544350948184729\n    ],\n    \"chunk_accumulator\": [\n      26270.721279084682,\n      3.3355047926306725\n    ],\n    \"compact_replay\": [\n      22717.82947378233,\n      6.811864208430052\n    ],\n    \"fp32_replay\": [\n      23955.777686089277,\n      2.7667907997965813\n    ]\n  }\n}\n{\n  \"shape\": \"24x192\",\n  \"round\": 1,\n  \"scores\": {\n    \"chunk_accumulator\": [\n      21856.528860051185,\n      2.4809851311147213\n    ],\n    \"compact_replay\": [\n      17293.934541754425,\n      3.8385367952287197\n    ],\n    \"fp32_replay\": [\n      23038.262996356934,\n      2.070927992463112\n    ],\n    \"step_accumulator\": [\n      24570.746516808867,\n      30.90317314490676\n    ]\n  }\n}\n\n# exit_code: 124\n",
+            "passed": false,
+            "status": "failed",
+            "timeout_seconds": 900
+          }
+        ],
+        "config_path": "/data/projects/bio-score-replay.U3tLED35/bio-score-vs-factor-replay.yaml",
+        "config_sha256": "e9dcb679d48bd15cc5552af026ca6f8a87c41b9f0fb95a90a7c6cc4cc7c84f5e",
+        "config_sha256_after": "e9dcb679d48bd15cc5552af026ca6f8a87c41b9f0fb95a90a7c6cc4cc7c84f5e",
+        "config_snapshot_path": "/home/ubuntu/.local/state/dsr/quality-logs/bio-score-vs-factor-replay/20261124T191806-jCjKuexY/checks-config.yaml",
+        "dry_run": false,
+        "dsr_version": "0.2.3",
+        "duration_ms": 903595,
+        "executed": 1,
+        "failed": 1,
+        "interrupted": 0,
+        "not_run": 0,
+        "observed": 1,
+        "passed": 0,
+        "planned": 0,
+        "run_dir": "/home/ubuntu/.local/state/dsr/quality-logs/bio-score-vs-factor-replay/20261124T191806-jCjKuexY",
+        "skipped": false,
+        "source_after": "0a3a0c4c1625f6ad75409f99dbd6d5e204f9a9f6|06fd1218e96460edbed295f43295296b239edf0fd942a0a64c047704ad719a8b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+        "source_before": "0a3a0c4c1625f6ad75409f99dbd6d5e204f9a9f6|06fd1218e96460edbed295f43295296b239edf0fd942a0a64c047704ad719a8b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+        "status": "failed",
+        "timeout_seconds": 900,
+        "tool": "bio-score-vs-factor-replay",
+        "total": 1
+      },
+      "duration_ms": 0,
+      "exit_code": 1,
+      "run_id": "f358250c-4381-4854-9ac5-33056fd0cd86",
+      "started_at": "2026-11-25T00:36:38Z",
+      "status": "failure",
+      "tool": "dsr",
+      "version": "0.2.3"
+    },
+    "log": "# dsr quality check\n# argv: set -e; export CUDA_VISIBLE_DEVICES=0 UV_OFFLINE=true UV_PROJECT_ENVIRONMENT=/data/projects/bio_inspired_nanochat/.venv OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1; test \"$(git rev-parse HEAD)\" = 0a3a0c4c1625f6ad75409f99dbd6d5e204f9a9f6; printf '%s  %s\\n' fedf1ed7c4f88f93f35665881f1aef1a89430d5fe7a8a6675c6765209e2f90d8 /data/projects/bio-score-replay.U3tLED35/compare_score_replay.py 08faf1e950173bb44c11d26df28c55da7237dc55c77dbc1cbae4a5d7584540d9 /data/projects/bio-learning-pilot.XRewL9V1/weights/model.safetensors a48e6ab280ad87a25f06da604d486aa819b9c1bc467dae7c25fe5d05c57f5511 /data/projects/bio-learning-pilot.XRewL9V1/weights/config.json c0382117ea329cdf097041132f6d735924b697924d6f6fc3945713e96ce87539 /data/projects/bio-learning-pilot.XRewL9V1/weights/tokenizer.json d743761ff02297cc5cdf38a612b0f78d5cdf5ceb3f251ab1d25ad353d24b1887 /data/projects/bio-learning-pilot.XRewL9V1/weights/tokenizer_config.json | sha256sum --check; flock -w 60 /tmp/bio_inspired_nanochat-trj-gpu0.lock taskset -c 52 uv run --no-sync python /data/projects/bio-score-replay.U3tLED35/compare_score_replay.py /data/projects/bio-learning-pilot.XRewL9V1/weights /data/projects/bio-score-replay.U3tLED35/measurements.json; sha256sum /data/projects/bio-score-replay.U3tLED35/measurements.json\n# cwd: /data/projects/bio-prefill-scan.Nq3wZNFe/source\n# env: PATH=/home/ubuntu/.rch/shims:/home/ubuntu/.local/bin:/home/ubuntu/.rch/shims:/home/ubuntu/.local/bin:/home/ubuntu/.rch/shims:/home/ubuntu/.local/bin:/home/ubuntu/.rch/shims:/home/ubuntu/mcp_agent_mail:/home/ubuntu/.local/bin:/home/ubuntu/.nvm/versions/node/v26.0.0/bin:/home/ubuntu/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin\n# env: DSR_QUALITY_RUN_DIR=/home/ubuntu/.local/state/dsr/quality-logs/bio-score-vs-factor-replay/20261124T191806-jCjKuexY\n# env: DSR_QUALITY_TIMEOUT=900\n# env: DSR_REPOS_FILE=/data/projects/bio-score-replay.U3tLED35/bio-score-vs-factor-replay.yaml\n# env: DSR_CURRENT_CMD=quality\n# env: CARGO_TARGET_DIR=/scratch/cargo-targets\n# env: DSR_CURRENT_HOST=\n# env: DSR_RUN_ID=run-1795565881-1793339\n# env: CARGO_BUILD_JOBS=16\n# env: DSR_CURRENT_TOOL=\n# env: CARGO_INCREMENTAL=0\n# env: DSR_RUST_NATIVE_ENV_NAMES\n# started_monotonic_ms: 3305715898\n# timeout_seconds: 900\n# ----\n/data/projects/bio-score-replay.U3tLED35/compare_score_replay.py: OK\n/data/projects/bio-learning-pilot.XRewL9V1/weights/model.safetensors: OK\n/data/projects/bio-learning-pilot.XRewL9V1/weights/config.json: OK\n/data/projects/bio-learning-pilot.XRewL9V1/weights/tokenizer.json: OK\n/data/projects/bio-learning-pilot.XRewL9V1/weights/tokenizer_config.json: OK\n\nLoading weights:   0%|          | 0/338 [00:00<?, ?it/s]\nLoading weights: 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 338/338 [00:00<00:00, 4376.07it/s]\n{\n  \"shape\": \"8x16\",\n  \"round\": 0,\n  \"scores\": {\n    \"compact_replay\": [\n      2936.4565960131586,\n      3.2502450048923492\n    ],\n    \"fp32_replay\": [\n      1283.109499141574,\n      3.688075114041567\n    ],\n    \"step_accumulator\": [\n      1986.18129407987,\n      2.282273955643177\n    ],\n    \"chunk_accumulator\": [\n      1464.9661150760949,\n      2.6901159435510635\n    ]\n  }\n}\n{\n  \"shape\": \"8x16\",\n  \"round\": 1,\n  \"scores\": {\n    \"fp32_replay\": [\n      1808.864387217909,\n      5.3517501801252365\n    ],\n    \"step_accumulator\": [\n      1612.9731638357043,\n      2.4566100910305977\n    ],\n    \"chunk_accumulator\": [\n      2045.0952402316034,\n      2.3437291383743286\n    ],\n    \"compact_replay\": [\n      1596.3296410627663,\n      2.41961982101202\n    ]\n  }\n}\n{\n  \"shape\": \"8x16\",\n  \"round\": 2,\n  \"scores\": {\n    \"step_accumulator\": [\n      1822.0222839154303,\n      3.278257790952921\n    ],\n    \"chunk_accumulator\": [\n      1649.0114098414779,\n      2.4561788886785507\n    ],\n    \"compact_replay\": [\n      1523.6552809365094,\n      3.1441268511116505\n    ],\n    \"fp32_replay\": [\n      2506.987436208874,\n      2.953329123556614\n    ]\n  }\n}\n{\n  \"shape\": \"8x384\",\n  \"round\": 0,\n  \"scores\": {\n    \"fp32_replay\": [\n      51944.39731212333,\n      8.058328181505203\n    ],\n    \"step_accumulator\": [\n      53348.38154865429,\n      2.493959851562977\n    ],\n    \"chunk_accumulator\": [\n      57223.46928482875,\n      2.6476369239389896\n    ],\n    \"compact_replay\": [\n      38677.32915608212,\n      7.0163169875741005\n    ]\n  }\n}\n{\n  \"shape\": \"8x384\",\n  \"round\": 1,\n  \"scores\": {\n    \"step_accumulator\": [\n      35646.957179997116,\n      1.73158198595047\n    ],\n    \"chunk_accumulator\": [\n      40005.414254032075,\n      3.3778240904212\n    ],\n    \"compact_replay\": [\n      39588.56994379312,\n      3.847754094749689\n    ],\n    \"fp32_replay\": [\n      41412.97138715163,\n      25.785671081393957\n    ]\n  }\n}\n{\n  \"shape\": \"8x384\",\n  \"round\": 2,\n  \"scores\": {\n    \"chunk_accumulator\": [\n      33597.93524630368,\n      1.954078208655119\n    ],\n    \"compact_replay\": [\n      36610.35623122007,\n      2.379173878580332\n    ],\n    \"fp32_replay\": [\n      36410.88877804577,\n      3.8927593268454075\n    ],\n    \"step_accumulator\": [\n      32120.447240304202,\n      2.461859956383705\n    ]\n  }\n}\n{\n  \"shape\": \"24x192\",\n  \"round\": 0,\n  \"scores\": {\n    \"step_accumulator\": [\n      25441.474453080446,\n      5.544350948184729\n    ],\n    \"chunk_accumulator\": [\n      26270.721279084682,\n      3.3355047926306725\n    ],\n    \"compact_replay\": [\n      22717.82947378233,\n      6.811864208430052\n    ],\n    \"fp32_replay\": [\n      23955.777686089277,\n      2.7667907997965813\n    ]\n  }\n}\n{\n  \"shape\": \"24x192\",\n  \"round\": 1,\n  \"scores\": {\n    \"chunk_accumulator\": [\n      21856.528860051185,\n      2.4809851311147213\n    ],\n    \"compact_replay\": [\n      17293.934541754425,\n      3.8385367952287197\n    ],\n    \"fp32_replay\": [\n      23038.262996356934,\n      2.070927992463112\n    ],\n    \"step_accumulator\": [\n      24570.746516808867,\n      30.90317314490676\n    ]\n  }\n}\n\n# exit_code: 124\n",
+    "rounds": {
+      "24x192": [
+        {
+          "round": 0,
+          "scores": {
+            "chunk_accumulator": [
+              26270.721279084682,
+              3.3355047926306725
+            ],
+            "compact_replay": [
+              22717.82947378233,
+              6.811864208430052
+            ],
+            "fp32_replay": [
+              23955.777686089277,
+              2.7667907997965813
+            ],
+            "step_accumulator": [
+              25441.474453080446,
+              5.544350948184729
+            ]
+          },
+          "shape": "24x192"
+        },
+        {
+          "round": 1,
+          "scores": {
+            "chunk_accumulator": [
+              21856.528860051185,
+              2.4809851311147213
+            ],
+            "compact_replay": [
+              17293.934541754425,
+              3.8385367952287197
+            ],
+            "fp32_replay": [
+              23038.262996356934,
+              2.070927992463112
+            ],
+            "step_accumulator": [
+              24570.746516808867,
+              30.90317314490676
+            ]
+          },
+          "shape": "24x192"
+        }
+      ],
+      "8x16": [
+        {
+          "round": 0,
+          "scores": {
+            "chunk_accumulator": [
+              1464.9661150760949,
+              2.6901159435510635
+            ],
+            "compact_replay": [
+              2936.4565960131586,
+              3.2502450048923492
+            ],
+            "fp32_replay": [
+              1283.109499141574,
+              3.688075114041567
+            ],
+            "step_accumulator": [
+              1986.18129407987,
+              2.282273955643177
+            ]
+          },
+          "shape": "8x16"
+        },
+        {
+          "round": 1,
+          "scores": {
+            "chunk_accumulator": [
+              2045.0952402316034,
+              2.3437291383743286
+            ],
+            "compact_replay": [
+              1596.3296410627663,
+              2.41961982101202
+            ],
+            "fp32_replay": [
+              1808.864387217909,
+              5.3517501801252365
+            ],
+            "step_accumulator": [
+              1612.9731638357043,
+              2.4566100910305977
+            ]
+          },
+          "shape": "8x16"
+        },
+        {
+          "round": 2,
+          "scores": {
+            "chunk_accumulator": [
+              1649.0114098414779,
+              2.4561788886785507
+            ],
+            "compact_replay": [
+              1523.6552809365094,
+              3.1441268511116505
+            ],
+            "fp32_replay": [
+              2506.987436208874,
+              2.953329123556614
+            ],
+            "step_accumulator": [
+              1822.0222839154303,
+              3.278257790952921
+            ]
+          },
+          "shape": "8x16"
+        }
+      ],
+      "8x384": [
+        {
+          "round": 0,
+          "scores": {
+            "chunk_accumulator": [
+              57223.46928482875,
+              2.6476369239389896
+            ],
+            "compact_replay": [
+              38677.32915608212,
+              7.0163169875741005
+            ],
+            "fp32_replay": [
+              51944.39731212333,
+              8.058328181505203
+            ],
+            "step_accumulator": [
+              53348.38154865429,
+              2.493959851562977
+            ]
+          },
+          "shape": "8x384"
+        },
+        {
+          "round": 1,
+          "scores": {
+            "chunk_accumulator": [
+              40005.414254032075,
+              3.3778240904212
+            ],
+            "compact_replay": [
+              39588.56994379312,
+              3.847754094749689
+            ],
+            "fp32_replay": [
+              41412.97138715163,
+              25.785671081393957
+            ],
+            "step_accumulator": [
+              35646.957179997116,
+              1.73158198595047
+            ]
+          },
+          "shape": "8x384"
+        },
+        {
+          "round": 2,
+          "scores": {
+            "chunk_accumulator": [
+              33597.93524630368,
+              1.954078208655119
+            ],
+            "compact_replay": [
+              36610.35623122007,
+              2.379173878580332
+            ],
+            "fp32_replay": [
+              36410.88877804577,
+              3.8927593268454075
+            ],
+            "step_accumulator": [
+              32120.447240304202,
+              2.461859956383705
+            ]
+          },
+          "shape": "8x384"
+        }
+      ]
+    },
+    "scope": "Logged model rounds are emitted only after within-round token/support checks and FP64 comparison. The incomplete invocation yielded no full measurement JSON or registered decision.",
+    "source_sha256": "fedf1ed7c4f88f93f35665881f1aef1a89430d5fe7a8a6675c6765209e2f90d8"
+  },
+  "recount_source": "\"\"\"Preserve valid completed rounds from the primary timeout and validated follow-ups.\"\"\"\nimport hashlib\nimport json\nimport re\nimport statistics\nimport sys\nfrom pathlib import Path\n\nroot, destination = map(Path, sys.argv[1:])\nWIDTH, RANK = 1536, 16\nMODES = (\"compact_replay\", \"fp32_replay\", \"step_accumulator\", \"chunk_accumulator\")\n\n\ndef read(path):\n    return json.loads(path.read_bytes())\n\n\ndef sha(path):\n    return hashlib.sha256(path.read_bytes()).hexdigest()\n\n\ndef file_record(tool, source):\n    config_path = root / f\"{tool}.yaml\"\n    config = read(config_path)\n    receipt = read(root / f\"{tool}.json\")\n    details = receipt[\"details\"]\n    assert details[\"source_before\"] == details[\"source_after\"]\n    assert details[\"source_before\"].split(\"|\", 1)[0] == \"0a3a0c4c1625f6ad75409f99dbd6d5e204f9a9f6\"\n    assert details[\"config_sha256\"] == details[\"config_sha256_after\"] == sha(config_path)\n    check, = details[\"checks\"]\n    assert check[\"command\"] == config[\"tools\"][tool][\"checks\"][0]\n    source_path = root / source\n    assert sha(source_path) in check[\"command\"]\n    return {\"dsr_receipt\": receipt, \"source_sha256\": sha(source_path), \"driver_source\": source_path.read_text()}, check\n\n\ndef complete(tool, source, raw):\n    record, check = file_record(tool, source)\n    assert record[\"dsr_receipt\"][\"status\"] == \"success\" and record[\"dsr_receipt\"][\"exit_code\"] == 0\n    assert check[\"status\"] == \"passed\" and check[\"exit_code\"] == 0\n    data_path = root / raw\n    assert sha(data_path) in check[\"output_preview\"]\n    record[\"data\"], record[\"raw_result_sha256\"] = read(data_path), sha(data_path)\n    return record\n\n\nmain, check = file_record(\"bio-score-vs-factor-replay\", \"compare_score_replay.py\")\nassert main[\"source_sha256\"] == \"fedf1ed7c4f88f93f35665881f1aef1a89430d5fe7a8a6675c6765209e2f90d8\"\nassert main[\"dsr_receipt\"][\"status\"] == \"failure\" and check[\"exit_code\"] == 124\nprimary_log = root / \"primary.log\"\nassert sha(primary_log) == check[\"log_sha256\"]\nlog = primary_log.read_text()\ndecoder = json.JSONDecoder()\nrounds = {}\nfor match in re.finditer(r'(?m)^\\{\\n  \"shape\":', log):\n    row, _ = decoder.raw_decode(log[match.start():])\n    assert set(row[\"scores\"]) == set(MODES)\n    assert row[\"round\"] == len(rounds.setdefault(row[\"shape\"], []))\n    rounds[row[\"shape\"]].append(row)\nassert {shape: len(rows) for shape, rows in rounds.items()} == {\"8x16\": 3, \"8x384\": 3, \"24x192\": 2}\nsummary = {}\nfor shape, rows in rounds.items():\n    if len(rows) == 3:\n        summary[shape] = {mode: {\"median_e2e_ms\": statistics.median(row[\"scores\"][mode][0] for row in rows),\n                                 \"median_feedback_ms\": statistics.median(row[\"scores\"][mode][1] for row in rows)}\n                          for mode in MODES}\nmain |= {\"log\": log, \"rounds\": rounds, \"complete_shape_medians\": summary,\n         \"scope\": \"Logged model rounds are emitted only after within-round token/support checks and FP64 comparison. The incomplete invocation yielded no full measurement JSON or registered decision.\"}\ndevice = complete(\"bio-score-graph-cost\", \"score_device_cost.py\", \"device-cost.json\")\nassert device[\"source_sha256\"] == \"0cee28f0a514da55e0c129400b97b3bb6912316042d10e0d97d424e40e3bb4f7\"\nfor arms in device[\"data\"][\"measurements\"].values():\n    for values in arms.values():\n        assert len(values[\"round_device_ms\"]) == 8\n        assert statistics.median(values[\"round_device_ms\"]) == values[\"median_device_ms\"]\nrepeat = complete(\"bio-score-long-shape-replication\", \"repeat_long_shape.py\", \"replication.json\")\nassert repeat[\"source_sha256\"] == \"dae42ea207a4cd615137b89f72f63e1dd6b157dcda3fd509e8ee2fa57e9c33b5\"\nrep = repeat[\"data\"][\"rows\"][\"24x192\"]\nassert len(rep) == 3\nfor row in rep:\n    for key in (\"token_sha256\", \"support_sha256\", \"final_eos\"):\n        assert len({arm[key] for arm in row.values()}) == 1\n    for arm in row.values():\n        assert 0 <= arm[\"maximum_absolute\"] <= 3e-4\n        assert 0 <= arm[\"relative_frobenius\"] <= 3e-6\nsummary_repeat = repeat[\"data\"][\"summary\"][\"24x192\"]\nfastest = min(summary_repeat[mode][\"median_e2e_ms\"] for mode in MODES[:2])\ncompact = summary_repeat[\"compact_replay\"][\"retained_bytes\"]\nfor key, med in summary_repeat.items():\n    assert statistics.median(row[key][\"end_to_end_ms\"] for row in rep) == med[\"median_e2e_ms\"]\n    if \"accumulator\" in key:\n        expected = 4 * 24 * WIDTH * RANK\n    else:\n        expected = 24 * 192 * ((2 if key == \"compact_replay\" else 4) * WIDTH + 4 * RANK)\n    assert med[\"retained_bytes\"] == expected\n    assert med[\"e2e_over_fastest_replay\"] == med[\"median_e2e_ms\"] / fastest\n    assert med[\"compact_retention_ratio\"] == compact / expected\nrepeat[\"standalone_pass\"] = {mode: summary_repeat[mode][\"e2e_over_fastest_replay\"] <= 1.05\n                              and summary_repeat[mode][\"compact_retention_ratio\"] >= 2 for mode in MODES[2:]}\nbundle = {\"primary_incomplete\": main, \"device_only\": device, \"second_gpu\": repeat,\n          \"recount_source\": Path(__file__).read_text(), \"registered_gate\": \"unmeasured\"}\nwith destination.open(\"x\", encoding=\"utf-8\") as file:\n    json.dump(bundle, file, indent=2, sort_keys=True, allow_nan=False)\n    file.write(\"\\n\")\n",
+  "registered_gate": "unmeasured",
+  "second_gpu": {
+    "data": {
+      "rows": {
+        "24x192": [
+          {
+            "chunk_accumulator": {
+              "end_to_end_ms": 17178.60688501969,
+              "feedback_ms": 3.3862199634313583,
+              "feedback_peak_delta_bytes": 98816,
+              "final_eos": 0,
+              "maximum_absolute": 2.1123488608054686e-05,
+              "peak_live_delta_bytes": 187446784,
+              "peak_persistent_tables_bytes": 3563520,
+              "prefill_tokens": 552,
+              "relative_frobenius": 1.239058224371282e-07,
+              "retained_score_bytes": 2359296,
+              "support_sha256": "0dd7bbcd290dab9df635be58f32e51e6997dbc0c6543493c4d90b8c7f348d59e",
+              "through_rollout_ms": 17175.22066505626,
+              "token_sha256": "1435ace57aa8b111bca2ae6006f9a98cfd0356832040114249ca5a590b11a0bb"
+            },
+            "compact_replay": {
+              "end_to_end_ms": 23960.82640811801,
+              "feedback_ms": 15.916512347757816,
+              "feedback_peak_delta_bytes": 29753856,
+              "final_eos": 0,
+              "maximum_absolute": 0.00010034271770109626,
+              "peak_live_delta_bytes": 206708736,
+              "peak_persistent_tables_bytes": 14450688,
+              "prefill_tokens": 552,
+              "relative_frobenius": 4.646779488963566e-07,
+              "retained_score_bytes": 14450688,
+              "support_sha256": "0dd7bbcd290dab9df635be58f32e51e6997dbc0c6543493c4d90b8c7f348d59e",
+              "through_rollout_ms": 23944.90989577025,
+              "token_sha256": "1435ace57aa8b111bca2ae6006f9a98cfd0356832040114249ca5a590b11a0bb"
+            },
+            "fp32_replay": {
+              "end_to_end_ms": 21844.127519987524,
+              "feedback_ms": 2.290118020027876,
+              "feedback_peak_delta_bytes": 393728,
+              "final_eos": 0,
+              "maximum_absolute": 0.00010034271770109626,
+              "peak_live_delta_bytes": 213513728,
+              "peak_persistent_tables_bytes": 28606464,
+              "prefill_tokens": 552,
+              "relative_frobenius": 4.646779488963566e-07,
+              "retained_score_bytes": 28606464,
+              "support_sha256": "0dd7bbcd290dab9df635be58f32e51e6997dbc0c6543493c4d90b8c7f348d59e",
+              "through_rollout_ms": 21841.837401967496,
+              "token_sha256": "1435ace57aa8b111bca2ae6006f9a98cfd0356832040114249ca5a590b11a0bb"
+            },
+            "step_accumulator": {
+              "end_to_end_ms": 23097.82914025709,
+              "feedback_ms": 1.976862084120512,
+              "feedback_peak_delta_bytes": 98816,
+              "final_eos": 0,
+              "maximum_absolute": 3.078200803940945e-05,
+              "peak_live_delta_bytes": 186217984,
+              "peak_persistent_tables_bytes": 2359296,
+              "prefill_tokens": 552,
+              "relative_frobenius": 2.0808230012153957e-07,
+              "retained_score_bytes": 2359296,
+              "support_sha256": "0dd7bbcd290dab9df635be58f32e51e6997dbc0c6543493c4d90b8c7f348d59e",
+              "through_rollout_ms": 23095.85227817297,
+              "token_sha256": "1435ace57aa8b111bca2ae6006f9a98cfd0356832040114249ca5a590b11a0bb"
+            }
+          },
+          {
+            "chunk_accumulator": {
+              "end_to_end_ms": 25484.55694131553,
+              "feedback_ms": 3.1476239673793316,
+              "feedback_peak_delta_bytes": 98816,
+              "final_eos": 0,
+              "maximum_absolute": 2.1662794786436734e-05,
+              "peak_live_delta_bytes": 187446784,
+              "peak_persistent_tables_bytes": 3563520,
+              "prefill_tokens": 552,
+              "relative_frobenius": 1.1727184970752423e-07,
+              "retained_score_bytes": 2359296,
+              "support_sha256": "81f7875fe7e754552496329f8f6938a48529714dbb8ba905f23fd0d5710c2b9e",
+              "through_rollout_ms": 25481.409317348152,
+              "token_sha256": "378af1e52e7506a85f077fd3964fc44d98d4b4bcdf5ec976d8d2870f3abca126"
+            },
+            "compact_replay": {
+              "end_to_end_ms": 18401.70286502689,
+              "feedback_ms": 2.520930953323841,
+              "feedback_peak_delta_bytes": 29753856,
+              "final_eos": 0,
+              "maximum_absolute": 8.718806112995026e-05,
+              "peak_live_delta_bytes": 206708736,
+              "peak_persistent_tables_bytes": 14450688,
+              "prefill_tokens": 552,
+              "relative_frobenius": 4.02449144008244e-07,
+              "retained_score_bytes": 14450688,
+              "support_sha256": "81f7875fe7e754552496329f8f6938a48529714dbb8ba905f23fd0d5710c2b9e",
+              "through_rollout_ms": 18399.181934073567,
+              "token_sha256": "378af1e52e7506a85f077fd3964fc44d98d4b4bcdf5ec976d8d2870f3abca126"
+            },
+            "fp32_replay": {
+              "end_to_end_ms": 23465.227806940675,
+              "feedback_ms": 1.9712001085281372,
+              "feedback_peak_delta_bytes": 393728,
+              "final_eos": 0,
+              "maximum_absolute": 8.718806112995026e-05,
+              "peak_live_delta_bytes": 213513728,
+              "peak_persistent_tables_bytes": 28606464,
+              "prefill_tokens": 552,
+              "relative_frobenius": 4.02449144008244e-07,
+              "retained_score_bytes": 28606464,
+              "support_sha256": "81f7875fe7e754552496329f8f6938a48529714dbb8ba905f23fd0d5710c2b9e",
+              "through_rollout_ms": 23463.256606832147,
+              "token_sha256": "378af1e52e7506a85f077fd3964fc44d98d4b4bcdf5ec976d8d2870f3abca126"
+            },
+            "step_accumulator": {
+              "end_to_end_ms": 24881.638863123953,
+              "feedback_ms": 3.6249072290956974,
+              "feedback_peak_delta_bytes": 98816,
+              "final_eos": 0,
+              "maximum_absolute": 2.7928269666688266e-05,
+              "peak_live_delta_bytes": 186217984,
+              "peak_persistent_tables_bytes": 2359296,
+              "prefill_tokens": 552,
+              "relative_frobenius": 1.924422966261318e-07,
+              "retained_score_bytes": 2359296,
+              "support_sha256": "81f7875fe7e754552496329f8f6938a48529714dbb8ba905f23fd0d5710c2b9e",
+              "through_rollout_ms": 24878.013955894858,
+              "token_sha256": "378af1e52e7506a85f077fd3964fc44d98d4b4bcdf5ec976d8d2870f3abca126"
+            }
+          },
+          {
+            "chunk_accumulator": {
+              "end_to_end_ms": 19605.81774637103,
+              "feedback_ms": 34.62356934323907,
+              "feedback_peak_delta_bytes": 98816,
+              "final_eos": 0,
+              "maximum_absolute": 2.1156121079002332e-05,
+              "peak_live_delta_bytes": 187446784,
+              "peak_persistent_tables_bytes": 3563520,
+              "prefill_tokens": 552,
+              "relative_frobenius": 1.1772896401514927e-07,
+              "retained_score_bytes": 2359296,
+              "support_sha256": "b072773808a916b68f33833592b95fd89a613346ca556fd5bd041b61adf3a495",
+              "through_rollout_ms": 19571.19417702779,
+              "token_sha256": "95cefe81edf42a0419e6c98fbabf7c4710978e7d22dabdf010e5c175846acf34"
+            },
+            "compact_replay": {
+              "end_to_end_ms": 18560.615653637797,
+              "feedback_ms": 4.066814668476582,
+              "feedback_peak_delta_bytes": 29753856,
+              "final_eos": 0,
+              "maximum_absolute": 7.973261902805007e-05,
+              "peak_live_delta_bytes": 206708736,
+              "peak_persistent_tables_bytes": 14450688,
+              "prefill_tokens": 552,
+              "relative_frobenius": 4.2203644608554293e-07,
+              "retained_score_bytes": 14450688,
+              "support_sha256": "b072773808a916b68f33833592b95fd89a613346ca556fd5bd041b61adf3a495",
+              "through_rollout_ms": 18556.54883896932,
+              "token_sha256": "95cefe81edf42a0419e6c98fbabf7c4710978e7d22dabdf010e5c175846acf34"
+            },
+            "fp32_replay": {
+              "end_to_end_ms": 25624.410694930702,
+              "feedback_ms": 5.65035967156291,
+              "feedback_peak_delta_bytes": 393728,
+              "final_eos": 0,
+              "maximum_absolute": 7.973261902805007e-05,
+              "peak_live_delta_bytes": 213513728,
+              "peak_persistent_tables_bytes": 28606464,
+              "prefill_tokens": 552,
+              "relative_frobenius": 4.2203644608554293e-07,
+              "retained_score_bytes": 28606464,
+              "support_sha256": "b072773808a916b68f33833592b95fd89a613346ca556fd5bd041b61adf3a495",
+              "through_rollout_ms": 25618.76033525914,
+              "token_sha256": "95cefe81edf42a0419e6c98fbabf7c4710978e7d22dabdf010e5c175846acf34"
+            },
+            "step_accumulator": {
+              "end_to_end_ms": 22183.41153813526,
+              "feedback_ms": 2.852281089872122,
+              "feedback_peak_delta_bytes": 98816,
+              "final_eos": 0,
+              "maximum_absolute": 3.203534623352766e-05,
+              "peak_live_delta_bytes": 186217984,
+              "peak_persistent_tables_bytes": 2359296,
+              "prefill_tokens": 552,
+              "relative_frobenius": 1.9731057829938042e-07,
+              "retained_score_bytes": 2359296,
+              "support_sha256": "b072773808a916b68f33833592b95fd89a613346ca556fd5bd041b61adf3a495",
+              "through_rollout_ms": 22180.55925704539,
+              "token_sha256": "95cefe81edf42a0419e6c98fbabf7c4710978e7d22dabdf010e5c175846acf34"
+            }
+          }
+        ]
+      },
+      "scope": "Second-device standalone replication of the exact same 24x192 rollout shape. Analyze each invocation on its own.",
+      "summary": {
+        "24x192": {
+          "chunk_accumulator": {
+            "compact_retention_ratio": 6.125,
+            "e2e_over_fastest_replay": 1.056312899972603,
+            "median_e2e_ms": 19605.81774637103,
+            "median_feedback_ms": 3.3862199634313583,
+            "median_feedback_peak_delta_bytes": 98816,
+            "peak_persistent_tables_bytes": 3563520,
+            "retained_bytes": 2359296
+          },
+          "compact_replay": {
+            "compact_retention_ratio": 1.0,
+            "e2e_over_fastest_replay": 1.0,
+            "median_e2e_ms": 18560.615653637797,
+            "median_feedback_ms": 4.066814668476582,
+            "median_feedback_peak_delta_bytes": 29753856,
+            "peak_persistent_tables_bytes": 14450688,
+            "retained_bytes": 14450688
+          },
+          "fp32_replay": {
+            "compact_retention_ratio": 0.5051546391752577,
+            "e2e_over_fastest_replay": 1.2642483549483767,
+            "median_e2e_ms": 23465.227806940675,
+            "median_feedback_ms": 2.290118020027876,
+            "median_feedback_peak_delta_bytes": 393728,
+            "peak_persistent_tables_bytes": 28606464,
+            "retained_bytes": 28606464
+          },
+          "step_accumulator": {
+            "compact_retention_ratio": 6.125,
+            "e2e_over_fastest_replay": 1.2444538247700863,
+            "median_e2e_ms": 23097.82914025709,
+            "median_feedback_ms": 2.852281089872122,
+            "median_feedback_peak_delta_bytes": 98816,
+            "peak_persistent_tables_bytes": 2359296,
+            "retained_bytes": 2359296
+          }
+        }
+      }
+    },
+    "driver_source": "\"\"\"Repeat the 24-by-192 shape on the second GPU without changing its gate.\"\"\"\nimport json\nimport sys\nfrom pathlib import Path\n\nimport torch\nfrom rich.console import Console\nfrom transformers import AutoModelForCausalLM, AutoTokenizer\n\nfrom compare_score_replay import MODES, RANK, ROUNDS, run, check_gradient, summarize\n\n\ndef main():\n    torch.set_num_threads(1)\n    torch.set_float32_matmul_precision(\"highest\")\n    snapshot_dir, target = map(Path, sys.argv[1:])\n    tokenizer = AutoTokenizer.from_pretrained(snapshot_dir, local_files_only=True, trust_remote_code=False)\n    model = AutoModelForCausalLM.from_pretrained(snapshot_dir, dtype=torch.bfloat16, attn_implementation=\"sdpa\",\n                                                use_safetensors=True, local_files_only=True,\n                                                trust_remote_code=False).to(\"cuda\").eval()\n    gen = torch.Generator(device=\"cuda\").manual_seed(20261124)\n    basis = torch.randn((model.config.vocab_size, RANK), generator=gen, device=\"cuda\") * 0.25\n    observed = []\n    console = Console()\n    with torch.inference_mode():\n        for mode in MODES:\n            run(model, tokenizer, basis, 8, 16, mode, 909)\n        for trial in range(ROUNDS):\n            seed = 4100 + trial\n            order = (trial + 2) % len(MODES)\n            trials, gradients, ideal = {}, {}, None\n            for mode in MODES[order:] + MODES[:order]:\n                gradient, timing, reference = run(model, tokenizer, basis, 24, 192, mode, seed,\n                                                  oracle=mode == \"compact_replay\")\n                if reference is not None:\n                    ideal = reference\n                trials[mode], gradients[mode] = timing, gradient\n            for key in (\"token_sha256\", \"support_sha256\", \"final_eos\"):\n                assert len({row[key] for row in trials.values()}) == 1, key\n            for mode, timing in trials.items():\n                timing.update(check_gradient(gradients[mode], ideal))\n            observed.append(trials)\n            console.print_json(data={\"shape\": \"24x192\", \"round\": trial,\n                                    \"scores\": {m: [v[\"end_to_end_ms\"], v[\"feedback_ms\"]] for m, v in trials.items()}})\n    result = {\"rows\": {\"24x192\": observed}, \"summary\": summarize({\"24x192\": observed}),\n              \"scope\": \"Second-device standalone replication of the exact same 24x192 rollout shape. Analyze each invocation on its own.\"}\n    console.print_json(data=result[\"summary\"])\n    with target.open(\"x\", encoding=\"utf-8\") as sink:\n        json.dump(result, sink, sort_keys=True, allow_nan=False)\n\n\nif __name__ == \"__main__\":\n    main()\n",
+    "dsr_receipt": {
+      "command": "quality",
+      "details": {
+        "checks": [
+          {
+            "command": "set -e; export CUDA_VISIBLE_DEVICES=1 UV_OFFLINE=true UV_PROJECT_ENVIRONMENT=/data/projects/bio_inspired_nanochat/.venv OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1; test \"$(git rev-parse HEAD)\" = 0a3a0c4c1625f6ad75409f99dbd6d5e204f9a9f6; printf '%s  %s\\n' dae42ea207a4cd615137b89f72f63e1dd6b157dcda3fd509e8ee2fa57e9c33b5 /data/projects/bio-score-replay.U3tLED35/repeat_long_shape.py fedf1ed7c4f88f93f35665881f1aef1a89430d5fe7a8a6675c6765209e2f90d8 /data/projects/bio-score-replay.U3tLED35/compare_score_replay.py 08faf1e950173bb44c11d26df28c55da7237dc55c77dbc1cbae4a5d7584540d9 /data/projects/bio-learning-pilot.XRewL9V1/weights/model.safetensors a48e6ab280ad87a25f06da604d486aa819b9c1bc467dae7c25fe5d05c57f5511 /data/projects/bio-learning-pilot.XRewL9V1/weights/config.json c0382117ea329cdf097041132f6d735924b697924d6f6fc3945713e96ce87539 /data/projects/bio-learning-pilot.XRewL9V1/weights/tokenizer.json d743761ff02297cc5cdf38a612b0f78d5cdf5ceb3f251ab1d25ad353d24b1887 /data/projects/bio-learning-pilot.XRewL9V1/weights/tokenizer_config.json | sha256sum --check; flock -w 60 /tmp/bio_inspired_nanochat-trj-gpu1.lock taskset -c 53 uv run --no-sync python /data/projects/bio-score-replay.U3tLED35/repeat_long_shape.py /data/projects/bio-learning-pilot.XRewL9V1/weights /data/projects/bio-score-replay.U3tLED35/replication.json; sha256sum /data/projects/bio-score-replay.U3tLED35/replication.json",
+            "cwd": "/data/projects/bio-prefill-scan.Nq3wZNFe/source",
+            "duration_ms": 408210,
+            "executed": true,
+            "exit_code": 0,
+            "log_path": "/home/ubuntu/.local/state/dsr/quality-logs/bio-score-long-shape-replication/20261124T193121-Y3qe5Pk0/check-1.log",
+            "log_sha256": "255d586eff1aa83b27519c29b296ac80de663f76d503f10eba71edee8082511d",
+            "output_preview": "6464,\n      \"median_feedback_peak_delta_bytes\": 393728,\n      \"e2e_over_fastest_replay\": 1.2642483549483767,\n      \"compact_retention_ratio\": 0.5051546391752577\n    },\n    \"step_accumulator\": {\n      \"median_e2e_ms\": 23097.82914025709,\n      \"median_feedback_ms\": 2.852281089872122,\n      \"retained_bytes\": 2359296,\n      \"peak_persistent_tables_bytes\": 2359296,\n      \"median_feedback_peak_delta_bytes\": 98816,\n      \"e2e_over_fastest_replay\": 1.2444538247700863,\n      \"compact_retention_ratio\": 6.125\n    },\n    \"chunk_accumulator\": {\n      \"median_e2e_ms\": 19605.81774637103,\n      \"median_feedback_ms\": 3.3862199634313583,\n      \"retained_bytes\": 2359296,\n      \"peak_persistent_tables_bytes\": 3563520,\n      \"median_feedback_peak_delta_bytes\": 98816,\n      \"e2e_over_fastest_replay\": 1.056312899972603,\n      \"compact_retention_ratio\": 6.125\n    }\n  }\n}\n48c1de182cc8e5fa7703b6a8e9d1b1c6ba08027d3da79e43c3f21a60b3e3acb1  /data/projects/bio-score-replay.U3tLED35/replication.json\n\n# exit_code: 0\n",
+            "passed": true,
+            "status": "passed",
+            "timeout_seconds": 900
+          }
+        ],
+        "config_path": "/data/projects/bio-score-replay.U3tLED35/bio-score-long-shape-replication.yaml",
+        "config_sha256": "2cae8627196a1a852e55071e803bf3fc8f40c1ab2a6d53f41ddac2b5a69b6e8f",
+        "config_sha256_after": "2cae8627196a1a852e55071e803bf3fc8f40c1ab2a6d53f41ddac2b5a69b6e8f",
+        "config_snapshot_path": "/home/ubuntu/.local/state/dsr/quality-logs/bio-score-long-shape-replication/20261124T193121-Y3qe5Pk0/checks-config.yaml",
+        "dry_run": false,
+        "dsr_version": "0.2.3",
+        "duration_ms": 409521,
+        "executed": 1,
+        "failed": 0,
+        "interrupted": 0,
+        "not_run": 0,
+        "observed": 1,
+        "passed": 1,
+        "planned": 0,
+        "run_dir": "/home/ubuntu/.local/state/dsr/quality-logs/bio-score-long-shape-replication/20261124T193121-Y3qe5Pk0",
+        "skipped": false,
+        "source_after": "0a3a0c4c1625f6ad75409f99dbd6d5e204f9a9f6|06fd1218e96460edbed295f43295296b239edf0fd942a0a64c047704ad719a8b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+        "source_before": "0a3a0c4c1625f6ad75409f99dbd6d5e204f9a9f6|06fd1218e96460edbed295f43295296b239edf0fd942a0a64c047704ad719a8b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+        "status": "passed",
+        "timeout_seconds": 900,
+        "tool": "bio-score-long-shape-replication",
+        "total": 1
+      },
+      "duration_ms": 0,
+      "exit_code": 0,
+      "run_id": "ca9b726a-4fe4-48b0-94a9-b6218013214a",
+      "started_at": "2026-11-25T00:41:20Z",
+      "status": "success",
+      "tool": "dsr",
+      "version": "0.2.3"
+    },
+    "raw_result_sha256": "48c1de182cc8e5fa7703b6a8e9d1b1c6ba08027d3da79e43c3f21a60b3e3acb1",
+    "source_sha256": "dae42ea207a4cd615137b89f72f63e1dd6b157dcda3fd509e8ee2fa57e9c33b5",
+    "standalone_pass": {
+      "chunk_accumulator": false,
+      "step_accumulator": false
+    }
+  }
+}
