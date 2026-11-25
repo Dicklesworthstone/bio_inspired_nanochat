@@ -110,7 +110,7 @@ def build_commands(
     return out
 
 
-def scoring_command(columns, seeds, recipe, template, out_dir, manifest_path=None):
+def scoring_command(columns, seeds, recipe, template, out_dir, manifest_path=None, *, bpb_only=False):
     argv = [sys.executable, "-m", "scripts.eval_matrix", "matrix", "--presets",
             ",".join(c.config_id for c in columns), "--seeds", ",".join(map(str, seeds)),
             "--checkpoint-dir", str(Path(get_base_dir()) / "base_checkpoints" / template),
@@ -121,6 +121,8 @@ def scoring_command(columns, seeds, recipe, template, out_dir, manifest_path=Non
             argv.extend([option, recipe[train_key]])
     if manifest_path:
         argv.extend(["--matrix-manifest", str(manifest_path)])
+    if bpb_only:
+        argv.append("--bpb-only")
     return argv
 
 
@@ -245,7 +247,7 @@ def run_cells(manifest, path, columns, seeds, recipe, nproc, restart, *, plan_on
     return 0
 
 
-def screening_costs(csv_path, base, current_data, source_sha, recipe, columns, seeds, tokens, nproc):
+def screening_costs(csv_path, base, current_data, source_sha, recipe, columns, seeds, tokens, nproc, *, bpb_only):
     """Project each arm at its slowest observed screen rate and charge past attempts."""
     with csv_path.open(newline="", encoding="utf-8") as stream:
         first = next(csv.DictReader(stream))
@@ -257,6 +259,8 @@ def screening_costs(csv_path, base, current_data, source_sha, recipe, columns, s
         screen["run_id"] != first["matrix_manifest_digest"] or screen["data"] != current_data
         or screen["source_sha256"] != source_sha or screen["world_size"] != nproc):
         raise ValueError("screen and confirmation inputs do not match")
+    if bpb_only is not screen.get("bpb_only", False):
+        raise ValueError("confirmation scoring mode differs from the screen")
     for key in set(recipe) | set(screen["recipe"]):
         if key not in {"num_iterations", "save_every", "eval_every"} and recipe.get(key) != screen["recipe"].get(key):
             raise ValueError(f"confirmation changed the screen recipe field {key}")
@@ -296,6 +300,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--screen-csv", type=Path, help="Complete scored D1 screen for confirmation admission")
     parser.add_argument("--tok-per-sec", type=float, help="Conservative aggregate training rate for the initial screen")
     parser.add_argument("--score-seconds-per-cell", type=float, help="Measured conservative single-GPU scoring wall time for one screening cell")
+    parser.add_argument("--bpb-only", action="store_true", help="Freeze BPB-only checkpoint scoring in the matrix manifest")
     parser.add_argument("--cap-gpu-hours", type=float, default=am.DEFAULT_GPU_HOUR_CAP)
     parser.add_argument("--out-dir", type=Path, help="Root for the printed scorer's outputs")
     args = parser.parse_args(argv)
@@ -363,7 +368,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 parser.error("training tokens differ from the registered stage budget")
             if args.stage == "confirmation":
                 per_arm, screen_spend = screening_costs(args.screen_csv, base, data, source_sha, fields,
-                                                         columns, seeds, tokens, args.nproc)
+                                                         columns, seeds, tokens, args.nproc, bpb_only=args.bpb_only)
             else:
                 if args.tok_per_sec is None:
                     parser.error("screen admission needs its measured conservative --tok-per-sec")
@@ -379,6 +384,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             parser.error("structural and all-stage execution require explicit --exploratory")
         column_flags = {c.config_id: recipe_fields(am.base_train_argv(c, seed=0)[:-2]) for c in columns}
         manifest = mm.seal_manifest({
+            **({"bpb_only": True} if args.bpb_only else {}),
             "schema": 1, "stage": args.stage, "registered": registered, "git_revision": revision,
             "source_sha256": source_sha, "data": data, "recipe": fields, "seeds": seeds,
             "columns": [c.config_id for c in columns], "column_flags": column_flags, "num_iterations": steps,
@@ -414,7 +420,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         console.print("Unbound recipe preview. Use --plan with staged data to freeze the run and print its scoring command.")
         return 0
     console.print("\n[bold]score with:[/bold]")
-    console.print(shlex.join(scoring_command(columns, seeds, fields, template, out_dir, path)),
+    console.print(shlex.join(scoring_command(columns, seeds, fields, template, out_dir, path, bpb_only=args.bpb_only)),
                   markup=False, highlight=False, soft_wrap=True)
     return 0
 

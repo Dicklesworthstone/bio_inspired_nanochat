@@ -79,7 +79,8 @@ def test_eval_matrix_accepts_every_matrix_column():
     assert "synaptic_off" in MATRIX_COLUMNS and "add_neuromod" in MATRIX_COLUMNS
     assert not (set(MATRIX_COLUMNS) & set(PresetId.__args__)), "columns must not shadow presets"
     assert set(MATRIX_COLUMNS) | set(PresetId.__args__) == {
-        c.config_id for c in am.screening_columns() + am.d1_screening_columns() + am.structural_columns()
+        c.config_id
+        for c in am.screening_columns() + am.d1_screening_columns() + am.structural_columns() + am.exploratory_columns()
     }
     presyn_only = _syn_cfg_for_preset("control_presyn")
     assert presyn_only.enable_presyn and not presyn_only.enable_hebbian

@@ -191,8 +191,8 @@ class HarnessRunSummary:
     walltime_sec: float | None
     tok_per_sec: float | None
     train_loss_final: float | None
-    val_loss: float
-    val_ppl: float
+    val_loss: float | None
+    val_ppl: float | None
     val_bpb: float | None
     core_metric: float | None
     id_ece: float | None
@@ -1178,6 +1178,7 @@ def _run_one(
     core_eval: bool,
     core_max_per_task: int,
     ece_bins: int,
+    bpb_only: bool = False,
     niah_lengths: str = "",
     dead_expert_threshold: float = 0.01,
     continual_tasks: int = 3,
@@ -1381,6 +1382,7 @@ def _run_one(
         })
     run_config = {
         **identity,
+        **({"bpb_only": True} if bpb_only else {}),
         "preset": preset,
         "seed": seed,
         "recipe_source": recipe_source,
@@ -1539,16 +1541,25 @@ def _run_one(
 
     # Evaluation
     eval_steps = max(1, math.ceil(eval_tokens / world_tokens_per_micro) if manifest else eval_tokens // world_tokens_per_micro)
-    val_loss, val_ppl, id_ece, ood_auroc, routing = _val_loss_ppl_ece(
-        model,
-        val_iter,
-        steps=eval_steps,
-        device_type=device_type,
-        ddp=ddp,
-        ece_bins=ece_bins,
-        ood_seed=seed + 74_007,
-        dead_expert_threshold=dead_expert_threshold,
-    )
+    if bpb_only:
+        model.eval()
+        # The full scorer reserves the first window for loss/PPL/ECE. Advance the
+        # same loader so BPB still sees the exact second window of the manifest.
+        for _ in range(eval_steps):
+            next(val_iter)
+        val_loss = val_ppl = id_ece = ood_auroc = None
+        routing = RoutingMetricSummary(None, None, {})
+    else:
+        val_loss, val_ppl, id_ece, ood_auroc, routing = _val_loss_ppl_ece(
+            model,
+            val_iter,
+            steps=eval_steps,
+            device_type=device_type,
+            ddp=ddp,
+            ece_bins=ece_bins,
+            ood_seed=seed + 74_007,
+            dead_expert_threshold=dead_expert_threshold,
+        )
 
     val_bpb: float | None = None
     if eval_bpb:
@@ -1591,6 +1602,8 @@ def _run_one(
                         val_bpb = float(evaluate_bpb(model, val_iter, eval_steps, token_bytes))
                 finally:
                     model.forward = orig_forward
+    if bpb_only and (val_bpb is None or not math.isfinite(val_bpb)):
+        raise ValueError("BPB-only scoring requires a finite held-out BPB")
 
     core_metric: float | None = None
     if core_eval and ddp_rank == 0:
@@ -1607,39 +1620,43 @@ def _run_one(
     # the fast-weight / long-context claim. Swept over length × needle depth.
     niah_acc: float | None = None
     recall_by_length: dict[str, float] = {}
-    memory_status = "not_applicable"
+    memory_status = "not_run" if bpb_only else "not_applicable"
     memory_reason: str | None = "no supported context lengths"
-    try:
-        from bio_inspired_nanochat.synthetic_tasks import niah_accuracy_by_length
+    if bpb_only:
+        memory_reason = "BPB-only scoring"
+    else:
+        try:
+            from bio_inspired_nanochat.synthetic_tasks import niah_accuracy_by_length
 
-        context_max = int(sequence_len) - 2
-        max_len = context_max if niah_lengths.strip() else min(context_max, 256)
-        lengths_used = _resolve_niah_lengths(niah_lengths, max_len)
-        if lengths_used and ddp_rank == 0:
-            with autocast_ctx, _force_synaptic_eval_forward(model) as eval_model:
-                niah_result = niah_accuracy_by_length(
-                    eval_model,
-                    vocab_size=min(64, int(vocab_size)),
-                    lengths=lengths_used,
-                    batch=32,
-                    seed=int(seed),
-                    device=device,
-                )
-            niah_acc = float(niah_result["overall"])
-            recall_by_length = {
-                str(length): float(accuracy)
-                for length, accuracy in niah_result["by_length"].items()
-            }
-            memory_status = "ok"
-            memory_reason = None
-    except Exception as e:  # eval is best-effort; never fail a run on the probe
-        if ddp_rank == 0:
-            console.print(f"[yellow][niah] eval skipped:[/yellow] {e}")
-            memory_status = "error"
-            memory_reason = repr(e)
+            context_max = int(sequence_len) - 2
+            max_len = context_max if niah_lengths.strip() else min(context_max, 256)
+            lengths_used = _resolve_niah_lengths(niah_lengths, max_len)
+            if lengths_used and ddp_rank == 0:
+                with autocast_ctx, _force_synaptic_eval_forward(model) as eval_model:
+                    niah_result = niah_accuracy_by_length(
+                        eval_model,
+                        vocab_size=min(64, int(vocab_size)),
+                        lengths=lengths_used,
+                        batch=32,
+                        seed=int(seed),
+                        device=device,
+                    )
+                niah_acc = float(niah_result["overall"])
+                recall_by_length = {
+                    str(length): float(accuracy)
+                    for length, accuracy in niah_result["by_length"].items()
+                }
+                memory_status = "ok"
+                memory_reason = None
+        except Exception as e:  # eval is best-effort; never fail a run on the probe
+            if ddp_rank == 0:
+                console.print(f"[yellow][niah] eval skipped:[/yellow] {e}")
+                memory_status = "error"
+                memory_reason = repr(e)
 
-    continual = ContinualMetricSummary(None, {}, [], "not_run", "non-zero DDP rank")
-    if ddp_rank == 0:
+    continual_reason = "BPB-only scoring" if bpb_only else "non-zero DDP rank"
+    continual = ContinualMetricSummary(None, {}, [], "not_run", continual_reason)
+    if not bpb_only and ddp_rank == 0:
         try:
             with autocast_ctx:
                 continual = _continual_forgetting_metric(
@@ -1679,9 +1696,9 @@ def _run_one(
     )
 
     capability_metric_status = {
-        "uncertainty": "ok",
+        "uncertainty": "not_run" if bpb_only else "ok",
         "continual": continual.status,
-        "routing": "ok" if routing.layers else "not_applicable",
+        "routing": "not_run" if bpb_only else ("ok" if routing.layers else "not_applicable"),
         "memory": memory_status,
     }
 
@@ -1782,7 +1799,7 @@ def _run_one(
             {
                 "run_id": run_id,
                 "capability": "uncertainty",
-                "status": "ok",
+                "status": capability_metric_status["uncertainty"],
                 "id_ece": summary.id_ece,
                 "ood_auroc": summary.ood_auroc,
                 "ece_bins": ece_bins,
@@ -1954,6 +1971,7 @@ def _run_batch(
                         weight_decay=args.weight_decay,
                         eval_tokens=args.eval_tokens,
                         eval_bpb=args.eval_bpb,
+                        bpb_only=args.bpb_only,
                         core_eval=args.core_eval,
                         core_max_per_task=args.core_max_per_task,
                         ece_bins=args.ece_bins,
@@ -2105,6 +2123,8 @@ def main() -> int:
         )
         p.add_argument("--eval-tokens", type=int, default=1_000_000)
         p.add_argument("--eval-bpb", action="store_true", help="Also compute val bpb (requires tokenizer artifacts)")
+        p.add_argument("--bpb-only", action="store_true",
+                       help="Score the same held-out BPB window and skip auxiliary diagnostics")
         p.add_argument("--core-eval", action="store_true", help="Also compute CORE metric (requires eval bundle)")
         p.add_argument("--core-max-per-task", type=int, default=200)
         p.add_argument("--ece-bins", type=int, default=15)
@@ -2190,6 +2210,13 @@ def main() -> int:
         parser.error("--continual-tasks must be >= 2")
     if args.continual_exposures < 1:
         parser.error("--continual-exposures must be >= 1")
+    if args.bpb_only:
+        if args.cmd != "matrix" or not args.matrix_manifest or not args.eval_bpb:
+            parser.error("--bpb-only requires matrix, --matrix-manifest, and --eval-bpb")
+        if args.core_eval or args.niah_lengths:
+            parser.error("--bpb-only is incompatible with --core-eval or --niah-lengths")
+        if args.eval_tokens < 1 or args.device_batch_size < 1:
+            parser.error("--bpb-only requires positive evaluation token and batch sizes")
     if not args.checkpoint_dir and not args.inline_smoke_training:
         parser.error(
             "scientific evaluation requires --checkpoint-dir from base_train; "
@@ -2199,6 +2226,14 @@ def main() -> int:
         if not args.checkpoint_dir or args.data != "fineweb" or not args.eval_bpb:
             parser.error("--matrix-manifest requires --checkpoint-dir, --data fineweb, and --eval-bpb")
         args.matrix_manifest = load_manifest(args.matrix_manifest)
+        if args.matrix_manifest.get("registered") or "bpb_only" in args.matrix_manifest:
+            if args.bpb_only is not args.matrix_manifest.get("bpb_only", False):
+                parser.error("scoring mode differs from the matrix manifest")
+        if args.bpb_only:
+            recipe = args.matrix_manifest["recipe"]
+            if (args.eval_tokens != int(recipe.get("eval_tokens", 1_000_000)) or
+                args.device_batch_size != int(recipe.get("device_batch_size", 8))):
+                parser.error("BPB token budget and batch size must match the matrix manifest")
         if dataset_identity() != args.matrix_manifest["data"]:
             raise ValueError("evaluation data/split/tokenizer do not match matrix manifest")
         if args.matrix_manifest["registered"]:

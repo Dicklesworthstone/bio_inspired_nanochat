@@ -101,6 +101,21 @@ uv run python -m scripts.matrix_launch --stage screening --nproc 2 --plan \
 Use the same arguments with `--execute` to train. Run the scoring command printed on the
 last line. Use `--execute --restart` to continue the same training manifest.
 
+For a BPB-only screen, pass `--bpb-only` to `matrix_launch` and budget with a measured
+scoring time from that mode. The manifest and printed scorer command bind the selection.
+The scorer reads past the first validation window and scores the same second window as
+the full evaluator. Auxiliary metrics are reported as `not_run`. Use the same mode for
+confirmation so its admission calculation uses observed costs from the same workload.
+Keep the full scorer for runs that need capability diagnostics.
+
+The BPB-only scorer reproduced the archived scores exactly on all six exploratory
+FineWeb checkpoints, each over 1,048,576 held-out input tokens. One saved scaffold
+checkpoint took a median of 141 seconds with BPB-only and 191 seconds with the full
+scorer across three completed warm pairs on the same RTX 4090. The fourth pair hit
+the overall timing deadline, and the first cold pair favored the full scorer.
+Measure admission rates on the reference geometry before starting a registered run.
+[Scoring evidence](../results/fineweb_bpb_only_2026-11-25.json)
+
 **Capacity and interpretation.** Shared width/depth and equal input tokens establish the
 registered budget. Record the trainable parameter count, active parameter count, optimizer
 names and recipe digest for each arm, including installed fast-weight matrices. A contrast

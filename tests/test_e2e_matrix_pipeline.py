@@ -104,6 +104,36 @@ def test_eval_matrix_scored_every_checkpoint_from_its_own_metadata(pipeline):
         assert int(r["trainable_params"]) > 0 and int(r["active_params"]) > 0
 
 
+def test_bpb_only_scores_the_same_window_on_the_same_checkpoints(pipeline):
+    argv = shlex.split(pipeline["launch"].stdout.splitlines()[-1])
+    out = pipeline["base_dir"] / "bpb_only"
+    argv[argv.index("--out-dir") + 1] = str(out)
+    argv.append("--bpb-only")
+    scored = _run(argv[2:], pipeline["env"], timeout=300)
+    assert scored.returncode == 0, (scored.stdout, scored.stderr)
+    summary, = out.rglob("summary.jsonl")
+
+    def read_cells(path):
+        rows = [json.loads(line) for line in path.read_text().splitlines()]
+        return {(row["preset"], row["seed"]): row for row in rows}
+
+    full = read_cells(pipeline["summary"].with_suffix(".jsonl"))
+    fast = read_cells(summary)
+    assert fast.keys() == full.keys()
+    for cell, row in fast.items():
+        assert row["status"] == "ok"
+        for field in ("val_bpb", "eval_tokens_processed", "eval_data_digest", "model_file_sha256"):
+            assert row[field] == full[cell][field]
+        assert all(row[field] is None for field in ("val_loss", "val_ppl", "id_ece", "niah_acc", "forgetting_rate"))
+        assert set(row["capability_metric_status"].values()) == {"not_run"}
+
+    wrong = argv.copy()
+    wrong[wrong.index("--eval-tokens") + 1] = "256"
+    rejected = _run(wrong[2:], pipeline["env"], timeout=60)
+    assert rejected.returncode == 2
+    assert "BPB token budget and batch size must match" in rejected.stderr
+
+
 def test_restart_requires_matching_run_and_preserves_complete_checkpoints(pipeline):
     manifest = pipeline["manifest"]
     timing = pipeline["base_dir"] / "matrix_runs" / manifest["run_id"] / "attempts.jsonl"

@@ -318,7 +318,8 @@ def test_restart_cannot_report_success_after_recorded_overrun(tmp_path):
         matrix_launch.run_cells(plan, path, [], [], [], 2, True)
 
 
-def test_confirmation_admits_complete_scored_screen_and_refuses_an_edited_pair(tmp_path, monkeypatch):
+@pytest.mark.parametrize("bpb_only", [False, True])
+def test_confirmation_admits_complete_scored_screen_and_refuses_an_edited_pair(tmp_path, monkeypatch, capsys, bpb_only):
     import json
     from test_eval_stats import _fixture_screen, _write_d1_fixture
     from scripts import matrix_launch
@@ -330,10 +331,13 @@ def test_confirmation_admits_complete_scored_screen_and_refuses_an_edited_pair(t
     monkeypatch.setattr(mm, "source_identity", lambda: ("2" * 40, "1" * 64))
     common = ("--device_type=cuda --depth=10 --max_seq_len=1024 --tie_embeddings=1 --eval_tokens=1048576 "
               "--device_batch_size=8 --total_batch_size=32768")
+    mode = ["--bpb-only"] if bpb_only else []
     assert matrix_launch.main(["--stage", "screening", "--plan", "--nproc", "2", "--tok-per-sec", "30000",
-                               "--score-seconds-per-cell", "8", f"--recipe={common} --num_iterations=305"]) == 0
+                               "--score-seconds-per-cell", "8", f"--recipe={common} --num_iterations=305", *mode]) == 0
+    assert ("--bpb-only" in shlex.split(capsys.readouterr().out.splitlines()[-1])) is bpb_only
     screen_path, = (tmp_path / "matrix_runs").glob("*/manifest.json")
     screen = mm.load_manifest(screen_path)
+    assert screen.get("bpb_only", False) is bpb_only
     data = _fixture_screen()
     data["add_bdnf"] = {1337: 3.5, 1338: 7.0}
     csv_path = tmp_path / "screen.csv"
@@ -347,16 +351,35 @@ def test_confirmation_admits_complete_scored_screen_and_refuses_an_edited_pair(t
     mm.seal_scores(screen, csv_path)
     argv = ["--stage", "confirmation", "--plan", "--nproc", "2", "--screen-csv", str(csv_path),
             f"--recipe={common} --num_iterations=3051"]
-    assert matrix_launch.main(argv) == 0
+    with pytest.raises(ValueError, match="confirmation scoring mode differs"):
+        matrix_launch.main([*argv, *([] if bpb_only else ["--bpb-only"])])
+    assert matrix_launch.main([*argv, *mode]) == 0
     plans = [json.loads(p.read_text()) for p in (tmp_path / "matrix_runs").glob("*/manifest.json")]
     confirmation, = (p for p in plans if p["stage"] == "confirmation")
+    assert confirmation.get("bpb_only", False) is bpb_only
     assert confirmation["seeds"] == list(range(2337, 2344))
     assert confirmation["screen_gpu_hours"] == pytest.approx(36 * (2 * 50 + 8) / 3600)
     assert len(confirmation["per_arm_gpu_hours"]) == 5
     data["add_bdnf"][1337] -= 0.25
     _write_d1_fixture(csv_path, data, manifest_digest=screen["run_id"])
     with pytest.raises(ValueError, match="completed scorer receipt"):
-        matrix_launch.main(argv)
+        matrix_launch.main([*argv, *mode])
+
+
+def test_registered_scorer_rejects_unsealed_bpb_only_mode(tmp_path, monkeypatch, capsys):
+    import json
+    from bio_inspired_nanochat.matrix_manifest import seal_manifest
+    from scripts.eval_matrix import main
+
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps(seal_manifest({"schema": 1, "stage": "screening", "registered": True})))
+    monkeypatch.setattr(sys, "argv", ["eval_matrix", "matrix", "--presets", "vanilla", "--seeds", "1337",
+                                     "--device-type", "cpu", "--data", "fineweb", "--checkpoint-dir", str(tmp_path),
+                                     "--matrix-manifest", str(manifest), "--eval-bpb", "--bpb-only"])
+    with pytest.raises(SystemExit) as error:
+        main()
+    assert error.value.code == 2
+    assert "scoring mode differs from the matrix manifest" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("flags", [
