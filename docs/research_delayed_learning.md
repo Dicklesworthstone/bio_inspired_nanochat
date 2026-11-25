@@ -235,3 +235,31 @@ Full replay, final-block replay with pinned host storage, and offloaded graph re
 All three used 0.195 MiB of device waiting state at depth eight. Final-block replay cut host waiting storage by a factor of 111 and reduced median total time by 4.2% versus the fastest eligible control. It missed the 20% advancement threshold. Graph offload finished faster in one of three paired rounds, had a lower median latency after feedback, and used less peak GPU memory. Final-block replay took 39.7% less total time than full recomputation.
 
 The study uses independent draws over the same four prompts on one RTX 4090. The two caps cover waiting tensors, and the peak column is incremental to the resident model and preallocated inputs. One ordered optimizer step follows each wave and uses fixed delayed coefficients. The [queue evidence archive](../results/delayed_lora_queue_2026-11-24.json) contains the native DSR receipt, every admission, raw timing samples, drivers, and independent recount.
+
+### Sharing frozen prompt activations
+
+- [x] Seal four prompt patterns, the 2 MiB device waiting cap, batch geometry, and identical draw streams for all arms.
+- [x] Compare full replay, unshared GPU activations, exact prompt-row sharing, and causal-prefix sharing in the same DSR invocation.
+- [x] Check every admission against a payload calculation and every shared activation against the current capture.
+- [x] Require matching sampled support and bitwise gradients and AdamW state whenever an arm completes.
+- [x] Deliberately substitute the old prompt activation for a changed prompt and verify that it corrupts the scored logits.
+- [x] Archive the four cases, rejected jobs, and independent recount.
+
+Repeat eight 4-by-16 jobs with the same four base prompts in the first seven jobs. Use the same draw stream in all arms and vary only the last job. Its four patterns are unchanged prompts, a final-token edit in one row, final-token edits in two rows, and first-token edits in two rows. Share activations only within the same batch lane, fixed model and adapter snapshot, and identical causal token histories at the same positions. An exact-row cache reuses a prompt only when the entire row matches. A prefix cache can reuse the preceding activations before a changed token. The harness compares the shared slice with the live capture bit for bit and reconstructs the original contiguous tensor for each differentiable replay. This experiment retains the original live forward passes. Prefix sharing also appears in serving systems that reuse attention KV, where it can avoid prefill computation. [PagedAttention paper](https://arxiv.org/abs/2309.06180)
+
+The fixed payload is 25,600 action and score bytes per job. Each stored BF16 activation takes 3,072 bytes. Each job keeps 60 generated-position activations, with prompt positions charged once for each stored row or causal prefix. The 2,097,152-byte cap leaves room for 136 prompt positions at depth eight. With all prompt rows repeated, the 100 distinct prompt positions predict 1,986,560 bytes at depth eight. One changed full row raises the exact-row prediction to 2,063,360 bytes, and two raise it to 2,140,160 bytes. Sharing the causal prefix should admit both final-token edits at 1,992,704 bytes and reject two first-token edits at 2,140,160 bytes. The test measures admission and update identity. It has no speed gate.
+
+### Prompt sharing result
+
+Every queue hit the predicted capacity boundary. Full replay admitted all eight jobs in all four cases and held 204,800 bytes while waiting. Unshared saved activations admitted four jobs in each case and rejected the fifth at 2,585,600 bytes.
+
+| Final job | Exact-row sharing | Causal-prefix sharing |
+|---|---:|---:|
+| Same prompts | 8/8 at 1,986,560 bytes | 8/8 at 1,986,560 bytes |
+| Final token edited in one row | 8/8 at 2,063,360 bytes | 8/8 at 1,989,632 bytes |
+| Final token edited in two rows | 7/8, eighth would hold 2,140,160 bytes | 8/8 at 1,992,704 bytes |
+| First token edited in two rows | 7/8, eighth would hold 2,140,160 bytes | 7/8, eighth would hold 2,140,160 bytes |
+
+Both sharing methods produced the same logits, per-job gradients, aggregated gradients, updated weights, and AdamW state as full replay whenever they admitted all eight jobs. Replaying the final job with stale activations in the two-final-token case changed selected logits by up to 15.90625 and 15.84375 in the edited lanes. The two unedited lanes had zero error. An early edit gave zero reuse on each edited lane because every later activation depends on the changed history.
+
+This run used one GPU, one fixed policy, and one set of sampler streams shared across the four cases. The capacity gain applies to queues with enough repeated prompt history. Admission excludes transient workspace. All forwards during generation still ran. The [prompt sharing archive](../results/delayed_lora_prompt_sharing_2026-11-24.json) preserves the terminal DSR receipt, the raw records, and an independent count of distinct causal histories and their bytes.
