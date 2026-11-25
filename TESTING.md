@@ -384,6 +384,22 @@ paired training slowdown by 5.78% across 12 fresh pairs. Its median measured
 the trainer.
 [Scan timings and DSR receipts](results/profiles/cpu_presyn_scan_2026-11-24.json)
 
+A later single-thread profile measured a median slowdown of 2.14× against
+live vanilla training. Zero of 20 pairs met the 2.00× ceiling. Within 42
+traced scan calls, the median time was 0.92 ms for native dispatch, 0.43 ms
+for stochastic input preparation, and 0.10 ms for the scalar EMA scan.
+
+A Rust trial reused calcium from the release calculation for keys with one
+finite selected drive. Keys selected multiple times kept the ordered sum.
+All 144 native fixtures and three AdamW updates matched the incumbent bit
+for bit. The isolated scan took 12–14% less time across three shapes. In
+12 rotated live training pairs, the candidate had a median slowdown of
+2.03× and three pairs met the ceiling. Its median paired training time fell
+2.2% versus the installed wheel and 0.8% versus the rebuilt parent. The
+trial missed the fixed training gate and the production kernel stayed on
+the incumbent.
+[Profile, candidate patch, and paired DSR receipts](results/profiles/cpu_presyn_postprocess_2026-11-24.json)
+
 The two-process Gloo tests passed all six cases on both revisions on `csd`
 with PyTorch `2.9.1+cpu`. On `trj` with CUDA hidden and PyTorch `2.9.1+cu128`,
 both revisions reproduced the broad run's five failures. Four
