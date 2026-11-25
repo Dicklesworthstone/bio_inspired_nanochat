@@ -1316,6 +1316,30 @@
         }
       ],
       "change_scope": "Windowed replay now accepts colocated CUDA tensors and FP16 or BF16 CUDA drives with FP32 recurrence. The release and integrator arithmetic, fallback, functional runtime ledger, and Lean statement are unchanged. DSR 33127696-047a-40bd-95d4-d6af807dd90a verified CPU and real CUDA parity, including repeated-index fallback and exact cross-window gradients. DSR 7f0385bf-6d59-4515-995f-d8f8253037a4 verified six matched training steps. CUDA behavior is empirical conformance evidence. The Lean theorem still concerns the reduced exact-real energy rate."
+    },
+    {
+      "cycle_id": "fineweb-exploration-and-disabled-release-runtime-binding-2026-11-24",
+      "frog_id": "bio_inspired_nanochat-4fw",
+      "hash_scope": "formal/lean/BioInspiredNanochat.lean",
+      "artifact_hash": "sha256:831498bc2853d86701250ea89024ab5f5f6190d2e3a5a9ae66f93a7d5d42d963",
+      "theorem_ids": ["BioInspiredNanochat.Metriplectic.energyRate_zero"],
+      "axioms": ["propext", "Classical.choice", "Quot.sound"],
+      "sorry_or_admit_present": false,
+      "runtime_mapping": [
+        {
+          "path": "bio_inspired_nanochat/ablation_matrix.py",
+          "sha256": "911c4573dec5008579502f9bfbd55c3ff069ce69b9db3328abe28685868f0247"
+        },
+        {
+          "path": "bio_inspired_nanochat/synaptic.py",
+          "sha256": "2f0b1f10f7c88d6129ac6738e58bc04ad24c827b20ead87f6adff94feabfb668"
+        },
+        {
+          "path": "tests/test_chunked_tbptt.py",
+          "sha256": "4417698c7713a8b2916f0f161e5c7f398fb606ff3c02344f4fa6df729b4bf3e8"
+        }
+      ],
+      "change_scope": "The exploratory matrix names a fused column explicitly. The detached per-key path with release disabled returns the neutral tensor for the group and skips prefix copies. The runtime checks cover the release tensor and state writes. The Lean statement concerns the reduced exact-real energy rate."
     }
   ]
 }

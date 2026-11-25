@@ -63,6 +63,29 @@ def _state_tensors(state):
     return tensors
 
 
+@pytest.mark.unit
+def test_disabled_detached_recurrence_preserves_state_without_prefix_writes():
+    cfg = SynapticConfig(enable_presyn=False)
+    presyn = SynapticPresyn(d_head=8, cfg=cfg)
+    state = build_presyn_state(B, T_KEY, H, "cpu", torch.float32, cfg)
+    tensors = _state_tensors(state)
+    versions = [tensor._version for tensor in tensors]
+    drive = torch.randn(B, H, T, K, requires_grad=True)
+    idx = torch.zeros_like(drive, dtype=torch.int64)
+    valid = torch.ones_like(idx, dtype=torch.bool)
+    valid[..., -1] = False
+
+    (release,) = chunked_recurrence(
+        presyn, state, [drive], [idx], chunk_len=0, train=True, valids=[valid],
+        active_key_counts=[T + 1], differentiable=False,
+    )
+
+    assert torch.equal(release, torch.ones_like(drive))
+    assert not release.requires_grad
+    assert all(a is b for a, b in zip(_state_tensors(state), tensors, strict=True))
+    assert [tensor._version for tensor in tensors] == versions
+
+
 # --------------------------------------------------------------------------- #
 # 1. Gradient is TRUNCATED at chunk boundaries, flows WITHIN a chunk
 # --------------------------------------------------------------------------- #

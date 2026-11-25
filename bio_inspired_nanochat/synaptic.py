@@ -1381,6 +1381,15 @@ def _release_recurrence_group(
     )
     flat_state, _, _ = _flatten_presyn_state(state)
     if (
+        not cfg.enable_presyn
+        and not differentiable
+        and not cfg.metriplectic_integrator
+        and not any(tensor.requires_grad for tensor in flat_state)
+    ):
+        # Disabled release returns one per edge and does not change the state.
+        # Avoid copying each causal prefix back onto itself for this group.
+        return torch.ones_like(drive)
+    if (
         valid is not None
         and query_count > 1
         and cfg.enable_presyn
