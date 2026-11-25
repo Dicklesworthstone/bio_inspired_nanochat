@@ -49,6 +49,26 @@ revision. [Current protocol](ablation_matrix.md) · [Follow-up DSR receipts](../
     through three updates. The same probe observed 160 fused scan calls in
     each of the training and evaluation forwards on a saved fused checkpoint.
     [Paired CUDA evidence](../results/profiles/d1_presyn_disabled_2026-11-24.json)
+  - [x] Train and score a bounded exploratory comparison of `vanilla`,
+    `synaptic_off`, and `bio_all_native`. Each of the six cells used two RTX
+    4090s, the D1 model geometry, and 1,048,576 FineWeb training positions.
+    All scores use 1,048,576 held-out positions covering 5,053,372 target
+    bytes. Both saved rank-local data cursors matched the count-baseline replay.
+
+    | Arm | Seed 1337 BPB | Seed 1338 BPB |
+    | --- | ---: | ---: |
+    | Vanilla | 3.960130 | 3.935749 |
+    | Mechanisms-off scaffold | 3.828697 | 3.789937 |
+    | Default synaptic stack with fused release | 3.830387 | 3.793704 |
+
+    The fused stack scored 0.001690 and 0.003766 BPB higher than the scaffold.
+    The matched unigram scored 2.345379 and the smoothed bigram 2.483714.
+    The full diagnostic scorer reached its deadline after two of six cells.
+    Direct BPB replay completed all six and reproduced both overlapping
+    values exactly. The two fused 10-million-token training cells alone
+    project to 1.84 GPU-hours at the measured median update times, before
+    controls or scoring. The registered 36-cell study remains open.
+    [Checkpoints, data, counts, and DSR evidence](../results/fineweb_accelerated_2026-11-24.json)
 - [ ] Train and score the matched vanilla reference, run admissible registered
   contrasts, then record the statistical decision or the measured budget shortfall.
   Select a final checkpoint only after the absolute quality and reproduction gates.
