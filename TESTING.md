@@ -400,6 +400,27 @@ trial missed the fixed training gate and the production kernel stayed on
 the incumbent.
 [Profile, candidate patch, and paired DSR receipts](results/profiles/cpu_presyn_postprocess_2026-11-24.json)
 
+The CPU allocation sweep ran 12 rounds in each of eight configurations on
+`csd`. In every round, live vanilla and synaptic training and cached decode
+shared the same CPU affinity and PyTorch thread count. The order of the four
+benchmarks rotated. The native binary produced bitwise-identical results
+across all 144 fixtures. Three AdamW updates matched bit for bit when the
+Rayon worker count changed at a fixed CPU allocation and PyTorch width.
+
+| CPU allocation | PyTorch threads | Median training slowdown, one to two Rayon workers | Median paired synaptic training time saved | Rounds meeting both limits, one to two workers |
+| --- | ---: | ---: | ---: | ---: |
+| One logical CPU | 1 | 2.126× → 2.042× | 2.1% | 0/12 → 4/12 |
+| Two SMT siblings | 1 | 2.108× → 2.005× | 5.7% | 1/12 → 6/12 |
+| Two physical cores | 1 | 2.187× → 1.997× | 12.8% | 1/12 → 6/12 |
+| Two physical cores | 2 | 2.207× → 2.109× | 1.5% | 0/12 → 0/12 |
+
+Cached decode met its 1.50× limit in 95 of 96 rounds. The best configuration
+met the training median limit of 2.00× and saved more than the preset 5%, but
+fell short of the required nine joint passes. This was a comparison of worker
+allocations on one host with the same model code and native binary.
+`bio_inspired_nanochat-r2d` remains in progress.
+[Raw measurements, independent recount, and DSR receipt](results/profiles/cpu_presyn_thread_topology_2026-11-24.json)
+
 The two-process Gloo tests passed all six cases on both revisions on `csd`
 with PyTorch `2.9.1+cpu`. On `trj` with CUDA hidden and PyTorch `2.9.1+cu128`,
 both revisions reproduced the broad run's five failures. Four
