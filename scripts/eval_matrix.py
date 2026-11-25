@@ -40,6 +40,7 @@ from rich.table import Table
 from bio_inspired_nanochat.ablation_matrix import (
     AblationConfig,
     d1_screening_columns,
+    exploratory_columns,
     screening_columns,
     structural_columns,
 )
@@ -94,12 +95,12 @@ DEFAULT_ABLATION_PRESETS: tuple[PresetId, ...] = (
     "bio_no_septin_barrier",
 )
 
-# The pre-registered matrix columns (docs/ablation_matrix.md) that are not named registry
-# presets: the synaptic_off anchor and the add-one-in columns. They are materialised through
+# Matrix columns outside the named registry presets include the synaptic_off anchor,
+# add-one-in columns, and explicitly selected exploratory columns. They are materialised through
 # ablation_matrix.AblationConfig.build_syn_cfg(), so this runner cannot drift from the spec.
 ALL_MATRIX_COLUMNS: dict[str, AblationConfig] = {
     column.config_id: column
-    for column in screening_columns() + d1_screening_columns() + structural_columns()
+    for column in screening_columns() + d1_screening_columns() + structural_columns() + exploratory_columns()
 }
 MATRIX_COLUMNS = {k: v for k, v in ALL_MATRIX_COLUMNS.items() if k not in set(PresetId.__args__)}
 

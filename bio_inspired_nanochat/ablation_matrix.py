@@ -292,6 +292,17 @@ def d1_screening_columns() -> list[AblationConfig]:
     return columns
 
 
+def exploratory_columns() -> list[AblationConfig]:
+    """Additional columns available by explicit selection outside the registered study."""
+    return [
+        AblationConfig(
+            "bio_all_native", Base.BIO_ALL, {"native_presyn": True}, "exploratory",
+            "The default synaptic stack with the native presynaptic backend. On CUDA it uses "
+            "the fused scan and its own stochastic draw stream.",
+        ),
+    ]
+
+
 # --------------------------------------------------------------------------- #
 # MoE stage (sx1m / uta; `--stage structural`). Everything that acts only on SynapticMoE blocks is
 # contrasted here against `moe_fixed` (bio_all on MoE, fixed expert population), never on the dense

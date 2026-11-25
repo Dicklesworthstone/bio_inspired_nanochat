@@ -66,7 +66,8 @@ STAGES = ("screening", "confirmation", "structural", "all")
 
 def columns_for_stage(stage: str, survivors: Sequence[str] = (), columns: Sequence[str] = ()) -> list[am.AblationConfig]:
     if columns:
-        known = {c.config_id: c for c in am.screening_columns() + am.d1_screening_columns() + am.structural_columns()}
+        available = am.screening_columns() + am.d1_screening_columns() + am.structural_columns() + am.exploratory_columns()
+        known = {c.config_id: c for c in available}
         unknown = [c for c in columns if c not in known]
         if unknown:
             raise ValueError(f"unknown column id(s) {unknown}; known: {sorted(known)}")

@@ -60,7 +60,11 @@ def test_watchdog_stops_term_resistant_training_within_allocation(tmp_path):
 RECIPE = ("--depth=10", "--total_batch_size=524288")
 
 
-@pytest.mark.parametrize("column", am.screening_columns() + am.d1_screening_columns()[-2:] + am.structural_columns(), ids=lambda c: c.config_id)
+@pytest.mark.parametrize(
+    "column",
+    am.screening_columns() + am.d1_screening_columns()[-2:] + am.structural_columns() + am.exploratory_columns(),
+    ids=lambda c: c.config_id,
+)
 def test_every_column_round_trips_through_the_base_train_override_parser(column):
     argv = am.base_train_argv(column, seed=1337, recipe=RECIPE)
     assert argv[: len(RECIPE)] == list(RECIPE)
@@ -78,6 +82,25 @@ def test_every_column_round_trips_through_the_base_train_override_parser(column)
         )
     assert "--init_seed=1337" in remaining
     assert f"--model_tag={am.matrix_model_tag(column.config_id, 1337)}" in remaining
+
+
+def test_native_full_stack_is_explicit_and_outside_the_registered_roster(capsys):
+    from scripts.eval_matrix import ALL_MATRIX_COLUMNS
+    from scripts.matrix_launch import main
+
+    preset = "bio_all_native"
+    candidate = ALL_MATRIX_COLUMNS[preset].build_syn_cfg()
+    reference = ALL_MATRIX_COLUMNS["bio_all"].build_syn_cfg()
+    assert candidate is not None and reference is not None
+    assert candidate.native_presyn and not reference.native_presyn
+    reference.native_presyn = True
+    assert candidate == reference
+    assert preset not in {column.config_id for column in am.d1_screening_columns()}
+    with pytest.raises(SystemExit) as error:
+        main(["--columns", preset])
+    assert error.value.code == 2
+    assert main(["--exploratory", "--columns", preset, "--seeds", "1337"]) == 0
+    assert "--syn_cfg.native_presyn=1" in capsys.readouterr().out
 
 
 def test_synaptic_off_anchor_neutralises_every_default_on_mechanism_on_the_command_line():
