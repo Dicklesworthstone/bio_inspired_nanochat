@@ -882,20 +882,29 @@ if not resuming:
     step = 0
     min_val_bpb = float("inf")
     val_bpb = float("inf")
+    evaluated = False
     smooth_train_loss = 0  # EMA of training loss
     total_training_time = 0  # total wall-clock time of training
 else:
     step = meta_data["step"]
-    val_bpb = meta_data.get("val_bpb")
-    if (
-        isinstance(val_bpb, bool)
-        or not isinstance(val_bpb, (int, float))
-        or not math.isfinite(float(val_bpb))
-    ):
-        raise ValueError("checkpoint val_bpb must be finite for exact resume")
-    val_bpb = float(val_bpb)
     loop_state = meta_data["loop_state"]
-    min_val_bpb = loop_state["min_val_bpb"]
+    saved_val_bpb = meta_data.get("val_bpb", math.nan)
+    saved_min_val_bpb = loop_state.get("min_val_bpb", math.nan)
+    # An intermediate checkpoint can precede evaluation when the recipe evaluates only at
+    # the end. Older trainers persisted both unset values as positive infinity.
+    evaluated = not (
+        eval_every <= 0 and step < num_iterations
+        and ((saved_val_bpb is None and saved_min_val_bpb is None)
+             or (saved_val_bpb == math.inf and saved_min_val_bpb == math.inf))
+    )
+    if evaluated:
+        for name, value in (("val_bpb", saved_val_bpb), ("min_val_bpb", saved_min_val_bpb)):
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+                raise ValueError(f"checkpoint {name} must be finite for exact resume")
+        val_bpb = float(saved_val_bpb)
+        min_val_bpb = float(saved_min_val_bpb)
+    else:
+        val_bpb = min_val_bpb = float("inf")
     smooth_train_loss = loop_state["smooth_train_loss"]
     total_training_time = loop_state["total_training_time"]
 
@@ -988,6 +997,7 @@ while True:
             val_bpb = evaluate_bpb(model, val_loader, eval_steps, token_bytes)
             if use_syn:
                 syn_model.forward = orig_forward
+        evaluated = True
         print0(f"Step {step:05d} | Validation bpb: {val_bpb:.4f}")
         min_val_bpb = min(min_val_bpb, val_bpb)
         wandb_run.log(
@@ -1072,7 +1082,7 @@ while True:
             [opt.state_dict() for opt in optimizers],  # optimizer states
             {  # metadata saved as json
                 "step": step,
-                "val_bpb": val_bpb,  # loss at last step
+                "val_bpb": val_bpb if evaluated else None,
                 "model_config": checkpoint_model_config(orig_model, model_config_kwargs),
                 "synapses": use_syn,  # mark if this is a synaptic model
                 # vg9.6: persist the full bio kinetics + provenance so the model round-trips
@@ -1095,7 +1105,7 @@ while True:
                 "max_seq_len": max_seq_len,
                 "dataloader_state_dict": collated_loader_state,
                 "loop_state": {  # all loop state (other than step) so that we can resume training
-                    "min_val_bpb": min_val_bpb,
+                    "min_val_bpb": min_val_bpb if evaluated else None,
                     "smooth_train_loss": smooth_train_loss,
                     "total_training_time": total_training_time,
                 },

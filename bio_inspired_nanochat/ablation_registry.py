@@ -129,8 +129,8 @@ MECHANISMS: tuple[MechanismFlag, ...] = (
     ),
     MechanismFlag(
         "recurrence_checkpoint", "recurrence_checkpoint_len", 0, 0, False,
-        ("differentiable_recurrence", "metriplectic_integrator"),
-        "Exact-gradient windowed checkpoint/replay for the deterministic CPU and CUDA metriplectic "
+        ("differentiable_recurrence",),
+        "Exact-gradient windowed checkpoint/replay for the deterministic CPU and CUDA "
         "presynaptic recurrence (0642.1.2.6).",
     ),
     MechanismFlag(

@@ -1356,6 +1356,34 @@
         }
       ],
       "change_scope": "CUDA Graph replay applies to the detached scripted recurrence. Dispatch still bypasses this path for the metriplectic integrator. The digest binds the checked source revision. The Lean statement applies to the reduced exact-real metriplectic energy rate."
+    },
+    {
+      "cycle_id": "ordinary-presyn-checkpoint-runtime-binding-2026-11-25",
+      "frog_id": "bio_inspired_nanochat-2u53",
+      "hash_scope": "formal/lean/BioInspiredNanochat.lean",
+      "artifact_hash": "sha256:831498bc2853d86701250ea89024ab5f5f6190d2e3a5a9ae66f93a7d5d42d963",
+      "theorem_ids": ["BioInspiredNanochat.Metriplectic.energyRate_zero"],
+      "axioms": ["propext", "Classical.choice", "Quot.sound"],
+      "sorry_or_admit_present": false,
+      "runtime_mapping": [
+        {
+          "path": "bio_inspired_nanochat/synaptic.py",
+          "sha256": "5514fa50fb8f85428d3d2bee5b78dd999c726002413d5008cbb553ff58fad8d9"
+        },
+        {
+          "path": "bio_inspired_nanochat/ablation_registry.py",
+          "sha256": "f7be2f95d9a28d4b42d1f0732bb6592c76185082a4ea4f03adbfd0d3b5078ef2"
+        },
+        {
+          "path": "tests/test_diff_recurrence_wiring.py",
+          "sha256": "fe415d8178751233af7dab4702ee59f1588e04f859aca48b6f2ac75818da9e7a"
+        },
+        {
+          "path": "docs/theory/metriplectic.md",
+          "sha256": "05cbb79247c1d750556a7b36506a2cf56135f2961854f41f50a5ff64a539500b"
+        }
+      ],
+      "change_scope": "Windowed full-BPTT replay also accepts ordinary deterministic presynaptic recurrence. Metriplectic replay retains the existing heat state initialization. The parity tests cover both transitions. The Lean theorem applies to the reduced exact-real metriplectic energy rate."
     }
   ]
 }

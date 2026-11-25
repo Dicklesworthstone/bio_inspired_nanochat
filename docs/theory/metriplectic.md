@@ -408,9 +408,11 @@ ledger cross the non-reentrant checkpoint as explicit tensors. The replay closur
 module-buffer mutation or custom checkpoint context: the caller commits the terminal EMA/ledger
 once per original forward window, while backward recomputation is functional.
 
-The live contract requires `enable_presyn=True`,
-`differentiable_recurrence=True`, `metriplectic_integrator=True`, standard attention,
+The live contract requires `enable_presyn=True`, `learnable_kinetics=True`,
+`differentiable_recurrence=True`, standard attention,
 `stochastic_train_frac=0`, and no MC sampling. Each checkpoint uses one CPU or CUDA device.
+The same replay also supports the ordinary presynaptic transition. The heat buffer is
+initialized for the metriplectic integrator and remains absent in ordinary recurrence.
 FP32 and FP64 drives use matching recurrent state and kinetics. FP16 and BF16 drives are also
 accepted on CUDA with FP32 recurrent state and kinetic parameters, matching the eager autocast
 path. Truncated-BPTT composition, FlexAttention, stochastic release, and MC sampling remain

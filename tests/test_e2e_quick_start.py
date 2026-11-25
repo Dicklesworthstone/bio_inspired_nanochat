@@ -22,6 +22,7 @@ import json
 import math
 import os
 import random
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -134,6 +135,69 @@ def test_base_train_records_exactly_one_train_row_in_the_registry(quick_start):
     assert len(train_rows) == 1, rows
     assert train_rows[0]["hardware"].startswith("cpu")
     assert math.isfinite(float(train_rows[0]["metrics"]["val_bpb"]))
+
+
+def test_base_train_resumes_a_checkpoint_written_before_first_validation(quick_start, tmp_path):
+    import torch
+
+    env = {**quick_start["env"], "BIO_RESULTS_REGISTRY": str(tmp_path / "resume_registry.jsonl")}
+    root = quick_start["base_dir"] / "base_checkpoints"
+    command = [
+        "scripts.base_train", "--device_type=cpu", "--torch_compile=0", "--synapses=0",
+        "--depth=1", "--max_seq_len=16", "--device_batch_size=1", "--total_batch_size=16",
+        "--num_iterations=2", "--save_every=1", "--eval_every=-1", "--eval_tokens=16",
+        "--core_metric_every=-1", "--sample_every=-1",
+    ]
+    original = _run([*command, "--model_tag=before_validation"], env, timeout=120)
+    assert original.returncode == 0, original.stderr[-4000:]
+    source = root / "before_validation"
+    metadata = json.loads((source / "meta_000001.json").read_text())
+    assert metadata["val_bpb"] is None and metadata["loop_state"]["min_val_bpb"] is None
+    final_bpb = json.loads((source / "meta_000002.json").read_text())["val_bpb"]
+    assert math.isfinite(final_bpb)
+
+    def same_state(left, right):
+        if torch.is_tensor(left):
+            assert left.dtype == right.dtype and left.shape == right.shape
+            assert torch.equal(
+                left.reshape(-1).contiguous().view(torch.uint8),
+                right.reshape(-1).contiguous().view(torch.uint8),
+            )
+        elif isinstance(left, dict):
+            assert left.keys() == right.keys()
+            for key in left:
+                same_state(left[key], right[key])
+        elif isinstance(left, (tuple, list)):
+            for a, b in zip(left, right, strict=True):
+                same_state(a, b)
+        else:
+            assert left == right
+
+    for name in ("null_score", "legacy_score", "invalid_score", "missing_shard"):
+        destination = root / name
+        destination.mkdir()
+        for file in (*source.glob("*000001*"), source / ".checkpoint_commit_regime_v1.json"):
+            if name == "missing_shard" and file.name.startswith("train_"):
+                continue
+            shutil.copyfile(file, destination / file.name)
+        meta_path = destination / "meta_000001.json"
+        if name in {"legacy_score", "invalid_score"}:
+            meta = json.loads(meta_path.read_text())
+            meta["val_bpb"] = math.inf if name == "legacy_score" else math.nan
+            meta["loop_state"]["min_val_bpb"] = math.inf
+            meta_path.write_text(json.dumps(meta))
+        restored = _run([*command, f"--model_tag={name}", "--resume_from_step=1"], env, timeout=120)
+        if name in {"invalid_score", "missing_shard"}:
+            diagnostic = "checkpoint val_bpb must be finite" if name == "invalid_score" else "incomplete or uncommitted"
+            assert restored.returncode != 0 and diagnostic in restored.stderr, restored.stderr[-4000:]
+            continue
+        assert restored.returncode == 0, restored.stderr[-4000:]
+        assert json.loads((destination / "meta_000002.json").read_text())["val_bpb"] == final_bpb
+        for name in ("model_000002.pt", "optim_000002_rank0.pt", "train_000002_rank0.pt"):
+            same_state(
+                torch.load(source / name, map_location="cpu", weights_only=True),
+                torch.load(destination / name, map_location="cpu", weights_only=True),
+            )
 
 
 def test_validation_only_scores_the_saved_checkpoint(quick_start):

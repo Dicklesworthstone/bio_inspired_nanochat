@@ -150,6 +150,11 @@ rank-local training shard must both declare the requested step. RNG restoration 
 compile wrapping and runtime/controller reconstruction, so setup work cannot consume draws from
 the checkpoint's saved future.
 
+When evaluation is deferred to the last step, a complete intermediate base checkpoint
+stores `null` for both validation BPB fields. The trainer also reads older checkpoints
+that used positive infinity for both fields under the same deferred evaluation recipe.
+The final checkpoint records the measured BPB.
+
 ## Caveats
 
 - **RNG blobs load on CPU.** `load_checkpoint` loads the `train_state` RNG blob with

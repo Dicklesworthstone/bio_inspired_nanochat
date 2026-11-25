@@ -49,7 +49,10 @@ def _model(
     train: bool = False,
     learnable: bool = True,
     metriplectic: bool = False,
+    stochastic_train_frac: float | None = None,
 ):
+    if stochastic_train_frac is None:
+        stochastic_train_frac = 0.0 if metriplectic or checkpoint_len > 0 else 0.12
     syn = SynapticConfig(
         learnable_kinetics=learnable,
         differentiable_recurrence=diff_rec,
@@ -57,7 +60,7 @@ def _model(
         recurrence_chunk_len=chunk_len,
         recurrence_checkpoint_len=checkpoint_len,
         metriplectic_integrator=metriplectic,
-        stochastic_train_frac=0.0 if metriplectic or checkpoint_len > 0 else 0.12,
+        stochastic_train_frac=stochastic_train_frac,
     )
     return make_tiny_synaptic(seed=seed, train=train, sequence_len=seq, syn_cfg=syn)
 
@@ -214,18 +217,23 @@ def test_calcium_decay_gradient_matches_finite_difference():
         pytest.param("cuda", torch.float16, marks=pytest.mark.gpu, id="cuda-fp16-autocast"),
     ],
 )
+@pytest.mark.parametrize("metriplectic", [False, True], ids=["ordinary", "metriplectic"])
 def test_live_model_checkpoint_matches_eager_forward_backward_and_runtime_buffers(
     device: str,
     autocast_dtype: torch.dtype | None,
+    metriplectic: bool,
 ):
-    eager = _model(diff_rec=True, block=4, seq=16, train=True, metriplectic=True).to(device)
+    eager = _model(
+        diff_rec=True, block=4, seq=16, train=True, metriplectic=metriplectic,
+        stochastic_train_frac=0.0,
+    ).to(device)
     replayed = _model(
         diff_rec=True,
         block=4,
         checkpoint_len=2,
         seq=16,
         train=True,
-        metriplectic=True,
+        metriplectic=metriplectic,
     ).to(device)
     x = random_tokens(1, 16, 97, seed=11).to(device)
     y = random_tokens(1, 16, 97, seed=12).to(device)
@@ -334,8 +342,17 @@ def test_validator_range_checks_block_and_chunk():
 def test_validator_rejects_checkpoint_without_full_differentiable_bptt():
     errors, _ = validate_config(SynapticConfig(recurrence_checkpoint_len=2))
     assert any("differentiable_recurrence" in error for error in errors)
-    assert any("metriplectic_integrator" in error for error in errors)
     assert any("stochastic_train_frac=0" in error for error in errors)
+
+    errors, _ = validate_config(
+        SynapticConfig(
+            learnable_kinetics=True,
+            differentiable_recurrence=True,
+            recurrence_checkpoint_len=2,
+            stochastic_train_frac=0.0,
+        )
+    )
+    assert errors == []
 
     errors, _ = validate_config(
         SynapticConfig(
@@ -364,9 +381,6 @@ def test_default_config_does_not_engage_the_recurrence():
     cfg = SynapticConfig()
     assert not cfg.differentiable_recurrence
     assert cfg.recurrence_checkpoint_len == 0
-    assert _BY_FIELD["recurrence_checkpoint_len"].requires == (
-        "differentiable_recurrence",
-        "metriplectic_integrator",
-    )
+    assert _BY_FIELD["recurrence_checkpoint_len"].requires == ("differentiable_recurrence",)
     errors, warnings = validate_config(cfg)
     assert errors == [] and warnings == []

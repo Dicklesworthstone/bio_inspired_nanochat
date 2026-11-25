@@ -2016,12 +2016,11 @@ def _checkpoint_recurrence_segment(
         not cfg.enable_presyn
         or not cfg.learnable_kinetics
         or not cfg.differentiable_recurrence
-        or not presyn.use_metriplectic_integrator()
         or presyn.kinetics is None
     ):
         raise ValueError(
             "recurrence checkpointing requires enable_presyn=True, learnable_kinetics=True, "
-            "differentiable_recurrence=True, and metriplectic_integrator=True"
+            "and differentiable_recurrence=True"
         )
     if cfg.use_flex_attention:
         raise ValueError("recurrence checkpointing does not yet support FlexAttention")
@@ -2046,7 +2045,7 @@ def _checkpoint_recurrence_segment(
     if any(idx.dtype != torch.long for idx in idxs):
         raise TypeError("recurrence checkpointing requires int64 index tensors")
 
-    if "HEAT" not in state:
+    if presyn.use_metriplectic_integrator() and "HEAT" not in state:
         state["HEAT"] = torch.zeros_like(state["C"])
 
     flat_state, delay_len, has_heat = _flatten_presyn_state(state)
