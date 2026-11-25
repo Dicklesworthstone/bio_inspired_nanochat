@@ -21,8 +21,10 @@
 import contextlib
 import functools
 import importlib
+import logging
 import math
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from contextvars import ContextVar
 from dataclasses import dataclass
 from enum import Enum
 from types import ModuleType
@@ -765,6 +767,7 @@ def _scripted_detached_presyn_scan(
     record_edges: bool = False,
     pre_uniform: torch.Tensor | None = None,
     pre_noise: torch.Tensor | None = None,
+    graph_draws: bool = False,
 ) -> tuple[
     torch.Tensor,
     torch.Tensor,
@@ -790,6 +793,7 @@ def _scripted_detached_presyn_scan(
 
     ``pre_uniform`` (B, H, T) and ``pre_noise`` (B, H, T, K) replace the per-query draws from
     ``generator`` when given, so a fused kernel fed the same draws can be checked against this loop.
+    ``graph_draws`` keeps the stochastic decision on device when the caller already made the draws.
     """
     calcium = calcium.detach().clone()
     buffer = buffer.detach().clone()
@@ -877,7 +881,7 @@ def _scripted_detached_presyn_scan(
             do_stochastic = uniform < stochastic_frac
             stochastic_mask = do_stochastic.unsqueeze(-1).expand_as(probability)
             stochastic_mask = stochastic_mask & step_valid
-            if not bool(stochastic_mask.any()):
+            if not graph_draws and not bool(stochastic_mask.any()):
                 released = released_deterministic
             else:
                 step_mask = stochastic_mask
@@ -897,6 +901,8 @@ def _scripted_detached_presyn_scan(
                     deviation = torch.sqrt(variance + 1e-6)
                     if pre_noise is not None:
                         noise = pre_noise[:, :, offset : offset + 1, :]
+                        if graph_draws:
+                            noise = torch.where(stochastic_mask.any(), noise, step_noise)
                     else:
                         noise = torch.randn(
                             (
@@ -1035,6 +1041,143 @@ def _scripted_detached_presyn_scan(
         ema_e,
         edges,
     )
+
+
+def _scan_layout(value: Any) -> tuple:
+    if torch.is_tensor(value):
+        return (value.device, value.dtype, tuple(value.shape), value.stride())
+    if isinstance(value, (tuple, list)):
+        return tuple(_scan_layout(item) for item in value)
+    return (type(value), value)
+
+
+def _clone_scan_tree(value: Any) -> Any:
+    if torch.is_tensor(value):
+        return value.clone()
+    if isinstance(value, (tuple, list)):
+        return type(value)(_clone_scan_tree(item) for item in value)
+    return value
+
+
+def _copy_scan_tree(dst: Any, src: Any) -> None:
+    if torch.is_tensor(dst):
+        dst.copy_(src)
+    elif isinstance(dst, (tuple, list)):
+        for left, right in zip(dst, src, strict=True):
+            _copy_scan_tree(left, right)
+
+
+def _same_scan_bits(left: Any, right: Any) -> bool:
+    if isinstance(left, (tuple, list)):
+        return len(left) == len(right) and all(
+            _same_scan_bits(a, b) for a, b in zip(left, right, strict=True)
+        )
+    return left.dtype == right.dtype and left.shape == right.shape and torch.equal(
+        left.reshape(-1).contiguous().view(torch.uint8),
+        right.reshape(-1).contiguous().view(torch.uint8),
+    )
+
+
+class ReferenceScanGraphs:
+    """Own exact-reference scan graphs on a single trainer's CUDA stream."""
+
+    def __init__(self, device: torch.device, *, max_entries: int = 32) -> None:
+        self.stream = torch.cuda.current_stream(device)
+        self.device = self.stream.device
+        self.capture_stream = torch.cuda.Stream(device=self.device)
+        self.max_entries = max_entries
+        self.entries: dict[tuple, Any] = {}
+        self.captures = 0
+        self.replays = 0
+        self.rejected = 0
+        self.enabled = True
+
+    @contextlib.contextmanager
+    def activate(self):
+        token = _reference_scan_graphs.set(self)
+        try:
+            yield
+        finally:
+            _reference_scan_graphs.reset(token)
+
+    def run(
+        self,
+        inputs: tuple,
+        generator: torch.Generator | None,
+        settings: tuple,
+        prepare: Callable[[torch.Generator | None], tuple],
+    ) -> Any:
+        eager = (*inputs, generator, *settings)
+        if (
+            not self.enabled
+            or inputs[0].device != self.device
+            or torch.cuda.current_stream(self.device) != self.stream
+            or torch.cuda.is_current_stream_capturing()
+        ):
+            return _scripted_detached_presyn_scan(*eager)
+        key = (
+            _scan_layout(inputs),
+            settings,
+            torch.is_autocast_enabled("cuda"),
+            torch.get_autocast_dtype("cuda"),
+            torch.are_deterministic_algorithms_enabled(),
+        )
+        if key in self.entries:
+            entry = self.entries[key]
+            if entry is None:
+                return _scripted_detached_presyn_scan(*eager)
+            graph, static, result = entry
+            _copy_scan_tree(static, prepare(generator))
+            graph.replay()
+            self.replays += 1
+            # The next layer or microbatch may reuse the same captured buffers.
+            return _clone_scan_tree(result)
+        if len(self.entries) >= self.max_entries:
+            return _scripted_detached_presyn_scan(*eager)
+
+        before = generator.get_state() if generator is not None else None
+        expected = _scripted_detached_presyn_scan(*eager)
+        # The first use stays on the reference path regardless of the capture verdict.
+        # Qualification uses a separate generator, so it cannot advance training RNG.
+        trial_generator = None
+        if before is not None:
+            trial_generator = torch.Generator(device=self.device)
+            trial_generator.set_state(before)
+        self.entries[key] = None
+        try:
+            # The trainer splits attention tensors along the query axis. Cloning those views
+            # gives each capture a compact staging buffer. Check its output against the live view.
+            static = _clone_scan_tree(prepare(trial_generator))
+            self.capture_stream.wait_stream(self.stream)
+            with torch.cuda.stream(self.capture_stream):
+                for _ in range(2):
+                    _scripted_detached_presyn_scan(*static)
+            self.capture_stream.synchronize()
+            graph = torch.cuda.CUDAGraph()
+            # Restore the owner stream even if CUDAGraph.capture_end raises.
+            with torch.cuda.stream(self.capture_stream), torch.cuda.graph(graph, stream=self.capture_stream):
+                result = _scripted_detached_presyn_scan(*static)
+            graph.replay()
+            rng_matches = generator is None or (
+                trial_generator is not None
+                and torch.equal(generator.get_state(), trial_generator.get_state())
+            )
+            if rng_matches and _same_scan_bits(expected, result):
+                self.entries[key] = (graph, static, result)
+                self.captures += 1
+        except RuntimeError as error:
+            # A capture can be rejected by CUDA or by an operator without capture support.
+            # Stop trying on this stream and retain the already-computed reference answer.
+            self.enabled = False
+            logging.getLogger(__name__).warning("Reference scan CUDA Graph capture disabled: %s", error)
+        if self.entries[key] is None:
+            self.rejected += 1
+        return expected
+
+
+_reference_scan_graphs: ContextVar[ReferenceScanGraphs | None] = ContextVar(
+    "_reference_scan_graphs", default=None,
+)
 
 
 def presyn_edge_release(
@@ -1447,7 +1590,7 @@ def _release_recurrence_group(
                 needs_drive_grad=needs_drive_grad,
             )
         with torch.no_grad():
-            scripted = _scripted_detached_presyn_scan(
+            scan_inputs = (
                 state["C"],
                 state["BUF"],
                 state["RRP"],
@@ -1462,11 +1605,14 @@ def _release_recurrence_group(
                 valid,
                 first_active_key_count,
                 presyn.ema_e,
-                train_generator,
+            )
+            draw_width = int(cfg.attn_topk)
+            count_cap = int(cfg.stochastic_count_cap)
+            scan_settings = (
                 train,
                 train_stochastic_frac,
-                int(cfg.attn_topk),
-                int(cfg.stochastic_count_cap),
+                draw_width,
+                count_cap,
                 math.exp(-1.0 / cfg.tau_c),
                 math.exp(-1.0 / cfg.tau_buf),
                 cfg.alpha_ca,
@@ -1487,6 +1633,22 @@ def _release_recurrence_group(
                 cfg.energy_use,
                 needs_drive_grad,
             )
+            graph_cache = _reference_scan_graphs.get() if train and drive.is_cuda else None
+            if graph_cache is None or (train_generator is not None and count_cap <= 0):
+                scripted = _scripted_detached_presyn_scan(*scan_inputs, train_generator, *scan_settings)
+            else:
+                def prepare(generator: torch.Generator | None) -> tuple:
+                    prepared = (*scan_inputs, None, *scan_settings)
+                    if generator is None:
+                        return prepared
+                    batch, heads, queries, topk = drive.shape
+                    uniform, noise = _scripted_scan_rng(
+                        valid, generator, batch, heads, queries, topk,
+                        draw_width, train_stochastic_frac, count_cap,
+                    )
+                    return (*prepared, uniform.view(batch, heads, queries), noise, True)
+
+                scripted = graph_cache.run(scan_inputs, train_generator, scan_settings, prepare)
         if train_generator is not None:
             presyn._commit_train_sampling_generator(train_generator)
         state.update(
@@ -1657,7 +1819,7 @@ def _fused_detached_scan(
 
 
 @torch.jit.script
-def _scripted_rust_scan_rng(
+def _scripted_scan_rng(
     valid: torch.Tensor,
     generator: torch.Generator | None,
     batch: int,
@@ -1674,12 +1836,16 @@ def _scripted_rust_scan_rng(
     uniforms = torch.jit.annotate(list[torch.Tensor], [])
     noises = torch.jit.annotate(list[torch.Tensor], [])
     zero_step = torch.zeros((batch, heads, 1, topk), device=valid.device, dtype=torch.float32)
+    threshold = (
+        float(torch.tensor(stochastic_frac, dtype=torch.float32, device=torch.device("cpu")))
+        if valid.is_cuda else stochastic_frac
+    )
     for offset in range(queries):
         step_uniform = torch.rand(
             (batch, heads, 1), device=valid.device, dtype=torch.float32, generator=generator
         )
         uniforms.append(step_uniform)
-        if count_cap > 0 and float(step_uniform.min()) < stochastic_frac:
+        if count_cap > 0 and float(step_uniform.min()) < threshold:
             do_draw = (
                 True
                 if all_rows_have_valid
@@ -1760,7 +1926,7 @@ def _rust_detached_scan(
     rows = batch * heads
     stochastic = train and stochastic_frac > 0.0
     if stochastic:
-        uniform, noise = _scripted_rust_scan_rng(
+        uniform, noise = _scripted_scan_rng(
             valid,
             generator,
             batch,

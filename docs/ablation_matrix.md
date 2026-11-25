@@ -116,6 +116,13 @@ the overall timing deadline, and the first cold pair favored the full scorer.
 Measure admission rates on the reference geometry before starting a registered run.
 [Scoring evidence](../results/fineweb_bpb_only_2026-11-25.json)
 
+The exploratory eager CUDA training recipe accepts `--reference_cuda_graphs=1`.
+Each process runs its first training update through the scripted reference, including
+after a restart. The trainer owns the cache on one device and stream. A new capture
+must reproduce the reference scan and RNG state exactly before replay is used.
+The launcher records the flag in the manifest recipe. Qualify the rates of all
+registered reference arms at the locked geometry before requesting admission.
+
 **Capacity and interpretation.** Shared width/depth and equal input tokens establish the
 registered budget. Record the trainable parameter count, active parameter count, optimizer
 names and recipe digest for each arm, including installed fast-weight matrices. A contrast

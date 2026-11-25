@@ -236,3 +236,104 @@ def test_cuda_dispatch_matches_the_scripted_scan_values_and_gradients():
     torch.testing.assert_close(ker_grad, ref_grad, rtol=1e-4, atol=1e-5)
     for name in ref_state:
         torch.testing.assert_close(ker_state[name], ref_state[name], rtol=1e-4, atol=1e-5)
+
+
+def _reference_cuda_scan(seed, fraction, queries=8):
+    from bio_inspired_nanochat.synaptic import (
+        SynapticConfig,
+        SynapticPresyn,
+        _release_recurrence_group,
+        build_presyn_state,
+    )
+
+    device = torch.device("cuda", torch.cuda.current_device())
+    config = SynapticConfig(native_presyn=False, attn_topk=4, stochastic_train_frac=fraction)
+    presyn = SynapticPresyn(8, config).to(device)
+    presyn._presyn_train_rng_seed.fill_(1234)
+    state = build_presyn_state(2, queries, 3, device, torch.float32, config)
+    generator = torch.Generator(device=device).manual_seed(seed)
+    dots = torch.randn(2, 3, queries + 2, queries, device=device, generator=generator)
+    causal = torch.ones(queries + 2, queries, device=device, dtype=torch.bool).tril()
+    vals, indices = torch.topk(dots.masked_fill(~causal, -torch.inf), 4, dim=-1)
+    valid = torch.isfinite(vals)[:, :, :queries]
+    drive = vals[:, :, :queries].requires_grad_()
+    indices = indices[:, :, :queries]
+    assert not drive.is_contiguous() and not indices.is_contiguous() and not valid.is_contiguous()
+    output = _release_recurrence_group(
+        presyn, state, drive, indices, valid, train=True,
+        differentiable=False, active_key_count=queries,
+    )
+    output.sum().backward()
+    return output.detach(), drive.grad, list(state.values()), presyn.ema_e, presyn._presyn_train_cuda_rng_state
+
+
+@pytest.mark.gpu
+@pytest.mark.parametrize("fraction", [0.0, 0.12])
+def test_reference_cuda_graph_replay_and_fallback(fraction):
+    from bio_inspired_nanochat.synaptic import ReferenceScanGraphs, _same_scan_bits
+
+    for _ in range(3):
+        _reference_cuda_scan(7, fraction)
+        _reference_cuda_scan(10, fraction, queries=9)
+    expected = [_reference_cuda_scan(seed, fraction) for seed in (7, 8, 9)]
+    other_shape = _reference_cuda_scan(10, fraction, queries=9)
+    graphs = ReferenceScanGraphs(torch.device("cuda"), max_entries=1)
+    with graphs.activate():
+        first = _reference_cuda_scan(7, fraction)
+        replay = _reference_cuda_scan(8, fraction)
+        bounded = _reference_cuda_scan(10, fraction, queries=9)
+        foreign = torch.cuda.Stream(device=graphs.device)
+        foreign.wait_stream(graphs.stream)
+        with torch.cuda.stream(foreign):
+            fallback = _reference_cuda_scan(9, fraction)
+        foreign.synchronize()
+    assert (graphs.captures, graphs.replays, graphs.rejected) == (1, 1, 0)
+    for label, actual, reference in zip(
+        ("first use", "replay", "foreign stream", "cache limit"),
+        (first, replay, fallback, bounded), (*expected, other_shape), strict=True,
+    ):
+        assert _same_scan_bits(actual, reference), label
+
+
+@pytest.mark.gpu
+def test_reference_cuda_graph_rejects_a_failed_bit_check(monkeypatch):
+    from bio_inspired_nanochat import synaptic
+
+    device = torch.device("cuda", torch.cuda.current_device())
+    for _ in range(3):
+        _reference_cuda_scan(7, 0.12)
+    expected = [_reference_cuda_scan(seed, 0.12) for seed in (7, 8)]
+    graphs = synaptic.ReferenceScanGraphs(device)
+    compare = synaptic._same_scan_bits
+    with monkeypatch.context() as context:
+        context.setattr(synaptic, "_same_scan_bits", lambda _left, _right: False)
+        with graphs.activate():
+            actual = [_reference_cuda_scan(seed, 0.12) for seed in (7, 8)]
+    assert (graphs.captures, graphs.replays, graphs.rejected) == (0, 0, 1)
+    assert compare(actual, expected)
+
+
+@pytest.mark.gpu
+def test_reference_cuda_graph_capture_error_restores_owner_stream(monkeypatch):
+    from bio_inspired_nanochat import synaptic
+
+    for _ in range(3):
+        _reference_cuda_scan(7, 0.12)
+    expected = [_reference_cuda_scan(seed, 0.12) for seed in (7, 8)]
+    graphs = synaptic.ReferenceScanGraphs(torch.device("cuda"))
+    scan = synaptic._scripted_detached_presyn_scan
+
+    def synchronize_in_capture(*args):
+        if torch.cuda.is_current_stream_capturing():
+            torch.cuda.current_stream().synchronize()
+        return scan(*args)
+
+    with monkeypatch.context() as context, graphs.activate():
+        context.setattr(synaptic, "_scripted_detached_presyn_scan", synchronize_in_capture)
+        actual = _reference_cuda_scan(7, 0.12)
+        assert torch.cuda.current_stream() == graphs.stream
+        fallback = _reference_cuda_scan(8, 0.12)
+
+    assert not graphs.enabled
+    assert (graphs.captures, graphs.replays, graphs.rejected) == (0, 0, 1)
+    assert synaptic._same_scan_bits((actual, fallback), expected)

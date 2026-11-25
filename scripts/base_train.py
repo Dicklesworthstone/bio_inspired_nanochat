@@ -15,6 +15,7 @@ import math
 import os
 
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+import logging
 import sys
 import time
 from ast import literal_eval
@@ -80,6 +81,7 @@ run = "dummy"  # wandb run name default ("dummy" is special - we won't log to wa
 # Runtime
 device_type = ""  # cuda|cpu|mps (empty => autodetect good device type default, in order: CUDA > MPS > CPU)
 torch_compile = 1  # 0 => run the model eagerly. Auto-disabled on Python 3.14+, where torch.compile raises (torch 2.x)
+reference_cuda_graphs = 0  # 1 => reuse qualified detached reference scans during eager CUDA training
 hebb_chunk_len = 0  # hwxb.8: >0 => read each batch this many tokens at a time through a KV cache so online Hebbian writes act within the sequence (truncated BPTT at chunk boundaries); 0 => ordinary full-sequence forward
 # Model architecture
 depth = (
@@ -178,6 +180,8 @@ _configured = configured_copy(globals())
 user_config = {k: _configured[k] for k in config_keys}
 globals().update(user_config)
 user_config["syn_cfg_overrides"] = dict(syn_cfg_overrides)
+if reference_cuda_graphs not in (0, 1):
+    raise ValueError("--reference_cuda_graphs must be 0 or 1")
 if syn_cfg_overrides and not synapses:
     # Fail here, before the tokenizer/data/model setup, so a typo in the flags costs seconds.
     raise ValueError(
@@ -919,6 +923,15 @@ if resuming:
 
 # -----------------------------------------------------------------------------
 # Training loop
+reference_graphs = None
+graph_warmup_step = step
+if reference_cuda_graphs:
+    if use_syn and device_type == "cuda" and not torch_compile and hebb_chunk_len == 0:
+        from bio_inspired_nanochat.synaptic import ReferenceScanGraphs
+
+        reference_graphs = ReferenceScanGraphs(device)
+    else:
+        print0("Reference scan CUDA Graphs require eager CUDA synaptic training without Hebbian chunking")
 while True:
     last_step = (
         step == num_iterations
@@ -1127,7 +1140,12 @@ while True:
                     x, y, chunk_len=hebb_chunk_len, loss_scale=1.0 / grad_accum_steps
                 )
         else:
-            with autocast_ctx:
+            graph_context = (
+                reference_graphs.activate()
+                if reference_graphs is not None and step > graph_warmup_step
+                else nullcontext()
+            )
+            with graph_context, autocast_ctx:
                 result = model(x, y, train_mode=True) if use_syn else model(x, y)
                 if isinstance(result, tuple):
                     logits, loss = result
@@ -1306,6 +1324,11 @@ while True:
 print0(f"Peak memory usage: {get_max_memory() / 1024 / 1024:.2f}MiB")
 print0(f"Total training time: {total_training_time / 60:.2f}m")
 print0(f"Minimum validation bpb: {min_val_bpb:.4f}")
+if reference_graphs is not None:
+    logging.getLogger(__name__).info(
+        "Reference scan CUDA Graphs rank %s: %s captures, %s replays, %s rejected",
+        ddp_rank, reference_graphs.captures, reference_graphs.replays, reference_graphs.rejected,
+    )
 
 # Log to report
 get_report().log(
