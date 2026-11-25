@@ -1,0 +1,754 @@
+{
+  "admission": {
+    "argv": [
+      "/data/projects/bio_inspired_nanochat/.venv/bin/python",
+      "-m",
+      "scripts.matrix_launch",
+      "--stage",
+      "screening",
+      "--nproc",
+      "2",
+      "--plan",
+      "--bpb-only",
+      "--cap-gpu-hours",
+      "72",
+      "--tok-per-sec",
+      "375.58719885856704",
+      "--score-seconds-per-cell",
+      "82.71167326485738",
+      "--recipe=--core_metric_every=-1 --depth=10 --device_batch_size=8 --device_type=cuda --embedding_lr=0.2 --eval_every=-1 --eval_tokens=1048576 --final_lr_frac=0.0 --grad_clip=1.0 --matrix_lr=0.02 --max_seq_len=1024 --num_iterations=152 --sample_every=-1 --save_every=-1 --target_param_data_ratio=-1 --tie_embeddings=1 --torch_compile=0 --total_batch_size=65536 --unembedding_lr=0.004 --warmdown_ratio=0.2 --warmup_ratio=0.1 --weight_decay=0.0"
+    ],
+    "cap_gpu_hours": 72,
+    "cells": 36,
+    "inputs": {
+      "bio_update_count": 3,
+      "observed_train_rate": 375.58719885856704,
+      "score_basis": "Matched vanilla BPB-only CLI on one GPU because the bio checkpoint was unavailable",
+      "score_seconds": 82.71167326485738,
+      "train_basis": "Fastest completed reference bio_all update, including cold updates"
+    },
+    "launcher_exit": 2,
+    "launcher_output": "usage: python -m scripts.matrix_launch [-h]\n                                       [--stage {screening,confirmation,structural,all}]\n                                       [--survivors SURVIVORS]\n                                       [--columns COLUMNS] [--seeds SEEDS]\n                                       [--recipe RECIPE] [--nproc NPROC]\n                                       [--execute] [--plan] [--exploratory]\n                                       [--restart] [--screen-csv SCREEN_CSV]\n                                       [--tok-per-sec TOK_PER_SEC]\n                                       [--score-seconds-per-cell SCORE_SECONDS_PER_CELL]\n                                       [--bpb-only]\n                                       [--cap-gpu-hours CAP_GPU_HOURS]\n                                       [--out-dir OUT_DIR]\npython -m scripts.matrix_launch: error: registered plan exceeds the aggregate device-hour cap\n",
+    "new_registered_manifest": false,
+    "scoring_gpu_hours": 0.8271167326485738,
+    "total_gpu_hours": 531.2750143326487,
+    "training_gpu_hours": 530.4478976,
+    "training_only_minimum_rate_for_72_gpu_hours": 2767.0755555555556,
+    "training_tokens_per_cell": 9961472
+  },
+  "attempts": [
+    {
+      "event": "start",
+      "started_at": 1795587126.5706546,
+      "tag": "matrix_screening_fb1493e35614257f55f9_vanilla_s1337"
+    },
+    {
+      "event": "end",
+      "exit": 0,
+      "seconds": 154.1354394769296,
+      "tag": "matrix_screening_fb1493e35614257f55f9_vanilla_s1337"
+    },
+    {
+      "event": "start",
+      "started_at": 1795587280.743564,
+      "tag": "matrix_screening_fb1493e35614257f55f9_bio_all_s1337"
+    },
+    {
+      "event": "end",
+      "exit": 137,
+      "seconds": 741.5042085298337,
+      "tag": "matrix_screening_fb1493e35614257f55f9_bio_all_s1337"
+    }
+  ],
+  "driver_inputs": {
+    "admit.py": {
+      "sha256": "81ea415fd9466f6d670db5e768e085a5b43c728eaa548e33cd3aa952ff2d4ec3",
+      "source": "\"\"\"Ask the existing registered launcher to price the exact 36-cell screen.\"\"\"\n\nimport json\nfrom pathlib import Path\nimport shlex\nimport subprocess\nimport sys\n\nfrom rich.console import Console\nfrom bio_inspired_nanochat.ablation_matrix import d1_screening_columns, SCREENING_SEEDS\nfrom bio_inspired_nanochat.common import get_base_dir\nfrom bio_inspired_nanochat.matrix_manifest import load_manifest, registered_tokens\n\n\npilot_file, input_file, output_file = map(Path, sys.argv[1:])\npilot = load_manifest(pilot_file)\ninputs = json.loads(input_file.read_text())\nrecipe = dict(pilot[\"recipe\"])\nbatch = int(recipe[\"total_batch_size\"])\ntokens = registered_tokens(\"screening\", batch)\nrecipe[\"num_iterations\"] = str(tokens // batch)\nassert tokens == 9961472\ncells = len(d1_screening_columns()) * len(SCREENING_SEEDS)\nassert cells == 36 and pilot[\"world_size\"] == 2 and pilot[\"bpb_only\"]\ncommand = [sys.executable, \"-m\", \"scripts.matrix_launch\", \"--stage\", \"screening\",\n           \"--nproc\", \"2\", \"--plan\", \"--bpb-only\",\n           \"--cap-gpu-hours\", \"72\", \"--tok-per-sec\", str(inputs[\"observed_train_rate\"]),\n           \"--score-seconds-per-cell\", str(inputs[\"score_seconds\"]),\n           f\"--recipe={shlex.join(f'--{key}={value}' for key, value in recipe.items())}\"]\ntraining = 2 * cells * tokens / inputs[\"observed_train_rate\"] / 3600\nscoring = cells * inputs[\"score_seconds\"] / 3600\npath_set_before = set(Path(get_base_dir()).glob(\"matrix_runs/*/manifest.json\"))\nresult = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False)\nConsole().file.write(result.stdout)\npath_set_after = set(Path(get_base_dir()).glob(\"matrix_runs/*/manifest.json\"))\nif training + scoring > 72:\n    assert result.returncode == 2 and \"registered plan exceeds the aggregate device-hour cap\" in result.stdout\n    assert path_set_before == path_set_after\nelse:\n    assert result.returncode == 0\n    frozen_path, = path_set_after - path_set_before\n    frozen = load_manifest(frozen_path)\n    assert frozen[\"registered\"] and frozen[\"columns\"] == [column.config_id for column in d1_screening_columns()]\n    assert frozen[\"bpb_only\"] and frozen[\"tokens_per_cell\"] == tokens and frozen[\"data\"] == pilot[\"data\"]\nwith output_file.open(\"x\") as stream:\n    json.dump({\n        \"argv\": command,\n        \"cells\": cells,\n        \"training_tokens_per_cell\": tokens,\n        \"inputs\": inputs,\n        \"training_gpu_hours\": training,\n        \"scoring_gpu_hours\": scoring,\n        \"total_gpu_hours\": training + scoring,\n        \"training_only_minimum_rate_for_72_gpu_hours\": 2 * cells * tokens / (72 * 3600),\n        \"cap_gpu_hours\": 72,\n        \"launcher_exit\": result.returncode,\n        \"new_registered_manifest\": bool(path_set_after - path_set_before),\n        \"launcher_output\": result.stdout,\n    }, stream, sort_keys=True, allow_nan=False)\n    stream.write(\"\\n\")\n"
+    },
+    "probe.py": {
+      "sha256": "90c74a7bab864a9fc0144e4f7c1afea91666b52ecce411cb16102e0fa158e487",
+      "source": "\"\"\"Run the production dual-GPU trainer and single-GPU BPB scorer for admission.\"\"\"\n\nimport json\nimport math\nimport os\nfrom pathlib import Path\nimport shlex\nimport subprocess\nimport sys\nimport time\n\nfrom rich.console import Console\nfrom bio_inspired_nanochat.matrix_manifest import dataset_identity, file_digest, load_manifest\n\n\nbase, output = map(Path, sys.argv[1:3])\narms = sys.argv[3].split(\",\")\nconsole = Console()\ntrain_recipe = json.loads(Path(\"results/fineweb_accelerated_2026-11-24.json\").read_text())[\n    \"checkpoint_recount\"\n][\"manifest\"][\"recipe\"]\ntrain_recipe[\"num_iterations\"] = \"8\"\nexpected_data = json.loads(Path(\"results/vanilla_pilot_2026-11-22.json\").read_text())[\"budget\"][\"input_identity\"]\nassert dataset_identity() == expected_data\nrecipe = [f\"--{key}={value}\" for key, value in train_recipe.items()]\nlaunch = [sys.executable, \"-m\", \"scripts.matrix_launch\", \"--stage\", \"screening\", \"--exploratory\",\n          \"--columns\", \",\".join(arms), \"--seeds\", \"1337\", \"--nproc\", \"2\", \"--bpb-only\",\n          \"--cap-gpu-hours\", \"0.5\", \"--execute\", f\"--recipe={shlex.join(recipe)}\"]\nscorer = None\nwith subprocess.Popen(launch, stdout=subprocess.PIPE, text=True, bufsize=1) as child:\n    assert child.stdout is not None\n    for line in child.stdout:\n        console.file.write(line)\n        console.file.flush()\n        if line.startswith(shlex.join([sys.executable, \"-m\", \"scripts.eval_matrix\", \"matrix\"]) + \" \"):\n            assert scorer is None\n            scorer = shlex.split(line)\n    if code := child.wait():\n        raise subprocess.CalledProcessError(code, launch)\nassert scorer is not None and \"--bpb-only\" in scorer\nmanifest_path = Path(scorer[scorer.index(\"--matrix-manifest\") + 1])\nmanifest = load_manifest(manifest_path)\nassert manifest[\"data\"] == expected_data and manifest[\"recipe\"] == train_recipe\nassert manifest[\"columns\"] == arms and manifest[\"seeds\"] == [1337] and manifest[\"world_size\"] == 2\nassert manifest[\"tokens_per_cell\"] == 8 * 65536 and not manifest[\"registered\"]\nattempts_path = manifest_path.with_name(\"attempts.jsonl\")\nattempts = [json.loads(line) for line in attempts_path.read_text().splitlines()]\nassert len(attempts) == 2 * len(arms)\noutput.mkdir()\nfor arm in arms:\n    score = scorer.copy()\n    score[score.index(\"--presets\") + 1] = arm\n    out = output / arm\n    score[score.index(\"--out-dir\") + 1] = str(out)\n    started = time.monotonic()\n    subprocess.run(score, env={**os.environ, \"CUDA_VISIBLE_DEVICES\": \"0\"}, check=True, timeout=360)\n    elapsed = time.monotonic() - started\n    summary, = out.rglob(\"summary.jsonl\")\n    row, = [json.loads(line) for line in summary.read_text().splitlines()]\n    assert row[\"preset\"] == arm and row[\"seed\"] == 1337 and row[\"status\"] == \"ok\"\n    assert row[\"matrix_manifest_digest\"] == manifest[\"run_id\"]\n    assert row[\"train_world_size\"] == 2 and row[\"world_size\"] == 1\n    assert row[\"train_tokens_processed\"] == 8 * 65536 and row[\"eval_tokens_processed\"] == 1048576\n    assert math.isfinite(row[\"val_bpb\"]) and set(row[\"capability_metric_status\"].values()) == {\"not_run\"}\n    checkpoint = base / \"base_checkpoints\" / manifest[\"checkpoint_template\"].format(preset=arm, seed=1337)\n    weight_hash = file_digest(checkpoint / \"model_000008.pt\")\n    assert weight_hash == row[\"model_file_sha256\"]\n    assert row[\"eval_data_digest\"] == expected_data[\"val_sha256\"]\n    assert row[\"tokenizer_digest\"] == expected_data[\"tokenizer_sha256\"]\n    provenance = json.loads((checkpoint / \"meta_000008.json\").read_text())\n    if arm != \"vanilla\":\n        # The manifest-bound scorer also checks the checkpoint's resolved flags.\n        flags = manifest[\"column_flags\"][arm]\n        assert flags[\"syn_cfg.native_presyn\"].lower() in {\"false\", \"0\"}\n        assert flags[\"syn_cfg.native_genetics\"].lower() in {\"false\", \"0\"}\n    row = {\"score_cli_wall_seconds\": elapsed, \"row\": row, \"argv\": score, \"model_hash\": weight_hash,\n           \"summary_sha256\": file_digest(summary), \"training_metadata\": {\n               \"loop_state\": provenance[\"loop_state\"], \"matrix_optimizer_names\": provenance[\"matrix_optimizer_names\"],\n               \"model_config\": provenance[\"model_config\"],\n           }}\n    with (output / f\"{arm}.json\").open(\"x\") as stream:\n        json.dump(row, stream, sort_keys=True, allow_nan=False)\n        stream.write(\"\\n\")\n    console.print(f\"{arm} BPB-only scorer completed in {elapsed:.3f} seconds\")\nwith (output / \"run.json\").open(\"x\") as stream:\n    json.dump({\"manifest\": manifest, \"attempts\": attempts, \"train_launch\": launch}, stream, sort_keys=True)\n    stream.write(\"\\n\")\n"
+    },
+    "recover.py": {
+      "sha256": "34476dd6b27ee681887dc89d3ccedd13d645aef12e22e7310b3c5546eb2e24e3",
+      "source": "\"\"\"Score the completed vanilla checkpoint after a bounded reference pilot stops.\"\"\"\n\nimport json\nimport math\nimport os\nfrom pathlib import Path\nimport subprocess\nimport sys\nimport time\n\nfrom rich.console import Console\nfrom bio_inspired_nanochat.matrix_manifest import file_digest, load_manifest\n\n\nbase, pilot_receipt, output = map(Path, sys.argv[1:])\nscript_dir = Path(__file__).resolve().parent\nreceipt = json.loads(pilot_receipt.read_text())\nassert receipt[\"status\"] == \"failure\"\ncheck, = receipt[\"details\"][\"checks\"]\nlog_path = Path(check[\"log_path\"])\nassert check[\"log_sha256\"] == file_digest(log_path)\nmanifest_path, = base.glob(\"matrix_runs/*/manifest.json\")\nmanifest = load_manifest(manifest_path)\nattempts = [json.loads(line) for line in manifest_path.with_name(\"attempts.jsonl\").read_text().splitlines()]\nassert [(event[\"event\"], event.get(\"exit\")) for event in attempts] == [\n    (\"start\", None), (\"end\", 0), (\"start\", None), (\"end\", 137),\n]\nassert \"got signal: 15\" in log_path.read_text()\nassert 895 < attempts[1][\"seconds\"] + attempts[3][\"seconds\"] < 900\noutput.mkdir()\nrecipe = manifest[\"recipe\"]\ncommand = [sys.executable, \"-m\", \"scripts.eval_matrix\", \"matrix\", \"--device-type\", \"cuda\",\n           \"--presets\", \"vanilla\", \"--seeds\", \"1337\",\n           \"--checkpoint-dir\", str(base / \"base_checkpoints\" / manifest[\"checkpoint_template\"]),\n           \"--checkpoint-step\", recipe[\"num_iterations\"], \"--matrix-manifest\", str(manifest_path),\n           \"--eval-bpb\", \"--bpb-only\", \"--data\", \"fineweb\", \"--fail-fast\",\n           \"--device-batch-size\", recipe[\"device_batch_size\"], \"--eval-tokens\", recipe[\"eval_tokens\"],\n           \"--out-dir\", str(output / \"score\")]\nstart = time.monotonic()\nsubprocess.run(command, check=True, timeout=360, env={**os.environ, \"CUDA_VISIBLE_DEVICES\": \"0\"})\nelapsed = time.monotonic() - start\nsummary, = (output / \"score\").rglob(\"summary.jsonl\")\nrow, = [json.loads(line) for line in summary.read_text().splitlines()]\nassert row[\"preset\"] == \"vanilla\" and row[\"seed\"] == 1337 and row[\"status\"] == \"ok\"\nassert row[\"matrix_manifest_digest\"] == manifest[\"run_id\"] and math.isfinite(row[\"val_bpb\"])\nassert row[\"train_tokens_processed\"] == 8 * 65536 and row[\"eval_tokens_processed\"] == 1048576\nassert row[\"train_world_size\"] == 2 and row[\"world_size\"] == 1\nassert row[\"eval_data_digest\"] == manifest[\"data\"][\"val_sha256\"]\nassert row[\"tokenizer_digest\"] == manifest[\"data\"][\"tokenizer_sha256\"]\nassert set(row[\"capability_metric_status\"].values()) == {\"not_run\"}\nweight = base / \"base_checkpoints\" / manifest[\"checkpoint_template\"].format(preset=\"vanilla\", seed=1337) / \"model_000008.pt\"\nassert file_digest(weight) == row[\"model_file_sha256\"]\nwith (output / \"vanilla.json\").open(\"x\") as stream:\n    json.dump({\"score_cli_wall_seconds\": elapsed, \"row\": row, \"argv\": command,\n               \"summary_sha256\": file_digest(summary),\n               \"summary_csv_sha256\": file_digest(summary.with_suffix(\".csv\"))}, stream, sort_keys=True)\n    stream.write(\"\\n\")\nprint(f\"Vanilla checkpoint BPB-only wall seconds: {elapsed:.3f}\", file=Console().file, flush=True)\n\nparsed = json.loads(subprocess.check_output(\n    [sys.executable, str(script_dir / \"summarize.py\"), str(log_path), str(manifest_path), str(output)],\n    text=True,\n))\nbio_updates = parsed[\"bio_all\"][\"updates\"]\nassert bio_updates\nbest_bio_update = min(update[\"seconds\"] for update in bio_updates)\ninput_rate = manifest[\"total_batch_size\"] / best_bio_update\ninputs = {\"observed_train_rate\": input_rate, \"score_seconds\": elapsed, \"bio_update_count\": len(bio_updates),\n          \"train_basis\": \"Fastest completed reference bio_all update, including cold updates\",\n          \"score_basis\": \"Matched vanilla BPB-only CLI on one GPU because the bio checkpoint was unavailable\"}\nwith (output / \"inputs.json\").open(\"x\") as stream:\n    json.dump(inputs, stream, sort_keys=True, allow_nan=False)\n    stream.write(\"\\n\")\nwith (output / \"parsed.json\").open(\"x\") as stream:\n    json.dump(parsed, stream, sort_keys=True, allow_nan=False)\n    stream.write(\"\\n\")\nassert input_rate < 2 * 36 * 9961472 / (72 * 3600)\nsubprocess.run([sys.executable, str(script_dir / \"admit.py\"), str(manifest_path),\n                str(output / \"inputs.json\"), str(output / \"admission.json\")], check=True, timeout=120)\n"
+    },
+    "summarize.py": {
+      "sha256": "6503ea302b6ca5cdb82fc72bf0c8255c0efe3f0c99865339aa97bf6aa027fe0a",
+      "source": "\"\"\"Read the real trainer's calibrated update and memory measurements.\"\"\"\n\nimport json\nfrom pathlib import Path\nimport re\nimport statistics\nimport sys\n\nlog_text = Path(sys.argv[1]).read_text()\nmanifest = json.loads(Path(sys.argv[2]).read_text())\nscore_dir = Path(sys.argv[3])\nbatch = manifest[\"total_batch_size\"]\ntrain_world_size = manifest[\"world_size\"]\nassert batch == 65536 and train_world_size == 2\ncolumn_reports = {}\nfor arm in manifest[\"columns\"]:\n    tag = manifest[\"checkpoint_template\"].format(preset=arm, seed=1337)\n    prefixes = tuple(match.start() for match in re.finditer(rf\"^torchrun [^\\n]+--model_tag={tag}\\b\", log_text, re.M))\n    if not prefixes:\n        continue\n    start, = prefixes\n    end = log_text.find(\"\\ntorchrun \", start + 1)\n    section = log_text[start:] if end == -1 else log_text[start:end]\n    observed = re.findall(\n        r\"^step (\\d{5})/\\d{5} .*?loss: ([\\d.]+).*? dt: ([\\d.]+)ms \\| tok/sec: ([\\d,]+)\",\n        section, re.M,\n    )\n    updates = []\n    for step, loss, milliseconds, logged_rate in observed:\n        seconds = float(milliseconds) / 1000\n        rate = int(logged_rate.replace(\",\", \"\"))\n        assert abs(rate - batch / seconds) < max(2, rate * 0.0003)\n        updates.append({\"step\": int(step), \"loss\": float(loss), \"seconds\": seconds, \"logged_aggregate_tok_s\": rate})\n    assert [row[\"step\"] for row in updates] == list(range(len(updates)))\n    post_two = [row[\"seconds\"] for row in updates[2:]]\n    memory = re.findall(r\"^Peak memory usage: ([\\d.]+)MiB\", section, re.M)\n    assert len(memory) <= 1\n    score_path = score_dir / f\"{arm}.json\"\n    score = json.loads(score_path.read_text()) if score_path.exists() else None\n    column_reports[arm] = {\n        \"updates\": updates,\n        \"post_first_two_update_count\": len(post_two),\n        \"post_first_two_fastest_seconds\": min(post_two) if post_two else None,\n        \"post_first_two_median_seconds\": statistics.median(post_two) if post_two else None,\n        \"post_first_two_slowest_seconds\": max(post_two) if post_two else None,\n        \"rank0_peak_allocated_mib\": float(memory[0]) if memory else None,\n        \"score\": score,\n    }\nprint(json.dumps(column_reports, indent=2, allow_nan=False))\n"
+    }
+  },
+  "dsr_runs": {
+    "corrected": {
+      "config": {
+        "tools": {
+          "bio-d1-reference-admission-signal": {
+            "checks": [
+              "set -e; test \"$(git rev-parse HEAD)\" = f5139ef62d1c6c6e97810206867697e8bf3d7d87; git diff --exit-code; test -z \"$(git status --porcelain)\"; test -z \"$(nvidia-smi --query-compute-apps=pid --format=csv,noheader)\"; printf \"%s  %s\\n\" 34476dd6b27ee681887dc89d3ccedd13d645aef12e22e7310b3c5546eb2e24e3 /data/projects/bio-d1-ref.PFkYu6Ev/fixed/recover.py | sha256sum --check; printf \"%s  %s\\n\" 6503ea302b6ca5cdb82fc72bf0c8255c0efe3f0c99865339aa97bf6aa027fe0a /data/projects/bio-d1-ref.PFkYu6Ev/fixed/summarize.py | sha256sum --check; printf \"%s  %s\\n\" 81ea415fd9466f6d670db5e768e085a5b43c728eaa548e33cd3aa952ff2d4ec3 /data/projects/bio-d1-ref.PFkYu6Ev/fixed/admit.py | sha256sum --check; export UV_OFFLINE=true PYTHONDONTWRITEBYTECODE=1 UV_PROJECT_ENVIRONMENT=/data/projects/bio_inspired_nanochat/.venv PYTHONPATH=/data/projects/bio-d1-ref.PFkYu6Ev/source NANOCHAT_BASE_DIR=/data/projects/bio-d1-ref.PFkYu6Ev/cache BIO_RESULTS_REGISTRY=/data/projects/bio-d1-ref.PFkYu6Ev/registry.jsonl OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1; uv run --no-sync python /data/projects/bio-d1-ref.PFkYu6Ev/fixed/recover.py /data/projects/bio-d1-ref.PFkYu6Ev/cache /data/projects/bio-d1-ref.PFkYu6Ev/first-receipt.json /data/projects/bio-d1-ref.PFkYu6Ev/corrected; sha256sum /data/projects/bio-d1-ref.PFkYu6Ev/corrected/*.json"
+            ]
+          }
+        }
+      },
+      "log": "# dsr quality check\n# argv: set -e; test \"$(git rev-parse HEAD)\" = f5139ef62d1c6c6e97810206867697e8bf3d7d87; git diff --exit-code; test -z \"$(git status --porcelain)\"; test -z \"$(nvidia-smi --query-compute-apps=pid --format=csv,noheader)\"; printf \"%s  %s\\n\" 34476dd6b27ee681887dc89d3ccedd13d645aef12e22e7310b3c5546eb2e24e3 /data/projects/bio-d1-ref.PFkYu6Ev/fixed/recover.py | sha256sum --check; printf \"%s  %s\\n\" 6503ea302b6ca5cdb82fc72bf0c8255c0efe3f0c99865339aa97bf6aa027fe0a /data/projects/bio-d1-ref.PFkYu6Ev/fixed/summarize.py | sha256sum --check; printf \"%s  %s\\n\" 81ea415fd9466f6d670db5e768e085a5b43c728eaa548e33cd3aa952ff2d4ec3 /data/projects/bio-d1-ref.PFkYu6Ev/fixed/admit.py | sha256sum --check; export UV_OFFLINE=true PYTHONDONTWRITEBYTECODE=1 UV_PROJECT_ENVIRONMENT=/data/projects/bio_inspired_nanochat/.venv PYTHONPATH=/data/projects/bio-d1-ref.PFkYu6Ev/source NANOCHAT_BASE_DIR=/data/projects/bio-d1-ref.PFkYu6Ev/cache BIO_RESULTS_REGISTRY=/data/projects/bio-d1-ref.PFkYu6Ev/registry.jsonl OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1; uv run --no-sync python /data/projects/bio-d1-ref.PFkYu6Ev/fixed/recover.py /data/projects/bio-d1-ref.PFkYu6Ev/cache /data/projects/bio-d1-ref.PFkYu6Ev/first-receipt.json /data/projects/bio-d1-ref.PFkYu6Ev/corrected; sha256sum /data/projects/bio-d1-ref.PFkYu6Ev/corrected/*.json\n# cwd: /data/projects/bio-d1-ref.PFkYu6Ev/source\n# env: PATH=/home/ubuntu/.rch/shims:/home/ubuntu/.local/bin:/home/ubuntu/.rch/shims:/home/ubuntu/.local/bin:/home/ubuntu/.rch/shims:/home/ubuntu/.local/bin:/home/ubuntu/.rch/shims:/home/ubuntu/mcp_agent_mail:/home/ubuntu/.local/bin:/home/ubuntu/.nvm/versions/node/v26.0.0/bin:/home/ubuntu/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin\n# env: DSR_QUALITY_RUN_DIR=/home/ubuntu/.local/state/dsr/quality-logs/bio-d1-reference-admission-signal/20261125T013053-ERMIuJW3\n# env: DSR_QUALITY_TIMEOUT=620\n# env: DSR_REPOS_FILE=/data/projects/bio-d1-ref.PFkYu6Ev/fixed/corrected.yaml\n# env: DSR_CURRENT_CMD=quality\n# env: CARGO_TARGET_DIR=/scratch/cargo-targets\n# env: DSR_CURRENT_HOST=\n# env: DSR_RUN_ID=run-1795588251-1088161\n# env: CARGO_BUILD_JOBS=16\n# env: DSR_CURRENT_TOOL=\n# env: CARGO_INCREMENTAL=0\n# env: DSR_RUST_NATIVE_ENV_NAMES\n# started_monotonic_ms: 3328016434\n# timeout_seconds: 620\n# ----\n/data/projects/bio-d1-ref.PFkYu6Ev/fixed/recover.py: OK\n/data/projects/bio-d1-ref.PFkYu6Ev/fixed/summarize.py: OK\n/data/projects/bio-d1-ref.PFkYu6Ev/fixed/admit.py: OK\n2026-11-25 01:32:23,499 - bio_inspired_nanochat.common - \u001b[32m\u001b[1mINFO\u001b[0m - Distributed world size: 1\nEval Matrix Batch:\nmatrix_20261125_06\n       3223       \n\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 preset  \u2503 seed \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 vanilla \u2502 1337 \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n2026-11-25 01:32:30,107 - bio_inspired_nanochat.checkpoint_manager - \u001b[32m\u001b[1mINFO\u001b[0m - Building model with config: {'sequence_len': 1024, 'vocab_size': 65536, 'n_layer': 10, 'n_head': 5, 'n_kv_head': 5, 'n_embd': 640, 'tie_embeddings': True, 'init_type': 'baseline', 'init_seed': 1337, 'attention_type': 'standard', 'ultrametric_k': 8, 'ultrametric_p': 2, 'ultrametric_alpha': 2.0, 'ultrametric_lcp_beta': 32.0, 'ultrametric_query_chunk_size': 64}\n           Eval Matrix Summary: Q-vanilla-ckpt8-s1337-20261125_063237           \n\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 key                      \u2503                                             value \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 status                   \u2502                                                ok \u2502\n\u2502 error                    \u2502                                                   \u2502\n\u2502 run_id                   \u2502             Q-vanilla-ckpt8-s1337-20261125_063237 \u2502\n\u2502 run_dir                  \u2502 /data/projects/bio-d1-ref.PFkYu6Ev/corrected/sco\u2026 \u2502\n\u2502 preset                   \u2502                                           vanilla \u2502\n\u2502 seed                     \u2502                                              1337 \u2502\n\u2502 recipe_source            \u2502                             base_train_checkpoint \u2502\n\u2502 checkpoint_dir           \u2502 /data/projects/bio-d1-ref.PFkYu6Ev/cache/base_ch\u2026 \u2502\n\u2502 checkpoint_step          \u2502                                                 8 \u2502\n\u2502 checkpoint_git_sha       \u2502          f5139ef62d1c6c6e97810206867697e8bf3d7d87 \u2502\n\u2502 checkpoint_config_hash   \u2502                                  d43456bd81af4a22 \u2502\n\u2502 data                     \u2502                                           fineweb \u2502\n\u2502 device_type              \u2502                                              cuda \u2502\n\u2502 world_size               \u2502                                                 1 \u2502\n\u2502 init_type                \u2502                                          baseline \u2502\n\u2502 sequence_len             \u2502                                              1024 \u2502\n\u2502 vocab_size               \u2502                                             65536 \u2502\n\u2502 n_layer                  \u2502                                                10 \u2502\n\u2502 n_head                   \u2502                                                 5 \u2502\n\u2502 n_embd                   \u2502                                               640 \u2502\n\u2502 use_moe                  \u2502                                             False \u2502\n\u2502 num_experts              \u2502                                                 0 \u2502\n\u2502 moe_top_k                \u2502                                                 0 \u2502\n\u2502 device_batch_size        \u2502                                                 8 \u2502\n\u2502 total_batch_size_tokens  \u2502                                             65536 \u2502\n\u2502 grad_accum_steps         \u2502                                                   \u2502\n\u2502 train_tokens_requested   \u2502                                            524288 \u2502\n\u2502 train_tokens_processed   \u2502                                            524288 \u2502\n\u2502 steps                    \u2502                                                 8 \u2502\n\u2502 eval_tokens              \u2502                                           1048576 \u2502\n\u2502 eval_steps               \u2502                                               128 \u2502\n\u2502 eval_bpb                 \u2502                                              True \u2502\n\u2502 core_eval                \u2502                                             False \u2502\n\u2502 core_max_per_task        \u2502                                               200 \u2502\n\u2502 ece_bins                 \u2502                                                15 \u2502\n\u2502 dead_expert_threshold    \u2502                                              0.01 \u2502\n\u2502 continual_tasks          \u2502                                                 3 \u2502\n\u2502 continual_exposures      \u2502                                                 4 \u2502\n\u2502 walltime_sec             \u2502                                  64.9282065811567 \u2502\n\u2502 tok_per_sec              \u2502                                 8074.888058777177 \u2502\n\u2502 train_loss_final         \u2502                                 9.851808831996538 \u2502\n\u2502 val_loss                 \u2502                                                   \u2502\n\u2502 val_ppl                  \u2502                                                   \u2502\n\u2502 val_bpb                  \u2502                                 4.510997850351952 \u2502\n\u2502 core_metric              \u2502                                                   \u2502\n\u2502 id_ece                   \u2502                                                   \u2502\n\u2502 ood_auroc                \u2502                                                   \u2502\n\u2502 forgetting_rate          \u2502                                                   \u2502\n\u2502 moe_gini                 \u2502                                                   \u2502\n\u2502 dead_expert_frac         \u2502                                                   \u2502\n\u2502 niah_acc                 \u2502                                                   \u2502\n\u2502 recall_by_length         \u2502                                                {} \u2502\n\u2502 forgetting_by_task       \u2502                                                {} \u2502\n\u2502 capability_metric_status \u2502           {'uncertainty': 'not_run', 'continual': \u2502\n\u2502                          \u2502        'not_run', 'routing': 'not_run', 'memory': \u2502\n\u2502                          \u2502                                        'not_run'} \u2502\n\u2502 eval_device_batch_size   \u2502                                                 8 \u2502\n\u2502 eval_tokens_processed    \u2502                                           1048576 \u2502\n\u2502 trainable_params         \u2502                                          91095040 \u2502\n\u2502 active_params            \u2502                                          91095040 \u2502\n\u2502 matrix_stage             \u2502                                         screening \u2502\n\u2502 protocol_id              \u2502                                       exploratory \u2502\n\u2502 matrix_manifest_digest   \u2502 fb1493e35614257f55f96f9fb539cd38d7eb3bda5a83857c\u2026 \u2502\n\u2502 matrix_source_sha256     \u2502 81b4d0ae9421f5271b1f88882df54dc3b70d2438f699eb39\u2026 \u2502\n\u2502 model_file_sha256        \u2502 45e6a7632772df75cb2d65fd58e7b3dbd6b796683b797757\u2026 \u2502\n\u2502 trained_cell_id          \u2502 matrix_screening_fb1493e35614257f55f9_vanilla_s1\u2026 \u2502\n\u2502 train_data_digest        \u2502 b7b4d3725126f3a7892b34b1dd98d769732f1eb33701b563\u2026 \u2502\n\u2502 eval_data_digest         \u2502 ed9409a4d91be0e5a9f786556b9afad38f0d213394d20929\u2026 \u2502\n\u2502 tokenizer_digest         \u2502 32b10bf4f351cb5daa2f95ba9f05b94140a541d7ec14ca12\u2026 \u2502\n\u2502 screen_summary_sha256    \u2502                                                   \u2502\n\u2502 train_device_type        \u2502                                              cuda \u2502\n\u2502 train_world_size         \u2502                                                 2 \u2502\n\u2502 optimizer_recipe_digest  \u2502 5f4fab64a05b19019d720584cde6dd1c3d1d1357183390cb\u2026 \u2502\n\u2502 optimizer_names          \u2502                         ['DistAdamW', 'DistMuon'] \u2502\n\u2502 parameter_match_rule     \u2502          report_exact_trainable_and_active_counts \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\nBatch outputs: \n/data/projects/bio-d1-ref.PFkYu6Ev/corrected/score/matrix_20261125_063223\nVanilla checkpoint BPB-only wall seconds: 82.712\nusage: python -m scripts.matrix_launch [-h]\n                                       [--stage {screening,confirmation,structural,all}]\n                                       [--survivors SURVIVORS]\n                                       [--columns COLUMNS] [--seeds SEEDS]\n                                       [--recipe RECIPE] [--nproc NPROC]\n                                       [--execute] [--plan] [--exploratory]\n                                       [--restart] [--screen-csv SCREEN_CSV]\n                                       [--tok-per-sec TOK_PER_SEC]\n                                       [--score-seconds-per-cell SCORE_SECONDS_PER_CELL]\n                                       [--bpb-only]\n                                       [--cap-gpu-hours CAP_GPU_HOURS]\n                                       [--out-dir OUT_DIR]\npython -m scripts.matrix_launch: error: registered plan exceeds the aggregate device-hour cap\nd06273eaa8e26d88ce07c74412675197e123f659dbb3e289b6643cd16a70084f  /data/projects/bio-d1-ref.PFkYu6Ev/corrected/admission.json\ncd8febff27f7295b058158aec8a62e5965744471a4cdde4ab80755632060c1ef  /data/projects/bio-d1-ref.PFkYu6Ev/corrected/inputs.json\n94bd34824d41c940c022ae12a4067c9718b6b04e49f13a9db0c4f25303b35e65  /data/projects/bio-d1-ref.PFkYu6Ev/corrected/parsed.json\nfbdce6e384de2fccacef6e7da27597a3d853c23770df808ce570f0f3b063c301  /data/projects/bio-d1-ref.PFkYu6Ev/corrected/vanilla.json\n\n# exit_code: 0\n",
+      "receipt": {
+        "command": "quality",
+        "details": {
+          "checks": [
+            {
+              "command": "set -e; test \"$(git rev-parse HEAD)\" = f5139ef62d1c6c6e97810206867697e8bf3d7d87; git diff --exit-code; test -z \"$(git status --porcelain)\"; test -z \"$(nvidia-smi --query-compute-apps=pid --format=csv,noheader)\"; printf \"%s  %s\\n\" 34476dd6b27ee681887dc89d3ccedd13d645aef12e22e7310b3c5546eb2e24e3 /data/projects/bio-d1-ref.PFkYu6Ev/fixed/recover.py | sha256sum --check; printf \"%s  %s\\n\" 6503ea302b6ca5cdb82fc72bf0c8255c0efe3f0c99865339aa97bf6aa027fe0a /data/projects/bio-d1-ref.PFkYu6Ev/fixed/summarize.py | sha256sum --check; printf \"%s  %s\\n\" 81ea415fd9466f6d670db5e768e085a5b43c728eaa548e33cd3aa952ff2d4ec3 /data/projects/bio-d1-ref.PFkYu6Ev/fixed/admit.py | sha256sum --check; export UV_OFFLINE=true PYTHONDONTWRITEBYTECODE=1 UV_PROJECT_ENVIRONMENT=/data/projects/bio_inspired_nanochat/.venv PYTHONPATH=/data/projects/bio-d1-ref.PFkYu6Ev/source NANOCHAT_BASE_DIR=/data/projects/bio-d1-ref.PFkYu6Ev/cache BIO_RESULTS_REGISTRY=/data/projects/bio-d1-ref.PFkYu6Ev/registry.jsonl OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1; uv run --no-sync python /data/projects/bio-d1-ref.PFkYu6Ev/fixed/recover.py /data/projects/bio-d1-ref.PFkYu6Ev/cache /data/projects/bio-d1-ref.PFkYu6Ev/first-receipt.json /data/projects/bio-d1-ref.PFkYu6Ev/corrected; sha256sum /data/projects/bio-d1-ref.PFkYu6Ev/corrected/*.json",
+              "cwd": "/data/projects/bio-d1-ref.PFkYu6Ev/source",
+              "duration_ms": 165972,
+              "executed": true,
+              "exit_code": 0,
+              "log_path": "/home/ubuntu/.local/state/dsr/quality-logs/bio-d1-reference-admission-signal/20261125T013053-ERMIuJW3/check-1.log",
+              "log_sha256": "cb1c23af494763cceaeea49daeb1f969a53330be5d49237ef538d55ec4d2310e",
+              "output_preview": "                  [--restart] [--screen-csv SCREEN_CSV]\n                                       [--tok-per-sec TOK_PER_SEC]\n                                       [--score-seconds-per-cell SCORE_SECONDS_PER_CELL]\n                                       [--bpb-only]\n                                       [--cap-gpu-hours CAP_GPU_HOURS]\n                                       [--out-dir OUT_DIR]\npython -m scripts.matrix_launch: error: registered plan exceeds the aggregate device-hour cap\nd06273eaa8e26d88ce07c74412675197e123f659dbb3e289b6643cd16a70084f  /data/projects/bio-d1-ref.PFkYu6Ev/corrected/admission.json\ncd8febff27f7295b058158aec8a62e5965744471a4cdde4ab80755632060c1ef  /data/projects/bio-d1-ref.PFkYu6Ev/corrected/inputs.json\n94bd34824d41c940c022ae12a4067c9718b6b04e49f13a9db0c4f25303b35e65  /data/projects/bio-d1-ref.PFkYu6Ev/corrected/parsed.json\nfbdce6e384de2fccacef6e7da27597a3d853c23770df808ce570f0f3b063c301  /data/projects/bio-d1-ref.PFkYu6Ev/corrected/vanilla.json\n\n# exit_code: 0\n",
+              "passed": true,
+              "status": "passed",
+              "timeout_seconds": 620
+            }
+          ],
+          "config_path": "/data/projects/bio-d1-ref.PFkYu6Ev/fixed/corrected.yaml",
+          "config_sha256": "d78f1fc84b8cf135fda6bbabed0cf7dbaf0bb73c8f7cc74b7c6b980fcc065abf",
+          "config_sha256_after": "d78f1fc84b8cf135fda6bbabed0cf7dbaf0bb73c8f7cc74b7c6b980fcc065abf",
+          "config_snapshot_path": "/home/ubuntu/.local/state/dsr/quality-logs/bio-d1-reference-admission-signal/20261125T013053-ERMIuJW3/checks-config.yaml",
+          "dry_run": false,
+          "dsr_version": "0.2.3",
+          "duration_ms": 166896,
+          "executed": 1,
+          "failed": 0,
+          "interrupted": 0,
+          "not_run": 0,
+          "observed": 1,
+          "passed": 1,
+          "planned": 0,
+          "run_dir": "/home/ubuntu/.local/state/dsr/quality-logs/bio-d1-reference-admission-signal/20261125T013053-ERMIuJW3",
+          "skipped": false,
+          "source_after": "f5139ef62d1c6c6e97810206867697e8bf3d7d87|ec56a7c37aad092fe7e899cff5dd284b50736866d7fe765fa291045778ac8bb5|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+          "source_before": "f5139ef62d1c6c6e97810206867697e8bf3d7d87|ec56a7c37aad092fe7e899cff5dd284b50736866d7fe765fa291045778ac8bb5|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+          "status": "passed",
+          "timeout_seconds": 620,
+          "tool": "bio-d1-reference-admission-signal",
+          "total": 1
+        },
+        "duration_ms": 0,
+        "exit_code": 0,
+        "run_id": "8087fcfb-f290-4494-865a-11e2aaf534ea",
+        "started_at": "2026-11-25T06:35:40Z",
+        "status": "success",
+        "tool": "dsr",
+        "version": "0.2.3"
+      },
+      "receipt_sha256": "9dbd5e0bd356b896615787dff0c103a3ebdcc65858970b342d0474f1d338d1f6"
+    },
+    "first": {
+      "config": {
+        "tools": {
+          "bio-d1-reference-first": {
+            "checks": [
+              "set -e; test \"$(git rev-parse HEAD)\" = f5139ef62d1c6c6e97810206867697e8bf3d7d87; git diff --exit-code; test -z \"$(git status --porcelain)\"; test -z \"$(nvidia-smi --query-compute-apps=pid --format=csv,noheader)\"; nvidia-smi --query-gpu=index,name,memory.total,driver_version --format=csv,noheader; printf \"%s  %s\\n\" 90c74a7bab864a9fc0144e4f7c1afea91666b52ecce411cb16102e0fa158e487 /data/projects/bio-d1-ref.PFkYu6Ev/probe.py | sha256sum --check; export UV_OFFLINE=true PYTHONDONTWRITEBYTECODE=1 UV_PROJECT_ENVIRONMENT=/data/projects/bio_inspired_nanochat/.venv PYTHONPATH=/data/projects/bio-d1-ref.PFkYu6Ev/source NANOCHAT_BASE_DIR=/data/projects/bio-d1-ref.PFkYu6Ev/cache BIO_RESULTS_REGISTRY=/data/projects/bio-d1-ref.PFkYu6Ev/registry.jsonl OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 CUDA_VISIBLE_DEVICES=0,1; uv run --no-sync python /data/projects/bio-d1-ref.PFkYu6Ev/probe.py /data/projects/bio-d1-ref.PFkYu6Ev/cache /data/projects/bio-d1-ref.PFkYu6Ev/first vanilla,bio_all; sha256sum /data/projects/bio-d1-ref.PFkYu6Ev/first/*.json"
+            ]
+          }
+        }
+      },
+      "log": "# dsr quality check\n# argv: set -e; test \"$(git rev-parse HEAD)\" = f5139ef62d1c6c6e97810206867697e8bf3d7d87; git diff --exit-code; test -z \"$(git status --porcelain)\"; test -z \"$(nvidia-smi --query-compute-apps=pid --format=csv,noheader)\"; nvidia-smi --query-gpu=index,name,memory.total,driver_version --format=csv,noheader; printf \"%s  %s\\n\" 90c74a7bab864a9fc0144e4f7c1afea91666b52ecce411cb16102e0fa158e487 /data/projects/bio-d1-ref.PFkYu6Ev/probe.py | sha256sum --check; export UV_OFFLINE=true PYTHONDONTWRITEBYTECODE=1 UV_PROJECT_ENVIRONMENT=/data/projects/bio_inspired_nanochat/.venv PYTHONPATH=/data/projects/bio-d1-ref.PFkYu6Ev/source NANOCHAT_BASE_DIR=/data/projects/bio-d1-ref.PFkYu6Ev/cache BIO_RESULTS_REGISTRY=/data/projects/bio-d1-ref.PFkYu6Ev/registry.jsonl OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 CUDA_VISIBLE_DEVICES=0,1; uv run --no-sync python /data/projects/bio-d1-ref.PFkYu6Ev/probe.py /data/projects/bio-d1-ref.PFkYu6Ev/cache /data/projects/bio-d1-ref.PFkYu6Ev/first vanilla,bio_all; sha256sum /data/projects/bio-d1-ref.PFkYu6Ev/first/*.json\n# cwd: /data/projects/bio-d1-ref.PFkYu6Ev/source\n# env: PATH=/home/ubuntu/.rch/shims:/home/ubuntu/.local/bin:/home/ubuntu/.rch/shims:/home/ubuntu/.local/bin:/home/ubuntu/.rch/shims:/home/ubuntu/.local/bin:/home/ubuntu/.rch/shims:/home/ubuntu/mcp_agent_mail:/home/ubuntu/.local/bin:/home/ubuntu/.nvm/versions/node/v26.0.0/bin:/home/ubuntu/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin\n# env: DSR_QUALITY_RUN_DIR=/home/ubuntu/.local/state/dsr/quality-logs/bio-d1-reference-first/20261125T010943-YBws3wpO\n# env: DSR_QUALITY_TIMEOUT=1800\n# env: DSR_REPOS_FILE=/data/projects/bio-d1-ref.PFkYu6Ev/first.yaml\n# env: DSR_CURRENT_CMD=quality\n# env: CARGO_TARGET_DIR=/scratch/cargo-targets\n# env: DSR_CURRENT_HOST=\n# env: DSR_RUN_ID=run-1795586978-682287\n# env: CARGO_BUILD_JOBS=16\n# env: DSR_CURRENT_TOOL=\n# env: CARGO_INCREMENTAL=0\n# env: DSR_RUST_NATIVE_ENV_NAMES\n# started_monotonic_ms: 3326775439\n# timeout_seconds: 1800\n# ----\n0, NVIDIA GeForce RTX 4090, 24564 MiB, 595.99.02\n1, NVIDIA GeForce RTX 4090, 24564 MiB, 595.99.02\n/data/projects/bio-d1-ref.PFkYu6Ev/probe.py: OK\ntorchrun --standalone --nproc_per_node=2 -m scripts.base_train --core_metric_every=-1 --depth=10 --device_batch_size=8 --device_type=cuda --embedding_lr=0.2 --eval_every=-1 --eval_tokens=1048576 --final_lr_frac=0.0 --grad_clip=1.0 --matrix_lr=0.02 --max_seq_len=1024 --num_iterations=8 --sample_every=-1 --save_every=-1 --target_param_data_ratio=-1 --tie_embeddings=1 --torch_compile=0 --total_batch_size=65536 --unembedding_lr=0.004 --warmdown_ratio=0.2 --warmup_ratio=0.1 --weight_decay=0.0 --synapses=0 --init_seed=1337 --model_tag=matrix_screening_fb1493e35614257f55f9_vanilla_s1337 --matrix_run_id=fb1493e35614257f55f96f9fb539cd38d7eb3bda5a83857cf390ab6b7cf80d6d --matrix_manifest=/data/projects/bio-d1-ref.PFkYu6Ev/cache/matrix_runs/fb1493e35614257f55f96f9fb539cd38d7eb3bda5a83857cf390ab6b7cf80d6d/manifest.json\n\n                                                       \u2588\u2588\u2588\u2588\u2588                \u2588\u2588\u2588\u2588\u2588\n                                                      \u2591\u2591\u2588\u2588\u2588                \u2591\u2591\u2588\u2588\u2588\n     \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588    \u2588\u2588\u2588\u2588\u2588\u2588   \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588    \u2588\u2588\u2588\u2588\u2588\u2588   \u2588\u2588\u2588\u2588\u2588\u2588  \u2591\u2588\u2588\u2588\u2588\u2588\u2588\u2588    \u2588\u2588\u2588\u2588\u2588\u2588  \u2588\u2588\u2588\u2588\u2588\u2588\u2588\n    \u2591\u2591\u2588\u2588\u2588\u2591\u2591\u2588\u2588\u2588  \u2591\u2591\u2591\u2591\u2591\u2588\u2588\u2588 \u2591\u2591\u2588\u2588\u2588\u2591\u2591\u2588\u2588\u2588  \u2588\u2588\u2588\u2591\u2591\u2588\u2588\u2588 \u2588\u2588\u2588\u2591\u2591\u2588\u2588\u2588 \u2591\u2588\u2588\u2588\u2591\u2591\u2588\u2588\u2588  \u2591\u2591\u2591\u2591\u2591\u2588\u2588\u2588\u2591\u2591\u2591\u2588\u2588\u2588\u2591\n     \u2591\u2588\u2588\u2588 \u2591\u2588\u2588\u2588   \u2588\u2588\u2588\u2588\u2588\u2588\u2588  \u2591\u2588\u2588\u2588 \u2591\u2588\u2588\u2588 \u2591\u2588\u2588\u2588 \u2591\u2588\u2588\u2588\u2591\u2588\u2588\u2588 \u2591\u2591\u2591  \u2591\u2588\u2588\u2588 \u2591\u2588\u2588\u2588   \u2588\u2588\u2588\u2588\u2588\u2588\u2588  \u2591\u2588\u2588\u2588\n     \u2591\u2588\u2588\u2588 \u2591\u2588\u2588\u2588  \u2588\u2588\u2588\u2591\u2591\u2588\u2588\u2588  \u2591\u2588\u2588\u2588 \u2591\u2588\u2588\u2588 \u2591\u2588\u2588\u2588 \u2591\u2588\u2588\u2588\u2591\u2588\u2588\u2588  \u2588\u2588\u2588 \u2591\u2588\u2588\u2588 \u2591\u2588\u2588\u2588  \u2588\u2588\u2588\u2591\u2591\u2588\u2588\u2588  \u2591\u2588\u2588\u2588 \u2588\u2588\u2588\n     \u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2588\u2591\u2591\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2588\u2591\u2591\u2588\u2588\u2588\u2588\u2588\u2588 \u2591\u2591\u2588\u2588\u2588\u2588\u2588\u2588  \u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2588\u2591\u2591\u2588\u2588\u2588\u2588\u2588\u2588\u2588  \u2591\u2591\u2588\u2588\u2588\u2588\u2588\n    \u2591\u2591\u2591\u2591 \u2591\u2591\u2591\u2591\u2591  \u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591 \u2591\u2591\u2591\u2591 \u2591\u2591\u2591\u2591\u2591  \u2591\u2591\u2591\u2591\u2591\u2591   \u2591\u2591\u2591\u2591\u2591\u2591  \u2591\u2591\u2591\u2591 \u2591\u2591\u2591\u2591\u2591  \u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591   \u2591\u2591\u2591\u2591\u2591\n    \nOverriding: core_metric_every = -1\nOverriding: depth = 10\nOverriding: device_batch_size = 8\nOverriding: device_type = cuda\nOverriding: embedding_lr = 0.2\nOverriding: eval_every = -1\nOverriding: eval_tokens = 1048576\nOverriding: final_lr_frac = 0.0\nOverriding: grad_clip = 1.0\nOverriding: matrix_lr = 0.02\nOverriding: max_seq_len = 1024\nOverriding: num_iterations = 8\nOverriding: sample_every = -1\nOverriding: save_every = -1\nOverriding: target_param_data_ratio = -1\nOverriding: tie_embeddings = 1\nOverriding: torch_compile = 0\nOverriding: total_batch_size = 65536\nOverriding: unembedding_lr = 0.004\nOverriding: warmdown_ratio = 0.2\nOverriding: warmup_ratio = 0.1\nOverriding: weight_decay = 0.0\nOverriding: synapses = 0\nOverriding: init_seed = 1337\nOverriding: model_tag = matrix_screening_fb1493e35614257f55f9_vanilla_s1337\nOverriding: matrix_run_id = fb1493e35614257f55f96f9fb539cd38d7eb3bda5a83857cf390ab6b7cf80d6d\nOverriding: matrix_manifest = /data/projects/bio-d1-ref.PFkYu6Ev/cache/matrix_runs/fb1493e35614257f55f96f9fb539cd38d7eb3bda5a83857cf390ab6b7cf80d6d/manifest.json\n2026-11-25 01:12:40,354 - bio_inspired_nanochat.common - \u001b[32m\u001b[1mINFO\u001b[0m - Distributed world size: 2\nVocab size: 65,536\nnum_layers: 10\nmodel_dim: 640\nnum_heads: 5\nnum_kv_heads: 5\nTokens / micro-batch / rank: 8 x 1024 = 8,192\nTokens / micro-batch: 16,384\nTotal batch size 65,536 => gradient accumulation steps: 4\n2026-11-25 01:13:14,539 - bio_inspired_nanochat.run.train-matrix_screening_fb1493e35614257f55f9_vanilla_s1337 - \u001b[32m\u001b[1mINFO\u001b[0m - [run_start] run_dir=runs/telemetry/matrix_screening_fb1493e35614257f55f9_vani\u2026 provenance={git_sha=\u2026,torch=\u2026,cuda=\u2026\u2026}\nNumber of parameters: 91,095,040\nEstimated FLOPs per token: 3.735552e+08\nUsing user-provided number of iterations: 8\nTotal number of training tokens: 524,288\nTokens : Params ratio: 0.01\nTotal training FLOPs estimate: 1.958505e+14\nScaling the LR for the AdamW parameters \u221d1/\u221a(640/768) = 1.095445\nMuon: Grouping 40 params of shape torch.Size([640, 640]), device cuda:0, dtype torch.float32\nMuon: Grouping 10 params of shape torch.Size([640, 2560]), device cuda:0, dtype torch.float32\nMuon: Grouping 10 params of shape torch.Size([2560, 640]), device cuda:0, dtype torch.float32\nstep 00000/00008 (0.00%) | loss: 23.922462 | grad norm: 79.1526 | lrm: 1.00 | dt: 7780.37ms | tok/sec: 8,423 | mfu: 0.16 | total time: 0.00m\n2026-11-25 01:13:24,019 - bio_inspired_nanochat.run.train-matrix_screening_fb1493e35614257f55f9_vanilla_s1337 - \u001b[32m\u001b[1mINFO\u001b[0m - [train_step] step=0 loss=23.92 lr=1 grad_norm=79.15 tok_per_sec=8423 step_ms=7780 mfu=0.1591 vram_gb=5.06 divergence_action=OK\nstep 00001/00008 (12.50%) | loss: 22.046449 | grad norm: 39.5934 | lrm: 1.00 | dt: 1238.58ms | tok/sec: 52,912 | mfu: 1.00 | total time: 0.00m\nstep 00002/00008 (25.00%) | loss: 20.665060 | grad norm: 25.1095 | lrm: 1.00 | dt: 1290.42ms | tok/sec: 50,786 | mfu: 0.96 | total time: 0.00m\nstep 00003/00008 (37.50%) | loss: 19.736688 | grad norm: 17.0837 | lrm: 1.00 | dt: 1237.41ms | tok/sec: 52,962 | mfu: 1.00 | total time: 0.00m\nstep 00004/00008 (50.00%) | loss: 18.888992 | grad norm: 20.1653 | lrm: 1.00 | dt: 1351.54ms | tok/sec: 48,489 | mfu: 0.92 | total time: 0.00m\nstep 00005/00008 (62.50%) | loss: 18.301364 | grad norm: 11.5808 | lrm: 1.00 | dt: 1233.90ms | tok/sec: 53,112 | mfu: 1.00 | total time: 0.00m\nstep 00006/00008 (75.00%) | loss: 17.760927 | grad norm: 10.5485 | lrm: 1.00 | dt: 1532.80ms | tok/sec: 42,755 | mfu: 0.81 | total time: 0.00m\nstep 00007/00008 (87.50%) | loss: 17.298054 | grad norm: 7.8623 | lrm: 0.50 | dt: 1460.13ms | tok/sec: 44,883 | mfu: 0.85 | total time: 0.00m\nStep 00008 | Validation bpb: 4.4948\n2026-11-25 01:13:42,272 - bio_inspired_nanochat.run.train-matrix_screening_fb1493e35614257f55f9_vanilla_s1337 - \u001b[32m\u001b[1mINFO\u001b[0m - [eval] step=8 val_bpb=4.495 min_val_bpb=4.495\n<|bos|>The capital of France is the the the the the the the the the the the the the the the the\n<|bos|>The chemical symbol of gold is the the the the the the the the the the the the the the the the\n<|bos|>If yesterday was Friday, then tomorrow will be be be be be be be be be be be be be be be be be\n<|bos|>The opposite of hot is the the the the the the the the the the the the the the the the\n<|bos|>The planets of the solar system are:::::::::::::::::\n<|bos|>My favorite color is the the the the the the the the the the the the the the the the\n<|bos|>If 5*x + 3 = 13, then x is is is is is is the the the the the the the the the the the\n2026-11-25 01:13:51,306 - bio_inspired_nanochat.checkpoint_manager - \u001b[32m\u001b[1mINFO\u001b[0m - Saved optimizer state to: /data/projects/bio-d1-ref.PFkYu6Ev/cache/base_checkpoints/matrix_screening_fb1493e35614257f55f9_vanilla_s1337/optim_000008_rank1.pt\n2026-11-25 01:13:53,322 - bio_inspired_nanochat.checkpoint_manager - \u001b[32m\u001b[1mINFO\u001b[0m - Saved model parameters to: /data/projects/bio-d1-ref.PFkYu6Ev/cache/base_checkpoints/matrix_screening_fb1493e35614257f55f9_vanilla_s1337/model_000008.pt\n2026-11-25 01:13:54,973 - bio_inspired_nanochat.checkpoint_manager - \u001b[32m\u001b[1mINFO\u001b[0m - Saved metadata to: /data/projects/bio-d1-ref.PFkYu6Ev/cache/base_checkpoints/matrix_screening_fb1493e35614257f55f9_vanilla_s1337/meta_000008.json\n2026-11-25 01:13:59,820 - bio_inspired_nanochat.checkpoint_manager - \u001b[32m\u001b[1mINFO\u001b[0m - Saved train state to: /data/projects/bio-d1-ref.PFkYu6Ev/cache/base_checkpoints/matrix_screening_fb1493e35614257f55f9_vanilla_s1337/train_000008_rank1.pt\n2026-11-25 01:14:00,513 - bio_inspired_nanochat.checkpoint_manager - \u001b[32m\u001b[1mINFO\u001b[0m - Saved optimizer state to: /data/projects/bio-d1-ref.PFkYu6Ev/cache/base_checkpoints/matrix_screening_fb1493e35614257f55f9_vanilla_s1337/optim_000008_rank0.pt\n2026-11-25 01:14:08,638 - bio_inspired_nanochat.checkpoint_manager - \u001b[32m\u001b[1mINFO\u001b[0m - Saved train state to: /data/projects/bio-d1-ref.PFkYu6Ev/cache/base_checkpoints/matrix_screening_fb1493e35614257f55f9_vanilla_s1337/train_000008_rank0.pt\nPeak memory usage: 5698.41MiB\nTotal training time: 0.00m\nMinimum validation bpb: 4.4948\n[results] appended run record 180756dd09b3 to the registry\n2026-11-25 01:14:08,808 - bio_inspired_nanochat.run.train-matrix_screening_fb1493e35614257f55f9_vanilla_s1337 - \u001b[32m\u001b[1mINFO\u001b[0m - [run_end] n_events=4\n[W1125 01:14:26.948382352 AllocatorConfig.cpp:28] Warning: PYTORCH_CUDA_ALLOC_CONF is deprecated, use PYTORCH_ALLOC_CONF instead (function operator())\n[W1125 01:14:26.040078810 AllocatorConfig.cpp:28] Warning: PYTORCH_CUDA_ALLOC_CONF is deprecated, use PYTORCH_ALLOC_CONF instead (function operator())\ntorchrun --standalone --nproc_per_node=2 -m scripts.base_train --core_metric_every=-1 --depth=10 --device_batch_size=8 --device_type=cuda --embedding_lr=0.2 --eval_every=-1 --eval_tokens=1048576 --final_lr_frac=0.0 --grad_clip=1.0 --matrix_lr=0.02 --max_seq_len=1024 --num_iterations=8 --sample_every=-1 --save_every=-1 --target_param_data_ratio=-1 --tie_embeddings=1 --torch_compile=0 --total_batch_size=65536 --unembedding_lr=0.004 --warmdown_ratio=0.2 --warmup_ratio=0.1 --weight_decay=0.0 --synapses=1 --syn_cfg.native_presyn=0 --syn_cfg.native_genetics=0 --init_seed=1337 --model_tag=matrix_screening_fb1493e35614257f55f9_bio_all_s1337 --matrix_run_id=fb1493e35614257f55f96f9fb539cd38d7eb3bda5a83857cf390ab6b7cf80d6d --matrix_manifest=/data/projects/bio-d1-ref.PFkYu6Ev/cache/matrix_runs/fb1493e35614257f55f96f9fb539cd38d7eb3bda5a83857cf390ab6b7cf80d6d/manifest.json\n\n                                                       \u2588\u2588\u2588\u2588\u2588                \u2588\u2588\u2588\u2588\u2588\n                                                      \u2591\u2591\u2588\u2588\u2588                \u2591\u2591\u2588\u2588\u2588\n     \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588    \u2588\u2588\u2588\u2588\u2588\u2588   \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588    \u2588\u2588\u2588\u2588\u2588\u2588   \u2588\u2588\u2588\u2588\u2588\u2588  \u2591\u2588\u2588\u2588\u2588\u2588\u2588\u2588    \u2588\u2588\u2588\u2588\u2588\u2588  \u2588\u2588\u2588\u2588\u2588\u2588\u2588\n    \u2591\u2591\u2588\u2588\u2588\u2591\u2591\u2588\u2588\u2588  \u2591\u2591\u2591\u2591\u2591\u2588\u2588\u2588 \u2591\u2591\u2588\u2588\u2588\u2591\u2591\u2588\u2588\u2588  \u2588\u2588\u2588\u2591\u2591\u2588\u2588\u2588 \u2588\u2588\u2588\u2591\u2591\u2588\u2588\u2588 \u2591\u2588\u2588\u2588\u2591\u2591\u2588\u2588\u2588  \u2591\u2591\u2591\u2591\u2591\u2588\u2588\u2588\u2591\u2591\u2591\u2588\u2588\u2588\u2591\n     \u2591\u2588\u2588\u2588 \u2591\u2588\u2588\u2588   \u2588\u2588\u2588\u2588\u2588\u2588\u2588  \u2591\u2588\u2588\u2588 \u2591\u2588\u2588\u2588 \u2591\u2588\u2588\u2588 \u2591\u2588\u2588\u2588\u2591\u2588\u2588\u2588 \u2591\u2591\u2591  \u2591\u2588\u2588\u2588 \u2591\u2588\u2588\u2588   \u2588\u2588\u2588\u2588\u2588\u2588\u2588  \u2591\u2588\u2588\u2588\n     \u2591\u2588\u2588\u2588 \u2591\u2588\u2588\u2588  \u2588\u2588\u2588\u2591\u2591\u2588\u2588\u2588  \u2591\u2588\u2588\u2588 \u2591\u2588\u2588\u2588 \u2591\u2588\u2588\u2588 \u2591\u2588\u2588\u2588\u2591\u2588\u2588\u2588  \u2588\u2588\u2588 \u2591\u2588\u2588\u2588 \u2591\u2588\u2588\u2588  \u2588\u2588\u2588\u2591\u2591\u2588\u2588\u2588  \u2591\u2588\u2588\u2588 \u2588\u2588\u2588\n     \u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2588\u2591\u2591\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2588\u2591\u2591\u2588\u2588\u2588\u2588\u2588\u2588 \u2591\u2591\u2588\u2588\u2588\u2588\u2588\u2588  \u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2588\u2591\u2591\u2588\u2588\u2588\u2588\u2588\u2588\u2588  \u2591\u2591\u2588\u2588\u2588\u2588\u2588\n    \u2591\u2591\u2591\u2591 \u2591\u2591\u2591\u2591\u2591  \u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591 \u2591\u2591\u2591\u2591 \u2591\u2591\u2591\u2591\u2591  \u2591\u2591\u2591\u2591\u2591\u2591   \u2591\u2591\u2591\u2591\u2591\u2591  \u2591\u2591\u2591\u2591 \u2591\u2591\u2591\u2591\u2591  \u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591   \u2591\u2591\u2591\u2591\u2591\n    \nOverriding: core_metric_every = -1\nOverriding: depth = 10\nOverriding: device_batch_size = 8\nOverriding: device_type = cuda\nOverriding: embedding_lr = 0.2\nOverriding: eval_every = -1\nOverriding: eval_tokens = 1048576\nOverriding: final_lr_frac = 0.0\nOverriding: grad_clip = 1.0\nOverriding: matrix_lr = 0.02\nOverriding: max_seq_len = 1024\nOverriding: num_iterations = 8\nOverriding: sample_every = -1\nOverriding: save_every = -1\nOverriding: target_param_data_ratio = -1\nOverriding: tie_embeddings = 1\nOverriding: torch_compile = 0\nOverriding: total_batch_size = 65536\nOverriding: unembedding_lr = 0.004\nOverriding: warmdown_ratio = 0.2\nOverriding: warmup_ratio = 0.1\nOverriding: weight_decay = 0.0\nOverriding: synapses = 1\nOverriding: init_seed = 1337\nOverriding: model_tag = matrix_screening_fb1493e35614257f55f9_bio_all_s1337\nOverriding: matrix_run_id = fb1493e35614257f55f96f9fb539cd38d7eb3bda5a83857cf390ab6b7cf80d6d\nOverriding: matrix_manifest = /data/projects/bio-d1-ref.PFkYu6Ev/cache/matrix_runs/fb1493e35614257f55f96f9fb539cd38d7eb3bda5a83857cf390ab6b7cf80d6d/manifest.json\n2026-11-25 01:15:14,877 - bio_inspired_nanochat.common - \u001b[32m\u001b[1mINFO\u001b[0m - Distributed world size: 2\nVocab size: 65,536\nnum_layers: 10\nmodel_dim: 640\nnum_heads: 5\nnum_kv_heads: 5\nTokens / micro-batch / rank: 8 x 1024 = 8,192\nTokens / micro-batch: 16,384\nTotal batch size 65,536 => gradient accumulation steps: 4\n[config] syn_cfg.native_genetics = False\n[config] syn_cfg.native_presyn = False\n[config] WARNING: metabolism, genome act only on SynapticMoE blocks and are inert with use_moe=0 (their ablations belong to the MoE stage)\n2026-11-25 01:15:40,924 - bio_inspired_nanochat.run.train-matrix_screening_fb1493e35614257f55f9_bio_all_s1337 - \u001b[32m\u001b[1mINFO\u001b[0m - [run_start] run_dir=runs/telemetry/matrix_screening_fb1493e35614257f55f9_bio_\u2026 provenance={git_sha=\u2026,torch=\u2026,cuda=\u2026\u2026}\nNumber of parameters: 91,165,440\nEstimated FLOPs per token: 4.096000e+07\nUsing user-provided number of iterations: 8\nTotal number of training tokens: 524,288\nTokens : Params ratio: 0.01\nTotal training FLOPs estimate: 2.147484e+13\nScaling the LR for the AdamW parameters \u221d1/\u221a(640/768) = 1.095445\nMuon: Grouping 40 params of shape torch.Size([640, 640]), device cuda:0, dtype torch.float32\nMuon: Grouping 10 params of shape torch.Size([640, 2560]), device cuda:0, dtype torch.float32\nMuon: Grouping 10 params of shape torch.Size([2560, 640]), device cuda:0, dtype torch.float32\n2026-11-25 01:18:38,858 - bio_inspired_nanochat.common - \u001b[32m\u001b[1mINFO\u001b[0m - [divguard step 0] bio-norms w_slow=25.7, w_slow=25.6, w_slow=25.6, w_slow=25.6 | loss_ema=23.7\n2026-11-25 01:19:13,037 - bio_inspired_nanochat.common - \u001b[32m\u001b[1mINFO\u001b[0m - [divguard step 0] bio-norms w_slow=25.7, w_slow=25.6, w_slow=25.6, w_slow=25.6 | loss_ema=24.09\n2026-11-25 01:19:14,373 - bio_inspired_nanochat.run.train-matrix_screening_fb1493e35614257f55f9_bio_all_s1337 - \u001b[32m\u001b[1mINFO\u001b[0m - [bio_telemetry] step=0 fast_weight_mag=0 hebb_state_l2=0\nstep 00000/00008 (0.00%) | loss: 24.091547 | grad norm: 23.1559 | lrm: 1.00 | dt: 208615.24ms | tok/sec: 314 | mfu: 0.00 | total time: 0.00m\n2026-11-25 01:19:14,419 - bio_inspired_nanochat.run.train-matrix_screening_fb1493e35614257f55f9_bio_all_s1337 - \u001b[32m\u001b[1mINFO\u001b[0m - [train_step] step=0 loss=24.09 lr=1 grad_norm=23.16 tok_per_sec=314 step_ms=2.086e+05 mfu=0.0006505 vram_gb=8.49 divergence_action=OK\n2026-11-25 01:21:48,741 - bio_inspired_nanochat.common - \u001b[32m\u001b[1mINFO\u001b[0m - [divguard step 1] bio-norms w_slow=25.7, w_slow=25.6, w_slow=25.6, w_slow=25.6 | loss_ema=23.62\n2026-11-25 01:22:20,750 - bio_inspired_nanochat.common - \u001b[32m\u001b[1mINFO\u001b[0m - [divguard step 1] bio-norms w_slow=25.7, w_slow=25.6, w_slow=25.6, w_slow=25.6 | loss_ema=24\nstep 00001/00008 (12.50%) | loss: 21.749342 | grad norm: 9.2656 | lrm: 1.00 | dt: 186876.82ms | tok/sec: 350 | mfu: 0.00 | total time: 0.00m\n2026-11-25 01:24:40,886 - bio_inspired_nanochat.common - \u001b[32m\u001b[1mINFO\u001b[0m - [divguard step 2] bio-norms w_slow=25.8, w_slow=25.7, w_slow=25.7, w_slow=25.7 | loss_ema=23.5\n2026-11-25 01:25:15,251 - bio_inspired_nanochat.common - \u001b[32m\u001b[1mINFO\u001b[0m - [divguard step 2] bio-norms w_slow=25.8, w_slow=25.7, w_slow=25.7, w_slow=25.7 | loss_ema=23.88\nstep 00002/00008 (25.00%) | loss: 20.394625 | grad norm: 7.0855 | lrm: 1.00 | dt: 174489.44ms | tok/sec: 375 | mfu: 0.00 | total time: 0.00m\nW1125 01:26:51.695000 779877 torch/distributed/elastic/agent/server/api.py:725] Received 15 death signal, shutting down workers\nW1125 01:26:51.703000 779877 torch/distributed/elastic/multiprocessing/api.py:908] Sending process 783695 closing signal SIGTERM\nW1125 01:26:51.705000 779877 torch/distributed/elastic/multiprocessing/api.py:908] Sending process 783714 closing signal SIGTERM\nTraceback (most recent call last):\n  File \"/data/projects/bio_inspired_nanochat/.venv/bin/torchrun\", line 10, in <module>\n    sys.exit(main())\n             ~~~~^^\n  File \"/data/projects/bio_inspired_nanochat/.venv/lib/python3.14/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py\", line 357, in wrapper\n    return f(*args, **kwargs)\n  File \"/data/projects/bio_inspired_nanochat/.venv/lib/python3.14/site-packages/torch/distributed/run.py\", line 936, in main\n    run(args)\n    ~~~^^^^^^\n  File \"/data/projects/bio_inspired_nanochat/.venv/lib/python3.14/site-packages/torch/distributed/run.py\", line 927, in run\n    elastic_launch(\n    ~~~~~~~~~~~~~~~\n        config=config,\n        ~~~~~~~~~~~~~~\n        entrypoint=cmd,\n        ~~~~~~~~~~~~~~~\n    )(*cmd_args)\n    ~^^^^^^^^^^^\n  File \"/data/projects/bio_inspired_nanochat/.venv/lib/python3.14/site-packages/torch/distributed/launcher/api.py\", line 156, in __call__\n    return launch_agent(self._config, self._entrypoint, list(args))\n  File \"/data/projects/bio_inspired_nanochat/.venv/lib/python3.14/site-packages/torch/distributed/launcher/api.py\", line 284, in launch_agent\n    result = agent.run()\n  File \"/data/projects/bio_inspired_nanochat/.venv/lib/python3.14/site-packages/torch/distributed/elastic/metrics/api.py\", line 138, in wrapper\n    result = f(*args, **kwargs)\n  File \"/data/projects/bio_inspired_nanochat/.venv/lib/python3.14/site-packages/torch/distributed/elastic/agent/server/api.py\", line 717, in run\n    result = self._invoke_run(role)\n  File \"/data/projects/bio_inspired_nanochat/.venv/lib/python3.14/site-packages/torch/distributed/elastic/agent/server/api.py\", line 881, in _invoke_run\n    time.sleep(monitor_interval)\n    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^\n  File \"/data/projects/bio_inspired_nanochat/.venv/lib/python3.14/site-packages/torch/distributed/elastic/multiprocessing/api.py\", line 85, in _terminate_process_handler\n    raise SignalException(f\"Process {os.getpid()} got signal: {sigval}\", sigval=sigval)\ntorch.distributed.elastic.multiprocessing.api.SignalException: Process 779877 got signal: 15\nTraceback (most recent call last):\n  File \"/data/projects/bio-d1-ref.PFkYu6Ev/probe.py\", line 39, in <module>\n    raise subprocess.CalledProcessError(code, launch)\nsubprocess.CalledProcessError: Command '['/data/projects/bio_inspired_nanochat/.venv/bin/python', '-m', 'scripts.matrix_launch', '--stage', 'screening', '--exploratory', '--columns', 'vanilla,bio_all', '--seeds', '1337', '--nproc', '2', '--bpb-only', '--cap-gpu-hours', '0.5', '--execute', '--recipe=--core_metric_every=-1 --depth=10 --device_batch_size=8 --device_type=cuda --embedding_lr=0.2 --eval_every=-1 --eval_tokens=1048576 --final_lr_frac=0.0 --grad_clip=1.0 --matrix_lr=0.02 --max_seq_len=1024 --num_iterations=8 --sample_every=-1 --save_every=-1 --target_param_data_ratio=-1 --tie_embeddings=1 --torch_compile=0 --total_batch_size=65536 --unembedding_lr=0.004 --warmdown_ratio=0.2 --warmup_ratio=0.1 --weight_decay=0.0']' returned non-zero exit status 137.\n\n# exit_code: 1\n",
+      "receipt": {
+        "command": "quality",
+        "details": {
+          "checks": [
+            {
+              "command": "set -e; test \"$(git rev-parse HEAD)\" = f5139ef62d1c6c6e97810206867697e8bf3d7d87; git diff --exit-code; test -z \"$(git status --porcelain)\"; test -z \"$(nvidia-smi --query-compute-apps=pid --format=csv,noheader)\"; nvidia-smi --query-gpu=index,name,memory.total,driver_version --format=csv,noheader; printf \"%s  %s\\n\" 90c74a7bab864a9fc0144e4f7c1afea91666b52ecce411cb16102e0fa158e487 /data/projects/bio-d1-ref.PFkYu6Ev/probe.py | sha256sum --check; export UV_OFFLINE=true PYTHONDONTWRITEBYTECODE=1 UV_PROJECT_ENVIRONMENT=/data/projects/bio_inspired_nanochat/.venv PYTHONPATH=/data/projects/bio-d1-ref.PFkYu6Ev/source NANOCHAT_BASE_DIR=/data/projects/bio-d1-ref.PFkYu6Ev/cache BIO_RESULTS_REGISTRY=/data/projects/bio-d1-ref.PFkYu6Ev/registry.jsonl OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 CUDA_VISIBLE_DEVICES=0,1; uv run --no-sync python /data/projects/bio-d1-ref.PFkYu6Ev/probe.py /data/projects/bio-d1-ref.PFkYu6Ev/cache /data/projects/bio-d1-ref.PFkYu6Ev/first vanilla,bio_all; sha256sum /data/projects/bio-d1-ref.PFkYu6Ev/first/*.json",
+              "cwd": "/data/projects/bio-d1-ref.PFkYu6Ev/source",
+              "duration_ms": 978083,
+              "executed": true,
+              "exit_code": 1,
+              "log_path": "/home/ubuntu/.local/state/dsr/quality-logs/bio-d1-reference-first/20261125T010943-YBws3wpO/check-1.log",
+              "log_sha256": "e31c68570c79554f8092941653429e5e656bc929d8372012788646a125740817",
+              "output_preview": ".api.SignalException: Process 779877 got signal: 15\nTraceback (most recent call last):\n  File \"/data/projects/bio-d1-ref.PFkYu6Ev/probe.py\", line 39, in <module>\n    raise subprocess.CalledProcessError(code, launch)\nsubprocess.CalledProcessError: Command '['/data/projects/bio_inspired_nanochat/.venv/bin/python', '-m', 'scripts.matrix_launch', '--stage', 'screening', '--exploratory', '--columns', 'vanilla,bio_all', '--seeds', '1337', '--nproc', '2', '--bpb-only', '--cap-gpu-hours', '0.5', '--execute', '--recipe=--core_metric_every=-1 --depth=10 --device_batch_size=8 --device_type=cuda --embedding_lr=0.2 --eval_every=-1 --eval_tokens=1048576 --final_lr_frac=0.0 --grad_clip=1.0 --matrix_lr=0.02 --max_seq_len=1024 --num_iterations=8 --sample_every=-1 --save_every=-1 --target_param_data_ratio=-1 --tie_embeddings=1 --torch_compile=0 --total_batch_size=65536 --unembedding_lr=0.004 --warmdown_ratio=0.2 --warmup_ratio=0.1 --weight_decay=0.0']' returned non-zero exit status 137.\n\n# exit_code: 1\n",
+              "passed": false,
+              "status": "failed",
+              "timeout_seconds": 1800
+            }
+          ],
+          "config_path": "/data/projects/bio-d1-ref.PFkYu6Ev/first.yaml",
+          "config_sha256": "5d47b0830f0862fbcd8a151bc608cf02aa9ce63252ed059b9b776ec8fb71b1d2",
+          "config_sha256_after": "5d47b0830f0862fbcd8a151bc608cf02aa9ce63252ed059b9b776ec8fb71b1d2",
+          "config_snapshot_path": "/home/ubuntu/.local/state/dsr/quality-logs/bio-d1-reference-first/20261125T010943-YBws3wpO/checks-config.yaml",
+          "dry_run": false,
+          "dsr_version": "0.2.3",
+          "duration_ms": 979073,
+          "executed": 1,
+          "failed": 1,
+          "interrupted": 0,
+          "not_run": 0,
+          "observed": 1,
+          "passed": 0,
+          "planned": 0,
+          "run_dir": "/home/ubuntu/.local/state/dsr/quality-logs/bio-d1-reference-first/20261125T010943-YBws3wpO",
+          "skipped": false,
+          "source_after": "f5139ef62d1c6c6e97810206867697e8bf3d7d87|ec56a7c37aad092fe7e899cff5dd284b50736866d7fe765fa291045778ac8bb5|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+          "source_before": "f5139ef62d1c6c6e97810206867697e8bf3d7d87|ec56a7c37aad092fe7e899cff5dd284b50736866d7fe765fa291045778ac8bb5|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+          "status": "failed",
+          "timeout_seconds": 1800,
+          "tool": "bio-d1-reference-first",
+          "total": 1
+        },
+        "duration_ms": 0,
+        "exit_code": 1,
+        "run_id": "afd01a1b-5570-4a48-825b-b77eada48a95",
+        "started_at": "2026-11-25T06:28:21Z",
+        "status": "failure",
+        "tool": "dsr",
+        "version": "0.2.3"
+      },
+      "receipt_sha256": "8e8bf0926774af0fad74f20e62792ad3727d94e3c04ef65aac956addaca8983b"
+    },
+    "followup": {
+      "config": {
+        "tools": {
+          "bio-d1-reference-admission": {
+            "checks": [
+              "set -e; test \"$(git rev-parse HEAD)\" = f5139ef62d1c6c6e97810206867697e8bf3d7d87; git diff --exit-code; test -z \"$(git status --porcelain)\"; test -z \"$(nvidia-smi --query-compute-apps=pid --format=csv,noheader)\"; printf \"%s  %s\\n\" 1489edc9be592ccc34a0c139b50764844c8ee47b2d4dbc62a71d6c98b004e77e /data/projects/bio-d1-ref.PFkYu6Ev/recover.py | sha256sum --check; printf \"%s  %s\\n\" 6503ea302b6ca5cdb82fc72bf0c8255c0efe3f0c99865339aa97bf6aa027fe0a /data/projects/bio-d1-ref.PFkYu6Ev/summarize.py | sha256sum --check; printf \"%s  %s\\n\" 81ea415fd9466f6d670db5e768e085a5b43c728eaa548e33cd3aa952ff2d4ec3 /data/projects/bio-d1-ref.PFkYu6Ev/admit.py | sha256sum --check; export UV_OFFLINE=true PYTHONDONTWRITEBYTECODE=1 UV_PROJECT_ENVIRONMENT=/data/projects/bio_inspired_nanochat/.venv PYTHONPATH=/data/projects/bio-d1-ref.PFkYu6Ev/source NANOCHAT_BASE_DIR=/data/projects/bio-d1-ref.PFkYu6Ev/cache BIO_RESULTS_REGISTRY=/data/projects/bio-d1-ref.PFkYu6Ev/registry.jsonl OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1; uv run --no-sync python /data/projects/bio-d1-ref.PFkYu6Ev/recover.py /data/projects/bio-d1-ref.PFkYu6Ev/cache /data/projects/bio-d1-ref.PFkYu6Ev/first-receipt.json /data/projects/bio-d1-ref.PFkYu6Ev/followup; sha256sum /data/projects/bio-d1-ref.PFkYu6Ev/followup/*.json"
+            ]
+          }
+        }
+      },
+      "log": "# dsr quality check\n# argv: set -e; test \"$(git rev-parse HEAD)\" = f5139ef62d1c6c6e97810206867697e8bf3d7d87; git diff --exit-code; test -z \"$(git status --porcelain)\"; test -z \"$(nvidia-smi --query-compute-apps=pid --format=csv,noheader)\"; printf \"%s  %s\\n\" 1489edc9be592ccc34a0c139b50764844c8ee47b2d4dbc62a71d6c98b004e77e /data/projects/bio-d1-ref.PFkYu6Ev/recover.py | sha256sum --check; printf \"%s  %s\\n\" 6503ea302b6ca5cdb82fc72bf0c8255c0efe3f0c99865339aa97bf6aa027fe0a /data/projects/bio-d1-ref.PFkYu6Ev/summarize.py | sha256sum --check; printf \"%s  %s\\n\" 81ea415fd9466f6d670db5e768e085a5b43c728eaa548e33cd3aa952ff2d4ec3 /data/projects/bio-d1-ref.PFkYu6Ev/admit.py | sha256sum --check; export UV_OFFLINE=true PYTHONDONTWRITEBYTECODE=1 UV_PROJECT_ENVIRONMENT=/data/projects/bio_inspired_nanochat/.venv PYTHONPATH=/data/projects/bio-d1-ref.PFkYu6Ev/source NANOCHAT_BASE_DIR=/data/projects/bio-d1-ref.PFkYu6Ev/cache BIO_RESULTS_REGISTRY=/data/projects/bio-d1-ref.PFkYu6Ev/registry.jsonl OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1; uv run --no-sync python /data/projects/bio-d1-ref.PFkYu6Ev/recover.py /data/projects/bio-d1-ref.PFkYu6Ev/cache /data/projects/bio-d1-ref.PFkYu6Ev/first-receipt.json /data/projects/bio-d1-ref.PFkYu6Ev/followup; sha256sum /data/projects/bio-d1-ref.PFkYu6Ev/followup/*.json\n# cwd: /data/projects/bio-d1-ref.PFkYu6Ev/source\n# env: PATH=/home/ubuntu/.rch/shims:/home/ubuntu/.local/bin:/home/ubuntu/.rch/shims:/home/ubuntu/.local/bin:/home/ubuntu/.rch/shims:/home/ubuntu/.local/bin:/home/ubuntu/.rch/shims:/home/ubuntu/mcp_agent_mail:/home/ubuntu/.local/bin:/home/ubuntu/.nvm/versions/node/v26.0.0/bin:/home/ubuntu/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin\n# env: DSR_QUALITY_RUN_DIR=/home/ubuntu/.local/state/dsr/quality-logs/bio-d1-reference-admission/20261125T012828-nlerOkK3\n# env: DSR_QUALITY_TIMEOUT=620\n# env: DSR_REPOS_FILE=/data/projects/bio-d1-ref.PFkYu6Ev/followup.yaml\n# env: DSR_CURRENT_CMD=quality\n# env: CARGO_TARGET_DIR=/scratch/cargo-targets\n# env: DSR_CURRENT_HOST=\n# env: DSR_RUN_ID=run-1795588106-1039016\n# env: CARGO_BUILD_JOBS=16\n# env: DSR_CURRENT_TOOL=\n# env: CARGO_INCREMENTAL=0\n# env: DSR_RUST_NATIVE_ENV_NAMES\n# started_monotonic_ms: 3327878622\n# timeout_seconds: 620\n# ----\n/data/projects/bio-d1-ref.PFkYu6Ev/recover.py: OK\n/data/projects/bio-d1-ref.PFkYu6Ev/summarize.py: OK\n/data/projects/bio-d1-ref.PFkYu6Ev/admit.py: OK\nTraceback (most recent call last):\n  File \"/data/projects/bio-d1-ref.PFkYu6Ev/recover.py\", line 25, in <module>\n    assert [(event[\"event\"], event.get(\"exit\")) for event in attempts] == [\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n        (\"start\", None), (\"end\", 0), (\"start\", None), (\"end\", 124),\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ]\n    ^\nAssertionError\n\n# exit_code: 1\n",
+      "receipt": {
+        "command": "quality",
+        "details": {
+          "checks": [
+            {
+              "command": "set -e; test \"$(git rev-parse HEAD)\" = f5139ef62d1c6c6e97810206867697e8bf3d7d87; git diff --exit-code; test -z \"$(git status --porcelain)\"; test -z \"$(nvidia-smi --query-compute-apps=pid --format=csv,noheader)\"; printf \"%s  %s\\n\" 1489edc9be592ccc34a0c139b50764844c8ee47b2d4dbc62a71d6c98b004e77e /data/projects/bio-d1-ref.PFkYu6Ev/recover.py | sha256sum --check; printf \"%s  %s\\n\" 6503ea302b6ca5cdb82fc72bf0c8255c0efe3f0c99865339aa97bf6aa027fe0a /data/projects/bio-d1-ref.PFkYu6Ev/summarize.py | sha256sum --check; printf \"%s  %s\\n\" 81ea415fd9466f6d670db5e768e085a5b43c728eaa548e33cd3aa952ff2d4ec3 /data/projects/bio-d1-ref.PFkYu6Ev/admit.py | sha256sum --check; export UV_OFFLINE=true PYTHONDONTWRITEBYTECODE=1 UV_PROJECT_ENVIRONMENT=/data/projects/bio_inspired_nanochat/.venv PYTHONPATH=/data/projects/bio-d1-ref.PFkYu6Ev/source NANOCHAT_BASE_DIR=/data/projects/bio-d1-ref.PFkYu6Ev/cache BIO_RESULTS_REGISTRY=/data/projects/bio-d1-ref.PFkYu6Ev/registry.jsonl OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1; uv run --no-sync python /data/projects/bio-d1-ref.PFkYu6Ev/recover.py /data/projects/bio-d1-ref.PFkYu6Ev/cache /data/projects/bio-d1-ref.PFkYu6Ev/first-receipt.json /data/projects/bio-d1-ref.PFkYu6Ev/followup; sha256sum /data/projects/bio-d1-ref.PFkYu6Ev/followup/*.json",
+              "cwd": "/data/projects/bio-d1-ref.PFkYu6Ev/source",
+              "duration_ms": 21688,
+              "executed": true,
+              "exit_code": 1,
+              "log_path": "/home/ubuntu/.local/state/dsr/quality-logs/bio-d1-reference-admission/20261125T012828-nlerOkK3/check-1.log",
+              "log_sha256": "ef9c9e39ec195dde9e99f67783ef766b23b7db011705c491641e356958529a67",
+              "output_preview": "TY_TIMEOUT=620\n# env: DSR_REPOS_FILE=/data/projects/bio-d1-ref.PFkYu6Ev/followup.yaml\n# env: DSR_CURRENT_CMD=quality\n# env: CARGO_TARGET_DIR=/scratch/cargo-targets\n# env: DSR_CURRENT_HOST=\n# env: DSR_RUN_ID=run-1795588106-1039016\n# env: CARGO_BUILD_JOBS=16\n# env: DSR_CURRENT_TOOL=\n# env: CARGO_INCREMENTAL=0\n# env: DSR_RUST_NATIVE_ENV_NAMES\n# started_monotonic_ms: 3327878622\n# timeout_seconds: 620\n# ----\n/data/projects/bio-d1-ref.PFkYu6Ev/recover.py: OK\n/data/projects/bio-d1-ref.PFkYu6Ev/summarize.py: OK\n/data/projects/bio-d1-ref.PFkYu6Ev/admit.py: OK\nTraceback (most recent call last):\n  File \"/data/projects/bio-d1-ref.PFkYu6Ev/recover.py\", line 25, in <module>\n    assert [(event[\"event\"], event.get(\"exit\")) for event in attempts] == [\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n        (\"start\", None), (\"end\", 0), (\"start\", None), (\"end\", 124),\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ]\n    ^\nAssertionError\n\n# exit_code: 1\n",
+              "passed": false,
+              "status": "failed",
+              "timeout_seconds": 620
+            }
+          ],
+          "config_path": "/data/projects/bio-d1-ref.PFkYu6Ev/followup.yaml",
+          "config_sha256": "eefa54d0d84b76553aba545acaf0679dbe177f00e3ce773e2c3861f91f9862d1",
+          "config_sha256_after": "eefa54d0d84b76553aba545acaf0679dbe177f00e3ce773e2c3861f91f9862d1",
+          "config_snapshot_path": "/home/ubuntu/.local/state/dsr/quality-logs/bio-d1-reference-admission/20261125T012828-nlerOkK3/checks-config.yaml",
+          "dry_run": false,
+          "dsr_version": "0.2.3",
+          "duration_ms": 22776,
+          "executed": 1,
+          "failed": 1,
+          "interrupted": 0,
+          "not_run": 0,
+          "observed": 1,
+          "passed": 0,
+          "planned": 0,
+          "run_dir": "/home/ubuntu/.local/state/dsr/quality-logs/bio-d1-reference-admission/20261125T012828-nlerOkK3",
+          "skipped": false,
+          "source_after": "f5139ef62d1c6c6e97810206867697e8bf3d7d87|ec56a7c37aad092fe7e899cff5dd284b50736866d7fe765fa291045778ac8bb5|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+          "source_before": "f5139ef62d1c6c6e97810206867697e8bf3d7d87|ec56a7c37aad092fe7e899cff5dd284b50736866d7fe765fa291045778ac8bb5|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+          "status": "failed",
+          "timeout_seconds": 620,
+          "tool": "bio-d1-reference-admission",
+          "total": 1
+        },
+        "duration_ms": 0,
+        "exit_code": 1,
+        "run_id": "15750d8a-2948-4822-b0cf-3826f014ff40",
+        "started_at": "2026-11-25T06:30:47Z",
+        "status": "failure",
+        "tool": "dsr",
+        "version": "0.2.3"
+      },
+      "receipt_sha256": "8763153a84dd5b00a689dc709ca418aa94114194bfe931d4c37ee8a14d86846f"
+    }
+  },
+  "manifest": {
+    "bpb_only": true,
+    "cap_gpu_hours": 0.5,
+    "checkpoint_template": "matrix_screening_fb1493e35614257f55f9_{preset}_s{seed}",
+    "column_flags": {
+      "bio_all": {
+        "syn_cfg.native_genetics": "0",
+        "syn_cfg.native_presyn": "0",
+        "synapses": "1"
+      },
+      "vanilla": {
+        "synapses": "0"
+      }
+    },
+    "columns": [
+      "vanilla",
+      "bio_all"
+    ],
+    "data": {
+      "tokenizer": {
+        "token_bytes.pt": "ae39c27aae519d14071efc95f9a558ba0b7ede47e7d83ad4f198422b44c5f70e",
+        "tokenizer.json": "45d958866dbe10af5f33f4cd360d7fe30cfabdd7dbe5cd3aaec27f25e579e46b"
+      },
+      "tokenizer_sha256": "32b10bf4f351cb5daa2f95ba9f05b94140a541d7ec14ca123101e42f5b1484f5",
+      "train": [
+        "6a3450ea745ee6b6830c09819c0f2c72682eba443022de595bcb50ceb3092c22",
+        "30a72934cb85581f88c701fc4b6f389a7215d2af99ee1d3f65e1a99d16c06adf",
+        "3f90859d36510630529c32990b0269a867bb6967652ddca9e8c8ee69879360e6",
+        "0116631ad3c33debdf292328b24133a9ef5ef35517a844dfa8f08bf62166cf52",
+        "f214985a443999a3599b11a01b6e241ee1b9da51f948e72334a5442c2a374d37",
+        "ddb7eeb20b64e290d68238e9e9ea3651fc123d0ec4fbce3884e7a4f8f9a0a10f",
+        "f88599776e4351a6338242b437683d7162e4a176763a0314b4c2696abef68ca8",
+        "2aca70545cc310fb09b94de74ef23af3f4f442f5b68dfd5cb68578096f0c91d1",
+        "f6b5a838516437ea71cd37b2a958dffc55e3d9d9080b924e298db3e4610b9b7a",
+        "b1525632c48c7a79c2b64f6cc96122b65c99fd517ddabed2d1b81c95c77ca6c6",
+        "fcae67248a149eed43d9f7eb2bfb4f4cbd055d1a8d5178e82f77296f5edc009c",
+        "0ffb8dd421996e93f3d93865e297626a9a61f92d8ed43b9fc054db96b2d27859",
+        "76cf72ba9797c764faea4c09ed1dcb0765e58cf313668f8858be5e5c80c91653",
+        "32f2dc25338ae2551e0501898024d8bd4833838db16602cc8c7f4879561c01a3",
+        "b2c4e47d3531c3e53fa874d4146b3c239970b273fc9ae073a3bc39d8bf30d787",
+        "e6363e580ba98ac578b5593724e816b92f2ba1271d4e21c4e2eb129bdea96eb4",
+        "0e4f1387d5531359c152c50e219b0b5b208ef1793294e43729caecd953a3ab6a",
+        "5bcf3d7b7a7cc27dbd59270f98f79333e677c3533b4e9d824bb8b93eba3af1c4",
+        "000591b1ffab98c4fa842ac34dc6b33a35b5909fcb6b859d3bc6276ffc2c6e4e",
+        "118a8f184715e5868f14c21f51bbfbb81e1226744c1f8fc024e9a2b067bdcb0c",
+        "c171e32e3a6ee237c48e40689f7b6f388d592d6cb7f3f35493c55bdc6a59bf3c",
+        "9966175a568232931ba0d1c6ac9bb0de14d9fd4c23b4eec2e32bdab7a08dbad9",
+        "7753faf71e87ed35550972b371415fc96c5004c7ca0de374a07d5a6ca1df8df9",
+        "f3690651515b10dadde475b0438e3fdf51e926042860726a3bd4ecd40212fe6e",
+        "1fca4c70e055fa3a0c8132d445db4904ef14089730365f6ebffe84201819a276",
+        "3797ac036715170891fa9c9def490cafae71986cfbdb18c2547b6d5c721e4d46",
+        "20b4c7a1842e816041637c4d79e4506222567c5aea6e5f568fa1c3a1c8639386"
+      ],
+      "train_sha256": "b7b4d3725126f3a7892b34b1dd98d769732f1eb33701b563922a07605cf49435",
+      "val": [
+        "4bbe362eb1ab719547b26608ca3f81d8b39262f31285dfb28c3d15a4c01db017"
+      ],
+      "val_sha256": "ed9409a4d91be0e5a9f786556b9afad38f0d213394d20929bde55418f3e0ae0c"
+    },
+    "git_revision": "f5139ef62d1c6c6e97810206867697e8bf3d7d87",
+    "num_iterations": 8,
+    "per_arm_gpu_hours": {},
+    "protocol_id": "exploratory",
+    "recipe": {
+      "core_metric_every": "-1",
+      "depth": "10",
+      "device_batch_size": "8",
+      "device_type": "cuda",
+      "embedding_lr": "0.2",
+      "eval_every": "-1",
+      "eval_tokens": "1048576",
+      "final_lr_frac": "0.0",
+      "grad_clip": "1.0",
+      "matrix_lr": "0.02",
+      "max_seq_len": "1024",
+      "num_iterations": "8",
+      "sample_every": "-1",
+      "save_every": "-1",
+      "target_param_data_ratio": "-1",
+      "tie_embeddings": "1",
+      "torch_compile": "0",
+      "total_batch_size": "65536",
+      "unembedding_lr": "0.004",
+      "warmdown_ratio": "0.2",
+      "warmup_ratio": "0.1",
+      "weight_decay": "0.0"
+    },
+    "registered": false,
+    "run_id": "fb1493e35614257f55f96f9fb539cd38d7eb3bda5a83857cf390ab6b7cf80d6d",
+    "schema": 1,
+    "screen_gpu_hours": 0.0,
+    "screen_rate_tokens_per_second": null,
+    "screen_scoring_seconds_per_cell": null,
+    "screen_summary_sha256": null,
+    "seeds": [
+      1337
+    ],
+    "source_sha256": "81b4d0ae9421f5271b1f88882df54dc3b70d2438f699eb39ef2d5883b690bdc3",
+    "stage": "screening",
+    "tokens_per_cell": 524288,
+    "total_batch_size": 65536,
+    "world_size": 2
+  },
+  "measurement": {
+    "bio_all": {
+      "post_first_two_fastest_seconds": 174.48944,
+      "post_first_two_median_seconds": 174.48944,
+      "post_first_two_slowest_seconds": 174.48944,
+      "post_first_two_update_count": 1,
+      "rank0_peak_allocated_mib": null,
+      "score": null,
+      "updates": [
+        {
+          "logged_aggregate_tok_s": 314,
+          "loss": 24.091547,
+          "seconds": 208.61524,
+          "step": 0
+        },
+        {
+          "logged_aggregate_tok_s": 350,
+          "loss": 21.749342,
+          "seconds": 186.87682,
+          "step": 1
+        },
+        {
+          "logged_aggregate_tok_s": 375,
+          "loss": 20.394625,
+          "seconds": 174.48944,
+          "step": 2
+        }
+      ]
+    },
+    "vanilla": {
+      "post_first_two_fastest_seconds": 1.2339,
+      "post_first_two_median_seconds": 1.32098,
+      "post_first_two_slowest_seconds": 1.5328,
+      "post_first_two_update_count": 6,
+      "rank0_peak_allocated_mib": 5698.41,
+      "score": {
+        "argv": [
+          "/data/projects/bio_inspired_nanochat/.venv/bin/python",
+          "-m",
+          "scripts.eval_matrix",
+          "matrix",
+          "--device-type",
+          "cuda",
+          "--presets",
+          "vanilla",
+          "--seeds",
+          "1337",
+          "--checkpoint-dir",
+          "/data/projects/bio-d1-ref.PFkYu6Ev/cache/base_checkpoints/matrix_screening_fb1493e35614257f55f9_{preset}_s{seed}",
+          "--checkpoint-step",
+          "8",
+          "--matrix-manifest",
+          "/data/projects/bio-d1-ref.PFkYu6Ev/cache/matrix_runs/fb1493e35614257f55f96f9fb539cd38d7eb3bda5a83857cf390ab6b7cf80d6d/manifest.json",
+          "--eval-bpb",
+          "--bpb-only",
+          "--data",
+          "fineweb",
+          "--fail-fast",
+          "--device-batch-size",
+          "8",
+          "--eval-tokens",
+          "1048576",
+          "--out-dir",
+          "/data/projects/bio-d1-ref.PFkYu6Ev/corrected/score"
+        ],
+        "row": {
+          "active_params": 91095040,
+          "capability_metric_status": {
+            "continual": "not_run",
+            "memory": "not_run",
+            "routing": "not_run",
+            "uncertainty": "not_run"
+          },
+          "checkpoint_config_hash": "d43456bd81af4a22",
+          "checkpoint_dir": "/data/projects/bio-d1-ref.PFkYu6Ev/cache/base_checkpoints/matrix_screening_fb1493e35614257f55f9_vanilla_s1337",
+          "checkpoint_git_sha": "f5139ef62d1c6c6e97810206867697e8bf3d7d87",
+          "checkpoint_step": 8,
+          "continual_exposures": 4,
+          "continual_tasks": 3,
+          "core_eval": false,
+          "core_max_per_task": 200,
+          "core_metric": null,
+          "data": "fineweb",
+          "dead_expert_frac": null,
+          "dead_expert_threshold": 0.01,
+          "device_batch_size": 8,
+          "device_type": "cuda",
+          "ece_bins": 15,
+          "error": "",
+          "eval_bpb": true,
+          "eval_data_digest": "ed9409a4d91be0e5a9f786556b9afad38f0d213394d20929bde55418f3e0ae0c",
+          "eval_device_batch_size": 8,
+          "eval_steps": 128,
+          "eval_tokens": 1048576,
+          "eval_tokens_processed": 1048576,
+          "forgetting_by_task": {},
+          "forgetting_rate": null,
+          "grad_accum_steps": null,
+          "id_ece": null,
+          "init_type": "baseline",
+          "matrix_manifest_digest": "fb1493e35614257f55f96f9fb539cd38d7eb3bda5a83857cf390ab6b7cf80d6d",
+          "matrix_source_sha256": "81b4d0ae9421f5271b1f88882df54dc3b70d2438f699eb39ef2d5883b690bdc3",
+          "matrix_stage": "screening",
+          "model_file_sha256": "45e6a7632772df75cb2d65fd58e7b3dbd6b796683b797757eb6585f67d0fd5de",
+          "moe_gini": null,
+          "moe_top_k": 0,
+          "n_embd": 640,
+          "n_head": 5,
+          "n_layer": 10,
+          "niah_acc": null,
+          "num_experts": 0,
+          "ood_auroc": null,
+          "optimizer_names": [
+            "DistAdamW",
+            "DistMuon"
+          ],
+          "optimizer_recipe_digest": "5f4fab64a05b19019d720584cde6dd1c3d1d1357183390cb0d38a0259a5240ce",
+          "parameter_match_rule": "report_exact_trainable_and_active_counts",
+          "preset": "vanilla",
+          "protocol_id": "exploratory",
+          "recall_by_length": {},
+          "recipe_source": "base_train_checkpoint",
+          "run_dir": "/data/projects/bio-d1-ref.PFkYu6Ev/corrected/score/matrix_20261125_063223/Q-vanilla-ckpt8-s1337-20261125_063237",
+          "run_id": "Q-vanilla-ckpt8-s1337-20261125_063237",
+          "screen_summary_sha256": null,
+          "seed": 1337,
+          "sequence_len": 1024,
+          "status": "ok",
+          "steps": 8,
+          "tok_per_sec": 8074.888058777177,
+          "tokenizer_digest": "32b10bf4f351cb5daa2f95ba9f05b94140a541d7ec14ca123101e42f5b1484f5",
+          "total_batch_size_tokens": 65536,
+          "train_data_digest": "b7b4d3725126f3a7892b34b1dd98d769732f1eb33701b563922a07605cf49435",
+          "train_device_type": "cuda",
+          "train_loss_final": 9.851808831996538,
+          "train_tokens_processed": 524288,
+          "train_tokens_requested": 524288,
+          "train_world_size": 2,
+          "trainable_params": 91095040,
+          "trained_cell_id": "matrix_screening_fb1493e35614257f55f9_vanilla_s1337",
+          "use_moe": false,
+          "val_bpb": 4.510997850351952,
+          "val_loss": null,
+          "val_ppl": null,
+          "vocab_size": 65536,
+          "walltime_sec": 64.9282065811567,
+          "world_size": 1
+        },
+        "score_cli_wall_seconds": 82.71167326485738,
+        "summary_csv_sha256": "af702084dc0103b6b3f42a3dc714757c7456d62546d7de5e77c7f8fa16326dd9",
+        "summary_sha256": "d6c5a8d7660499f128d49a3d9e8227be8f01453670ffdd2bc81a8f0b8907a625"
+      },
+      "updates": [
+        {
+          "logged_aggregate_tok_s": 8423,
+          "loss": 23.922462,
+          "seconds": 7.78037,
+          "step": 0
+        },
+        {
+          "logged_aggregate_tok_s": 52912,
+          "loss": 22.046449,
+          "seconds": 1.23858,
+          "step": 1
+        },
+        {
+          "logged_aggregate_tok_s": 50786,
+          "loss": 20.66506,
+          "seconds": 1.2904200000000001,
+          "step": 2
+        },
+        {
+          "logged_aggregate_tok_s": 52962,
+          "loss": 19.736688,
+          "seconds": 1.2374100000000001,
+          "step": 3
+        },
+        {
+          "logged_aggregate_tok_s": 48489,
+          "loss": 18.888992,
+          "seconds": 1.35154,
+          "step": 4
+        },
+        {
+          "logged_aggregate_tok_s": 53112,
+          "loss": 18.301364,
+          "seconds": 1.2339,
+          "step": 5
+        },
+        {
+          "logged_aggregate_tok_s": 42755,
+          "loss": 17.760927,
+          "seconds": 1.5328,
+          "step": 6
+        },
+        {
+          "logged_aggregate_tok_s": 44883,
+          "loss": 17.298054,
+          "seconds": 1.4601300000000001,
+          "step": 7
+        }
+      ]
+    }
+  },
+  "scope": {
+    "claim": "Observed reference-backend speed priced by the existing D1 registered admission rule",
+    "device": "Two RTX 4090s for training, one RTX 4090 for vanilla scoring",
+    "rate_scope": "One seed and completed pilot updates. The launcher applies the input rate to all 36 cells.",
+    "registered_screen_work_item": "bio_inspired_nanochat-hwxb.5.2.1",
+    "score_scope": "Vanilla was the only completed checkpoint. The reference bio arm timed out before its final checkpoint.",
+    "source_git_revision": "f5139ef62d1c6c6e97810206867697e8bf3d7d87",
+    "study_disposition": "The registered launcher rejected the observed inputs before sealing or starting a registered run",
+    "work_item": "bio_inspired_nanochat-4fw"
+  },
+  "summary": {
+    "fastest_reference_bio_all_aggregate_tokens_per_second": 375.58719885856704,
+    "fastest_reference_bio_all_update_seconds": 174.48944,
+    "pilot_charged_training_gpu_hours": 0.49757758222597964,
+    "pilot_vanilla_score_gpu_hours": 0.022975464795793717,
+    "reference_bio_all_updates": 3,
+    "registered_cap_gpu_hours": 72,
+    "registered_projection_gpu_hours": 531.2750143326487,
+    "registered_projection_training_gpu_hours": 530.4478976,
+    "registered_refusal_exit": 2,
+    "vanilla_median_update_seconds_after_first_two": 1.32098,
+    "vanilla_updates": 8
+  },
+  "vanilla_checkpoint_metadata": {
+    "device_batch_size": 8,
+    "loop_state": {
+      "min_val_bpb": 4.4947891844325385,
+      "smooth_train_loss": 9.851808831996538,
+      "total_training_time": 0
+    },
+    "matrix_data": {
+      "tokenizer": {
+        "token_bytes.pt": "ae39c27aae519d14071efc95f9a558ba0b7ede47e7d83ad4f198422b44c5f70e",
+        "tokenizer.json": "45d958866dbe10af5f33f4cd360d7fe30cfabdd7dbe5cd3aaec27f25e579e46b"
+      },
+      "tokenizer_sha256": "32b10bf4f351cb5daa2f95ba9f05b94140a541d7ec14ca123101e42f5b1484f5",
+      "train": [
+        "6a3450ea745ee6b6830c09819c0f2c72682eba443022de595bcb50ceb3092c22",
+        "30a72934cb85581f88c701fc4b6f389a7215d2af99ee1d3f65e1a99d16c06adf",
+        "3f90859d36510630529c32990b0269a867bb6967652ddca9e8c8ee69879360e6",
+        "0116631ad3c33debdf292328b24133a9ef5ef35517a844dfa8f08bf62166cf52",
+        "f214985a443999a3599b11a01b6e241ee1b9da51f948e72334a5442c2a374d37",
+        "ddb7eeb20b64e290d68238e9e9ea3651fc123d0ec4fbce3884e7a4f8f9a0a10f",
+        "f88599776e4351a6338242b437683d7162e4a176763a0314b4c2696abef68ca8",
+        "2aca70545cc310fb09b94de74ef23af3f4f442f5b68dfd5cb68578096f0c91d1",
+        "f6b5a838516437ea71cd37b2a958dffc55e3d9d9080b924e298db3e4610b9b7a",
+        "b1525632c48c7a79c2b64f6cc96122b65c99fd517ddabed2d1b81c95c77ca6c6",
+        "fcae67248a149eed43d9f7eb2bfb4f4cbd055d1a8d5178e82f77296f5edc009c",
+        "0ffb8dd421996e93f3d93865e297626a9a61f92d8ed43b9fc054db96b2d27859",
+        "76cf72ba9797c764faea4c09ed1dcb0765e58cf313668f8858be5e5c80c91653",
+        "32f2dc25338ae2551e0501898024d8bd4833838db16602cc8c7f4879561c01a3",
+        "b2c4e47d3531c3e53fa874d4146b3c239970b273fc9ae073a3bc39d8bf30d787",
+        "e6363e580ba98ac578b5593724e816b92f2ba1271d4e21c4e2eb129bdea96eb4",
+        "0e4f1387d5531359c152c50e219b0b5b208ef1793294e43729caecd953a3ab6a",
+        "5bcf3d7b7a7cc27dbd59270f98f79333e677c3533b4e9d824bb8b93eba3af1c4",
+        "000591b1ffab98c4fa842ac34dc6b33a35b5909fcb6b859d3bc6276ffc2c6e4e",
+        "118a8f184715e5868f14c21f51bbfbb81e1226744c1f8fc024e9a2b067bdcb0c",
+        "c171e32e3a6ee237c48e40689f7b6f388d592d6cb7f3f35493c55bdc6a59bf3c",
+        "9966175a568232931ba0d1c6ac9bb0de14d9fd4c23b4eec2e32bdab7a08dbad9",
+        "7753faf71e87ed35550972b371415fc96c5004c7ca0de374a07d5a6ca1df8df9",
+        "f3690651515b10dadde475b0438e3fdf51e926042860726a3bd4ecd40212fe6e",
+        "1fca4c70e055fa3a0c8132d445db4904ef14089730365f6ebffe84201819a276",
+        "3797ac036715170891fa9c9def490cafae71986cfbdb18c2547b6d5c721e4d46",
+        "20b4c7a1842e816041637c4d79e4506222567c5aea6e5f568fa1c3a1c8639386"
+      ],
+      "train_sha256": "b7b4d3725126f3a7892b34b1dd98d769732f1eb33701b563922a07605cf49435",
+      "val": [
+        "4bbe362eb1ab719547b26608ca3f81d8b39262f31285dfb28c3d15a4c01db017"
+      ],
+      "val_sha256": "ed9409a4d91be0e5a9f786556b9afad38f0d213394d20929bde55418f3e0ae0c"
+    },
+    "matrix_git_revision": "f5139ef62d1c6c6e97810206867697e8bf3d7d87",
+    "matrix_optimizer_names": [
+      "DistAdamW",
+      "DistMuon"
+    ],
+    "matrix_source_sha256": "81b4d0ae9421f5271b1f88882df54dc3b70d2438f699eb39ef2d5883b690bdc3",
+    "matrix_train_device_type": "cuda",
+    "matrix_train_world_size": 2,
+    "matrix_training_wall_seconds": 64.9282065811567,
+    "max_seq_len": 1024,
+    "model_config": {
+      "attention_type": "standard",
+      "init_seed": 1337,
+      "init_type": "baseline",
+      "n_embd": 640,
+      "n_head": 5,
+      "n_kv_head": 5,
+      "n_layer": 10,
+      "sequence_len": 1024,
+      "tie_embeddings": true,
+      "ultrametric_alpha": 2.0,
+      "ultrametric_k": 8,
+      "ultrametric_lcp_beta": 32.0,
+      "ultrametric_p": 2,
+      "ultrametric_query_chunk_size": 64,
+      "vocab_size": 65536
+    },
+    "model_file_sha256": "45e6a7632772df75cb2d65fd58e7b3dbd6b796683b797757eb6585f67d0fd5de",
+    "provenance": null,
+    "splitmerge": null,
+    "step": 8,
+    "synapses": false,
+    "synaptic_config": null,
+    "total_batch_size": 65536,
+    "user_config": {
+      "core_metric_every": -1,
+      "core_metric_max_per_task": 500,
+      "depth": 10,
+      "device_batch_size": 8,
+      "device_type": "cuda",
+      "embedding_lr": 0.2,
+      "eval_every": -1,
+      "eval_tokens": 1048576,
+      "final_lr_frac": 0.0,
+      "final_norm": 1,
+      "grad_clip": 1.0,
+      "hebb_chunk_len": 0,
+      "init_seed": 1337,
+      "init_type": "baseline",
+      "load_cmaes_params": "",
+      "matrix_lr": 0.02,
+      "matrix_manifest": "/data/projects/bio-d1-ref.PFkYu6Ev/cache/matrix_runs/fb1493e35614257f55f96f9fb539cd38d7eb3bda5a83857cf390ab6b7cf80d6d/manifest.json",
+      "matrix_run_id": "fb1493e35614257f55f96f9fb539cd38d7eb3bda5a83857cf390ab6b7cf80d6d",
+      "max_seq_len": 1024,
+      "merge_cosine": 0.85,
+      "merge_health_max": 0.25,
+      "merges_per_call": 1,
+      "model_tag": "matrix_screening_fb1493e35614257f55f9_vanilla_s1337",
+      "moe_hidden_mult": 4,
+      "moe_top_k": 2,
+      "neuromod_enabled": 0,
+      "neuromod_log_every": 100,
+      "neuroviz_dir": "runs/neuroviz",
+      "neuroviz_image_every": 10000,
+      "neuroviz_interactive_every": 25000,
+      "neuroviz_tb_every": 1000,
+      "num_experts": 8,
+      "num_iterations": 8,
+      "resume_from_step": -1,
+      "run": "dummy",
+      "sample_every": -1,
+      "save_every": -1,
+      "scalar_lr": 0.01,
+      "sm_energy_floor": 0.05,
+      "sm_fp_divergence_noise": 0.02,
+      "sm_function_preserving": 1,
+      "sm_gate_ramp_forwards": 512,
+      "sm_health_mode": "product",
+      "sm_homeostasis_guards": 0,
+      "sm_neuroscore_weight": 0.5,
+      "sm_use_neuroscore": 0,
+      "sm_verbose": 0,
+      "sm_warmup_steps": 20000,
+      "split_health_min": 0.8,
+      "splitmerge_every": 0,
+      "splits_per_call": 1,
+      "syn_cfg_overrides": {},
+      "synapses": 0,
+      "target_flops": -1.0,
+      "target_param_data_ratio": -1,
+      "tie_embeddings": 1,
+      "topological_nas": 0,
+      "torch_compile": 0,
+      "total_batch_size": 65536,
+      "unembedding_lr": 0.004,
+      "use_flex_attention": 0,
+      "use_moe": 0,
+      "uta4_growth_budget_pct": 0.5,
+      "uta4_max_experts": 64,
+      "uta4_min_experts": 2,
+      "uta4_variable_experts": 0,
+      "warmdown_ratio": 0.2,
+      "warmup_ratio": 0.1,
+      "weight_decay": 0.0
+    },
+    "val_bpb": 4.4947891844325385
+  }
+}
