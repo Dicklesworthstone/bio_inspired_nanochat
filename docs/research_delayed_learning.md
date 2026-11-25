@@ -207,3 +207,31 @@ All three modes matched the original trajectories and produced identical logits 
 Final-block replay reduced waiting bytes by a factor of 107–140 relative to the retained graph. It took 19.7% less total time at 4 by 16 and 0.13% more at 8 by 32. The retained graph responded faster after feedback, taking 103 and 183 ms versus 159 and 521 ms for final-block replay. Incremental peak PyTorch allocation fell from 61.13 to 55.62 MiB and from 216.14 to 203.77 MiB, respectively. Full replay used the smallest waiting state. The larger gap at feedback may matter when many rollouts wait concurrently. The two measured shapes establish an engineering tradeoff for a fixed adapter and workload. A production queue, an optimized checkpointed graph, and convergence on a public reward task remain untested.
 
 The [LoRA replay archive](../results/delayed_lora_tail_replay_2026-11-24.json) includes all three DSR receipts, drivers, configuration files, per-round outcomes, and recount scripts. The multi-token cohorts establish update equivalence through the gradient. The one-token optimizer pilot extends it through AdamW while leaving the reward advancement gate closed.
+
+### Delayed feedback queue and pinned host offload
+
+- [x] Freeze the queue depth, devices, transfer policy, cap and three paired seeds.
+- [x] Queue eight independent 4-by-16 jobs before releasing any feedback. Charge live collection, pinned-memory copies, ordered replay or backward, and the shared optimizer step.
+- [x] Run full-model replay, device and pinned-host final-block replay, device graph retention, and pinned-host graph retention under the same cap.
+- [x] Record waiting-state allocations after every enqueue and the first rejection, plus incremental peak CUDA allocation throughout the arm.
+- [x] Compare actual draws, support scores, all four gradients per job, and the aggregate AdamW parameters and state. Independently recount admission, parity, and the verdict.
+
+The fixed waiting-state cap is 2 MiB of live CUDA allocation and 1 GiB of retained host tensors, measured above the same preallocated input and model state between jobs. An arm that exceeds a cap aborts that queue before feedback. The cap covers waiting state. Generation and replay may use transient workspace, which is measured separately. The three paired rounds rotate arm order and use seeds 3817 through 3819, with a distinct draw stream for each job. All gradients are computed at the original policy and reduced in arrival order before a single AdamW update. The state cap and aggregate update model a wave of on-policy rollouts. A service with interleaved policy updates needs a separate protocol.
+
+Pinned-host final-block replay transfers the native BF16 feature once in each direction. The host graph control offloads tensors through PyTorch's saved-tensor hooks. It keeps model-owned storage on device and shares one pinned device-to-host copy between saved views of the same live storage. It restores the original dtype, offset and strides on each access during backward. Both arms synchronize between jobs during collection and after the optimizer step. Host bytes count live tensor storage and exclude Python objects, allocator reserves, and model residency. [PyTorch saved tensor hooks](https://docs.pytorch.org/docs/stable/autograd.html#torch.autograd.graph.save_on_cpu)
+
+The candidate advances if it completes all three queues with bitwise parity and its median total time is at least 20% lower than the fastest eligible conventional control in the same run. If host graph retention also qualifies, report its host storage and latency in addition to the speed gate. The full cached replay arm must complete all three queues and exactly reproduce behavior logits for the comparison to be valid.
+
+### Queue result
+
+Full replay, final-block replay with pinned host storage, and offloaded graph retention completed all three queues. Each scored 1,536 decisions across eight jobs per round. Their sampled trajectories, support logits, four per-job gradients, aggregate gradients, updated weights, and AdamW state matched bit for bit. The device-resident final-block arm could hold four jobs and rejected the fifth at 2.47 MiB. The device-resident graph rejected the first at 52.83 MiB.
+
+| Method completing all queues | Median total | Median feedback to update | Host waiting storage | Incremental CUDA peak |
+|---|---:|---:|---:|---:|
+| Full replay | 25.21 s | 13.59 s | 0 MiB | 59.18 MiB |
+| Pinned-host graph | 15.87 s | 1.49 s | 416.49 MiB | 13.30 MiB |
+| Pinned-host final-block replay | 15.20 s | 2.73 s | 3.75 MiB | 55.99 MiB |
+
+All three used 0.195 MiB of device waiting state at depth eight. Final-block replay cut host waiting storage by a factor of 111 and reduced median total time by 4.2% versus the fastest eligible control. It missed the 20% advancement threshold. Graph offload finished faster in one of three paired rounds, had a lower median latency after feedback, and used less peak GPU memory. Final-block replay took 39.7% less total time than full recomputation.
+
+The study uses independent draws over the same four prompts on one RTX 4090. The two caps cover waiting tensors, and the peak column is incremental to the resident model and preallocated inputs. One ordered optimizer step follows each wave and uses fixed delayed coefficients. The [queue evidence archive](../results/delayed_lora_queue_2026-11-24.json) contains the native DSR receipt, every admission, raw timing samples, drivers, and independent recount.

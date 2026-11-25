@@ -1,0 +1,2043 @@
+{
+  "configuration": "{\n  \"tools\": {\n    \"bio-delayed-lora-queue\": {\n      \"checks\": [\n        \"set -e; export CUDA_VISIBLE_DEVICES=0 UV_OFFLINE=true UV_PROJECT_ENVIRONMENT=/data/projects/bio_inspired_nanochat/.venv OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1; test \\\"$(git rev-parse HEAD)\\\" = 0a3a0c4c1625f6ad75409f99dbd6d5e204f9a9f6; printf '%s  %s\\\\n' a59250b34dd055cd977f2a79bfcdd3003b4e5857e57696717f68f7c8c9ec23ac /data/projects/bio-tail-replay.iqMTxrSS/retained_graph.py faa3401d5ce766781251861e5e2e700b2e66c0a8b936e12e137e3d0036dfbefc /data/projects/bio-tail-replay.iqMTxrSS/delay_queue.py 3736d23c6112f9609a97bbef76c50540e8d72081242af28eb215c6acbf92ed1f /data/projects/bio-tail-replay.iqMTxrSS/tail_replay.py 08faf1e950173bb44c11d26df28c55da7237dc55c77dbc1cbae4a5d7584540d9 /data/projects/bio-learning-pilot.XRewL9V1/weights/model.safetensors a48e6ab280ad87a25f06da604d486aa819b9c1bc467dae7c25fe5d05c57f5511 /data/projects/bio-learning-pilot.XRewL9V1/weights/config.json c0382117ea329cdf097041132f6d735924b697924d6f6fc3945713e96ce87539 /data/projects/bio-learning-pilot.XRewL9V1/weights/tokenizer.json d743761ff02297cc5cdf38a612b0f78d5cdf5ceb3f251ab1d25ad353d24b1887 /data/projects/bio-learning-pilot.XRewL9V1/weights/tokenizer_config.json | sha256sum --check; flock -w 60 /tmp/bio_inspired_nanochat-trj-gpu0.lock taskset -c 52 uv run --no-sync python /data/projects/bio-tail-replay.iqMTxrSS/delay_queue.py /data/projects/bio-learning-pilot.XRewL9V1/weights /data/projects/bio-tail-replay.iqMTxrSS/delay-queue.json /data/projects/bio-tail-replay.iqMTxrSS/delay-queue-rounds.jsonl; sha256sum /data/projects/bio-tail-replay.iqMTxrSS/delay-queue.json /data/projects/bio-tail-replay.iqMTxrSS/delay-queue-rounds.jsonl\"\n      ]\n    }\n  }\n}\n",
+  "configuration_sha256": "8a10ab70be6a14934628389499afac0990488dd5c63206cc0e928297aea4b1f3",
+  "driver_sha256": {
+    "delay_queue.py": "faa3401d5ce766781251861e5e2e700b2e66c0a8b936e12e137e3d0036dfbefc",
+    "retained_graph.py": "a59250b34dd055cd977f2a79bfcdd3003b4e5857e57696717f68f7c8c9ec23ac",
+    "tail_replay.py": "3736d23c6112f9609a97bbef76c50540e8d72081242af28eb215c6acbf92ed1f"
+  },
+  "driver_sources": {
+    "delay_queue.py": "\"\"\"Measure exact on-policy update from a delayed wave under two waiting-state caps.\"\"\"\nfrom contextlib import nullcontext\nfrom dataclasses import dataclass\nimport json\nfrom pathlib import Path\nimport statistics\nimport sys\nfrom time import perf_counter\nimport weakref\n\nimport torch\nfrom torch.multiprocessing.reductions import StorageWeakRef\nfrom transformers import AutoModelForCausalLM, AutoTokenizer\n\nfrom retained_graph import live_graph\nfrom tail_replay import (\n    CONSOLE, Episode, REVISION, RankOne, cached_scores, capture, digest, draw,\n    gradients, prompts,\n)\n\n\nJOBS, BATCH, STEPS = 8, 4, 16\nSEEDS = (3817, 3818, 3819)\nDEVICE_CAP, HOST_CAP = 2 * 1024**2, 1024**3\nMODES = (\"full\", \"tail_device\", \"tail_host\", \"graph_device\", \"graph_host\")\n\n\n@dataclass\nclass Job:\n    episode: Episode\n    scores: torch.Tensor | None\n\n\nclass PinnedGraph:\n    \"\"\"Save each dynamic storage once and preserve the saved tensor's exact view.\"\"\"\n    def __init__(self, model):\n        self.static = {\n            tensor.untyped_storage().data_ptr()\n            for tensor in (*model.parameters(), *model.buffers()) if tensor.is_cuda\n        }\n        self.copies = {}\n        self.host_refs = []\n\n    def hooks(self):\n        return torch.autograd.graph.saved_tensors_hooks(self.pack, self.unpack)\n\n    @staticmethod\n    def byte_view(tensor):\n        storage = tensor.untyped_storage()\n        return torch.empty(0, device=tensor.device, dtype=torch.uint8).set_(\n            storage, 0, (storage.nbytes(),), (1,)\n        )\n\n    def pack(self, tensor):\n        storage = tensor.untyped_storage()\n        if not tensor.is_cuda or storage.data_ptr() in self.static:\n            return (None, tensor.detach())\n        key = storage.data_ptr()\n        entry = self.copies.get(key)\n        pinned = None if entry is None or entry[0].expired() else entry[1]()\n        if pinned is None:\n            pinned = pin(self.byte_view(tensor.detach()))\n            reference = weakref.ref(pinned)\n            self.copies[key] = StorageWeakRef(storage), reference\n            self.host_refs.append(reference)\n        return tensor.device, pinned, tensor.dtype, tensor.size(), tensor.stride(), tensor.storage_offset()\n\n    @staticmethod\n    def unpack(packed):\n        device, host, *view = packed\n        if device is None:\n            return host\n        dtype, size, stride, offset = view\n        storage = host.to(device, non_blocking=True).untyped_storage()\n        return torch.empty(0, device=device, dtype=dtype).set_(storage, offset, size, stride)\n\n    def live_host_bytes(self):\n        return sum(t.untyped_storage().nbytes() for reference in self.host_refs\n                   if (t := reference()) is not None)\n\n\ndef pin(tensor):\n    target = torch.empty_like(tensor, device=\"cpu\", pin_memory=True)\n    return target.copy_(tensor, non_blocking=True)\n\n\ndef collect(model, prompt, uniforms, eos, mode, offload):\n    if mode.startswith(\"graph\"):\n        with offload.hooks() if offload is not None else nullcontext():\n            episode, scores = live_graph(model, prompt, uniforms, eos)\n        return Job(episode, scores)\n    episode = capture(model, prompt, uniforms, eos, save=mode.startswith(\"tail\"))\n    if mode == \"tail_host\":\n        episode.saved = pin(episode.saved)\n    return Job(episode, None)\n\n\ndef update_snapshot(parameters, summed, jobs):\n    copied = [torch.nn.Parameter(p.detach().clone()) for p in parameters]\n    optimizer = torch.optim.AdamW(copied, lr=0.003, weight_decay=0.0)\n    for parameter, grad in zip(copied, summed, strict=True):\n        parameter.grad = grad / jobs\n    optimizer.step()\n    return copied, tuple(optimizer.state[p][k] for p in copied for k in (\"step\", \"exp_avg\", \"exp_avg_sq\"))\n\n\ndef host_bytes(jobs, offload):\n    if offload is not None:\n        return offload.live_host_bytes()\n    return sum(j.episode.saved.untyped_storage().nbytes() for j in jobs\n               if j.episode.saved is not None and j.episode.saved.device.type == \"cpu\")\n\n\ndef digest_job(job):\n    ep = job.episode\n    return [digest(value) for value in (ep.actions, ep.support, ep.behavior, ep.indices)]\n\n\ndef arm(model, prompt, uniforms, eos, feedbacks, mode, params, *, device_cap=DEVICE_CAP):\n    queue, admissions, raw = [], [], []\n    offload = PinnedGraph(model) if mode == \"graph_host\" else None\n    torch.cuda.synchronize()\n    baseline = torch.cuda.memory_allocated()\n    torch.cuda.reset_peak_memory_stats()\n    start = perf_counter()\n    for draws in uniforms:\n        queue.append(collect(model, prompt, draws, eos, mode, offload))\n        torch.cuda.synchronize()\n        allocation = torch.cuda.memory_allocated() - baseline\n        host = host_bytes(queue, offload)\n        accepted = allocation <= device_cap and host <= HOST_CAP\n        admissions.append({\"device_bytes\": allocation, \"host_bytes\": host, \"accepted\": accepted})\n        if not accepted:\n            break\n    arrival = perf_counter()\n    completed = len(admissions) == len(uniforms) and admissions[-1][\"accepted\"]\n    if completed:\n        summed = [torch.zeros_like(param) for param in params]\n        for job, feedback in zip(queue, feedbacks, strict=True):\n            episode, scores = job.episode, job.scores\n            if mode == \"tail_host\":\n                episode.saved = episode.saved.to(\"cuda\", non_blocking=True)\n            if scores is None:\n                scores = cached_scores(model, episode, tail=mode.startswith(\"tail\"))\n            grad = gradients(scores, episode, feedback, params)\n            raw.append((scores.detach(), grad))\n            for acc, item in zip(summed, grad, strict=True):\n                acc.add_(item)\n            if mode == \"tail_host\":\n                episode.saved = None\n            job.scores = None\n        updated, state = update_snapshot(params, summed, len(queue))\n    torch.cuda.synchronize()\n    end = perf_counter()\n    row = {\n        \"admissions\": admissions, \"completed\": completed,\n        \"collect_ms\": (arrival - start) * 1000, \"feedback_ms\": (end - arrival) * 1000,\n        \"total_ms\": (end - start) * 1000,\n        \"max_incremental_peak_bytes\": torch.cuda.max_memory_allocated() - baseline,\n        \"trajectory_hashes\": [digest_job(job) for job in queue],\n    }\n    if completed:\n        row.update({\n            \"all_behavior_logits_bitwise\": all(\n                torch.equal(job.episode.behavior, logits) for job, (logits, _) in zip(queue, raw, strict=True)\n            ),\n            \"per_job_gradient_sha256\": [[digest(g) for g in gs] for _, gs in raw],\n            \"sum_gradient_sha256\": [digest(g) for g in summed],\n            \"adam_parameter_sha256\": [digest(p) for p in updated],\n            \"adam_state_sha256\": [digest(t) for t in state],\n        })\n    return row\n\n\ndef summarize(records):\n    summary = {}\n    for mode in MODES:\n        arms = [record[\"arms\"][mode] for record in records]\n        exact = all(row[\"exact\"] for row in arms)\n        summary[mode] = {\n            \"all_exact\": exact,\n            \"completed_queues\": sum(row[\"completed\"] for row in arms),\n            \"max_accepted_before_feedback\": max(sum(a[\"accepted\"] for a in row[\"admissions\"]) for row in arms),\n            \"median_total_ms\": statistics.median(row[\"total_ms\"] for row in arms) if exact else None,\n            \"median_feedback_ms\": statistics.median(row[\"feedback_ms\"] for row in arms) if exact else None,\n            \"max_device_bytes_at_admission\": max(a[\"device_bytes\"] for row in arms for a in row[\"admissions\"]),\n            \"max_host_bytes_at_admission\": max(a[\"host_bytes\"] for row in arms for a in row[\"admissions\"]),\n        }\n    controls = [summary[mode][\"median_total_ms\"] for mode in (\"full\", \"graph_device\", \"graph_host\")\n                if summary[mode][\"all_exact\"]]\n    valid = summary[\"full\"][\"all_exact\"]\n    tail = summary[\"tail_host\"][\"median_total_ms\"]\n    return summary, valid and tail is not None and tail <= 0.80 * min(controls)\n\n\ndef main():\n    torch.set_num_threads(1)\n    torch.set_float32_matmul_precision(\"highest\")\n    checkpoint, output, log = map(Path, sys.argv[1:])\n    tokenizer = AutoTokenizer.from_pretrained(checkpoint, local_files_only=True, trust_remote_code=False)\n    model = AutoModelForCausalLM.from_pretrained(\n        checkpoint, dtype=torch.bfloat16, attn_implementation=\"sdpa\", use_safetensors=True,\n        local_files_only=True, trust_remote_code=False,\n    ).to(\"cuda\").eval()\n    model.requires_grad_(False)\n    assert model.config.num_hidden_layers == 28 and not model.model.has_sliding_layers\n    rng = torch.Generator(device=\"cuda\").manual_seed(92017)\n    attention = model.model.layers[-1].self_attn\n    attention.q_proj = RankOne(attention.q_proj, rng)\n    attention.v_proj = RankOne(attention.v_proj, rng)\n    params = attention.q_proj.input, attention.q_proj.output, attention.v_proj.input, attention.v_proj.output\n    assert {id(p) for p in params} == {id(p) for p in model.parameters() if p.requires_grad}\n    eos_ids = model.generation_config.eos_token_id\n    eos = torch.tensor(eos_ids if isinstance(eos_ids, list) else [eos_ids], device=\"cuda\")\n    prompt = prompts(tokenizer, BATCH)\n    coefficients = [torch.linspace(-0.75, 0.95, BATCH, dtype=torch.float32, device=\"cuda\") + i / 32\n                    for i in range(JOBS)]\n    warm = [draw(BATCH, 3, 899)]\n    for mode in MODES:\n        arm(model, prompt, warm, eos, coefficients[:1], mode, params, device_cap=2**30)\n    records = []\n    keys = (\"trajectory_hashes\", \"per_job_gradient_sha256\", \"sum_gradient_sha256\",\n            \"adam_parameter_sha256\", \"adam_state_sha256\")\n    with log.open(\"x\", encoding=\"utf-8\") as journal:\n        for turn, seed in enumerate(SEEDS):\n            randoms = [draw(BATCH, STEPS, seed * 100 + job) for job in range(JOBS)]\n            order = MODES[turn:] + MODES[:turn]\n            rows = {mode: arm(model, prompt, randoms, eos, coefficients, mode, params) for mode in order}\n            reference = rows[\"full\"]\n            assert reference[\"completed\"] and reference[\"all_behavior_logits_bitwise\"]\n            for row in rows.values():\n                anchors = row[\"trajectory_hashes\"]\n                row[\"sampled_prefix_matches\"] = anchors == reference[\"trajectory_hashes\"][:len(anchors)]\n                row[\"exact\"] = row[\"completed\"] and row[\"all_behavior_logits_bitwise\"] and all(\n                    row[key] == reference[key] for key in keys\n                )\n            record = {\"seed\": seed, \"order\": order, \"arms\": rows}\n            records.append(record)\n            journal.write(json.dumps(record, sort_keys=True, allow_nan=False) + \"\\n\")\n            journal.flush()\n            CONSOLE.print_json(data={\"seed\": seed, \"round\": summarize([record])[0]})\n    summary, passes = summarize(records)\n    result = {\"model_revision\": REVISION, \"device\": torch.cuda.get_device_name(), \"device_cap\": DEVICE_CAP,\n              \"host_cap\": HOST_CAP, \"jobs\": JOBS, \"batch\": BATCH, \"steps\": STEPS,\n              \"records\": records, \"summary\": summary, \"passes\": passes}\n    CONSOLE.print_json(data={\"summary\": summary, \"passes\": passes})\n    with output.open(\"x\", encoding=\"utf-8\") as stream:\n        json.dump(result, stream, allow_nan=False, sort_keys=True)\n\n\nif __name__ == \"__main__\":\n    main()\n",
+    "retained_graph.py": "\"\"\"Compare exact replay with a retained generation graph across the original cohorts.\"\"\"\nimport json\nimport statistics\nimport sys\nfrom pathlib import Path\nfrom time import perf_counter\n\nimport torch\nfrom transformers import AutoModelForCausalLM, AutoTokenizer\n\nfrom tail_replay import (\n    CONSOLE, ROUNDS, SHAPES, TEMPERATURE, TOP_K, Episode, RankOne, digest,\n    draw, errors, gradients, prompts, run,\n)\n\n\ndef live_graph(model, prompt, uniforms, eos):\n    cache = None\n    current = prompt\n    actions, support, indices, scores = [], [], [], []\n    for step, randoms in enumerate(uniforms):\n        output = model.model(input_ids=current, past_key_values=cache, use_cache=True)\n        cache = output.past_key_values\n        logits = model.lm_head(output.last_hidden_state[:, -1]).float()\n        with torch.no_grad():\n            sampling = logits if step == len(uniforms) - 1 else logits.index_fill(1, eos, -torch.inf)\n            top, ids = sampling.topk(TOP_K, dim=-1, sorted=True)\n            cumulative = (top / TEMPERATURE).softmax(-1).cumsum(-1)\n            choice = (randoms[:, None] >= cumulative).sum(-1).clamp_max(TOP_K - 1)\n            current = ids.gather(1, choice[:, None])\n        actions.append(current[:, 0])\n        support.append(ids)\n        indices.append(choice)\n        scores.append(logits.gather(1, ids))\n    stacked = torch.stack(scores, dim=1)\n    return Episode(prompt, torch.stack(actions, dim=1), torch.stack(support, dim=1),\n                   stacked.detach(), torch.stack(indices, dim=1), None), stacked\n\n\ndef timed(model, prompt, uniforms, eos, params, mode):\n    torch.cuda.synchronize()\n    baseline = torch.cuda.memory_allocated()\n    torch.cuda.reset_peak_memory_stats()\n    start = perf_counter()\n    if mode != \"retained\":\n        row, logits, gradient, episode, _ = run(model, prompt, uniforms, eos, mode, params)\n        # The replay helper records precisely the components live at feedback.\n        retained = row[\"retained_common_bytes\"] - episode.prompt.numel() * episode.prompt.element_size()\n        return {**row, \"waiting_bytes\": retained + row[\"feature_bytes\"]}, logits, gradient\n    episode, scores = live_graph(model, prompt, uniforms, eos)\n    torch.cuda.synchronize()\n    arrival = perf_counter()\n    waiting = torch.cuda.memory_allocated() - baseline\n    feedback = torch.linspace(-0.75, 0.95, prompt.size(0), dtype=torch.float32, device=\"cuda\")\n    gradient = gradients(scores, episode, feedback, params)\n    torch.cuda.synchronize()\n    end = perf_counter()\n    return {\n        \"collect_ms\": 1000 * (arrival - start), \"replay_ms\": 1000 * (end - arrival),\n        \"total_ms\": 1000 * (end - start), \"waiting_bytes\": waiting,\n        \"max_incremental_peak_bytes\": torch.cuda.max_memory_allocated() - baseline,\n        \"actions_sha256\": digest(episode.actions), \"support_sha256\": digest(episode.support),\n        \"behavior_sha256\": digest(episode.behavior), \"behavior_logits_bitwise\": True,\n    }, scores.detach(), gradient\n\n\ndef main():\n    torch.set_num_threads(1)\n    torch.set_float32_matmul_precision(\"highest\")\n    snapshot, out, log = map(Path, sys.argv[1:])\n    tokenizer = AutoTokenizer.from_pretrained(snapshot, local_files_only=True, trust_remote_code=False)\n    model = AutoModelForCausalLM.from_pretrained(snapshot, dtype=torch.bfloat16, attn_implementation=\"sdpa\",\n                                                use_safetensors=True, local_files_only=True, trust_remote_code=False).to(\"cuda\").eval()\n    model.requires_grad_(False)\n    assert model.config.num_hidden_layers == 28 and not model.model.has_sliding_layers\n    rng = torch.Generator(device=\"cuda\").manual_seed(92017)\n    attention = model.model.layers[-1].self_attn\n    attention.q_proj = RankOne(attention.q_proj, rng)\n    attention.v_proj = RankOne(attention.v_proj, rng)\n    params = (attention.q_proj.input, attention.q_proj.output, attention.v_proj.input, attention.v_proj.output)\n    raw_eos = model.generation_config.eos_token_id\n    eos = torch.tensor(raw_eos if isinstance(raw_eos, list) else [raw_eos], device=\"cuda\")\n    modes = (\"full_cached\", \"tail_cached\", \"retained\")\n    for mode in modes:\n        timed(model, prompts(tokenizer, 4), draw(4, 3, 899), eos, params, mode)\n    records = []\n    with log.open(\"x\", encoding=\"utf-8\") as journal:\n        for index, (batch, steps) in enumerate(SHAPES):\n            prompt = prompts(tokenizer, batch)\n            for trial in range(ROUNDS):\n                seed = 1207 + trial\n                randoms = draw(batch, steps, seed)\n                rotation = (index + trial) % len(modes)\n                order = modes[rotation:] + modes[:rotation]\n                result = {mode: timed(model, prompt, randoms, eos, params, mode) for mode in order}\n                reference, ref_scores, ref_grad = result[\"full_cached\"]\n                for row, scores, gradient in result.values():\n                    row[\"same_trajectory\"] = all(row[key] == reference[key] for key in\n                                                  (\"actions_sha256\", \"support_sha256\", \"behavior_sha256\"))\n                    row[\"reference_logits_bitwise\"] = torch.equal(scores, ref_scores)\n                    row[\"gradient_bitwise\"] = all(torch.equal(a, b) for a, b in zip(gradient, ref_grad, strict=True))\n                    row[\"factor_gradient_errors\"] = errors(gradient, ref_grad)\n                    row[\"exact\"] = (row[\"same_trajectory\"] and row[\"reference_logits_bitwise\"]\n                                    and row[\"gradient_bitwise\"] and row[\"behavior_logits_bitwise\"])\n                record = {\"shape\": f\"{batch}x{steps}\", \"trial\": trial, \"seed\": seed, \"order\": order,\n                          \"arms\": {mode: result[mode][0] for mode in modes}}\n                records.append(record)\n                journal.write(json.dumps(record, sort_keys=True, allow_nan=False) + \"\\n\")\n                journal.flush()\n                CONSOLE.print_json(data={\"shape\": record[\"shape\"], \"trial\": trial,\n                                         \"exact\": {mode: record[\"arms\"][mode][\"exact\"] for mode in modes}})\n    summary = {}\n    for batch, steps in SHAPES:\n        shape = f\"{batch}x{steps}\"\n        selected = [row[\"arms\"] for row in records if row[\"shape\"] == shape]\n        summary[shape] = {}\n        for mode in modes:\n            rows = [row[mode] for row in selected]\n            summary[shape][mode] = {\n                \"exact_rounds\": sum(row[\"exact\"] for row in rows),\n                **{key: statistics.median(row[key] for row in rows) for key in\n                   (\"collect_ms\", \"replay_ms\", \"total_ms\", \"waiting_bytes\", \"max_incremental_peak_bytes\")},\n            }\n    CONSOLE.print_json(data=summary)\n    with out.open(\"x\", encoding=\"utf-8\") as stream:\n        json.dump({\"rows\": records, \"summary\": summary, \"runtime\": torch.cuda.get_device_name(),\n                   \"scope\": \"Same-policy multi-token gradient and device retention; no optimizer effects or waits.\"},\n                  stream, sort_keys=True, allow_nan=False)\n\n\nif __name__ == \"__main__\":\n    main()\n",
+    "tail_replay.py": "\"\"\"Compare native cached and vectorized replay of a final-block LoRA policy.\"\"\"\nimport hashlib\nimport json\nimport math\nimport statistics\nimport sys\nfrom dataclasses import dataclass\nfrom pathlib import Path\nfrom time import perf_counter\n\nimport torch\nfrom rich.console import Console\nfrom torch import nn\nfrom torch.nn import functional as F\nfrom transformers import AutoModelForCausalLM, AutoTokenizer\nfrom transformers.cache_utils import DynamicCache\n\n\nSHAPES = ((4, 16), (8, 32))\nMODES = (\"full_cached\", \"tail_cached\", \"full_parallel\", \"tail_parallel\")\nROUNDS = 3\nTOP_K = 32\nTEMPERATURE = 0.75\nREVISION = \"aafeb0fc6f22cbf0eaeed126eff8be45b0360a35\"\nCONSOLE = Console()\n\n\nclass RankOne(nn.Module):\n    def __init__(self, base, rng):\n        super().__init__()\n        self.base = base\n        scale = math.sqrt(base.in_features)\n        self.input = nn.Parameter(torch.randn((base.in_features, 1), generator=rng, device=\"cuda\") / scale)\n        self.output = nn.Parameter(torch.randn((1, base.out_features), generator=rng, device=\"cuda\") * 0.05)\n\n    def forward(self, x):\n        return self.base(x) + ((x.float() @ self.input) @ self.output).to(x.dtype)\n\n\n@dataclass\nclass Episode:\n    prompt: torch.Tensor\n    actions: torch.Tensor\n    support: torch.Tensor\n    behavior: torch.Tensor\n    indices: torch.Tensor\n    saved: torch.Tensor | None\n\n    def replay_tokens(self):\n        return torch.cat((self.prompt, self.actions[:, :-1]), dim=1)\n\n\ndef capture(model, prompt, uniforms, eos, *, save):\n    batch, prefix = prompt.shape\n    steps = uniforms.shape[0]\n    actions = torch.empty((batch, steps), dtype=torch.long, device=\"cuda\")\n    support = torch.empty((batch, steps, TOP_K), dtype=torch.long, device=\"cuda\")\n    behavior = torch.empty((batch, steps, TOP_K), dtype=torch.float32, device=\"cuda\")\n    indices = torch.empty((batch, steps), dtype=torch.long, device=\"cuda\")\n    saved = torch.empty((batch, prefix + steps - 1, model.config.hidden_size),\n                        dtype=torch.bfloat16, device=\"cuda\") if save else None\n    offset = 0\n\n    def collect(_module, args, kwargs):\n        nonlocal offset\n        h = args[0]\n        # The benchmark uses fully populated, fixed-length prompts and full attention.\n        # On a backend that requires a mask, this recorder must fail closed.\n        if kwargs[\"attention_mask\"] is not None or h.dtype != torch.bfloat16:\n            raise RuntimeError(\"cached boundary requires a native BF16 feature and an implicit causal mask\")\n        if saved is not None:\n            saved[:, offset:offset + h.size(1)].copy_(h)\n        offset += h.size(1)\n\n    hook = model.model.layers[-1].register_forward_pre_hook(collect, with_kwargs=True)\n    try:\n        with torch.no_grad():\n            cache = None\n            current = prompt\n            for step in range(steps):\n                out = model.model(input_ids=current, past_key_values=cache, use_cache=True)\n                cache = out.past_key_values\n                logits = model.lm_head(out.last_hidden_state[:, -1]).float()\n                sample_logits = logits if step == steps - 1 else logits.index_fill(1, eos, -torch.inf)\n                top, ids = sample_logits.topk(TOP_K, dim=-1, sorted=True)\n                cumulative = (top / TEMPERATURE).softmax(-1).cumsum(-1)\n                choice = (uniforms[step, :, None] >= cumulative).sum(-1).clamp_max(TOP_K - 1)\n                current = ids.gather(1, choice[:, None])\n                support[:, step].copy_(ids)\n                actions[:, step].copy_(current[:, 0])\n                behavior[:, step].copy_(logits.gather(1, ids))\n                indices[:, step].copy_(choice)\n    finally:\n        hook.remove()\n    assert offset == prefix + steps - 1\n    return Episode(prompt, actions, support, behavior, indices, saved)\n\n\ndef last_layer(model, prefix_features, offset, cache):\n    position = torch.arange(offset, offset + prefix_features.size(1),\n                            device=prefix_features.device).unsqueeze(0)\n    embeddings = model.model.rotary_emb(prefix_features, position)\n    out = model.model.layers[-1](prefix_features, attention_mask=None, position_ids=position,\n                                 position_embeddings=embeddings, past_key_values=cache, use_cache=cache is not None)\n    return model.model.norm(out)\n\n\ndef cached_scores(model, episode, *, tail, detach_prompt=False):\n    prefix, steps = episode.prompt.size(1), episode.actions.size(1)\n    cache = DynamicCache(config=model.config)\n    chunks = []\n    for step in range(steps):\n        start = 0 if step == 0 else prefix + step - 1\n        end = prefix + step\n        if tail:\n            if step == 0 and detach_prompt:\n                with torch.no_grad():\n                    last = last_layer(model, episode.saved[:, start:end], start, cache)[:, -1]\n            else:\n                last = last_layer(model, episode.saved[:, start:end], start, cache)[:, -1]\n        else:\n            tokens = episode.prompt if step == 0 else episode.actions[:, step - 1:step]\n            out = model.model(input_ids=tokens, past_key_values=cache, use_cache=True)\n            last = out.last_hidden_state[:, -1]\n        chunks.append(model.lm_head(last).float().gather(1, episode.support[:, step]))\n    return torch.stack(chunks, dim=1)\n\n\ndef parallel_scores(model, episode, *, tail):\n    if tail:\n        out = last_layer(model, episode.saved, 0, None)\n    else:\n        out = model.model(input_ids=episode.replay_tokens(), use_cache=False).last_hidden_state\n    relevant = out[:, episode.prompt.size(1) - 1:]\n    return model.lm_head(relevant).float().gather(2, episode.support)\n\n\ndef gradients(scores, episode, feedback, params):\n    chosen = F.log_softmax(scores / TEMPERATURE, dim=-1).gather(2, episode.indices.unsqueeze(-1))\n    objective = (chosen.squeeze(-1).sum(-1) * feedback).sum()\n    out = torch.autograd.grad(objective, params)\n    return tuple(gradient.detach() for gradient in out)\n\n\ndef nbytes(t):\n    return t.numel() * t.element_size()\n\n\ndef digest(t):\n    return hashlib.sha256(t.detach().cpu().contiguous().numpy().tobytes()).hexdigest()\n\n\ndef run(model, prompt, uniforms, eos, mode, params):\n    tail = mode.startswith(\"tail\")\n    torch.cuda.synchronize()\n    base_bytes = torch.cuda.memory_allocated()\n    torch.cuda.reset_peak_memory_stats()\n    start = perf_counter()\n    ep = capture(model, prompt, uniforms, eos, save=tail)\n    torch.cuda.synchronize()\n    arrival = perf_counter()\n    live_peak = torch.cuda.max_memory_allocated()\n    before_feedback = torch.cuda.memory_allocated()\n    torch.cuda.reset_peak_memory_stats()\n    feedback = torch.linspace(-0.75, 0.95, prompt.size(0), dtype=torch.float32, device=\"cuda\")\n    if mode.endswith(\"parallel\"):\n        scores = parallel_scores(model, ep, tail=tail)\n    else:\n        scores = cached_scores(model, ep, tail=tail)\n    grad = gradients(scores, ep, feedback, params)\n    torch.cuda.synchronize()\n    end = perf_counter()\n    replay_peak = torch.cuda.max_memory_allocated()\n    archive = {\n        \"collect_ms\": (arrival - start) * 1000, \"replay_ms\": (end - arrival) * 1000,\n        \"total_ms\": (end - start) * 1000, \"feature_bytes\": 0 if ep.saved is None else nbytes(ep.saved),\n        \"retained_common_bytes\": sum(nbytes(x) for x in (ep.prompt, ep.actions, ep.support, ep.behavior, ep.indices)),\n        \"max_incremental_peak_bytes\": max(live_peak, replay_peak) - base_bytes,\n        \"replay_incremental_peak_bytes\": replay_peak - before_feedback,\n        \"actions_sha256\": digest(ep.actions), \"support_sha256\": digest(ep.support),\n        \"behavior_sha256\": digest(ep.behavior), \"terminal_eos_actions\": int(torch.isin(ep.actions[:, -1], eos).sum()),\n        \"behavior_logits_bitwise\": torch.equal(ep.behavior, scores),\n        \"behavior_logits_max_abs\": float((ep.behavior - scores.detach()).abs().max()),\n    }\n    assert not torch.isin(ep.actions[:, :-1], eos).any()\n    return archive, scores.detach(), grad, ep, feedback\n\n\ndef errors(new, reference):\n    per_factor = []\n    for actual, expected in zip(new, reference, strict=True):\n        absolute = (actual.double() - expected.double())\n        norm = float(expected.double().norm())\n        assert norm > 1e-8\n        per_factor.append({\"relative_frobenius\": float(absolute.norm()) / norm,\n                           \"maximum_absolute\": float(absolute.abs().max()),\n                           \"reference_norm\": norm})\n    return per_factor\n\n\ndef qualify(rows, scores, grads):\n    reference, reference_grad = scores[\"full_cached\"], grads[\"full_cached\"]\n    anchors = (\"actions_sha256\", \"support_sha256\", \"behavior_sha256\", \"terminal_eos_actions\")\n    for key in anchors:\n        assert len({row[key] for row in rows.values()}) == 1, key\n    baseline_matches = rows[\"full_cached\"][\"behavior_logits_bitwise\"]\n    for mode in MODES:\n        row = rows[mode]\n        row[\"reference_logits_bitwise\"] = torch.equal(scores[mode], reference)\n        row[\"reference_logit_max_abs\"] = float((scores[mode] - reference).abs().max())\n        row[\"factor_gradient_errors\"] = errors(grads[mode], reference_grad)\n        gradient_pass = all(r[\"relative_frobenius\"] <= 1e-6 and r[\"maximum_absolute\"] <= 1e-7\n                            for r in row[\"factor_gradient_errors\"])\n        row[\"eligible\"] = baseline_matches and row[\"reference_logits_bitwise\"] and gradient_pass\n\n\ndef decide(rows):\n    result = {}\n    for shape, observations in rows.items():\n        summary = {}\n        for mode in MODES:\n            subject = [r[\"arms\"][mode] for r in observations]\n            summary[mode] = {\"eligible\": all(r[\"eligible\"] for r in subject),\n                             \"median_collect_ms\": statistics.median(r[\"collect_ms\"] for r in subject),\n                             \"median_replay_ms\": statistics.median(r[\"replay_ms\"] for r in subject),\n                             \"median_total_ms\": statistics.median(r[\"total_ms\"] for r in subject),\n                             \"feature_bytes\": subject[0][\"feature_bytes\"],\n                             \"max_incremental_peak_bytes\": max(r[\"max_incremental_peak_bytes\"] for r in subject)}\n        eligible_full = [row for name, row in summary.items() if name.startswith(\"full\") and row[\"eligible\"]]\n        for mode in MODES:\n            row = summary[mode]\n            row[\"replay_speedup_over_fastest_eligible_full\"] = (\n                min(x[\"median_replay_ms\"] for x in eligible_full) / row[\"median_replay_ms\"] if eligible_full else None)\n            row[\"total_saving_over_fastest_eligible_full\"] = (\n                1.0 - row[\"median_total_ms\"] / min(x[\"median_total_ms\"] for x in eligible_full) if eligible_full else None)\n            row[\"passes\"] = (row[\"eligible\"] and bool(eligible_full)\n                             and row[\"replay_speedup_over_fastest_eligible_full\"] >= 2.0\n                             and row[\"total_saving_over_fastest_eligible_full\"] >= 0.20)\n        result[shape] = summary\n    return result, {mode: all(summary[mode][\"passes\"] for summary in result.values())\n                    for mode in MODES if mode.startswith(\"tail\")}\n\n\ndef prompts(tokenizer, batch):\n    rows = [\"Evaluate the following product. Explain your result in plain text. \"\n            f\"What is {20 + index} multiplied by {48 + index}? Answer:\" for index in range(batch)]\n    out = tokenizer(rows, add_special_tokens=False, return_tensors=\"pt\", padding=True).to(\"cuda\")\n    assert bool(out.attention_mask.all())\n    return out.input_ids\n\n\ndef draw(batch, steps, seed):\n    generator = torch.Generator(device=\"cuda\").manual_seed(seed)\n    return torch.rand((steps, batch), generator=generator, device=\"cuda\")\n\n\ndef main():\n    torch.set_num_threads(1)\n    torch.set_float32_matmul_precision(\"highest\")\n    source, target, rounds_path = map(Path, sys.argv[1:])\n    tokenizer = AutoTokenizer.from_pretrained(source, local_files_only=True, trust_remote_code=False)\n    model = AutoModelForCausalLM.from_pretrained(source, dtype=torch.bfloat16, attn_implementation=\"sdpa\",\n                                                use_safetensors=True, local_files_only=True,\n                                                trust_remote_code=False).to(\"cuda\").eval()\n    model.requires_grad_(False)\n    assert model.config.num_hidden_layers == 28 and not model.model.has_sliding_layers\n    rng = torch.Generator(device=\"cuda\").manual_seed(92017)\n    attention = model.model.layers[-1].self_attn\n    attention.q_proj = RankOne(attention.q_proj, rng)\n    attention.v_proj = RankOne(attention.v_proj, rng)\n    params = (attention.q_proj.input, attention.q_proj.output, attention.v_proj.input, attention.v_proj.output)\n    assert {id(p) for p in model.parameters() if p.requires_grad} == {id(p) for p in params}\n    eos_ids = model.generation_config.eos_token_id\n    eos = torch.tensor(eos_ids if isinstance(eos_ids, list) else [eos_ids], device=\"cuda\")\n\n    warm_prompt = prompts(tokenizer, 4)\n    warm_uniforms = draw(4, 3, 899)\n    for mode in MODES:\n        run(model, warm_prompt, warm_uniforms, eos, mode, params)\n    records = {}\n    with rounds_path.open(\"x\", encoding=\"utf-8\") as round_archive:\n        for shape_index, (batch, steps) in enumerate(SHAPES):\n            key = f\"{batch}x{steps}\"\n            records[key] = []\n            prompt = prompts(tokenizer, batch)\n            for trial in range(ROUNDS):\n                seed = 1207 + trial\n                uniforms = draw(batch, steps, seed)\n                rotation = (trial + shape_index) % len(MODES)\n                rows, scores, grads, episodes = {}, {}, {}, {}\n                for mode in MODES[rotation:] + MODES[:rotation]:\n                    row, values, gradient, episode, feedback = run(model, prompt, uniforms, eos, mode, params)\n                    rows[mode], scores[mode], grads[mode], episodes[mode] = row, values, gradient, episode\n                qualify(rows, scores, grads)\n                warning = None\n                if trial == 0:\n                    ep = episodes[\"tail_cached\"]\n                    detached = cached_scores(model, ep, tail=True, detach_prompt=True)\n                    detached_grad = gradients(detached, ep, feedback, params)\n                    detached_errors = errors(detached_grad, grads[\"tail_cached\"])\n                    warning = {\"detaching_prompt_logits_unchanged\": torch.equal(detached.detach(), scores[\"tail_cached\"]),\n                               \"tail_vs_detached_prompt_errors\": detached_errors}\n                    assert warning[\"detaching_prompt_logits_unchanged\"]\n                    assert max(r[\"relative_frobenius\"] for r in detached_errors[2:]) > 1e-3\n                merged = {\"shape\": key, \"round\": trial, \"seed\": seed, \"prefill_length\": prompt.size(1),\n                          \"arms\": rows, \"prompt_detach_counterexample\": warning}\n                records[key].append(merged)\n                round_archive.write(json.dumps(merged, sort_keys=True, allow_nan=False) + \"\\n\")\n                round_archive.flush()\n                CONSOLE.print_json(data={\"shape\": key, \"trial\": trial,\n                                         \"eligible\": {m: rows[m][\"eligible\"] for m in MODES},\n                                         \"total_ms\": {m: rows[m][\"total_ms\"] for m in MODES}})\n    summary, gate = decide(records)\n    result = {\"model_revision\": REVISION, \"adapters\": [\"q.input\", \"q.output\", \"v.input\", \"v.output\"],\n              \"trainable_scalars\": sum(x.numel() for x in params), \"rows\": records,\n              \"summary\": summary, \"passes_both_shapes\": gate,\n              \"run_scope\": \"One delayed, signed coefficient per trajectory; same frozen Qwen and one rank-one Q/V adapter in the final block. Four paths tested in the same invocation. The objective is the conditional log likelihood on the actual sampler support. Timing ends at gradients.\",\n              \"runtime\": {\"gpu\": torch.cuda.get_device_name(), \"torch\": torch.__version__}}\n    CONSOLE.print_json(data={\"summary\": summary, \"passes_both_shapes\": gate})\n    with target.open(\"x\", encoding=\"utf-8\") as stream:\n        json.dump(result, stream, sort_keys=True, allow_nan=False)\n\n\nif __name__ == \"__main__\":\n    main()\n"
+  },
+  "dsr_receipt": {
+    "command": "quality",
+    "details": {
+      "checks": [
+        {
+          "command": "set -e; export CUDA_VISIBLE_DEVICES=0 UV_OFFLINE=true UV_PROJECT_ENVIRONMENT=/data/projects/bio_inspired_nanochat/.venv OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1; test \"$(git rev-parse HEAD)\" = 0a3a0c4c1625f6ad75409f99dbd6d5e204f9a9f6; printf '%s  %s\\n' a59250b34dd055cd977f2a79bfcdd3003b4e5857e57696717f68f7c8c9ec23ac /data/projects/bio-tail-replay.iqMTxrSS/retained_graph.py faa3401d5ce766781251861e5e2e700b2e66c0a8b936e12e137e3d0036dfbefc /data/projects/bio-tail-replay.iqMTxrSS/delay_queue.py 3736d23c6112f9609a97bbef76c50540e8d72081242af28eb215c6acbf92ed1f /data/projects/bio-tail-replay.iqMTxrSS/tail_replay.py 08faf1e950173bb44c11d26df28c55da7237dc55c77dbc1cbae4a5d7584540d9 /data/projects/bio-learning-pilot.XRewL9V1/weights/model.safetensors a48e6ab280ad87a25f06da604d486aa819b9c1bc467dae7c25fe5d05c57f5511 /data/projects/bio-learning-pilot.XRewL9V1/weights/config.json c0382117ea329cdf097041132f6d735924b697924d6f6fc3945713e96ce87539 /data/projects/bio-learning-pilot.XRewL9V1/weights/tokenizer.json d743761ff02297cc5cdf38a612b0f78d5cdf5ceb3f251ab1d25ad353d24b1887 /data/projects/bio-learning-pilot.XRewL9V1/weights/tokenizer_config.json | sha256sum --check; flock -w 60 /tmp/bio_inspired_nanochat-trj-gpu0.lock taskset -c 52 uv run --no-sync python /data/projects/bio-tail-replay.iqMTxrSS/delay_queue.py /data/projects/bio-learning-pilot.XRewL9V1/weights /data/projects/bio-tail-replay.iqMTxrSS/delay-queue.json /data/projects/bio-tail-replay.iqMTxrSS/delay-queue-rounds.jsonl; sha256sum /data/projects/bio-tail-replay.iqMTxrSS/delay-queue.json /data/projects/bio-tail-replay.iqMTxrSS/delay-queue-rounds.jsonl",
+          "cwd": "/data/projects/bio-prefill-scan.Nq3wZNFe/source",
+          "duration_ms": 318112,
+          "executed": true,
+          "exit_code": 0,
+          "log_path": "/home/ubuntu/.local/state/dsr/quality-logs/bio-delayed-lora-queue/20261124T201823-mNciCQ6d/check-1.log",
+          "log_sha256": "451c8bea286271a146bdd1d23dfa082f49b80c6cc4dc518dc314e2d92dd57eb9",
+          "output_preview": "2733.3843503147364,\n      \"max_device_bytes_at_admission\": 204800,\n      \"max_host_bytes_at_admission\": 3932160\n    },\n    \"graph_device\": {\n      \"all_exact\": false,\n      \"completed_queues\": 0,\n      \"max_accepted_before_feedback\": 0,\n      \"median_total_ms\": null,\n      \"median_feedback_ms\": null,\n      \"max_device_bytes_at_admission\": 55397888,\n      \"max_host_bytes_at_admission\": 0\n    },\n    \"graph_host\": {\n      \"all_exact\": true,\n      \"completed_queues\": 3,\n      \"max_accepted_before_feedback\": 8,\n      \"median_total_ms\": 15869.680953212082,\n      \"median_feedback_ms\": 1491.4758908562362,\n      \"max_device_bytes_at_admission\": 204800,\n      \"max_host_bytes_at_admission\": 436718592\n    }\n  },\n  \"passes\": false\n}\ndb54b443f43498a6bd6fae5b62a2fb0f5bffbfed156b9e335ed1cb59082b5837  /data/projects/bio-tail-replay.iqMTxrSS/delay-queue.json\nd9cc20c57ff4ca50489f33a38588d9ad18838f5909b70960b4ef5bcb9b9d8eaa  /data/projects/bio-tail-replay.iqMTxrSS/delay-queue-rounds.jsonl\n\n# exit_code: 0\n",
+          "passed": true,
+          "status": "passed",
+          "timeout_seconds": 900
+        }
+      ],
+      "config_path": "/data/projects/bio-tail-replay.iqMTxrSS/bio-delayed-lora-queue.yaml",
+      "config_sha256": "8a10ab70be6a14934628389499afac0990488dd5c63206cc0e928297aea4b1f3",
+      "config_sha256_after": "8a10ab70be6a14934628389499afac0990488dd5c63206cc0e928297aea4b1f3",
+      "config_snapshot_path": "/home/ubuntu/.local/state/dsr/quality-logs/bio-delayed-lora-queue/20261124T201823-mNciCQ6d/checks-config.yaml",
+      "dry_run": false,
+      "dsr_version": "0.2.3",
+      "duration_ms": 319315,
+      "executed": 1,
+      "failed": 0,
+      "interrupted": 0,
+      "not_run": 0,
+      "observed": 1,
+      "passed": 1,
+      "planned": 0,
+      "run_dir": "/home/ubuntu/.local/state/dsr/quality-logs/bio-delayed-lora-queue/20261124T201823-mNciCQ6d",
+      "skipped": false,
+      "source_after": "0a3a0c4c1625f6ad75409f99dbd6d5e204f9a9f6|06fd1218e96460edbed295f43295296b239edf0fd942a0a64c047704ad719a8b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "source_before": "0a3a0c4c1625f6ad75409f99dbd6d5e204f9a9f6|06fd1218e96460edbed295f43295296b239edf0fd942a0a64c047704ad719a8b|0f38fb26eec09a52a7b6b63a828ab4d0617e0652b19a4b2c9426a4a32ae060a8",
+      "status": "passed",
+      "timeout_seconds": 900,
+      "tool": "bio-delayed-lora-queue",
+      "total": 1
+    },
+    "duration_ms": 0,
+    "exit_code": 0,
+    "run_id": "84e472b3-657d-4ca7-ae53-a4e69b0d99db",
+    "started_at": "2026-11-25T01:26:21Z",
+    "status": "success",
+    "tool": "dsr",
+    "version": "0.2.3"
+  },
+  "independent_recount_source": "\"\"\"Recompute queue admission, state equality, and timing from the terminal DSR run.\"\"\"\nimport hashlib\nimport json\nimport math\nfrom pathlib import Path\nfrom statistics import median\nimport sys\n\n\ndef read(path):\n    return json.loads(path.read_bytes())\n\n\ndef hash_file(path):\n    return hashlib.sha256(path.read_bytes()).hexdigest()\n\n\ndef valid_digests(values, count):\n    return len(values) == count and all(len(value) == 64 and int(value, 16) >= 0 for value in values)\n\n\nfolder, output = map(Path, sys.argv[1:])\nname = \"bio-delayed-lora-queue\"\nconfig = folder / f\"{name}.yaml\"\nresponse = read(folder / f\"{name}.json\")\nresult_file = folder / \"delay-queue.json\"\nlog = folder / \"delay-queue-rounds.jsonl\"\ndrivers = {\n    \"delay_queue.py\": \"faa3401d5ce766781251861e5e2e700b2e66c0a8b936e12e137e3d0036dfbefc\",\n    \"retained_graph.py\": \"a59250b34dd055cd977f2a79bfcdd3003b4e5857e57696717f68f7c8c9ec23ac\",\n    \"tail_replay.py\": \"3736d23c6112f9609a97bbef76c50540e8d72081242af28eb215c6acbf92ed1f\",\n}\nevidence = response[\"details\"]\nassert response[\"status\"] == \"success\" and response[\"exit_code\"] == 0\nassert evidence[\"source_before\"] == evidence[\"source_after\"]\nassert evidence[\"source_before\"].split(\"|\", 1)[0] == \"0a3a0c4c1625f6ad75409f99dbd6d5e204f9a9f6\"\nassert hash_file(config) == evidence[\"config_sha256\"] == evidence[\"config_sha256_after\"]\ncheck, = evidence[\"checks\"]\nassert check[\"status\"] == \"passed\" and check[\"exit_code\"] == 0\nassert check[\"command\"] == read(config)[\"tools\"][name][\"checks\"][0]\nassert hash_file(result_file) in check[\"output_preview\"] and hash_file(log) in check[\"output_preview\"]\nfor filename, digest in drivers.items():\n    assert hash_file(folder / filename) == digest and digest in check[\"command\"]\n\nresult = read(result_file)\nrecords = [json.loads(line) for line in log.read_text().splitlines()]\nassert records == result[\"records\"] and len(records) == 3\nassert (result[\"jobs\"], result[\"batch\"], result[\"steps\"]) == (8, 4, 16)\ngpu_budget = result[\"device_cap\"]\nhost_budget = result[\"host_cap\"]\nassert (gpu_budget, host_budget) == (2**21, 2**30)\nmodes = (\"full\", \"tail_device\", \"tail_host\", \"graph_device\", \"graph_host\")\ndigest_fields = ((\"sum_gradient_sha256\", 4), (\"adam_parameter_sha256\", 4), (\"adam_state_sha256\", 12))\nfor index, (record, seed) in enumerate(zip(records, (3817, 3818, 3819), strict=True)):\n    assert record[\"seed\"] == seed and tuple(record[\"order\"]) == modes[index:] + modes[:index]\n    assert set(record[\"arms\"]) == set(modes)\n    reference = record[\"arms\"][\"full\"]\n    assert reference[\"completed\"] and reference[\"all_behavior_logits_bitwise\"]\n    assert len(set(tuple(x) for x in reference[\"trajectory_hashes\"])) == 8\n    for mode, arm in record[\"arms\"].items():\n        examined = arm[\"admissions\"]\n        assert 1 <= len(examined) <= 8\n        for j, attempt in enumerate(examined):\n            gpu, host = attempt[\"device_bytes\"], attempt[\"host_bytes\"]\n            assert 0 <= gpu <= arm[\"max_incremental_peak_bytes\"] and host >= 0\n            assert attempt[\"accepted\"] == (gpu <= gpu_budget and host <= host_budget)\n            assert attempt[\"accepted\"] or j == len(examined) - 1\n            if mode == \"tail_host\":\n                assert host == (j + 1) * 491_520\n            elif mode != \"graph_host\":\n                assert host == 0\n        complete = len(examined) == 8 and all(a[\"accepted\"] for a in examined)\n        assert arm[\"completed\"] == complete\n        anchors = arm[\"trajectory_hashes\"]\n        assert len(anchors) == len(examined)\n        assert all(valid_digests(row, 4) for row in anchors)\n        same = anchors == reference[\"trajectory_hashes\"][:len(anchors)]\n        assert arm[\"sampled_prefix_matches\"] == same\n        exact = False\n        if complete:\n            assert len(arm[\"per_job_gradient_sha256\"]) == 8\n            assert all(valid_digests(row, 4) for row in arm[\"per_job_gradient_sha256\"])\n            assert all(valid_digests(arm[key], count) for key, count in digest_fields)\n            exact = same and arm[\"all_behavior_logits_bitwise\"] and all(\n                arm[key] == reference[key] for key, _ in (*digest_fields, (\"per_job_gradient_sha256\", 8))\n            )\n        assert arm[\"exact\"] == exact\n        assert math.isclose(arm[\"total_ms\"], arm[\"collect_ms\"] + arm[\"feedback_ms\"], rel_tol=1e-12)\n\nsummary = {}\nfor mode in modes:\n    rows = [record[\"arms\"][mode] for record in records]\n    attempts = [item for row in rows for item in row[\"admissions\"]]\n    exact = all(row[\"exact\"] for row in rows)\n    summary[mode] = {\n        \"all_exact\": exact, \"completed_queues\": sum(r[\"completed\"] for r in rows),\n        \"max_accepted_before_feedback\": max(len([a for a in r[\"admissions\"] if a[\"accepted\"]]) for r in rows),\n        \"median_total_ms\": median(r[\"total_ms\"] for r in rows) if exact else None,\n        \"median_feedback_ms\": median(r[\"feedback_ms\"] for r in rows) if exact else None,\n        \"max_device_bytes_at_admission\": max(a[\"device_bytes\"] for a in attempts),\n        \"max_host_bytes_at_admission\": max(a[\"host_bytes\"] for a in attempts),\n    }\nassert summary == result[\"summary\"]\ncontrol = min((mode for mode in (\"full\", \"graph_device\", \"graph_host\") if summary[mode][\"all_exact\"]),\n              key=lambda mode: summary[mode][\"median_total_ms\"])\ncandidate = summary[\"tail_host\"][\"median_total_ms\"]\nratio = None if candidate is None else candidate / summary[control][\"median_total_ms\"]\nassert result[\"passes\"] == (summary[\"full\"][\"all_exact\"] and ratio is not None and ratio <= 0.80)\narchived = {\n    \"readout\": {\"fastest_eligible_control\": control, \"candidate_total_time_relative_to_control\": ratio},\n    \"result\": result, \"driver_sources\": {name: (folder / name).read_text() for name in drivers},\n    \"driver_sha256\": drivers, \"configuration\": config.read_text(), \"configuration_sha256\": hash_file(config),\n    \"dsr_receipt\": response, \"raw_result_sha256\": hash_file(result_file),\n    \"raw_rounds_sha256\": hash_file(log), \"independent_recount_source\": Path(__file__).read_text(),\n}\nwith output.open(\"x\", encoding=\"utf-8\") as stream:\n    json.dump(archived, stream, indent=2, sort_keys=True, allow_nan=False)\n    stream.write(\"\\n\")\n",
+  "raw_result_sha256": "db54b443f43498a6bd6fae5b62a2fb0f5bffbfed156b9e335ed1cb59082b5837",
+  "raw_rounds_sha256": "d9cc20c57ff4ca50489f33a38588d9ad18838f5909b70960b4ef5bcb9b9d8eaa",
+  "readout": {
+    "candidate_total_time_relative_to_control": 0.9579990679700845,
+    "fastest_eligible_control": "graph_host"
+  },
+  "result": {
+    "batch": 4,
+    "device": "NVIDIA GeForce RTX 4090",
+    "device_cap": 2097152,
+    "host_cap": 1073741824,
+    "jobs": 8,
+    "model_revision": "aafeb0fc6f22cbf0eaeed126eff8be45b0360a35",
+    "passes": false,
+    "records": [
+      {
+        "arms": {
+          "full": {
+            "adam_parameter_sha256": [
+              "510a07bbe7a813d4550f162938ed5a035f2be0b39de7fce320af528b516625f3",
+              "c4555e72907068908db4cd1051ee6605365fc3671e8170d1e3e40824fb0bbca5",
+              "5b3cc8bacee6bd1a1d31e76f26486f3cce01427053886d94e4a76235c8cdd3c8",
+              "e51bf07199b284d23e7be86603848488ef9c4c434273b0f7df17babc894236d2"
+            ],
+            "adam_state_sha256": [
+              "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c",
+              "8868b2b78985d35fa923000edb0d30cf9545d660f1dcf8419a79cab59c279775",
+              "aa6a645d485f2ffda95f4f367f70bbd90070bc656e42217bbc3779d1a872199d",
+              "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c",
+              "0cdf321bf454291ed41c53ed8056d2cebfe7c3938073c39f81c0575bb4342494",
+              "d6a8ebeabb7072f71b46c638f77d6ec52cf32add4ef8f372bbfbb80fe92d3245",
+              "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c",
+              "3a788eaaeb5d3629a0d0552fdbad9feed74dc096f3775830011aef0b85c24173",
+              "8feaa1b9f80f3e44336f62c149a7d827492e8be854e378931904c7c2c546a9b3",
+              "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c",
+              "d6a52f4eccf19eb64f096464fa3953194b784881255c003305b850b6c0084097",
+              "f852a1e33edf8f6eca6ece9fe90caedbf8d7dd94d992ffa0c67caa1365cd8db2"
+            ],
+            "admissions": [
+              {
+                "accepted": true,
+                "device_bytes": 25600,
+                "host_bytes": 0
+              },
+              {
+                "accepted": true,
+                "device_bytes": 51200,
+                "host_bytes": 0
+              },
+              {
+                "accepted": true,
+                "device_bytes": 76800,
+                "host_bytes": 0
+              },
+              {
+                "accepted": true,
+                "device_bytes": 102400,
+                "host_bytes": 0
+              },
+              {
+                "accepted": true,
+                "device_bytes": 128000,
+                "host_bytes": 0
+              },
+              {
+                "accepted": true,
+                "device_bytes": 153600,
+                "host_bytes": 0
+              },
+              {
+                "accepted": true,
+                "device_bytes": 179200,
+                "host_bytes": 0
+              },
+              {
+                "accepted": true,
+                "device_bytes": 204800,
+                "host_bytes": 0
+              }
+            ],
+            "all_behavior_logits_bitwise": true,
+            "collect_ms": 9928.336740005761,
+            "completed": true,
+            "exact": true,
+            "feedback_ms": 10554.589666891843,
+            "max_incremental_peak_bytes": 62052352,
+            "per_job_gradient_sha256": [
+              [
+                "569ade25fdfc6998a8f74cee19d3ac883763857d86b7fbe9ca11635cd821548c",
+                "c8883c459365dc375aeda334583b9d3c91d8c2f8832d98a7a50700d07325d76d",
+                "9ceebce08568ef0b5af68592be8f36e9c0bd7ec514bbb24eabbf7b79bfc53c85",
+                "3f2c59d6a39b9edf11facd56a9ea7b182eb5c01e739fad6628c88f198a31e3c1"
+              ],
+              [
+                "cf1b75180dd7b072b49dc93126c4ff3333c1417df62edeb2062ba311617a4e03",
+                "5e30c02115d38dd0e33a349ed0319fb862c25ee868616f36971892f09822dd79",
+                "ed6eb16ae1b80a8375a95346cf42ddc01c01de1ee4a43d992c1f328adfbdb887",
+                "cd5ab35245f61ef4399c5ce2255c625982e4b5fb14bbb6c47e74aa603bbe3761"
+              ],
+              [
+                "0e3e6531f90b35b270c87201ce29ab45cface0d01f4ffcbc100b55c3386b577f",
+                "54b8825202194ca2a5bcbb8ffa350650c70bb9b33cdd2742c786b782771e3565",
+                "948c27cc1dd49a93e6235883883a804c2c23419ff13f9cd926ab08d2a395d797",
+                "c421d0e63dfe5895f5decb0f8730d9522d8fe4aad027d5a4876c4c1431ed286e"
+              ],
+              [
+                "1bac7559beb102581dd429cae8a8b002bbb03d7daa22df9bf10d94b3cdd32cbb",
+                "f7bcd4c505e85f0468fce8d629d703bdfe25616c7c6514f23bdbca9460abea37",
+                "1f9bc8cdb7fb460eb32a3bb4e0c51181f397a045e635077e9c544ecec61ab782",
+                "b73211d241535a895f71c70958653c5b9e3ff8f00fe83557505d2295b0c94f3d"
+              ],
+              [
+                "1a7d0492429e4c80a31c9004cf4cc23f5dca0d95cedd8fdf4a520a3b130b31ad",
+                "4de8e749e7e9be4ffeae8169117902fbced55fd0b3cc96fdbacb57dc89b362da",
+                "585b5d608373bb356dc1d5aafb09eccbbb9cbf4935e30c840ec0119357418751",
+                "a8bc49e9f6de6e06136ab687a7d3274ec272c6d949cbf8f248a90c3dc698d488"
+              ],
+              [
+                "7599935c6f372d3e10ba959fbe091d5ade486fa96598fea6f71f695feaa0d66c",
+                "53da450978e6e1e9b2efc6b7409539f9ccfdfc0d2a824a8dec192de405853331",
+                "b13cd5d0b89681e26e30d33a1506fe770f460c8b5196e0617db58fbd49120f89",
+                "d7f14c5cdf7b69c4c7389ae8c71e8a9872af46e79411c0cbd9f5ef9e8fc64c55"
+              ],
+              [
+                "c902618a9160ec8dc186d8a0d921b698b4de7786596fb464645c0ed68b6efafc",
+                "f54b504dec75ca9b2d31cddaa1143dafafd36093d96cf5ee2ebdfe10aa9f5f06",
+                "8e9954874d120434f9ac0628aec90ca16a782ee70fd34667111b86b408823006",
+                "4a8edcd28d19aae57d2b98e43b8b11e9ef060bdd9c85a644581958ceaf4f3260"
+              ],
+              [
+                "0f0d78199bb3c34c813dd3ff838c53856efde5616e3e3f8566439fc37edc391a",
+                "3373fd09e6a3371c232569c212843255bcbaacc7c54a44191e45cce7550c83ac",
+                "f6a7325d74fa7ba3ee1be93ac6b495d5543c1c94e9507718a198a7372fbdfeba",
+                "05ab1c750bbcb96032a488c8abe3168e779ce29530bad7dc96ebc18494e1a381"
+              ]
+            ],
+            "sampled_prefix_matches": true,
+            "sum_gradient_sha256": [
+              "ffc04ce90b292c2a8ad68d28c3a1df550a2a40af2c221ecc8e514f73d600d38d",
+              "29e1c2751e8a99ec7de3adc150a5a00e5d4307ebc8ba2c14793f0336d9956d8a",
+              "e78170f4309e4f024a2b108c204a913d52a8ebe60afc9b0df0372152c2a3a1d4",
+              "14ab686e6c699434c4230a5b8ec522bdd9be0512033d7de6ede74b5e3288e443"
+            ],
+            "total_ms": 20482.926406897604,
+            "trajectory_hashes": [
+              [
+                "b89776f87f9a5dadfd338326273d82e6407acf78095e803151e5d081881da435",
+                "74e5c480de3376b5e943e53c49cce2130cf86dae48a73904f36ab671c961dbc5",
+                "725b7a72b1fce4489f1022182d5c41de5d52c9b3e2d710dd7c761aefeada503d",
+                "fa05766d6161812758bb7ca44b4df2cae956771e703372332d41d2a50158150d"
+              ],
+              [
+                "e361e11f7cd0bfbb5fd587dbf54e559a0ac70354f05bb968ed5e82367105e2ab",
+                "2f351e3fcfa45a7475efe317fb74b2df5db2eaf806e345b28f327a9197f6d64e",
+                "10d6bddf9c16c27a2742959b4938c4a582343a01aa32d001cc3e19e7a4ad7bc8",
+                "c8f36625983057636496e976d573c7149b3ae95a16d10b02a613416f4ea43663"
+              ],
+              [
+                "993c805aed55f3312cbdfec2a1cecdc938f7814cb03d4c5b959ba19207103727",
+                "c68d122fad8a2998524265c286b982aba8f9262017f60a8ca3039d908576287b",
+                "285a29d373563d39c76ae328185a936f5ef892fd408ca7c0591b37a62dfc6871",
+                "5b639324e8fe509d64bc68168dabaf3a5e438beeb66744bf3db620e2bd01c6e6"
+              ],
+              [
+                "c62e1b92a1c0853627a26499aa2f12e01d32960f683a753e0f5087c0a05022c6",
+                "b34b7826f1bf85eb1f279923cbbfab891a39f943dacf30b68dafe22680e896d3",
+                "55da4427138176530e154375a392ab04caafeb524a36f03b0e776831b963c930",
+                "bdc0691e6a344bea55ce6b3bf4c10ce147a471696d52fbe774a35c48cd51f201"
+              ],
+              [
+                "990bc8e8d885e963fe7cbcb276bfc4ab4c36f83e8977bbe0320a1647531cffe3",
+                "6bc786631fb2691694667e753a6b1e18be83fd666a31abeaa770b2ffc3992530",
+                "59f2b224a64fc02fc65a29f6b9b6846f5705e151389c4b4d4892f78859e10044",
+                "b7317c379ab9c4d1d3d857e69aa172dea513701258ce89b341f21335860f88bc"
+              ],
+              [
+                "22cf61f42266aeb61a361d9d2e3da5f601ecfd0f9076d4e5041d06182ed5ee40",
+                "95dae1bc5edcadf594bb74d91e74a0779f61378cf5d906265a7605a371c01556",
+                "20f4d9ab6b1dfb92f43b72aca35d154812a8cd1b153fb59d1b507638088fd155",
+                "8ecda690494b25eb72290c0a0837cf3ec2ddff4a1419a4f2455097f432193fb3"
+              ],
+              [
+                "4dd634f7d2b35755f7ed92cf77cca1f2a6e486d46fcbd8d310e18ae3fc39492c",
+                "16a0a27717397eb8d9c4ca06be63cba9131d18b6e369d763ccce52b54cbd551a",
+                "7b175388c345221ee0d47bb407138f5eab650a0ee0a7dfaa4e85aab1ae04c8f1",
+                "300e735bbab4cde6b605e734201f9c1e82e62e6d9c3eb5834fcd4766fa089489"
+              ],
+              [
+                "08fc45c8642a294a4d602bb03fc290327d10d7b0e523aacbab1091541983e513",
+                "55f76312547b92291343ea21b25d666ea651db5a4b19c0979d783b3d133c786f",
+                "bc13297b2d6a681bf67c1c5e7d71a668e71aacaea0cb4870bd16e5414c396ba7",
+                "a7f997f47cdabc2e943d961b14365e31ba555f2194a5e187c28dc47a92c8a2e5"
+              ]
+            ]
+          },
+          "graph_device": {
+            "admissions": [
+              {
+                "accepted": false,
+                "device_bytes": 55397888,
+                "host_bytes": 0
+              }
+            ],
+            "collect_ms": 1314.228265080601,
+            "completed": false,
+            "exact": false,
+            "feedback_ms": 0.20723789930343628,
+            "max_incremental_peak_bytes": 64097280,
+            "sampled_prefix_matches": true,
+            "total_ms": 1314.4355029799044,
+            "trajectory_hashes": [
+              [
+                "b89776f87f9a5dadfd338326273d82e6407acf78095e803151e5d081881da435",
+                "74e5c480de3376b5e943e53c49cce2130cf86dae48a73904f36ab671c961dbc5",
+                "725b7a72b1fce4489f1022182d5c41de5d52c9b3e2d710dd7c761aefeada503d",
+                "fa05766d6161812758bb7ca44b4df2cae956771e703372332d41d2a50158150d"
+              ]
+            ]
+          },
+          "graph_host": {
+            "adam_parameter_sha256": [
+              "510a07bbe7a813d4550f162938ed5a035f2be0b39de7fce320af528b516625f3",
+              "c4555e72907068908db4cd1051ee6605365fc3671e8170d1e3e40824fb0bbca5",
+              "5b3cc8bacee6bd1a1d31e76f26486f3cce01427053886d94e4a76235c8cdd3c8",
+              "e51bf07199b284d23e7be86603848488ef9c4c434273b0f7df17babc894236d2"
+            ],
+            "adam_state_sha256": [
+              "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c",
+              "8868b2b78985d35fa923000edb0d30cf9545d660f1dcf8419a79cab59c279775",
+              "aa6a645d485f2ffda95f4f367f70bbd90070bc656e42217bbc3779d1a872199d",
+              "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c",
+              "0cdf321bf454291ed41c53ed8056d2cebfe7c3938073c39f81c0575bb4342494",
+              "d6a8ebeabb7072f71b46c638f77d6ec52cf32add4ef8f372bbfbb80fe92d3245",
+              "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c",
+              "3a788eaaeb5d3629a0d0552fdbad9feed74dc096f3775830011aef0b85c24173",
+              "8feaa1b9f80f3e44336f62c149a7d827492e8be854e378931904c7c2c546a9b3",
+              "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c",
+              "d6a52f4eccf19eb64f096464fa3953194b784881255c003305b850b6c0084097",
+              "f852a1e33edf8f6eca6ece9fe90caedbf8d7dd94d992ffa0c67caa1365cd8db2"
+            ],
+            "admissions": [
+              {
+                "accepted": true,
+                "device_bytes": 25600,
+                "host_bytes": 54589824
+              },
+              {
+                "accepted": true,
+                "device_bytes": 51200,
+                "host_bytes": 109179648
+              },
+              {
+                "accepted": true,
+                "device_bytes": 76800,
+                "host_bytes": 163769472
+              },
+              {
+                "accepted": true,
+                "device_bytes": 102400,
+                "host_bytes": 218359296
+              },
+              {
+                "accepted": true,
+                "device_bytes": 128000,
+                "host_bytes": 272949120
+              },
+              {
+                "accepted": true,
+                "device_bytes": 153600,
+                "host_bytes": 327538944
+              },
+              {
+                "accepted": true,
+                "device_bytes": 179200,
+                "host_bytes": 382128768
+              },
+              {
+                "accepted": true,
+                "device_bytes": 204800,
+                "host_bytes": 436718592
+              }
+            ],
+            "all_behavior_logits_bitwise": true,
+            "collect_ms": 21697.198783047497,
+            "completed": true,
+            "exact": true,
+            "feedback_ms": 1721.5152150020003,
+            "max_incremental_peak_bytes": 13946368,
+            "per_job_gradient_sha256": [
+              [
+                "569ade25fdfc6998a8f74cee19d3ac883763857d86b7fbe9ca11635cd821548c",
+                "c8883c459365dc375aeda334583b9d3c91d8c2f8832d98a7a50700d07325d76d",
+                "9ceebce08568ef0b5af68592be8f36e9c0bd7ec514bbb24eabbf7b79bfc53c85",
+                "3f2c59d6a39b9edf11facd56a9ea7b182eb5c01e739fad6628c88f198a31e3c1"
+              ],
+              [
+                "cf1b75180dd7b072b49dc93126c4ff3333c1417df62edeb2062ba311617a4e03",
+                "5e30c02115d38dd0e33a349ed0319fb862c25ee868616f36971892f09822dd79",
+                "ed6eb16ae1b80a8375a95346cf42ddc01c01de1ee4a43d992c1f328adfbdb887",
+                "cd5ab35245f61ef4399c5ce2255c625982e4b5fb14bbb6c47e74aa603bbe3761"
+              ],
+              [
+                "0e3e6531f90b35b270c87201ce29ab45cface0d01f4ffcbc100b55c3386b577f",
+                "54b8825202194ca2a5bcbb8ffa350650c70bb9b33cdd2742c786b782771e3565",
+                "948c27cc1dd49a93e6235883883a804c2c23419ff13f9cd926ab08d2a395d797",
+                "c421d0e63dfe5895f5decb0f8730d9522d8fe4aad027d5a4876c4c1431ed286e"
+              ],
+              [
+                "1bac7559beb102581dd429cae8a8b002bbb03d7daa22df9bf10d94b3cdd32cbb",
+                "f7bcd4c505e85f0468fce8d629d703bdfe25616c7c6514f23bdbca9460abea37",
+                "1f9bc8cdb7fb460eb32a3bb4e0c51181f397a045e635077e9c544ecec61ab782",
+                "b73211d241535a895f71c70958653c5b9e3ff8f00fe83557505d2295b0c94f3d"
+              ],
+              [
+                "1a7d0492429e4c80a31c9004cf4cc23f5dca0d95cedd8fdf4a520a3b130b31ad",
+                "4de8e749e7e9be4ffeae8169117902fbced55fd0b3cc96fdbacb57dc89b362da",
+                "585b5d608373bb356dc1d5aafb09eccbbb9cbf4935e30c840ec0119357418751",
+                "a8bc49e9f6de6e06136ab687a7d3274ec272c6d949cbf8f248a90c3dc698d488"
+              ],
+              [
+                "7599935c6f372d3e10ba959fbe091d5ade486fa96598fea6f71f695feaa0d66c",
+                "53da450978e6e1e9b2efc6b7409539f9ccfdfc0d2a824a8dec192de405853331",
+                "b13cd5d0b89681e26e30d33a1506fe770f460c8b5196e0617db58fbd49120f89",
+                "d7f14c5cdf7b69c4c7389ae8c71e8a9872af46e79411c0cbd9f5ef9e8fc64c55"
+              ],
+              [
+                "c902618a9160ec8dc186d8a0d921b698b4de7786596fb464645c0ed68b6efafc",
+                "f54b504dec75ca9b2d31cddaa1143dafafd36093d96cf5ee2ebdfe10aa9f5f06",
+                "8e9954874d120434f9ac0628aec90ca16a782ee70fd34667111b86b408823006",
+                "4a8edcd28d19aae57d2b98e43b8b11e9ef060bdd9c85a644581958ceaf4f3260"
+              ],
+              [
+                "0f0d78199bb3c34c813dd3ff838c53856efde5616e3e3f8566439fc37edc391a",
+                "3373fd09e6a3371c232569c212843255bcbaacc7c54a44191e45cce7550c83ac",
+                "f6a7325d74fa7ba3ee1be93ac6b495d5543c1c94e9507718a198a7372fbdfeba",
+                "05ab1c750bbcb96032a488c8abe3168e779ce29530bad7dc96ebc18494e1a381"
+              ]
+            ],
+            "sampled_prefix_matches": true,
+            "sum_gradient_sha256": [
+              "ffc04ce90b292c2a8ad68d28c3a1df550a2a40af2c221ecc8e514f73d600d38d",
+              "29e1c2751e8a99ec7de3adc150a5a00e5d4307ebc8ba2c14793f0336d9956d8a",
+              "e78170f4309e4f024a2b108c204a913d52a8ebe60afc9b0df0372152c2a3a1d4",
+              "14ab686e6c699434c4230a5b8ec522bdd9be0512033d7de6ede74b5e3288e443"
+            ],
+            "total_ms": 23418.713998049498,
+            "trajectory_hashes": [
+              [
+                "b89776f87f9a5dadfd338326273d82e6407acf78095e803151e5d081881da435",
+                "74e5c480de3376b5e943e53c49cce2130cf86dae48a73904f36ab671c961dbc5",
+                "725b7a72b1fce4489f1022182d5c41de5d52c9b3e2d710dd7c761aefeada503d",
+                "fa05766d6161812758bb7ca44b4df2cae956771e703372332d41d2a50158150d"
+              ],
+              [
+                "e361e11f7cd0bfbb5fd587dbf54e559a0ac70354f05bb968ed5e82367105e2ab",
+                "2f351e3fcfa45a7475efe317fb74b2df5db2eaf806e345b28f327a9197f6d64e",
+                "10d6bddf9c16c27a2742959b4938c4a582343a01aa32d001cc3e19e7a4ad7bc8",
+                "c8f36625983057636496e976d573c7149b3ae95a16d10b02a613416f4ea43663"
+              ],
+              [
+                "993c805aed55f3312cbdfec2a1cecdc938f7814cb03d4c5b959ba19207103727",
+                "c68d122fad8a2998524265c286b982aba8f9262017f60a8ca3039d908576287b",
+                "285a29d373563d39c76ae328185a936f5ef892fd408ca7c0591b37a62dfc6871",
+                "5b639324e8fe509d64bc68168dabaf3a5e438beeb66744bf3db620e2bd01c6e6"
+              ],
+              [
+                "c62e1b92a1c0853627a26499aa2f12e01d32960f683a753e0f5087c0a05022c6",
+                "b34b7826f1bf85eb1f279923cbbfab891a39f943dacf30b68dafe22680e896d3",
+                "55da4427138176530e154375a392ab04caafeb524a36f03b0e776831b963c930",
+                "bdc0691e6a344bea55ce6b3bf4c10ce147a471696d52fbe774a35c48cd51f201"
+              ],
+              [
+                "990bc8e8d885e963fe7cbcb276bfc4ab4c36f83e8977bbe0320a1647531cffe3",
+                "6bc786631fb2691694667e753a6b1e18be83fd666a31abeaa770b2ffc3992530",
+                "59f2b224a64fc02fc65a29f6b9b6846f5705e151389c4b4d4892f78859e10044",
+                "b7317c379ab9c4d1d3d857e69aa172dea513701258ce89b341f21335860f88bc"
+              ],
+              [
+                "22cf61f42266aeb61a361d9d2e3da5f601ecfd0f9076d4e5041d06182ed5ee40",
+                "95dae1bc5edcadf594bb74d91e74a0779f61378cf5d906265a7605a371c01556",
+                "20f4d9ab6b1dfb92f43b72aca35d154812a8cd1b153fb59d1b507638088fd155",
+                "8ecda690494b25eb72290c0a0837cf3ec2ddff4a1419a4f2455097f432193fb3"
+              ],
+              [
+                "4dd634f7d2b35755f7ed92cf77cca1f2a6e486d46fcbd8d310e18ae3fc39492c",
+                "16a0a27717397eb8d9c4ca06be63cba9131d18b6e369d763ccce52b54cbd551a",
+                "7b175388c345221ee0d47bb407138f5eab650a0ee0a7dfaa4e85aab1ae04c8f1",
+                "300e735bbab4cde6b605e734201f9c1e82e62e6d9c3eb5834fcd4766fa089489"
+              ],
+              [
+                "08fc45c8642a294a4d602bb03fc290327d10d7b0e523aacbab1091541983e513",
+                "55f76312547b92291343ea21b25d666ea651db5a4b19c0979d783b3d133c786f",
+                "bc13297b2d6a681bf67c1c5e7d71a668e71aacaea0cb4870bd16e5414c396ba7",
+                "a7f997f47cdabc2e943d961b14365e31ba555f2194a5e187c28dc47a92c8a2e5"
+              ]
+            ]
+          },
+          "tail_device": {
+            "admissions": [
+              {
+                "accepted": true,
+                "device_bytes": 517120,
+                "host_bytes": 0
+              },
+              {
+                "accepted": true,
+                "device_bytes": 1034240,
+                "host_bytes": 0
+              },
+              {
+                "accepted": true,
+                "device_bytes": 1551360,
+                "host_bytes": 0
+              },
+              {
+                "accepted": true,
+                "device_bytes": 2068480,
+                "host_bytes": 0
+              },
+              {
+                "accepted": false,
+                "device_bytes": 2585600,
+                "host_bytes": 0
+              }
+            ],
+            "collect_ms": 6616.624830290675,
+            "completed": false,
+            "exact": false,
+            "feedback_ms": 0.1628040336072445,
+            "max_incremental_peak_bytes": 16316416,
+            "sampled_prefix_matches": true,
+            "total_ms": 6616.787634324282,
+            "trajectory_hashes": [
+              [
+                "b89776f87f9a5dadfd338326273d82e6407acf78095e803151e5d081881da435",
+                "74e5c480de3376b5e943e53c49cce2130cf86dae48a73904f36ab671c961dbc5",
+                "725b7a72b1fce4489f1022182d5c41de5d52c9b3e2d710dd7c761aefeada503d",
+                "fa05766d6161812758bb7ca44b4df2cae956771e703372332d41d2a50158150d"
+              ],
+              [
+                "e361e11f7cd0bfbb5fd587dbf54e559a0ac70354f05bb968ed5e82367105e2ab",
+                "2f351e3fcfa45a7475efe317fb74b2df5db2eaf806e345b28f327a9197f6d64e",
+                "10d6bddf9c16c27a2742959b4938c4a582343a01aa32d001cc3e19e7a4ad7bc8",
+                "c8f36625983057636496e976d573c7149b3ae95a16d10b02a613416f4ea43663"
+              ],
+              [
+                "993c805aed55f3312cbdfec2a1cecdc938f7814cb03d4c5b959ba19207103727",
+                "c68d122fad8a2998524265c286b982aba8f9262017f60a8ca3039d908576287b",
+                "285a29d373563d39c76ae328185a936f5ef892fd408ca7c0591b37a62dfc6871",
+                "5b639324e8fe509d64bc68168dabaf3a5e438beeb66744bf3db620e2bd01c6e6"
+              ],
+              [
+                "c62e1b92a1c0853627a26499aa2f12e01d32960f683a753e0f5087c0a05022c6",
+                "b34b7826f1bf85eb1f279923cbbfab891a39f943dacf30b68dafe22680e896d3",
+                "55da4427138176530e154375a392ab04caafeb524a36f03b0e776831b963c930",
+                "bdc0691e6a344bea55ce6b3bf4c10ce147a471696d52fbe774a35c48cd51f201"
+              ],
+              [
+                "990bc8e8d885e963fe7cbcb276bfc4ab4c36f83e8977bbe0320a1647531cffe3",
+                "6bc786631fb2691694667e753a6b1e18be83fd666a31abeaa770b2ffc3992530",
+                "59f2b224a64fc02fc65a29f6b9b6846f5705e151389c4b4d4892f78859e10044",
+                "b7317c379ab9c4d1d3d857e69aa172dea513701258ce89b341f21335860f88bc"
+              ]
+            ]
+          },
+          "tail_host": {
+            "adam_parameter_sha256": [
+              "510a07bbe7a813d4550f162938ed5a035f2be0b39de7fce320af528b516625f3",
+              "c4555e72907068908db4cd1051ee6605365fc3671e8170d1e3e40824fb0bbca5",
+              "5b3cc8bacee6bd1a1d31e76f26486f3cce01427053886d94e4a76235c8cdd3c8",
+              "e51bf07199b284d23e7be86603848488ef9c4c434273b0f7df17babc894236d2"
+            ],
+            "adam_state_sha256": [
+              "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c",
+              "8868b2b78985d35fa923000edb0d30cf9545d660f1dcf8419a79cab59c279775",
+              "aa6a645d485f2ffda95f4f367f70bbd90070bc656e42217bbc3779d1a872199d",
+              "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c",
+              "0cdf321bf454291ed41c53ed8056d2cebfe7c3938073c39f81c0575bb4342494",
+              "d6a8ebeabb7072f71b46c638f77d6ec52cf32add4ef8f372bbfbb80fe92d3245",
+              "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c",
+              "3a788eaaeb5d3629a0d0552fdbad9feed74dc096f3775830011aef0b85c24173",
+              "8feaa1b9f80f3e44336f62c149a7d827492e8be854e378931904c7c2c546a9b3",
+              "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c",
+              "d6a52f4eccf19eb64f096464fa3953194b784881255c003305b850b6c0084097",
+              "f852a1e33edf8f6eca6ece9fe90caedbf8d7dd94d992ffa0c67caa1365cd8db2"
+            ],
+            "admissions": [
+              {
+                "accepted": true,
+                "device_bytes": 25600,
+                "host_bytes": 491520
+              },
+              {
+                "accepted": true,
+                "device_bytes": 51200,
+                "host_bytes": 983040
+              },
+              {
+                "accepted": true,
+                "device_bytes": 76800,
+                "host_bytes": 1474560
+              },
+              {
+                "accepted": true,
+                "device_bytes": 102400,
+                "host_bytes": 1966080
+              },
+              {
+                "accepted": true,
+                "device_bytes": 128000,
+                "host_bytes": 2457600
+              },
+              {
+                "accepted": true,
+                "device_bytes": 153600,
+                "host_bytes": 2949120
+              },
+              {
+                "accepted": true,
+                "device_bytes": 179200,
+                "host_bytes": 3440640
+              },
+              {
+                "accepted": true,
+                "device_bytes": 204800,
+                "host_bytes": 3932160
+              }
+            ],
+            "all_behavior_logits_bitwise": true,
+            "collect_ms": 15507.249991875142,
+            "completed": true,
+            "exact": true,
+            "feedback_ms": 2384.506317321211,
+            "max_incremental_peak_bytes": 58714112,
+            "per_job_gradient_sha256": [
+              [
+                "569ade25fdfc6998a8f74cee19d3ac883763857d86b7fbe9ca11635cd821548c",
+                "c8883c459365dc375aeda334583b9d3c91d8c2f8832d98a7a50700d07325d76d",
+                "9ceebce08568ef0b5af68592be8f36e9c0bd7ec514bbb24eabbf7b79bfc53c85",
+                "3f2c59d6a39b9edf11facd56a9ea7b182eb5c01e739fad6628c88f198a31e3c1"
+              ],
+              [
+                "cf1b75180dd7b072b49dc93126c4ff3333c1417df62edeb2062ba311617a4e03",
+                "5e30c02115d38dd0e33a349ed0319fb862c25ee868616f36971892f09822dd79",
+                "ed6eb16ae1b80a8375a95346cf42ddc01c01de1ee4a43d992c1f328adfbdb887",
+                "cd5ab35245f61ef4399c5ce2255c625982e4b5fb14bbb6c47e74aa603bbe3761"
+              ],
+              [
+                "0e3e6531f90b35b270c87201ce29ab45cface0d01f4ffcbc100b55c3386b577f",
+                "54b8825202194ca2a5bcbb8ffa350650c70bb9b33cdd2742c786b782771e3565",
+                "948c27cc1dd49a93e6235883883a804c2c23419ff13f9cd926ab08d2a395d797",
+                "c421d0e63dfe5895f5decb0f8730d9522d8fe4aad027d5a4876c4c1431ed286e"
+              ],
+              [
+                "1bac7559beb102581dd429cae8a8b002bbb03d7daa22df9bf10d94b3cdd32cbb",
+                "f7bcd4c505e85f0468fce8d629d703bdfe25616c7c6514f23bdbca9460abea37",
+                "1f9bc8cdb7fb460eb32a3bb4e0c51181f397a045e635077e9c544ecec61ab782",
+                "b73211d241535a895f71c70958653c5b9e3ff8f00fe83557505d2295b0c94f3d"
+              ],
+              [
+                "1a7d0492429e4c80a31c9004cf4cc23f5dca0d95cedd8fdf4a520a3b130b31ad",
+                "4de8e749e7e9be4ffeae8169117902fbced55fd0b3cc96fdbacb57dc89b362da",
+                "585b5d608373bb356dc1d5aafb09eccbbb9cbf4935e30c840ec0119357418751",
+                "a8bc49e9f6de6e06136ab687a7d3274ec272c6d949cbf8f248a90c3dc698d488"
+              ],
+              [
+                "7599935c6f372d3e10ba959fbe091d5ade486fa96598fea6f71f695feaa0d66c",
+                "53da450978e6e1e9b2efc6b7409539f9ccfdfc0d2a824a8dec192de405853331",
+                "b13cd5d0b89681e26e30d33a1506fe770f460c8b5196e0617db58fbd49120f89",
+                "d7f14c5cdf7b69c4c7389ae8c71e8a9872af46e79411c0cbd9f5ef9e8fc64c55"
+              ],
+              [
+                "c902618a9160ec8dc186d8a0d921b698b4de7786596fb464645c0ed68b6efafc",
+                "f54b504dec75ca9b2d31cddaa1143dafafd36093d96cf5ee2ebdfe10aa9f5f06",
+                "8e9954874d120434f9ac0628aec90ca16a782ee70fd34667111b86b408823006",
+                "4a8edcd28d19aae57d2b98e43b8b11e9ef060bdd9c85a644581958ceaf4f3260"
+              ],
+              [
+                "0f0d78199bb3c34c813dd3ff838c53856efde5616e3e3f8566439fc37edc391a",
+                "3373fd09e6a3371c232569c212843255bcbaacc7c54a44191e45cce7550c83ac",
+                "f6a7325d74fa7ba3ee1be93ac6b495d5543c1c94e9507718a198a7372fbdfeba",
+                "05ab1c750bbcb96032a488c8abe3168e779ce29530bad7dc96ebc18494e1a381"
+              ]
+            ],
+            "sampled_prefix_matches": true,
+            "sum_gradient_sha256": [
+              "ffc04ce90b292c2a8ad68d28c3a1df550a2a40af2c221ecc8e514f73d600d38d",
+              "29e1c2751e8a99ec7de3adc150a5a00e5d4307ebc8ba2c14793f0336d9956d8a",
+              "e78170f4309e4f024a2b108c204a913d52a8ebe60afc9b0df0372152c2a3a1d4",
+              "14ab686e6c699434c4230a5b8ec522bdd9be0512033d7de6ede74b5e3288e443"
+            ],
+            "total_ms": 17891.756309196353,
+            "trajectory_hashes": [
+              [
+                "b89776f87f9a5dadfd338326273d82e6407acf78095e803151e5d081881da435",
+                "74e5c480de3376b5e943e53c49cce2130cf86dae48a73904f36ab671c961dbc5",
+                "725b7a72b1fce4489f1022182d5c41de5d52c9b3e2d710dd7c761aefeada503d",
+                "fa05766d6161812758bb7ca44b4df2cae956771e703372332d41d2a50158150d"
+              ],
+              [
+                "e361e11f7cd0bfbb5fd587dbf54e559a0ac70354f05bb968ed5e82367105e2ab",
+                "2f351e3fcfa45a7475efe317fb74b2df5db2eaf806e345b28f327a9197f6d64e",
+                "10d6bddf9c16c27a2742959b4938c4a582343a01aa32d001cc3e19e7a4ad7bc8",
+                "c8f36625983057636496e976d573c7149b3ae95a16d10b02a613416f4ea43663"
+              ],
+              [
+                "993c805aed55f3312cbdfec2a1cecdc938f7814cb03d4c5b959ba19207103727",
+                "c68d122fad8a2998524265c286b982aba8f9262017f60a8ca3039d908576287b",
+                "285a29d373563d39c76ae328185a936f5ef892fd408ca7c0591b37a62dfc6871",
+                "5b639324e8fe509d64bc68168dabaf3a5e438beeb66744bf3db620e2bd01c6e6"
+              ],
+              [
+                "c62e1b92a1c0853627a26499aa2f12e01d32960f683a753e0f5087c0a05022c6",
+                "b34b7826f1bf85eb1f279923cbbfab891a39f943dacf30b68dafe22680e896d3",
+                "55da4427138176530e154375a392ab04caafeb524a36f03b0e776831b963c930",
+                "bdc0691e6a344bea55ce6b3bf4c10ce147a471696d52fbe774a35c48cd51f201"
+              ],
+              [
+                "990bc8e8d885e963fe7cbcb276bfc4ab4c36f83e8977bbe0320a1647531cffe3",
+                "6bc786631fb2691694667e753a6b1e18be83fd666a31abeaa770b2ffc3992530",
+                "59f2b224a64fc02fc65a29f6b9b6846f5705e151389c4b4d4892f78859e10044",
+                "b7317c379ab9c4d1d3d857e69aa172dea513701258ce89b341f21335860f88bc"
+              ],
+              [
+                "22cf61f42266aeb61a361d9d2e3da5f601ecfd0f9076d4e5041d06182ed5ee40",
+                "95dae1bc5edcadf594bb74d91e74a0779f61378cf5d906265a7605a371c01556",
+                "20f4d9ab6b1dfb92f43b72aca35d154812a8cd1b153fb59d1b507638088fd155",
+                "8ecda690494b25eb72290c0a0837cf3ec2ddff4a1419a4f2455097f432193fb3"
+              ],
+              [
+                "4dd634f7d2b35755f7ed92cf77cca1f2a6e486d46fcbd8d310e18ae3fc39492c",
+                "16a0a27717397eb8d9c4ca06be63cba9131d18b6e369d763ccce52b54cbd551a",
+                "7b175388c345221ee0d47bb407138f5eab650a0ee0a7dfaa4e85aab1ae04c8f1",
+                "300e735bbab4cde6b605e734201f9c1e82e62e6d9c3eb5834fcd4766fa089489"
+              ],
+              [
+                "08fc45c8642a294a4d602bb03fc290327d10d7b0e523aacbab1091541983e513",
+                "55f76312547b92291343ea21b25d666ea651db5a4b19c0979d783b3d133c786f",
+                "bc13297b2d6a681bf67c1c5e7d71a668e71aacaea0cb4870bd16e5414c396ba7",
+                "a7f997f47cdabc2e943d961b14365e31ba555f2194a5e187c28dc47a92c8a2e5"
+              ]
+            ]
+          }
+        },
+        "order": [
+          "full",
+          "tail_device",
+          "tail_host",
+          "graph_device",
+          "graph_host"
+        ],
+        "seed": 3817
+      },
+      {
+        "arms": {
+          "full": {
+            "adam_parameter_sha256": [
+              "df7704c82825510ec97fe07beb72f5ccfd97efac3384835ee5b0e9fb46d26be7",
+              "bdcaedf010ed5d8919cf000ad1db88ffbfb4e3c4e0e3ae09db162ec67577d1d0",
+              "d1cfeed1f9af05769de3f7dc4302eb791805ac29834cff7fb0c534d153f63c67",
+              "a57ae61dbba5ecd65e8425b7943f3ceac897c7ff682dabe27cf9cc110da11a9b"
+            ],
+            "adam_state_sha256": [
+              "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c",
+              "6bbf260dbdde26490f4d3fc3e8d20ccb43a65554708078d4a751143cd53d10c5",
+              "84426ee781918ae2b976a550a94cde517c772d9b0db128abaa86f5296c49965b",
+              "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c",
+              "10bddcc9d0b487eaf23508d2a75d34ce9b8793ec24f8dae87d54ad52e694a0b8",
+              "28b8eccdd32782135eab3b2fd99aa3d7e821f80c6f0eb724f21a317aab1dcac6",
+              "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c",
+              "ace92e46276cd653d58138afa0ad0accf35788b00384c5e5b790c3ce8c207de5",
+              "f83ac2092e0e950c78d2e55dccbfd39e3355cec204c154c53ab1a5cfb7f29533",
+              "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c",
+              "bcc9512c101f0c14a565fc02eff104bc1a64f9064d154e4072a68f40ab1a1d9d",
+              "c62a24d87db32c61b42b4e719419be36046cbbba188c6c4017afe1f0ecb0af9a"
+            ],
+            "admissions": [
+              {
+                "accepted": true,
+                "device_bytes": 25600,
+                "host_bytes": 0
+              },
+              {
+                "accepted": true,
+                "device_bytes": 51200,
+                "host_bytes": 0
+              },
+              {
+                "accepted": true,
+                "device_bytes": 76800,
+                "host_bytes": 0
+              },
+              {
+                "accepted": true,
+                "device_bytes": 102400,
+                "host_bytes": 0
+              },
+              {
+                "accepted": true,
+                "device_bytes": 128000,
+                "host_bytes": 0
+              },
+              {
+                "accepted": true,
+                "device_bytes": 153600,
+                "host_bytes": 0
+              },
+              {
+                "accepted": true,
+                "device_bytes": 179200,
+                "host_bytes": 0
+              },
+              {
+                "accepted": true,
+                "device_bytes": 204800,
+                "host_bytes": 0
+              }
+            ],
+            "all_behavior_logits_bitwise": true,
+            "collect_ms": 12153.807235881686,
+            "completed": true,
+            "exact": true,
+            "feedback_ms": 14206.811809912324,
+            "max_incremental_peak_bytes": 62052352,
+            "per_job_gradient_sha256": [
+              [
+                "1e74ce1873428de9315a1ed60468437c2000a0f96ae8b3ee5558f9d2fb5f9581",
+                "667f25981cf34f58e49cb922d34850bd6f0ed146825199f71754e0cd380f0031",
+                "ca84d60b5d446b74a9490af463754c9320890032a97e2f06b9e126059c993822",
+                "73ef542b4baaa7c6c44e5e67987b2f3a500a767ed1aab5b9c9f61f9d4abc45ca"
+              ],
+              [
+                "1b1caf004d2c0cd71c48b6997deff5d1487fc32871a759fc042fb495c3da4bbb",
+                "8c14072df84cdaa4ac377a0a2bd70fe29ebe4e3643783dd590e5e092bbf8912e",
+                "5d696a92a250ef8f8e37b583c44ceb66601ebc7e1d7172c4d724fb0cbf1fba53",
+                "0fbe337d806990ff833b53d227e2ac17181ca1d42f350f0a221e85a68eb54e80"
+              ],
+              [
+                "e186676a8bce9bce9da7b8ce3c92f5f9ec9d080ffc45dfdd078b6dab3f23bb56",
+                "1e0ce04b0a808763f210bfdc565e76a1ae988532e9d42f540019f6e2067b1d63",
+                "d05d4ee50d02fdbc0d5aabdacf07f74f1d5d683fe782a878080e994fead125de",
+                "4da928463344a7b750a28849097fc200537dadccf7b632cf98ebb3e4a71f715d"
+              ],
+              [
+                "b3e6aa07a3c1325095a090cc8c88b9408635d3d4b7bd7da9f9379269a705d1d2",
+                "eac764cf2bf9e698f37a9aed18e9ecc5b3539d41cbdc7ed15b6fee0a168e98ec",
+                "50b6a27102fa658b9cab961996830f55e406a32aa36e4284cf42df11a214013f",
+                "88cf81665848d7f11a2b0216f1af7ece09616111ce4c99ff7ffe6b3b09aa227a"
+              ],
+              [
+                "2d3efb7a9d5db22cf85b8a7808651af04a98bf6dfc9e9b1ef8f63ff0cc0abddc",
+                "04a29bcfd2f3597b28c21343a9ae7b1840cea49da8862367bf60b4dcb82c32de",
+                "dd1c52977e60e5154ed6b9fb15da74c2c65a4457baf757354f2a716da8fc5f37",
+                "17d9cf7f1a0383128586a9f7ae96c7a4d436aa263f049e336c4bf9d997d16b5e"
+              ],
+              [
+                "6b3b9fb390da78948a2a4342fa38bedf382599d9933d42c454381bfdcb7aa122",
+                "99103cc5e61838cc8d44fe26ca40673c5d23fb01d436bf0d0d5c0396f5f9c9b6",
+                "ef350ff99f25dd78ec03a96a96d0aac2902890d0dcddeffde13e2eac6a7384c6",
+                "840616fad3163ea202c060b7c6a501ad5bd70be0c2eb5848c3d78c75e8a6e64f"
+              ],
+              [
+                "057e1239e19d85237f5f1919ce72d9ea2e582dcde7cd77b7f310c08aae33e80d",
+                "4abe7c1c63cbffcc4f0c6a9fe549a3d6737cde2a7a12f5c586352439333ce80b",
+                "ba3f00f20d56ac419a02fa52983f0ff965e4868d1755c3f67196d500967c8f71",
+                "73d50f1c951c04ac87db19bdad6ce4667d5ba1ebc9274fcd049536a37b25ffff"
+              ],
+              [
+                "679f34637973aae57ab11d2e82cca8cfe615d9670d0f4b44f0a131378de4c288",
+                "4814c1e1d8d75047dcf98761e3d2969185edf4799989b018dacbf02fde10ddc9",
+                "d069e58f975a138c29084c1513bb1695ec6c388655566ac528fa2187e3b7ba52",
+                "f971585f45c391b51a151e5876b1ef9f841ab6396049863a05f223738cdd3892"
+              ]
+            ],
+            "sampled_prefix_matches": true,
+            "sum_gradient_sha256": [
+              "7250248cbedb935d1eeec1e1b805760257f7631944a23442dc13a55b75ad7f22",
+              "96e983f1e66c11d0f62c6d2b54103ac09b9104340d736a7fbb4a6bee50512048",
+              "c24e288ae5f036ef70411a19a9353054e69fe4db8658d91d3247c0535d23612f",
+              "3b61128de0ab72d08ebb4be63ebfe10f877e5b69ee9d1b656859842e6be85a6b"
+            ],
+            "total_ms": 26360.61904579401,
+            "trajectory_hashes": [
+              [
+                "69ece0a3bd1fa89fa81f68c66a45e13d961485147c7a976a054b2855b21b20b2",
+                "e783fdf02bb9f2a06223fc7fda745797ce48bbdb4cb6f91b869a3f323fcb0b5a",
+                "7942ee05061204fc5fb69c297409860c7f8d98d7deccef1fe8862f4ce6fcc6eb",
+                "c7bfd35a8f40188e8153174288d5c5fc3097b22432a25eda3ecf9fca6ed38648"
+              ],
+              [
+                "e986426135348e9881328586b0c4367e354e071946f12a476e389d7bd25317b2",
+                "7e161fac086e1f52d3aacdef2d1f079ae191801ba3270ab8f984d096929a353b",
+                "5e36eb0fbaab6e162e5082fff201aae4f55fdd4de7b05f913d0e38828d961800",
+                "c079fc4b26ca7a2e67b371042338e0751be15a69a237323b79899ebfce50acf2"
+              ],
+              [
+                "421a4ae12f5ef328ee0f7cf490d2b950e055ed8cc75b2bce961d7dae08a2a324",
+                "fc894f32011f2cf445355adccd5fb47bf97a4277db9402fbc00be6189c664def",
+                "c5dd75e2ce693b011a10cb68f7b8f5574f1871bd1ee5f57f5d8bb17272c3703a",
+                "8422d294ac4972b72c87613aec2ad5c9aa3c91d9d692197835231dd3e8c224c6"
+              ],
+              [
+                "9d277615601d5818413b0d81acbe031f55901c68fec52b660ae9023f1b39de61",
+                "b3f550ba24131d756fef203c55d27c8eed4cf42f78c3d57dd2ed5e826d6a7a30",
+                "1f2fbae2168ee1f4ed149c699236b8b0c20b2836361322b23f16a18758b45c6b",
+                "b64d3e7407b98ad60d69a8c5c35acfb5921383a3c84a76d76e53b3af724e0c4a"
+              ],
+              [
+                "5281626f226cafa316907b88e77a82d9281f2c44afb0eeee10c75503a11b7723",
+                "0bf2858600f18bebbf9dfa064903dc542a8b12a0f183a492bfa2aa5a442d21e2",
+                "e9f50b2d89cd97d0f04273ac6ba4c333d2e4f7ac86842ebae8dd37bd8bd54d05",
+                "7e451677494982b086b36c8eb5db6c43ce355a8609eabe90051c33655de9d160"
+              ],
+              [
+                "a041058566be86d82b933f0f7e3e90ac43b1a365eb54be3ad39a161e75d7be50",
+                "588a5860ca62ccc67fe79a7fcd78e357ee23bc68a77c78559fff2f1f83ae25b4",
+                "e2c5bc56df603c27e405184ee2a46939df1eae1f6b4d41b4e5e2f896740fe954",
+                "beefb3af504d1ef5f40c731c4fbe52bd9488401a0392841b6ec12b4c9a4a631f"
+              ],
+              [
+                "db1566b14a50297ee7a8677d37f0b161fa1a9d98b7030c68b01b538923daad91",
+                "576afeee25993347adba0cd15bf0028332da6ee6b9b759bfaddb6576dc73d6bb",
+                "46548607bf02b5f3feebf5d04192a3bafb0ba7d30bf03a77c42bbfbef2d0d55c",
+                "6494968ad9c0f1b6eb3778d95141a1517e4905ea4954d8b1bc30bdd8f5f7a755"
+              ],
+              [
+                "6ef98020deb6751ba5cc1ca15d8fd3e4a0c51d1488cd5acb467951c757c2de71",
+                "31044470f838d1dfa3b872f1ea892f9370c2e4e2306ab25bceb7d6243ccd047b",
+                "116ceedc4fc932cf1837e3297511d01dc5a94d4fd14a403040fb2d830b8e4c63",
+                "57b5e622da01b82697ab5a62dcb881e184038569dcbcf6bd0ef4c6e17e302a68"
+              ]
+            ]
+          },
+          "graph_device": {
+            "admissions": [
+              {
+                "accepted": false,
+                "device_bytes": 55397888,
+                "host_bytes": 0
+              }
+            ],
+            "collect_ms": 1557.4498339556158,
+            "completed": false,
+            "exact": false,
+            "feedback_ms": 0.468377023935318,
+            "max_incremental_peak_bytes": 64097280,
+            "sampled_prefix_matches": true,
+            "total_ms": 1557.918210979551,
+            "trajectory_hashes": [
+              [
+                "69ece0a3bd1fa89fa81f68c66a45e13d961485147c7a976a054b2855b21b20b2",
+                "e783fdf02bb9f2a06223fc7fda745797ce48bbdb4cb6f91b869a3f323fcb0b5a",
+                "7942ee05061204fc5fb69c297409860c7f8d98d7deccef1fe8862f4ce6fcc6eb",
+                "c7bfd35a8f40188e8153174288d5c5fc3097b22432a25eda3ecf9fca6ed38648"
+              ]
+            ]
+          },
+          "graph_host": {
+            "adam_parameter_sha256": [
+              "df7704c82825510ec97fe07beb72f5ccfd97efac3384835ee5b0e9fb46d26be7",
+              "bdcaedf010ed5d8919cf000ad1db88ffbfb4e3c4e0e3ae09db162ec67577d1d0",
+              "d1cfeed1f9af05769de3f7dc4302eb791805ac29834cff7fb0c534d153f63c67",
+              "a57ae61dbba5ecd65e8425b7943f3ceac897c7ff682dabe27cf9cc110da11a9b"
+            ],
+            "adam_state_sha256": [
+              "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c",
+              "6bbf260dbdde26490f4d3fc3e8d20ccb43a65554708078d4a751143cd53d10c5",
+              "84426ee781918ae2b976a550a94cde517c772d9b0db128abaa86f5296c49965b",
+              "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c",
+              "10bddcc9d0b487eaf23508d2a75d34ce9b8793ec24f8dae87d54ad52e694a0b8",
+              "28b8eccdd32782135eab3b2fd99aa3d7e821f80c6f0eb724f21a317aab1dcac6",
+              "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c",
+              "ace92e46276cd653d58138afa0ad0accf35788b00384c5e5b790c3ce8c207de5",
+              "f83ac2092e0e950c78d2e55dccbfd39e3355cec204c154c53ab1a5cfb7f29533",
+              "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c",
+              "bcc9512c101f0c14a565fc02eff104bc1a64f9064d154e4072a68f40ab1a1d9d",
+              "c62a24d87db32c61b42b4e719419be36046cbbba188c6c4017afe1f0ecb0af9a"
+            ],
+            "admissions": [
+              {
+                "accepted": true,
+                "device_bytes": 25600,
+                "host_bytes": 54589824
+              },
+              {
+                "accepted": true,
+                "device_bytes": 51200,
+                "host_bytes": 109179648
+              },
+              {
+                "accepted": true,
+                "device_bytes": 76800,
+                "host_bytes": 163769472
+              },
+              {
+                "accepted": true,
+                "device_bytes": 102400,
+                "host_bytes": 218359296
+              },
+              {
+                "accepted": true,
+                "device_bytes": 128000,
+                "host_bytes": 272949120
+              },
+              {
+                "accepted": true,
+                "device_bytes": 153600,
+                "host_bytes": 327538944
+              },
+              {
+                "accepted": true,
+                "device_bytes": 179200,
+                "host_bytes": 382128768
+              },
+              {
+                "accepted": true,
+                "device_bytes": 204800,
+                "host_bytes": 436718592
+              }
+            ],
+            "all_behavior_logits_bitwise": true,
+            "collect_ms": 14378.205062355846,
+            "completed": true,
+            "exact": true,
+            "feedback_ms": 1491.4758908562362,
+            "max_incremental_peak_bytes": 13946368,
+            "per_job_gradient_sha256": [
+              [
+                "1e74ce1873428de9315a1ed60468437c2000a0f96ae8b3ee5558f9d2fb5f9581",
+                "667f25981cf34f58e49cb922d34850bd6f0ed146825199f71754e0cd380f0031",
+                "ca84d60b5d446b74a9490af463754c9320890032a97e2f06b9e126059c993822",
+                "73ef542b4baaa7c6c44e5e67987b2f3a500a767ed1aab5b9c9f61f9d4abc45ca"
+              ],
+              [
+                "1b1caf004d2c0cd71c48b6997deff5d1487fc32871a759fc042fb495c3da4bbb",
+                "8c14072df84cdaa4ac377a0a2bd70fe29ebe4e3643783dd590e5e092bbf8912e",
+                "5d696a92a250ef8f8e37b583c44ceb66601ebc7e1d7172c4d724fb0cbf1fba53",
+                "0fbe337d806990ff833b53d227e2ac17181ca1d42f350f0a221e85a68eb54e80"
+              ],
+              [
+                "e186676a8bce9bce9da7b8ce3c92f5f9ec9d080ffc45dfdd078b6dab3f23bb56",
+                "1e0ce04b0a808763f210bfdc565e76a1ae988532e9d42f540019f6e2067b1d63",
+                "d05d4ee50d02fdbc0d5aabdacf07f74f1d5d683fe782a878080e994fead125de",
+                "4da928463344a7b750a28849097fc200537dadccf7b632cf98ebb3e4a71f715d"
+              ],
+              [
+                "b3e6aa07a3c1325095a090cc8c88b9408635d3d4b7bd7da9f9379269a705d1d2",
+                "eac764cf2bf9e698f37a9aed18e9ecc5b3539d41cbdc7ed15b6fee0a168e98ec",
+                "50b6a27102fa658b9cab961996830f55e406a32aa36e4284cf42df11a214013f",
+                "88cf81665848d7f11a2b0216f1af7ece09616111ce4c99ff7ffe6b3b09aa227a"
+              ],
+              [
+                "2d3efb7a9d5db22cf85b8a7808651af04a98bf6dfc9e9b1ef8f63ff0cc0abddc",
+                "04a29bcfd2f3597b28c21343a9ae7b1840cea49da8862367bf60b4dcb82c32de",
+                "dd1c52977e60e5154ed6b9fb15da74c2c65a4457baf757354f2a716da8fc5f37",
+                "17d9cf7f1a0383128586a9f7ae96c7a4d436aa263f049e336c4bf9d997d16b5e"
+              ],
+              [
+                "6b3b9fb390da78948a2a4342fa38bedf382599d9933d42c454381bfdcb7aa122",
+                "99103cc5e61838cc8d44fe26ca40673c5d23fb01d436bf0d0d5c0396f5f9c9b6",
+                "ef350ff99f25dd78ec03a96a96d0aac2902890d0dcddeffde13e2eac6a7384c6",
+                "840616fad3163ea202c060b7c6a501ad5bd70be0c2eb5848c3d78c75e8a6e64f"
+              ],
+              [
+                "057e1239e19d85237f5f1919ce72d9ea2e582dcde7cd77b7f310c08aae33e80d",
+                "4abe7c1c63cbffcc4f0c6a9fe549a3d6737cde2a7a12f5c586352439333ce80b",
+                "ba3f00f20d56ac419a02fa52983f0ff965e4868d1755c3f67196d500967c8f71",
+                "73d50f1c951c04ac87db19bdad6ce4667d5ba1ebc9274fcd049536a37b25ffff"
+              ],
+              [
+                "679f34637973aae57ab11d2e82cca8cfe615d9670d0f4b44f0a131378de4c288",
+                "4814c1e1d8d75047dcf98761e3d2969185edf4799989b018dacbf02fde10ddc9",
+                "d069e58f975a138c29084c1513bb1695ec6c388655566ac528fa2187e3b7ba52",
+                "f971585f45c391b51a151e5876b1ef9f841ab6396049863a05f223738cdd3892"
+              ]
+            ],
+            "sampled_prefix_matches": true,
+            "sum_gradient_sha256": [
+              "7250248cbedb935d1eeec1e1b805760257f7631944a23442dc13a55b75ad7f22",
+              "96e983f1e66c11d0f62c6d2b54103ac09b9104340d736a7fbb4a6bee50512048",
+              "c24e288ae5f036ef70411a19a9353054e69fe4db8658d91d3247c0535d23612f",
+              "3b61128de0ab72d08ebb4be63ebfe10f877e5b69ee9d1b656859842e6be85a6b"
+            ],
+            "total_ms": 15869.680953212082,
+            "trajectory_hashes": [
+              [
+                "69ece0a3bd1fa89fa81f68c66a45e13d961485147c7a976a054b2855b21b20b2",
+                "e783fdf02bb9f2a06223fc7fda745797ce48bbdb4cb6f91b869a3f323fcb0b5a",
+                "7942ee05061204fc5fb69c297409860c7f8d98d7deccef1fe8862f4ce6fcc6eb",
+                "c7bfd35a8f40188e8153174288d5c5fc3097b22432a25eda3ecf9fca6ed38648"
+              ],
+              [
+                "e986426135348e9881328586b0c4367e354e071946f12a476e389d7bd25317b2",
+                "7e161fac086e1f52d3aacdef2d1f079ae191801ba3270ab8f984d096929a353b",
+                "5e36eb0fbaab6e162e5082fff201aae4f55fdd4de7b05f913d0e38828d961800",
+                "c079fc4b26ca7a2e67b371042338e0751be15a69a237323b79899ebfce50acf2"
+              ],
+              [
+                "421a4ae12f5ef328ee0f7cf490d2b950e055ed8cc75b2bce961d7dae08a2a324",
+                "fc894f32011f2cf445355adccd5fb47bf97a4277db9402fbc00be6189c664def",
+                "c5dd75e2ce693b011a10cb68f7b8f5574f1871bd1ee5f57f5d8bb17272c3703a",
+                "8422d294ac4972b72c87613aec2ad5c9aa3c91d9d692197835231dd3e8c224c6"
+              ],
+              [
+                "9d277615601d5818413b0d81acbe031f55901c68fec52b660ae9023f1b39de61",
+                "b3f550ba24131d756fef203c55d27c8eed4cf42f78c3d57dd2ed5e826d6a7a30",
+                "1f2fbae2168ee1f4ed149c699236b8b0c20b2836361322b23f16a18758b45c6b",
+                "b64d3e7407b98ad60d69a8c5c35acfb5921383a3c84a76d76e53b3af724e0c4a"
+              ],
+              [
+                "5281626f226cafa316907b88e77a82d9281f2c44afb0eeee10c75503a11b7723",
+                "0bf2858600f18bebbf9dfa064903dc542a8b12a0f183a492bfa2aa5a442d21e2",
+                "e9f50b2d89cd97d0f04273ac6ba4c333d2e4f7ac86842ebae8dd37bd8bd54d05",
+                "7e451677494982b086b36c8eb5db6c43ce355a8609eabe90051c33655de9d160"
+              ],
+              [
+                "a041058566be86d82b933f0f7e3e90ac43b1a365eb54be3ad39a161e75d7be50",
+                "588a5860ca62ccc67fe79a7fcd78e357ee23bc68a77c78559fff2f1f83ae25b4",
+                "e2c5bc56df603c27e405184ee2a46939df1eae1f6b4d41b4e5e2f896740fe954",
+                "beefb3af504d1ef5f40c731c4fbe52bd9488401a0392841b6ec12b4c9a4a631f"
+              ],
+              [
+                "db1566b14a50297ee7a8677d37f0b161fa1a9d98b7030c68b01b538923daad91",
+                "576afeee25993347adba0cd15bf0028332da6ee6b9b759bfaddb6576dc73d6bb",
+                "46548607bf02b5f3feebf5d04192a3bafb0ba7d30bf03a77c42bbfbef2d0d55c",
+                "6494968ad9c0f1b6eb3778d95141a1517e4905ea4954d8b1bc30bdd8f5f7a755"
+              ],
+              [
+                "6ef98020deb6751ba5cc1ca15d8fd3e4a0c51d1488cd5acb467951c757c2de71",
+                "31044470f838d1dfa3b872f1ea892f9370c2e4e2306ab25bceb7d6243ccd047b",
+                "116ceedc4fc932cf1837e3297511d01dc5a94d4fd14a403040fb2d830b8e4c63",
+                "57b5e622da01b82697ab5a62dcb881e184038569dcbcf6bd0ef4c6e17e302a68"
+              ]
+            ]
+          },
+          "tail_device": {
+            "admissions": [
+              {
+                "accepted": true,
+                "device_bytes": 517120,
+                "host_bytes": 0
+              },
+              {
+                "accepted": true,
+                "device_bytes": 1034240,
+                "host_bytes": 0
+              },
+              {
+                "accepted": true,
+                "device_bytes": 1551360,
+                "host_bytes": 0
+              },
+              {
+                "accepted": true,
+                "device_bytes": 2068480,
+                "host_bytes": 0
+              },
+              {
+                "accepted": false,
+                "device_bytes": 2585600,
+                "host_bytes": 0
+              }
+            ],
+            "collect_ms": 6778.96690228954,
+            "completed": false,
+            "exact": false,
+            "feedback_ms": 0.4214998334646225,
+            "max_incremental_peak_bytes": 16316416,
+            "sampled_prefix_matches": true,
+            "total_ms": 6779.388402123004,
+            "trajectory_hashes": [
+              [
+                "69ece0a3bd1fa89fa81f68c66a45e13d961485147c7a976a054b2855b21b20b2",
+                "e783fdf02bb9f2a06223fc7fda745797ce48bbdb4cb6f91b869a3f323fcb0b5a",
+                "7942ee05061204fc5fb69c297409860c7f8d98d7deccef1fe8862f4ce6fcc6eb",
+                "c7bfd35a8f40188e8153174288d5c5fc3097b22432a25eda3ecf9fca6ed38648"
+              ],
+              [
+                "e986426135348e9881328586b0c4367e354e071946f12a476e389d7bd25317b2",
+                "7e161fac086e1f52d3aacdef2d1f079ae191801ba3270ab8f984d096929a353b",
+                "5e36eb0fbaab6e162e5082fff201aae4f55fdd4de7b05f913d0e38828d961800",
+                "c079fc4b26ca7a2e67b371042338e0751be15a69a237323b79899ebfce50acf2"
+              ],
+              [
+                "421a4ae12f5ef328ee0f7cf490d2b950e055ed8cc75b2bce961d7dae08a2a324",
+                "fc894f32011f2cf445355adccd5fb47bf97a4277db9402fbc00be6189c664def",
+                "c5dd75e2ce693b011a10cb68f7b8f5574f1871bd1ee5f57f5d8bb17272c3703a",
+                "8422d294ac4972b72c87613aec2ad5c9aa3c91d9d692197835231dd3e8c224c6"
+              ],
+              [
+                "9d277615601d5818413b0d81acbe031f55901c68fec52b660ae9023f1b39de61",
+                "b3f550ba24131d756fef203c55d27c8eed4cf42f78c3d57dd2ed5e826d6a7a30",
+                "1f2fbae2168ee1f4ed149c699236b8b0c20b2836361322b23f16a18758b45c6b",
+                "b64d3e7407b98ad60d69a8c5c35acfb5921383a3c84a76d76e53b3af724e0c4a"
+              ],
+              [
+                "5281626f226cafa316907b88e77a82d9281f2c44afb0eeee10c75503a11b7723",
+                "0bf2858600f18bebbf9dfa064903dc542a8b12a0f183a492bfa2aa5a442d21e2",
+                "e9f50b2d89cd97d0f04273ac6ba4c333d2e4f7ac86842ebae8dd37bd8bd54d05",
+                "7e451677494982b086b36c8eb5db6c43ce355a8609eabe90051c33655de9d160"
+              ]
+            ]
+          },
+          "tail_host": {
+            "adam_parameter_sha256": [
+              "df7704c82825510ec97fe07beb72f5ccfd97efac3384835ee5b0e9fb46d26be7",
+              "bdcaedf010ed5d8919cf000ad1db88ffbfb4e3c4e0e3ae09db162ec67577d1d0",
+              "d1cfeed1f9af05769de3f7dc4302eb791805ac29834cff7fb0c534d153f63c67",
+              "a57ae61dbba5ecd65e8425b7943f3ceac897c7ff682dabe27cf9cc110da11a9b"
+            ],
+            "adam_state_sha256": [
+              "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c",
+              "6bbf260dbdde26490f4d3fc3e8d20ccb43a65554708078d4a751143cd53d10c5",
+              "84426ee781918ae2b976a550a94cde517c772d9b0db128abaa86f5296c49965b",
+              "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c",
+              "10bddcc9d0b487eaf23508d2a75d34ce9b8793ec24f8dae87d54ad52e694a0b8",
+              "28b8eccdd32782135eab3b2fd99aa3d7e821f80c6f0eb724f21a317aab1dcac6",
+              "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c",
+              "ace92e46276cd653d58138afa0ad0accf35788b00384c5e5b790c3ce8c207de5",
+              "f83ac2092e0e950c78d2e55dccbfd39e3355cec204c154c53ab1a5cfb7f29533",
+              "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c",
+              "bcc9512c101f0c14a565fc02eff104bc1a64f9064d154e4072a68f40ab1a1d9d",
+              "c62a24d87db32c61b42b4e719419be36046cbbba188c6c4017afe1f0ecb0af9a"
+            ],
+            "admissions": [
+              {
+                "accepted": true,
+                "device_bytes": 25600,
+                "host_bytes": 491520
+              },
+              {
+                "accepted": true,
+                "device_bytes": 51200,
+                "host_bytes": 983040
+              },
+              {
+                "accepted": true,
+                "device_bytes": 76800,
+                "host_bytes": 1474560
+              },
+              {
+                "accepted": true,
+                "device_bytes": 102400,
+                "host_bytes": 1966080
+              },
+              {
+                "accepted": true,
+                "device_bytes": 128000,
+                "host_bytes": 2457600
+              },
+              {
+                "accepted": true,
+                "device_bytes": 153600,
+                "host_bytes": 2949120
+              },
+              {
+                "accepted": true,
+                "device_bytes": 179200,
+                "host_bytes": 3440640
+              },
+              {
+                "accepted": true,
+                "device_bytes": 204800,
+                "host_bytes": 3932160
+              }
+            ],
+            "all_behavior_logits_bitwise": true,
+            "collect_ms": 10855.086540337652,
+            "completed": true,
+            "exact": true,
+            "feedback_ms": 3024.287586566061,
+            "max_incremental_peak_bytes": 58714112,
+            "per_job_gradient_sha256": [
+              [
+                "1e74ce1873428de9315a1ed60468437c2000a0f96ae8b3ee5558f9d2fb5f9581",
+                "667f25981cf34f58e49cb922d34850bd6f0ed146825199f71754e0cd380f0031",
+                "ca84d60b5d446b74a9490af463754c9320890032a97e2f06b9e126059c993822",
+                "73ef542b4baaa7c6c44e5e67987b2f3a500a767ed1aab5b9c9f61f9d4abc45ca"
+              ],
+              [
+                "1b1caf004d2c0cd71c48b6997deff5d1487fc32871a759fc042fb495c3da4bbb",
+                "8c14072df84cdaa4ac377a0a2bd70fe29ebe4e3643783dd590e5e092bbf8912e",
+                "5d696a92a250ef8f8e37b583c44ceb66601ebc7e1d7172c4d724fb0cbf1fba53",
+                "0fbe337d806990ff833b53d227e2ac17181ca1d42f350f0a221e85a68eb54e80"
+              ],
+              [
+                "e186676a8bce9bce9da7b8ce3c92f5f9ec9d080ffc45dfdd078b6dab3f23bb56",
+                "1e0ce04b0a808763f210bfdc565e76a1ae988532e9d42f540019f6e2067b1d63",
+                "d05d4ee50d02fdbc0d5aabdacf07f74f1d5d683fe782a878080e994fead125de",
+                "4da928463344a7b750a28849097fc200537dadccf7b632cf98ebb3e4a71f715d"
+              ],
+              [
+                "b3e6aa07a3c1325095a090cc8c88b9408635d3d4b7bd7da9f9379269a705d1d2",
+                "eac764cf2bf9e698f37a9aed18e9ecc5b3539d41cbdc7ed15b6fee0a168e98ec",
+                "50b6a27102fa658b9cab961996830f55e406a32aa36e4284cf42df11a214013f",
+                "88cf81665848d7f11a2b0216f1af7ece09616111ce4c99ff7ffe6b3b09aa227a"
+              ],
+              [
+                "2d3efb7a9d5db22cf85b8a7808651af04a98bf6dfc9e9b1ef8f63ff0cc0abddc",
+                "04a29bcfd2f3597b28c21343a9ae7b1840cea49da8862367bf60b4dcb82c32de",
+                "dd1c52977e60e5154ed6b9fb15da74c2c65a4457baf757354f2a716da8fc5f37",
+                "17d9cf7f1a0383128586a9f7ae96c7a4d436aa263f049e336c4bf9d997d16b5e"
+              ],
+              [
+                "6b3b9fb390da78948a2a4342fa38bedf382599d9933d42c454381bfdcb7aa122",
+                "99103cc5e61838cc8d44fe26ca40673c5d23fb01d436bf0d0d5c0396f5f9c9b6",
+                "ef350ff99f25dd78ec03a96a96d0aac2902890d0dcddeffde13e2eac6a7384c6",
+                "840616fad3163ea202c060b7c6a501ad5bd70be0c2eb5848c3d78c75e8a6e64f"
+              ],
+              [
+                "057e1239e19d85237f5f1919ce72d9ea2e582dcde7cd77b7f310c08aae33e80d",
+                "4abe7c1c63cbffcc4f0c6a9fe549a3d6737cde2a7a12f5c586352439333ce80b",
+                "ba3f00f20d56ac419a02fa52983f0ff965e4868d1755c3f67196d500967c8f71",
+                "73d50f1c951c04ac87db19bdad6ce4667d5ba1ebc9274fcd049536a37b25ffff"
+              ],
+              [
+                "679f34637973aae57ab11d2e82cca8cfe615d9670d0f4b44f0a131378de4c288",
+                "4814c1e1d8d75047dcf98761e3d2969185edf4799989b018dacbf02fde10ddc9",
+                "d069e58f975a138c29084c1513bb1695ec6c388655566ac528fa2187e3b7ba52",
+                "f971585f45c391b51a151e5876b1ef9f841ab6396049863a05f223738cdd3892"
+              ]
+            ],
+            "sampled_prefix_matches": true,
+            "sum_gradient_sha256": [
+              "7250248cbedb935d1eeec1e1b805760257f7631944a23442dc13a55b75ad7f22",
+              "96e983f1e66c11d0f62c6d2b54103ac09b9104340d736a7fbb4a6bee50512048",
+              "c24e288ae5f036ef70411a19a9353054e69fe4db8658d91d3247c0535d23612f",
+              "3b61128de0ab72d08ebb4be63ebfe10f877e5b69ee9d1b656859842e6be85a6b"
+            ],
+            "total_ms": 13879.374126903713,
+            "trajectory_hashes": [
+              [
+                "69ece0a3bd1fa89fa81f68c66a45e13d961485147c7a976a054b2855b21b20b2",
+                "e783fdf02bb9f2a06223fc7fda745797ce48bbdb4cb6f91b869a3f323fcb0b5a",
+                "7942ee05061204fc5fb69c297409860c7f8d98d7deccef1fe8862f4ce6fcc6eb",
+                "c7bfd35a8f40188e8153174288d5c5fc3097b22432a25eda3ecf9fca6ed38648"
+              ],
+              [
+                "e986426135348e9881328586b0c4367e354e071946f12a476e389d7bd25317b2",
+                "7e161fac086e1f52d3aacdef2d1f079ae191801ba3270ab8f984d096929a353b",
+                "5e36eb0fbaab6e162e5082fff201aae4f55fdd4de7b05f913d0e38828d961800",
+                "c079fc4b26ca7a2e67b371042338e0751be15a69a237323b79899ebfce50acf2"
+              ],
+              [
+                "421a4ae12f5ef328ee0f7cf490d2b950e055ed8cc75b2bce961d7dae08a2a324",
+                "fc894f32011f2cf445355adccd5fb47bf97a4277db9402fbc00be6189c664def",
+                "c5dd75e2ce693b011a10cb68f7b8f5574f1871bd1ee5f57f5d8bb17272c3703a",
+                "8422d294ac4972b72c87613aec2ad5c9aa3c91d9d692197835231dd3e8c224c6"
+              ],
+              [
+                "9d277615601d5818413b0d81acbe031f55901c68fec52b660ae9023f1b39de61",
+                "b3f550ba24131d756fef203c55d27c8eed4cf42f78c3d57dd2ed5e826d6a7a30",
+                "1f2fbae2168ee1f4ed149c699236b8b0c20b2836361322b23f16a18758b45c6b",
+                "b64d3e7407b98ad60d69a8c5c35acfb5921383a3c84a76d76e53b3af724e0c4a"
+              ],
+              [
+                "5281626f226cafa316907b88e77a82d9281f2c44afb0eeee10c75503a11b7723",
+                "0bf2858600f18bebbf9dfa064903dc542a8b12a0f183a492bfa2aa5a442d21e2",
+                "e9f50b2d89cd97d0f04273ac6ba4c333d2e4f7ac86842ebae8dd37bd8bd54d05",
+                "7e451677494982b086b36c8eb5db6c43ce355a8609eabe90051c33655de9d160"
+              ],
+              [
+                "a041058566be86d82b933f0f7e3e90ac43b1a365eb54be3ad39a161e75d7be50",
+                "588a5860ca62ccc67fe79a7fcd78e357ee23bc68a77c78559fff2f1f83ae25b4",
+                "e2c5bc56df603c27e405184ee2a46939df1eae1f6b4d41b4e5e2f896740fe954",
+                "beefb3af504d1ef5f40c731c4fbe52bd9488401a0392841b6ec12b4c9a4a631f"
+              ],
+              [
+                "db1566b14a50297ee7a8677d37f0b161fa1a9d98b7030c68b01b538923daad91",
+                "576afeee25993347adba0cd15bf0028332da6ee6b9b759bfaddb6576dc73d6bb",
+                "46548607bf02b5f3feebf5d04192a3bafb0ba7d30bf03a77c42bbfbef2d0d55c",
+                "6494968ad9c0f1b6eb3778d95141a1517e4905ea4954d8b1bc30bdd8f5f7a755"
+              ],
+              [
+                "6ef98020deb6751ba5cc1ca15d8fd3e4a0c51d1488cd5acb467951c757c2de71",
+                "31044470f838d1dfa3b872f1ea892f9370c2e4e2306ab25bceb7d6243ccd047b",
+                "116ceedc4fc932cf1837e3297511d01dc5a94d4fd14a403040fb2d830b8e4c63",
+                "57b5e622da01b82697ab5a62dcb881e184038569dcbcf6bd0ef4c6e17e302a68"
+              ]
+            ]
+          }
+        },
+        "order": [
+          "tail_device",
+          "tail_host",
+          "graph_device",
+          "graph_host",
+          "full"
+        ],
+        "seed": 3818
+      },
+      {
+        "arms": {
+          "full": {
+            "adam_parameter_sha256": [
+              "6d41b9e644e9d75edbbac6ef108015ea16099ce75ac3297bb411e2c214395fce",
+              "8abb87dcc496417e4f22e7e46686042ca617f4ec1953389f692b6eba9d2dc153",
+              "e2bcb1ec7709463490c7f51e201591834b4b54289e939bdb176aa802fd860b4a",
+              "3dbce9ca8a9931acf093470dd38425f0e9c4be0e8a286f45821164cf1eb25ba0"
+            ],
+            "adam_state_sha256": [
+              "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c",
+              "8f1fc7fc3a537f11da912408dbf40960e3cc5a67b16151d94c6b5f8d0e0957f9",
+              "3800b1a2d42a4711c031e812989e04ce10a0bf508ac337d76559130ce4f0dc01",
+              "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c",
+              "3e969bab32bd9246fe1f2400f6e7832605befa31ec073782bac2fc41bdd297f7",
+              "ce56f29682c41c6da0dff5f98ea9dbcb75c701d768ac0ea538880f12ba1c64c0",
+              "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c",
+              "1f66133a4a469ee41c89ed34d414913e4314edc13d6b53c3e12bfddb9ad28e60",
+              "50f8f305becd534c7d73a1b77b2f5d76fc0749c4f69081fab14d1ed45cc3c1a7",
+              "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c",
+              "418668cbf045ff71c2c219b2c43f4007089a2936d860b95a5ecdd351ffa8783e",
+              "60fb8d94d3f398db56aed7876ac7a62da1e119deae64dc29889e8cec82b08a38"
+            ],
+            "admissions": [
+              {
+                "accepted": true,
+                "device_bytes": 25600,
+                "host_bytes": 0
+              },
+              {
+                "accepted": true,
+                "device_bytes": 51200,
+                "host_bytes": 0
+              },
+              {
+                "accepted": true,
+                "device_bytes": 76800,
+                "host_bytes": 0
+              },
+              {
+                "accepted": true,
+                "device_bytes": 102400,
+                "host_bytes": 0
+              },
+              {
+                "accepted": true,
+                "device_bytes": 128000,
+                "host_bytes": 0
+              },
+              {
+                "accepted": true,
+                "device_bytes": 153600,
+                "host_bytes": 0
+              },
+              {
+                "accepted": true,
+                "device_bytes": 179200,
+                "host_bytes": 0
+              },
+              {
+                "accepted": true,
+                "device_bytes": 204800,
+                "host_bytes": 0
+              }
+            ],
+            "all_behavior_logits_bitwise": true,
+            "collect_ms": 11622.740795835853,
+            "completed": true,
+            "exact": true,
+            "feedback_ms": 13591.897435951978,
+            "max_incremental_peak_bytes": 62052352,
+            "per_job_gradient_sha256": [
+              [
+                "2b08c75b018901a55123b2a86db20d6f8c2f6d59e2720b83be6a822b3d4a8737",
+                "7d5fedc361002503f7805f45be501780485e5b5ab6e141dbe05d4415fb7b38ae",
+                "cfe2cf3dc8c9a446f10a11669140730a6ef38abcad5fd1c2ea57796a64ebe9c3",
+                "de37060790e0cec6b7682884dd7b49890fed13e5381b1c3b847fa46231702b37"
+              ],
+              [
+                "4090cd6267a72a9769248ccb975fcd0d8aa8e97314bee247543cc0c6b7c7a69c",
+                "ac50a601d8258b155d3f98462aed328469fca1baeffe5c933c005025d2bd8607",
+                "2cc75ed255951e6ad87e8ef47b948a6f7497e76d03e03e49bf37f43b10c0fc86",
+                "36db1b9a4985ec6355316426059e494e7a73383ab8013d6d12a1a9e29d832782"
+              ],
+              [
+                "25f87b4d0062e6c5063bea70c83d6740b055e1269fc26b3bc56803746625fd75",
+                "9c308c259366fd9c51f972afc324fc1d2f47af211f7d94061bd3c71e51a19276",
+                "facbd33d0c8ad707f2fd9c8b4cd1704ae6f635485feefb170658275224ba93d7",
+                "6298d49993f710461e2d15eab9a8d1bcfd258e5ada6c51f1fec72c8e11e36cba"
+              ],
+              [
+                "0d32b61460af07e1073fcaa97e27c58f7dfe3a2079645c9e763dc01863ce7b84",
+                "bd7ee6c7fccb4a831997ee321df518613a87d6cc0d80e0faba8eac6d430c2428",
+                "deaf87ca8bec3de31e11c9a6676ff3bdd6b328444f6994b930b9baca9067c3d9",
+                "736812854b8febbac8a31bc7cb26104735fb621ee595b79190f2f17f77b31ebd"
+              ],
+              [
+                "e4ba3ecebb0fbb791dfc9c51c0c64c7ad7c1e91c1851799fbec5fa959e04d9f7",
+                "71118fd24e1b38ab09006c9a3c0db94e85b0fa279b422ad315794b057609edea",
+                "8abc4f12f94fc11127396bcc1e27ab856334f24f26e4cfbc20b6d42b2ef76613",
+                "45b43aa694b9b3255e2dfe2d72b3a44ef6e39d154125f2fcf19209555907ee26"
+              ],
+              [
+                "461adfbc57f82539b62233a5a839c3f979ec170d1549c3c44b28d608711d320d",
+                "873ae015cc992e382a8dff0dea8349bf7c1e0ddc8beefd863aa5c837b4fc7c84",
+                "b4bd877c54ffa58e09449655ce368bf355e76b3916a283b602aadbc9034248c4",
+                "f5050e4a4a61c0e81468a7ca258c14cf4d542f1571816141654ef5e59cc7c713"
+              ],
+              [
+                "4239b928b90d0c02a929f7b95b8a83eb9c735474342fae71abc9e9c8b415e0b5",
+                "8380dda78d7e8f633b4d97f7a57051b809ce5ce2780b543b95ff69471ee243ee",
+                "69a1a440db00311f951ae7b48003c293eff2c8230558b6d4383c060c831a1651",
+                "72e5bc017e2a92c4f466ca614112b8030b22df72e9fda97541caa57ba40ce249"
+              ],
+              [
+                "34c7dd794e08a3167fc44fff1168278191d8a47c1ca092462212ad2fdc64bc58",
+                "c4111e2a8e52c9ba974d1762caf5d3ad4c7b3a52fd94b5639b38fbe35a2c816b",
+                "498006989ed7961288cd1fa1b3fbd46468a684a4ac130b9dfbd0dbc9a4975744",
+                "60117b10e211630e7cb5f28ced212b441079a94865ed068f3b76bec73eb16ed9"
+              ]
+            ],
+            "sampled_prefix_matches": true,
+            "sum_gradient_sha256": [
+              "3260bb3054687e9f0fd521b2aa8a2cb1ff4c0d4f0cf500d7852b80c364de5e63",
+              "e9f4d3537f9afcedd2803b12dbab36039cc7abb2bf7595a3c9e8e2c18f5b106e",
+              "13d9928cc05983ab023ec281e3b6e0ceb7ce6acb8d7c1a75cdee1abf8c86e72f",
+              "8a900b48a6445ac1f3395fda7a120dc6e00b8b3271b7b44f43deccef150c51f4"
+            ],
+            "total_ms": 25214.63823178783,
+            "trajectory_hashes": [
+              [
+                "77bb49358349956c6658ed8a9aea454716b0c73ca373276665f2265af3a2437d",
+                "67addc6ec09dcb14353d1f986e9191611aaf624a4727e3c6f0f21733b9cff821",
+                "bcb2d2f374afa398fab2a9ac92e238e100eb8d58c1dc0361f0af1da87b81d682",
+                "2f00ff3eea5d7ef512e61c4c43bbc39b04b64bff33218794257b469a6d622ee0"
+              ],
+              [
+                "6647e4ebb098afe136d2fe4b903248c702b898259ac1c4bb51bb585be451e362",
+                "00d0b28ab543eb19f24f2bbeb37c655de0073a0f8f501df89e5b3be3294710c9",
+                "0758446617206423915c4cb4f2e713f943ec1ac356efb2202fb99ca89d73f240",
+                "b4da59da07901e1a1ab0e182a76323a684d43efab71b1dd39a5cd650261e4a1a"
+              ],
+              [
+                "b2761595e93662e077c355e9eb3207134e70d941a2fe1ef662d27e19a82f7088",
+                "18a80c66479dc03a32aefb3c45a291065c83c7f4aec5765022d76cad67e51da4",
+                "d54325c3cf80d9e421f739c371ff39b8c2d774c5779a86ca93c2b7340bd655fb",
+                "c162f059a710705b9125249434a5b9bd3b49b3dcaad40e21cfec3ccde2be0ca2"
+              ],
+              [
+                "2e1f8a1687ec71f8306d9959e5add97cff6cab7b0c220e929be6bdfef4b9e8d6",
+                "65a03b53d6e4007a7c051d988801badbe6be89cfcc9ff617f234d7cd6082ba22",
+                "1ed8e7f355364de23c57cce34b676ca3e7b62aea6f0fbc3a65a558ffb8dfc8ee",
+                "77185f085f59257d5f56a0d9989e5eb5fca0308db67f588f0095fa2408315636"
+              ],
+              [
+                "dbe991f72ef50bb34d8b0e4b3101759b488823c9272c4a8de3a6b5649e9d906e",
+                "7ee43a8a2c0d66221a5052170f03240ee988c7cbbb0112c51f18260eb0cd7182",
+                "aca606dd60ae92509333e2348036ca35fc89f0c55b91defbec67ac3b75d74fcd",
+                "4c1e92f0eb9eada44e0e07a062284ded897d97be615b7efceb47e73ae854ea28"
+              ],
+              [
+                "67f6a973b01864c89920a21525e8b9788ffd6f90c1b0a5859a326cde58a9f5ac",
+                "e70864b3f54924f5dd5baef9803c05278a22adcef0c3bad4cb485ef2a55ebc3f",
+                "7b5c22e9d918c396f1040eaf725658e4f6d1d957d8cfcef54320ad9f2509c943",
+                "c2b0e0de56800341db6152ef861e75539696604f59f1f9fcdf447a76f0b31cac"
+              ],
+              [
+                "45062ebfd4926d367c3dd3b90ec3ca72b83de5a6aa67a558592a70ddaeda128d",
+                "3f620b14bf025648cf696ce04bfb23a070f94c329c4324cb295a567fdf742cf3",
+                "b14bb74c2b21319535950b9a8f75707d0eab6731db01039ec81c52d8c8cf0ada",
+                "c36874f4e522ad6ed6608250b9319db618f8447e45196e9d353dbbc75033c400"
+              ],
+              [
+                "b0d02d1ff081e25106d30df46965af9be1a5d09200127936884197224bc4cdb6",
+                "0ebf8da1502a6a9ed0530a56c529e4089ea4c5d1215a37cd68040050d9c0d6cc",
+                "9a2e72473feee81a0c9e89fa54e3ac69bf01aa8ffe40ff00dcb139147dd3d04d",
+                "3f28b0f3721f3c11d2899477237a171a9322f552e94b422f6303e59575c6a560"
+              ]
+            ]
+          },
+          "graph_device": {
+            "admissions": [
+              {
+                "accepted": false,
+                "device_bytes": 55397888,
+                "host_bytes": 0
+              }
+            ],
+            "collect_ms": 1415.0121239945292,
+            "completed": false,
+            "exact": false,
+            "feedback_ms": 0.4381202161312103,
+            "max_incremental_peak_bytes": 64097280,
+            "sampled_prefix_matches": true,
+            "total_ms": 1415.4502442106605,
+            "trajectory_hashes": [
+              [
+                "77bb49358349956c6658ed8a9aea454716b0c73ca373276665f2265af3a2437d",
+                "67addc6ec09dcb14353d1f986e9191611aaf624a4727e3c6f0f21733b9cff821",
+                "bcb2d2f374afa398fab2a9ac92e238e100eb8d58c1dc0361f0af1da87b81d682",
+                "2f00ff3eea5d7ef512e61c4c43bbc39b04b64bff33218794257b469a6d622ee0"
+              ]
+            ]
+          },
+          "graph_host": {
+            "adam_parameter_sha256": [
+              "6d41b9e644e9d75edbbac6ef108015ea16099ce75ac3297bb411e2c214395fce",
+              "8abb87dcc496417e4f22e7e46686042ca617f4ec1953389f692b6eba9d2dc153",
+              "e2bcb1ec7709463490c7f51e201591834b4b54289e939bdb176aa802fd860b4a",
+              "3dbce9ca8a9931acf093470dd38425f0e9c4be0e8a286f45821164cf1eb25ba0"
+            ],
+            "adam_state_sha256": [
+              "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c",
+              "8f1fc7fc3a537f11da912408dbf40960e3cc5a67b16151d94c6b5f8d0e0957f9",
+              "3800b1a2d42a4711c031e812989e04ce10a0bf508ac337d76559130ce4f0dc01",
+              "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c",
+              "3e969bab32bd9246fe1f2400f6e7832605befa31ec073782bac2fc41bdd297f7",
+              "ce56f29682c41c6da0dff5f98ea9dbcb75c701d768ac0ea538880f12ba1c64c0",
+              "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c",
+              "1f66133a4a469ee41c89ed34d414913e4314edc13d6b53c3e12bfddb9ad28e60",
+              "50f8f305becd534c7d73a1b77b2f5d76fc0749c4f69081fab14d1ed45cc3c1a7",
+              "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c",
+              "418668cbf045ff71c2c219b2c43f4007089a2936d860b95a5ecdd351ffa8783e",
+              "60fb8d94d3f398db56aed7876ac7a62da1e119deae64dc29889e8cec82b08a38"
+            ],
+            "admissions": [
+              {
+                "accepted": true,
+                "device_bytes": 25600,
+                "host_bytes": 54589824
+              },
+              {
+                "accepted": true,
+                "device_bytes": 51200,
+                "host_bytes": 109179648
+              },
+              {
+                "accepted": true,
+                "device_bytes": 76800,
+                "host_bytes": 163769472
+              },
+              {
+                "accepted": true,
+                "device_bytes": 102400,
+                "host_bytes": 218359296
+              },
+              {
+                "accepted": true,
+                "device_bytes": 128000,
+                "host_bytes": 272949120
+              },
+              {
+                "accepted": true,
+                "device_bytes": 153600,
+                "host_bytes": 327538944
+              },
+              {
+                "accepted": true,
+                "device_bytes": 179200,
+                "host_bytes": 382128768
+              },
+              {
+                "accepted": true,
+                "device_bytes": 204800,
+                "host_bytes": 436718592
+              }
+            ],
+            "all_behavior_logits_bitwise": true,
+            "collect_ms": 12638.645438011736,
+            "completed": true,
+            "exact": true,
+            "feedback_ms": 1467.188660055399,
+            "max_incremental_peak_bytes": 13946368,
+            "per_job_gradient_sha256": [
+              [
+                "2b08c75b018901a55123b2a86db20d6f8c2f6d59e2720b83be6a822b3d4a8737",
+                "7d5fedc361002503f7805f45be501780485e5b5ab6e141dbe05d4415fb7b38ae",
+                "cfe2cf3dc8c9a446f10a11669140730a6ef38abcad5fd1c2ea57796a64ebe9c3",
+                "de37060790e0cec6b7682884dd7b49890fed13e5381b1c3b847fa46231702b37"
+              ],
+              [
+                "4090cd6267a72a9769248ccb975fcd0d8aa8e97314bee247543cc0c6b7c7a69c",
+                "ac50a601d8258b155d3f98462aed328469fca1baeffe5c933c005025d2bd8607",
+                "2cc75ed255951e6ad87e8ef47b948a6f7497e76d03e03e49bf37f43b10c0fc86",
+                "36db1b9a4985ec6355316426059e494e7a73383ab8013d6d12a1a9e29d832782"
+              ],
+              [
+                "25f87b4d0062e6c5063bea70c83d6740b055e1269fc26b3bc56803746625fd75",
+                "9c308c259366fd9c51f972afc324fc1d2f47af211f7d94061bd3c71e51a19276",
+                "facbd33d0c8ad707f2fd9c8b4cd1704ae6f635485feefb170658275224ba93d7",
+                "6298d49993f710461e2d15eab9a8d1bcfd258e5ada6c51f1fec72c8e11e36cba"
+              ],
+              [
+                "0d32b61460af07e1073fcaa97e27c58f7dfe3a2079645c9e763dc01863ce7b84",
+                "bd7ee6c7fccb4a831997ee321df518613a87d6cc0d80e0faba8eac6d430c2428",
+                "deaf87ca8bec3de31e11c9a6676ff3bdd6b328444f6994b930b9baca9067c3d9",
+                "736812854b8febbac8a31bc7cb26104735fb621ee595b79190f2f17f77b31ebd"
+              ],
+              [
+                "e4ba3ecebb0fbb791dfc9c51c0c64c7ad7c1e91c1851799fbec5fa959e04d9f7",
+                "71118fd24e1b38ab09006c9a3c0db94e85b0fa279b422ad315794b057609edea",
+                "8abc4f12f94fc11127396bcc1e27ab856334f24f26e4cfbc20b6d42b2ef76613",
+                "45b43aa694b9b3255e2dfe2d72b3a44ef6e39d154125f2fcf19209555907ee26"
+              ],
+              [
+                "461adfbc57f82539b62233a5a839c3f979ec170d1549c3c44b28d608711d320d",
+                "873ae015cc992e382a8dff0dea8349bf7c1e0ddc8beefd863aa5c837b4fc7c84",
+                "b4bd877c54ffa58e09449655ce368bf355e76b3916a283b602aadbc9034248c4",
+                "f5050e4a4a61c0e81468a7ca258c14cf4d542f1571816141654ef5e59cc7c713"
+              ],
+              [
+                "4239b928b90d0c02a929f7b95b8a83eb9c735474342fae71abc9e9c8b415e0b5",
+                "8380dda78d7e8f633b4d97f7a57051b809ce5ce2780b543b95ff69471ee243ee",
+                "69a1a440db00311f951ae7b48003c293eff2c8230558b6d4383c060c831a1651",
+                "72e5bc017e2a92c4f466ca614112b8030b22df72e9fda97541caa57ba40ce249"
+              ],
+              [
+                "34c7dd794e08a3167fc44fff1168278191d8a47c1ca092462212ad2fdc64bc58",
+                "c4111e2a8e52c9ba974d1762caf5d3ad4c7b3a52fd94b5639b38fbe35a2c816b",
+                "498006989ed7961288cd1fa1b3fbd46468a684a4ac130b9dfbd0dbc9a4975744",
+                "60117b10e211630e7cb5f28ced212b441079a94865ed068f3b76bec73eb16ed9"
+              ]
+            ],
+            "sampled_prefix_matches": true,
+            "sum_gradient_sha256": [
+              "3260bb3054687e9f0fd521b2aa8a2cb1ff4c0d4f0cf500d7852b80c364de5e63",
+              "e9f4d3537f9afcedd2803b12dbab36039cc7abb2bf7595a3c9e8e2c18f5b106e",
+              "13d9928cc05983ab023ec281e3b6e0ceb7ce6acb8d7c1a75cdee1abf8c86e72f",
+              "8a900b48a6445ac1f3395fda7a120dc6e00b8b3271b7b44f43deccef150c51f4"
+            ],
+            "total_ms": 14105.834098067135,
+            "trajectory_hashes": [
+              [
+                "77bb49358349956c6658ed8a9aea454716b0c73ca373276665f2265af3a2437d",
+                "67addc6ec09dcb14353d1f986e9191611aaf624a4727e3c6f0f21733b9cff821",
+                "bcb2d2f374afa398fab2a9ac92e238e100eb8d58c1dc0361f0af1da87b81d682",
+                "2f00ff3eea5d7ef512e61c4c43bbc39b04b64bff33218794257b469a6d622ee0"
+              ],
+              [
+                "6647e4ebb098afe136d2fe4b903248c702b898259ac1c4bb51bb585be451e362",
+                "00d0b28ab543eb19f24f2bbeb37c655de0073a0f8f501df89e5b3be3294710c9",
+                "0758446617206423915c4cb4f2e713f943ec1ac356efb2202fb99ca89d73f240",
+                "b4da59da07901e1a1ab0e182a76323a684d43efab71b1dd39a5cd650261e4a1a"
+              ],
+              [
+                "b2761595e93662e077c355e9eb3207134e70d941a2fe1ef662d27e19a82f7088",
+                "18a80c66479dc03a32aefb3c45a291065c83c7f4aec5765022d76cad67e51da4",
+                "d54325c3cf80d9e421f739c371ff39b8c2d774c5779a86ca93c2b7340bd655fb",
+                "c162f059a710705b9125249434a5b9bd3b49b3dcaad40e21cfec3ccde2be0ca2"
+              ],
+              [
+                "2e1f8a1687ec71f8306d9959e5add97cff6cab7b0c220e929be6bdfef4b9e8d6",
+                "65a03b53d6e4007a7c051d988801badbe6be89cfcc9ff617f234d7cd6082ba22",
+                "1ed8e7f355364de23c57cce34b676ca3e7b62aea6f0fbc3a65a558ffb8dfc8ee",
+                "77185f085f59257d5f56a0d9989e5eb5fca0308db67f588f0095fa2408315636"
+              ],
+              [
+                "dbe991f72ef50bb34d8b0e4b3101759b488823c9272c4a8de3a6b5649e9d906e",
+                "7ee43a8a2c0d66221a5052170f03240ee988c7cbbb0112c51f18260eb0cd7182",
+                "aca606dd60ae92509333e2348036ca35fc89f0c55b91defbec67ac3b75d74fcd",
+                "4c1e92f0eb9eada44e0e07a062284ded897d97be615b7efceb47e73ae854ea28"
+              ],
+              [
+                "67f6a973b01864c89920a21525e8b9788ffd6f90c1b0a5859a326cde58a9f5ac",
+                "e70864b3f54924f5dd5baef9803c05278a22adcef0c3bad4cb485ef2a55ebc3f",
+                "7b5c22e9d918c396f1040eaf725658e4f6d1d957d8cfcef54320ad9f2509c943",
+                "c2b0e0de56800341db6152ef861e75539696604f59f1f9fcdf447a76f0b31cac"
+              ],
+              [
+                "45062ebfd4926d367c3dd3b90ec3ca72b83de5a6aa67a558592a70ddaeda128d",
+                "3f620b14bf025648cf696ce04bfb23a070f94c329c4324cb295a567fdf742cf3",
+                "b14bb74c2b21319535950b9a8f75707d0eab6731db01039ec81c52d8c8cf0ada",
+                "c36874f4e522ad6ed6608250b9319db618f8447e45196e9d353dbbc75033c400"
+              ],
+              [
+                "b0d02d1ff081e25106d30df46965af9be1a5d09200127936884197224bc4cdb6",
+                "0ebf8da1502a6a9ed0530a56c529e4089ea4c5d1215a37cd68040050d9c0d6cc",
+                "9a2e72473feee81a0c9e89fa54e3ac69bf01aa8ffe40ff00dcb139147dd3d04d",
+                "3f28b0f3721f3c11d2899477237a171a9322f552e94b422f6303e59575c6a560"
+              ]
+            ]
+          },
+          "tail_device": {
+            "admissions": [
+              {
+                "accepted": true,
+                "device_bytes": 517120,
+                "host_bytes": 0
+              },
+              {
+                "accepted": true,
+                "device_bytes": 1034240,
+                "host_bytes": 0
+              },
+              {
+                "accepted": true,
+                "device_bytes": 1551360,
+                "host_bytes": 0
+              },
+              {
+                "accepted": true,
+                "device_bytes": 2068480,
+                "host_bytes": 0
+              },
+              {
+                "accepted": false,
+                "device_bytes": 2585600,
+                "host_bytes": 0
+              }
+            ],
+            "collect_ms": 7603.38083608076,
+            "completed": false,
+            "exact": false,
+            "feedback_ms": 0.2584140747785568,
+            "max_incremental_peak_bytes": 16316416,
+            "sampled_prefix_matches": true,
+            "total_ms": 7603.639250155538,
+            "trajectory_hashes": [
+              [
+                "77bb49358349956c6658ed8a9aea454716b0c73ca373276665f2265af3a2437d",
+                "67addc6ec09dcb14353d1f986e9191611aaf624a4727e3c6f0f21733b9cff821",
+                "bcb2d2f374afa398fab2a9ac92e238e100eb8d58c1dc0361f0af1da87b81d682",
+                "2f00ff3eea5d7ef512e61c4c43bbc39b04b64bff33218794257b469a6d622ee0"
+              ],
+              [
+                "6647e4ebb098afe136d2fe4b903248c702b898259ac1c4bb51bb585be451e362",
+                "00d0b28ab543eb19f24f2bbeb37c655de0073a0f8f501df89e5b3be3294710c9",
+                "0758446617206423915c4cb4f2e713f943ec1ac356efb2202fb99ca89d73f240",
+                "b4da59da07901e1a1ab0e182a76323a684d43efab71b1dd39a5cd650261e4a1a"
+              ],
+              [
+                "b2761595e93662e077c355e9eb3207134e70d941a2fe1ef662d27e19a82f7088",
+                "18a80c66479dc03a32aefb3c45a291065c83c7f4aec5765022d76cad67e51da4",
+                "d54325c3cf80d9e421f739c371ff39b8c2d774c5779a86ca93c2b7340bd655fb",
+                "c162f059a710705b9125249434a5b9bd3b49b3dcaad40e21cfec3ccde2be0ca2"
+              ],
+              [
+                "2e1f8a1687ec71f8306d9959e5add97cff6cab7b0c220e929be6bdfef4b9e8d6",
+                "65a03b53d6e4007a7c051d988801badbe6be89cfcc9ff617f234d7cd6082ba22",
+                "1ed8e7f355364de23c57cce34b676ca3e7b62aea6f0fbc3a65a558ffb8dfc8ee",
+                "77185f085f59257d5f56a0d9989e5eb5fca0308db67f588f0095fa2408315636"
+              ],
+              [
+                "dbe991f72ef50bb34d8b0e4b3101759b488823c9272c4a8de3a6b5649e9d906e",
+                "7ee43a8a2c0d66221a5052170f03240ee988c7cbbb0112c51f18260eb0cd7182",
+                "aca606dd60ae92509333e2348036ca35fc89f0c55b91defbec67ac3b75d74fcd",
+                "4c1e92f0eb9eada44e0e07a062284ded897d97be615b7efceb47e73ae854ea28"
+              ]
+            ]
+          },
+          "tail_host": {
+            "adam_parameter_sha256": [
+              "6d41b9e644e9d75edbbac6ef108015ea16099ce75ac3297bb411e2c214395fce",
+              "8abb87dcc496417e4f22e7e46686042ca617f4ec1953389f692b6eba9d2dc153",
+              "e2bcb1ec7709463490c7f51e201591834b4b54289e939bdb176aa802fd860b4a",
+              "3dbce9ca8a9931acf093470dd38425f0e9c4be0e8a286f45821164cf1eb25ba0"
+            ],
+            "adam_state_sha256": [
+              "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c",
+              "8f1fc7fc3a537f11da912408dbf40960e3cc5a67b16151d94c6b5f8d0e0957f9",
+              "3800b1a2d42a4711c031e812989e04ce10a0bf508ac337d76559130ce4f0dc01",
+              "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c",
+              "3e969bab32bd9246fe1f2400f6e7832605befa31ec073782bac2fc41bdd297f7",
+              "ce56f29682c41c6da0dff5f98ea9dbcb75c701d768ac0ea538880f12ba1c64c0",
+              "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c",
+              "1f66133a4a469ee41c89ed34d414913e4314edc13d6b53c3e12bfddb9ad28e60",
+              "50f8f305becd534c7d73a1b77b2f5d76fc0749c4f69081fab14d1ed45cc3c1a7",
+              "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c",
+              "418668cbf045ff71c2c219b2c43f4007089a2936d860b95a5ecdd351ffa8783e",
+              "60fb8d94d3f398db56aed7876ac7a62da1e119deae64dc29889e8cec82b08a38"
+            ],
+            "admissions": [
+              {
+                "accepted": true,
+                "device_bytes": 25600,
+                "host_bytes": 491520
+              },
+              {
+                "accepted": true,
+                "device_bytes": 51200,
+                "host_bytes": 983040
+              },
+              {
+                "accepted": true,
+                "device_bytes": 76800,
+                "host_bytes": 1474560
+              },
+              {
+                "accepted": true,
+                "device_bytes": 102400,
+                "host_bytes": 1966080
+              },
+              {
+                "accepted": true,
+                "device_bytes": 128000,
+                "host_bytes": 2457600
+              },
+              {
+                "accepted": true,
+                "device_bytes": 153600,
+                "host_bytes": 2949120
+              },
+              {
+                "accepted": true,
+                "device_bytes": 179200,
+                "host_bytes": 3440640
+              },
+              {
+                "accepted": true,
+                "device_bytes": 204800,
+                "host_bytes": 3932160
+              }
+            ],
+            "all_behavior_logits_bitwise": true,
+            "collect_ms": 12469.75521184504,
+            "completed": true,
+            "exact": true,
+            "feedback_ms": 2733.3843503147364,
+            "max_incremental_peak_bytes": 58714112,
+            "per_job_gradient_sha256": [
+              [
+                "2b08c75b018901a55123b2a86db20d6f8c2f6d59e2720b83be6a822b3d4a8737",
+                "7d5fedc361002503f7805f45be501780485e5b5ab6e141dbe05d4415fb7b38ae",
+                "cfe2cf3dc8c9a446f10a11669140730a6ef38abcad5fd1c2ea57796a64ebe9c3",
+                "de37060790e0cec6b7682884dd7b49890fed13e5381b1c3b847fa46231702b37"
+              ],
+              [
+                "4090cd6267a72a9769248ccb975fcd0d8aa8e97314bee247543cc0c6b7c7a69c",
+                "ac50a601d8258b155d3f98462aed328469fca1baeffe5c933c005025d2bd8607",
+                "2cc75ed255951e6ad87e8ef47b948a6f7497e76d03e03e49bf37f43b10c0fc86",
+                "36db1b9a4985ec6355316426059e494e7a73383ab8013d6d12a1a9e29d832782"
+              ],
+              [
+                "25f87b4d0062e6c5063bea70c83d6740b055e1269fc26b3bc56803746625fd75",
+                "9c308c259366fd9c51f972afc324fc1d2f47af211f7d94061bd3c71e51a19276",
+                "facbd33d0c8ad707f2fd9c8b4cd1704ae6f635485feefb170658275224ba93d7",
+                "6298d49993f710461e2d15eab9a8d1bcfd258e5ada6c51f1fec72c8e11e36cba"
+              ],
+              [
+                "0d32b61460af07e1073fcaa97e27c58f7dfe3a2079645c9e763dc01863ce7b84",
+                "bd7ee6c7fccb4a831997ee321df518613a87d6cc0d80e0faba8eac6d430c2428",
+                "deaf87ca8bec3de31e11c9a6676ff3bdd6b328444f6994b930b9baca9067c3d9",
+                "736812854b8febbac8a31bc7cb26104735fb621ee595b79190f2f17f77b31ebd"
+              ],
+              [
+                "e4ba3ecebb0fbb791dfc9c51c0c64c7ad7c1e91c1851799fbec5fa959e04d9f7",
+                "71118fd24e1b38ab09006c9a3c0db94e85b0fa279b422ad315794b057609edea",
+                "8abc4f12f94fc11127396bcc1e27ab856334f24f26e4cfbc20b6d42b2ef76613",
+                "45b43aa694b9b3255e2dfe2d72b3a44ef6e39d154125f2fcf19209555907ee26"
+              ],
+              [
+                "461adfbc57f82539b62233a5a839c3f979ec170d1549c3c44b28d608711d320d",
+                "873ae015cc992e382a8dff0dea8349bf7c1e0ddc8beefd863aa5c837b4fc7c84",
+                "b4bd877c54ffa58e09449655ce368bf355e76b3916a283b602aadbc9034248c4",
+                "f5050e4a4a61c0e81468a7ca258c14cf4d542f1571816141654ef5e59cc7c713"
+              ],
+              [
+                "4239b928b90d0c02a929f7b95b8a83eb9c735474342fae71abc9e9c8b415e0b5",
+                "8380dda78d7e8f633b4d97f7a57051b809ce5ce2780b543b95ff69471ee243ee",
+                "69a1a440db00311f951ae7b48003c293eff2c8230558b6d4383c060c831a1651",
+                "72e5bc017e2a92c4f466ca614112b8030b22df72e9fda97541caa57ba40ce249"
+              ],
+              [
+                "34c7dd794e08a3167fc44fff1168278191d8a47c1ca092462212ad2fdc64bc58",
+                "c4111e2a8e52c9ba974d1762caf5d3ad4c7b3a52fd94b5639b38fbe35a2c816b",
+                "498006989ed7961288cd1fa1b3fbd46468a684a4ac130b9dfbd0dbc9a4975744",
+                "60117b10e211630e7cb5f28ced212b441079a94865ed068f3b76bec73eb16ed9"
+              ]
+            ],
+            "sampled_prefix_matches": true,
+            "sum_gradient_sha256": [
+              "3260bb3054687e9f0fd521b2aa8a2cb1ff4c0d4f0cf500d7852b80c364de5e63",
+              "e9f4d3537f9afcedd2803b12dbab36039cc7abb2bf7595a3c9e8e2c18f5b106e",
+              "13d9928cc05983ab023ec281e3b6e0ceb7ce6acb8d7c1a75cdee1abf8c86e72f",
+              "8a900b48a6445ac1f3395fda7a120dc6e00b8b3271b7b44f43deccef150c51f4"
+            ],
+            "total_ms": 15203.139562159777,
+            "trajectory_hashes": [
+              [
+                "77bb49358349956c6658ed8a9aea454716b0c73ca373276665f2265af3a2437d",
+                "67addc6ec09dcb14353d1f986e9191611aaf624a4727e3c6f0f21733b9cff821",
+                "bcb2d2f374afa398fab2a9ac92e238e100eb8d58c1dc0361f0af1da87b81d682",
+                "2f00ff3eea5d7ef512e61c4c43bbc39b04b64bff33218794257b469a6d622ee0"
+              ],
+              [
+                "6647e4ebb098afe136d2fe4b903248c702b898259ac1c4bb51bb585be451e362",
+                "00d0b28ab543eb19f24f2bbeb37c655de0073a0f8f501df89e5b3be3294710c9",
+                "0758446617206423915c4cb4f2e713f943ec1ac356efb2202fb99ca89d73f240",
+                "b4da59da07901e1a1ab0e182a76323a684d43efab71b1dd39a5cd650261e4a1a"
+              ],
+              [
+                "b2761595e93662e077c355e9eb3207134e70d941a2fe1ef662d27e19a82f7088",
+                "18a80c66479dc03a32aefb3c45a291065c83c7f4aec5765022d76cad67e51da4",
+                "d54325c3cf80d9e421f739c371ff39b8c2d774c5779a86ca93c2b7340bd655fb",
+                "c162f059a710705b9125249434a5b9bd3b49b3dcaad40e21cfec3ccde2be0ca2"
+              ],
+              [
+                "2e1f8a1687ec71f8306d9959e5add97cff6cab7b0c220e929be6bdfef4b9e8d6",
+                "65a03b53d6e4007a7c051d988801badbe6be89cfcc9ff617f234d7cd6082ba22",
+                "1ed8e7f355364de23c57cce34b676ca3e7b62aea6f0fbc3a65a558ffb8dfc8ee",
+                "77185f085f59257d5f56a0d9989e5eb5fca0308db67f588f0095fa2408315636"
+              ],
+              [
+                "dbe991f72ef50bb34d8b0e4b3101759b488823c9272c4a8de3a6b5649e9d906e",
+                "7ee43a8a2c0d66221a5052170f03240ee988c7cbbb0112c51f18260eb0cd7182",
+                "aca606dd60ae92509333e2348036ca35fc89f0c55b91defbec67ac3b75d74fcd",
+                "4c1e92f0eb9eada44e0e07a062284ded897d97be615b7efceb47e73ae854ea28"
+              ],
+              [
+                "67f6a973b01864c89920a21525e8b9788ffd6f90c1b0a5859a326cde58a9f5ac",
+                "e70864b3f54924f5dd5baef9803c05278a22adcef0c3bad4cb485ef2a55ebc3f",
+                "7b5c22e9d918c396f1040eaf725658e4f6d1d957d8cfcef54320ad9f2509c943",
+                "c2b0e0de56800341db6152ef861e75539696604f59f1f9fcdf447a76f0b31cac"
+              ],
+              [
+                "45062ebfd4926d367c3dd3b90ec3ca72b83de5a6aa67a558592a70ddaeda128d",
+                "3f620b14bf025648cf696ce04bfb23a070f94c329c4324cb295a567fdf742cf3",
+                "b14bb74c2b21319535950b9a8f75707d0eab6731db01039ec81c52d8c8cf0ada",
+                "c36874f4e522ad6ed6608250b9319db618f8447e45196e9d353dbbc75033c400"
+              ],
+              [
+                "b0d02d1ff081e25106d30df46965af9be1a5d09200127936884197224bc4cdb6",
+                "0ebf8da1502a6a9ed0530a56c529e4089ea4c5d1215a37cd68040050d9c0d6cc",
+                "9a2e72473feee81a0c9e89fa54e3ac69bf01aa8ffe40ff00dcb139147dd3d04d",
+                "3f28b0f3721f3c11d2899477237a171a9322f552e94b422f6303e59575c6a560"
+              ]
+            ]
+          }
+        },
+        "order": [
+          "tail_host",
+          "graph_device",
+          "graph_host",
+          "full",
+          "tail_device"
+        ],
+        "seed": 3819
+      }
+    ],
+    "steps": 16,
+    "summary": {
+      "full": {
+        "all_exact": true,
+        "completed_queues": 3,
+        "max_accepted_before_feedback": 8,
+        "max_device_bytes_at_admission": 204800,
+        "max_host_bytes_at_admission": 0,
+        "median_feedback_ms": 13591.897435951978,
+        "median_total_ms": 25214.63823178783
+      },
+      "graph_device": {
+        "all_exact": false,
+        "completed_queues": 0,
+        "max_accepted_before_feedback": 0,
+        "max_device_bytes_at_admission": 55397888,
+        "max_host_bytes_at_admission": 0,
+        "median_feedback_ms": null,
+        "median_total_ms": null
+      },
+      "graph_host": {
+        "all_exact": true,
+        "completed_queues": 3,
+        "max_accepted_before_feedback": 8,
+        "max_device_bytes_at_admission": 204800,
+        "max_host_bytes_at_admission": 436718592,
+        "median_feedback_ms": 1491.4758908562362,
+        "median_total_ms": 15869.680953212082
+      },
+      "tail_device": {
+        "all_exact": false,
+        "completed_queues": 0,
+        "max_accepted_before_feedback": 4,
+        "max_device_bytes_at_admission": 2585600,
+        "max_host_bytes_at_admission": 0,
+        "median_feedback_ms": null,
+        "median_total_ms": null
+      },
+      "tail_host": {
+        "all_exact": true,
+        "completed_queues": 3,
+        "max_accepted_before_feedback": 8,
+        "max_device_bytes_at_admission": 204800,
+        "max_host_bytes_at_admission": 3932160,
+        "median_feedback_ms": 2733.3843503147364,
+        "median_total_ms": 15203.139562159777
+      }
+    }
+  }
+}
