@@ -40,6 +40,15 @@ revision. [Current protocol](ablation_matrix.md) · [Follow-up DSR receipts](../
     which invalidated its DSR source-stability receipt. Independent reload
     measured 5.3024 validation BPB on 1,048,576 positions using one GPU. The
     registered-preset scorer rejected the changed backend as designed.
+  - [x] Remove the disabled release loop from the detached per-key scaffold.
+    A replay at eight sequences of 1,024 tokens on one RTX 4090 measured
+    median update times of 5,973 ms with the original scaffold, 487 ms with the
+    fast path, and 530 ms with live vanilla. This is a median paired reduction
+    of 91.9% in scaffold update time over six rounds with two timings per arm.
+    Logits, loss, gradients, weights and optimizer state matched bit for bit
+    through three updates. The same probe observed 160 fused scan calls in
+    each of the training and evaluation forwards on a saved fused checkpoint.
+    [Paired CUDA evidence](../results/profiles/d1_presyn_disabled_2026-11-24.json)
 - [ ] Train and score the matched vanilla reference, run admissible registered
   contrasts, then record the statistical decision or the measured budget shortfall.
   Select a final checkpoint only after the absolute quality and reproduction gates.
