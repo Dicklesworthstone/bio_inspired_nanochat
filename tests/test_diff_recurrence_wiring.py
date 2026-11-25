@@ -205,8 +205,20 @@ def test_calcium_decay_gradient_matches_finite_difference():
 # --------------------------------------------------------------------------- #
 # 7. The live full-model path preserves values, gradients, and runtime effects.
 # --------------------------------------------------------------------------- #
-def test_live_model_checkpoint_matches_eager_forward_backward_and_runtime_buffers():
-    eager = _model(diff_rec=True, block=4, seq=16, train=True, metriplectic=True)
+@pytest.mark.parametrize(
+    ("device", "autocast_dtype"),
+    [
+        ("cpu", None),
+        pytest.param("cuda", None, marks=pytest.mark.gpu, id="cuda-fp32"),
+        pytest.param("cuda", torch.bfloat16, marks=pytest.mark.gpu, id="cuda-bf16-autocast"),
+        pytest.param("cuda", torch.float16, marks=pytest.mark.gpu, id="cuda-fp16-autocast"),
+    ],
+)
+def test_live_model_checkpoint_matches_eager_forward_backward_and_runtime_buffers(
+    device: str,
+    autocast_dtype: torch.dtype | None,
+):
+    eager = _model(diff_rec=True, block=4, seq=16, train=True, metriplectic=True).to(device)
     replayed = _model(
         diff_rec=True,
         block=4,
@@ -214,12 +226,13 @@ def test_live_model_checkpoint_matches_eager_forward_backward_and_runtime_buffer
         seq=16,
         train=True,
         metriplectic=True,
-    )
-    x = random_tokens(1, 16, 97, seed=11)
-    y = random_tokens(1, 16, 97, seed=12)
+    ).to(device)
+    x = random_tokens(1, 16, 97, seed=11).to(device)
+    y = random_tokens(1, 16, 97, seed=12).to(device)
 
-    eager_logits, eager_loss = eager(x, y, train_mode=True)
-    replayed_logits, replayed_loss = replayed(x, y, train_mode=True)
+    with torch.autocast(device, dtype=autocast_dtype, enabled=autocast_dtype is not None):
+        eager_logits, eager_loss = eager(x, y, train_mode=True)
+        replayed_logits, replayed_loss = replayed(x, y, train_mode=True)
     assert torch.equal(eager_logits, replayed_logits)
     assert torch.equal(eager_loss, replayed_loss)
 
@@ -242,6 +255,7 @@ def test_live_model_checkpoint_matches_eager_forward_backward_and_runtime_buffer
 
     eager_loss.backward()
     replayed_loss.backward()
+    assert _kinetic_grads(replayed)["rho_b"] > 0.0
     for (eager_name, eager_param), (replayed_name, replayed_param) in zip(
         eager.named_parameters(), replayed.named_parameters()
     ):

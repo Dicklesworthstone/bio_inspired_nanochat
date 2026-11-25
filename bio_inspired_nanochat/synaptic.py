@@ -1854,15 +1854,20 @@ def _checkpoint_recurrence_segment(
         raise ValueError("recurrence checkpointing requires stochastic_train_frac=0")
     if bool(getattr(presyn, "_mc_sampling", False)):
         raise ValueError("recurrence checkpointing does not support MC release sampling")
-    if any(tensor.device.type != "cpu" for tensor in (*drives, *idxs)) or any(
-        valid is not None and valid.device.type != "cpu" for valid in valids
+    device = drives[0].device
+    if device.type not in {"cpu", "cuda"} or any(
+        tensor.device != device for tensor in (*drives, *idxs)
+    ) or any(
+        valid is not None and valid.device != device for valid in valids
     ):
-        raise ValueError("recurrence checkpointing is currently supported on CPU only")
+        raise ValueError("recurrence checkpointing requires all inputs on one CPU or CUDA device")
     drive_dtype = drives[0].dtype
-    if drive_dtype not in {torch.float32, torch.float64} or any(
-        drive.dtype != drive_dtype for drive in drives
-    ):
-        raise TypeError("recurrence checkpointing currently requires float32 or float64 drives")
+    low_precision_cuda = device.type == "cuda" and drive_dtype in {torch.float16, torch.bfloat16}
+    if (drive_dtype not in {torch.float32, torch.float64} and not low_precision_cuda
+            or any(drive.dtype != drive_dtype for drive in drives)):
+        raise TypeError("recurrence checkpointing requires uniform float32 or float64 drives "
+                        "(float16 and bfloat16 are also supported on CUDA with float32 state)")
+    state_dtype = torch.float32 if low_precision_cuda else drive_dtype
     if any(idx.dtype != torch.long for idx in idxs):
         raise TypeError("recurrence checkpointing requires int64 index tensors")
 
@@ -1870,22 +1875,22 @@ def _checkpoint_recurrence_segment(
         state["HEAT"] = torch.zeros_like(state["C"])
 
     flat_state, delay_len, has_heat = _flatten_presyn_state(state)
-    if any(tensor.device.type != "cpu" for tensor in flat_state):
-        raise ValueError("checkpointed recurrent state must be on CPU")
-    if any(tensor.dtype != drive_dtype for tensor in flat_state):
-        raise TypeError("checkpointed recurrent state dtype must match the drive dtype")
+    if any(tensor.device != device for tensor in flat_state):
+        raise ValueError("checkpointed recurrent state must be on the drive device")
+    if any(tensor.dtype != state_dtype for tensor in flat_state):
+        raise TypeError(f"checkpointed recurrent state dtype must be {state_dtype}")
     state_count = len(flat_state)
     step_count = len(drives)
     runtime_initial = _runtime_buffer_snapshot(presyn)
-    if any(tensor.device.type != "cpu" for tensor in runtime_initial):
-        raise ValueError("checkpointed runtime buffers must be on CPU")
-    if runtime_initial[0].dtype != drive_dtype:
-        raise TypeError("checkpointed EMA dtype must match the drive dtype")
+    if any(tensor.device != device for tensor in runtime_initial):
+        raise ValueError("checkpointed runtime buffers must be on the drive device")
+    if runtime_initial[0].dtype != state_dtype:
+        raise TypeError(f"checkpointed EMA dtype must be {state_dtype}")
     if any(
-        parameter.device.type != "cpu" or parameter.dtype != drive_dtype
+        parameter.device != device or parameter.dtype != state_dtype
         for parameter in presyn.kinetics.parameters()
     ):
-        raise TypeError("checkpointed kinetics must match the CPU drive dtype")
+        raise TypeError("checkpointed kinetics must match the recurrent state device and dtype")
     runtime_count = len(runtime_initial)
     explicit_valids = tuple(
         torch.ones_like(drive, dtype=torch.bool) if valid is None else valid

@@ -1284,6 +1284,38 @@
         }
       ],
       "change_scope": "The compiled artifact with this Lean digest was audited in DSR afe60310-4007-40c5-a835-a7a8f2b1fc95. The CPU suite rejected the stale synaptic.py digest before rebinding. Independent byte comparisons cover the CUDA storage optimization; the Lean theorem concerns the reduced energy rate."
+    },
+    {
+      "cycle_id": "cuda-full-bptt-checkpoint-runtime-binding-2026-11-24",
+      "frog_id": "bio_inspired_nanochat-0642.1.2.6",
+      "hash_scope": "formal/lean/BioInspiredNanochat.lean",
+      "artifact_hash": "sha256:831498bc2853d86701250ea89024ab5f5f6190d2e3a5a9ae66f93a7d5d42d963",
+      "theorem_ids": ["BioInspiredNanochat.Metriplectic.energyRate_zero"],
+      "axioms": ["propext", "Classical.choice", "Quot.sound"],
+      "sorry_or_admit_present": false,
+      "runtime_mapping": [
+        {
+          "path": "bio_inspired_nanochat/synaptic.py",
+          "sha256": "4714a83ba3d846b47ae67fddc825b74d08319344a30b6b215b429605eb605abe"
+        },
+        {
+          "path": "bio_inspired_nanochat/ablation_registry.py",
+          "sha256": "141356a2122a3a64dbbaecf87e0640f7dbdedf415f06fb80f38f057bfd987fe9"
+        },
+        {
+          "path": "tests/test_chunked_tbptt.py",
+          "sha256": "ce8f23ca2cd2ffd453f41ed4c4c84b18924ab84ebf9f8e5da48b43e7c1fd4515"
+        },
+        {
+          "path": "tests/test_diff_recurrence_wiring.py",
+          "sha256": "a4e105cd4908eab001a5032545bef5002b9dd339b112dfdd5f33e0175476cf5c"
+        },
+        {
+          "path": "docs/theory/metriplectic.md",
+          "sha256": "0d47b66fa7eabdffc10d3f3b56c1459ebb903ae4498000699a2eb3b716a5fdce"
+        }
+      ],
+      "change_scope": "Windowed replay now accepts colocated CUDA tensors and FP16 or BF16 CUDA drives with FP32 recurrence. The release and integrator arithmetic, fallback, functional runtime ledger, and Lean statement are unchanged. DSR 33127696-047a-40bd-95d4-d6af807dd90a verified CPU and real CUDA parity, including repeated-index fallback and exact cross-window gradients. DSR 7f0385bf-6d59-4515-995f-d8f8253037a4 verified six matched training steps. CUDA behavior is empirical conformance evidence. The Lean theorem still concerns the reduced exact-real energy rate."
     }
   ]
 }

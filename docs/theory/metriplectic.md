@@ -408,14 +408,37 @@ ledger cross the non-reentrant checkpoint as explicit tensors. The replay closur
 module-buffer mutation or custom checkpoint context: the caller commits the terminal EMA/ledger
 once per original forward window, while backward recomputation is functional.
 
-This first live contract deliberately requires `enable_presyn=True`,
+The live contract requires `enable_presyn=True`,
 `differentiable_recurrence=True`, `metriplectic_integrator=True`, standard attention,
-`stochastic_train_frac=0`, no MC sampling, and CPU fp32/fp64 tensors. It rejects truncated-BPTT composition,
-FlexAttention, stochastic/MC release, and non-CPU execution. Those gates avoid claiming replay
-parity before CUDA duplicate-index scatter, stochastic evidence, and compiled execution are
-measured. In this environment PyTorch 2.9.1 itself rejects `torch.compile` on the project-mandated
-Python 3.14, so the compile smoke is retained but skipped with that explicit upstream reason; no
-compiled-training claim is made here.
+`stochastic_train_frac=0`, and no MC sampling. Each checkpoint uses one CPU or CUDA device.
+FP32 and FP64 drives use matching recurrent state and kinetics. FP16 and BF16 drives are also
+accepted on CUDA with FP32 recurrent state and kinetic parameters, matching the eager autocast
+path. Truncated-BPTT composition, FlexAttention, stochastic release, and MC sampling remain
+unsupported. PyTorch 2.9.1 on Python 3.14 rejects `torch.compile` in this environment. The
+compiled-training and distributed paths require separate qualification.
+
+The live CUDA checks compared eager and checkpointed loss, logits, all parameter gradients, and
+runtime buffers in FP32, BF16 autocast, and FP16 autocast. A separate FP64 recurrence test used
+repeated indices and a planted fallback. It checked cross-window gradients, terminal state, and
+CPU and CUDA RNG state. Backward replay left the persistent EMA and guard ledger unchanged.
+
+The paired RTX 4090 measurement used a two-layer, width-128 Nanochat model with batch size two,
+BF16 autocast, top-16 attention, and four 8-query groups per window. Both arms ran the same
+forward, cross-entropy backward, and SGD step on matched token streams. All 40 populated
+parameter gradients, updated weights, forward logits, and runtime buffers matched bit for bit
+in each of six paired rounds. The locked gate required at least 25% lower incremental peak
+allocation at both lengths.
+
+| Sequence length | Eager peak | Checkpoint peak | Median step time, eager → checkpoint |
+|---|---:|---:|---:|
+| 128 | 32.86 MiB | 10.52 MiB | 12.01 s → 33.87 s |
+| 256 | 101.31 MiB | 21.99 MiB | 6.99 s → 13.28 s |
+
+Checkpointing cut peak allocation by 68.0% and 78.3%. The 256-token checkpointed step fit
+below the 128-token eager peak. The timed steps include recomputation and show a wall-time
+penalty at both shapes. The benchmark uses synthetic tokens and one GPU. Its medians describe
+within-shape comparisons and leave FineWeb quality, distributed execution, and large-model
+throughput unmeasured. [CUDA receipts and independent recount](../../results/profiles/rtx4090_full_bptt_checkpoint_2026-11-24.json)
 
 ### 10.5 Memory budget
 

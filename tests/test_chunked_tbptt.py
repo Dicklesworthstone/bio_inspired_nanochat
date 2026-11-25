@@ -122,7 +122,10 @@ def test_forward_values_independent_of_chunk_length():
 # 4. Non-reentrant checkpoint/replay preserves full BPTT and persistent effects.
 # --------------------------------------------------------------------------- #
 @pytest.mark.unit
-def test_checkpoint_replay_matches_eager_state_gradients_rng_and_runtime_buffers():
+@pytest.mark.parametrize(
+    "device", ["cpu", pytest.param("cuda", marks=pytest.mark.gpu)]
+)
+def test_checkpoint_replay_matches_eager_state_gradients_rng_and_runtime_buffers(device: str):
     cfg = SynapticConfig(
         enable_presyn=True,
         learnable_kinetics=True,
@@ -131,18 +134,18 @@ def test_checkpoint_replay_matches_eager_state_gradients_rng_and_runtime_buffers
         stochastic_train_frac=0.0,
     )
     torch.manual_seed(1)
-    eager_presyn = SynapticPresyn(d_head=8, cfg=cfg).double()
+    eager_presyn = SynapticPresyn(d_head=8, cfg=cfg).to(device, dtype=torch.float64)
     checkpoint_presyn = copy.deepcopy(eager_presyn)
     generator = torch.Generator().manual_seed(2)
     base_drives = [
         torch.randn(B, H, T, K, generator=generator, dtype=torch.float64) * 0.4 + 0.5
         for _ in range(N)
     ]
-    idxs = [torch.randint(0, T_KEY, (B, H, T, K), generator=generator) for _ in range(N)]
+    idxs = [torch.randint(0, T_KEY, (B, H, T, K), generator=generator).to(device) for _ in range(N)]
 
     def run(presyn, checkpoint_len):
-        drives = [drive.clone().requires_grad_() for drive in base_drives]
-        state = build_presyn_state(B, T_KEY, H, "cpu", torch.float64, cfg)
+        drives = [drive.to(device, copy=True).requires_grad_() for drive in base_drives]
+        state = build_presyn_state(B, T_KEY, H, device, torch.float64, cfg)
         state["C"][..., 0] = -5.0  # one planted domain breach exercises mixed fallback replay
         torch.manual_seed(22)
         outputs = chunked_recurrence(
@@ -190,6 +193,7 @@ def test_checkpoint_replay_matches_eager_state_gradients_rng_and_runtime_buffers
     )
     torch.manual_seed(999)
     rng_before_backward = torch.get_rng_state().clone()
+    cuda_rng = torch.cuda.get_rng_state() if device == "cuda" else None
     checkpoint_loss.backward()
 
     for eager, replayed in zip(eager_drives, checkpoint_drives):
@@ -207,6 +211,8 @@ def test_checkpoint_replay_matches_eager_state_gradients_rng_and_runtime_buffers
     for before, after in zip(runtime_after_forward, runtime_after_backward):
         assert torch.equal(before, after), "backward replay must not duplicate persistent effects"
     assert torch.equal(rng_before_backward, torch.get_rng_state())
+    if cuda_rng is not None:
+        assert torch.equal(cuda_rng, torch.cuda.get_rng_state())
 
 
 @pytest.mark.unit
