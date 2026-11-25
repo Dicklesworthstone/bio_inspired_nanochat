@@ -144,3 +144,66 @@ The device-only comparison includes collection and reduction and uses synthetic 
 The independent second-GPU live run completed all three 24-by-192 rounds and verified the predicted 6.125-fold reduction in retained score state. The four update paths matched their FP64 reference to at most `4.65e-7` relative Frobenius error. Compact replay took a median of 18.56 s end to end. Chunk accumulation took 19.61 s and per-token accumulation took 23.10 s, 5.63% and 24.45% slower respectively. Neither stayed within the 5% latency allowance in this run. Compact replay itself ranged from 18.40 to 23.96 s. The chunk accumulator's 13.781-to-2.250 MiB reduction in retained score state corresponded to a 206.7-to-187.4 MB reduction in incremental peak PyTorch allocations on this workload. The latter includes other rollout allocations and illustrates the smaller system-level effect.
 
 The [score-storage archive](../results/delayed_score_replay_2026-11-24.json) includes the primary timeout log, the device-only and second-GPU DSR receipts, the frozen drivers, and the recount script. The narrow result is a memory tradeoff for one frozen policy and one fixed-rank gradient. Its registered end-to-end latency gate remains open.
+
+## Replay only the trainable final block
+
+The rank-one Q/V LoRA control had more supervised capacity than the tested four-depth readout. With that adapter placed only in the final Qwen block, the first 27 blocks' BF16 outputs depend on tokens and frozen weights. Capture those activations at generation time and replay the final block when feedback arrives. Its attention still differentiates through the prompt and previous scored positions. The comparison measures a storage-for-recomputation tradeoff for the same adapter.
+
+For a fixed realized token prefix \(x\), let \(F(x)\) be the frozen blocks' output and \(L_\theta(F(x))\) be the suffix objective. Since \(F\) is independent of the adapter parameters \(\theta\), substituting the recorded \(F(x)\) preserves the derivative in exact arithmetic. The final block's internal cache depends on \(\theta\), so its prompt K/V still belongs in the differentiated computation. Related work uses trainable suffixes to cut training cost. This experiment tests the recorded-policy numeric contract and charges live capture. [Suffix adaptation precedent](https://openaccess.thecvf.com/content/CVPR2024/papers/Mercea_Time-_Memory-_and_Parameter-Efficient_Visual_Adaptation_CVPR_2024_paper.pdf)
+
+- [x] Verify the public checkpoint and lock the rank-one adapter, two rollout shapes, and three rotated rounds.
+- [x] Generate live, identical top-32 trajectories in all arms and account for the cost of capturing native BF16 activations.
+- [x] Replay the full model and the captured final block in the original cached geometry.
+- [x] Test parallel teacher-forced full and final-block replay on the identical tokens and recorded support.
+- [x] Require exact behavior-support logits and check every trainable gradient, including through the prompt. Save every completed round before beginning another.
+- [x] Compare wall time and retained bytes against the fastest full-model arm that qualifies. Recount the verdict independently and archive terminal DSR evidence.
+
+Use batch and scored-token pairs (4, 16) and (8, 32), one pinned Qwen2.5-Math-1.5B-Instruct checkpoint, nonzero Q/V LoRA factors, and a fixed delayed coefficient per trajectory. Use the native causal SDPA backend. Compare all four replay paths under the actual top-32 support and scored actions from the rollout. EOS is eligible in the last draw. The reference is full cached replay in the original sampling geometry. Eligibility requires its behavior logits to agree bit for bit and the arm's retained logits to agree with the reference bit for bit. Require nonzero gradients for all four factors, with relative Frobenius error at most `1e-6` per factor and max absolute error at most `1e-7` for an eligible arm. Report numeric drift and time for other arms separately.
+
+For a positive engineering result, the same eligible final-block arm needs a twofold median post-feedback speedup and at least 20% lower median collected-rollout-plus-replay time at both shapes relative to the fastest eligible full replay at each boundary. This pilot does not perform an optimizer update or measure reward learning.
+
+### Replay result
+
+The cached final-block path reproduced behavior-support logits and all four Q/V LoRA gradients bit for bit in every one of six rotated rounds. Both parallel paths failed eligibility. Full parallel replay changed selected logits by up to 0.375 and had up to 11.65% relative gradient error in a factor. Parallel final-block replay had up to 7.32% relative gradient error. They remain relevant to a separate comparison that allows approximation.
+
+| Batch by decisions | Full cached replay | Final-block cached replay | Median total time, full → final block | Additional retained BF16 features |
+|---|---:|---:|---:|---:|
+| 4 by 16 | 1,054 ms | 144 ms | 2.02 s → 1.15 s | 0.469 MiB |
+| 8 by 32 | 2,274 ms | 396 ms | 5.15 s → 2.53 s | 1.313 MiB |
+
+These total medians include live generation, collection and gradient calculation on one RTX 4090. The exact path improved post-feedback time by 5.73–7.31× and total time by 43.1–50.9%, passing the locked engineering gate. The negative control held prompt logits fixed while detaching its final-block cache. That changed V-factor gradients by 68–75%, showing why replay needs the differentiated prompt computation.
+
+### Follow-up with actual optimizer updates
+
+- [x] Run the same enabled final-block Q/V LoRA on 64 paired updates from a common initialization.
+- [x] Verify bitwise equality of recorded four-choice draws, reward, gradients, updated parameters, and AdamW state at every paired update.
+- [x] Check the reward signal against the threshold and measure initial and final held-out accuracy and expected reward on 256 fresh questions.
+- [x] Charge collection, full or final-block replay, and AdamW. Alternate execution order once per update and export timings and state digests.
+
+This test uses fraction ordering, a qualified task from the capacity screen. The runtime uses fresh disjoint training and test prompts. Each update samples four responses on each of four prompts and centers the verifiable zero-or-one reward within each group. The two arms use full parallel prefill and captured-activation final-block prefill respectively, with the same restricted four-answer support. The one-token task allows full replay in a single parallel forward pass. Report whether at least 24 updates have mixed reward and held-out expected reward improves at least five percentage points. This one-seed test measures the scoped update and cost tradeoff. A cross-task, second-backbone GPU-hours result remains a separate claim.
+
+### Optimizer result
+
+All 64 paired updates used identical actions, rewards, gradients, updated weights, and AdamW states. This covers 1,024 sampled answers per arm. There were 61 updates with mixed rewards. On the 256 disjoint held-out questions, both arms moved from 84 to 102 correct by argmax and from 30.91% to 34.11% mean gold-answer probability. The 3.21 percentage point increase fell below the prespecified five-point reward threshold.
+
+The timed collection, replay, and update steps summed to 13.62 s for full replay and 7.53 s for final-block replay, a 1.81-fold speedup at identical parameters. The latter held 2.484 MiB of additional BF16 features per update. Both arms prefilled all four repeated rows per prompt, and the timed interval excluded tokenization and held-out scoring. Deduplicated prefill and a shared forward graph are additional opportunities on this one-token workload.
+
+### Comparison with retaining the generation graph
+
+- [x] Run the two multi-token cohorts with a third path that retains the generation graph through feedback.
+- [x] Compare the exact sampled trajectories, support logits, and all four factor gradients in each rotated round.
+- [x] Include generation and backward time, and measure incremental live GPU allocation at feedback.
+- [x] Recount the medians and publish the speed and retention tradeoff against this control.
+
+For prompt and generated-token counts fixed by the replay cohort, the retained graph skips the second forward pass and keeps the trainable block's autograd state live. The practical tradeoff requires exact results for all arms, at least a twofold reduction in bytes at feedback for saved activations, and a median total time no more than 10% slower than the retained graph at both shapes. The retained-graph arm uses incremental live PyTorch allocations at feedback. The replay arms count the still-live tensor bytes for sampled actions, support, logits, indices, and the saved features where applicable. All three exclude the prompt held before timing. The probe keeps weights fixed and measures no external reward latency, memory allocation under load, or throughput across queued rollouts.
+
+All three modes matched the original trajectories and produced identical logits and gradients in all six rounds on one RTX 4090. The saved-activation path passed the waiting-state and wall-time gate at both shapes.
+
+| Batch by decisions | Median time, full replay / final-block replay / retained graph | Waiting MiB, full replay / final-block replay / retained graph |
+|---|---:|---:|
+| 4 by 16 | 2.58 / 1.28 / 1.59 s | 0.024 / 0.493 / 52.83 |
+| 8 by 32 | 5.56 / 3.47 / 3.46 s | 0.098 / 1.410 / 197.38 |
+
+Final-block replay reduced waiting bytes by a factor of 107–140 relative to the retained graph. It took 19.7% less total time at 4 by 16 and 0.13% more at 8 by 32. The retained graph responded faster after feedback, taking 103 and 183 ms versus 159 and 521 ms for final-block replay. Incremental peak PyTorch allocation fell from 61.13 to 55.62 MiB and from 216.14 to 203.77 MiB, respectively. Full replay used the smallest waiting state. The larger gap at feedback may matter when many rollouts wait concurrently. The two measured shapes establish an engineering tradeoff for a fixed adapter and workload. A production queue, an optimized checkpointed graph, and convergence on a public reward task remain untested.
+
+The [LoRA replay archive](../results/delayed_lora_tail_replay_2026-11-24.json) includes all three DSR receipts, drivers, configuration files, per-round outcomes, and recount scripts. The multi-token cohorts establish update equivalence through the gradient. The one-token optimizer pilot extends it through AdamW while leaving the reward advancement gate closed.
