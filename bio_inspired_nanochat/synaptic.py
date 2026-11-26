@@ -1078,6 +1078,12 @@ def _same_scan_bits(left: Any, right: Any) -> bool:
     )
 
 
+@dataclass(slots=True)
+class _ReferenceScanResumeProfile:
+    forward_pending: bool = True
+    adjoint_pending: bool = True
+
+
 class ReferenceScanGraphs:
     """Own exact-reference scan graphs on a single trainer's CUDA stream."""
 
@@ -1101,13 +1107,13 @@ class ReferenceScanGraphs:
             _reference_scan_graphs.reset(token)
 
     @contextlib.contextmanager
-    def prime_evaluation_profile(self):
-        """Recreate the first evaluation scan's profiling context after a restart."""
-        token = _reference_scan_eval_profile_pending.set(True)
+    def prime_resume_profile(self):
+        """Restore the evaluation and adjoint execution plans on a fresh process."""
+        token = _reference_scan_resume_profile.set(_ReferenceScanResumeProfile())
         try:
             yield
         finally:
-            _reference_scan_eval_profile_pending.reset(token)
+            _reference_scan_resume_profile.reset(token)
 
     def run(
         self,
@@ -1187,8 +1193,8 @@ class ReferenceScanGraphs:
 _reference_scan_graphs: ContextVar[ReferenceScanGraphs | None] = ContextVar(
     "_reference_scan_graphs", default=None,
 )
-_reference_scan_eval_profile_pending: ContextVar[bool] = ContextVar(
-    "_reference_scan_eval_profile_pending", default=False,
+_reference_scan_resume_profile: ContextVar[_ReferenceScanResumeProfile | None] = ContextVar(
+    "_reference_scan_resume_profile", default=None,
 )
 
 
@@ -1334,6 +1340,8 @@ class _DetachedScanReleaseGrad(torch.autograd.Function):
     @staticmethod
     def forward(ctx, drive, scan_output, valid, cfg, *edges):  # type: ignore[override]
         ctx.cfg = cfg
+        # The autograd worker may run after the forward's context has exited.
+        ctx.resume_profile = _reference_scan_resume_profile.get() if not cfg.native_presyn else None
         ctx.save_for_backward(drive, valid, *edges)
         return scan_output.view_as(scan_output)
 
@@ -1341,7 +1349,7 @@ class _DetachedScanReleaseGrad(torch.autograd.Function):
     def backward(ctx, grad_output):  # type: ignore[override]
         drive, valid, *edges = ctx.saved_tensors
         cfg = ctx.cfg
-        grad_drive = _scripted_presyn_edge_release_grad(
+        operands = (
             drive,
             grad_output,
             valid,
@@ -1366,6 +1374,12 @@ class _DetachedScanReleaseGrad(torch.autograd.Function):
             float(cfg.q_beta),
             float(cfg.qmax),
         )
+        resume_profile = ctx.resume_profile
+        if resume_profile is not None and resume_profile.adjoint_pending and drive.is_cuda:
+            # The result of the profiling execution is not the warmed derivative.
+            _scripted_presyn_edge_release_grad(*operands)
+            resume_profile.adjoint_pending = False
+        grad_drive = _scripted_presyn_edge_release_grad(*operands)
         return (grad_drive, None, None, None, *([None] * len(edges)))
 
 
@@ -1645,13 +1659,14 @@ def _release_recurrence_group(
                 cfg.energy_use,
                 needs_drive_grad,
             )
-            if train and drive.is_cuda and _reference_scan_eval_profile_pending.get():
+            resume_profile = _reference_scan_resume_profile.get() if train and drive.is_cuda else None
+            if resume_profile is not None and resume_profile.forward_pending:
                 # The scan clones recurrent inputs and evaluation draws no randomness.
                 # Give TorchScript the same initial mode as the uninterrupted trainer.
                 _scripted_detached_presyn_scan(
                     *scan_inputs, None, False, *scan_settings[1:-1], False
                 )
-                _reference_scan_eval_profile_pending.set(False)
+                resume_profile.forward_pending = False
             graph_cache = _reference_scan_graphs.get() if train and drive.is_cuda else None
             if graph_cache is None or (train_generator is not None and count_cap <= 0):
                 scripted = _scripted_detached_presyn_scan(*scan_inputs, train_generator, *scan_settings)

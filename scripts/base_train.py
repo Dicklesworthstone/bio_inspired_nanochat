@@ -1155,7 +1155,7 @@ while True:
                 if step > graph_warmup_step:
                     scan_context = reference_graphs.activate()
                 elif replaying_checkpoint_boundary and eval_every > 0 and micro_step == 0:
-                    scan_context = reference_graphs.prime_evaluation_profile()
+                    scan_context = reference_graphs.prime_resume_profile()
             with scan_context, autocast_ctx:
                 result = model(x, y, train_mode=True) if use_syn else model(x, y)
                 if isinstance(result, tuple):

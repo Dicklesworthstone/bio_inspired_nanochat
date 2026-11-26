@@ -1400,6 +1400,22 @@
         }
       ],
       "change_scope": "Restore the ordinary CUDA scan's evaluation-mode profiling context when resuming the graph-enabled trainer. The metriplectic integrator bypasses this path. The Lean statement applies to the reduced exact-real metriplectic energy rate."
+    },
+    {
+      "cycle_id": "cuda-resume-adjoint-profile-runtime-binding-2026-11-26",
+      "frog_id": "bio_inspired_nanochat-hwxb.2.6",
+      "hash_scope": "formal/lean/BioInspiredNanochat.lean",
+      "artifact_hash": "sha256:831498bc2853d86701250ea89024ab5f5f6190d2e3a5a9ae66f93a7d5d42d963",
+      "theorem_ids": ["BioInspiredNanochat.Metriplectic.energyRate_zero"],
+      "axioms": ["propext", "Classical.choice", "Quot.sound"],
+      "sorry_or_admit_present": false,
+      "runtime_mapping": [
+        {
+          "path": "bio_inspired_nanochat/synaptic.py",
+          "sha256": "dc02180e592bf7c7e33a1fa95fc5c4147b62dd96240a23e8edb35365145c3ab7"
+        }
+      ],
+      "change_scope": "Retain the restored CUDA profiling context for the autograd worker and discard its initial adjoint evaluation. The adjoint formula is unchanged. The metriplectic integrator bypasses this path. The Lean statement applies to the reduced exact-real metriplectic energy rate."
     }
   ]
 }
