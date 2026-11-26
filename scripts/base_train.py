@@ -1150,12 +1150,13 @@ while True:
                     x, y, chunk_len=hebb_chunk_len, loss_scale=1.0 / grad_accum_steps
                 )
         else:
-            graph_context = (
-                reference_graphs.activate()
-                if reference_graphs is not None and step > graph_warmup_step
-                else nullcontext()
-            )
-            with graph_context, autocast_ctx:
+            scan_context = nullcontext()
+            if reference_graphs is not None:
+                if step > graph_warmup_step:
+                    scan_context = reference_graphs.activate()
+                elif replaying_checkpoint_boundary and eval_every > 0 and micro_step == 0:
+                    scan_context = reference_graphs.prime_evaluation_profile()
+            with scan_context, autocast_ctx:
                 result = model(x, y, train_mode=True) if use_syn else model(x, y)
                 if isinstance(result, tuple):
                     logits, loss = result

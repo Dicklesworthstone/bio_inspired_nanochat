@@ -1384,6 +1384,22 @@
         }
       ],
       "change_scope": "Windowed full-BPTT replay also accepts ordinary deterministic presynaptic recurrence. Metriplectic replay retains the existing heat state initialization. The parity tests cover both transitions. The Lean theorem applies to the reduced exact-real metriplectic energy rate."
+    },
+    {
+      "cycle_id": "cuda-resume-evaluation-profile-runtime-binding-2026-11-25",
+      "frog_id": "bio_inspired_nanochat-2u53",
+      "hash_scope": "formal/lean/BioInspiredNanochat.lean",
+      "artifact_hash": "sha256:831498bc2853d86701250ea89024ab5f5f6190d2e3a5a9ae66f93a7d5d42d963",
+      "theorem_ids": ["BioInspiredNanochat.Metriplectic.energyRate_zero"],
+      "axioms": ["propext", "Classical.choice", "Quot.sound"],
+      "sorry_or_admit_present": false,
+      "runtime_mapping": [
+        {
+          "path": "bio_inspired_nanochat/synaptic.py",
+          "sha256": "26d191d5c7861dafd31d300678d9a43be3f402e650c88b1d26f454d099905568"
+        }
+      ],
+      "change_scope": "Restore the ordinary CUDA scan's evaluation-mode profiling context when resuming the graph-enabled trainer. The metriplectic integrator bypasses this path. The Lean statement applies to the reduced exact-real metriplectic energy rate."
     }
   ]
 }

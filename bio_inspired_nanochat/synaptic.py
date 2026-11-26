@@ -1100,6 +1100,15 @@ class ReferenceScanGraphs:
         finally:
             _reference_scan_graphs.reset(token)
 
+    @contextlib.contextmanager
+    def prime_evaluation_profile(self):
+        """Recreate the first evaluation scan's profiling context after a restart."""
+        token = _reference_scan_eval_profile_pending.set(True)
+        try:
+            yield
+        finally:
+            _reference_scan_eval_profile_pending.reset(token)
+
     def run(
         self,
         inputs: tuple,
@@ -1177,6 +1186,9 @@ class ReferenceScanGraphs:
 
 _reference_scan_graphs: ContextVar[ReferenceScanGraphs | None] = ContextVar(
     "_reference_scan_graphs", default=None,
+)
+_reference_scan_eval_profile_pending: ContextVar[bool] = ContextVar(
+    "_reference_scan_eval_profile_pending", default=False,
 )
 
 
@@ -1633,6 +1645,13 @@ def _release_recurrence_group(
                 cfg.energy_use,
                 needs_drive_grad,
             )
+            if train and drive.is_cuda and _reference_scan_eval_profile_pending.get():
+                # The scan clones recurrent inputs and evaluation draws no randomness.
+                # Give TorchScript the same initial mode as the uninterrupted trainer.
+                _scripted_detached_presyn_scan(
+                    *scan_inputs, None, False, *scan_settings[1:-1], False
+                )
+                _reference_scan_eval_profile_pending.set(False)
             graph_cache = _reference_scan_graphs.get() if train and drive.is_cuda else None
             if graph_cache is None or (train_generator is not None and count_cap <= 0):
                 scripted = _scripted_detached_presyn_scan(*scan_inputs, train_generator, *scan_settings)
