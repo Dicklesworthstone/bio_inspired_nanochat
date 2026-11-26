@@ -195,3 +195,47 @@ controlled memory component.
 
 The [trained-memory archive](../results/trained_evicted_recall_2026-11-24.json)
 contains both experiment drivers, paired outcomes, and terminal receipts.
+
+### Activity-dependent local erasure
+
+The candidate multiplies each row of the fast matrix by
+$\alpha(1-\beta k_i^2)$ before adding $\beta k v^\mathsf{T}$. It uses the
+diagonal of the delta rule's erasure matrix. This saves the read needed
+to calculate a prediction error and makes erasure depend on the choice
+of feature coordinates. For $k=(3/5,4/5)$ and an orthogonal old key
+$q=(4/5,-3/5)$, full delta erasure preserves the old response at $1$.
+At $\alpha=\beta=1$, local erasure leaves $337/625$. The case isolates
+interference from erasure alone. Lean checks the concrete integer
+numerators after the denominators are cleared. [Gated delta update](https://arxiv.org/abs/2412.06464)
+
+The CPU assay used continuous noisy cues with hidden identities and two
+histories that differed only by a swap of binding values. Each arm used
+1,024 bytes of mutable state and saw the same observations. The
+original screen used 12 held-out seeds and 576 pairs per panel. Local
+erasure got zero correct pairs in each panel. The cosine cache got
+435/576 in revision, and the strongest retention control got 3/576.
+The original result remains inconclusive under its preset 20% control floor.
+
+On 12 new test seeds, the original settings stayed frozen. The added
+conventional reservoir cache used the original development split for
+calibration. Each count again represents a complete pair, with 576 pairs
+per panel.
+
+| Writer or cache | Retention | Revision |
+|---|---:|---:|
+| Activity-dependent local erasure | 0 | 1 |
+| Decayed outer product | 0 | 1 |
+| Scalar-gated delta | 1 | 4 |
+| Recent cosine cache | 0 | 415 |
+| Reservoir cosine cache | 361 | 340 |
+
+The reservoir cleared the retention floor at the same byte budget.
+Local erasure missed the accuracy gate and took 1.30 times the latency
+of the fastest matrix control in the paired timing summary. This assay
+stops this update at the component stage. [Protocols, raw outcomes, and
+execution receipts](../results/local_associative_memory_2026-11-26.json)
+
+To reproduce the two runs, extract the archived driver and protocol text,
+verify the SHA-256 values, and map the paths in the recorded DSR recipes
+to the new checkout and worker. The diagnostic consumes the original
+calibration output, and each recount takes its own raw predictions.
