@@ -239,3 +239,44 @@ To reproduce the two runs, extract the archived driver and protocol text,
 verify the SHA-256 values, and map the paths in the recorded DSR recipes
 to the new checkout and worker. The diagnostic consumes the original
 calibration output, and each recount takes its own raw predictions.
+
+### Separate update rates for cues and values
+
+When a noisy cue matches a stored record, this candidate updates its
+value immediately and moves the cue prototype more slowly on a conflicting
+value. A stable prototype can keep a single corrupted observation from
+moving the address. A truly drifting cue can instead become harder to find.
+The assay checks both cases with exact two-dimensional witnesses.
+[Synaptic consolidation](https://www.nature.com/articles/nn.4401) ·
+[Continual prototype learning](https://openaccess.thecvf.com/content/ICCV2021/html/De_Lange_Continual_Prototype_Evolution_Learning_Online_From_Non-Stationary_Data_Streams_ICCV_2021_paper.html)
+
+All arms used 1,024 bytes, the same hidden-identity cue generator, and
+the same held-out pair protocol. The original 12-seed run scored 743/768
+on revision with conflict gating. The recent cache and both conventional
+prototype controls reached 739/768. The four-pair difference was 0.52
+percentage points and favored conflict gating on four seeds. The candidate
+also recalled only 6/768 retention pairs versus 620/768 for the reservoir.
+Its typical batched latency was 1.76 times the fastest control. The
+decision required a three-point revision gain over each control, at least
+nine seed wins, losses of at most two points on each guard panel, and
+latency within 10% of the fastest control.
+
+Calibration selected recent admission for all prototype methods. A
+diagnostic on 12 different held-out seeds fixed admission, the match
+threshold, and recency to the original reservoir settings. It selected
+the update gains from the existing development grid under those settings.
+Each panel again used 768 pairs.
+
+| Method with shared reservoir admission | Retention | Revision | Cue drift |
+|---|---:|---:|---:|
+| Latest cue | 632 | 619 | 343 |
+| Fixed-gain centroid | 626 | 650 | 319 |
+| Similarity-conditioned gain | 622 | 653 | 329 |
+| Conflict-conditioned gain | 618 | 654 | 334 |
+
+Much of the gain over replacing cues with the latest observation was
+also available from a conventional prototype update. Using the value
+conflict as the signal added one correct revision pair over the
+similarity control, with an interval spanning zero. Both runs failed
+the prespecified gate. [Protocols, raw predictions, timings and
+reproduction commands](../results/conflict_gated_prototypes_2026-11-26.json)
